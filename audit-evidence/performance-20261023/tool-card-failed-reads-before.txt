@@ -1,0 +1,38 @@
+
+ RUN  v4.1.12 /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat
+
+------xstderr | app/db/__tests__/messages-transactions.test.ts > message transaction and ordering contracts > stops persisted-state reads after a renderer fails while healthy cards stay live
+[tool-card] source failed_card mount-error
+Failed to resolve directive: theme { toolCalls: [Getter/Setter] } at <ToolCallIndicator>
+at <ToolCardSlot>
+at <Anonymous>
+at <VTUROOT>
+
+----------------
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |core-app| app/db/__tests__/messages-transactions.test.ts > message transaction and ordering contracts > stops persisted-state reads after a renderer fails while healthy cards stay live
+AssertionError: expected [ [ 'failed' ], [ 'failed' ], …(2) ] to have a length of +0 but got 4
+
+- Expected
++ Received
+
+- 0
++ 4
+
+ ❯ app/db/__tests__/messages-transactions.test.ts:319:72
+    317|             await new Promise(resolve => setTimeout(resolve, 100));
+    318|             expect(failedCard.signal.aborted).toBe(true);
+    319|             expect(reads.mock.calls.filter(([id]) => id === 'failed'))…
+       |                                                                        ^
+    320|             expect(reads.mock.calls.some(([id]) => id === 'healthy')).…
+    321|         } finally { wrapper.unmount(); reads.mockRestore(); await brid…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 22 skipped (23)
+   Start at  23:22:58
+   Duration  1.40s (transform 422ms, setup 55ms, import 524ms, tests 535ms, environment 224ms)

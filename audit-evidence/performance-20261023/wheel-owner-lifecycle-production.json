@@ -1,0 +1,69 @@
+{
+  "browser": "153.0.8010.12",
+  "origin": "http://127.0.0.1:3147",
+  "phases": [
+    {
+      "browsing": false,
+      "registered": [
+        {
+          "passive": false,
+          "useCapture": false,
+          "once": false
+        }
+      ],
+      "before": 4408,
+      "after": 4288
+    },
+    {
+      "browsing": true,
+      "registered": [
+        {
+          "passive": true,
+          "useCapture": false,
+          "once": false
+        }
+      ],
+      "before": 6364,
+      "after": 6244
+    },
+    {
+      "browsing": false,
+      "registered": [
+        {
+          "passive": false,
+          "useCapture": false,
+          "once": false
+        }
+      ],
+      "before": 6364,
+      "after": 6244
+    }
+  ],
+  "nativeDefaults": [
+    {
+      "deltaY": -120,
+      "cancelable": true,
+      "defaultPrevented": false
+    },
+    {
+      "deltaY": -120,
+      "cancelable": false,
+      "defaultPrevented": false
+    },
+    {
+      "deltaY": -120,
+      "cancelable": true,
+      "defaultPrevented": false
+    }
+  ],
+  "afterDeactivation": [
+    {
+      "passive": false,
+      "useCapture": false,
+      "once": false
+    }
+  ],
+  "afterUnmount": [],
+  "devUnmountFlag": null,
+  "errors": []
+}

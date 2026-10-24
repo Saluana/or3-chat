@@ -1,0 +1,1047 @@
+{
+  "config": {
+    "argv": [
+      "/Users/brendon/.vite-plus/js_runtime/node/24.22.1/bin/node",
+      "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.bin/playwright",
+      "test",
+      "tests/e2e/or3-scroll-canary.spec.ts",
+      "tests/e2e/tool-cards.spec.ts",
+      "--workers=1",
+      "--reporter=json"
+    ],
+    "configFile": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/playwright.config.ts",
+    "rootDir": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.spec.ts",
+          "**/*.e2e.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "or3-scroll-canary.spec.ts",
+      "file": "or3-scroll-canary.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "prefetches every decoded image before mounting its row",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2115,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:16:55.589Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8793ae5e2a9354d67af-d1eb267f8495e71de488",
+          "file": "or3-scroll-canary.spec.ts",
+          "line": 100,
+          "column": 1
+        },
+        {
+          "title": "follows streaming at the bottom but never snaps back while browsing",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2762,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:16:57.780Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "browsing-browsingTop",
+                      "contentType": "application/json",
+                      "body": "eyJiZWZvcmUiOnsicmVuZGVyZWRSb3dzIjo1NSwicmVhZHlJbWFnZXMiOjUsInNjcm9sbFRvcCI6MTA0MTQsInNjcm9sbEhlaWdodCI6MTE4NjgsInRyYWNrSGVpZ2h0IjoxMTg2OCwidmlzaWJsZUFuY2hvciI6ImNhbmFyeS10aHJlYWQtYS04OSIsImFuY2hvck9mZnNldCI6LTQwLCJib3R0b21EaXN0YW5jZSI6ODAwLCJoYXNTY3JvbGxBcGkiOnRydWUsImhhc1Zpc2libGVSb3dzIjp0cnVlLCJ0YWlsUmV2aXNpb24iOjAsInJldGFpbmVkQXJyYXkiOnRydWV9LCJhZnRlciI6eyJyZW5kZXJlZFJvd3MiOjU2LCJyZWFkeUltYWdlcyI6NSwic2Nyb2xsVG9wIjoxMDQxNCwic2Nyb2xsSGVpZ2h0IjoxMTk0NCwidHJhY2tIZWlnaHQiOjExOTQ0LCJ2aXNpYmxlQW5jaG9yIjoiY2FuYXJ5LXRocmVhZC1hLTg5IiwiYW5jaG9yT2Zmc2V0IjotNDAsImJvdHRvbURpc3RhbmNlIjo4NzYsImhhc1Njcm9sbEFwaSI6dHJ1ZSwiaGFzVmlzaWJsZVJvd3MiOnRydWUsInRhaWxSZXZpc2lvbiI6MCwicmV0YWluZWRBcnJheSI6dHJ1ZX19"
+                    },
+                    {
+                      "name": "browsing-keyboardTop",
+                      "contentType": "application/json",
+                      "body": "eyJiZWZvcmUiOnsicmVuZGVyZWRSb3dzIjo2MCwicmVhZHlJbWFnZXMiOjYsInNjcm9sbFRvcCI6OTkxNCwic2Nyb2xsSGVpZ2h0IjoxMTk0NCwidHJhY2tIZWlnaHQiOjExOTQ0LCJ2aXNpYmxlQW5jaG9yIjoiY2FuYXJ5LXRocmVhZC1hLTg1IiwiYW5jaG9yT2Zmc2V0IjotNDgsImJvdHRvbURpc3RhbmNlIjoxMzc2LCJoYXNTY3JvbGxBcGkiOnRydWUsImhhc1Zpc2libGVSb3dzIjp0cnVlLCJ0YWlsUmV2aXNpb24iOjAsInJldGFpbmVkQXJyYXkiOnRydWV9LCJhZnRlciI6eyJyZW5kZXJlZFJvd3MiOjYxLCJyZWFkeUltYWdlcyI6Niwic2Nyb2xsVG9wIjo5OTE0LCJzY3JvbGxIZWlnaHQiOjEyMDIwLCJ0cmFja0hlaWdodCI6MTIwMjAsInZpc2libGVBbmNob3IiOiJjYW5hcnktdGhyZWFkLWEtODUiLCJhbmNob3JPZmZzZXQiOi00OCwiYm90dG9tRGlzdGFuY2UiOjE0NTIsImhhc1Njcm9sbEFwaSI6dHJ1ZSwiaGFzVmlzaWJsZVJvd3MiOnRydWUsInRhaWxSZXZpc2lvbiI6MCwicmV0YWluZWRBcnJheSI6dHJ1ZX19"
+                    },
+                    {
+                      "name": "browsing-scrollbarTop",
+                      "contentType": "application/json",
+                      "body": "eyJiZWZvcmUiOnsicmVuZGVyZWRSb3dzIjo2NCwicmVhZHlJbWFnZXMiOjYsInNjcm9sbFRvcCI6OTU2NCwic2Nyb2xsSGVpZ2h0IjoxMjAyMCwidHJhY2tIZWlnaHQiOjEyMDIwLCJ2aXNpYmxlQW5jaG9yIjoiY2FuYXJ5LXRocmVhZC1hLTgyIiwiYW5jaG9yT2Zmc2V0IjotOTIsImJvdHRvbURpc3RhbmNlIjoxODAyLCJoYXNTY3JvbGxBcGkiOnRydWUsImhhc1Zpc2libGVSb3dzIjp0cnVlLCJ0YWlsUmV2aXNpb24iOjAsInJldGFpbmVkQXJyYXkiOnRydWV9LCJhZnRlciI6eyJyZW5kZXJlZFJvd3MiOjY1LCJyZWFkeUltYWdlcyI6Niwic2Nyb2xsVG9wIjo5NTY0LCJzY3JvbGxIZWlnaHQiOjEyMDk2LCJ0cmFja0hlaWdodCI6MTIwOTYsInZpc2libGVBbmNob3IiOiJjYW5hcnktdGhyZWFkLWEtODIiLCJhbmNob3JPZmZzZXQiOi05MiwiYm90dG9tRGlzdGFuY2UiOjE4NzgsImhhc1Njcm9sbEFwaSI6dHJ1ZSwiaGFzVmlzaWJsZVJvd3MiOnRydWUsInRhaWxSZXZpc2lvbiI6MCwicmV0YWluZWRBcnJheSI6dHJ1ZX19"
+                    },
+                    {
+                      "name": "browsing-touchTop",
+                      "contentType": "application/json",
+                      "body": "eyJiZWZvcmUiOnsicmVuZGVyZWRSb3dzIjo2OCwicmVhZHlJbWFnZXMiOjYsInNjcm9sbFRvcCI6OTIxNCwic2Nyb2xsSGVpZ2h0IjoxMjA5NiwidHJhY2tIZWlnaHQiOjEyMDk2LCJ2aXNpYmxlQW5jaG9yIjoiY2FuYXJ5LXRocmVhZC1hLTgwIiwiYW5jaG9yT2Zmc2V0IjotMTIsImJvdHRvbURpc3RhbmNlIjoyMjI4LCJoYXNTY3JvbGxBcGkiOnRydWUsImhhc1Zpc2libGVSb3dzIjp0cnVlLCJ0YWlsUmV2aXNpb24iOjAsInJldGFpbmVkQXJyYXkiOnRydWV9LCJhZnRlciI6eyJyZW5kZXJlZFJvd3MiOjY5LCJyZWFkeUltYWdlcyI6Niwic2Nyb2xsVG9wIjo5MjE0LCJzY3JvbGxIZWlnaHQiOjEyMTcyLCJ0cmFja0hlaWdodCI6MTIwOTYsInZpc2libGVBbmNob3IiOiJjYW5hcnktdGhyZWFkLWEtODAiLCJhbmNob3JPZmZzZXQiOi0xMiwiYm90dG9tRGlzdGFuY2UiOjIzMDQsImhhc1Njcm9sbEFwaSI6dHJ1ZSwiaGFzVmlzaWJsZVJvd3MiOnRydWUsInRhaWxSZXZpc2lvbiI6MCwicmV0YWluZWRBcnJheSI6dHJ1ZX19"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8793ae5e2a9354d67af-dcb4a27c6b3a8706e085",
+          "file": "or3-scroll-canary.spec.ts",
+          "line": 143,
+          "column": 1
+        },
+        {
+          "title": "keeps browsing when native scrolling overtakes an instant bottom-follow write",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2377,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:00.548Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "overtaken-write",
+                      "contentType": "application/json",
+                      "body": "eyJpbW1lZGlhdGUiOnsicmVuZGVyZWRSb3dzIjo0OCwicmVhZHlJbWFnZXMiOjUsInNjcm9sbFRvcCI6MTA3MzgsInNjcm9sbEhlaWdodCI6MTE3OTIsInRyYWNrSGVpZ2h0IjoxMTc5MiwidmlzaWJsZUFuY2hvciI6ImNhbmFyeS10aHJlYWQtYS05MSIsImFuY2hvck9mZnNldCI6LTQ2LCJib3R0b21EaXN0YW5jZSI6NDAwLCJoYXNTY3JvbGxBcGkiOnRydWUsImhhc1Zpc2libGVSb3dzIjp0cnVlLCJ0YWlsUmV2aXNpb24iOjAsInJldGFpbmVkQXJyYXkiOnRydWV9LCJicm93c2luZyI6eyJyZW5kZXJlZFJvd3MiOjUyLCJyZWFkeUltYWdlcyI6NSwic2Nyb2xsVG9wIjoxMDczOCwic2Nyb2xsSGVpZ2h0IjoxMTc5MiwidHJhY2tIZWlnaHQiOjExNzkyLCJ2aXNpYmxlQW5jaG9yIjoiY2FuYXJ5LXRocmVhZC1hLTkxIiwiYW5jaG9yT2Zmc2V0IjotNDYsImJvdHRvbURpc3RhbmNlIjo0MDAsImhhc1Njcm9sbEFwaSI6dHJ1ZSwiaGFzVmlzaWJsZVJvd3MiOnRydWUsInRhaWxSZXZpc2lvbiI6MCwicmV0YWluZWRBcnJheSI6dHJ1ZX19"
+                    },
+                    {
+                      "name": "browsing-overtaken-bottom-write",
+                      "contentType": "application/json",
+                      "body": "eyJiZWZvcmUiOnsicmVuZGVyZWRSb3dzIjo1MiwicmVhZHlJbWFnZXMiOjUsInNjcm9sbFRvcCI6MTA3MzgsInNjcm9sbEhlaWdodCI6MTE3OTIsInRyYWNrSGVpZ2h0IjoxMTc5MiwidmlzaWJsZUFuY2hvciI6ImNhbmFyeS10aHJlYWQtYS05MSIsImFuY2hvck9mZnNldCI6LTQ2LCJib3R0b21EaXN0YW5jZSI6NDAwLCJoYXNTY3JvbGxBcGkiOnRydWUsImhhc1Zpc2libGVSb3dzIjp0cnVlLCJ0YWlsUmV2aXNpb24iOjAsInJldGFpbmVkQXJyYXkiOnRydWV9LCJhZnRlciI6eyJyZW5kZXJlZFJvd3MiOjUzLCJyZWFkeUltYWdlcyI6NSwic2Nyb2xsVG9wIjoxMDczOCwic2Nyb2xsSGVpZ2h0IjoxMTg2OCwidHJhY2tIZWlnaHQiOjExODY4LCJ2aXNpYmxlQW5jaG9yIjoiY2FuYXJ5LXRocmVhZC1hLTkxIiwiYW5jaG9yT2Zmc2V0IjotNDYsImJvdHRvbURpc3RhbmNlIjo0NzYsImhhc1Njcm9sbEFwaSI6dHJ1ZSwiaGFzVmlzaWJsZVJvd3MiOnRydWUsInRhaWxSZXZpc2lvbiI6MCwicmV0YWluZWRBcnJheSI6dHJ1ZX19"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8793ae5e2a9354d67af-067bef3a169d10240bd0",
+          "file": "or3-scroll-canary.spec.ts",
+          "line": 223,
+          "column": 1
+        },
+        {
+          "title": "streams in place through the row revision while following the bottom",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1979,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:02.931Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8793ae5e2a9354d67af-cf14889c7d7b7e1aefed",
+          "file": "or3-scroll-canary.spec.ts",
+          "line": 270,
+          "column": 1
+        },
+        {
+          "title": "keeps a browsing viewport anchored while an offscreen tail streams in place",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1727,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:04.914Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "browsing-browsingTop",
+                      "contentType": "application/json",
+                      "body": "eyJiZWZvcmUiOnsicmVuZGVyZWRSb3dzIjoyNSwicmVhZHlJbWFnZXMiOjIsInNjcm9sbFRvcCI6ODY5MCwic2Nyb2xsSGVpZ2h0IjoxMTg0NCwidHJhY2tIZWlnaHQiOjExODQ0LCJ2aXNpYmxlQW5jaG9yIjoiY2FuYXJ5LXRocmVhZC1hLTc1IiwiYW5jaG9yT2Zmc2V0IjotMTIwLCJib3R0b21EaXN0YW5jZSI6MjUwMCwiaGFzU2Nyb2xsQXBpIjp0cnVlLCJoYXNWaXNpYmxlUm93cyI6dHJ1ZSwidGFpbFJldmlzaW9uIjowLCJyZXRhaW5lZEFycmF5Ijp0cnVlfSwiYWZ0ZXIiOnsicmVuZGVyZWRSb3dzIjoyNSwicmVhZHlJbWFnZXMiOjIsInNjcm9sbFRvcCI6ODY5MCwic2Nyb2xsSGVpZ2h0IjoxMTg0NCwidHJhY2tIZWlnaHQiOjExODQ0LCJ2aXNpYmxlQW5jaG9yIjoiY2FuYXJ5LXRocmVhZC1hLTc1IiwiYW5jaG9yT2Zmc2V0IjotMTIwLCJib3R0b21EaXN0YW5jZSI6MjUwMCwiaGFzU2Nyb2xsQXBpIjp0cnVlLCJoYXNWaXNpYmxlUm93cyI6dHJ1ZSwidGFpbFJldmlzaW9uIjoxLCJyZXRhaW5lZEFycmF5Ijp0cnVlfX0="
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8793ae5e2a9354d67af-f066982abe80858e2158",
+          "file": "or3-scroll-canary.spec.ts",
+          "line": 356,
+          "column": 1
+        },
+        {
+          "title": "resets streamed rows when the thread changes",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2024,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:06.647Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8793ae5e2a9354d67af-cebec22e14334b95fbfa",
+          "file": "or3-scroll-canary.spec.ts",
+          "line": 431,
+          "column": 1
+        },
+        {
+          "title": "preserves the visible keyed anchor through a middle mutation",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2003,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:08.675Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8793ae5e2a9354d67af-28ded70229e3d4788d38",
+          "file": "or3-scroll-canary.spec.ts",
+          "line": 474,
+          "column": 1
+        },
+        {
+          "title": "holds track height during a browsing gesture and commits without moving the anchor",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2056,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:10.683Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8793ae5e2a9354d67af-057b5737d6f453aa8519",
+          "file": "or3-scroll-canary.spec.ts",
+          "line": 495,
+          "column": 1
+        },
+        {
+          "title": "rapid content epochs cannot restore a stale thread position",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2069,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:12.743Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8793ae5e2a9354d67af-1d5084526babc5e34283",
+          "file": "or3-scroll-canary.spec.ts",
+          "line": 533,
+          "column": 1
+        },
+        {
+          "title": "restores a browsing anchor and keeps it through later row growth",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1901,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:14.817Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "d8793ae5e2a9354d67af-82c5a1b5a7deeaebf466",
+          "file": "or3-scroll-canary.spec.ts",
+          "line": 554,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "tool-cards.spec.ts",
+      "file": "tool-cards.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "quiz executes inline, sends an attributed answer, and persists the locked state across reload",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2519,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:16.729Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2832a9dc82b38c2c0891-11634100ea2d078e3e5b",
+          "file": "tool-cards.spec.ts",
+          "line": 114,
+          "column": 1
+        },
+        {
+          "title": "quiz weather and map rehydrate in light and dark mode and fit 320px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1996,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:19.253Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2832a9dc82b38c2c0891-68259397f5330f0e58fe",
+          "file": "tool-cards.spec.ts",
+          "line": 150,
+          "column": 1
+        },
+        {
+          "title": "saved card state survives virtualization and receives persisted updates",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2982,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:21.253Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2832a9dc82b38c2c0891-ec116a12829aa458ae3d",
+          "file": "tool-cards.spec.ts",
+          "line": 197,
+          "column": 3
+        },
+        {
+          "title": "saved card state survives virtualization and receives persisted updates with a slower CPU",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5393,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:24.238Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2832a9dc82b38c2c0891-334a108e1320843b2261",
+          "file": "tool-cards.spec.ts",
+          "line": 197,
+          "column": 3
+        },
+        {
+          "title": "card saves stay ordered across panes while preparation is delayed",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2112,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:29.635Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2832a9dc82b38c2c0891-b3f9483f2f8f983d7a3f",
+          "file": "tool-cards.spec.ts",
+          "line": 261,
+          "column": 1
+        },
+        {
+          "title": "card save completion preserves remote persisted state",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1668,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:31.750Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2832a9dc82b38c2c0891-2c7ef6a016bdb5a31321",
+          "file": "tool-cards.spec.ts",
+          "line": 286,
+          "column": 3
+        },
+        {
+          "title": "card save completion preserves normalized persisted state",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2085,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:33.425Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2832a9dc82b38c2c0891-284c08ce2f925b08d7fc",
+          "file": "tool-cards.spec.ts",
+          "line": 286,
+          "column": 3
+        },
+        {
+          "title": "offscreen preloads preserve visible frames and resume when capacity frees",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1019,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:35.514Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2832a9dc82b38c2c0891-c7d6a68e70df1e4bf0a4",
+          "file": "tool-cards.spec.ts",
+          "line": 315,
+          "column": 1
+        },
+        {
+          "title": "legacy placement, crashing card fallback and timer sends stay isolated",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8422,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:36.538Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2832a9dc82b38c2c0891-995b0292f5f1d8cd8570",
+          "file": "tool-cards.spec.ts",
+          "line": 335,
+          "column": 1
+        },
+        {
+          "title": "always cards receive persisted status updates",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1052,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:44.965Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2832a9dc82b38c2c0891-b06c0ddc898a31035c9d",
+          "file": "tool-cards.spec.ts",
+          "line": 364,
+          "column": 1
+        },
+        {
+          "title": "trusted Vue card uses the SDK adapter and is removed on activation teardown",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1068,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:46.021Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2832a9dc82b38c2c0891-11fb9c6bdd72ac19e09b",
+          "file": "tool-cards.spec.ts",
+          "line": 374,
+          "column": 1
+        },
+        {
+          "title": "lazy cards mount during scrolling without rerunning their tools",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1785,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:47.093Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2832a9dc82b38c2c0891-a4fe2a2e455bd08cc2df",
+          "file": "tool-cards.spec.ts",
+          "line": 398,
+          "column": 1
+        },
+        {
+          "title": "verified frame mounts, resizes and receives live theme changes",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6666,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:48.882Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2832a9dc82b38c2c0891-102460962009db10a512",
+          "file": "tool-cards.spec.ts",
+          "line": 420,
+          "column": 1
+        },
+        {
+          "title": "SDK vanilla, Vue and React helpers update, record actions and clean up once",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 999,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:55.551Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2832a9dc82b38c2c0891-67ab5ac1dc3482522f5d",
+          "file": "tool-cards.spec.ts",
+          "line": 462,
+          "column": 1
+        },
+        {
+          "title": "card actions reject invalid state, text and links and enforce send cooldown",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1152,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:56.554Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2832a9dc82b38c2c0891-a19ec6787fcfdae9720e",
+          "file": "tool-cards.spec.ts",
+          "line": 487,
+          "column": 1
+        },
+        {
+          "title": "busy chat refuses a card send before reserving its cooldown",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1036,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:57.710Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2832a9dc82b38c2c0891-4fb4095cbd4460789a9e",
+          "file": "tool-cards.spec.ts",
+          "line": 509,
+          "column": 1
+        },
+        {
+          "title": "30 frame cards obey the per-pane cap and resume as the chat scrolls",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2837,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T09:17:58.749Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2832a9dc82b38c2c0891-2dcb47df5d07a225ee45",
+          "file": "tool-cards.spec.ts",
+          "line": 550,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-24T09:16:55.367Z",
+    "duration": 66304.738,
+    "expected": 27,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

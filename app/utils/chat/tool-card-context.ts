@@ -3,8 +3,9 @@ import type { ToolCardContext, ToolCardTheme } from '@or3/plugin-sdk/cards';
 import type { PluginResult } from '@or3/plugin-sdk';
 import { jsonCardValue, assertCardStateLimits } from '~~/shared/chat/tool-card-data';
 import { pluginError } from '@or3/plugin-sdk';
-import type { ToolCallInfo } from './uiMessages';
+import type { ToolCallInfo, UiChatMessage } from './uiMessages';
 import { MAX_TOOL_UI_RESULT_BYTES, utf8Bytes } from '~~/shared/chat/tool-limits';
+export type ToolCardMessage = Pick<UiChatMessage, 'id' | 'sourceThreadId' | 'toolCards'>;
 export function parseCardData(value?: string): unknown {
     if (value === undefined) return null;
     try {
@@ -60,6 +61,7 @@ export function createToolCardContext(input: {
             queued = false;
             if (controller.signal.aborted) return;
             for (const listener of [...listeners]) {
+                if (controller.signal.aborted) break;
                 try {
                     listener(card);
                 } catch {
@@ -159,14 +161,21 @@ export function createToolCardContext(input: {
     return {
         card,
         updateState(state: unknown) {
+            if (controller.signal.aborted) return;
             // Keep observations even while a newer local edit is optimistic.
             // Its completion must reveal the latest stored value, not its input.
             committedState = state;
             observedRevision++;
-            if (!optimistic) values.state = state;
-            notify();
+            // Card state is validated JSON. Dexie re-emits the same state
+            // when other message fields change; preserve the visible value
+            // and subscribers while still fencing pending save completions.
+            if (!optimistic && JSON.stringify(values.state) !== JSON.stringify(state)) {
+                values.state = state;
+                notify();
+            }
         },
         update(call: ToolCallInfo, theme: ToolCardTheme) {
+            if (controller.signal.aborted) return;
             Object.assign(
                 values,
                 snapshot(call, values.state, theme)

@@ -1,0 +1,11 @@
+
+Running 3 tests using 1 worker
+
+(node:48490) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/3] [chromium] › tests/e2e/tool-cards.spec.ts:292:1 › legacy placement, crashing card fallback and timer sends stay isolated
+[2/3] [chromium] › tests/e2e/tool-cards.spec.ts:331:1 › trusted Vue card uses the SDK adapter and is removed on activation teardown
+[3/3] [chromium] › tests/e2e/tool-cards.spec.ts:355:1 › lazy cards mount during scrolling without rerunning their tools
+  3 passed (12.7s)

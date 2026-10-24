@@ -1,0 +1,4 @@
+$ bun run scripts/release/check-docs.mjs
+Documentation checks passed (115 files, 103 mapped routes, 20 typechecked examples from Getting Started, OpenRouter, Database, Types, Architecture, Utils; Vue script portions only, templates excluded; Cloud 0.1.91).
+$ bun run scripts/docs/check-examples.mjs
+Documentation examples checked (20 TypeScript fences and Vue <script> portions from Getting Started, OpenRouter, Database, Types, Architecture, Utils; Vue templates were not type-checked).

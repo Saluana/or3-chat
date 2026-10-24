@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-24",
+  "scope": "Diagnostic and report changes only; both response-only prototypes rejected.",
+  "reports": [
+    "CARD-COLD-OPEN.md",
+    "STABILITY-STATUS.md",
+    "WHEEL-REVERSAL.md"
+  ],
+  "checkedLocalLinks": 46,
+  "measuredDiagnosticRuns": 30,
+  "recordedEndpointErrors": 6,
+  "runtimeChanged": false,
+  "patchSha256": "9ee180e12a232a4d68de1a00909a2bb7ce0b96af6ab9c3f0d50c23efce9bfcd5",
+  "installedEsmSha256": "54769713f12bdb50f69c00b81bef5653213cb6aab72e073938be15e995e95c4a",
+  "gitDiffCheck": "pass",
+  "upstreamBehind": 0,
+  "localAhead": 1,
+  "server3116Stopped": true,
+  "buildOrCanonicalTestsRerun": false
+}

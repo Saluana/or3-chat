@@ -1,0 +1,1932 @@
+$ tsx scripts/cli/nuxt-task.ts build
+Building Nuxt for production...
+● Loading Nuxt config
+● Nuxt 4.6.2 (with Nitro 2.13.5, Vite 8.3.5 and Vue 3.5.44)
+● Setting up modules
+● Preparing app
+[nuxt:icon] ✔ Nuxt Icon loaded local collection blank-solar with 152 icons
+● Nitro preset: node-server
+● Generating types
+
+ WARN  Duplicated imports "WorkspacePluginReconcileEventDetail", the one from "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WorkspacePluginReconcileReason", the one from "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "requestWorkspacePluginReconcile", the one from "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WORKSPACE_PLUGIN_RECONCILE_EVENT", the one from "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+ℹ Nuxt Icon client bundle consist of 195 icons with 107.38KB(uncompressed) in size
+● Bundling client
+
+ WARN  Duplicated imports "WorkspacePluginReconcileEventDetail", the one from "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WorkspacePluginReconcileReason", the one from "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "requestWorkspacePluginReconcile", the one from "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WORKSPACE_PLUGIN_RECONCILE_EVENT", the one from "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+ℹ Building client...
+ℹ vite v8.3.5 building client environment for production...
+
+[theme-compiler] Compiling themes...
+[theme-compiler] Generated types at /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/types/theme-generated.d.ts
+[theme-compiler] - 3 themes
+[theme-compiler] - 88 identifiers
+[theme-compiler] - 15 contexts
+[theme-compiler] Compiled 3 themes
+  - Successful: 3
+  - Errors: 0
+  - Warnings: 0
+[theme-compiler] ✅ All themes compiled successfully!
+
+transforming...
+● Bundling client (5.02s · 6.67s)
+
+ WARN  [33m[PLUGIN_TIMINGS] [0mJavaScript callbacks ran for 2.5s of this 3.7s build (69%).
+The slowest callbacks, timed inside each callback (the wait before a callback starts is excluded, the time it awaits is included):
+  - plugin vite:terser renderChunk (50%, 1.8s, 1 call)
+Additional callback time came from callbacks under 1s.
+See https://rolldown.rs/reference/InputOptions.checks#bundlertimings for more details.
+
+
+✓ 5934 modules transformed.
+rendering chunks...
+● Bundling client (10.0s · 11.6s)
+● Bundling client (15.0s · 16.6s)
+computing gzip size...
+ℹ .nuxt-e2e-journeys/dist/client/_nuxt/bash-Zd97RxpB.js                              0.04 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/tokenizer.worker-COoVXiY0.js                  0.56 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/diff-BfiyAQBR.js                              1.90 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/json-Bq-DaH27.js                              2.25 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/document-revision.worker-Dd5rtSPg.js          2.33 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Size3-Regular.CTq5MqoE.woff             4.42 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/press-start-2p-latin.ClsvrIBJ.woff2           4.70 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Size4-Regular.Dl5lxZxV.woff2            4.92 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Size2-Regular.Dy4dx90m.woff2            5.20 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/sha2-DeTJ8TON.js                              5.32 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Size1-Regular.mCD8mA8B.woff2            5.46 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Size4-Regular.BF-4gkZK.woff             5.98 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Size2-Regular.oD1tc_U0.woff             6.18 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Size1-Regular.C195tn64.woff             6.49 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Caligraphic-Regular.Di6jR-x-.woff2      6.90 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Caligraphic-Bold.Dq_IR9rO.woff2         6.91 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/vt323-latin.EhPR265H.woff2                    7.19 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Size3-Regular.DgpXs0kz.ttf              7.58 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Caligraphic-Regular.CTRA-rTL.woff       7.65 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Caligraphic-Bold.BEiXGLvX.woff          7.71 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/yaml-CP9_SwLs.js                              7.75 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Script-Regular.D3wIWfF6.woff2           9.64 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/rust-CHfKf_Mw.js                              9.91 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_SansSerif-Regular.DDBCnlJ7.woff2       10.34 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Size4-Regular.DWFBv043.ttf             10.36 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Script-Regular.D5yQViql.woff           10.58 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Fraktur-Regular.CTYiF6lA.woff2         11.31 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Fraktur-Bold.CL6g_b3V.woff2            11.34 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Size2-Regular.B7gKUWhC.ttf             11.50 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_SansSerif-Italic.C3H0VqGB.woff2        12.02 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_SansSerif-Bold.D1sUS0GD.woff2          12.21 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Size1-Regular.Dbsnue_I.ttf             12.22 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_SansSerif-Regular.CS6fqUqJ.woff        12.31 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Caligraphic-Regular.wX97UBjC.ttf       12.34 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Caligraphic-Bold.ATXxdsX0.ttf          12.36 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Fraktur-Regular.Dxdc4cR9.woff          13.20 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Fraktur-Bold.BsDP51OF.woff             13.29 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Typewriter-Regular.CO6r4hn1.woff2      13.56 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_SansSerif-Italic.DN2j7dab.woff         14.11 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_SansSerif-Bold.DbIhKOiC.woff           14.40 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/vue-Bh1T1TTx.js                              14.67 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Typewriter-Regular.C0xS9mPB.woff       16.02 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Math-BoldItalic.CZnvNsCZ.woff2         16.40 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Math-Italic.t53AETM-.woff2             16.44 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Script-Regular.C5JkGWo-.ttf            16.64 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Main-BoldItalic.DxDJ3AOS.woff2         16.78 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Main-Italic.NWA7e6Wa.woff2             16.98 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Math-BoldItalic.iY-2wyZ7.woff          18.66 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Math-Italic.DA0__PXp.woff              18.74 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Main-BoldItalic.SpSLRI95.woff          19.41 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_SansSerif-Regular.BNo7hRIc.ttf         19.43 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Fraktur-Regular.CB_wures.ttf           19.57 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Fraktur-Bold.BdnERNNW.ttf              19.58 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Main-Italic.BMLOBm91.woff              19.67 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_SansSerif-Italic.YYjJ1zSn.ttf          22.36 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/go-D_Ykg7kD.js                               24.07 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_SansSerif-Bold.CFMepnvq.ttf            24.50 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Main-Bold.Cx986IdX.woff2               25.32 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/shellscript-DgWvUxV2.js                      26.06 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Main-Regular.B22Nviop.woff2            26.27 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Typewriter-Regular.D3Ib7_Hf.ttf        27.55 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_AMS-Regular.BQhdFMY1.woff2             28.07 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/markdown-BgjiZLxv.js                         29.13 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Main-Bold.Jm3AIy58.woff                29.91 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Main-Regular.Dr94JaBh.woff             30.77 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Math-BoldItalic.B3XSjfu4.ttf           31.19 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Math-Italic.flOr_0UB.ttf               31.30 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Main-BoldItalic.DzxPMmG6.ttf           32.96 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_AMS-Regular.DMm9YOAa.woff              33.51 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Main-Italic.3WenGoN9.ttf               33.58 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/html-OorhbYvG.js                             37.33 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/ibm-plex-sans-latin.BD64o3ke.woff2           40.24 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/python-CUypIsH2.js                           40.54 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/css-BikGqyfb.js                              41.85 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Main-Bold.waoOVXN0.ttf                 51.33 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/signup-clouds-bottom-dark.2w_pbcKy.webp      53.05 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_Main-Regular.ypZvNtVU.ttf              53.58 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/KaTeX_AMS-Regular.DRggAlZN.ttf               63.63 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/signup-clouds-bottom-light.Bi2eNVIA.webp     80.66 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/signin-hero-dark.BRXJNa1M.webp              105.99 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/signin-hero-light.CbZSL4pw.webp             109.44 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/javascript-xbgRgekT.js                      113.99 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/tsx-C9Zf7pTd.js                             114.22 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/jsx-BuqiV4gt.js                             115.04 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/typescript-Cwz8N_aN.js                      118.26 kB
+.nuxt-e2e-journeys/dist/client/manifest.json                                     162.16 kB │ gzip:  19.45 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/markdown-highlight.worker-JhMGyQXm.js       188.41 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/project-extraction.worker-BIKz6sj4.js       747.81 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/lightmode-cyberpunk-bg.BNJA-CJL.png         941.26 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/cyberpunk.DJ8k1lj4.png                    1,244.37 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/pdf.worker.min.CjEcRF4W.mjs               1,264.34 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/main-UfddMIVy.js                          1,650.95 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/cybersb2.CHjb-ZXs.png                     2,009.19 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/startup.x1XGuNl0.css                          0.00 kB │ gzip:   0.02 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/ImageViewer.3NNsB485.css                      0.15 kB │ gzip:   0.14 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/admin.BgoW7ebu.css                            0.29 kB │ gzip:   0.14 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Or3ScrollCanary.BIWxdX1r.css                  0.42 kB │ gzip:   0.26 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/WorkspaceBackupApp.DFHEJC9E.css               0.42 kB │ gzip:   0.25 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/GalleryGrid.BDart_8I.css                      0.53 kB │ gzip:   0.25 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/chat-shell.BvpwCJ2m.css                       0.55 kB │ gzip:   0.23 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/WorkspaceProfileSettings.Bete-C9K.css         0.59 kB │ gzip:   0.29 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/MessageEditor.DY-W-jnJ.css                    0.90 kB │ gzip:   0.39 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/ModelCatalog.DfjzHzTJ.css                     1.04 kB │ gzip:   0.24 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Dashboard.CDWij7WL.css                        1.07 kB │ gzip:   0.41 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/document-editor-schema.KH8PWYgC.css           1.37 kB │ gzip:   0.58 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/PromptEditor.DrO7KdQK.css                     1.51 kB │ gzip:   0.57 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/error-500.CmR4p1fc.css                        1.95 kB │ gzip:   0.72 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/AiPage.rCL3sNmB.css                           1.96 kB │ gzip:   0.67 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/error-404.DpKY_dMl.css                        2.70 kB │ gzip:   0.92 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DocumentHistoryPanel.DBbukUJm.css             2.76 kB │ gzip:   0.78 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/images.Bja0aoKP.css                           3.08 kB │ gzip:   0.82 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/ChatEmptyState.DXKINS8A.css                   3.79 kB │ gzip:   1.05 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/SidebarProjectsPage.C-TqkE_R.css              4.68 kB │ gzip:   1.22 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/WorkspaceTabSwitcher.CqxyE0vG.css             5.03 kB │ gzip:   1.10 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/suggestions.D1ChPnYQ.css                      6.34 kB │ gzip:   1.55 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/welcome.CMkgi8PQ.css                          7.01 kB │ gzip:   1.96 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/PortableClientView.Diak5t2x.css               7.54 kB │ gzip:   1.53 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/MobileAuthJourney.Bwj2lOpC.css                7.56 kB │ gzip:   1.88 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/WorkspaceTabBar.Dv-rS-Ay.css                  8.43 kB │ gzip:   1.86 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/ChatInput.C40fO-TX.css                       10.22 kB │ gzip:   1.92 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/WorkspaceFilesPane.BTLE1lZF.css              11.87 kB │ gzip:   2.31 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/ChatSettingsPopover.pUlCAget.css             13.36 kB │ gzip:   2.35 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/ChatMessage.CV3SV55q.css                     17.38 kB │ gzip:   3.80 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/styles.CkcX6bvW.css                          19.84 kB │ gzip:   3.46 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DocumentAiPanel.BWKXUblg.css                 20.11 kB │ gzip:   3.73 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/chat-shell.BQM6dZvS.css                      21.15 kB │ gzip:   4.08 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/chat-shell.BVHsg4ck.css                      24.30 kB │ gzip:   4.98 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/stream-markdown.Eh1nzpFl.css                 29.36 kB │ gzip:   7.99 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/ThemePage.BTNO1OAQ.css                       33.35 kB │ gzip:   4.93 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DocumentationShell.D5acGLRC.css              34.12 kB │ gzip:   4.84 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DocumentEditor.ceXkEtCb.css                  34.45 kB │ gzip:   6.21 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/styles.ecVrasWO.css                          81.45 kB │ gzip:  11.57 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/styles.BRokmAIj.css                         124.41 kB │ gzip:  13.78 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/startup.BlgNqF98.css                        392.87 kB │ gzip:  53.40 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/H-rIq1qc.js                                   0.08 kB │ gzip:   0.08 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BpEuRCHZ.js                                   0.12 kB │ gzip:   0.11 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/C2iE16LP.js                                   0.12 kB │ gzip:   0.11 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/C2qVGpLA.js                                   0.13 kB │ gzip:   0.13 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BIYlkhzA.js                                   0.14 kB │ gzip:   0.13 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CTcOB59c.js                                   0.15 kB │ gzip:   0.15 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CWyI5CkQ.js                                   0.15 kB │ gzip:   0.15 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/D2aCOiaB.js                                   0.15 kB │ gzip:   0.15 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CB7KKwY8.js                                   0.16 kB │ gzip:   0.15 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DHZ5XvFp.js                                   0.16 kB │ gzip:   0.15 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/QDtrAcr6.js                                   0.16 kB │ gzip:   0.15 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DeN62NTG.js                                   0.17 kB │ gzip:   0.15 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CtaewcFa.js                                   0.17 kB │ gzip:   0.15 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CIN80UeG.js                                   0.17 kB │ gzip:   0.15 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DfC7-Zzt.js                                   0.17 kB │ gzip:   0.14 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BdVU5Umt.js                                   0.17 kB │ gzip:   0.15 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BPwjzW52.js                                   0.18 kB │ gzip:   0.15 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CTbIVJZp.js                                   0.18 kB │ gzip:   0.15 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/ZoQFAQqm.js                                   0.18 kB │ gzip:   0.15 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/2rQuso0h.js                                   0.18 kB │ gzip:   0.15 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/D6b-vPM7.js                                   0.18 kB │ gzip:   0.15 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/h0kjDWYX.js                                   0.18 kB │ gzip:   0.15 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/B2-Djb8D.js                                   0.18 kB │ gzip:   0.15 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/GoLt3Jdy.js                                   0.18 kB │ gzip:   0.16 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/MADWxbrL.js                                   0.18 kB │ gzip:   0.16 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/vxD3Ho3N.js                                   0.18 kB │ gzip:   0.16 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/ovhWlOgK.js                                   0.18 kB │ gzip:   0.15 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BqVb2UzJ.js                                   0.20 kB │ gzip:   0.16 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CAuCVEhy.js                                   0.22 kB │ gzip:   0.17 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CDC9vwY1.js                                   0.22 kB │ gzip:   0.16 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/og4FmpIo.js                                   0.23 kB │ gzip:   0.19 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BY0obrZR.js                                   0.26 kB │ gzip:   0.20 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/B_iTJ4lb.js                                   0.27 kB │ gzip:   0.21 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DBfcTLx-.js                                   0.27 kB │ gzip:   0.19 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/gg1I5JcR.js                                   0.29 kB │ gzip:   0.20 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/D_ZXKdFT.js                                   0.30 kB │ gzip:   0.23 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CwuRj4Xd.js                                   0.34 kB │ gzip:   0.25 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BPQCu0II.js                                   0.35 kB │ gzip:   0.21 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/mzVmCdKN.js                                   0.36 kB │ gzip:   0.28 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/MSH4OzsT.js                                   0.39 kB │ gzip:   0.27 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CJM0x6vR.js                                   0.40 kB │ gzip:   0.28 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CDlUmhst.js                                   0.41 kB │ gzip:   0.26 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/B9-V6JrL.js                                   0.42 kB │ gzip:   0.28 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DAEtWjyG.js                                   0.42 kB │ gzip:   0.28 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Cnv0OrzB.js                                   0.43 kB │ gzip:   0.30 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/B_t_v3aP.js                                   0.44 kB │ gzip:   0.30 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Di8K-we7.js                                   0.44 kB │ gzip:   0.27 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CqAkEVy1.js                                   0.45 kB │ gzip:   0.30 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BuLULf1f.js                                   0.48 kB │ gzip:   0.31 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DqyPFlGK.js                                   0.49 kB │ gzip:   0.31 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Bp1N2t8R.js                                   0.52 kB │ gzip:   0.34 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/C3M1vTkc.js                                   0.52 kB │ gzip:   0.34 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DtKUi0VS.js                                   0.52 kB │ gzip:   0.34 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CeT3MmCZ.js                                   0.53 kB │ gzip:   0.34 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DUt3xhvq.js                                   0.53 kB │ gzip:   0.34 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Bb8xVG7X.js                                   0.53 kB │ gzip:   0.33 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DP7ddrFf.js                                   0.54 kB │ gzip:   0.36 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/D79IscPK.js                                   0.54 kB │ gzip:   0.31 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/c_OZrJrc.js                                   0.55 kB │ gzip:   0.36 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Dvr4l3oR.js                                   0.56 kB │ gzip:   0.37 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DxNG8zpa.js                                   0.56 kB │ gzip:   0.37 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/wpsuV2fP.js                                   0.57 kB │ gzip:   0.36 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/ChmKtZjD.js                                   0.57 kB │ gzip:   0.36 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DsZcHmO-.js                                   0.61 kB │ gzip:   0.34 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/HRX7hqep.js                                   0.61 kB │ gzip:   0.31 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/HmOTiTEr.js                                   0.64 kB │ gzip:   0.37 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CFjlfRUs.js                                   0.65 kB │ gzip:   0.42 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CI2XwIF5.js                                   0.66 kB │ gzip:   0.41 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BZ3bJ1LQ.js                                   0.67 kB │ gzip:   0.42 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/0pNIaZI4.js                                   0.70 kB │ gzip:   0.43 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/NFelpYWs.js                                   0.70 kB │ gzip:   0.34 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Cp2PXFDd.js                                   0.71 kB │ gzip:   0.46 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DzYRmUxn.js                                   0.71 kB │ gzip:   0.44 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Dj5Dj9n-.js                                   0.72 kB │ gzip:   0.41 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DD-SDA83.js                                   0.76 kB │ gzip:   0.46 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BbzqZ3r5.js                                   0.81 kB │ gzip:   0.47 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/4gcfAGrC.js                                   0.83 kB │ gzip:   0.48 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/8Tzy6n8-.js                                   0.88 kB │ gzip:   0.45 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DSgXRImK.js                                   0.88 kB │ gzip:   0.45 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BCM2_l0B.js                                   0.88 kB │ gzip:   0.45 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CA7OfHW1.js                                   0.90 kB │ gzip:   0.49 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DWrqNnIM.js                                   0.91 kB │ gzip:   0.50 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BQUBvPbN.js                                   0.94 kB │ gzip:   0.52 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/D0mMQABr.js                                   0.97 kB │ gzip:   0.49 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DSg64HNC.js                                   0.98 kB │ gzip:   0.52 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Cj9jirSx.js                                   1.01 kB │ gzip:   0.54 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DsKxuR_6.js                                   1.04 kB │ gzip:   0.62 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/D1sKKib5.js                                   1.05 kB │ gzip:   0.61 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/0jKXz076.js                                   1.09 kB │ gzip:   0.60 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BFoPeqoc.js                                   1.11 kB │ gzip:   0.61 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DPZubORt.js                                   1.13 kB │ gzip:   0.62 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/D8bmpWqW.js                                   1.16 kB │ gzip:   0.69 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BYN8iHyu.js                                   1.17 kB │ gzip:   0.66 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BwVWCPig.js                                   1.17 kB │ gzip:   0.64 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/2b_u6Mbj.js                                   1.19 kB │ gzip:   0.66 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/B4WpInvD.js                                   1.20 kB │ gzip:   0.62 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DVwmzITD.js                                   1.22 kB │ gzip:   0.61 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DdMhbp-U.js                                   1.26 kB │ gzip:   0.59 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BqEJgBBl.js                                   1.32 kB │ gzip:   0.69 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DX0btqiw.js                                   1.34 kB │ gzip:   0.76 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CF5HtJRF.js                                   1.36 kB │ gzip:   0.75 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CGG3tuqe.js                                   1.40 kB │ gzip:   0.81 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/sA_aCGHk.js                                   1.40 kB │ gzip:   0.64 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/C3XPUbrS.js                                   1.43 kB │ gzip:   0.61 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Dyk7D4Fa.js                                   1.44 kB │ gzip:   0.78 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BzSbnZxE.js                                   1.47 kB │ gzip:   0.74 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Cyx7O5NB.js                                   1.48 kB │ gzip:   0.66 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DfuVtsAg.js                                   1.49 kB │ gzip:   0.81 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DfuDOC3k.js                                   1.50 kB │ gzip:   0.60 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CtJP4Zsn.js                                   1.51 kB │ gzip:   0.59 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BtZW3i9u.js                                   1.54 kB │ gzip:   0.82 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Dkt2PU7W.js                                   1.56 kB │ gzip:   0.81 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BDamnDsw.js                                   1.57 kB │ gzip:   0.84 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CGkmsyl6.js                                   1.70 kB │ gzip:   0.89 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Bx8LWmdl.js                                   1.75 kB │ gzip:   0.77 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/yhAyXF2u.js                                   1.76 kB │ gzip:   0.79 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CdGFZhBL.js                                   1.82 kB │ gzip:   0.98 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DWxSb3Ds.js                                   1.83 kB │ gzip:   0.81 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CQvg2he1.js                                   1.88 kB │ gzip:   1.10 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/ah1N9UmA.js                                   1.89 kB │ gzip:   0.88 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Dg6VK2vA.js                                   1.91 kB │ gzip:   0.93 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Oi7JAy6Z.js                                   1.98 kB │ gzip:   0.99 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/B0DThY3S.js                                   1.99 kB │ gzip:   0.74 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BWmMEFz0.js                                   2.00 kB │ gzip:   0.84 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Ccc8Pcq-.js                                   2.03 kB │ gzip:   0.98 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DiZia5Ex.js                                   2.06 kB │ gzip:   0.92 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/eg-DKN4_.js                                   2.07 kB │ gzip:   1.05 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/hepxxNQm.js                                   2.11 kB │ gzip:   0.97 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/VEckEA7J.js                                   2.12 kB │ gzip:   0.87 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BUqqXFLL.js                                   2.16 kB │ gzip:   1.09 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DCZMF1Ok.js                                   2.16 kB │ gzip:   0.92 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/B_jNhpck.js                                   2.16 kB │ gzip:   1.06 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/sQTSh6qc.js                                   2.22 kB │ gzip:   0.97 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/D4dJD_zd.js                                   2.22 kB │ gzip:   1.19 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BQWUARnZ.js                                   2.22 kB │ gzip:   1.16 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/nt4q86gi.js                                   2.24 kB │ gzip:   1.09 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CR0oTTA1.js                                   2.26 kB │ gzip:   1.03 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Db01b4-S.js                                   2.30 kB │ gzip:   0.90 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BROpEWjo.js                                   2.32 kB │ gzip:   1.11 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DdU5d92x.js                                   2.34 kB │ gzip:   1.14 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DvyxTB1Z.js                                   2.35 kB │ gzip:   0.95 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BGl-J7L5.js                                   2.35 kB │ gzip:   1.13 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DeJcJtRX.js                                   2.37 kB │ gzip:   1.00 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Dggllphp.js                                   2.39 kB │ gzip:   0.88 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DsE0hbLs.js                                   2.42 kB │ gzip:   1.22 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CPwXgkJ8.js                                   2.42 kB │ gzip:   1.13 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/D45oWxD6.js                                   2.54 kB │ gzip:   0.74 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CJPo5oCr.js                                   2.55 kB │ gzip:   1.23 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/B3RE3zbI.js                                   2.65 kB │ gzip:   1.14 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/C_THCdbW.js                                   2.68 kB │ gzip:   0.92 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CrG1GkeS.js                                   2.86 kB │ gzip:   1.27 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Cg6BlKdW.js                                   2.90 kB │ gzip:   1.32 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/XCI1MuP_.js                                   2.97 kB │ gzip:   1.15 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DZZlj2q4.js                                   3.43 kB │ gzip:   1.58 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Bee6zrtd.js                                   3.45 kB │ gzip:   1.61 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/AZHRUiUh.js                                   3.46 kB │ gzip:   1.70 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/_ar4Nd_6.js                                   3.49 kB │ gzip:   1.78 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/D2XZoPWI.js                                   3.51 kB │ gzip:   1.61 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Bv28yjTb.js                                   3.52 kB │ gzip:   1.56 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/tYvx2oyr.js                                   3.58 kB │ gzip:   1.56 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/F7RLlTVn.js                                   3.59 kB │ gzip:   1.70 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/ho0R6xLl.js                                   3.62 kB │ gzip:   1.76 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BjB5ioBs.js                                   3.71 kB │ gzip:   1.65 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CSBcEtb9.js                                   3.72 kB │ gzip:   1.66 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DdbCvIIm.js                                   3.77 kB │ gzip:   1.73 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/HxfbcmOZ.js                                   3.85 kB │ gzip:   1.86 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BuGqZBCY.js                                   4.01 kB │ gzip:   1.76 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BXQ_CjFv.js                                   4.07 kB │ gzip:   1.50 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/zSRm7CXu.js                                   4.08 kB │ gzip:   1.94 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BzpBLiNH.js                                   4.14 kB │ gzip:   1.77 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DXdDhifn.js                                   4.16 kB │ gzip:   1.73 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/w2O1dngG.js                                   4.23 kB │ gzip:   1.82 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/QlsKrdtJ.js                                   4.23 kB │ gzip:   1.73 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/zImBn0_I.js                                   4.31 kB │ gzip:   1.92 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CNMnNKNK.js                                   4.41 kB │ gzip:   1.88 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DWJMz50W.js                                   4.42 kB │ gzip:   1.60 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/fm3mH1JD.js                                   4.69 kB │ gzip:   2.10 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DBym-K7n.js                                   4.73 kB │ gzip:   1.31 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/ZlnjenrW.js                                   4.80 kB │ gzip:   2.14 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DwqJbyru.js                                   4.83 kB │ gzip:   1.99 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CikRtRuz.js                                   4.92 kB │ gzip:   2.24 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DWT9ycXX.js                                   4.92 kB │ gzip:   1.98 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/lVks3ais.js                                   5.03 kB │ gzip:   2.10 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BKsYQU62.js                                   5.31 kB │ gzip:   2.33 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Du1FBD5_.js                                   5.43 kB │ gzip:   2.55 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/4CElPi9w.js                                   5.52 kB │ gzip:   2.38 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/1ClIZWgj.js                                   5.54 kB │ gzip:   2.34 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/D4Him7rU.js                                   5.68 kB │ gzip:   2.24 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CitFuRIK.js                                   5.69 kB │ gzip:   2.58 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/ByAlnQIT.js                                   5.81 kB │ gzip:   2.36 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BPYAF6Va.js                                   5.82 kB │ gzip:   1.64 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Ck3WXfa5.js                                   5.95 kB │ gzip:   2.05 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BQsecbiu.js                                   5.97 kB │ gzip:   1.72 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Bm9PbGl8.js                                   6.06 kB │ gzip:   2.48 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CCN4HwyR.js                                   6.06 kB │ gzip:   2.20 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DS4MF-QG.js                                   6.27 kB │ gzip:   2.61 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/C5828C0V.js                                   6.45 kB │ gzip:   2.46 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/3utdZVnX.js                                   6.52 kB │ gzip:   1.88 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BpjFK1CQ.js                                   6.60 kB │ gzip:   2.50 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DUIS-gXr.js                                   6.66 kB │ gzip:   2.81 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BNBxZpRv.js                                   6.67 kB │ gzip:   2.79 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/tad6rAd9.js                                   6.68 kB │ gzip:   2.75 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/LXczWQg6.js                                   6.75 kB │ gzip:   3.01 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/9H-Bhr6O.js                                   6.89 kB │ gzip:   2.98 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BDYsEq0l.js                                   6.91 kB │ gzip:   1.79 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BQ7b6eMm.js                                   6.92 kB │ gzip:   2.94 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/C04mE5R3.js                                   7.07 kB │ gzip:   2.93 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Co_DlYVK.js                                   7.08 kB │ gzip:   2.98 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/dzZ1tdJE.js                                   7.30 kB │ gzip:   2.76 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BJOK14UY.js                                   7.56 kB │ gzip:   2.89 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DC0VAQTZ.js                                   7.87 kB │ gzip:   3.13 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/D9ZZNuAW.js                                   7.90 kB │ gzip:   2.44 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/PsXG2dsp.js                                   7.91 kB │ gzip:   3.39 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DcjYDS0b.js                                   7.95 kB │ gzip:   3.37 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BI-m8g1b.js                                   8.19 kB │ gzip:   3.28 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/B0F1LpbM.js                                   8.23 kB │ gzip:   2.61 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Xpf9CN7_.js                                   8.26 kB │ gzip:   3.24 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/60jl07QV.js                                   8.29 kB │ gzip:   3.65 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/nCdqeMYk.js                                   8.35 kB │ gzip:   2.98 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DOGRte86.js                                   8.80 kB │ gzip:   3.54 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/XCXNIP1l.js                                   8.80 kB │ gzip:   3.83 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DVBCRh3Z.js                                   9.41 kB │ gzip:   3.07 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DVPacqrd.js                                   9.44 kB │ gzip:   3.70 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DQBdipW6.js                                   9.63 kB │ gzip:   3.04 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/R4i87rq2.js                                   9.71 kB │ gzip:   3.36 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Bl-BDCF6.js                                   9.75 kB │ gzip:   2.72 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CyRFgBKI.js                                   9.78 kB │ gzip:   3.43 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CcpVvdxI.js                                   9.80 kB │ gzip:   3.93 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BZYWDttd.js                                   9.94 kB │ gzip:   3.64 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/IUv3KsSc.js                                  10.03 kB │ gzip:   3.23 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/6Z4iMFOq.js                                  10.07 kB │ gzip:   3.50 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/UPgV-V41.js                                  10.12 kB │ gzip:   3.48 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DdZVfIJz.js                                  10.13 kB │ gzip:   2.95 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/TBv_u7FU.js                                  10.23 kB │ gzip:   3.01 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BlWoZOwT.js                                  10.38 kB │ gzip:   3.54 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BdIs6J7v.js                                  10.39 kB │ gzip:   3.93 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DAVHxBP-.js                                  10.43 kB │ gzip:   4.12 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Dea9W_ue.js                                  10.72 kB │ gzip:   4.04 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/C5S-Xo7E.js                                  10.73 kB │ gzip:   3.70 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CTxQHvF5.js                                  10.73 kB │ gzip:   4.10 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CYvQhIjV.js                                  11.06 kB │ gzip:   3.81 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DyRot-hg.js                                  11.09 kB │ gzip:   4.16 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/f71bdyhM.js                                  11.17 kB │ gzip:   3.67 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CaDGbMg3.js                                  11.24 kB │ gzip:   4.24 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/bffUdigq.js                                  11.39 kB │ gzip:   4.13 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/eklOY9Sf.js                                  12.51 kB │ gzip:   2.46 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/D9VPjIDx.js                                  12.72 kB │ gzip:   4.88 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BaOl0dkN.js                                  12.79 kB │ gzip:   5.07 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DDA5i0dx.js                                  12.96 kB │ gzip:   5.15 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Cv2C_UMV.js                                  13.02 kB │ gzip:   4.75 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DSyVlpPG.js                                  13.22 kB │ gzip:   5.01 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BNfEG13X.js                                  13.27 kB │ gzip:   4.36 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BXw-duz6.js                                  14.32 kB │ gzip:   5.46 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/C_G89WjK.js                                  14.39 kB │ gzip:   4.62 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/C3GjqNRH.js                                  14.78 kB │ gzip:   5.13 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CsPWdJFD.js                                  14.79 kB │ gzip:   4.67 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/C-qv4M1e.js                                  14.85 kB │ gzip:   4.74 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CIblsCjY.js                                  15.04 kB │ gzip:   5.17 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/YWUO72PY.js                                  15.07 kB │ gzip:   6.19 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DCbk3To-.js                                  15.22 kB │ gzip:   3.67 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Ds5RYQOe.js                                  15.72 kB │ gzip:   5.17 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/nPrcTUfC.js                                  15.85 kB │ gzip:   4.40 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CkM4Xmva.js                                  16.49 kB │ gzip:   5.39 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DBUn4Dec.js                                  16.53 kB │ gzip:   6.93 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BTdvgoST.js                                  16.65 kB │ gzip:   6.44 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/E77GpZVA.js                                  16.66 kB │ gzip:   5.44 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CuF1Dlj2.js                                  16.98 kB │ gzip:   5.90 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DPKXIcmZ.js                                  17.09 kB │ gzip:   4.44 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/D8tq3_dv.js                                  17.25 kB │ gzip:   5.53 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/9IXzHVn8.js                                  17.42 kB │ gzip:   6.53 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/mCBrO8Gu.js                                  17.43 kB │ gzip:   5.70 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/lDYPEsVd.js                                  17.77 kB │ gzip:   5.80 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CCbRSJb5.js                                  17.86 kB │ gzip:   4.78 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CD9pB3zU.js                                  17.93 kB │ gzip:   4.55 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/C9qhNa-c.js                                  18.09 kB │ gzip:   6.11 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/COqDzG93.js                                  18.89 kB │ gzip:   6.51 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/oVvmcW_k.js                                  19.42 kB │ gzip:   5.86 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/C07s1K_3.js                                  19.63 kB │ gzip:   5.75 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/uOBsRmuH.js                                  20.02 kB │ gzip:   7.14 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DzeYjjVQ.js                                  20.18 kB │ gzip:   6.54 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BGLk3hsN.js                                  21.84 kB │ gzip:   7.03 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/A44rgupM.js                                  21.98 kB │ gzip:   6.59 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BQeVqANl.js                                  22.60 kB │ gzip:   7.44 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/NBrD9B3l.js                                  22.85 kB │ gzip:   8.25 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DZHHE6Y_.js                                  23.25 kB │ gzip:   7.93 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CAkBQAxE.js                                  23.35 kB │ gzip:   8.24 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DyxvZSeq.js                                  24.09 kB │ gzip:   7.97 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DIiIz6xE.js                                  24.14 kB │ gzip:   7.18 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/B5rZgJHz.js                                  24.36 kB │ gzip:   5.23 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/lxtBSThB.js                                  25.34 kB │ gzip:   6.58 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BEcIZ4Px.js                                  26.53 kB │ gzip:   6.56 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Bky1VukM.js                                  27.15 kB │ gzip:   8.70 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/c3bfmk6K.js                                  27.17 kB │ gzip:   8.91 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CpM0PcFl.js                                  27.21 kB │ gzip:   8.57 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/czV62513.js                                  27.41 kB │ gzip:   6.14 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/t9qmbB2i.js                                  27.48 kB │ gzip:   8.52 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CObdxILO.js                                  28.47 kB │ gzip:   9.64 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Bebqq0ow.js                                  29.27 kB │ gzip:   8.68 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Bd0IZPIj.js                                  29.37 kB │ gzip:   5.33 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BbYvk3X2.js                                  29.58 kB │ gzip:   8.65 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BnYpsMj9.js                                  30.32 kB │ gzip:  10.53 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BmtUHu7q.js                                  30.64 kB │ gzip:  10.06 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/ChHhtBDn.js                                  30.99 kB │ gzip:   9.73 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DiJr0mqs.js                                  31.09 kB │ gzip:  10.42 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Bp_oyamX.js                                  33.37 kB │ gzip:   9.77 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/zDu51GfL.js                                  33.39 kB │ gzip:  12.31 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/EvUr1kPE.js                                  36.39 kB │ gzip:  11.21 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BNGy7I8c.js                                  36.46 kB │ gzip:   7.93 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/B6hBdEjJ.js                                  37.11 kB │ gzip:  10.43 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BvnFrdOK.js                                  37.38 kB │ gzip:  12.10 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CMiguPBg.js                                  37.42 kB │ gzip:  11.83 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CN1aea9s.js                                  37.46 kB │ gzip:  12.35 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/8LfI7Y6U.js                                  37.70 kB │ gzip:  12.06 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/D6kRgXcR.js                                  38.91 kB │ gzip:  12.10 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BG9tCFyg.js                                  39.12 kB │ gzip:  12.58 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BSxRKKVb.js                                  40.35 kB │ gzip:  13.36 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CMpjCvvz.js                                  41.10 kB │ gzip:  12.07 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Biq4-mgJ.js                                  41.16 kB │ gzip:   9.40 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BdaPMZWW.js                                  41.18 kB │ gzip:  15.11 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DWWB0Ynj.js                                  41.53 kB │ gzip:  14.62 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/tcQVuK-Z.js                                  42.09 kB │ gzip:  14.85 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/-Xrw8hiN.js                                  42.10 kB │ gzip:  12.69 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Qr7QdUYw.js                                  42.19 kB │ gzip:  12.98 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DYXFxvkN.js                                  42.90 kB │ gzip:  11.79 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/C3VEmXax.js                                  43.72 kB │ gzip:  13.46 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BWxzb5ip.js                                  43.98 kB │ gzip:  12.30 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/YHHfCCHq.js                                  45.04 kB │ gzip:   8.62 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DaYXPUUZ.js                                  45.37 kB │ gzip:  13.76 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/B3pvP176.js                                  46.16 kB │ gzip:  15.45 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CNFNVrB2.js                                  46.46 kB │ gzip:  14.87 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CeLFEJy8.js                                  47.71 kB │ gzip:  18.61 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/D4fW5dzN.js                                  48.59 kB │ gzip:  15.74 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/C-qh2BOi.js                                  48.95 kB │ gzip:   9.31 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/B0PHPG72.js                                  50.27 kB │ gzip:  16.52 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CpynKIBK.js                                  50.50 kB │ gzip:  14.60 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BLlxk4rw.js                                  52.32 kB │ gzip:  16.97 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BsP2s6hS.js                                  56.42 kB │ gzip:  18.69 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CzKKgt7x.js                                  58.93 kB │ gzip:  20.89 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Cx97zBE_.js                                  59.03 kB │ gzip:  18.76 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BUuJgCfM.js                                  60.34 kB │ gzip:  19.82 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CQPrr04b.js                                  60.71 kB │ gzip:  18.05 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/D39BuZft.js                                  61.05 kB │ gzip:  17.73 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/B6aozhIg.js                                  62.97 kB │ gzip:  17.07 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BHpoAUwS.js                                  64.22 kB │ gzip:  18.39 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DVyNKQze.js                                  64.72 kB │ gzip:  21.38 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/yeGYm308.js                                  64.74 kB │ gzip:  18.81 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/nT5aMAfP.js                                  75.87 kB │ gzip:  24.89 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CYsJsn1x.js                                  78.89 kB │ gzip:  25.09 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Bn3KcgBY.js                                  80.76 kB │ gzip:  21.41 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/D9tEzw3E.js                                  90.51 kB │ gzip:  24.22 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Cl-vx3gw.js                                  91.23 kB │ gzip:  26.23 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CWh2ygGO.js                                  97.43 kB │ gzip:  30.32 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CavHu_Ej.js                                  98.64 kB │ gzip:  32.63 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/B-hqgN-U.js                                 102.22 kB │ gzip:  29.05 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CQlpKoEU.js                                 104.61 kB │ gzip:  30.18 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CPXK-Dik.js                                 104.79 kB │ gzip:  25.05 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/9dN2stFu.js                                 111.16 kB │ gzip:  37.91 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DBi_2r4N.js                                 112.27 kB │ gzip:  35.65 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BtYfdUyz.js                                 114.62 kB │ gzip:  44.32 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/ORSam-Os.js                                 114.89 kB │ gzip:  16.23 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Bnp9phrx.js                                 114.96 kB │ gzip:  30.99 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BOi1-PUA.js                                 115.08 kB │ gzip:  16.19 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/mV2ES-DO.js                                 115.90 kB │ gzip:  16.22 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BbTchFK0.js                                 119.12 kB │ gzip:  15.75 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Co_DSZen.js                                 120.38 kB │ gzip:  37.84 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DETrlkWR.js                                 120.83 kB │ gzip:  35.58 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DgFs4VLt.js                                 122.31 kB │ gzip:  40.34 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BYEfdX6M.js                                 123.48 kB │ gzip:  36.20 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/eFlgVCij.js                                 125.03 kB │ gzip:  42.55 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CJl29FEw.js                                 128.43 kB │ gzip:  40.10 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BWbUXAjI.js                                 129.57 kB │ gzip:  41.88 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BLRrphIt.js                                 131.98 kB │ gzip:  39.75 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BzritqgS.js                                 132.80 kB │ gzip:  43.31 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CubihgHu.js                                 133.25 kB │ gzip:  55.74 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/DYnEBctn.js                                 147.92 kB │ gzip:  40.81 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CCs-h6KB.js                                 161.19 kB │ gzip:  41.07 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/D59PN0WY.js                                 174.22 kB │ gzip:  55.30 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CrvuL64a.js                                 182.55 kB │ gzip:  51.63 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/Be-YiY24.js                                 204.49 kB │ gzip:  61.21 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/CeBaLwaf.js                                 239.71 kB │ gzip:  39.88 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/MTeNkXvQ.js                                 259.09 kB │ gzip:  78.57 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BU6o1D3V.js                                 412.87 kB │ gzip: 126.35 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/IeW3sI5e.js                                 432.00 kB │ gzip: 138.26 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/cdXy7Xlm.js                                 649.42 kB │ gzip: 113.66 kB
+.nuxt-e2e-journeys/dist/client/_nuxt/BCVp9SWd.js                                 660.70 kB │ gzip: 147.04 kB
+
+
+ WARN  [33m[INEFFECTIVE_DYNAMIC_IMPORT] [0mapp/utils/chat/workspace-access.ts is dynamically imported by app/db/projects.ts, app/utils/chat/thread-chat-tools.ts, app/utils/chat/tool-registry.ts but also statically imported by app/components/chat/ChatInputDropper.vue?vue&type=script&setup=true&lang.ts, app/components/chat/WorkspaceDocumentChangeCard.vue?vue&type=script&setup=true&lang.ts, app/components/chat/file-upload-utils.ts, app/components/files/WorkspaceFilesPane.vue?vue&type=script&setup=true&lang.ts, app/components/sidebar/SideBar.vue?vue&type=script&setup=true&lang.ts, ..., dynamic import will not move module into another chunk.
+
+
+
+ WARN  [plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+
+
+ WARN  [33m[INEFFECTIVE_DYNAMIC_IMPORT] [0mapp/utils/chat/workspace-items.ts is dynamically imported by app/components/chat/ChatInputDropper.vue?vue&type=script&setup=true&lang.ts, app/components/chat/WorkspaceDocumentChangeCard.vue?vue&type=script&setup=true&lang.ts, app/components/files/WorkspaceFilesPane.vue?vue&type=script&setup=true&lang.ts, app/db/project-workspace.ts, app/plugins/ChatMentions/useChatMentions.ts, ... but also statically imported by app/components/files/WorkspaceFilesPane.vue?vue&type=script&setup=true&lang.ts, app/components/sidebar/SideBar.vue?vue&type=script&setup=true&lang.ts, app/composables/projects/useProjectsCrud.ts, app/db/workspace-files.ts, app/utils/chat/workspace-chat-tools.ts, ..., dynamic import will not move module into another chunk.
+
+
+
+ WARN  [33m[INEFFECTIVE_DYNAMIC_IMPORT] [0mapp/utils/chat/workspace-projects.ts is dynamically imported by app/components/files/WorkspaceFilesPane.vue?vue&type=script&setup=true&lang.ts, app/utils/chat/workspace-chat-tools.ts, app/utils/chat/workspace-items.ts but also statically imported by app/utils/chat/workspace-chat-tools.ts, app/utils/chat/workspace-document-create.ts, app/utils/projects/context.ts, dynamic import will not move module into another chunk.
+
+
+
+ WARN  [33m[INEFFECTIVE_DYNAMIC_IMPORT] [0mapp/utils/projects/context.ts is dynamically imported by app/composables/chat/useAi.ts, app/db/branching.ts, app/db/threads.ts, app/utils/chat/compaction/summary.ts, app/utils/chat/openrouterStream.ts, ... but also statically imported by app/components/projects/ChatProjectChoice.vue?vue&type=script&setup=true&lang.ts, app/components/projects/ProjectMessageContext.vue?vue&type=script&setup=true&lang.ts, app/components/sidebar/SidebarProjectsPage.vue?vue&type=script&setup=true&lang.ts, app/composables/chat/useEmptyChatActions.ts, app/composables/projects/useProjectsCrud.ts, ..., dynamic import will not move module into another chunk.
+
+
+
+ WARN  [33m[INEFFECTIVE_DYNAMIC_IMPORT] [0mapp/db/project-workspace.ts is dynamically imported by app/composables/chat/useAi.ts, app/db/branching.ts, app/db/projects.ts, app/db/threads.ts, app/utils/chat/compaction/summary.ts, ... but also statically imported by app/components/projects/ChatProjectChoice.vue?vue&type=script&setup=true&lang.ts, app/components/projects/ProjectMessageContext.vue?vue&type=script&setup=true&lang.ts, app/components/sidebar/SidebarProjectsPage.vue?vue&type=script&setup=true&lang.ts, app/composables/chat/useChatModelSelection.ts, app/composables/plugins/trusted-records.ts, ..., dynamic import will not move module into another chunk.
+
+
+
+ WARN  [33m[INEFFECTIVE_DYNAMIC_IMPORT] [0mapp/db/documents.ts is dynamically imported by app/components/files/WorkspaceFilesPane.vue?vue&type=script&setup=true&lang.ts, app/db/project-workspace.ts, app/db/workspace-files.ts, tests/e2e/fixtures/ProductionChatJourney.vue?vue&type=script&setup=true&lang.ts but also statically imported by app/components/PageShell.vue?vue&type=script&setup=true&lang.ts, app/components/documents/DocumentEditorRoot.vue?vue&type=script&setup=true&lang.ts, app/components/plugins/PortableClientView.vue?vue&type=script&setup=true&lang.ts, app/components/sidebar/SideBar.vue?vue&type=script&setup=true&lang.ts, app/composables/documents/useDocumentsStore.ts, ..., dynamic import will not move module into another chunk.
+
+
+
+ WARN  [33m[INEFFECTIVE_DYNAMIC_IMPORT] [0mapp/composables/auth/confirmClientSignedOut.ts is dynamically imported by app/composables/workspace/shouldClearWorkspaceForNullSession.ts but also statically imported by app/plugins/00-workspace-db.client.ts, app/plugins/11.auth-session-refresh.client.ts, dynamic import will not move module into another chunk.
+
+
+
+ WARN  [33m[INEFFECTIVE_DYNAMIC_IMPORT] [0mapp/composables/projects/useProjectsCrud.ts is dynamically imported by app/composables/chat/useEmptyChatActions.ts but also statically imported by app/components/sidebar/SideBar.vue?vue&type=script&setup=true&lang.ts, app/components/sidebar/SideNavHeader.vue?vue&type=script&setup=true&lang.ts, dynamic import will not move module into another chunk.
+
+
+ℹ ✓ built in 17.71s
+
+ WARN  [33m[PLUGIN_TIMINGS] [0mJavaScript callbacks ran for 17.4s of this 17.7s build (98%).
+The slowest callbacks, timed inside each callback (the wait before a callback starts is excluded, the time it awaits is included):
+  - plugin vite:asset-import-meta-url transform (8%, 1.5s, 1 call)
+Additional callback time came from the callbacks below and from callbacks under 1s.
+11 callbacks are listed without a time. Their calls overlapped, so the time inside one call includes work from other calls. To find their cost, profile the build with node --cpu-prof:
+  - plugin builtin:replace transform (5934 calls)
+  - plugin builtin:replace load (4515 calls)
+  - plugin vite:terser renderChunk (385 calls)
+  … and 8 more
+See https://rolldown.rs/reference/InputOptions.checks#bundlertimings for more details.
+
+
+✔ Client built in 17716ms
+● Bundling server
+ℹ Building server...
+ℹ vite v8.3.5 building ssr environment for production...
+
+[theme-compiler] Compiling themes...
+[theme-compiler] Compiled 3 themes
+  - Successful: 3
+  - Errors: 0
+  - Warnings: 0
+[theme-compiler] ✅ All themes compiled successfully!
+
+transforming...
+✓ 1944 modules transformed.
+rendering chunks...
+ℹ .nuxt-e2e-journeys/dist/server/_nuxt/admin-styles.CkdqLb_a.mjs                            0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/AiSaveStatus-styles.BzOLJCnx.mjs                     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/SideBar-styles.C6fgf0Km.mjs                          0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/index-styles.Y_Md5ci8.mjs                            0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/welcome-styles.CzVGlXko.mjs                          0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/AppModal-styles.DniXFjD9.mjs                         0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/HelpChat-styles.B3xgs2yz.mjs                         0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/AppearanceSection-styles.CvEmvylB.mjs                0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/BackgroundLayerEditor-styles.YqQYVo9h.mjs            0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/BackgroundLayersSection-styles.DyTvxThM.mjs          0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatInput-styles.BrA1xW-N.mjs                        0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ColorPaletteSection-styles.DRZYK-1I.mjs              0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ColorPicker-styles.Bpz6xVI-.mjs                      0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Dashboard-styles.CcxzYt65.mjs                        0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DashboardThemeSelector-styles.F8mYdM7y.mjs           0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/PageShell-styles.BAcd3_WN.mjs                        0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ShapeSection-styles.CY5PpP4g.mjs                     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ThemeModeToggle-styles.BDzIJ6Sm.mjs                  0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/TypographySection-styles.DEiuw8Yq.mjs                0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/error-404-styles.BF-pIkoo.mjs                        0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/error-500-styles.BipnMLxW.mjs                        0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ResetSection-styles.DmBL8SQ2.mjs                     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatMessage-styles.D7iCgrzD.mjs                      0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/GalleryGrid-styles.ONlM_9wC.mjs                      0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ImageViewer-styles.BSegrwLW.mjs                      0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/MentionsList-styles.sN2U4qUL.mjs                     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/PromptEditor-styles.jGbPES4H.mjs                     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ResizeHandle-styles.DKTVpgSX.mjs                     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ToolCardSlot-styles.CUfESuxJ.mjs                     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/MessageEditor-styles.BaqQAkn0.mjs                    0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/SidebarHeader-styles.CeQ8xcv2.mjs                    0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ToolbarButton-styles.BO0P8NE9.mjs                    0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatEmptyState-styles.BJvEW1v0.mjs                   0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/CommandPalette-styles.DtZAO90z.mjs                   0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocsSidebarNav-styles.TJeNBtLh.mjs                   0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/LazyEditorHost-styles.DnDKotqe.mjs                   0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatWelcomeCard-styles.bBrTPcOq.mjs                  0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentAiActionList-styles.Cd-PbFps.mjs             0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentAiPromptEditor-styles.rdI_PNsm.mjs           0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/MentionsPopover-styles.d2PL-BRU.mjs                  0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/SidebarHomePage-styles._CrfJ2Uh.mjs                  0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/WorkspaceChrome-styles.DIJ_tHzq.mjs                  0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/WorkspaceTabBar-styles.x68cU7TE.mjs                  0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/BaseResizeHandle-styles.AIHgazWK.mjs                 0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatInputDropper-styles.BMnDmPcQ.mjs                 0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/NotificationItem-styles.CO7Zm0Qw.mjs                 0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/PaneResizeHandle-styles.BaLLOUL8.mjs                 0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatComposerShell-styles.DFD0o4fF.mjs                0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentImageNode-styles.D-1ktP2u.mjs                0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentInspector-styles.D6U4MYGA.mjs                0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/LoadingGenerating-styles.BJuEF4oS.mjs                0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ToolCallIndicator-styles.DOF3-s2G.mjs                0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentationShell-styles.PqoYfi_4.mjs               0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/FatalErrorBoundary-styles.BufWbH-7.mjs               0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ReasoningAccordion-styles.Co8Qybed.mjs               0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatMemorySettings-styles.BUiSgLzD.mjs               0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentHistoryPanel-styles.D57mTZfn.mjs             0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentTableToolbar-styles.Cub0HAY9.mjs             0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ResizableSidebarLayout-styles.C8SVqHvR.mjs           0.10 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/WorkspaceNewTabControl-styles.DaQNYB38.mjs           0.10 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/SideNavContentCollapsed-styles.ceD1SoBj.mjs          0.10 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/WorkspaceProfileSettings-styles.C3xwtsUK.mjs         0.10 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/AiPage-styles.C8s9pbjE.mjs                           0.15 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ModelCatalog-styles.Dt3EaGKy.mjs                     0.16 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatContainer-styles.lLpiNZe3.mjs                    0.16 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentEditorRoot-styles.DtladBBc.mjs               0.17 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatSettingsPopover-styles.C3_5sMo9.mjs              0.17 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/SideMobileBottomNav-styles.Cxnzv-Q8.mjs              0.17 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/WorkspaceTabSwitcher-styles.DPAsggKo.mjs             0.18 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentAiPanel-styles.Dt34pue4.mjs                  0.24 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ThemePage-styles.oP92o3_h.mjs                        0.80 kB
+.nuxt-e2e-journeys/dist/server/styles.mjs                                                 9.29 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/tools-public-Cpm4-Lfz.js                             0.17 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/styles-CECERB2i.js                                   0.18 kB │ map:     0.63 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/styles-DJwK1COt.js                                   0.18 kB │ map:     0.63 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/styles-CofRUSa0.js                                   0.18 kB │ map:     0.64 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/nullish-Dvpx-avd.js                                  0.19 kB │ map:     0.41 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/global-Bzs8qhyD.js                                   0.19 kB │ map:     0.35 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/meta-CAC3QmID.js                                     0.21 kB │ map:     0.33 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/pages-DE8f8sRs.js                                    0.22 kB │ map:     1.75 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/tokens-C8upf7tz.js                                   0.28 kB │ map:     1.37 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/workspaceResourceNavigation-DFzL5FB5.js              0.29 kB │ map:     1.68 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/trusted-editor-BpAyrv4d.js                           0.30 kB │ map:     2.24 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/FieldRoot-D_CWbweb.js                                0.31 kB │ map:    10.92 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/rolldown-runtime-D8jQpDG7.js                         0.34 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ResizeHandle-styles-1.mjs-ijS0n1iD.js                0.36 kB │ map:     1.39 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/LazyEditorHost-styles-1.mjs-D7VSCsg6.js              0.37 kB │ map:     6.85 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/BaseResizeHandle-styles-1.mjs-CzUqTlh5.js            0.37 kB │ map:     4.07 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/MentionsPopover-styles-1.mjs-B_zGIY1B.js             0.37 kB │ map:     1.77 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/registry-CWalnnzE.js                                 0.39 kB │ map:     1.50 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ToolbarButton-styles-1.mjs-BWVyOG9U.js               0.41 kB │ map:     2.99 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ImageViewer-styles-1.mjs-DXS-M2TW.js                 0.45 kB │ map:    12.85 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/getActiveElement-JZTLhsol.js                         0.45 kB │ map:     0.82 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/results-1JfxKfyf.js                                  0.46 kB │ map:     1.73 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useFormControl-BFEZ2nQn.js                           0.46 kB │ map:     0.64 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/NotificationItem-styles-1.mjs-8Rr3w-Sx.js            0.46 kB │ map:     7.49 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/virtual_nuxt_.nuxt-e2e-journeys_fetch-CyxcvglL.js    0.46 kB │ map:     0.53 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/SideNavContentCollapsed-styles-1.mjs-DJZuwStf.js     0.47 kB │ map:    21.14 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/PaneResizeHandle-styles-1.mjs-h932tHXi.js            0.48 kB │ map:     2.68 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/overlay-Bc18Tp6e.js                                  0.48 kB │ map:     0.80 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/related-chats-C8KzfUJp.js                            0.51 kB │ map:     0.76 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/register-core-za-WL4gr.js                            0.52 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/SideBar-styles-1.mjs-Yrl6Sle3.js                     0.52 kB │ map:    42.85 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useApiError-BTgEhx-b.js                              0.58 kB │ map:     0.76 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/WorkspaceTabSwitcher-styles-2.mjs-DfcQ70X5.js        0.61 kB │ map:    22.36 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ThemePage-styles-3.mjs-04FOo4aX.js                   0.63 kB │ map:     0.52 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/admin-styles-1.mjs-BEE8B_UR.js                       0.64 kB │ map:     0.52 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/define-theme-C8qby-RM.js                             0.70 kB │ map:     2.99 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatContainer-styles-2.mjs-BkTHDJ79.js               0.72 kB │ map:     0.76 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/registry-CF0w18vQ.js                                 0.74 kB │ map:     2.74 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/multiPaneApi-CbUIWJL2.js                             0.75 kB │ map:     1.12 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/date-C7DT4w3_.js                                     0.75 kB │ map:     1.29 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/AiPage-styles-1.mjs-B5V7e4IR.js                      0.75 kB │ map:     0.65 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ToolCardSlot-styles-1.mjs-REHx0X26.js                0.75 kB │ map:    13.19 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/FatalErrorBoundary-styles-1.mjs-i29Xg3F9.js          0.78 kB │ map:     4.64 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/GalleryGrid-styles-1.mjs-B_lzjcDf.js                 0.88 kB │ map:    17.49 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useIcon-a_lcrJ49.js                                  0.90 kB │ map:     1.68 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useModelVariantItems-C1gv-iVX.js                     0.93 kB │ map:     1.58 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/clamp-DIYkUC21.js                                    0.95 kB │ map:     4.14 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/themeOverrideProps-CS55JOva.js                       0.97 kB │ map:     2.23 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useAdminData-DO0J8MP0.js                             0.98 kB │ map:     4.10 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/WorkspaceProfileSettings-styles-1.mjs-DsDXLqG2.js    1.00 kB │ map:    10.96 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentTableToolbar-styles-1.mjs-D9Ra8ltK.js        1.00 kB │ map:     2.88 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Label-zjYuLcvQ.js                                    1.00 kB │ map:     1.96 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useConfirmDialog-8-JZSV06.js                         1.01 kB │ map:     2.44 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useForwardScopeId-DagAJ5Oj.js                        1.04 kB │ map:     1.38 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useHooks-DXHpt0jb.js                                 1.04 kB │ map:     3.13 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useResponsiveState-BhXCKKnU.js                       1.06 kB │ map:     6.05 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/document-content-COzI6aBT.js                         1.06 kB │ map:     2.13 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ThemePage-styles-10.mjs-58u4GxbB.js                  1.06 kB │ map:     0.97 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/pages-CPTPROWv.js                                    1.13 kB │ map:     0.66 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ReasoningAccordion-styles-1.mjs-DHygQrNN.js          1.19 kB │ map:     4.86 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/docs-CuNrWpE6.js                                     1.20 kB │ map:     0.80 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/plugin-quickstart-BH-LVLn-.js                        1.20 kB │ map:     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useAdminUserLookup-Ca5hUnsi.js                       1.21 kB │ map:     2.55 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/types-BbpXyYMo.js                                    1.23 kB │ map:    11.27 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/overview-CKiRNyci.js                                 1.24 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/signup-invites-CsXhwQmn.js                           1.24 kB │ map:     0.73 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/MessageEditor-styles-1.mjs-D8SZYebZ.js               1.26 kB │ map:     6.34 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ToolCallIndicator-styles-1.mjs-s_2GhwfM.js           1.27 kB │ map:    16.81 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/documentation-DpM2uU0X.js                            1.29 kB │ map:     0.94 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/src-Chpy2CrQ.js                                      1.32 kB │ map:    42.58 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/_...slug_-DNFD4rwj.js                                1.34 kB │ map:     1.02 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useFocusGuards-BtuB_C0w.js                           1.38 kB │ map:     2.12 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/_id_-DrLgnh_W.js                                     1.38 kB │ map:     1.20 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/_id_-P1VkeRVN.js                                     1.39 kB │ map:     1.21 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ModelCatalog-styles-1.mjs-BAJRQftU.js                1.40 kB │ map:    35.28 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Dashboard-styles-1.mjs-x40bo3sG.js                   1.42 kB │ map:    12.60 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/branding-Clql9tdL.js                                 1.43 kB │ map:     1.28 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/workspace-Y9g4yrfc.js                                1.44 kB │ map:     1.17 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/features-D9V_USl0.js                                 1.44 kB │ map:     1.33 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/state-FFjQoq2J.js                                    1.45 kB │ map:     5.78 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatContainer-styles-1.mjs-CCys0B4_.js               1.53 kB │ map:    67.62 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ThemePage-styles-7.mjs-Pnts9YRl.js                   1.54 kB │ map:     1.52 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/PageShell-styles-1.mjs-DkbakTYR.js                   1.60 kB │ map:     2.02 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ThemePage-styles-6.mjs-DdcsCcmV.js                   1.63 kB │ map:     1.67 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/chat-DTvuzFAa.js                                     1.63 kB │ map:     1.44 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/utils-BTqM8ZiX.js                                    1.64 kB │ map:     2.67 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/_registry-TQVKe7Q1.js                                1.65 kB │ map:     4.54 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/advanced-d3rlZmAe.js                                 1.65 kB │ map:     1.99 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentationPageShell-BXoY5a1P.js                   1.66 kB │ map:     1.36 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/SidebarHomePage-styles-1.mjs-DR7RCvKN.js             1.68 kB │ map:    34.97 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentAiPanel-styles-2.mjs-YGUkxIi_.js             1.69 kB │ map:     2.02 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/AppModal-styles-1.mjs-DP8Du2fd.js                    1.69 kB │ map:     5.86 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentImageNode-styles-1.mjs-C_yvDqUc.js           1.76 kB │ map:     6.18 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/parse-error-B8H4eEAV.js                              1.76 kB │ map:     2.70 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/SidebarHeader-styles-1.mjs-DHXwKOK7.js               1.84 kB │ map:     7.59 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/tool-card-frame-budget-D8Dtf0ox.js                   1.84 kB │ map:     4.12 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/PromptEditor-styles-1.mjs-D42ub6z_.js                1.87 kB │ map:    14.33 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/AiPage-styles-2.mjs-C2s4hUmm.js                      1.90 kB │ map:    26.74 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/image-library-CFanVPLj.js                            1.93 kB │ map:     3.35 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/attachments--ORZdYNg.js                              1.93 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useForwardExpose-CSy8N6eE.js                         1.94 kB │ map:     3.36 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/core-items-DwBmdNI-.js                               1.98 kB │ map:     3.74 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useTokenizer-D9xdvYV8.js                             2.04 kB │ map:     7.94 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/AppIcon-DT0X_7e1.js                                  2.06 kB │ map:     2.93 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ThemePage-styles-1.mjs-CQGv4Doq.js                   2.07 kB │ map:     2.25 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/transfer-queue-CHwFv3WR.js                           2.09 kB │ map:    53.32 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useDialogViewport-CISvUfyD.js                        2.09 kB │ map:     4.07 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentAiPanel-styles-1.mjs-BCZDZwn2.js             2.15 kB │ map:     2.03 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/streamWriteCoalescer-C7TS29Oi.js                     2.16 kB │ map:     6.20 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ThemePage-styles-5.mjs-C_15lM1e.js                   2.18 kB │ map:     2.26 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/contribution-surface-kernel-BOMviFZs.js              2.18 kB │ map:     5.04 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/validate-document-content-DNProiXt.js                2.19 kB │ map:     4.10 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/WorkspaceNewTabControl-styles-1.mjs-Di2wq9NQ.js      2.29 kB │ map:     9.50 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/stream-markdown-BnoUI7CY.js                          2.30 kB │ map:     9.71 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useFieldGroup-Dtsx0prH.js                            2.31 kB │ map:     3.56 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/portable-pane-DIFLtmOL.js                            2.31 kB │ map:     3.53 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/utils-BCuuV9nz.js                                    2.31 kB │ map:     3.91 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/error-500-styles-1.mjs-CdLClIq9.js                   2.32 kB │ map:     4.42 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/admin-auth-DB_8LnDC.js                               2.34 kB │ map:     5.24 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatComposerShell-B3lbOfoK.js                        2.35 kB │ map:    11.05 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/SideMobileBottomNav-styles-2.mjs-BWkqAH6j.js         2.41 kB │ map:    53.45 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useAdminPlugins-D2xdfd6k.js                          2.42 kB │ map:     7.60 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/FieldGroup-DFyKrtCh.js                               2.53 kB │ map:     2.76 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/dbTry-DIWl4CUs.js                                    2.63 kB │ map:     5.71 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ai-preferences-CilY7CD2.js                           2.70 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ThemePage-styles-11.mjs-CeEo5mV0.js                  2.74 kB │ map:     8.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/MessageEditor-B3Y3LHt8.js                            2.75 kB │ map:    13.37 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocsSidebarNav-styles-1.mjs-G8aCyMYa.js              2.76 kB │ map:     6.82 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/head-DBoZdB9V.js                                     2.80 kB │ map:     9.15 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/schema-Bxp3vr3P.js                                   2.82 kB │ map:     6.16 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/README-C2XsKW6q.js                                   2.83 kB │ map:     0.07 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Icon-CGgTEB1d.js                                     2.84 kB │ map:     3.35 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/usePanePrompt-BIR7v0QA.js                            2.86 kB │ map:     5.88 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/first-hook-eWCo0v78.js                               2.90 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/utilities-DAWpq_bw.js                                2.91 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/waitlist-R95piEY9.js                                 2.94 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/overview-C_drjfUU.js                                 2.99 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/chat-empty-state-30PMk0gW.js                         3.00 kB │ map:     6.81 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useTypedThemeOverrides-CDsM55Yu.js                   3.01 kB │ map:     9.43 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useTypeahead-41_OXtpq.js                             3.03 kB │ map:     4.39 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/workspace-access-CgM1VK6k.js                         3.03 kB │ map:     4.74 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/error-404-styles-1.mjs-rcIgKBzA.js                   3.07 kB │ map:     6.25 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/workspace-projects-4QQGqDMb.js                       3.07 kB │ map:    13.48 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentHistoryPanel-styles-1.mjs-BuUfj9cR.js        3.15 kB │ map:    10.93 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatInput-DxTmWpG1.js                                3.16 kB │ map:    36.80 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ready-CuDNccPT.js                                    3.17 kB │ map:     8.76 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ThemePage-styles-2.mjs-4VU9sz_A.js                   3.20 kB │ map:     3.86 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/first-data-h7jV464N.js                               3.26 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/copy-image-to-clipboard-D0jgEpqm.js                  3.35 kB │ map:     7.36 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ProjectToolApproval-D2qgCDCz.js                      3.37 kB │ map:     3.12 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/chat-editor-extensions-CaFY29Pf.js                   3.38 kB │ map:     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/index-6-styles-1.mjs-D4sknZGT.js                     3.41 kB │ map:    40.65 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/orama-kk6L1lMG.js                                    3.44 kB │ map:     8.87 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/_id_-Ca0QudKV.js                                     3.47 kB │ map:     3.98 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/overview-CaS2UdV3.js                                 3.53 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ModelCatalogProviderLogo-38uyfHx7.js                 3.53 kB │ map:     6.72 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ResizableSidebarLayout-styles-1.mjs-DDuEPiWW.js      3.55 kB │ map:    33.24 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useDialogFocus-Bk80nSsm.js                           3.62 kB │ map:     8.16 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/error-500-sXQ_P0zJ.js                                3.64 kB │ map:     4.78 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/database-BIrarKyN.js                                 3.76 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/overview-BQnUeZhh.js                                 3.80 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/schema-COTwK_K5.js                                   3.81 kB │ map:     0.07 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/overview-CyigQ-05.js                                 3.85 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatComposerShell-styles-1.mjs-CSNReawC.js           3.91 kB │ map:     5.35 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useSessionContext-D1wkz2aR.js                        3.92 kB │ map:     9.80 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/message-files-BRxm77yf.js                            3.92 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/PaletteImageThumb-C4Co8t6U.js                        3.95 kB │ map:     9.59 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/overview-YNChhgXA.js                                 4.06 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatEmptyState-styles-1.mjs-DGaROHsT.js              4.11 kB │ map:     9.54 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/first-chat-DxaLUZOd.js                               4.11 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/document-revisions-B224EDR3.js                       4.14 kB │ map:     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/posts-Cw7OWUqM.js                                    4.16 kB │ map:     0.07 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/RovingFocusItem-DGc6IAvF.js                          4.23 kB │ map:     7.35 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useAdminExtensions-To_AKxxT.js                       4.29 kB │ map:     8.98 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/CommandPalette-styles-1.mjs-tn9nx0DV.js              4.32 kB │ map:    35.81 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/VisuallyHiddenInput-CY2jU99-.js                      4.32 kB │ map:     8.67 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/access-gate-Bcn82Bb5.js                              4.34 kB │ map:     9.00 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/RovingFocusGroup-DRr0B1J8.js                         4.35 kB │ map:     7.62 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/LoadingGenerating-styles-1.mjs-N1THn6FE.js           4.38 kB │ map:     5.46 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/provider-clerk-BeIwo-Pp.js                           4.52 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/workspace-profiles-Bo6D4Lyv.js                       4.60 kB │ map:     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/first-theme-ixZ23ViJ.js                              4.61 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useActivePrompt-B39SxIb9.js                          4.65 kB │ map:     6.35 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/projects-DmOWz06g.js                                 4.66 kB │ map:     8.39 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/continuity-DABuFoAG.js                               4.68 kB │ map:     9.88 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/admin-plugins-62Y1FQX-.js                            4.71 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useModelSearch-CRr5AhS9.js                           4.73 kB │ map:    11.79 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/WorkspaceChrome-styles-1.mjs-DmZJa09z.js             4.80 kB │ map:    13.12 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/overview-CYI9apu6.js                                 4.85 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/kv-CcOIpUXn.js                                       4.87 kB │ map:     0.07 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/posts-g5AWKUh4.js                                    4.89 kB │ map:    16.84 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/reference-BLJIX3Re.js                                4.89 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/customize-Bq5V_a3e.js                                4.93 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/overview-DHOlt99j.js                                 4.93 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/prompts-BRGSAbot.js                                  5.02 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/branching-Bj4rO9HO.js                                5.03 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/file-upload-utils-oLKQ5ZTB.js                        5.05 kB │ map:     9.65 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/WorkspaceTabSwitcher-styles-1.mjs-hBjGMf5i.js        5.16 kB │ map:    22.36 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/persistence-CWoYuLgv.js                              5.18 kB │ map:    11.83 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ThemePage-styles-9.mjs-DuVMHr9P.js                   5.19 kB │ map:     5.77 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/message-renderers-BfcGSLIJ.js                        5.20 kB │ map:    14.77 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/icons.config-koKFyhnN.js                             5.20 kB │ map:     7.78 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/mini-app-tutorial-CR7NNzcp.js                        5.23 kB │ map:     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatSettingsPopover-styles-1.mjs-CoG-Eo_g.js         5.25 kB │ map:     5.28 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ModelSelect-DdDehiY3.js                              5.25 kB │ map:    11.98 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentInspector-styles-1.mjs-Bv_H__gn.js           5.30 kB │ map:    12.46 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/generate-BHRpb-rF.js                                 5.31 kB │ map:     9.45 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useFilter-B08STNDV.js                                5.36 kB │ map:     9.48 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/troubleshooting-KbCdMn8E.js                          5.39 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/error-404-DOj7EeNl.js                                5.40 kB │ map:     6.93 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/chat-types-o89rWaQh.js                               5.43 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatEmptyState-Bc9BTEXf.js                           5.44 kB │ map:    20.77 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/system-BNa6Xish.js                                   5.45 kB │ map:    27.21 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/workspace-backup-stream-n-7aLPaQ.js                  5.52 kB │ map:     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/usePaneApps-CXPP6dRN.js                              5.55 kB │ map:    13.23 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ConfirmDialog-DHGHyXzS.js                            5.56 kB │ map:     6.91 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/AppModal-CzsesLEk.js                                 5.57 kB │ map:    13.36 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/SearchPanelRoot-Dwuw0Gal.js                          5.64 kB │ map:    14.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/tool-card-chat-bridge-D7l7VWhB.js                    5.66 kB │ map:    12.38 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useThumbnailUrlCache-DTSnc6Po.js                     5.67 kB │ map:    11.55 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/threads-sWdLRkcT.js                                  5.68 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/usePreviewCache-5Ql2ouVb.js                          5.74 kB │ map:    15.27 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/library-D7jr-fLi.js                                  5.78 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/connect-_HQwc-mV.js                                  5.93 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/safe-changes-DFJAnyoz.js                             6.00 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatInputDropper-styles-1.mjs-FWHU0JoN.js            6.05 kB │ map:     8.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Card-B6O3g-yu.js                                     6.09 kB │ map:     6.12 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/architecture-C3MVuddS.js                             6.16 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/workspace-document-read-Bl_yUlE7.js                  6.18 kB │ map:    11.67 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useGraceArea-vFYt_Zk5.js                             6.20 kB │ map:    11.21 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useSidebarPages-DHQgN3_O.js                          6.29 kB │ map:    17.60 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/setup-Cvrd9Hv8.js                                    6.37 kB │ map:     0.07 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/FileCacheSettings-BJHyU1QO.js                        6.39 kB │ map:    11.21 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/command-palette-rQ6u4Rrr.js                          6.63 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatWelcomeCard-styles-1.mjs-DUPyxYC6.js             6.63 kB │ map:    17.97 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/openrouter-build-DHMsFRqI.js                         6.66 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/provider-s3-CnpYYi4t.js                              6.66 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/provider-fs-DMLmhST2.js                              6.67 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/workspace-file-read-D7fc2XZE.js                      6.67 kB │ map:    11.37 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/MentionsList-styles-1.mjs-CxJpvAMD.js                6.70 kB │ map:    21.59 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/or3-connect-RCq9qwdE.js                              6.72 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/login-CYcGYfOk.js                                    6.79 kB │ map:    21.25 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/openrouterStream-ULTCNg1S.js                         6.85 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/files-select-CuiouBpr.js                             6.86 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/package-install-DBwEns80.js                          6.90 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useOpenrouter-DYUHGc0N.js                            7.05 kB │ map:    12.85 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/connections-oh0kkbyd.js                              7.08 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ThemePage-styles-8.mjs-G4nkURRZ.js                   7.16 kB │ map:     7.88 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useWorkspaceProfiles-CYkcy3EH.js                     7.19 kB │ map:    17.90 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/errors-BzXOPdly.js                                   7.22 kB │ map:     0.07 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/source-map-BySLHmkj.js                               7.29 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/component-overrides-BtkSjXcg.js                      7.34 kB │ map:     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Presence-BQEFaBN4.js                                 7.35 kB │ map:    12.72 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useDefaultPrompt-DUqjGUSQ.js                         7.40 kB │ map:    11.00 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/welcome-styles-1.mjs-Brz5_h46.js                     7.42 kB │ map:     9.41 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/models-service-CsHNFr9f.js                           7.46 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/source-intake-D8mnuIZj.js                            7.48 kB │ map:    17.20 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/chat-tool-reliability-BRPZ8-2K.js                    7.54 kB │ map:     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/chat-tools-BT2O2k9t.js                               7.58 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/backup-CBbC5aIo.js                                   7.59 kB │ map:     0.07 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/file-handling-CRrKR9C1.js                            7.67 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/publish-CCWTMBL3.js                                  7.75 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/lossy-request-BPlWUyFy.js                            7.77 kB │ map:    13.68 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/SideMobileBottomNav-styles-1.mjs-BO12dwWF.js         7.81 kB │ map:    53.45 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/plugin-sdk-cli-Co6bFWs2.js                           7.88 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useServerRestart-D1DTNYEP.js                         7.97 kB │ map:    14.81 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/messages-Q9qLx0uu.js                                 8.09 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useDocumentEditorSessions-Cqow0NDC.js                8.19 kB │ map:    16.60 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/AdminConfigEditor-BlLBZM3t.js                        8.20 kB │ map:    61.85 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/configure-MHxbJ3eE.js                                8.23 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/tool-runtime-vCbfi9sI.js                             8.26 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/SidebarCreateDocumentModal-DoRtcbib.js               8.36 kB │ map:     7.96 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/OpenRouterKeyModal-Dpihv18G.js                       8.37 kB │ map:    11.47 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useChatInputBridge-CQobxDq8.js                       8.46 kB │ map:    11.74 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/plugin-access-gating-BtbuzqtD.js                     8.48 kB │ map:     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/create-DGW75q1f.js                                   8.51 kB │ map:    22.57 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/openrouter-callback-B6985lP6.js                      8.58 kB │ map:    29.26 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/document-ai-hunks-Ci2WFoFC.js                        8.63 kB │ map:    17.20 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/operations-vzKeZVCt.js                               8.66 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/WorkspaceTabBar-styles-1.mjs-C7oGI4Bo.js             8.81 kB │ map:    38.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Kbd-BSJtS7MB.js                                      8.87 kB │ map:    14.93 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatSettingsPopover-styles-2.mjs-BKpgkJqP.js         8.88 kB │ map:    49.05 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/files-DEb3tzEi.js                                    8.92 kB │ map:     0.07 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/first-plugin-FKmGq6IH.js                             8.96 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/workspaces-OnvZCiY5.js                               9.07 kB │ map:    20.86 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useExtensionManagement-BpIyDnO9.js                   9.13 kB │ map:    13.14 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useProjectsCrud-DYL1060u.js                          9.27 kB │ map:    16.89 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/HelpChat-styles-1.mjs-BDcNymF-.js                    9.28 kB │ map:    33.18 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentEditorRoot-styles-2.mjs-D7HjFTQO.js          9.32 kB │ map:     9.48 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/manifest-DLr5_7EX.js                                 9.42 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/reference-CpwK_vT6.js                                9.78 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/workspace-items-DNeODPkj.js                          9.83 kB │ map:    20.81 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/WorkspaceSelector-eE1Y0SrS.js                        9.91 kB │ map:    14.75 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ThemePage-styles-4.mjs-B6HMlz8Q.js                  10.01 kB │ map:    11.25 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/editor-BWUKpm6i.js                                  10.11 kB │ map:     0.07 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/PluginDevelopmentController-DH18hzwf.js             10.20 kB │ map:    39.14 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/provider-basic-auth-DR99gk3L.js                     10.22 kB │ map:     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ToolCardFrameHost-hD73T_GH.js                       10.27 kB │ map:    25.98 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/error-B8RPH_Sy.js                                   10.45 kB │ map:    29.28 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/admin-DIgWLlpy.js                                   10.52 kB │ map:    18.56 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatInput-styles-1.mjs-0NiugXwK.js                  10.58 kB │ map:    17.98 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useAiSettings-kTALz3xk.js                           10.64 kB │ map:    18.48 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/bundled-v1-manager-runtime-BckVeS1W.js              10.73 kB │ map:    83.28 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/FormField-B6uLk5If.js                               10.81 kB │ map:    12.06 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/activity-external-agents-Bed0giqc.js                10.96 kB │ map:     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/SidebarAuthButton-DiCMveiP.js                       10.96 kB │ map:    17.90 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/SidebarCreateProjectModal-DBJ-qa11.js               11.04 kB │ map:    10.97 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Badge-DgyU28TT.js                                   11.12 kB │ map:    16.25 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/PromptEditor-CsOHVrO_.js                            11.13 kB │ map:    32.90 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/manual-context-compaction-BCed4Tr2.js               11.14 kB │ map:     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/retry-BODlrXwc.js                                   11.25 kB │ map:    25.31 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/install-and-manage-BZR9o5Ee.js                      11.35 kB │ map:     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/add-features-BFs7Lbjn.js                            11.45 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/document-revisions-DWhCoXbS.js                      11.58 kB │ map:    26.71 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatMessage-styles-1.mjs-O3MvI2p0.js                11.62 kB │ map:    57.59 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/prompts-Db_3oWc4.js                                 11.74 kB │ map:    27.12 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/admin-users-QkSIOqHC.js                             11.77 kB │ map:    29.27 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/notifications-BW1O8KM3.js                           11.78 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/summary-BZDr-cTT.js                                 12.18 kB │ map:    19.71 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentHistoryPanel-DYCAnBnA.js                    12.37 kB │ map:    26.92 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/workspace-files-BTnvIhEt.js                         12.38 kB │ map:    24.70 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/nuxt-D7NOO19d.js                                    12.48 kB │ map:    33.78 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/GalleryGrid-C0gWoIV9.js                             12.56 kB │ map:    40.21 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/client-CNhkOmnX.js                                  12.73 kB │ map:     0.07 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/modelCatalog-CoyGNPzV.js                            12.82 kB │ map:    28.31 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/provider-sqlite-CKsmFeD2.js                         12.83 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/messageBuild-BwhjcCCM.js                            12.93 kB │ map:    30.61 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/projection-DEubR4a8.js                              13.01 kB │ map:    25.39 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/providers-CcA56NaV.js                               13.19 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/or3-cloud-wizard-EmCE7Szd.js                        13.26 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useDocumentsStore-CCdJFuCy.js                       13.31 kB │ map:    26.07 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/icons.config-3nrRFWm5.js                            13.33 kB │ map:    18.18 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/capability-matrix-BTAd9Qfc.js                       13.42 kB │ map:     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/WorkspaceTabBar-BXBqidTx.js                         13.44 kB │ map:    85.99 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Form-CxDyUWo2.js                                    13.54 kB │ map:    22.86 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/kv-CasBP0um.js                                      13.68 kB │ map:    30.35 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/workspace-document-change-D9xC6BFg.js               13.71 kB │ map:    24.54 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/secret-store-BS_XgVCq.js                            13.99 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/SidebarAddToProjectModal-DyMSXNOx.js                14.07 kB │ map:    17.11 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/tool-registry-B5OISHKd.js                           14.08 kB │ map:    31.06 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/config-DfCXeKRM.js                                  14.14 kB │ map:    25.90 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/tv-DquGNaFs.js                                      14.34 kB │ map:    27.18 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Alert-B2p-VkhK.js                                   14.76 kB │ map:    19.43 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/nuxt-link-sA7IrIRe.js                               14.79 kB │ map:    32.47 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/document-ai-operations-DGThuDVV.js                  14.90 kB │ map:    28.39 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/welcome-BkP7Vx3j.js                                 15.00 kB │ map:    52.80 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/runtime-and-security-DTMwK69j.js                    15.11 kB │ map:     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useDashboardPlugins-DZ-_XDBC.js                     15.28 kB │ map:    42.51 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useUserApiKey-BYnIKpnU.js                           15.37 kB │ map:    34.89 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useChatMentions-4ha6ZXnN.js                         15.56 kB │ map:    38.62 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/app-BbScktZQ.js                                     15.70 kB │ map:    49.48 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/projects-DX9llDoS.js                                15.73 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/openrouter-build-lXkivyrw.js                        16.29 kB │ map:    41.05 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/addons-hfjkNONu.js                                  16.58 kB │ map:    45.28 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/documents-nUNcdZno.js                               16.60 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/schema-CwpESNDp.js                                  16.68 kB │ map:    45.27 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/tool-cards-D6wl22-Q.js                              16.81 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/PopperArrow-Bq9pOL0a.js                             16.83 kB │ map:    33.44 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ImageViewer-BHK14YTa.js                             17.27 kB │ map:    33.28 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/documents-CPjw7zwm.js                               17.39 kB │ map:    36.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentAiPanel-styles-3.mjs-CIiqLfF6.js            17.48 kB │ map:    20.10 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/WorkspaceDocumentChangeCard-Dg7J0SMv.js             17.59 kB │ map:    34.73 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Input-C7qM0SIr.js                                   17.78 kB │ map:    25.75 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/portable-canary-Bqbi3Ytg.js                         17.91 kB │ map:    64.76 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/threads-Quo3Bhf2.js                                 18.27 kB │ map:    49.07 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/themes-HMPoTqdR.js                                  18.33 kB │ map:    43.25 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/auth-system-BAxqEze7.js                             18.51 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Textarea-DlU6wExW.js                                18.79 kB │ map:    27.40 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/WorkspaceProfileSettings-DzSeTsZu.js                19.36 kB │ map:    29.02 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/deployment-operations-RnvfzivR.js                   19.37 kB │ map:     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Dashboard-DaH52bUF.js                               19.39 kB │ map:    35.31 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentEditorRoot-styles-1.mjs-DAAiD3jD.js         20.36 kB │ map:    21.41 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useModelStore-DyyR7VSl.js                           20.53 kB │ map:    43.31 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/registry-Bk95oCWv.js                                20.72 kB │ map:    45.75 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/development-setup-D6_Q5K9C.js                       20.82 kB │ map:     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/webhooks-Cm7Qc27-.js                                20.92 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/api-reference-AVw1BXKh.js                           21.11 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/troubleshooting-l-IeTt1B.js                         21.19 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/files-DlOaHe-i.js                                   21.28 kB │ map:    54.33 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/WorkspaceTabSwitcher-3cH7qnzb.js                    21.79 kB │ map:    53.46 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Switch-DAfSVGfd.js                                  22.67 kB │ map:    28.69 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/connect-B2ZnJb6i.js                                 22.84 kB │ map:    63.01 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentationShell-styles-1.mjs-DOaQlpQv.js         23.17 kB │ map:    44.35 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/plugin-sdk-BNyPQtTf.js                              23.72 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useImageGallery-Dqs29tXS.js                         23.80 kB │ map:    56.81 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/styling-BP211he8.js                                 23.81 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/foregroundStream-CX1WaPJZ.js                        24.03 kB │ map:    53.16 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/storage-layer-DXM-SVfA.js                           24.23 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/provider-convex-BJe3FsrP.js                         24.70 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/document-editor-schema-B3y5gW81.js                  25.01 kB │ map:    68.35 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/FocusScope-BzpBQT7q.js                              25.38 kB │ map:    43.61 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/continue-K72ydTSa.js                                26.42 kB │ map:    53.46 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/config-reference-DS4df2eS.js                        26.80 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/SideNavContentCollapsed-CR5rGsuR.js                 27.41 kB │ map:    79.81 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/useCommandPalette-CQaN90iY.js                       27.47 kB │ map:    61.72 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/background-execution-mhJ_mfkQ.js                    28.38 kB │ map:     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/setup-Dz9pcn2G.js                                   28.74 kB │ map:    80.46 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/environment-reference-CTLkQj4D.js                   29.70 kB │ map:     0.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/chat-lifecycle-Bbc7QVUN.js                          29.83 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/images-DZhws5wZ.js                                  30.12 kB │ map:    95.23 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Tooltip-PPOhicmw.js                                 30.50 kB │ map:    46.32 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/_id_-DAOrjHUc.js                                    32.11 kB │ map:    74.48 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/theme-DUe9YjvJ.js                                   32.26 kB │ map:    53.10 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/sync-layer-D6ZVllHA.js                              32.30 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/hook-catalog-CBtp2iQG.js                            32.54 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/coordinator-D_n6XFfi.js                             32.77 kB │ map:    73.97 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/AiPage-DtP2Mqle.js                                  34.06 kB │ map:    84.45 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/portable-client-runtime-CEGhwAPA.js                 34.40 kB │ map:    91.28 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Checkbox-xDsWzybB.js                                35.26 kB │ map:    59.68 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Slider-DcNvtpW6.js                                  36.35 kB │ map:    65.09 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/projects-C7htqctu.js                                37.05 kB │ map:     0.08 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Tabs-wscG7Rrb.js                                    37.75 kB │ map:    51.75 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/context-SCC5KJ2y.js                                 38.34 kB │ map:    76.41 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/docmap-BzuYchU1.js                                  41.32 kB │ map:    58.80 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Popover-D9lD6wOv.js                                 42.18 kB │ map:    78.18 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/admin-DV0lvEj1.js                                   42.21 kB │ map:    70.66 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/openrouterStream-BWtGCxz0.js                        42.73 kB │ map:    85.14 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/client-D7DmD7Jq.js                                  44.74 kB │ map:   172.19 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/theme-BgBe_M_U.js                                   51.76 kB │ map:    86.67 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Modal-_IwDihXD.js                                   53.70 kB │ map:    69.16 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatSettingsPopover-BFO8Ub6e.js                     56.52 kB │ map:   153.18 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/theme-frUDTIxb.js                                   57.20 kB │ map:    94.93 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/webhooks-CK822bnu.js                                58.05 kB │ map:   108.19 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Toast-BQQlHw5y.js                                   60.67 kB │ map:    98.86 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentationShell-DhILmRc3.js                      60.68 kB │ map:   204.85 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ModelCatalog-CGH36BUQ.js                            64.99 kB │ map:   143.33 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/SystemPromptsModal-BMmR-Rv-.js                      69.84 kB │ map:   152.14 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/history-DwtG6k8t.js                                 79.79 kB │ map:   191.55 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/registration-COzXBx1y.js                            97.66 kB │ map:   134.48 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentAiPanel-C4wKhkUu.js                        104.97 kB │ map:   202.02 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/plugins-DxjMBKvY.js                                110.13 kB │ map:   268.36 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/components-BxQjxk3S.js                             124.92 kB │ map:   149.88 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ThemePage-DApZYhKY.js                              129.34 kB │ map:   422.06 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/SideBar-BcqY3JY5.js                                138.95 kB │ map:   428.75 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/Select-DUJXTnpH.js                                 140.35 kB │ map:   178.84 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatMessage-Cyb-psfl.js                            145.65 kB │ map:   374.00 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DropdownMenu-CJu3xpKA.js                           147.72 kB │ map:   201.37 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatInputDropper-DmMuk_f-.js                       158.60 kB │ map:   373.42 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/SelectMenu-WiVKonCE.js                             166.90 kB │ map:   229.13 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/DocumentEditor-C_-GWaRv.js                         181.30 kB │ map:   429.11 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/ChatContainer-gY-Q7rjZ.js                          282.31 kB │ map:   708.69 kB
+.nuxt-e2e-journeys/dist/server/_nuxt/PageShell-Didxe6-f.js                              375.17 kB │ map:   881.15 kB
+.nuxt-e2e-journeys/dist/server/server.mjs                                               546.55 kB │ map: 1,530.61 kB
+
+ℹ ✓ built in 4.76s
+
+ WARN  [33m[PLUGIN_TIMINGS] [0mJavaScript callbacks ran for 4.5s of this 4.8s build (95%).
+10 callbacks are listed without a time. Their calls overlapped, so the time inside one call includes work from other calls. To find their cost, profile the build with node --cpu-prof:
+  - plugin builtin:replace transform (1944 calls)
+  - plugin builtin:replace load (1446 calls)
+  - plugin nuxt:resolve-externals:external resolveId (1821 calls)
+  … and 7 more
+See https://rolldown.rs/reference/InputOptions.checks#bundlertimings for more details.
+
+
+✔ Server built in 4791ms
+● Building Nitro server
+[nitro] ℹ Initializing prerenderer
+
+ WARN  [plugin esbuild] .nuxt-e2e-journeys/dist/server/_nuxt/ChatContainer-gY-Q7rjZ.js: [esbuild] (.nuxt-e2e-journeys/dist/server/_nuxt/ChatContainer-gY-Q7rjZ.js:1309:3) Duplicate key "call" in object literal
+
+● Prerendering routes (5.00s · 29.6s)
+
+ WARN  "sendError" is imported from external module "file:///Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/h3/dist/index.mjs" but never used in ".nuxt-e2e-journeys/dist/server/_nuxt/retry-BODlrXwc.js".
+
+[nitro] ℹ Prerendering 1 routes
+[nitro]   ├─ /200.html (35ms)
+[nitro] ℹ Prerendered 1 routes in 8.469 seconds
+● Bundling Nitro server (10.0s · 34.6s)
+[nitro] ✔ Generated public .output/public
+
+PWA v1.3.0
+mode      generateSW
+precache  488 entries (19339.86 KiB)
+files generated
+  ../.output/public/sw.js
+  ../.output/public/workbox-f2abae6d.js
+warnings
+  One of the glob patterns doesn't match any files. Please remove or fix the following: {
+  "globDirectory": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/.output/public",
+  "globPattern": "**/_payload.json",
+  "globIgnores": [
+    "streamsaver/**",
+    "screenshots/**",
+    "logos/logo-8bit-raw.png",
+    "logos/logo-xl.png",
+    "logos/logo-1024.png",
+    "logos/icon-logo.png",
+    "logos/app-icon.svg",
+    "logos/app-icon-maskable.svg",
+    "logos/logo-1024.webp",
+    "sw.js",
+    "workbox-*.js"
+  ]
+}
+
+[nitro] ℹ Building Nuxt Nitro server (preset: node-server, compatibility date: 2025-07-07)
+● Bundling Nitro server (15.0s · 39.6s)
+[plugin esbuild] .nuxt-e2e-journeys/dist/server/_nuxt/ChatContainer-gY-Q7rjZ.js: [esbuild] (.nuxt-e2e-journeys/dist/server/_nuxt/ChatContainer-gY-Q7rjZ.js:1309:3) Duplicate key "call" in object literal
+node_modules/@openrouter/sdk/esm/lib/sdks.js (5:30): The 'this' keyword is equivalent to 'undefined' at the top level of an ES module, and has been rewritten
+node_modules/@openrouter/sdk/esm/lib/sdks.js (5:38): The 'this' keyword is equivalent to 'undefined' at the top level of an ES module, and has been rewritten
+node_modules/@openrouter/sdk/esm/lib/sdks.js (11:30): The 'this' keyword is equivalent to 'undefined' at the top level of an ES module, and has been rewritten
+node_modules/@openrouter/sdk/esm/lib/sdks.js (11:38): The 'this' keyword is equivalent to 'undefined' at the top level of an ES module, and has been rewritten
+● Bundling Nitro server (21.0s · 45.6s)
+node_modules/@openrouter/sdk/esm/types/async.js (5:30): The 'this' keyword is equivalent to 'undefined' at the top level of an ES module, and has been rewritten
+node_modules/@openrouter/sdk/esm/types/async.js (5:38): The 'this' keyword is equivalent to 'undefined' at the top level of an ES module, and has been rewritten
+node_modules/@openrouter/sdk/esm/types/async.js (11:30): The 'this' keyword is equivalent to 'undefined' at the top level of an ES module, and has been rewritten
+node_modules/@openrouter/sdk/esm/types/async.js (11:38): The 'this' keyword is equivalent to 'undefined' at the top level of an ES module, and has been rewritten
+node_modules/zod/v4/core/regexes.js (74:0): A comment
+
+"/** Anchors a pattern source. The interpolation lives here rather than at the call site because
+ * esbuild will not drop a `@__PURE__` call whose own argument interpolates a variable, but it
+ * will drop `anchor(dateSource)`. Keeping it inline pinned `date` into every bundle. */"
+
+in "node_modules/zod/v4/core/regexes.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+node_modules/zod/v4/core/util.js (400:0): A comment
+
+"// Wrapped in a `@__PURE__` IIFE: esbuild never tree-shakes a top-level initializer that contains a member access on `Number`, so the bare object literal survived into every bundle."
+
+in "node_modules/zod/v4/core/util.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+● Bundling Nitro server (26.0s · 50.6s)
+[nitro] ✔ Nuxt Nitro server built
+  ├─ .output/server/chunks/_/access.mjs (1.21 kB) (523 B gzip)
+  ├─ .output/server/chunks/_/activation-authorization.mjs (5.23 kB) (1.49 kB gzip)
+  ├─ .output/server/chunks/_/api-context.mjs (1.93 kB) (762 B gzip)
+  ├─ .output/server/chunks/_/api.mjs (3.25 kB) (1.03 kB gzip)
+  ├─ .output/server/chunks/_/background-workflow-state.mjs (658 B) (340 B gzip)
+  ├─ .output/server/chunks/_/bounded-body.mjs (3.21 kB) (1.01 kB gzip)
+  ├─ .output/server/chunks/_/cloud-mutation.mjs (397 B) (244 B gzip)
+  ├─ .output/server/chunks/_/config-manager.mjs (2.55 kB) (1.03 kB gzip)
+  ├─ .output/server/chunks/_/development-eligibility.mjs (5.84 kB) (1.92 kB gzip)
+  ├─ .output/server/chunks/_/error-template.mjs (4.36 kB) (1.7 kB gzip)
+  ├─ .output/server/chunks/_/event-types.mjs (1.99 kB) (565 B gzip)
+  ├─ .output/server/chunks/_/file-capability.mjs (119 B) (119 B gzip)
+  ├─ .output/server/chunks/_/file-kind-capability.mjs (936 B) (465 B gzip)
+  ├─ .output/server/chunks/_/file-kind.mjs (3.65 kB) (1.19 kB gzip)
+  ├─ .output/server/chunks/_/file-policy.mjs (10.2 kB) (2.4 kB gzip)
+  ├─ .output/server/chunks/_/file-policy2.mjs (876 B) (436 B gzip)
+  ├─ .output/server/chunks/_/generate.mjs (1.67 kB) (828 B gzip)
+  ├─ .output/server/chunks/_/hash.mjs (1.7 kB) (587 B gzip)
+  ├─ .output/server/chunks/_/headers.mjs (284 B) (201 B gzip)
+  ├─ .output/server/chunks/_/helpers.mjs (5.07 kB) (1.67 kB gzip)
+  ├─ .output/server/chunks/_/icons.mjs (264 kB) (46 kB gzip)
+  ├─ .output/server/chunks/_/icons2.mjs (597 kB) (91.6 kB gzip)
+  ├─ .output/server/chunks/_/icons3.mjs (1.17 MB) (311 kB gzip)
+  ├─ .output/server/chunks/_/icons4.mjs (2.09 MB) (336 kB gzip)
+  ├─ .output/server/chunks/_/icons5.mjs (4.75 MB) (1.9 MB gzip)
+  ├─ .output/server/chunks/_/install-requests.mjs (3.51 kB) (1.26 kB gzip)
+  ├─ .output/server/chunks/_/is-storage-enabled.mjs (261 B) (192 B gzip)
+  ├─ .output/server/chunks/_/is-sync-enabled.mjs (249 B) (186 B gzip)
+  ├─ .output/server/chunks/_/limited-json-body.mjs (2.84 kB) (1.06 kB gzip)
+  ├─ .output/server/chunks/_/local-only-kv.mjs (524 B) (356 B gzip)
+  ├─ .output/server/chunks/_/memory-classification.mjs (6.69 kB) (2.52 kB gzip)
+  ├─ .output/server/chunks/_/module-v2-runtime-policy.mjs (954 B) (414 B gzip)
+  ├─ .output/server/chunks/_/mutation-guard.mjs (3.11 kB) (1.01 kB gzip)
+  ├─ .output/server/chunks/_/openrouter.mjs (4.33 kB) (1.55 kB gzip)
+  ├─ .output/server/chunks/_/operator-client.mjs (10.3 kB) (2.64 kB gzip)
+  ├─ .output/server/chunks/_/package-assets.mjs (5.97 kB) (2.04 kB gzip)
+  ├─ .output/server/chunks/_/package-client-entry.mjs (4.01 kB) (1.38 kB gzip)
+  ├─ .output/server/chunks/_/package-lifecycle.mjs (5.57 kB) (1.72 kB gzip)
+  ├─ .output/server/chunks/_/package-runtime-eligibility.mjs (5.64 kB) (1.61 kB gzip)
+  ├─ .output/server/chunks/_/project-policy.mjs (2.14 kB) (822 B gzip)
+  ├─ .output/server/chunks/_/rate-limit.mjs (4.03 kB) (1.17 kB gzip)
+  ├─ .output/server/chunks/_/rate-limit2.mjs (955 B) (484 B gzip)
+  ├─ .output/server/chunks/_/rate-limit3.mjs (368 B) (211 B gzip)
+  ├─ .output/server/chunks/_/rate-limiter.mjs (415 B) (270 B gzip)
+  ├─ .output/server/chunks/_/recovery.mjs (359 B) (217 B gzip)
+  ├─ .output/server/chunks/_/registration.mjs (681 B) (386 B gzip)
+  ├─ .output/server/chunks/_/registry.mjs (1.64 kB) (635 B gzip)
+  ├─ .output/server/chunks/_/require-plugin-access.mjs (3.25 kB) (1.08 kB gzip)
+  ├─ .output/server/chunks/_/revocation.mjs (873 B) (427 B gzip)
+  ├─ .output/server/chunks/_/rollback-workspaces.mjs (8.63 kB) (2.36 kB gzip)
+  ├─ .output/server/chunks/_/rollout-route-error.mjs (2.84 kB) (1.16 kB gzip)
+  ├─ .output/server/chunks/_/route-identity.mjs (590 B) (311 B gzip)
+  ├─ .output/server/chunks/_/schemas.mjs (16.9 kB) (4.04 kB gzip)
+  ├─ .output/server/chunks/_/signup-invites.mjs (1.02 kB) (508 B gzip)
+  ├─ .output/server/chunks/_/store.mjs (3.13 kB) (977 B gzip)
+  ├─ .output/server/chunks/_/stub.mjs (751 B) (381 B gzip)
+  ├─ .output/server/chunks/_/title.mjs (2.17 kB) (1.16 kB gzip)
+  ├─ .output/server/chunks/_/transport.mjs (19.1 kB) (4.91 kB gzip)
+  ├─ .output/server/chunks/_/update-pins.mjs (1.42 kB) (647 B gzip)
+  ├─ .output/server/chunks/_/watched-candidate.mjs (4.73 kB) (1.5 kB gzip)
+  ├─ .output/server/chunks/_/workspace-access.mjs (1.75 kB) (664 B gzip)
+  ├─ .output/server/chunks/_/workspace-item-capability.mjs (550 B) (336 B gzip)
+  ├─ .output/server/chunks/_/workspace-item.mjs (2.28 kB) (854 B gzip)
+  ├─ .output/server/chunks/_/workspace-target.mjs (1.34 kB) (495 B gzip)
+  ├─ .output/server/chunks/_/workspace.mjs (5.79 kB) (1.76 kB gzip)
+  ├─ .output/server/chunks/build/_...slug_-DNFD4rwj.mjs (3.21 kB) (1.23 kB gzip)
+  ├─ .output/server/chunks/build/_id_-Ca0QudKV.mjs (4.52 kB) (1.47 kB gzip)
+  ├─ .output/server/chunks/build/_id_-DAOrjHUc.mjs (36.8 kB) (7.07 kB gzip)
+  ├─ .output/server/chunks/build/_id_-DrLgnh_W.mjs (5.63 kB) (2.22 kB gzip)
+  ├─ .output/server/chunks/build/_id_-P1VkeRVN.mjs (5.63 kB) (2.23 kB gzip)
+  ├─ .output/server/chunks/build/_registry-TQVKe7Q1.mjs (1.63 kB) (701 B gzip)
+  ├─ .output/server/chunks/build/access-gate-Bcn82Bb5.mjs (2.16 kB) (820 B gzip)
+  ├─ .output/server/chunks/build/activity-external-agents-Bed0giqc.mjs (10.9 kB) (4.84 kB gzip)
+  ├─ .output/server/chunks/build/add-features-BFs7Lbjn.mjs (11.4 kB) (4.49 kB gzip)
+  ├─ .output/server/chunks/build/admin-auth-DB_8LnDC.mjs (3.38 kB) (1.19 kB gzip)
+  ├─ .output/server/chunks/build/admin-DIgWLlpy.mjs (12.1 kB) (3.24 kB gzip)
+  ├─ .output/server/chunks/build/admin-DV0lvEj1.mjs (46.8 kB) (8.29 kB gzip)
+  ├─ .output/server/chunks/build/admin-plugins-62Y1FQX-.mjs (4.67 kB) (1.98 kB gzip)
+  ├─ .output/server/chunks/build/admin-styles.CkdqLb_a.mjs (600 B) (293 B gzip)
+  ├─ .output/server/chunks/build/admin-users-QkSIOqHC.mjs (13.4 kB) (3.68 kB gzip)
+  ├─ .output/server/chunks/build/AdminConfigEditor-BlLBZM3t.mjs (8.28 kB) (2.71 kB gzip)
+  ├─ .output/server/chunks/build/advanced-d3rlZmAe.mjs (2.6 kB) (1.03 kB gzip)
+  ├─ .output/server/chunks/build/ai-preferences-CilY7CD2.mjs (2.65 kB) (1.31 kB gzip)
+  ├─ .output/server/chunks/build/AiPage-DtP2Mqle.mjs (37.1 kB) (8.27 kB gzip)
+  ├─ .output/server/chunks/build/AiPage-styles-1.mjs-B5V7e4IR.mjs (645 B) (333 B gzip)
+  ├─ .output/server/chunks/build/AiPage-styles.C8s9pbjE.mjs (2.09 kB) (775 B gzip)
+  ├─ .output/server/chunks/build/AiSaveStatus-styles.BzOLJCnx.mjs (375 B) (226 B gzip)
+  ├─ .output/server/chunks/build/Alert-B2p-VkhK.mjs (16.3 kB) (2.85 kB gzip)
+  ├─ .output/server/chunks/build/api-reference-AVw1BXKh.mjs (21.1 kB) (7.67 kB gzip)
+  ├─ .output/server/chunks/build/AppearanceSection-styles.CvEmvylB.mjs (403 B) (228 B gzip)
+  ├─ .output/server/chunks/build/AppIcon-DT0X_7e1.mjs (2.04 kB) (869 B gzip)
+  ├─ .output/server/chunks/build/AppModal-CzsesLEk.mjs (5.92 kB) (1.89 kB gzip)
+  ├─ .output/server/chunks/build/AppModal-styles.DniXFjD9.mjs (1.68 kB) (665 B gzip)
+  ├─ .output/server/chunks/build/architecture-C3MVuddS.mjs (6.11 kB) (2.62 kB gzip)
+  ├─ .output/server/chunks/build/attachments--ORZdYNg.mjs (1.88 kB) (911 B gzip)
+  ├─ .output/server/chunks/build/auth-system-BAxqEze7.mjs (18.5 kB) (7.38 kB gzip)
+  ├─ .output/server/chunks/build/background-execution-mhJ_mfkQ.mjs (28.3 kB) (10.8 kB gzip)
+  ├─ .output/server/chunks/build/BackgroundLayerEditor-styles.YqQYVo9h.mjs (423 B) (235 B gzip)
+  ├─ .output/server/chunks/build/BackgroundLayersSection-styles.DyTvxThM.mjs (433 B) (235 B gzip)
+  ├─ .output/server/chunks/build/backup-CBbC5aIo.mjs (7.55 kB) (3.11 kB gzip)
+  ├─ .output/server/chunks/build/Badge-DgyU28TT.mjs (12.1 kB) (2.41 kB gzip)
+  ├─ .output/server/chunks/build/BaseResizeHandle-styles.AIHgazWK.mjs (346 B) (191 B gzip)
+  ├─ .output/server/chunks/build/branching-Bj4rO9HO.mjs (5 kB) (1.94 kB gzip)
+  ├─ .output/server/chunks/build/branding-Clql9tdL.mjs (2.35 kB) (923 B gzip)
+  ├─ .output/server/chunks/build/bundled-v1-manager-runtime-BckVeS1W.mjs (7.32 kB) (2.22 kB gzip)
+  ├─ .output/server/chunks/build/capability-matrix-BTAd9Qfc.mjs (13.4 kB) (3.99 kB gzip)
+  ├─ .output/server/chunks/build/Card-B6O3g-yu.mjs (6.54 kB) (1.54 kB gzip)
+  ├─ .output/server/chunks/build/chat-DTvuzFAa.mjs (5.88 kB) (2.28 kB gzip)
+  ├─ .output/server/chunks/build/chat-editor-extensions-CaFY29Pf.mjs (3.48 kB) (1.54 kB gzip)
+  ├─ .output/server/chunks/build/chat-empty-state-30PMk0gW.mjs (2.98 kB) (1.18 kB gzip)
+  ├─ .output/server/chunks/build/chat-lifecycle-Bbc7QVUN.mjs (29.8 kB) (11.5 kB gzip)
+  ├─ .output/server/chunks/build/chat-tool-reliability-BRPZ8-2K.mjs (7.49 kB) (3.29 kB gzip)
+  ├─ .output/server/chunks/build/chat-tools-BT2O2k9t.mjs (7.54 kB) (3.17 kB gzip)
+  ├─ .output/server/chunks/build/chat-types-o89rWaQh.mjs (5.4 kB) (2.38 kB gzip)
+  ├─ .output/server/chunks/build/ChatComposerShell-B3lbOfoK.mjs (2.32 kB) (979 B gzip)
+  ├─ .output/server/chunks/build/ChatComposerShell-styles.DFD0o4fF.mjs (3.89 kB) (873 B gzip)
+  ├─ .output/server/chunks/build/ChatContainer-gY-Q7rjZ.mjs (280 kB) (60.2 kB gzip)
+  ├─ .output/server/chunks/build/ChatContainer-styles-2.mjs-BkTHDJ79.mjs (670 B) (322 B gzip)
+  ├─ .output/server/chunks/build/ChatContainer-styles.lLpiNZe3.mjs (1.62 kB) (627 B gzip)
+  ├─ .output/server/chunks/build/ChatEmptyState-Bc9BTEXf.mjs (6.76 kB) (1.99 kB gzip)
+  ├─ .output/server/chunks/build/ChatEmptyState-styles.BJvEW1v0.mjs (4.1 kB) (1.2 kB gzip)
+  ├─ .output/server/chunks/build/ChatInput-DxTmWpG1.mjs (5.95 kB) (2.13 kB gzip)
+  ├─ .output/server/chunks/build/ChatInput-styles.BrA1xW-N.mjs (10.5 kB) (2.07 kB gzip)
+  ├─ .output/server/chunks/build/ChatInputDropper-DmMuk_f-.mjs (167 kB) (36.1 kB gzip)
+  ├─ .output/server/chunks/build/ChatInputDropper-styles.BMnDmPcQ.mjs (6.01 kB) (1.6 kB gzip)
+  ├─ .output/server/chunks/build/ChatMemorySettings-styles.BUiSgLzD.mjs (418 B) (232 B gzip)
+  ├─ .output/server/chunks/build/ChatMessage-Cyb-psfl.mjs (153 kB) (32.7 kB gzip)
+  ├─ .output/server/chunks/build/ChatMessage-styles.D7iCgrzD.mjs (12.5 kB) (2.82 kB gzip)
+  ├─ .output/server/chunks/build/ChatSettingsPopover-BFO8Ub6e.mjs (63 kB) (11.8 kB gzip)
+  ├─ .output/server/chunks/build/ChatSettingsPopover-styles-1.mjs-CoG-Eo_g.mjs (5.14 kB) (1.18 kB gzip)
+  ├─ .output/server/chunks/build/ChatSettingsPopover-styles.C3_5sMo9.mjs (9.1 kB) (1.91 kB gzip)
+  ├─ .output/server/chunks/build/ChatWelcomeCard-styles.bBrTPcOq.mjs (6.6 kB) (1.42 kB gzip)
+  ├─ .output/server/chunks/build/Checkbox-xDsWzybB.mjs (37.3 kB) (6.24 kB gzip)
+  ├─ .output/server/chunks/build/clamp-DIYkUC21.mjs (204 B) (182 B gzip)
+  ├─ .output/server/chunks/build/client-CNhkOmnX.mjs (12.7 kB) (3.68 kB gzip)
+  ├─ .output/server/chunks/build/client-D7DmD7Jq.mjs (134 kB) (40.2 kB gzip)
+  ├─ .output/server/chunks/build/ColorPaletteSection-styles.DRZYK-1I.mjs (411 B) (234 B gzip)
+  ├─ .output/server/chunks/build/ColorPicker-styles.Bpz6xVI-.mjs (373 B) (228 B gzip)
+  ├─ .output/server/chunks/build/command-palette-rQ6u4Rrr.mjs (6.6 kB) (2.96 kB gzip)
+  ├─ .output/server/chunks/build/CommandPalette-styles.DtZAO90z.mjs (4.3 kB) (1.22 kB gzip)
+  ├─ .output/server/chunks/build/component-overrides-BtkSjXcg.mjs (7.29 kB) (3.27 kB gzip)
+  ├─ .output/server/chunks/build/config-reference-DS4df2eS.mjs (26.8 kB) (8.66 kB gzip)
+  ├─ .output/server/chunks/build/configure-MHxbJ3eE.mjs (8.19 kB) (3.48 kB gzip)
+  ├─ .output/server/chunks/build/ConfirmDialog-DHGHyXzS.mjs (5.82 kB) (1.65 kB gzip)
+  ├─ .output/server/chunks/build/connect-_HQwc-mV.mjs (5.89 kB) (2.6 kB gzip)
+  ├─ .output/server/chunks/build/connect-B2ZnJb6i.mjs (25.3 kB) (6.13 kB gzip)
+  ├─ .output/server/chunks/build/connections-oh0kkbyd.mjs (7.04 kB) (3.07 kB gzip)
+  ├─ .output/server/chunks/build/context-SCC5KJ2y.mjs (39.8 kB) (10.2 kB gzip)
+  ├─ .output/server/chunks/build/continue-K72ydTSa.mjs (29.6 kB) (7.96 kB gzip)
+  ├─ .output/server/chunks/build/continuity-DABuFoAG.mjs (6.15 kB) (1.85 kB gzip)
+  ├─ .output/server/chunks/build/contribution-surface-kernel-BOMviFZs.mjs (1.72 kB) (622 B gzip)
+  ├─ .output/server/chunks/build/coordinator-D_n6XFfi.mjs (35.8 kB) (8.02 kB gzip)
+  ├─ .output/server/chunks/build/copy-image-to-clipboard-D0jgEpqm.mjs (4.45 kB) (1.4 kB gzip)
+  ├─ .output/server/chunks/build/core-items-DwBmdNI-.mjs (2.1 kB) (811 B gzip)
+  ├─ .output/server/chunks/build/create-DGW75q1f.mjs (9.66 kB) (2.79 kB gzip)
+  ├─ .output/server/chunks/build/customize-Bq5V_a3e.mjs (4.9 kB) (2.23 kB gzip)
+  ├─ .output/server/chunks/build/Dashboard-DaH52bUF.mjs (22.4 kB) (4.66 kB gzip)
+  ├─ .output/server/chunks/build/Dashboard-styles.CcxzYt65.mjs (1.39 kB) (551 B gzip)
+  ├─ .output/server/chunks/build/DashboardThemeSelector-styles.F8mYdM7y.mjs (428 B) (231 B gzip)
+  ├─ .output/server/chunks/build/database-BIrarKyN.mjs (3.72 kB) (1.68 kB gzip)
+  ├─ .output/server/chunks/build/date-C7DT4w3_.mjs (446 B) (277 B gzip)
+  ├─ .output/server/chunks/build/dbTry-DIWl4CUs.mjs (1.73 kB) (749 B gzip)
+  ├─ .output/server/chunks/build/define-theme-C8qby-RM.mjs (131 B) (131 B gzip)
+  ├─ .output/server/chunks/build/deployment-operations-RnvfzivR.mjs (19.3 kB) (7.5 kB gzip)
+  ├─ .output/server/chunks/build/development-setup-D6_Q5K9C.mjs (20.8 kB) (8.56 kB gzip)
+  ├─ .output/server/chunks/build/docmap-BzuYchU1.mjs (45.9 kB) (10.6 kB gzip)
+  ├─ .output/server/chunks/build/docs-CuNrWpE6.mjs (5.46 kB) (2.14 kB gzip)
+  ├─ .output/server/chunks/build/DocsSidebarNav-styles.TJeNBtLh.mjs (2.73 kB) (935 B gzip)
+  ├─ .output/server/chunks/build/document-ai-hunks-Ci2WFoFC.mjs (9.69 kB) (2.49 kB gzip)
+  ├─ .output/server/chunks/build/document-ai-operations-DGThuDVV.mjs (16.2 kB) (4.49 kB gzip)
+  ├─ .output/server/chunks/build/document-content-COzI6aBT.mjs (1.05 kB) (488 B gzip)
+  ├─ .output/server/chunks/build/document-editor-schema-B3y5gW81.mjs (25.8 kB) (6.72 kB gzip)
+  ├─ .output/server/chunks/build/document-revisions-B224EDR3.mjs (4.1 kB) (1.56 kB gzip)
+  ├─ .output/server/chunks/build/document-revisions-DWhCoXbS.mjs (11.9 kB) (3.54 kB gzip)
+  ├─ .output/server/chunks/build/DocumentAiActionList-styles.Cd-PbFps.mjs (422 B) (235 B gzip)
+  ├─ .output/server/chunks/build/DocumentAiPanel-C4wKhkUu.mjs (123 kB) (18.6 kB gzip)
+  ├─ .output/server/chunks/build/DocumentAiPanel-styles-1.mjs-BCZDZwn2.mjs (2.03 kB) (739 B gzip)
+  ├─ .output/server/chunks/build/DocumentAiPanel-styles-2.mjs-YGUkxIi_.mjs (1.58 kB) (694 B gzip)
+  ├─ .output/server/chunks/build/DocumentAiPanel-styles.Dt34pue4.mjs (17.9 kB) (3.4 kB gzip)
+  ├─ .output/server/chunks/build/DocumentAiPromptEditor-styles.rdI_PNsm.mjs (434 B) (231 B gzip)
+  ├─ .output/server/chunks/build/documentation-DpM2uU0X.mjs (3.2 kB) (1.22 kB gzip)
+  ├─ .output/server/chunks/build/DocumentationPageShell-BXoY5a1P.mjs (1.51 kB) (598 B gzip)
+  ├─ .output/server/chunks/build/DocumentationShell-DhILmRc3.mjs (65.3 kB) (14.4 kB gzip)
+  ├─ .output/server/chunks/build/DocumentationShell-styles.PqoYfi_4.mjs (24 kB) (4.55 kB gzip)
+  ├─ .output/server/chunks/build/DocumentEditor-C_-GWaRv.mjs (194 kB) (41.1 kB gzip)
+  ├─ .output/server/chunks/build/DocumentEditorRoot-styles.DtladBBc.mjs (30.3 kB) (5.76 kB gzip)
+  ├─ .output/server/chunks/build/DocumentHistoryPanel-DYCAnBnA.mjs (14.8 kB) (3.87 kB gzip)
+  ├─ .output/server/chunks/build/DocumentHistoryPanel-styles.D57mTZfn.mjs (3.13 kB) (933 B gzip)
+  ├─ .output/server/chunks/build/DocumentImageNode-styles.D-1ktP2u.mjs (1.73 kB) (728 B gzip)
+  ├─ .output/server/chunks/build/DocumentInspector-styles.D6U4MYGA.mjs (5.27 kB) (1.39 kB gzip)
+  ├─ .output/server/chunks/build/documents-CPjw7zwm.mjs (15.5 kB) (3.4 kB gzip)
+  ├─ .output/server/chunks/build/documents-nUNcdZno.mjs (16.6 kB) (6.26 kB gzip)
+  ├─ .output/server/chunks/build/DocumentTableToolbar-styles.Cub0HAY9.mjs (978 B) (472 B gzip)
+  ├─ .output/server/chunks/build/DropdownMenu-CJu3xpKA.mjs (172 kB) (19.5 kB gzip)
+  ├─ .output/server/chunks/build/editor-BWUKpm6i.mjs (10.1 kB) (4.2 kB gzip)
+  ├─ .output/server/chunks/build/environment-reference-CTLkQj4D.mjs (29.7 kB) (9.91 kB gzip)
+  ├─ .output/server/chunks/build/error-404-DOj7EeNl.mjs (6.48 kB) (2.49 kB gzip)
+  ├─ .output/server/chunks/build/error-404-styles.BF-pIkoo.mjs (3.02 kB) (1.07 kB gzip)
+  ├─ .output/server/chunks/build/error-500-styles.BipnMLxW.mjs (2.27 kB) (871 B gzip)
+  ├─ .output/server/chunks/build/error-500-sXQ_P0zJ.mjs (4.69 kB) (1.84 kB gzip)
+  ├─ .output/server/chunks/build/errors-BzXOPdly.mjs (7.18 kB) (3.33 kB gzip)
+  ├─ .output/server/chunks/build/FatalErrorBoundary-styles.BufWbH-7.mjs (764 B) (348 B gzip)
+  ├─ .output/server/chunks/build/features-D9V_USl0.mjs (2.37 kB) (922 B gzip)
+  ├─ .output/server/chunks/build/FieldGroup-DFyKrtCh.mjs (2.52 kB) (973 B gzip)
+  ├─ .output/server/chunks/build/FieldRoot-D_CWbweb.mjs (224 B) (177 B gzip)
+  ├─ .output/server/chunks/build/file-handling-CRrKR9C1.mjs (7.63 kB) (3.46 kB gzip)
+  ├─ .output/server/chunks/build/file-upload-utils-oLKQ5ZTB.mjs (4.92 kB) (1.82 kB gzip)
+  ├─ .output/server/chunks/build/FileCacheSettings-BJHyU1QO.mjs (6.7 kB) (2.09 kB gzip)
+  ├─ .output/server/chunks/build/files-DEb3tzEi.mjs (8.89 kB) (3.52 kB gzip)
+  ├─ .output/server/chunks/build/files-DlOaHe-i.mjs (18.6 kB) (4.77 kB gzip)
+  ├─ .output/server/chunks/build/files-select-CuiouBpr.mjs (6.82 kB) (2.66 kB gzip)
+  ├─ .output/server/chunks/build/first-chat-DxaLUZOd.mjs (4.08 kB) (1.84 kB gzip)
+  ├─ .output/server/chunks/build/first-data-h7jV464N.mjs (3.21 kB) (1.43 kB gzip)
+  ├─ .output/server/chunks/build/first-hook-eWCo0v78.mjs (3.03 kB) (1.42 kB gzip)
+  ├─ .output/server/chunks/build/first-plugin-FKmGq6IH.mjs (8.92 kB) (3.46 kB gzip)
+  ├─ .output/server/chunks/build/first-theme-ixZ23ViJ.mjs (4.46 kB) (2.04 kB gzip)
+  ├─ .output/server/chunks/build/FocusScope-BzpBQT7q.mjs (22.6 kB) (5.28 kB gzip)
+  ├─ .output/server/chunks/build/foregroundStream-CX1WaPJZ.mjs (26.1 kB) (6.18 kB gzip)
+  ├─ .output/server/chunks/build/Form-CxDyUWo2.mjs (14.2 kB) (3.89 kB gzip)
+  ├─ .output/server/chunks/build/FormField-B6uLk5If.mjs (11.6 kB) (2.57 kB gzip)
+  ├─ .output/server/chunks/build/GalleryGrid-C0gWoIV9.mjs (14.5 kB) (4.29 kB gzip)
+  ├─ .output/server/chunks/build/GalleryGrid-styles.ONlM_9wC.mjs (850 B) (401 B gzip)
+  ├─ .output/server/chunks/build/generate-BHRpb-rF.mjs (6.81 kB) (2.32 kB gzip)
+  ├─ .output/server/chunks/build/global-Bzs8qhyD.mjs (179 B) (161 B gzip)
+  ├─ .output/server/chunks/build/HelpChat-styles.B3xgs2yz.mjs (10.1 kB) (2.31 kB gzip)
+  ├─ .output/server/chunks/build/hook-catalog-CBtp2iQG.mjs (32.9 kB) (6.76 kB gzip)
+  ├─ .output/server/chunks/build/icons.config-3nrRFWm5.mjs (13.6 kB) (2.46 kB gzip)
+  ├─ .output/server/chunks/build/icons.config-koKFyhnN.mjs (5.31 kB) (1.32 kB gzip)
+  ├─ .output/server/chunks/build/image-library-CFanVPLj.mjs (2.74 kB) (1 kB gzip)
+  ├─ .output/server/chunks/build/images-DZhws5wZ.mjs (35.1 kB) (7.12 kB gzip)
+  ├─ .output/server/chunks/build/ImageViewer-BHK14YTa.mjs (20.8 kB) (3.98 kB gzip)
+  ├─ .output/server/chunks/build/ImageViewer-styles.BSegrwLW.mjs (439 B) (275 B gzip)
+  ├─ .output/server/chunks/build/index-styles.Y_Md5ci8.mjs (3.37 kB) (953 B gzip)
+  ├─ .output/server/chunks/build/Input-C7qM0SIr.mjs (19.5 kB) (3.73 kB gzip)
+  ├─ .output/server/chunks/build/install-and-manage-BZR9o5Ee.mjs (11.3 kB) (4.38 kB gzip)
+  ├─ .output/server/chunks/build/Kbd-BSJtS7MB.mjs (9.22 kB) (2.49 kB gzip)
+  ├─ .output/server/chunks/build/kv-CasBP0um.mjs (11.1 kB) (2.53 kB gzip)
+  ├─ .output/server/chunks/build/kv-CcOIpUXn.mjs (4.83 kB) (1.87 kB gzip)
+  ├─ .output/server/chunks/build/Label-zjYuLcvQ.mjs (989 B) (517 B gzip)
+  ├─ .output/server/chunks/build/LazyEditorHost-styles.DnDKotqe.mjs (336 B) (190 B gzip)
+  ├─ .output/server/chunks/build/library-D7jr-fLi.mjs (5.75 kB) (2.45 kB gzip)
+  ├─ .output/server/chunks/build/LoadingGenerating-styles.BJuEF4oS.mjs (5.23 kB) (1.78 kB gzip)
+  ├─ .output/server/chunks/build/login-CYcGYfOk.mjs (7.8 kB) (2.33 kB gzip)
+  ├─ .output/server/chunks/build/lossy-request-BPlWUyFy.mjs (9.08 kB) (2.87 kB gzip)
+  ├─ .output/server/chunks/build/manifest-DLr5_7EX.mjs (9.27 kB) (3.71 kB gzip)
+  ├─ .output/server/chunks/build/manual-context-compaction-BCed4Tr2.mjs (11.1 kB) (4.65 kB gzip)
+  ├─ .output/server/chunks/build/MentionsList-styles.sN2U4qUL.mjs (6.67 kB) (1.69 kB gzip)
+  ├─ .output/server/chunks/build/MentionsPopover-styles.d2PL-BRU.mjs (339 B) (193 B gzip)
+  ├─ .output/server/chunks/build/message-files-BRxm77yf.mjs (3.89 kB) (1.65 kB gzip)
+  ├─ .output/server/chunks/build/messageBuild-BwhjcCCM.mjs (11.6 kB) (3.59 kB gzip)
+  ├─ .output/server/chunks/build/MessageEditor-B3Y3LHt8.mjs (3.6 kB) (1.34 kB gzip)
+  ├─ .output/server/chunks/build/MessageEditor-styles.BaqQAkn0.mjs (1.23 kB) (535 B gzip)
+  ├─ .output/server/chunks/build/messages-Q9qLx0uu.mjs (8.05 kB) (3.14 kB gzip)
+  ├─ .output/server/chunks/build/meta-CAC3QmID.mjs (181 B) (150 B gzip)
+  ├─ .output/server/chunks/build/mini-app-tutorial-CR7NNzcp.mjs (5.33 kB) (2.32 kB gzip)
+  ├─ .output/server/chunks/build/Modal-_IwDihXD.mjs (60.7 kB) (7.03 kB gzip)
+  ├─ .output/server/chunks/build/ModelCatalog-CGH36BUQ.mjs (72.6 kB) (12.1 kB gzip)
+  ├─ .output/server/chunks/build/modelCatalog-CoyGNPzV.mjs (12.4 kB) (3.76 kB gzip)
+  ├─ .output/server/chunks/build/ModelCatalog-styles.Dt3EaGKy.mjs (1.47 kB) (436 B gzip)
+  ├─ .output/server/chunks/build/ModelCatalogProviderLogo-38uyfHx7.mjs (3.3 kB) (1.22 kB gzip)
+  ├─ .output/server/chunks/build/models-service-CsHNFr9f.mjs (7.43 kB) (3.23 kB gzip)
+  ├─ .output/server/chunks/build/ModelSelect-DdDehiY3.mjs (7.49 kB) (2.49 kB gzip)
+  ├─ .output/server/chunks/build/multiPaneApi-CbUIWJL2.mjs (1.61 kB) (595 B gzip)
+  ├─ .output/server/chunks/build/NotificationItem-styles.CO7Zm0Qw.mjs (429 B) (246 B gzip)
+  ├─ .output/server/chunks/build/notifications-BW1O8KM3.mjs (11.8 kB) (4.39 kB gzip)
+  ├─ .output/server/chunks/build/nullish-Dvpx-avd.mjs (149 B) (141 B gzip)
+  ├─ .output/server/chunks/build/openrouter-build-DHMsFRqI.mjs (6.61 kB) (2.94 kB gzip)
+  ├─ .output/server/chunks/build/openrouter-build-lXkivyrw.mjs (16.4 kB) (4.49 kB gzip)
+  ├─ .output/server/chunks/build/openrouter-callback-B6985lP6.mjs (10.6 kB) (2.74 kB gzip)
+  ├─ .output/server/chunks/build/OpenRouterKeyModal-Dpihv18G.mjs (10.9 kB) (2.96 kB gzip)
+  ├─ .output/server/chunks/build/openrouterStream-BWtGCxz0.mjs (41.2 kB) (9.67 kB gzip)
+  ├─ .output/server/chunks/build/openrouterStream-ULTCNg1S.mjs (6.81 kB) (3.09 kB gzip)
+  ├─ .output/server/chunks/build/operations-vzKeZVCt.mjs (8.62 kB) (3.71 kB gzip)
+  ├─ .output/server/chunks/build/or3-cloud-wizard-EmCE7Szd.mjs (13.2 kB) (5.41 kB gzip)
+  ├─ .output/server/chunks/build/or3-connect-RCq9qwdE.mjs (6.68 kB) (2.97 kB gzip)
+  ├─ .output/server/chunks/build/orama-kk6L1lMG.mjs (2.31 kB) (892 B gzip)
+  ├─ .output/server/chunks/build/overlay-Bc18Tp6e.mjs (440 B) (266 B gzip)
+  ├─ .output/server/chunks/build/overview-BQnUeZhh.mjs (3.77 kB) (1.75 kB gzip)
+  ├─ .output/server/chunks/build/overview-C_drjfUU.mjs (2.95 kB) (1.39 kB gzip)
+  ├─ .output/server/chunks/build/overview-CaS2UdV3.mjs (3.49 kB) (1.54 kB gzip)
+  ├─ .output/server/chunks/build/overview-CKiRNyci.mjs (1.2 kB) (617 B gzip)
+  ├─ .output/server/chunks/build/overview-CYI9apu6.mjs (4.81 kB) (2.11 kB gzip)
+  ├─ .output/server/chunks/build/overview-CyigQ-05.mjs (3.81 kB) (1.71 kB gzip)
+  ├─ .output/server/chunks/build/overview-DHOlt99j.mjs (4.89 kB) (2.03 kB gzip)
+  ├─ .output/server/chunks/build/overview-YNChhgXA.mjs (4.02 kB) (1.84 kB gzip)
+  ├─ .output/server/chunks/build/package-install-DBwEns80.mjs (6.86 kB) (3.13 kB gzip)
+  ├─ .output/server/chunks/build/pages-CPTPROWv.mjs (5.4 kB) (2.11 kB gzip)
+  ├─ .output/server/chunks/build/PageShell-Didxe6-f.mjs (397 kB) (69.9 kB gzip)
+  ├─ .output/server/chunks/build/PageShell-styles.BAcd3_WN.mjs (1.56 kB) (623 B gzip)
+  ├─ .output/server/chunks/build/PaletteImageThumb-C4Co8t6U.mjs (3.79 kB) (1.44 kB gzip)
+  ├─ .output/server/chunks/build/PaneResizeHandle-styles.BaLLOUL8.mjs (451 B) (239 B gzip)
+  ├─ .output/server/chunks/build/parse-error-B8H4eEAV.mjs (1.04 kB) (466 B gzip)
+  ├─ .output/server/chunks/build/plugin-access-gating-BtbuzqtD.mjs (8.48 kB) (3.62 kB gzip)
+  ├─ .output/server/chunks/build/plugin-quickstart-BH-LVLn-.mjs (1.15 kB) (629 B gzip)
+  ├─ .output/server/chunks/build/plugin-sdk-BNyPQtTf.mjs (23.7 kB) (9.12 kB gzip)
+  ├─ .output/server/chunks/build/plugin-sdk-cli-Co6bFWs2.mjs (7.83 kB) (3.23 kB gzip)
+  ├─ .output/server/chunks/build/PluginDevelopmentController-DH18hzwf.mjs (12.2 kB) (3.52 kB gzip)
+  ├─ .output/server/chunks/build/plugins-DxjMBKvY.mjs (122 kB) (22 kB gzip)
+  ├─ .output/server/chunks/build/Popover-D9lD6wOv.mjs (45.2 kB) (5.9 kB gzip)
+  ├─ .output/server/chunks/build/PopperArrow-Bq9pOL0a.mjs (17.2 kB) (3.92 kB gzip)
+  ├─ .output/server/chunks/build/portable-canary-Bqbi3Ytg.mjs (19.7 kB) (5.36 kB gzip)
+  ├─ .output/server/chunks/build/portable-client-runtime-CEGhwAPA.mjs (34.2 kB) (7.91 kB gzip)
+  ├─ .output/server/chunks/build/portable-pane-DIFLtmOL.mjs (2.08 kB) (821 B gzip)
+  ├─ .output/server/chunks/build/posts-Cw7OWUqM.mjs (4.12 kB) (1.83 kB gzip)
+  ├─ .output/server/chunks/build/Presence-BQEFaBN4.mjs (6.32 kB) (1.99 kB gzip)
+  ├─ .output/server/chunks/build/projects-C7htqctu.mjs (37 kB) (13.7 kB gzip)
+  ├─ .output/server/chunks/build/projects-DX9llDoS.mjs (15.7 kB) (6.13 kB gzip)
+  ├─ .output/server/chunks/build/ProjectToolApproval-D2qgCDCz.mjs (4.75 kB) (1.5 kB gzip)
+  ├─ .output/server/chunks/build/PromptEditor-CsOHVrO_.mjs (13.2 kB) (3.82 kB gzip)
+  ├─ .output/server/chunks/build/PromptEditor-styles.jGbPES4H.mjs (2.69 kB) (989 B gzip)
+  ├─ .output/server/chunks/build/prompts-BRGSAbot.mjs (4.98 kB) (2.02 kB gzip)
+  ├─ .output/server/chunks/build/provider-basic-auth-DR99gk3L.mjs (10.2 kB) (4.27 kB gzip)
+  ├─ .output/server/chunks/build/provider-clerk-BeIwo-Pp.mjs (4.47 kB) (2.02 kB gzip)
+  ├─ .output/server/chunks/build/provider-convex-BJe3FsrP.mjs (24.7 kB) (9.5 kB gzip)
+  ├─ .output/server/chunks/build/provider-fs-DMLmhST2.mjs (6.63 kB) (3.01 kB gzip)
+  ├─ .output/server/chunks/build/provider-s3-CnpYYi4t.mjs (6.62 kB) (3.11 kB gzip)
+  ├─ .output/server/chunks/build/provider-sqlite-CKsmFeD2.mjs (12.8 kB) (5.4 kB gzip)
+  ├─ .output/server/chunks/build/providers-CcA56NaV.mjs (13.1 kB) (4.94 kB gzip)
+  ├─ .output/server/chunks/build/publish-CCWTMBL3.mjs (7.7 kB) (3.08 kB gzip)
+  ├─ .output/server/chunks/build/README-C2XsKW6q.mjs (2.8 kB) (1.35 kB gzip)
+  ├─ .output/server/chunks/build/ReasoningAccordion-styles.Co8Qybed.mjs (1.17 kB) (484 B gzip)
+  ├─ .output/server/chunks/build/reference-BLJIX3Re.mjs (4.85 kB) (2.16 kB gzip)
+  ├─ .output/server/chunks/build/reference-CpwK_vT6.mjs (9.88 kB) (4.17 kB gzip)
+  ├─ .output/server/chunks/build/registration-COzXBx1y.mjs (112 kB) (16.6 kB gzip)
+  ├─ .output/server/chunks/build/registry-Bk95oCWv.mjs (22.6 kB) (4.86 kB gzip)
+  ├─ .output/server/chunks/build/registry-CF0w18vQ.mjs (230 B) (198 B gzip)
+  ├─ .output/server/chunks/build/registry-CWalnnzE.mjs (366 B) (244 B gzip)
+  ├─ .output/server/chunks/build/related-chats-C8KzfUJp.mjs (395 B) (275 B gzip)
+  ├─ .output/server/chunks/build/ResetSection-styles.DmBL8SQ2.mjs (379 B) (228 B gzip)
+  ├─ .output/server/chunks/build/ResizableSidebarLayout-styles.C8SVqHvR.mjs (3.54 kB) (946 B gzip)
+  ├─ .output/server/chunks/build/ResizeHandle-styles.DKTVpgSX.mjs (326 B) (189 B gzip)
+  ├─ .output/server/chunks/build/results-1JfxKfyf.mjs (453 B) (259 B gzip)
+  ├─ .output/server/chunks/build/retry-BODlrXwc.mjs (12.3 kB) (3.75 kB gzip)
+  ├─ .output/server/chunks/build/RovingFocusGroup-DRr0B1J8.mjs (4.54 kB) (1.49 kB gzip)
+  ├─ .output/server/chunks/build/RovingFocusItem-DGc6IAvF.mjs (4.32 kB) (1.45 kB gzip)
+  ├─ .output/server/chunks/build/runtime-and-security-DTMwK69j.mjs (15 kB) (6.23 kB gzip)
+  ├─ .output/server/chunks/build/safe-changes-DFJAnyoz.mjs (5.95 kB) (2.67 kB gzip)
+  ├─ .output/server/chunks/build/schema-COTwK_K5.mjs (3.78 kB) (1.54 kB gzip)
+  ├─ .output/server/chunks/build/schema-CwpESNDp.mjs (12.6 kB) (2.9 kB gzip)
+  ├─ .output/server/chunks/build/SearchPanelRoot-Dwuw0Gal.mjs (6.97 kB) (2.23 kB gzip)
+  ├─ .output/server/chunks/build/secret-store-BS_XgVCq.mjs (13.9 kB) (5.66 kB gzip)
+  ├─ .output/server/chunks/build/Select-DUJXTnpH.mjs (165 kB) (19.9 kB gzip)
+  ├─ .output/server/chunks/build/SelectMenu-WiVKonCE.mjs (190 kB) (25.7 kB gzip)
+  ├─ .output/server/chunks/build/setup-Cvrd9Hv8.mjs (6.34 kB) (2.77 kB gzip)
+  ├─ .output/server/chunks/build/setup-Dz9pcn2G.mjs (31.7 kB) (7.22 kB gzip)
+  ├─ .output/server/chunks/build/ShapeSection-styles.CY5PpP4g.mjs (378 B) (226 B gzip)
+  ├─ .output/server/chunks/build/SideBar-BcqY3JY5.mjs (144 kB) (26.5 kB gzip)
+  ├─ .output/server/chunks/build/SideBar-styles.C6fgf0Km.mjs (505 B) (307 B gzip)
+  ├─ .output/server/chunks/build/SidebarAddToProjectModal-DyMSXNOx.mjs (17.5 kB) (3.15 kB gzip)
+  ├─ .output/server/chunks/build/SidebarAuthButton-DiCMveiP.mjs (13.6 kB) (3.55 kB gzip)
+  ├─ .output/server/chunks/build/SidebarCreateDocumentModal-DoRtcbib.mjs (11 kB) (2.35 kB gzip)
+  ├─ .output/server/chunks/build/SidebarCreateProjectModal-DBJ-qa11.mjs (14.3 kB) (2.62 kB gzip)
+  ├─ .output/server/chunks/build/SidebarHeader-styles.CeQ8xcv2.mjs (2.66 kB) (963 B gzip)
+  ├─ .output/server/chunks/build/SidebarHomePage-styles._CrfJ2Uh.mjs (1.65 kB) (604 B gzip)
+  ├─ .output/server/chunks/build/SideMobileBottomNav-styles.Cxnzv-Q8.mjs (10 kB) (2.39 kB gzip)
+  ├─ .output/server/chunks/build/SideNavContentCollapsed-CR5rGsuR.mjs (26.5 kB) (6.51 kB gzip)
+  ├─ .output/server/chunks/build/SideNavContentCollapsed-styles.ceD1SoBj.mjs (452 B) (243 B gzip)
+  ├─ .output/server/chunks/build/signup-invites-CsXhwQmn.mjs (964 B) (440 B gzip)
+  ├─ .output/server/chunks/build/Slider-DcNvtpW6.mjs (38 kB) (7.31 kB gzip)
+  ├─ .output/server/chunks/build/source-intake-D8mnuIZj.mjs (9.18 kB) (2.91 kB gzip)
+  ├─ .output/server/chunks/build/source-map-BySLHmkj.mjs (7.4 kB) (2.94 kB gzip)
+  ├─ .output/server/chunks/build/storage-layer-DXM-SVfA.mjs (24.2 kB) (9.58 kB gzip)
+  ├─ .output/server/chunks/build/stream-markdown-BnoUI7CY.mjs (2.38 kB) (648 B gzip)
+  ├─ .output/server/chunks/build/streamWriteCoalescer-C7TS29Oi.mjs (2.22 kB) (713 B gzip)
+  ├─ .output/server/chunks/build/styles-CECERB2i.mjs (975 B) (406 B gzip)
+  ├─ .output/server/chunks/build/styles-CofRUSa0.mjs (975 B) (406 B gzip)
+  ├─ .output/server/chunks/build/styles-DJwK1COt.mjs (975 B) (406 B gzip)
+  ├─ .output/server/chunks/build/styling-BP211he8.mjs (23.9 kB) (9.82 kB gzip)
+  ├─ .output/server/chunks/build/summary-BZDr-cTT.mjs (15.3 kB) (5.15 kB gzip)
+  ├─ .output/server/chunks/build/Switch-DAfSVGfd.mjs (25.2 kB) (4.53 kB gzip)
+  ├─ .output/server/chunks/build/sync-layer-D6ZVllHA.mjs (32.3 kB) (12.1 kB gzip)
+  ├─ .output/server/chunks/build/system-BNa6Xish.mjs (6.34 kB) (2.2 kB gzip)
+  ├─ .output/server/chunks/build/SystemPromptsModal-BMmR-Rv-.mjs (80.5 kB) (12.3 kB gzip)
+  ├─ .output/server/chunks/build/Tabs-wscG7Rrb.mjs (42.3 kB) (6.32 kB gzip)
+  ├─ .output/server/chunks/build/Textarea-DlU6wExW.mjs (20.6 kB) (4 kB gzip)
+  ├─ .output/server/chunks/build/theme-BgBe_M_U.mjs (53.9 kB) (9.25 kB gzip)
+  ├─ .output/server/chunks/build/theme-DUe9YjvJ.mjs (33.5 kB) (6.64 kB gzip)
+  ├─ .output/server/chunks/build/theme-frUDTIxb.mjs (59.3 kB) (10 kB gzip)
+  ├─ .output/server/chunks/build/ThemeModeToggle-styles.BDzIJ6Sm.mjs (393 B) (228 B gzip)
+  ├─ .output/server/chunks/build/themeOverrideProps-CS55JOva.mjs (957 B) (412 B gzip)
+  ├─ .output/server/chunks/build/ThemePage-DApZYhKY.mjs (111 kB) (21.7 kB gzip)
+  ├─ .output/server/chunks/build/ThemePage-styles-1.mjs-CQGv4Doq.mjs (1.96 kB) (663 B gzip)
+  ├─ .output/server/chunks/build/ThemePage-styles-10.mjs-58u4GxbB.mjs (951 B) (354 B gzip)
+  ├─ .output/server/chunks/build/ThemePage-styles-2.mjs-4VU9sz_A.mjs (3.08 kB) (1 kB gzip)
+  ├─ .output/server/chunks/build/ThemePage-styles-3.mjs-04FOo4aX.mjs (506 B) (286 B gzip)
+  ├─ .output/server/chunks/build/ThemePage-styles-4.mjs-B6HMlz8Q.mjs (9.89 kB) (2.15 kB gzip)
+  ├─ .output/server/chunks/build/ThemePage-styles-5.mjs-C_15lM1e.mjs (2.06 kB) (703 B gzip)
+  ├─ .output/server/chunks/build/ThemePage-styles-6.mjs-DdcsCcmV.mjs (1.52 kB) (614 B gzip)
+  ├─ .output/server/chunks/build/ThemePage-styles-7.mjs-Pnts9YRl.mjs (1.43 kB) (599 B gzip)
+  ├─ .output/server/chunks/build/ThemePage-styles-8.mjs-G4nkURRZ.mjs (7.05 kB) (1.46 kB gzip)
+  ├─ .output/server/chunks/build/ThemePage-styles-9.mjs-DuVMHr9P.mjs (5.07 kB) (1.38 kB gzip)
+  ├─ .output/server/chunks/build/ThemePage-styles.oP92o3_h.mjs (5.09 kB) (1.39 kB gzip)
+  ├─ .output/server/chunks/build/themes-HMPoTqdR.mjs (21.1 kB) (5.17 kB gzip)
+  ├─ .output/server/chunks/build/threads-Quo3Bhf2.mjs (92.6 kB) (21.1 kB gzip)
+  ├─ .output/server/chunks/build/threads-sWdLRkcT.mjs (5.65 kB) (2.16 kB gzip)
+  ├─ .output/server/chunks/build/Toast-BQQlHw5y.mjs (67.3 kB) (11.3 kB gzip)
+  ├─ .output/server/chunks/build/tool-card-chat-bridge-D7l7VWhB.mjs (5.88 kB) (1.92 kB gzip)
+  ├─ .output/server/chunks/build/tool-card-frame-budget-D8Dtf0ox.mjs (1.95 kB) (758 B gzip)
+  ├─ .output/server/chunks/build/tool-cards-D6wl22-Q.mjs (16.9 kB) (7 kB gzip)
+  ├─ .output/server/chunks/build/tool-registry-B5OISHKd.mjs (13.2 kB) (3.24 kB gzip)
+  ├─ .output/server/chunks/build/tool-runtime-vCbfi9sI.mjs (8.37 kB) (3.49 kB gzip)
+  ├─ .output/server/chunks/build/ToolbarButton-styles.BO0P8NE9.mjs (375 B) (221 B gzip)
+  ├─ .output/server/chunks/build/ToolCallIndicator-styles.DOF3-s2G.mjs (1.24 kB) (537 B gzip)
+  ├─ .output/server/chunks/build/ToolCardFrameHost-hD73T_GH.mjs (4.93 kB) (1.89 kB gzip)
+  ├─ .output/server/chunks/build/ToolCardSlot-styles.CUfESuxJ.mjs (713 B) (365 B gzip)
+  ├─ .output/server/chunks/build/Tooltip-PPOhicmw.mjs (33 kB) (5.57 kB gzip)
+  ├─ .output/server/chunks/build/transfer-queue-CHwFv3WR.mjs (911 B) (401 B gzip)
+  ├─ .output/server/chunks/build/troubleshooting-KbCdMn8E.mjs (5.35 kB) (2.55 kB gzip)
+  ├─ .output/server/chunks/build/troubleshooting-l-IeTt1B.mjs (21.2 kB) (7.79 kB gzip)
+  ├─ .output/server/chunks/build/TypographySection-styles.DEiuw8Yq.mjs (403 B) (228 B gzip)
+  ├─ .output/server/chunks/build/useActivePrompt-B39SxIb9.mjs (1.25 kB) (462 B gzip)
+  ├─ .output/server/chunks/build/useAdminData-DO0J8MP0.mjs (972 B) (428 B gzip)
+  ├─ .output/server/chunks/build/useAdminExtensions-To_AKxxT.mjs (3.84 kB) (1.23 kB gzip)
+  ├─ .output/server/chunks/build/useAdminPlugins-D2xdfd6k.mjs (2.41 kB) (871 B gzip)
+  ├─ .output/server/chunks/build/useAdminUserLookup-Ca5hUnsi.mjs (1.23 kB) (513 B gzip)
+  ├─ .output/server/chunks/build/useAiSettings-kTALz3xk.mjs (8 kB) (2.22 kB gzip)
+  ├─ .output/server/chunks/build/useApiError-BTgEhx-b.mjs (390 B) (250 B gzip)
+  ├─ .output/server/chunks/build/useChatInputBridge-CQobxDq8.mjs (4.35 kB) (1.36 kB gzip)
+  ├─ .output/server/chunks/build/useChatMentions-4ha6ZXnN.mjs (11.2 kB) (3.39 kB gzip)
+  ├─ .output/server/chunks/build/useCommandPalette-CQaN90iY.mjs (27.4 kB) (6.77 kB gzip)
+  ├─ .output/server/chunks/build/useConfirmDialog-8-JZSV06.mjs (1.05 kB) (396 B gzip)
+  ├─ .output/server/chunks/build/useDashboardPlugins-DZ-_XDBC.mjs (13.5 kB) (2.95 kB gzip)
+  ├─ .output/server/chunks/build/useDefaultPrompt-DUqjGUSQ.mjs (13 kB) (3 kB gzip)
+  ├─ .output/server/chunks/build/useDialogFocus-Bk80nSsm.mjs (3.76 kB) (1.34 kB gzip)
+  ├─ .output/server/chunks/build/useDialogViewport-CISvUfyD.mjs (2.13 kB) (837 B gzip)
+  ├─ .output/server/chunks/build/useDocumentEditorSessions-Cqow0NDC.mjs (9.21 kB) (2.41 kB gzip)
+  ├─ .output/server/chunks/build/useDocumentsStore-CCdJFuCy.mjs (11.2 kB) (2.77 kB gzip)
+  ├─ .output/server/chunks/build/useExtensionManagement-BpIyDnO9.mjs (9.76 kB) (2.56 kB gzip)
+  ├─ .output/server/chunks/build/useFilter-B08STNDV.mjs (4.73 kB) (1.38 kB gzip)
+  ├─ .output/server/chunks/build/useFocusGuards-BtuB_C0w.mjs (1.02 kB) (477 B gzip)
+  ├─ .output/server/chunks/build/useFormControl-BFEZ2nQn.mjs (295 B) (216 B gzip)
+  ├─ .output/server/chunks/build/useForwardScopeId-DagAJ5Oj.mjs (267 B) (198 B gzip)
+  ├─ .output/server/chunks/build/useGraceArea-vFYt_Zk5.mjs (6.5 kB) (1.69 kB gzip)
+  ├─ .output/server/chunks/build/useIcon-a_lcrJ49.mjs (414 B) (259 B gzip)
+  ├─ .output/server/chunks/build/useImageGallery-Dqs29tXS.mjs (24.1 kB) (5.81 kB gzip)
+  ├─ .output/server/chunks/build/useModelSearch-CRr5AhS9.mjs (2.62 kB) (970 B gzip)
+  ├─ .output/server/chunks/build/useModelStore-DyyR7VSl.mjs (15 kB) (4.13 kB gzip)
+  ├─ .output/server/chunks/build/useModelVariantItems-C1gv-iVX.mjs (600 B) (324 B gzip)
+  ├─ .output/server/chunks/build/useOpenrouter-DYUHGc0N.mjs (5.6 kB) (1.87 kB gzip)
+  ├─ .output/server/chunks/build/usePaneApps-CXPP6dRN.mjs (4.61 kB) (1.58 kB gzip)
+  ├─ .output/server/chunks/build/usePanePrompt-BIR7v0QA.mjs (1.2 kB) (459 B gzip)
+  ├─ .output/server/chunks/build/usePreviewCache-5Ql2ouVb.mjs (4.74 kB) (1.5 kB gzip)
+  ├─ .output/server/chunks/build/useProjectsCrud-DYL1060u.mjs (11 kB) (2.82 kB gzip)
+  ├─ .output/server/chunks/build/useResponsiveState-BhXCKKnU.mjs (275 B) (191 B gzip)
+  ├─ .output/server/chunks/build/useServerRestart-D1DTNYEP.mjs (7.89 kB) (2.36 kB gzip)
+  ├─ .output/server/chunks/build/useSidebarPages-DHQgN3_O.mjs (3.58 kB) (1.36 kB gzip)
+  ├─ .output/server/chunks/build/useThumbnailUrlCache-DTSnc6Po.mjs (5.19 kB) (1.42 kB gzip)
+  ├─ .output/server/chunks/build/useTokenizer-D9xdvYV8.mjs (1.26 kB) (504 B gzip)
+  ├─ .output/server/chunks/build/useTypeahead-41_OXtpq.mjs (1.85 kB) (734 B gzip)
+  ├─ .output/server/chunks/build/useTypedThemeOverrides-CDsM55Yu.mjs (2.32 kB) (899 B gzip)
+  ├─ .output/server/chunks/build/useUserApiKey-BYnIKpnU.mjs (19.3 kB) (4.69 kB gzip)
+  ├─ .output/server/chunks/build/useWorkspaceProfiles-CYkcy3EH.mjs (7.1 kB) (1.99 kB gzip)
+  ├─ .output/server/chunks/build/utilities-DAWpq_bw.mjs (2.87 kB) (1.47 kB gzip)
+  ├─ .output/server/chunks/build/utils-BCuuV9nz.mjs (2.12 kB) (869 B gzip)
+  ├─ .output/server/chunks/build/utils-BTqM8ZiX.mjs (1.48 kB) (673 B gzip)
+  ├─ .output/server/chunks/build/validate-document-content-DNProiXt.mjs (3.28 kB) (1.18 kB gzip)
+  ├─ .output/server/chunks/build/VisuallyHiddenInput-CY2jU99-.mjs (4.56 kB) (1.26 kB gzip)
+  ├─ .output/server/chunks/build/waitlist-R95piEY9.mjs (2.91 kB) (1.47 kB gzip)
+  ├─ .output/server/chunks/build/webhooks-CK822bnu.mjs (64.8 kB) (10.8 kB gzip)
+  ├─ .output/server/chunks/build/webhooks-Cm7Qc27-.mjs (21.5 kB) (7.76 kB gzip)
+  ├─ .output/server/chunks/build/welcome-BkP7Vx3j.mjs (15.7 kB) (4.51 kB gzip)
+  ├─ .output/server/chunks/build/welcome-styles.CzVGlXko.mjs (8.25 kB) (2.4 kB gzip)
+  ├─ .output/server/chunks/build/workspace-access-CgM1VK6k.mjs (3.85 kB) (1.35 kB gzip)
+  ├─ .output/server/chunks/build/workspace-backup-stream-n-7aLPaQ.mjs (5.47 kB) (2.46 kB gzip)
+  ├─ .output/server/chunks/build/workspace-document-change-D9xC6BFg.mjs (15.4 kB) (3.95 kB gzip)
+  ├─ .output/server/chunks/build/workspace-document-read-Bl_yUlE7.mjs (7.86 kB) (2.59 kB gzip)
+  ├─ .output/server/chunks/build/workspace-file-read-D7fc2XZE.mjs (8.18 kB) (2.61 kB gzip)
+  ├─ .output/server/chunks/build/workspace-files-BTnvIhEt.mjs (13.7 kB) (3.87 kB gzip)
+  ├─ .output/server/chunks/build/workspace-items-DNeODPkj.mjs (10.5 kB) (3.06 kB gzip)
+  ├─ .output/server/chunks/build/workspace-profiles-Bo6D4Lyv.mjs (4.54 kB) (2.01 kB gzip)
+  ├─ .output/server/chunks/build/workspace-projects-4QQGqDMb.mjs (4.01 kB) (1.45 kB gzip)
+  ├─ .output/server/chunks/build/workspace-Y9g4yrfc.mjs (2.43 kB) (959 B gzip)
+  ├─ .output/server/chunks/build/WorkspaceChrome-styles.DIJ_tHzq.mjs (4.77 kB) (1.06 kB gzip)
+  ├─ .output/server/chunks/build/WorkspaceDocumentChangeCard-Dg7J0SMv.mjs (20.3 kB) (4.53 kB gzip)
+  ├─ .output/server/chunks/build/WorkspaceNewTabControl-styles.DaQNYB38.mjs (2.26 kB) (744 B gzip)
+  ├─ .output/server/chunks/build/WorkspaceProfileSettings-DzSeTsZu.mjs (23.3 kB) (4.91 kB gzip)
+  ├─ .output/server/chunks/build/WorkspaceProfileSettings-styles.C3xwtsUK.mjs (975 B) (447 B gzip)
+  ├─ .output/server/chunks/build/workspaceResourceNavigation-DFzL5FB5.mjs (250 B) (180 B gzip)
+  ├─ .output/server/chunks/build/workspaces-OnvZCiY5.mjs (10.7 kB) (3.07 kB gzip)
+  ├─ .output/server/chunks/build/WorkspaceSelector-eE1Y0SrS.mjs (10.6 kB) (2.67 kB gzip)
+  ├─ .output/server/chunks/build/WorkspaceTabBar-BXBqidTx.mjs (18 kB) (5.54 kB gzip)
+  ├─ .output/server/chunks/build/WorkspaceTabBar-styles.x68cU7TE.mjs (8.77 kB) (2.02 kB gzip)
+  ├─ .output/server/chunks/build/WorkspaceTabSwitcher-3cH7qnzb.mjs (28.1 kB) (6.24 kB gzip)
+  ├─ .output/server/chunks/build/WorkspaceTabSwitcher-styles.DPAsggKo.mjs (5.56 kB) (1.27 kB gzip)
+  ├─ .output/server/chunks/nitro/nitro.mjs (2 MB) (431 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/admin-users.get.mjs (1.37 kB) (572 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/admin-users/grant.post.mjs (1.75 kB) (692 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/admin-users/revoke.post.mjs (1.75 kB) (693 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/auth/change-password.post.mjs (2.73 kB) (893 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/auth/login.post.mjs (3.32 kB) (1.14 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/auth/logout.post.mjs (1.22 kB) (511 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/auth/session.get.mjs (1.41 kB) (593 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/extensions.get.mjs (1.14 kB) (474 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/extensions/install.post.mjs (48.6 kB) (11.5 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/extensions/uninstall.post.mjs (1.8 kB) (744 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/index.get.mjs (1.25 kB) (488 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/index.post.mjs (3 kB) (1.15 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins-page.get.mjs (7.79 kB) (2.37 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/acquisitions/_operationId/cancel.post.mjs (1.67 kB) (642 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/acquisitions/_operationId/recover-runner.post.mjs (2.22 kB) (888 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/acquisitions/_operationId/retry.post.mjs (3.48 kB) (1.16 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/acquisitions/_operationId/status.get.mjs (1.76 kB) (674 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/development/admit.post.mjs (20.6 kB) (5.39 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/development/cleanup.post.mjs (2.66 kB) (992 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/development/eligibility.get.mjs (1.42 kB) (527 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/development/verification.post.mjs (4.48 kB) (1.61 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/development/watch.get.mjs (1.61 kB) (654 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/development/watch/_runId/_generation/_file_.get.mjs (1.87 kB) (717 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/index.get.mjs (1.55 kB) (625 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/index.post.mjs (6.32 kB) (2.08 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/index2.post.mjs (3.13 kB) (1.21 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/library-install-requests.get.mjs (1.88 kB) (726 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/packages/_pluginId/canary.post.mjs (4.29 kB) (1.42 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/packages/_pluginId/canary/client.post.mjs (4.12 kB) (1.35 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/packages/_pluginId/canary/entry.get.mjs (2.62 kB) (960 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/packages/_pluginId/delete-data.post.mjs (2.63 kB) (990 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/packages/_pluginId/grants.post.mjs (13.2 kB) (3.42 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/packages/_pluginId/promote.post.mjs (10.2 kB) (3.01 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/packages/_pluginId/review.get.mjs (4.58 kB) (1.51 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/packages/_pluginId/rollback-review.get.mjs (3.09 kB) (1.08 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/packages/_pluginId/rollback.post.mjs (3.94 kB) (1.42 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/packages/_pluginId/status.get.mjs (3.65 kB) (1.12 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/packages/_pluginId/uninstall.post.mjs (2.8 kB) (1.09 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/rollouts/_operationId_.get.mjs (2.48 kB) (995 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/rollouts/_operationId/cancel.post.mjs (1.92 kB) (752 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/rollouts/_operationId/continue.post.mjs (2.05 kB) (801 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/rollouts/_operationId/retry.post.mjs (2.04 kB) (801 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/rollouts/_operationId/start.post.mjs (2.04 kB) (799 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/rollouts/workspaces.get.mjs (1.57 kB) (668 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/site-catalog.get.mjs (1.81 kB) (742 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/site-catalog.post.mjs (3.52 kB) (1.27 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/site-catalog/_pluginId_.get.mjs (2.25 kB) (947 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/update-pin.post.mjs (1.6 kB) (684 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/updates.get.mjs (10.1 kB) (2.75 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/workspace-enable.post.mjs (5.48 kB) (1.75 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/workspace-settings.get.mjs (2 kB) (751 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/plugins/workspace-settings.post.mjs (2.34 kB) (861 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/registration.get.mjs (1.91 kB) (769 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/registration.post.mjs (2.67 kB) (1.08 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/search-users.get.mjs (1.71 kB) (711 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/signup-invites/create.post.mjs (2.47 kB) (1.01 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/signup-invites/list.get.mjs (1.78 kB) (746 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/signup-invites/revoke.post.mjs (1.59 kB) (663 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/system/config.get.mjs (1.13 kB) (451 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/system/config/enriched.get.mjs (2.24 kB) (865 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/system/config/write.post.mjs (2.83 kB) (1.05 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/system/provider-action.post.mjs (3.01 kB) (1.08 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/system/rebuild-restart.post.mjs (1.22 kB) (511 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/system/restart-cancel.post.mjs (1.84 kB) (745 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/system/restart-reconcile.post.mjs (1.85 kB) (752 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/system/restart-status.get.mjs (2.23 kB) (903 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/system/restart.post.mjs (3.62 kB) (1.36 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/system/status.get.mjs (3.26 kB) (909 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/themes-page.get.mjs (1.34 kB) (560 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/title-model.post.mjs (2.94 kB) (1.13 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/update/check.post.mjs (1.39 kB) (560 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/update/preview.post.mjs (1.4 kB) (563 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/update/start.post.mjs (1.99 kB) (797 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/update/status.get.mjs (1.14 kB) (467 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/webhooks/_helpers.mjs (3.13 kB) (1.1 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/webhooks/_id_.delete.mjs (1.64 kB) (582 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/webhooks/_id_.patch.mjs (3.18 kB) (1.09 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/webhooks/_id/logs.get.mjs (1.49 kB) (520 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/webhooks/_id/test.post.mjs (1.61 kB) (560 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/webhooks/_id/toggle.post.mjs (1.6 kB) (564 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/workspace.get.mjs (2.65 kB) (942 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/workspace/file-policy.get.mjs (1.61 kB) (597 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/workspace/file-policy.post.mjs (2.2 kB) (885 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/workspace/guest-access/set.post.mjs (1.79 kB) (743 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/workspace/invites/create.post.mjs (4.39 kB) (1.56 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/workspace/invites/list.get.mjs (3 kB) (1.17 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/workspace/invites/revoke.post.mjs (3.3 kB) (1.2 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/workspace/members/remove.post.mjs (2.65 kB) (999 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/workspace/members/set-role.post.mjs (2.49 kB) (983 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/workspace/members/upsert.post.mjs (2.19 kB) (867 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/workspaces.get.mjs (2.71 kB) (1.1 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/workspaces.post.mjs (3.31 kB) (1.12 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/workspaces/_id_.get.mjs (2.77 kB) (1.02 kB gzip)
+  ├─ .output/server/chunks/routes/api/admin/workspaces/_id/restore.post.mjs (1.7 kB) (656 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/workspaces/_id/soft-delete.post.mjs (2.04 kB) (790 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/workspaces/restore.post.mjs (1.57 kB) (623 B gzip)
+  ├─ .output/server/chunks/routes/api/admin/workspaces/soft-delete.post.mjs (2.03 kB) (790 B gzip)
+  ├─ .output/server/chunks/routes/api/auth/session.get.mjs (2.75 kB) (1.06 kB gzip)
+  ├─ .output/server/chunks/routes/api/chat/history-readiness.get.mjs (2.27 kB) (916 B gzip)
+  ├─ .output/server/chunks/routes/api/connect/device/approve.post.mjs (6.22 kB) (1.99 kB gzip)
+  ├─ .output/server/chunks/routes/api/connect/device/deny.post.mjs (2.42 kB) (962 B gzip)
+  ├─ .output/server/chunks/routes/api/connect/device/request.get.mjs (2.47 kB) (954 B gzip)
+  ├─ .output/server/chunks/routes/api/connect/device/start.post.mjs (3.1 kB) (1.24 kB gzip)
+  ├─ .output/server/chunks/routes/api/connect/device/status.get.mjs (10.8 kB) (3.08 kB gzip)
+  ├─ .output/server/chunks/routes/api/connect/device/token.post.mjs (4.82 kB) (1.52 kB gzip)
+  ├─ .output/server/chunks/routes/api/connect/environments/remove.post.mjs (2.61 kB) (952 B gzip)
+  ├─ .output/server/chunks/routes/api/connect/environments/revoke.post.mjs (2.72 kB) (975 B gzip)
+  ├─ .output/server/chunks/routes/api/connect/index.get.mjs (4.24 kB) (1.24 kB gzip)
+  ├─ .output/server/chunks/routes/api/health.get.mjs (3.81 kB) (1.32 kB gzip)
+  ├─ .output/server/chunks/routes/api/health.head.mjs (823 B) (344 B gzip)
+  ├─ .output/server/chunks/routes/api/healthz.get.mjs (878 B) (381 B gzip)
+  ├─ .output/server/chunks/routes/api/index.get.mjs (1.2 kB) (494 B gzip)
+  ├─ .output/server/chunks/routes/api/index.post.mjs (2.42 kB) (969 B gzip)
+  ├─ .output/server/chunks/routes/api/index2.get.mjs (1.67 kB) (669 B gzip)
+  ├─ .output/server/chunks/routes/api/index2.post.mjs (2.44 kB) (902 B gzip)
+  ├─ .output/server/chunks/routes/api/jobs/_id/abort.post.mjs (4.2 kB) (1.39 kB gzip)
+  ├─ .output/server/chunks/routes/api/jobs/_id/client-tool/claim.post.mjs (4.41 kB) (1.51 kB gzip)
+  ├─ .output/server/chunks/routes/api/jobs/_id/client-tool/result.post.mjs (6.89 kB) (2.26 kB gzip)
+  ├─ .output/server/chunks/routes/api/jobs/_id/client-tool/validate.post.mjs (3.33 kB) (1.21 kB gzip)
+  ├─ .output/server/chunks/routes/api/jobs/_id/status.get.mjs (7.57 kB) (1.99 kB gzip)
+  ├─ .output/server/chunks/routes/api/jobs/_id/stream.get.mjs (34.1 kB) (6.79 kB gzip)
+  ├─ .output/server/chunks/routes/api/jobs/admission-abort.post.mjs (3.79 kB) (1.3 kB gzip)
+  ├─ .output/server/chunks/routes/api/jobs/admission/_admissionId_.get.mjs (2.78 kB) (1.03 kB gzip)
+  ├─ .output/server/chunks/routes/api/jobs/client-tool/capability.get.mjs (1.54 kB) (658 B gzip)
+  ├─ .output/server/chunks/routes/api/openrouter/classify-memory.post.mjs (13.7 kB) (4.57 kB gzip)
+  ├─ .output/server/chunks/routes/api/openrouter/credentials.post.mjs (2.11 kB) (849 B gzip)
+  ├─ .output/server/chunks/routes/api/openrouter/models.post.mjs (1.97 kB) (791 B gzip)
+  ├─ .output/server/chunks/routes/api/openrouter/oauth.mjs (6.31 kB) (2.22 kB gzip)
+  ├─ .output/server/chunks/routes/api/openrouter/stream.post.mjs (18.3 kB) (4.69 kB gzip)
+  ├─ .output/server/chunks/routes/api/openrouter/title-model.get.mjs (1.49 kB) (613 B gzip)
+  ├─ .output/server/chunks/routes/api/openrouter/title.post.mjs (3.32 kB) (1.25 kB gzip)
+  ├─ .output/server/chunks/routes/api/plugins/_pluginId/_...path_.mjs (20.4 kB) (5.21 kB gzip)
+  ├─ .output/server/chunks/routes/api/plugins/_pluginId/first-action.post.mjs (5.52 kB) (1.9 kB gzip)
+  ├─ .output/server/chunks/routes/api/plugins/_pluginId/sample.get.mjs (3.28 kB) (1.19 kB gzip)
+  ├─ .output/server/chunks/routes/api/plugins/_pluginId/setup-plan.get.mjs (7.42 kB) (2.21 kB gzip)
+  ├─ .output/server/chunks/routes/api/plugins/_pluginId/setup-values.post.mjs (12.1 kB) (3 kB gzip)
+  ├─ .output/server/chunks/routes/api/plugins/access.get.mjs (2.06 kB) (844 B gzip)
+  ├─ .output/server/chunks/routes/api/plugins/connections/_id_.delete.mjs (1.57 kB) (643 B gzip)
+  ├─ .output/server/chunks/routes/api/plugins/connections/test.post.mjs (11.5 kB) (2.94 kB gzip)
+  ├─ .output/server/chunks/routes/api/plugins/diagnostics.get.mjs (4.73 kB) (1.69 kB gzip)
+  ├─ .output/server/chunks/routes/api/plugins/index.get.mjs (1.26 kB) (518 B gzip)
+  ├─ .output/server/chunks/routes/api/plugins/index.post.mjs (8.5 kB) (2.16 kB gzip)
+  ├─ .output/server/chunks/routes/api/plugins/isolation/activation.delete.mjs (2.55 kB) (921 B gzip)
+  ├─ .output/server/chunks/routes/api/plugins/isolation/activation.post.mjs (4.95 kB) (1.55 kB gzip)
+  ├─ .output/server/chunks/routes/api/plugins/isolation/capability.post.mjs (45.4 kB) (10.8 kB gzip)
+  ├─ .output/server/chunks/routes/api/plugins/library/entitlements.get.mjs (1.95 kB) (839 B gzip)
+  ├─ .output/server/chunks/routes/api/plugins/library/install-requests.post.mjs (4.45 kB) (1.53 kB gzip)
+  ├─ .output/server/chunks/routes/api/plugins/library/link.get.mjs (1.48 kB) (629 B gzip)
+  ├─ .output/server/chunks/routes/api/plugins/library/link.post.mjs (2.72 kB) (1.06 kB gzip)
+  ├─ .output/server/chunks/routes/api/plugins/library/link/disconnect.post.mjs (1.75 kB) (706 B gzip)
+  ├─ .output/server/chunks/routes/api/plugins/marketplace/_pluginId_.get.mjs (2.58 kB) (985 B gzip)
+  ├─ .output/server/chunks/routes/api/plugins/marketplace/catalog.get.mjs (2.11 kB) (900 B gzip)
+  ├─ .output/server/chunks/routes/api/plugins/marketplace/preflight.post.mjs (3.64 kB) (1.35 kB gzip)
+  ├─ .output/server/chunks/routes/api/plugins/packages/_pluginId/_digest/_...path_.get.mjs (5.34 kB) (1.63 kB gzip)
+  ├─ .output/server/chunks/routes/api/plugins/runtime-manifest.get.mjs (16.7 kB) (4.21 kB gzip)
+  ├─ .output/server/chunks/routes/api/plugins/secrets.post.mjs (7.44 kB) (2.5 kB gzip)
+  ├─ .output/server/chunks/routes/api/ready.get.mjs (1.68 kB) (701 B gzip)
+  ├─ .output/server/chunks/routes/api/storage/commit.post.mjs (3.4 kB) (1.25 kB gzip)
+  ├─ .output/server/chunks/routes/api/storage/delete.post.mjs (3.63 kB) (1.25 kB gzip)
+  ├─ .output/server/chunks/routes/api/storage/gc/run.post.mjs (4.21 kB) (1.52 kB gzip)
+  ├─ .output/server/chunks/routes/api/storage/policy.get.mjs (1.81 kB) (661 B gzip)
+  ├─ .output/server/chunks/routes/api/storage/presign-download.post.mjs (8.74 kB) (2.75 kB gzip)
+  ├─ .output/server/chunks/routes/api/storage/presign-upload.post.mjs (10.5 kB) (3.16 kB gzip)
+  ├─ .output/server/chunks/routes/api/sync/events.get.mjs (4.45 kB) (1.5 kB gzip)
+  ├─ .output/server/chunks/routes/api/sync/gc-change-log.post.mjs (3.47 kB) (1.24 kB gzip)
+  ├─ .output/server/chunks/routes/api/sync/gc-tombstones.post.mjs (3.47 kB) (1.24 kB gzip)
+  ├─ .output/server/chunks/routes/api/sync/pull.post.mjs (3.95 kB) (1.27 kB gzip)
+  ├─ .output/server/chunks/routes/api/sync/push.post.mjs (7.5 kB) (2.45 kB gzip)
+  ├─ .output/server/chunks/routes/api/sync/snapshot.post.mjs (3.86 kB) (1.22 kB gzip)
+  ├─ .output/server/chunks/routes/api/sync/update-cursor.post.mjs (3.01 kB) (1.09 kB gzip)
+  ├─ .output/server/chunks/routes/api/webhooks/_helpers.mjs (5.62 kB) (1.64 kB gzip)
+  ├─ .output/server/chunks/routes/api/webhooks/_id_.delete.mjs (1.46 kB) (542 B gzip)
+  ├─ .output/server/chunks/routes/api/webhooks/_id_.patch.mjs (2.23 kB) (892 B gzip)
+  ├─ .output/server/chunks/routes/api/webhooks/_id/logs.get.mjs (1.44 kB) (527 B gzip)
+  ├─ .output/server/chunks/routes/api/webhooks/_id/test.post.mjs (1.52 kB) (555 B gzip)
+  ├─ .output/server/chunks/routes/api/webhooks/_id/toggle.post.mjs (1.42 kB) (531 B gzip)
+  ├─ .output/server/chunks/routes/api/webhooks/disable-all.post.mjs (1.17 kB) (479 B gzip)
+  ├─ .output/server/chunks/routes/api/webhooks/route-factories.mjs (4.43 kB) (1.28 kB gzip)
+  ├─ .output/server/chunks/routes/api/workspaces/_helpers.mjs (2.55 kB) (918 B gzip)
+  ├─ .output/server/chunks/routes/api/workspaces/_id_.delete.mjs (2.15 kB) (801 B gzip)
+  ├─ .output/server/chunks/routes/api/workspaces/_id_.patch.mjs (2.46 kB) (839 B gzip)
+  ├─ .output/server/chunks/routes/api/workspaces/active.post.mjs (2.45 kB) (873 B gzip)
+  ├─ .output/server/chunks/routes/api/workspaces/backup.get.mjs (10.3 kB) (3.34 kB gzip)
+  ├─ .output/server/chunks/routes/or3-containment/probe-worker.js.mjs (10.3 kB) (3.22 kB gzip)
+  ├─ .output/server/chunks/routes/or3-containment/target.js.mjs (1.39 kB) (627 B gzip)
+  ├─ .output/server/chunks/routes/or3-containment/target.mjs (1.11 kB) (502 B gzip)
+  ├─ .output/server/chunks/routes/or3/portable-frame.get.mjs (1.25 kB) (516 B gzip)
+  ├─ .output/server/chunks/routes/or3/tool-card-frame/_pluginId/_digest/_cardId_.get.mjs (19.3 kB) (5.96 kB gzip)
+  ├─ .output/server/chunks/routes/or3/tool-card-probe.get.mjs (909 B) (397 B gzip)
+  ├─ .output/server/chunks/routes/renderer.mjs (24.4 kB) (8.15 kB gzip)
+  ├─ .output/server/chunks/virtual/entry.mjs (774 kB) (186 kB gzip)
+  ├─ .output/server/chunks/virtual/precomputed.mjs (530 kB) (44.7 kB gzip)
+  ├─ .output/server/chunks/virtual/styles.mjs (13.2 kB) (2.53 kB gzip)
+  ├─ .output/server/index.mjs (820 B) (350 B gzip)
+  └─ .output/server/package.json (9.39 kB) (2.58 kB gzip)
+Σ Total size: 71 MB (22 MB gzip)
+[nitro] ✔ You can preview this build using node .output/server/index.mjs
+config 258ms · modules 295ms · app 562ms · types 526ms · client 18.1s · server 4.79s · nitro 30.4s
+◆ ✨ Build complete in 55.0s!
+[plugin-runtime-build:ssr] verified built-ins and bundled V1 fixture in .output/public/_nuxt/mzVmCdKN.js; client fixture absent from server output
+[plugin-runtime-build] trusted-host ModuleV2Loader UI remains rebuild-required (vue-singleton-unproven, sdk-singleton-unproven, vue-reactivity-unproven, vue-component-rendering-unproven)

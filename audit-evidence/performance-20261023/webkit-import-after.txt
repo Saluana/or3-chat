@@ -1,0 +1,29 @@
+
+Running 5 tests using 1 worker
+
+(node:43545) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/5] [webkit] › tests/e2e/production-chat-journey.spec.ts:2954:1 › PageShell compaction summary reload and original landmark navigation
+(node:43674) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[2/5] [webkit] › tests/e2e/production-chat-journey.spec.ts:2954:1 › PageShell compaction summary reload and original landmark navigation
+(node:43686) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[3/5] [webkit] › tests/e2e/production-chat-journey.spec.ts:2954:1 › PageShell compaction summary reload and original landmark navigation
+(node:43698) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[4/5] [webkit] › tests/e2e/production-chat-journey.spec.ts:2954:1 › PageShell compaction summary reload and original landmark navigation
+(node:43721) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[5/5] [webkit] › tests/e2e/production-chat-journey.spec.ts:2954:1 › PageShell compaction summary reload and original landmark navigation
+  5 passed (33.5s)

@@ -1,0 +1,53 @@
+
+Running 3 tests using 1 worker
+
+(node:13311) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/3] [chromium] › tests/e2e/tool-cards.spec.ts:507:1 › 30 frame cards obey the per-pane cap and resume as the chat scrolls
+(node:13478) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[2/3] [chromium] › tests/e2e/tool-cards.spec.ts:507:1 › 30 frame cards obey the per-pane cap and resume as the chat scrolls
+  1) [chromium] › tests/e2e/tool-cards.spec.ts:507:1 › 30 frame cards obey the per-pane cap and resume as the chat scrolls
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-msg-id="scroll-0"]').first().locator('iframe').contentFrame().getByRole('button', { name: 'Frame answer' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" locator('[data-msg-id="scroll-0"]').first().locator('iframe').contentFrame().getByRole('button', { name: 'Frame answer' }) with timeout 5000ms
+      - waiting for locator('[data-msg-id="scroll-0"]').first().locator('iframe').contentFrame().getByRole('button', { name: 'Frame answer' })
+
+
+      533 |       .frameLocator("iframe")
+      534 |       .getByRole("button", { name: "Frame answer" }),
+    > 535 |   ).toBeVisible();
+          |     ^
+      536 |   const final = await page.locator('iframe[title="Frame fixture"]').count();
+      537 |   expect(final).toBeLessThanOrEqual(12);
+      538 |   results.push({
+        at /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/tool-cards.spec.ts:535:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../tmp/or3-card-frame-baseline-artifacts/tool-cards-30-frame-cards--cb48f--resume-as-the-chat-scrolls-chromium-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../tmp/or3-card-frame-baseline-artifacts/tool-cards-30-frame-cards--cb48f--resume-as-the-chat-scrolls-chromium-repeat1/error-context.md
+
+    Error Context: ../../../../../../tmp/or3-card-frame-baseline-artifacts/tool-cards-30-frame-cards--cb48f--resume-as-the-chat-scrolls-chromium-repeat1/error-context.md
+
+
+(node:13536) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[3/3] [chromium] › tests/e2e/tool-cards.spec.ts:507:1 › 30 frame cards obey the per-pane cap and resume as the chat scrolls
+  1 failed
+    [chromium] › tests/e2e/tool-cards.spec.ts:507:1 › 30 frame cards obey the per-pane cap and resume as the chat scrolls
+  2 passed (13.8s)

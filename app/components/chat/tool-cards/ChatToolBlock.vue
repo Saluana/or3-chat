@@ -5,12 +5,13 @@ import {
     toolCardBindingKey,
     type ToolCardBinding
 } from '~/composables/chat/tool-cards';
-import type { ToolCallInfo, UiChatMessage } from '~/utils/chat/uiMessages';
+import type { ToolCallInfo } from '~/utils/chat/uiMessages';
+import type { ToolCardMessage } from '~/utils/chat/tool-card-context';
 import ToolCallIndicator from '../ToolCallIndicator.vue';
 import ToolCardSlot from './ToolCardSlot.vue';
 const props = defineProps<{
     toolCalls: ToolCallInfo[];
-    message: UiChatMessage;
+    message: ToolCardMessage;
 }>();
 const emit = defineEmits<{ resize: [] }>();
 const blocks = computed(() => {

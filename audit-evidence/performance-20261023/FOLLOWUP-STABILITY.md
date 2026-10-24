@@ -4,6 +4,11 @@ Date: October 23, 2026. Baseline: synced `or3-cloud` at `25c758b2`, after the
 previous 22 PRs and the user's other work were merged. These changes are local
 in this checkout on `or3-cloud`.
 
+This batch was subsequently committed as `a996424a`. The next
+[registered tool-card audit](TOOL-CARD-AUDIT.md) records further update filtering,
+stable card metadata, stale preload protection and browser qualification. Its final
+report identifies the remaining frame-budget and scroll-position evaluations.
+
 This round preserves appearance. No CSS, theme tokens, typography, spacing,
 control sizes, animation styling, scroll settings or dependency versions changed.
 Images use the existing renderer, placeholders, dimensions and hydration classes.
@@ -121,7 +126,7 @@ Receipts:
 | --- | --- |
 | Rich code/math streams | A fresh clean concurrent run still reaches **33.3 ms p95 at 4×**, with one long task; both replies save exactly. A separate instrumented run reaches 33.4 ms p95 and has about 261 ms of style calculation and 258 ms of layout, with a largest document layout around 30 ms. These event totals are diagnostic and are not an additive main-thread budget. Vue DOM-property patches, scroller measurement and first math-font invalidations appear in the trace. Isolate cold/warm font, DOM and layout costs before selecting another appearance-preserving change. Worker CPU is not fully qualified by the main-thread profile. |
 | Large instantaneous scroll jumps | Previous virtual and fully mounted static controls both showed gaps. This round does not change overscan or the scheduler. Next: compositor/raster capture at realistic input cadence and physical touch inertia, distinguishing engine painting from virtual range updates. |
-| Real plugin tool cards | Empty no-tool replies are cheaper. Registered cards, ordered assistant parts, argument/result updates, subscriptions, visibility gating and lifecycle cleanup still need their own long-stream qualification. The native navigation pass does not qualify all plugin cards. |
+| Real plugin tool cards | The next [card audit](TOOL-CARD-AUDIT.md) removes redundant notifications/container updates and stale preloads, with a registered-card stream probe and selected lifecycle coverage. Ordered multi-card replies, sustained subscriptions/memory and repeated workspace switching remain open. The tall-viewport frame-budget case is intermittent on the committed baseline; general scroll positioning still needs evaluation. |
 | WebKit private storage and devices | Raw private-context Blob writes still fail. Qualify private-mode behavior and actual iOS/Safari persistence/recovery separately from normal-profile results; retain existing data contracts when considering a remedy. |
 | Intermittent WebKit compaction/import errors | The earlier intermittent reload/import finding has not been independently isolated in this round. Functional passes elsewhere do not establish error-free compaction/navigation. |
 | First font paint and reduced-motion idle work | The prior font-readiness limitation and unattributed waiting-phase paint/layout work remain. Diagnose those with isolated traces; no font or motion appearance change is included here. |
