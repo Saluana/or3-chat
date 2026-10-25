@@ -1,0 +1,1 @@
+$ eslint --no-warn-ignored --quiet app/theme/_shared/theme-manifest.ts server/plugins/html-compression.ts server/plugins/__tests__/html-compression.test.ts "tests/e2e/performance-budgets.e2e.ts" tests/unit/workspace-db-cache.test.ts

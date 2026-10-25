@@ -1,0 +1,37 @@
+{
+  "focusedTests": {
+    "files": 5,
+    "passed": 35
+  },
+  "chromeTests": {
+    "passed": 22,
+    "finalRebuildSmokePassed": 1
+  },
+  "productionBuild": 0,
+  "applicationTypecheck": 0,
+  "targetedLint": 0,
+  "documentationCheck": 0,
+  "prerenderedHtmlRemainsText": true,
+  "assetBudget": {
+    "exitCode": 1,
+    "existingFailures": [
+      "totalJavascriptRawBytes",
+      "totalJavascriptGzipBytes",
+      "precacheRawBytes"
+    ]
+  },
+  "browserCleanup": {
+    "cpu": 1,
+    "networkUnthrottled": true,
+    "viewportRestored": true,
+    "cacheEnabled": true,
+    "serviceWorkerBypass": false,
+    "touchOverrideDisabled": true,
+    "observersRemoved": true
+  },
+  "manual": {
+    "draftSurvivedReload": true,
+    "testDraftClearedAndReloaded": true,
+    "commandPaletteFocusedWithResults": true
+  }
+}

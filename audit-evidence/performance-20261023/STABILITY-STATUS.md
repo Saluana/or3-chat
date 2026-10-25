@@ -50,6 +50,15 @@ JavaScript/precache budget failures, deployed/provider paths, full PWA lifecycle
 and physical devices remain open. Chrome's temporary settings are restored;
 the final production preview remains available on port 3156.
 
+The subsequent [composer startup repair](../performance-20261024/COMPOSER-STARTUP.md)
+reduces matched cold composer readiness from **6.396 to 5.991 s** by compressing
+rendered HTML and reusing parsed theme stylesheets. LCP improves from **1.748 to
+1.360 s**, with zero CLS and unchanged composer geometry/artwork. **35 focused
+tests and 22 Chrome E2Es pass**. This is a 6.3% readiness improvement, not a claim
+that cold startup is fast: about 752 KB of encoded JavaScript still loads before
+the observation. The report records rejected experiments and remaining deployed,
+provider, physical-device and complete-asset-budget evaluations.
+
 Work began on `or3-cloud`, freshly synced with upstream `25c758b2`, preserving
 image commit `a996424a`. The subsequent card, notification, workspace-lifecycle,
 scroll and browser-qualification changes and their evidence are included in the

@@ -307,7 +307,8 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) for (const mode of ['light'
             };
         });
         try {
-            await page.goto('/chat', { waitUntil: 'commit' });
+            const navigation = await page.goto('/chat', { waitUntil: 'commit' });
+            expect(navigation?.headers()['content-encoding'], 'the rendered page uses negotiated compression').toBe('gzip');
             await expect(page.locator('.chat-input-main').first()).toBeVisible();
             // WebKit's fonts.ready also waits for the held module scripts.
             // Load the visible text faces independently of document completion.
@@ -348,6 +349,9 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) for (const mode of ['light'
             if (await dismiss.isVisible()) await dismiss.click();
             const ready = await geometry();
             await testInfo.attach('after-hydration', { body: await page.screenshot({ path: testInfo.outputPath('after-hydration.png') }), contentType: 'image/png' });
+            const themeSheets = await page.locator('link[data-theme-stylesheet]').evaluateAll(links =>
+                links.map(link => (link as HTMLLinkElement).href));
+            expect(themeSheets.length, 'hydration reuses the parsed SSR stylesheet').toBe(new Set(themeSheets).size);
             writeFileSync(testInfo.outputPath('startup-geometry.json'), JSON.stringify({ theme, initial, ready, errors }, null, 2));
             await testInfo.attach('startup-geometry', {
                 body: Buffer.from(JSON.stringify({ theme, initial, ready, errors }, null, 2)),

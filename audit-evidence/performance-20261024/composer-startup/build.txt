@@ -1,0 +1,13 @@
+Final production build: exit 0
+  ├─ .output/server/chunks/routes/renderer.mjs (24.3 kB) (8.14 kB gzip)
+  ├─ .output/server/chunks/virtual/entry.mjs (783 kB) (190 kB gzip)
+  ├─ .output/server/chunks/virtual/precomputed.mjs (543 kB) (44.4 kB gzip)
+  ├─ .output/server/chunks/virtual/styles.mjs (14.3 kB) (2.66 kB gzip)
+  ├─ .output/server/index.mjs (820 B) (350 B gzip)
+  └─ .output/server/package.json (9.39 kB) (2.58 kB gzip)
+Σ Total size: 70.9 MB (22.1 MB gzip)
+[nitro] ✔ You can preview this build using node .output/server/index.mjs
+config 319ms · modules 476ms · app 838ms · types 559ms · client 21.6s · server 5.68s · nitro 34.8s
+◆ ✨ Build complete in 1m 04s!
+[plugin-runtime-build:ssr] verified built-ins and bundled V1 fixture in .output/public/_nuxt/mzVmCdKN.js; client fixture absent from server output
+[plugin-runtime-build] trusted-host ModuleV2Loader UI remains rebuild-required (vue-singleton-unproven, sdk-singleton-unproven, vue-reactivity-unproven, vue-component-rendering-unproven)
