@@ -1,0 +1,5 @@
+{
+  "app/core/search/command-palette/sources/chat-source.ts": "adb367918293e079c20ee873b2f9b35d03e0c4291c33f976479d4a5fa3367bb0",
+  "tests/e2e/fixtures/workspace-search-probe.js": "5972facf8d9ea707b864a87e31fc2744305855a1b40391ed35dc8ffcbb633bfd",
+  "tests/e2e/workspace-search-performance.e2e.ts": "e5a5dbb6de73e4b9151adf7753bb155f74032a88063409adc0cf1f8b2b96a5a4"
+}

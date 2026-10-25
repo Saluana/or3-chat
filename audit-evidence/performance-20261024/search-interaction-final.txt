@@ -1,0 +1,11 @@
+
+Running 3 tests using 1 worker
+
+(node:48746) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/3] [chromium] › tests/e2e/command-palette.spec.ts:35:1 › opens globally, traps one overlay, and restores focus on Escape
+[2/3] [chromium] › tests/e2e/command-palette.spec.ts:56:1 › requires two clicks and locks the first-click preview selection
+[3/3] [chromium] › tests/e2e/command-palette.spec.ts:91:1 › typing a new query cannot execute a stale result with Enter
+  3 passed (6.8s)

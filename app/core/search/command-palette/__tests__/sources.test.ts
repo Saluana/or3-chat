@@ -16,6 +16,122 @@ const context: PaletteLoadContext = {
 };
 
 describe('palette source adapters', () => {
+    it('loads complete chat history in bounded reads and stops reading after cancellation', async () => {
+        const { Or3DB } = await import('~/db/client');
+        const db = new Or3DB(`palette-pages-${crypto.randomUUID()}`);
+        const base = { created_at: 1, updated_at: 1, clock: 1, deleted: false };
+        const reads: number[] = [];
+        let cancel: AbortController | undefined;
+        db.use({
+            stack: 'dbcore',
+            name: 'read-budget',
+            create(down) {
+                return {
+                    ...down,
+                    table(name) {
+                        const table = down.table(name);
+                        return {
+                            ...table,
+                            async query(request) {
+                                const result = await table.query(request);
+                                if (name === 'messages') {
+                                    reads.push(result.result.length);
+                                    cancel?.abort();
+                                }
+                                return result;
+                            },
+                        };
+                    },
+                };
+            },
+        });
+        try {
+            await db.threads.bulkPut([
+                {
+                    ...base,
+                    id: 'root',
+                    title: 'Root',
+                    status: 'ready',
+                    pinned: false,
+                    forked: false,
+                },
+                {
+                    ...base,
+                    id: 'branch',
+                    title: 'Branch',
+                    status: 'ready',
+                    pinned: false,
+                    forked: true,
+                    parent_thread_id: 'root',
+                    branch_mode: 'reference',
+                    anchor_message_id: 'm-0004',
+                },
+            ]);
+            await db.messages.bulkPut(
+                Array.from({ length: 1201 }, (_, index) => ({
+                    ...base,
+                    id: `m-${String(index).padStart(4, '0')}`,
+                    thread_id: 'root',
+                    index,
+                    role: index === 4 ? 'tool' : 'user',
+                    // Legacy order_key omissions, non-visible anchors and unused payloads.
+                    data: {
+                        content: `Visible ${index}`,
+                        result: 'irrelevant tool bytes'.repeat(100),
+                    },
+                }))
+            );
+            await db.messages.update('m-1196', { deleted: true });
+            await db.messages.update('m-1197', {
+                role: 'assistant',
+                data: {
+                    type: 'workflow-execution',
+                    finalOutput: 'Workflow conclusion',
+                    content: 'private workflow state',
+                },
+            });
+            await db.messages.update('m-1198', {
+                data: { text: 'Legacy text field' },
+            });
+            await db.messages.update('m-1199', {
+                data: { content: 'superseded answer', superseded_by: 'm-1200' },
+            });
+            reads.length = 0;
+            const source = createChatPaletteSource();
+            const localContext = { ...context, getDb: async () => db };
+            const resources = await source.load(localContext);
+            const root = resources.find(
+                (resource) => resource.recordId === 'root'
+            )!;
+            expect(root.metadata?.messageCount).toBe(1198);
+            expect(root.content).toContain('Visible 1200');
+            expect(root.content).toContain(
+                'Workflow conclusion\nLegacy text field\nVisible 1200'
+            );
+            expect(root.content).not.toContain('Visible 1196');
+            expect(root.content).not.toContain('superseded answer');
+            expect(root.content).not.toContain('private workflow state');
+            expect(root.content).not.toContain('irrelevant tool bytes');
+            expect(
+                resources.find((resource) => resource.recordId === 'branch')
+                    ?.content
+            ).toBe('Visible 0\nVisible 1\nVisible 2\nVisible 3');
+            // A transfer budget, independent of the implementation's page size.
+            expect(Math.max(...reads)).toBeLessThanOrEqual(1000);
+            expect(reads.reduce((sum, count) => sum + count, 0)).toBe(1201);
+            reads.length = 0;
+            cancel = new AbortController();
+            await expect(
+                source.load({ ...localContext, signal: cancel.signal })
+            ).rejects.toMatchObject({ name: 'AbortError' });
+            expect(
+                reads.reduce((sum, count) => sum + count, 0)
+            ).toBeLessThanOrEqual(1000);
+        } finally {
+            await db.delete();
+        }
+    });
+
     it('refreshes only affected conversations and reference descendants using indexed reads', async () => {
         const { Or3DB } = await import('~/db/client');
         const db = new Or3DB(`palette-delta-${crypto.randomUUID()}`);
