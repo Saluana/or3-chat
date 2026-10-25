@@ -1,0 +1,4003 @@
+{
+  "browser": "153.0.8010.12",
+  "origin": "http://127.0.0.1:3116",
+  "cpuRate": 4,
+  "scope": "Fresh storage/context and disabled HTTP cache; shared Chromium process and warm development server. Scripted 30-card fixture, no paid requests.",
+  "runs": [
+    {
+      "mode": "frame-measure",
+      "warmup": false,
+      "phases": [
+        {
+          "name": "composer-ready",
+          "at": 2396.9000000953674,
+          "mounts": 8,
+          "calls": [
+            "quiz-24",
+            "quiz-27",
+            "quiz-29",
+            "quiz-22",
+            "quiz-23",
+            "quiz-25",
+            "quiz-26",
+            "quiz-28"
+          ],
+          "top": 5559,
+          "height": 6364,
+          "viewport": 680,
+          "bottom": 125,
+          "mountedCards": [
+            "scroll-22",
+            "scroll-23",
+            "scroll-24",
+            "scroll-25",
+            "scroll-26",
+            "scroll-27",
+            "scroll-28",
+            "scroll-29"
+          ],
+          "metrics": {
+            "Timestamp": 2002371.487779,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 16,
+            "Frames": 8,
+            "JSEventListeners": 1907,
+            "LayoutObjects": 1005,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 8197,
+            "Resources": 518,
+            "ContextLifecycleStateObservers": 120,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 16,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 2,
+            "ArrayBufferContents": 73,
+            "LayoutCount": 37,
+            "RecalcStyleCount": 49,
+            "LayoutDuration": 0.051581,
+            "RecalcStyleDuration": 0.267478,
+            "DevToolsCommandDuration": 0.06248,
+            "ScriptDuration": 0.404555,
+            "V8CompileDuration": 0.001121,
+            "TaskDuration": 2.263462,
+            "TaskOtherDuration": 1.476308,
+            "ThreadTime": 2.40278,
+            "ProcessTime": 3.189438,
+            "JSHeapUsedSize": 104350104,
+            "JSHeapTotalSize": 157188096,
+            "FirstMeaningfulPaint": 0,
+            "DomContentLoaded": 2002369.164716,
+            "NavigationStart": 2002369.068325
+          }
+        },
+        {
+          "name": "cold-settled",
+          "at": 3192.9000000953674,
+          "mounts": 8,
+          "calls": [
+            "quiz-24",
+            "quiz-27",
+            "quiz-29",
+            "quiz-22",
+            "quiz-23",
+            "quiz-25",
+            "quiz-26",
+            "quiz-28"
+          ],
+          "top": 5826,
+          "height": 6506,
+          "viewport": 680,
+          "bottom": 0,
+          "mountedCards": [
+            "scroll-22",
+            "scroll-23",
+            "scroll-24",
+            "scroll-25",
+            "scroll-26",
+            "scroll-27",
+            "scroll-28",
+            "scroll-29"
+          ],
+          "metrics": {
+            "Timestamp": 2002372.26232,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 18,
+            "Frames": 9,
+            "JSEventListeners": 2148,
+            "LayoutObjects": 1009,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 8495,
+            "Resources": 524,
+            "ContextLifecycleStateObservers": 123,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 18,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 2,
+            "ArrayBufferContents": 73,
+            "LayoutCount": 40,
+            "RecalcStyleCount": 100,
+            "LayoutDuration": 0.05518,
+            "RecalcStyleDuration": 0.333522,
+            "DevToolsCommandDuration": 0.090585,
+            "ScriptDuration": 0.414912,
+            "V8CompileDuration": 0.001121,
+            "TaskDuration": 2.447127,
+            "TaskOtherDuration": 1.551868,
+            "ThreadTime": 3.038207,
+            "ProcessTime": 3.864935,
+            "JSHeapUsedSize": 108471984,
+            "JSHeapTotalSize": 158531584,
+            "FirstMeaningfulPaint": 2002371.146516,
+            "DomContentLoaded": 2002369.164716,
+            "NavigationStart": 2002369.068325
+          }
+        },
+        {
+          "name": "saved-at-top",
+          "at": 4461.700000047684,
+          "mounts": 14,
+          "calls": [
+            "quiz-24",
+            "quiz-27",
+            "quiz-29",
+            "quiz-22",
+            "quiz-23",
+            "quiz-25",
+            "quiz-26",
+            "quiz-28",
+            "quiz-2",
+            "quiz-5",
+            "quiz-4",
+            "quiz-1",
+            "quiz-3",
+            "quiz-0"
+          ],
+          "top": 0,
+          "height": 8266,
+          "viewport": 680,
+          "bottom": 7586,
+          "mountedCards": [
+            "scroll-0",
+            "scroll-1",
+            "scroll-2",
+            "scroll-3",
+            "scroll-4",
+            "scroll-5",
+            "scroll-22",
+            "scroll-23",
+            "scroll-24",
+            "scroll-25"
+          ],
+          "metrics": {
+            "Timestamp": 2002373.530995,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 22,
+            "Frames": 11,
+            "JSEventListeners": 2605,
+            "LayoutObjects": 1252,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 10859,
+            "Resources": 536,
+            "ContextLifecycleStateObservers": 133,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 22,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 2,
+            "ArrayBufferContents": 104,
+            "LayoutCount": 55,
+            "RecalcStyleCount": 185,
+            "LayoutDuration": 0.067704,
+            "RecalcStyleDuration": 0.563742,
+            "DevToolsCommandDuration": 0.114281,
+            "ScriptDuration": 0.440881,
+            "V8CompileDuration": 0.001121,
+            "TaskDuration": 3.008632,
+            "TaskOtherDuration": 1.820964,
+            "ThreadTime": 4.136244,
+            "ProcessTime": 5.046079,
+            "JSHeapUsedSize": 112995984,
+            "JSHeapTotalSize": 165085184,
+            "FirstMeaningfulPaint": 2002371.146516,
+            "DomContentLoaded": 2002369.164716,
+            "NavigationStart": 2002369.068325
+          }
+        },
+        {
+          "name": "returned-settled",
+          "at": 5846,
+          "mounts": 22,
+          "calls": [
+            "quiz-24",
+            "quiz-27",
+            "quiz-29",
+            "quiz-22",
+            "quiz-23",
+            "quiz-25",
+            "quiz-26",
+            "quiz-28",
+            "quiz-2",
+            "quiz-5",
+            "quiz-4",
+            "quiz-1",
+            "quiz-3",
+            "quiz-0",
+            "quiz-26",
+            "quiz-27",
+            "quiz-28",
+            "quiz-29",
+            "quiz-3",
+            "quiz-1",
+            "quiz-0",
+            "quiz-2"
+          ],
+          "top": 0,
+          "height": 7782,
+          "viewport": 680,
+          "bottom": 7102,
+          "mountedCards": [
+            "scroll-0",
+            "scroll-1",
+            "scroll-2",
+            "scroll-3",
+            "scroll-5",
+            "scroll-22",
+            "scroll-23",
+            "scroll-24",
+            "scroll-25",
+            "scroll-26"
+          ],
+          "metrics": {
+            "Timestamp": 2002374.91568,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 14,
+            "Frames": 12,
+            "JSEventListeners": 1734,
+            "LayoutObjects": 1023,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 9229,
+            "Resources": 348,
+            "ContextLifecycleStateObservers": 157,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 14,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 0,
+            "ArrayBufferContents": 17,
+            "LayoutCount": 80,
+            "RecalcStyleCount": 270,
+            "LayoutDuration": 0.091266,
+            "RecalcStyleDuration": 0.957833,
+            "DevToolsCommandDuration": 0.139573,
+            "ScriptDuration": 0.47212,
+            "V8CompileDuration": 0.001121,
+            "TaskDuration": 4.046735,
+            "TaskOtherDuration": 2.384883,
+            "ThreadTime": 5.437577,
+            "ProcessTime": 6.576271,
+            "JSHeapUsedSize": 115123748,
+            "JSHeapTotalSize": 178634752,
+            "FirstMeaningfulPaint": 2002371.146516,
+            "DomContentLoaded": 2002369.164716,
+            "NavigationStart": 2002369.068325
+          }
+        }
+      ],
+      "sources": [
+        {
+          "url": "http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=d89a0139",
+          "originalHash": "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4",
+          "deliveredHash": "d87820ae621ac8d63a88480b4b32a39af404b9d7e4312c401d1acf398c1747b7"
+        }
+      ],
+      "errors": [],
+      "audit": {
+        "receipts": [
+          {
+            "at": 2199.2999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-24",
+            "runtime": "page"
+          },
+          {
+            "at": 2235.7000000476837,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-27",
+            "runtime": "page"
+          },
+          {
+            "at": 2256.7000000476837,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-29",
+            "runtime": "page"
+          },
+          {
+            "at": 2276.2000000476837,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-22",
+            "runtime": "page"
+          },
+          {
+            "at": 2295.7000000476837,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-23",
+            "runtime": "page"
+          },
+          {
+            "at": 2315.100000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-25",
+            "runtime": "page"
+          },
+          {
+            "at": 2333.9000000953674,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-26",
+            "runtime": "page"
+          },
+          {
+            "at": 2385.2999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-28",
+            "runtime": "page"
+          },
+          {
+            "at": 3382.7999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-2",
+            "runtime": "page"
+          },
+          {
+            "at": 3406.100000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-5",
+            "runtime": "page"
+          },
+          {
+            "at": 3428.600000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-4",
+            "runtime": "page"
+          },
+          {
+            "at": 3449.600000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-1",
+            "runtime": "page"
+          },
+          {
+            "at": 3470.7000000476837,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-3",
+            "runtime": "page"
+          },
+          {
+            "at": 3491.600000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-0",
+            "runtime": "page"
+          },
+          {
+            "at": 4727.5,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-26",
+            "runtime": "page"
+          },
+          {
+            "at": 4752.5,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-27",
+            "runtime": "page"
+          },
+          {
+            "at": 4771.400000095367,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-28",
+            "runtime": "page"
+          },
+          {
+            "at": 4791.5,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-29",
+            "runtime": "page"
+          },
+          {
+            "at": 5026.900000095367,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-3",
+            "runtime": "page"
+          },
+          {
+            "at": 5051.400000095367,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-1",
+            "runtime": "page"
+          },
+          {
+            "at": 5071.600000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-0",
+            "runtime": "page"
+          },
+          {
+            "at": 5091.100000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-2",
+            "runtime": "page"
+          }
+        ],
+        "longTasks": [
+          {
+            "name": "self",
+            "at": 418.7999999523163,
+            "duration": 185
+          },
+          {
+            "name": "self",
+            "at": 766.5,
+            "duration": 116
+          },
+          {
+            "name": "self",
+            "at": 925.5,
+            "duration": 56
+          },
+          {
+            "name": "self",
+            "at": 1039.7000000476837,
+            "duration": 108
+          },
+          {
+            "name": "self",
+            "at": 1223.2000000476837,
+            "duration": 75
+          },
+          {
+            "name": "self",
+            "at": 1347.9000000953674,
+            "duration": 720
+          },
+          {
+            "name": "self",
+            "at": 2080.100000143051,
+            "duration": 52
+          },
+          {
+            "name": "self",
+            "at": 2191.9000000953674,
+            "duration": 159
+          },
+          {
+            "name": "self",
+            "at": 3278.2000000476837,
+            "duration": 96
+          },
+          {
+            "name": "self",
+            "at": 3377.7000000476837,
+            "duration": 113
+          },
+          {
+            "name": "self",
+            "at": 3580.5,
+            "duration": 79
+          },
+          {
+            "name": "self",
+            "at": 4544.100000143051,
+            "duration": 170
+          },
+          {
+            "name": "self",
+            "at": 4724.299999952316,
+            "duration": 67
+          },
+          {
+            "name": "self",
+            "at": 4793.600000143051,
+            "duration": 100
+          },
+          {
+            "name": "self",
+            "at": 4926.5,
+            "duration": 93
+          },
+          {
+            "name": "self",
+            "at": 5023.100000143051,
+            "duration": 68
+          },
+          {
+            "name": "self",
+            "at": 5093,
+            "duration": 67
+          },
+          {
+            "name": "self",
+            "at": 5377,
+            "duration": 70
+          }
+        ],
+        "paints": [
+          {
+            "name": "first-paint",
+            "at": 92,
+            "duration": 0
+          },
+          {
+            "name": "first-contentful-paint",
+            "at": 988,
+            "duration": 0
+          }
+        ]
+      }
+    },
+    {
+      "mode": "frame",
+      "warmup": false,
+      "phases": [
+        {
+          "name": "composer-ready",
+          "at": 2574.9000000953674,
+          "mounts": 15,
+          "calls": [
+            "quiz-2",
+            "quiz-6",
+            "quiz-1",
+            "quiz-0",
+            "quiz-3",
+            "quiz-17",
+            "quiz-23",
+            "quiz-20",
+            "quiz-15",
+            "quiz-19",
+            "quiz-16",
+            "quiz-18",
+            "quiz-13",
+            "quiz-14",
+            "quiz-12"
+          ],
+          "top": 5025,
+          "height": 8233,
+          "viewport": 680,
+          "bottom": 2528,
+          "mountedCards": [
+            "scroll-0",
+            "scroll-1",
+            "scroll-2",
+            "scroll-3",
+            "scroll-6",
+            "scroll-12",
+            "scroll-13",
+            "scroll-14",
+            "scroll-15",
+            "scroll-16",
+            "scroll-17",
+            "scroll-18",
+            "scroll-19",
+            "scroll-20",
+            "scroll-23"
+          ],
+          "metrics": {
+            "Timestamp": 2002377.534336,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 18,
+            "Frames": 9,
+            "JSEventListeners": 1926,
+            "LayoutObjects": 1226,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 9683,
+            "Resources": 523,
+            "ContextLifecycleStateObservers": 122,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 18,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 2,
+            "ArrayBufferContents": 73,
+            "LayoutCount": 46,
+            "RecalcStyleCount": 57,
+            "LayoutDuration": 0.056508,
+            "RecalcStyleDuration": 0.393915,
+            "DevToolsCommandDuration": 0.0484,
+            "ScriptDuration": 0.405699,
+            "V8CompileDuration": 0.000122,
+            "TaskDuration": 2.4046640000000004,
+            "TaskOtherDuration": 1.500063,
+            "ThreadTime": 2.560128,
+            "ProcessTime": 3.351514,
+            "JSHeapUsedSize": 107192616,
+            "JSHeapTotalSize": 156631040,
+            "FirstMeaningfulPaint": 0,
+            "DomContentLoaded": 2002375.056135,
+            "NavigationStart": 2002374.958096
+          }
+        },
+        {
+          "name": "cold-settled",
+          "at": 3649.7000000476837,
+          "mounts": 22,
+          "calls": [
+            "quiz-2",
+            "quiz-6",
+            "quiz-1",
+            "quiz-0",
+            "quiz-3",
+            "quiz-17",
+            "quiz-23",
+            "quiz-20",
+            "quiz-15",
+            "quiz-19",
+            "quiz-16",
+            "quiz-18",
+            "quiz-13",
+            "quiz-14",
+            "quiz-12",
+            "quiz-29",
+            "quiz-24",
+            "quiz-27",
+            "quiz-22",
+            "quiz-26",
+            "quiz-25",
+            "quiz-28"
+          ],
+          "top": 9564,
+          "height": 10244,
+          "viewport": 680,
+          "bottom": 0,
+          "mountedCards": [
+            "scroll-14",
+            "scroll-15",
+            "scroll-16",
+            "scroll-17",
+            "scroll-18",
+            "scroll-19",
+            "scroll-20",
+            "scroll-22",
+            "scroll-23",
+            "scroll-24",
+            "scroll-25",
+            "scroll-26",
+            "scroll-27",
+            "scroll-28",
+            "scroll-29"
+          ],
+          "metrics": {
+            "Timestamp": 2002378.609234,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 20,
+            "Frames": 10,
+            "JSEventListeners": 2200,
+            "LayoutObjects": 1440,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 11502,
+            "Resources": 529,
+            "ContextLifecycleStateObservers": 125,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 20,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 2,
+            "ArrayBufferContents": 73,
+            "LayoutCount": 61,
+            "RecalcStyleCount": 129,
+            "LayoutDuration": 0.066512,
+            "RecalcStyleDuration": 0.599192,
+            "DevToolsCommandDuration": 0.08354,
+            "ScriptDuration": 0.421733,
+            "V8CompileDuration": 0.000122,
+            "TaskDuration": 2.7994790000000003,
+            "TaskOtherDuration": 1.628423,
+            "ThreadTime": 3.471914,
+            "ProcessTime": 4.316158,
+            "JSHeapUsedSize": 115478288,
+            "JSHeapTotalSize": 158760960,
+            "FirstMeaningfulPaint": 2002377.018571,
+            "DomContentLoaded": 2002375.056135,
+            "NavigationStart": 2002374.958096
+          }
+        },
+        {
+          "name": "saved-at-top",
+          "at": 5453.600000143051,
+          "mounts": 28,
+          "calls": [
+            "quiz-2",
+            "quiz-6",
+            "quiz-1",
+            "quiz-0",
+            "quiz-3",
+            "quiz-17",
+            "quiz-23",
+            "quiz-20",
+            "quiz-15",
+            "quiz-19",
+            "quiz-16",
+            "quiz-18",
+            "quiz-13",
+            "quiz-14",
+            "quiz-12",
+            "quiz-29",
+            "quiz-24",
+            "quiz-27",
+            "quiz-22",
+            "quiz-26",
+            "quiz-25",
+            "quiz-28",
+            "quiz-2",
+            "quiz-4",
+            "quiz-5",
+            "quiz-0",
+            "quiz-1",
+            "quiz-3"
+          ],
+          "top": 0,
+          "height": 7999,
+          "viewport": 680,
+          "bottom": 7319,
+          "mountedCards": [
+            "scroll-0",
+            "scroll-1",
+            "scroll-2",
+            "scroll-3",
+            "scroll-4",
+            "scroll-5",
+            "scroll-14",
+            "scroll-15",
+            "scroll-16",
+            "scroll-17",
+            "scroll-18",
+            "scroll-19"
+          ],
+          "metrics": {
+            "Timestamp": 2002380.41283,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 12,
+            "Frames": 11,
+            "JSEventListeners": 2365,
+            "LayoutObjects": 954,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 12027,
+            "Resources": 355,
+            "ContextLifecycleStateObservers": 186,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 12,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 0,
+            "ArrayBufferContents": 37,
+            "LayoutCount": 81,
+            "RecalcStyleCount": 186,
+            "LayoutDuration": 0.082785,
+            "RecalcStyleDuration": 0.865157,
+            "DevToolsCommandDuration": 0.110265,
+            "ScriptDuration": 0.47025,
+            "V8CompileDuration": 0.000122,
+            "TaskDuration": 3.9337190000000004,
+            "TaskOtherDuration": 2.405183,
+            "ThreadTime": 5.112873,
+            "ProcessTime": 6.253468,
+            "JSHeapUsedSize": 126979788,
+            "JSHeapTotalSize": 186761216,
+            "FirstMeaningfulPaint": 2002377.018571,
+            "DomContentLoaded": 2002375.056135,
+            "NavigationStart": 2002374.958096
+          }
+        },
+        {
+          "name": "returned-settled",
+          "at": 7150.900000095367,
+          "mounts": 39,
+          "calls": [
+            "quiz-2",
+            "quiz-6",
+            "quiz-1",
+            "quiz-0",
+            "quiz-3",
+            "quiz-17",
+            "quiz-23",
+            "quiz-20",
+            "quiz-15",
+            "quiz-19",
+            "quiz-16",
+            "quiz-18",
+            "quiz-13",
+            "quiz-14",
+            "quiz-12",
+            "quiz-29",
+            "quiz-24",
+            "quiz-27",
+            "quiz-22",
+            "quiz-26",
+            "quiz-25",
+            "quiz-28",
+            "quiz-2",
+            "quiz-4",
+            "quiz-5",
+            "quiz-0",
+            "quiz-1",
+            "quiz-3",
+            "quiz-29",
+            "quiz-28",
+            "quiz-25",
+            "quiz-27",
+            "quiz-26",
+            "quiz-23",
+            "quiz-24",
+            "quiz-1",
+            "quiz-2",
+            "quiz-3",
+            "quiz-0"
+          ],
+          "top": 0,
+          "height": 9117,
+          "viewport": 680,
+          "bottom": 8437,
+          "mountedCards": [
+            "scroll-0",
+            "scroll-1",
+            "scroll-2",
+            "scroll-3",
+            "scroll-4",
+            "scroll-5",
+            "scroll-14",
+            "scroll-15",
+            "scroll-16",
+            "scroll-17",
+            "scroll-18",
+            "scroll-19"
+          ],
+          "metrics": {
+            "Timestamp": 2002382.110124,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 15,
+            "Frames": 12,
+            "JSEventListeners": 3358,
+            "LayoutObjects": 1684,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 18885,
+            "Resources": 358,
+            "ContextLifecycleStateObservers": 238,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 15,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 0,
+            "ArrayBufferContents": 77,
+            "LayoutCount": 137,
+            "RecalcStyleCount": 272,
+            "LayoutDuration": 0.119486,
+            "RecalcStyleDuration": 1.367014,
+            "DevToolsCommandDuration": 0.133192,
+            "ScriptDuration": 0.500887,
+            "V8CompileDuration": 0.000122,
+            "TaskDuration": 5.302298,
+            "TaskOtherDuration": 3.18164,
+            "ThreadTime": 6.73346,
+            "ProcessTime": 8.012262,
+            "JSHeapUsedSize": 156291228,
+            "JSHeapTotalSize": 201981952,
+            "FirstMeaningfulPaint": 2002377.018571,
+            "DomContentLoaded": 2002375.056135,
+            "NavigationStart": 2002374.958096
+          }
+        }
+      ],
+      "sources": [
+        {
+          "url": "http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=d89a0139",
+          "originalHash": "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4",
+          "deliveredHash": "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4"
+        }
+      ],
+      "errors": [],
+      "audit": {
+        "receipts": [
+          {
+            "at": 2185.2000000476837,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-2",
+            "runtime": "page"
+          },
+          {
+            "at": 2219.9000000953674,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-6",
+            "runtime": "page"
+          },
+          {
+            "at": 2241.2000000476837,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-1",
+            "runtime": "page"
+          },
+          {
+            "at": 2261.100000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-0",
+            "runtime": "page"
+          },
+          {
+            "at": 2280.9000000953674,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-3",
+            "runtime": "page"
+          },
+          {
+            "at": 2313,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-17",
+            "runtime": "page"
+          },
+          {
+            "at": 2334.7000000476837,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-23",
+            "runtime": "page"
+          },
+          {
+            "at": 2355.100000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-20",
+            "runtime": "page"
+          },
+          {
+            "at": 2375.9000000953674,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-15",
+            "runtime": "page"
+          },
+          {
+            "at": 2396.600000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-19",
+            "runtime": "page"
+          },
+          {
+            "at": 2416.5,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-16",
+            "runtime": "page"
+          },
+          {
+            "at": 2436.7000000476837,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-18",
+            "runtime": "page"
+          },
+          {
+            "at": 2459,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-13",
+            "runtime": "page"
+          },
+          {
+            "at": 2480.7000000476837,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-14",
+            "runtime": "page"
+          },
+          {
+            "at": 2510.7000000476837,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-12",
+            "runtime": "page"
+          },
+          {
+            "at": 2615.300000190735,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-29",
+            "runtime": "page"
+          },
+          {
+            "at": 2634.600000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-24",
+            "runtime": "page"
+          },
+          {
+            "at": 2652.9000000953674,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-27",
+            "runtime": "page"
+          },
+          {
+            "at": 2673,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-22",
+            "runtime": "page"
+          },
+          {
+            "at": 2693,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-26",
+            "runtime": "page"
+          },
+          {
+            "at": 2712.100000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-25",
+            "runtime": "page"
+          },
+          {
+            "at": 2791.4000000953674,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-28",
+            "runtime": "page"
+          },
+          {
+            "at": 4241.200000047684,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-2",
+            "runtime": "page"
+          },
+          {
+            "at": 4265.700000047684,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-4",
+            "runtime": "page"
+          },
+          {
+            "at": 4289.100000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-5",
+            "runtime": "page"
+          },
+          {
+            "at": 4312,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-0",
+            "runtime": "page"
+          },
+          {
+            "at": 4335,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-1",
+            "runtime": "page"
+          },
+          {
+            "at": 4357.200000047684,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-3",
+            "runtime": "page"
+          },
+          {
+            "at": 5813.400000095367,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-29",
+            "runtime": "page"
+          },
+          {
+            "at": 5842.800000190735,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-28",
+            "runtime": "page"
+          },
+          {
+            "at": 5867.200000047684,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-25",
+            "runtime": "page"
+          },
+          {
+            "at": 5892.400000095367,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-27",
+            "runtime": "page"
+          },
+          {
+            "at": 5919.900000095367,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-26",
+            "runtime": "page"
+          },
+          {
+            "at": 6048.300000190735,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-23",
+            "runtime": "page"
+          },
+          {
+            "at": 6073.900000095367,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-24",
+            "runtime": "page"
+          },
+          {
+            "at": 6237.300000190735,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-1",
+            "runtime": "page"
+          },
+          {
+            "at": 6262.300000190735,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-2",
+            "runtime": "page"
+          },
+          {
+            "at": 6283.600000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-3",
+            "runtime": "page"
+          },
+          {
+            "at": 6306.5,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-0",
+            "runtime": "page"
+          }
+        ],
+        "longTasks": [
+          {
+            "name": "self",
+            "at": 424.7000000476837,
+            "duration": 180
+          },
+          {
+            "name": "self",
+            "at": 768.4000000953674,
+            "duration": 113
+          },
+          {
+            "name": "self",
+            "at": 925.1000001430511,
+            "duration": 53
+          },
+          {
+            "name": "self",
+            "at": 1035,
+            "duration": 109
+          },
+          {
+            "name": "self",
+            "at": 1218.4000000953674,
+            "duration": 76
+          },
+          {
+            "name": "self",
+            "at": 1345.4000000953674,
+            "duration": 705
+          },
+          {
+            "name": "self",
+            "at": 2061.300000190735,
+            "duration": 53
+          },
+          {
+            "name": "self",
+            "at": 2177.9000000953674,
+            "duration": 119
+          },
+          {
+            "name": "self",
+            "at": 2309.2000000476837,
+            "duration": 171
+          },
+          {
+            "name": "self",
+            "at": 2610.5,
+            "duration": 101
+          },
+          {
+            "name": "self",
+            "at": 3728.2000000476837,
+            "duration": 343
+          },
+          {
+            "name": "self",
+            "at": 4077.100000143051,
+            "duration": 159
+          },
+          {
+            "name": "self",
+            "at": 4237.300000190735,
+            "duration": 120
+          },
+          {
+            "name": "self",
+            "at": 4357.300000190735,
+            "duration": 111
+          },
+          {
+            "name": "self",
+            "at": 4530.600000143051,
+            "duration": 90
+          },
+          {
+            "name": "self",
+            "at": 5511.700000047684,
+            "duration": 288
+          },
+          {
+            "name": "self",
+            "at": 5805.200000047684,
+            "duration": 114
+          },
+          {
+            "name": "self",
+            "at": 5951.600000143051,
+            "duration": 56
+          },
+          {
+            "name": "self",
+            "at": 6074,
+            "duration": 158
+          },
+          {
+            "name": "self",
+            "at": 6232,
+            "duration": 74
+          },
+          {
+            "name": "self",
+            "at": 6340.300000190735,
+            "duration": 80
+          },
+          {
+            "name": "self",
+            "at": 6552.300000190735,
+            "duration": 76
+          }
+        ],
+        "paints": [
+          {
+            "name": "first-paint",
+            "at": 92,
+            "duration": 0
+          },
+          {
+            "name": "first-contentful-paint",
+            "at": 984,
+            "duration": 0
+          }
+        ]
+      }
+    },
+    {
+      "mode": "frame-measure",
+      "warmup": false,
+      "phases": [
+        {
+          "name": "composer-ready",
+          "at": 2448.0999999046326,
+          "mounts": 8,
+          "calls": [
+            "quiz-25",
+            "quiz-22",
+            "quiz-23",
+            "quiz-29",
+            "quiz-28",
+            "quiz-27",
+            "quiz-24",
+            "quiz-26"
+          ],
+          "top": 5826,
+          "height": 6506,
+          "viewport": 680,
+          "bottom": 0,
+          "mountedCards": [
+            "scroll-22",
+            "scroll-23",
+            "scroll-24",
+            "scroll-25",
+            "scroll-26",
+            "scroll-27",
+            "scroll-28",
+            "scroll-29"
+          ],
+          "metrics": {
+            "Timestamp": 2002384.618389,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 16,
+            "Frames": 8,
+            "JSEventListeners": 1907,
+            "LayoutObjects": 1005,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 8197,
+            "Resources": 518,
+            "ContextLifecycleStateObservers": 120,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 16,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 2,
+            "ArrayBufferContents": 73,
+            "LayoutCount": 38,
+            "RecalcStyleCount": 49,
+            "LayoutDuration": 0.052254,
+            "RecalcStyleDuration": 0.269595,
+            "DevToolsCommandDuration": 0.050645,
+            "ScriptDuration": 0.422518,
+            "V8CompileDuration": 0.00124,
+            "TaskDuration": 2.282508,
+            "TaskOtherDuration": 1.486304,
+            "ThreadTime": 2.432768,
+            "ProcessTime": 3.215977,
+            "JSHeapUsedSize": 104374400,
+            "JSHeapTotalSize": 157188096,
+            "FirstMeaningfulPaint": 0,
+            "DomContentLoaded": 2002382.267292,
+            "NavigationStart": 2002382.168527
+          }
+        },
+        {
+          "name": "cold-settled",
+          "at": 3212.2999999523163,
+          "mounts": 8,
+          "calls": [
+            "quiz-25",
+            "quiz-22",
+            "quiz-23",
+            "quiz-29",
+            "quiz-28",
+            "quiz-27",
+            "quiz-24",
+            "quiz-26"
+          ],
+          "top": 5826,
+          "height": 6506,
+          "viewport": 680,
+          "bottom": 0,
+          "mountedCards": [
+            "scroll-22",
+            "scroll-23",
+            "scroll-24",
+            "scroll-25",
+            "scroll-26",
+            "scroll-27",
+            "scroll-28",
+            "scroll-29"
+          ],
+          "metrics": {
+            "Timestamp": 2002385.381556,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 18,
+            "Frames": 9,
+            "JSEventListeners": 2148,
+            "LayoutObjects": 1009,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 8495,
+            "Resources": 523,
+            "ContextLifecycleStateObservers": 123,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 18,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 2,
+            "ArrayBufferContents": 73,
+            "LayoutCount": 40,
+            "RecalcStyleCount": 99,
+            "LayoutDuration": 0.055339,
+            "RecalcStyleDuration": 0.334028,
+            "DevToolsCommandDuration": 0.080828,
+            "ScriptDuration": 0.435339,
+            "V8CompileDuration": 0.00124,
+            "TaskDuration": 2.460732,
+            "TaskOtherDuration": 1.554006,
+            "ThreadTime": 3.056102,
+            "ProcessTime": 3.873753,
+            "JSHeapUsedSize": 108380728,
+            "JSHeapTotalSize": 158007296,
+            "FirstMeaningfulPaint": 2002384.273294,
+            "DomContentLoaded": 2002382.267292,
+            "NavigationStart": 2002382.168527
+          }
+        },
+        {
+          "name": "saved-at-top",
+          "at": 4462.900000095367,
+          "mounts": 13,
+          "calls": [
+            "quiz-25",
+            "quiz-22",
+            "quiz-23",
+            "quiz-29",
+            "quiz-28",
+            "quiz-27",
+            "quiz-24",
+            "quiz-26",
+            "quiz-2",
+            "quiz-5",
+            "quiz-1",
+            "quiz-0",
+            "quiz-3"
+          ],
+          "top": 0,
+          "height": 7999,
+          "viewport": 680,
+          "bottom": 7319,
+          "mountedCards": [
+            "scroll-0",
+            "scroll-1",
+            "scroll-2",
+            "scroll-3",
+            "scroll-5",
+            "scroll-22",
+            "scroll-23",
+            "scroll-24",
+            "scroll-25",
+            "scroll-26"
+          ],
+          "metrics": {
+            "Timestamp": 2002386.632317,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 22,
+            "Frames": 11,
+            "JSEventListeners": 2601,
+            "LayoutObjects": 1222,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 10668,
+            "Resources": 536,
+            "ContextLifecycleStateObservers": 133,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 22,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 2,
+            "ArrayBufferContents": 104,
+            "LayoutCount": 54,
+            "RecalcStyleCount": 148,
+            "LayoutDuration": 0.066018,
+            "RecalcStyleDuration": 0.549136,
+            "DevToolsCommandDuration": 0.103486,
+            "ScriptDuration": 0.465709,
+            "V8CompileDuration": 0.00124,
+            "TaskDuration": 2.9953309999999997,
+            "TaskOtherDuration": 1.80979,
+            "ThreadTime": 4.133835,
+            "ProcessTime": 5.031054,
+            "JSHeapUsedSize": 112956000,
+            "JSHeapTotalSize": 165347328,
+            "FirstMeaningfulPaint": 2002384.273294,
+            "DomContentLoaded": 2002382.267292,
+            "NavigationStart": 2002382.168527
+          }
+        },
+        {
+          "name": "returned-settled",
+          "at": 5857.299999952316,
+          "mounts": 20,
+          "calls": [
+            "quiz-25",
+            "quiz-22",
+            "quiz-23",
+            "quiz-29",
+            "quiz-28",
+            "quiz-27",
+            "quiz-24",
+            "quiz-26",
+            "quiz-2",
+            "quiz-5",
+            "quiz-1",
+            "quiz-0",
+            "quiz-3",
+            "quiz-29",
+            "quiz-27",
+            "quiz-28",
+            "quiz-3",
+            "quiz-2",
+            "quiz-0",
+            "quiz-1"
+          ],
+          "top": 0,
+          "height": 7782,
+          "viewport": 680,
+          "bottom": 7102,
+          "mountedCards": [
+            "scroll-0",
+            "scroll-1",
+            "scroll-2",
+            "scroll-3",
+            "scroll-5",
+            "scroll-22",
+            "scroll-23",
+            "scroll-24",
+            "scroll-25",
+            "scroll-26"
+          ],
+          "metrics": {
+            "Timestamp": 2002388.026821,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 14,
+            "Frames": 12,
+            "JSEventListeners": 1699,
+            "LayoutObjects": 1023,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 9075,
+            "Resources": 348,
+            "ContextLifecycleStateObservers": 158,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 14,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 0,
+            "ArrayBufferContents": 17,
+            "LayoutCount": 79,
+            "RecalcStyleCount": 225,
+            "LayoutDuration": 0.090534,
+            "RecalcStyleDuration": 0.961068,
+            "DevToolsCommandDuration": 0.128077,
+            "ScriptDuration": 0.482974,
+            "V8CompileDuration": 0.00124,
+            "TaskDuration": 4.057289000000001,
+            "TaskOtherDuration": 2.393444,
+            "ThreadTime": 5.449354,
+            "ProcessTime": 6.579171,
+            "JSHeapUsedSize": 113433140,
+            "JSHeapTotalSize": 178896896,
+            "FirstMeaningfulPaint": 2002384.273294,
+            "DomContentLoaded": 2002382.267292,
+            "NavigationStart": 2002382.168527
+          }
+        }
+      ],
+      "sources": [
+        {
+          "url": "http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=d89a0139",
+          "originalHash": "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4",
+          "deliveredHash": "d87820ae621ac8d63a88480b4b32a39af404b9d7e4312c401d1acf398c1747b7"
+        }
+      ],
+      "errors": [],
+      "audit": {
+        "receipts": [
+          {
+            "at": 2226.7000000476837,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-25",
+            "runtime": "page"
+          },
+          {
+            "at": 2264.2000000476837,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-22",
+            "runtime": "page"
+          },
+          {
+            "at": 2285,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-23",
+            "runtime": "page"
+          },
+          {
+            "at": 2305.2999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-29",
+            "runtime": "page"
+          },
+          {
+            "at": 2326,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-28",
+            "runtime": "page"
+          },
+          {
+            "at": 2346.7999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-27",
+            "runtime": "page"
+          },
+          {
+            "at": 2366.5999999046326,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-24",
+            "runtime": "page"
+          },
+          {
+            "at": 2386.5,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-26",
+            "runtime": "page"
+          },
+          {
+            "at": 3396.4000000953674,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-2",
+            "runtime": "page"
+          },
+          {
+            "at": 3420.2000000476837,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-5",
+            "runtime": "page"
+          },
+          {
+            "at": 3441.5,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-1",
+            "runtime": "page"
+          },
+          {
+            "at": 3462.9000000953674,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-0",
+            "runtime": "page"
+          },
+          {
+            "at": 3484,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-3",
+            "runtime": "page"
+          },
+          {
+            "at": 4677.400000095367,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-29",
+            "runtime": "page"
+          },
+          {
+            "at": 4707.799999952316,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-27",
+            "runtime": "page"
+          },
+          {
+            "at": 4739.200000047684,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-28",
+            "runtime": "page"
+          },
+          {
+            "at": 5025.599999904633,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-3",
+            "runtime": "page"
+          },
+          {
+            "at": 5048.599999904633,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-2",
+            "runtime": "page"
+          },
+          {
+            "at": 5068.900000095367,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-0",
+            "runtime": "page"
+          },
+          {
+            "at": 5088.5,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-1",
+            "runtime": "page"
+          }
+        ],
+        "longTasks": [
+          {
+            "name": "self",
+            "at": 427.2000000476837,
+            "duration": 197
+          },
+          {
+            "name": "self",
+            "at": 786.4000000953674,
+            "duration": 114
+          },
+          {
+            "name": "self",
+            "at": 943.5,
+            "duration": 59
+          },
+          {
+            "name": "self",
+            "at": 1069.2000000476837,
+            "duration": 107
+          },
+          {
+            "name": "self",
+            "at": 1251.2000000476837,
+            "duration": 76
+          },
+          {
+            "name": "self",
+            "at": 1376.5999999046326,
+            "duration": 718
+          },
+          {
+            "name": "self",
+            "at": 2107.0999999046326,
+            "duration": 52
+          },
+          {
+            "name": "self",
+            "at": 2219.9000000953674,
+            "duration": 166
+          },
+          {
+            "name": "self",
+            "at": 3294.2000000476837,
+            "duration": 94
+          },
+          {
+            "name": "self",
+            "at": 3392,
+            "duration": 111
+          },
+          {
+            "name": "self",
+            "at": 3581.2000000476837,
+            "duration": 80
+          },
+          {
+            "name": "self",
+            "at": 4526.799999952316,
+            "duration": 140
+          },
+          {
+            "name": "self",
+            "at": 4740.900000095367,
+            "duration": 103
+          },
+          {
+            "name": "self",
+            "at": 4893.299999952316,
+            "duration": 126
+          },
+          {
+            "name": "self",
+            "at": 5021.900000095367,
+            "duration": 86
+          },
+          {
+            "name": "self",
+            "at": 5110.5,
+            "duration": 59
+          },
+          {
+            "name": "self",
+            "at": 5373.700000047684,
+            "duration": 67
+          }
+        ],
+        "paints": [
+          {
+            "name": "first-paint",
+            "at": 96,
+            "duration": 0
+          },
+          {
+            "name": "first-contentful-paint",
+            "at": 1008,
+            "duration": 0
+          }
+        ]
+      }
+    },
+    {
+      "mode": "frame",
+      "warmup": false,
+      "phases": [
+        {
+          "name": "composer-ready",
+          "at": 2646.5,
+          "mounts": 17,
+          "calls": [
+            "quiz-5",
+            "quiz-0",
+            "quiz-4",
+            "quiz-2",
+            "quiz-1",
+            "quiz-3",
+            "quiz-18",
+            "quiz-21",
+            "quiz-11",
+            "quiz-19",
+            "quiz-12",
+            "quiz-13",
+            "quiz-15",
+            "quiz-16",
+            "quiz-14",
+            "quiz-10",
+            "quiz-17"
+          ],
+          "top": 5292,
+          "height": 8767,
+          "viewport": 680,
+          "bottom": 2795,
+          "mountedCards": [
+            "scroll-0",
+            "scroll-1",
+            "scroll-2",
+            "scroll-3",
+            "scroll-4",
+            "scroll-5",
+            "scroll-10",
+            "scroll-11",
+            "scroll-12",
+            "scroll-13",
+            "scroll-14",
+            "scroll-15",
+            "scroll-16",
+            "scroll-17",
+            "scroll-18",
+            "scroll-19",
+            "scroll-21"
+          ],
+          "metrics": {
+            "Timestamp": 2002390.74007,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 18,
+            "Frames": 9,
+            "JSEventListeners": 1935,
+            "LayoutObjects": 1286,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 10105,
+            "Resources": 519,
+            "ContextLifecycleStateObservers": 122,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 18,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 2,
+            "ArrayBufferContents": 73,
+            "LayoutCount": 48,
+            "RecalcStyleCount": 58,
+            "LayoutDuration": 0.056502,
+            "RecalcStyleDuration": 0.441966,
+            "DevToolsCommandDuration": 0.049533,
+            "ScriptDuration": 0.415539,
+            "V8CompileDuration": 0.000129,
+            "TaskDuration": 2.508124,
+            "TaskOtherDuration": 1.544512,
+            "ThreadTime": 2.653639,
+            "ProcessTime": 3.458381,
+            "JSHeapUsedSize": 108305712,
+            "JSHeapTotalSize": 157155328,
+            "FirstMeaningfulPaint": 0,
+            "DomContentLoaded": 2002388.168416,
+            "NavigationStart": 2002388.06928
+          }
+        },
+        {
+          "name": "cold-settled",
+          "at": 3779.2999999523163,
+          "mounts": 26,
+          "calls": [
+            "quiz-5",
+            "quiz-0",
+            "quiz-4",
+            "quiz-2",
+            "quiz-1",
+            "quiz-3",
+            "quiz-18",
+            "quiz-21",
+            "quiz-11",
+            "quiz-19",
+            "quiz-12",
+            "quiz-13",
+            "quiz-15",
+            "quiz-16",
+            "quiz-14",
+            "quiz-10",
+            "quiz-17",
+            "quiz-28",
+            "quiz-25",
+            "quiz-26",
+            "quiz-23",
+            "quiz-20",
+            "quiz-24",
+            "quiz-22",
+            "quiz-27",
+            "quiz-29"
+          ],
+          "top": 10632,
+          "height": 11312,
+          "viewport": 680,
+          "bottom": 0,
+          "mountedCards": [
+            "scroll-15",
+            "scroll-16",
+            "scroll-17",
+            "scroll-18",
+            "scroll-19",
+            "scroll-20",
+            "scroll-21",
+            "scroll-22",
+            "scroll-23",
+            "scroll-24",
+            "scroll-25",
+            "scroll-26",
+            "scroll-27",
+            "scroll-28",
+            "scroll-29"
+          ],
+          "metrics": {
+            "Timestamp": 2002391.849271,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 20,
+            "Frames": 10,
+            "JSEventListeners": 2210,
+            "LayoutObjects": 1560,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 12271,
+            "Resources": 523,
+            "ContextLifecycleStateObservers": 125,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 20,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 2,
+            "ArrayBufferContents": 73,
+            "LayoutCount": 66,
+            "RecalcStyleCount": 131,
+            "LayoutDuration": 0.069245,
+            "RecalcStyleDuration": 0.68407,
+            "DevToolsCommandDuration": 0.076326,
+            "ScriptDuration": 0.434558,
+            "V8CompileDuration": 0.000129,
+            "TaskDuration": 2.939403,
+            "TaskOtherDuration": 1.675132,
+            "ThreadTime": 3.600612,
+            "ProcessTime": 4.470517,
+            "JSHeapUsedSize": 101028680,
+            "JSHeapTotalSize": 164003840,
+            "FirstMeaningfulPaint": 2002390.173371,
+            "DomContentLoaded": 2002388.168416,
+            "NavigationStart": 2002388.06928
+          }
+        },
+        {
+          "name": "saved-at-top",
+          "at": 5590.299999952316,
+          "mounts": 31,
+          "calls": [
+            "quiz-5",
+            "quiz-0",
+            "quiz-4",
+            "quiz-2",
+            "quiz-1",
+            "quiz-3",
+            "quiz-18",
+            "quiz-21",
+            "quiz-11",
+            "quiz-19",
+            "quiz-12",
+            "quiz-13",
+            "quiz-15",
+            "quiz-16",
+            "quiz-14",
+            "quiz-10",
+            "quiz-17",
+            "quiz-28",
+            "quiz-25",
+            "quiz-26",
+            "quiz-23",
+            "quiz-20",
+            "quiz-24",
+            "quiz-22",
+            "quiz-27",
+            "quiz-29",
+            "quiz-8",
+            "quiz-2",
+            "quiz-1",
+            "quiz-0",
+            "quiz-3"
+          ],
+          "top": 0,
+          "height": 6664,
+          "viewport": 680,
+          "bottom": 5984,
+          "mountedCards": [
+            "scroll-0",
+            "scroll-1",
+            "scroll-2",
+            "scroll-3",
+            "scroll-8",
+            "scroll-15",
+            "scroll-16",
+            "scroll-17"
+          ],
+          "metrics": {
+            "Timestamp": 2002393.660354,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 12,
+            "Frames": 11,
+            "JSEventListeners": 2509,
+            "LayoutObjects": 985,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 13020,
+            "Resources": 355,
+            "ContextLifecycleStateObservers": 198,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 12,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 0,
+            "ArrayBufferContents": 37,
+            "LayoutCount": 85,
+            "RecalcStyleCount": 186,
+            "LayoutDuration": 0.082891,
+            "RecalcStyleDuration": 0.929181,
+            "DevToolsCommandDuration": 0.105794,
+            "ScriptDuration": 0.486332,
+            "V8CompileDuration": 0.000129,
+            "TaskDuration": 4.075672,
+            "TaskOtherDuration": 2.471402,
+            "ThreadTime": 5.245902,
+            "ProcessTime": 6.413626,
+            "JSHeapUsedSize": 131966796,
+            "JSHeapTotalSize": 190955520,
+            "FirstMeaningfulPaint": 2002390.173371,
+            "DomContentLoaded": 2002388.168416,
+            "NavigationStart": 2002388.06928
+          }
+        },
+        {
+          "name": "returned-settled",
+          "at": 10581,
+          "mounts": 43,
+          "calls": [
+            "quiz-5",
+            "quiz-0",
+            "quiz-4",
+            "quiz-2",
+            "quiz-1",
+            "quiz-3",
+            "quiz-18",
+            "quiz-21",
+            "quiz-11",
+            "quiz-19",
+            "quiz-12",
+            "quiz-13",
+            "quiz-15",
+            "quiz-16",
+            "quiz-14",
+            "quiz-10",
+            "quiz-17",
+            "quiz-28",
+            "quiz-25",
+            "quiz-26",
+            "quiz-23",
+            "quiz-20",
+            "quiz-24",
+            "quiz-22",
+            "quiz-27",
+            "quiz-29",
+            "quiz-8",
+            "quiz-2",
+            "quiz-1",
+            "quiz-0",
+            "quiz-3",
+            "quiz-24",
+            "quiz-29",
+            "quiz-26",
+            "quiz-25",
+            "quiz-27",
+            "quiz-23",
+            "quiz-28",
+            "quiz-9",
+            "quiz-6",
+            "quiz-5",
+            "quiz-7",
+            "quiz-4"
+          ],
+          "top": 1337,
+          "height": 9653,
+          "viewport": 680,
+          "bottom": 7636,
+          "mountedCards": [
+            "scroll-1",
+            "scroll-2",
+            "scroll-3",
+            "scroll-4",
+            "scroll-5",
+            "scroll-6",
+            "scroll-7",
+            "scroll-8",
+            "scroll-9",
+            "scroll-15",
+            "scroll-16",
+            "scroll-17",
+            "scroll-23",
+            "scroll-24",
+            "scroll-25"
+          ],
+          "metrics": {
+            "Timestamp": 2002398.650706,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 15,
+            "Frames": 12,
+            "JSEventListeners": 2852,
+            "LayoutObjects": 1469,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 17675,
+            "Resources": 359,
+            "ContextLifecycleStateObservers": 211,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 15,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 0,
+            "ArrayBufferContents": 51,
+            "LayoutCount": 141,
+            "RecalcStyleCount": 492,
+            "LayoutDuration": 0.111967,
+            "RecalcStyleDuration": 1.403086,
+            "DevToolsCommandDuration": 0.142654,
+            "ScriptDuration": 0.508915,
+            "V8CompileDuration": 0.000129,
+            "TaskDuration": 5.229595,
+            "TaskOtherDuration": 3.062901,
+            "ThreadTime": 9.319583,
+            "ProcessTime": 10.697167,
+            "JSHeapUsedSize": 146923888,
+            "JSHeapTotalSize": 197246976,
+            "FirstMeaningfulPaint": 2002390.173371,
+            "DomContentLoaded": 2002388.168416,
+            "NavigationStart": 2002388.06928
+          }
+        }
+      ],
+      "sources": [
+        {
+          "url": "http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=d89a0139",
+          "originalHash": "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4",
+          "deliveredHash": "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4"
+        }
+      ],
+      "errors": [
+        "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 0\nReceived: 1337\n\nCall Log:\n- Timeout 5000ms exceeded while waiting on the predicate"
+      ],
+      "audit": {
+        "receipts": [
+          {
+            "at": 2225.4000000953674,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-5",
+            "runtime": "page"
+          },
+          {
+            "at": 2263.600000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-0",
+            "runtime": "page"
+          },
+          {
+            "at": 2284.100000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-4",
+            "runtime": "page"
+          },
+          {
+            "at": 2303.7999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-2",
+            "runtime": "page"
+          },
+          {
+            "at": 2323,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-1",
+            "runtime": "page"
+          },
+          {
+            "at": 2343.100000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-3",
+            "runtime": "page"
+          },
+          {
+            "at": 2378.2999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-18",
+            "runtime": "page"
+          },
+          {
+            "at": 2400.2000000476837,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-21",
+            "runtime": "page"
+          },
+          {
+            "at": 2420.7999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-11",
+            "runtime": "page"
+          },
+          {
+            "at": 2441,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-19",
+            "runtime": "page"
+          },
+          {
+            "at": 2461.2000000476837,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-12",
+            "runtime": "page"
+          },
+          {
+            "at": 2481,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-13",
+            "runtime": "page"
+          },
+          {
+            "at": 2501.600000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-15",
+            "runtime": "page"
+          },
+          {
+            "at": 2523.7999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-16",
+            "runtime": "page"
+          },
+          {
+            "at": 2545.5,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-14",
+            "runtime": "page"
+          },
+          {
+            "at": 2576.600000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-10",
+            "runtime": "page"
+          },
+          {
+            "at": 2632,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-17",
+            "runtime": "page"
+          },
+          {
+            "at": 2709.9000000953674,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-28",
+            "runtime": "page"
+          },
+          {
+            "at": 2730.600000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-25",
+            "runtime": "page"
+          },
+          {
+            "at": 2750,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-26",
+            "runtime": "page"
+          },
+          {
+            "at": 2768.9000000953674,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-23",
+            "runtime": "page"
+          },
+          {
+            "at": 2788,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-20",
+            "runtime": "page"
+          },
+          {
+            "at": 2806.9000000953674,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-24",
+            "runtime": "page"
+          },
+          {
+            "at": 2827.2999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-22",
+            "runtime": "page"
+          },
+          {
+            "at": 2906.7999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-27",
+            "runtime": "page"
+          },
+          {
+            "at": 2927.2000000476837,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-29",
+            "runtime": "page"
+          },
+          {
+            "at": 4398.600000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-8",
+            "runtime": "page"
+          },
+          {
+            "at": 4419.5,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-2",
+            "runtime": "page"
+          },
+          {
+            "at": 4437.799999952316,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-1",
+            "runtime": "page"
+          },
+          {
+            "at": 4455.600000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-0",
+            "runtime": "page"
+          },
+          {
+            "at": 4474.100000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-3",
+            "runtime": "page"
+          },
+          {
+            "at": 5767.5,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-24",
+            "runtime": "page"
+          },
+          {
+            "at": 5793.299999952316,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-29",
+            "runtime": "page"
+          },
+          {
+            "at": 5815.700000047684,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-26",
+            "runtime": "page"
+          },
+          {
+            "at": 5840.100000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-25",
+            "runtime": "page"
+          },
+          {
+            "at": 5863.299999952316,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-27",
+            "runtime": "page"
+          },
+          {
+            "at": 5885.700000047684,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-23",
+            "runtime": "page"
+          },
+          {
+            "at": 5937.799999952316,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-28",
+            "runtime": "page"
+          },
+          {
+            "at": 6022.799999952316,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-9",
+            "runtime": "page"
+          },
+          {
+            "at": 6047.5,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-6",
+            "runtime": "page"
+          },
+          {
+            "at": 6072.299999952316,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-5",
+            "runtime": "page"
+          },
+          {
+            "at": 6095.700000047684,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-7",
+            "runtime": "page"
+          },
+          {
+            "at": 6119,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-4",
+            "runtime": "page"
+          }
+        ],
+        "longTasks": [
+          {
+            "name": "self",
+            "at": 425.40000009536743,
+            "duration": 184
+          },
+          {
+            "name": "self",
+            "at": 773.2999999523163,
+            "duration": 121
+          },
+          {
+            "name": "self",
+            "at": 936.2000000476837,
+            "duration": 56
+          },
+          {
+            "name": "self",
+            "at": 1051.7999999523163,
+            "duration": 108
+          },
+          {
+            "name": "self",
+            "at": 1237.7999999523163,
+            "duration": 75
+          },
+          {
+            "name": "self",
+            "at": 1369.7999999523163,
+            "duration": 723
+          },
+          {
+            "name": "self",
+            "at": 2103.2000000476837,
+            "duration": 51
+          },
+          {
+            "name": "self",
+            "at": 2217.5,
+            "duration": 125
+          },
+          {
+            "name": "self",
+            "at": 2373.7999999523163,
+            "duration": 171
+          },
+          {
+            "name": "self",
+            "at": 2705.600000143051,
+            "duration": 121
+          },
+          {
+            "name": "self",
+            "at": 3861.7000000476837,
+            "duration": 348
+          },
+          {
+            "name": "self",
+            "at": 4215.299999952316,
+            "duration": 178
+          },
+          {
+            "name": "self",
+            "at": 4394.700000047684,
+            "duration": 79
+          },
+          {
+            "name": "self",
+            "at": 4498.700000047684,
+            "duration": 109
+          },
+          {
+            "name": "self",
+            "at": 4666.799999952316,
+            "duration": 97
+          },
+          {
+            "name": "self",
+            "at": 5660.900000095367,
+            "duration": 96
+          },
+          {
+            "name": "self",
+            "at": 5760.900000095367,
+            "duration": 144
+          },
+          {
+            "name": "self",
+            "at": 5962.299999952316,
+            "duration": 55
+          },
+          {
+            "name": "self",
+            "at": 6019.400000095367,
+            "duration": 120
+          },
+          {
+            "name": "self",
+            "at": 6162,
+            "duration": 50
+          },
+          {
+            "name": "self",
+            "at": 6511.299999952316,
+            "duration": 67
+          }
+        ],
+        "paints": [
+          {
+            "name": "first-paint",
+            "at": 96,
+            "duration": 0
+          },
+          {
+            "name": "first-contentful-paint",
+            "at": 996,
+            "duration": 0
+          }
+        ]
+      }
+    },
+    {
+      "mode": "frame",
+      "warmup": false,
+      "phases": [
+        {
+          "name": "composer-ready",
+          "at": 2556.699999809265,
+          "mounts": 14,
+          "calls": [
+            "quiz-2",
+            "quiz-5",
+            "quiz-1",
+            "quiz-3",
+            "quiz-0",
+            "quiz-13",
+            "quiz-17",
+            "quiz-15",
+            "quiz-20",
+            "quiz-19",
+            "quiz-18",
+            "quiz-14",
+            "quiz-16",
+            "quiz-12"
+          ],
+          "top": 5025,
+          "height": 7966,
+          "viewport": 680,
+          "bottom": 2261,
+          "mountedCards": [
+            "scroll-0",
+            "scroll-1",
+            "scroll-2",
+            "scroll-3",
+            "scroll-5",
+            "scroll-12",
+            "scroll-13",
+            "scroll-14",
+            "scroll-15",
+            "scroll-16",
+            "scroll-17",
+            "scroll-18",
+            "scroll-19",
+            "scroll-20"
+          ],
+          "metrics": {
+            "Timestamp": 2002401.253176,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 18,
+            "Frames": 9,
+            "JSEventListeners": 1924,
+            "LayoutObjects": 1195,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 9471,
+            "Resources": 522,
+            "ContextLifecycleStateObservers": 122,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 18,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 2,
+            "ArrayBufferContents": 73,
+            "LayoutCount": 46,
+            "RecalcStyleCount": 57,
+            "LayoutDuration": 0.057415,
+            "RecalcStyleDuration": 0.385091,
+            "DevToolsCommandDuration": 0.0508,
+            "ScriptDuration": 0.399156,
+            "V8CompileDuration": 0.000601,
+            "TaskDuration": 2.4016279999999997,
+            "TaskOtherDuration": 1.50862,
+            "ThreadTime": 2.539777,
+            "ProcessTime": 3.336326,
+            "JSHeapUsedSize": 106999952,
+            "JSHeapTotalSize": 157155328,
+            "FirstMeaningfulPaint": 0,
+            "DomContentLoaded": 2002398.792056,
+            "NavigationStart": 2002398.695362
+          }
+        },
+        {
+          "name": "cold-settled",
+          "at": 3676.0999999046326,
+          "mounts": 23,
+          "calls": [
+            "quiz-2",
+            "quiz-5",
+            "quiz-1",
+            "quiz-3",
+            "quiz-0",
+            "quiz-13",
+            "quiz-17",
+            "quiz-15",
+            "quiz-20",
+            "quiz-19",
+            "quiz-18",
+            "quiz-14",
+            "quiz-16",
+            "quiz-12",
+            "quiz-27",
+            "quiz-26",
+            "quiz-23",
+            "quiz-22",
+            "quiz-24",
+            "quiz-21",
+            "quiz-25",
+            "quiz-29",
+            "quiz-28"
+          ],
+          "top": 9831,
+          "height": 10511,
+          "viewport": 680,
+          "bottom": 0,
+          "mountedCards": [
+            "scroll-15",
+            "scroll-16",
+            "scroll-17",
+            "scroll-18",
+            "scroll-19",
+            "scroll-20",
+            "scroll-21",
+            "scroll-22",
+            "scroll-23",
+            "scroll-24",
+            "scroll-25",
+            "scroll-26",
+            "scroll-27",
+            "scroll-28",
+            "scroll-29"
+          ],
+          "metrics": {
+            "Timestamp": 2002402.372734,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 20,
+            "Frames": 10,
+            "JSEventListeners": 2204,
+            "LayoutObjects": 1469,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 11707,
+            "Resources": 528,
+            "ContextLifecycleStateObservers": 125,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 20,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 2,
+            "ArrayBufferContents": 73,
+            "LayoutCount": 63,
+            "RecalcStyleCount": 131,
+            "LayoutDuration": 0.069682,
+            "RecalcStyleDuration": 0.630592,
+            "DevToolsCommandDuration": 0.082185,
+            "ScriptDuration": 0.417396,
+            "V8CompileDuration": 0.000601,
+            "TaskDuration": 2.839574,
+            "TaskOtherDuration": 1.639173,
+            "ThreadTime": 3.495402,
+            "ProcessTime": 4.34875,
+            "JSHeapUsedSize": 116248916,
+            "JSHeapTotalSize": 158760960,
+            "FirstMeaningfulPaint": 2002400.754599,
+            "DomContentLoaded": 2002398.792056,
+            "NavigationStart": 2002398.695362
+          }
+        },
+        {
+          "name": "saved-at-top",
+          "at": 5397,
+          "mounts": 29,
+          "calls": [
+            "quiz-2",
+            "quiz-5",
+            "quiz-1",
+            "quiz-3",
+            "quiz-0",
+            "quiz-13",
+            "quiz-17",
+            "quiz-15",
+            "quiz-20",
+            "quiz-19",
+            "quiz-18",
+            "quiz-14",
+            "quiz-16",
+            "quiz-12",
+            "quiz-27",
+            "quiz-26",
+            "quiz-23",
+            "quiz-22",
+            "quiz-24",
+            "quiz-21",
+            "quiz-25",
+            "quiz-29",
+            "quiz-28",
+            "quiz-4",
+            "quiz-2",
+            "quiz-5",
+            "quiz-1",
+            "quiz-0",
+            "quiz-3"
+          ],
+          "top": 0,
+          "height": 7732,
+          "viewport": 680,
+          "bottom": 7052,
+          "mountedCards": [
+            "scroll-0",
+            "scroll-1",
+            "scroll-2",
+            "scroll-3",
+            "scroll-4",
+            "scroll-5",
+            "scroll-15",
+            "scroll-16",
+            "scroll-17",
+            "scroll-18",
+            "scroll-19"
+          ],
+          "metrics": {
+            "Timestamp": 2002404.093542,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 22,
+            "Frames": 11,
+            "JSEventListeners": 3785,
+            "LayoutObjects": 2168,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 18203,
+            "Resources": 539,
+            "ContextLifecycleStateObservers": 199,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 22,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 2,
+            "ArrayBufferContents": 148,
+            "LayoutCount": 82,
+            "RecalcStyleCount": 183,
+            "LayoutDuration": 0.08151,
+            "RecalcStyleDuration": 0.875068,
+            "DevToolsCommandDuration": 0.10736,
+            "ScriptDuration": 0.458412,
+            "V8CompileDuration": 0.000601,
+            "TaskDuration": 3.8644249999999998,
+            "TaskOtherDuration": 2.341529,
+            "ThreadTime": 5.046034,
+            "ProcessTime": 6.065881,
+            "JSHeapUsedSize": 139447128,
+            "JSHeapTotalSize": 192643072,
+            "FirstMeaningfulPaint": 2002400.754599,
+            "DomContentLoaded": 2002398.792056,
+            "NavigationStart": 2002398.695362
+          }
+        },
+        {
+          "name": "returned-settled",
+          "at": 6867.599999904633,
+          "mounts": 39,
+          "calls": [
+            "quiz-2",
+            "quiz-5",
+            "quiz-1",
+            "quiz-3",
+            "quiz-0",
+            "quiz-13",
+            "quiz-17",
+            "quiz-15",
+            "quiz-20",
+            "quiz-19",
+            "quiz-18",
+            "quiz-14",
+            "quiz-16",
+            "quiz-12",
+            "quiz-27",
+            "quiz-26",
+            "quiz-23",
+            "quiz-22",
+            "quiz-24",
+            "quiz-21",
+            "quiz-25",
+            "quiz-29",
+            "quiz-28",
+            "quiz-4",
+            "quiz-2",
+            "quiz-5",
+            "quiz-1",
+            "quiz-0",
+            "quiz-3",
+            "quiz-28",
+            "quiz-27",
+            "quiz-26",
+            "quiz-29",
+            "quiz-25",
+            "quiz-23",
+            "quiz-24",
+            "quiz-1",
+            "quiz-0",
+            "quiz-2"
+          ],
+          "top": 0,
+          "height": 8850,
+          "viewport": 680,
+          "bottom": 8170,
+          "mountedCards": [
+            "scroll-0",
+            "scroll-1",
+            "scroll-2",
+            "scroll-3",
+            "scroll-4",
+            "scroll-5",
+            "scroll-15",
+            "scroll-16",
+            "scroll-17",
+            "scroll-18",
+            "scroll-19",
+            "scroll-23"
+          ],
+          "metrics": {
+            "Timestamp": 2002405.563896,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 14,
+            "Frames": 12,
+            "JSEventListeners": 2343,
+            "LayoutObjects": 1018,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 13317,
+            "Resources": 349,
+            "ContextLifecycleStateObservers": 220,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 14,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 0,
+            "ArrayBufferContents": 17,
+            "LayoutCount": 137,
+            "RecalcStyleCount": 273,
+            "LayoutDuration": 0.110103,
+            "RecalcStyleDuration": 1.266076,
+            "DevToolsCommandDuration": 0.137294,
+            "ScriptDuration": 0.480636,
+            "V8CompileDuration": 0.000601,
+            "TaskDuration": 4.9051800000000005,
+            "TaskOtherDuration": 2.910525,
+            "ThreadTime": 6.416275,
+            "ProcessTime": 7.696332,
+            "JSHeapUsedSize": 134413024,
+            "JSHeapTotalSize": 206422016,
+            "FirstMeaningfulPaint": 2002400.754599,
+            "DomContentLoaded": 2002398.792056,
+            "NavigationStart": 2002398.695362
+          }
+        }
+      ],
+      "sources": [
+        {
+          "url": "http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=d89a0139",
+          "originalHash": "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4",
+          "deliveredHash": "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4"
+        }
+      ],
+      "errors": [],
+      "audit": {
+        "receipts": [
+          {
+            "at": 2179.0999999046326,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-2",
+            "runtime": "page"
+          },
+          {
+            "at": 2217,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-5",
+            "runtime": "page"
+          },
+          {
+            "at": 2238.0999999046326,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-1",
+            "runtime": "page"
+          },
+          {
+            "at": 2257.699999809265,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-3",
+            "runtime": "page"
+          },
+          {
+            "at": 2276.2999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-0",
+            "runtime": "page"
+          },
+          {
+            "at": 2308.699999809265,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-13",
+            "runtime": "page"
+          },
+          {
+            "at": 2329.699999809265,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-17",
+            "runtime": "page"
+          },
+          {
+            "at": 2351.5999999046326,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-15",
+            "runtime": "page"
+          },
+          {
+            "at": 2375.2999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-20",
+            "runtime": "page"
+          },
+          {
+            "at": 2397.2999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-19",
+            "runtime": "page"
+          },
+          {
+            "at": 2417.7999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-18",
+            "runtime": "page"
+          },
+          {
+            "at": 2438.0999999046326,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-14",
+            "runtime": "page"
+          },
+          {
+            "at": 2461.5,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-16",
+            "runtime": "page"
+          },
+          {
+            "at": 2492.899999856949,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-12",
+            "runtime": "page"
+          },
+          {
+            "at": 2596.899999856949,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-27",
+            "runtime": "page"
+          },
+          {
+            "at": 2618.0999999046326,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-26",
+            "runtime": "page"
+          },
+          {
+            "at": 2637.7999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-23",
+            "runtime": "page"
+          },
+          {
+            "at": 2656.5,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-22",
+            "runtime": "page"
+          },
+          {
+            "at": 2675.0999999046326,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-24",
+            "runtime": "page"
+          },
+          {
+            "at": 2696.5999999046326,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-21",
+            "runtime": "page"
+          },
+          {
+            "at": 2717.5999999046326,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-25",
+            "runtime": "page"
+          },
+          {
+            "at": 2796.7999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-29",
+            "runtime": "page"
+          },
+          {
+            "at": 2818.2999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-28",
+            "runtime": "page"
+          },
+          {
+            "at": 4262.699999809265,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-4",
+            "runtime": "page"
+          },
+          {
+            "at": 4283,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-2",
+            "runtime": "page"
+          },
+          {
+            "at": 4301.699999809265,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-5",
+            "runtime": "page"
+          },
+          {
+            "at": 4320.299999952316,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-1",
+            "runtime": "page"
+          },
+          {
+            "at": 4338.399999856949,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-0",
+            "runtime": "page"
+          },
+          {
+            "at": 4357.299999952316,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-3",
+            "runtime": "page"
+          },
+          {
+            "at": 5656.599999904633,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-28",
+            "runtime": "page"
+          },
+          {
+            "at": 5681.599999904633,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-27",
+            "runtime": "page"
+          },
+          {
+            "at": 5702.399999856949,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-26",
+            "runtime": "page"
+          },
+          {
+            "at": 5724.299999952316,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-29",
+            "runtime": "page"
+          },
+          {
+            "at": 5746.099999904633,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-25",
+            "runtime": "page"
+          },
+          {
+            "at": 5781.099999904633,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-23",
+            "runtime": "page"
+          },
+          {
+            "at": 5805.699999809265,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-24",
+            "runtime": "page"
+          },
+          {
+            "at": 5938.199999809265,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-1",
+            "runtime": "page"
+          },
+          {
+            "at": 5959.899999856949,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-0",
+            "runtime": "page"
+          },
+          {
+            "at": 5978.599999904633,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-2",
+            "runtime": "page"
+          }
+        ],
+        "longTasks": [
+          {
+            "name": "self",
+            "at": 422.59999990463257,
+            "duration": 180
+          },
+          {
+            "name": "self",
+            "at": 750.5999999046326,
+            "duration": 113
+          },
+          {
+            "name": "self",
+            "at": 909.5,
+            "duration": 54
+          },
+          {
+            "name": "self",
+            "at": 1021.6999998092651,
+            "duration": 106
+          },
+          {
+            "name": "self",
+            "at": 1202.2999999523163,
+            "duration": 77
+          },
+          {
+            "name": "self",
+            "at": 1332.7999999523163,
+            "duration": 716
+          },
+          {
+            "name": "self",
+            "at": 2059.2999999523163,
+            "duration": 51
+          },
+          {
+            "name": "self",
+            "at": 2172.0999999046326,
+            "duration": 122
+          },
+          {
+            "name": "self",
+            "at": 2304.2999999523163,
+            "duration": 157
+          },
+          {
+            "name": "self",
+            "at": 2592.199999809265,
+            "duration": 142
+          },
+          {
+            "name": "self",
+            "at": 3759.199999809265,
+            "duration": 352
+          },
+          {
+            "name": "self",
+            "at": 4116.699999809265,
+            "duration": 142
+          },
+          {
+            "name": "self",
+            "at": 4258.699999809265,
+            "duration": 115
+          },
+          {
+            "name": "self",
+            "at": 4374.399999856949,
+            "duration": 83
+          },
+          {
+            "name": "self",
+            "at": 4514.399999856949,
+            "duration": 76
+          },
+          {
+            "name": "self",
+            "at": 5461,
+            "duration": 184
+          },
+          {
+            "name": "self",
+            "at": 5650.699999809265,
+            "duration": 95
+          },
+          {
+            "name": "self",
+            "at": 5844.199999809265,
+            "duration": 89
+          },
+          {
+            "name": "self",
+            "at": 5998,
+            "duration": 73
+          },
+          {
+            "name": "self",
+            "at": 6301.699999809265,
+            "duration": 67
+          }
+        ],
+        "paints": [
+          {
+            "name": "first-paint",
+            "at": 92,
+            "duration": 0
+          },
+          {
+            "name": "first-contentful-paint",
+            "at": 968,
+            "duration": 0
+          }
+        ]
+      }
+    },
+    {
+      "mode": "frame-measure",
+      "warmup": false,
+      "phases": [
+        {
+          "name": "composer-ready",
+          "at": 2416.2999999523163,
+          "mounts": 8,
+          "calls": [
+            "quiz-25",
+            "quiz-29",
+            "quiz-26",
+            "quiz-28",
+            "quiz-23",
+            "quiz-27",
+            "quiz-24",
+            "quiz-22"
+          ],
+          "top": 5826,
+          "height": 6506,
+          "viewport": 680,
+          "bottom": 0,
+          "mountedCards": [
+            "scroll-22",
+            "scroll-23",
+            "scroll-24",
+            "scroll-25",
+            "scroll-26",
+            "scroll-27",
+            "scroll-28",
+            "scroll-29"
+          ],
+          "metrics": {
+            "Timestamp": 2002408.025364,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 16,
+            "Frames": 8,
+            "JSEventListeners": 1912,
+            "LayoutObjects": 1005,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 8197,
+            "Resources": 518,
+            "ContextLifecycleStateObservers": 120,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 16,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 2,
+            "ArrayBufferContents": 73,
+            "LayoutCount": 38,
+            "RecalcStyleCount": 50,
+            "LayoutDuration": 0.051191,
+            "RecalcStyleDuration": 0.268865,
+            "DevToolsCommandDuration": 0.053099,
+            "ScriptDuration": 0.401684,
+            "V8CompileDuration": 0.000215,
+            "TaskDuration": 2.2640409999999997,
+            "TaskOtherDuration": 1.489045,
+            "ThreadTime": 2.40336,
+            "ProcessTime": 3.186986,
+            "JSHeapUsedSize": 104257252,
+            "JSHeapTotalSize": 156368896,
+            "FirstMeaningfulPaint": 0,
+            "DomContentLoaded": 2002405.702058,
+            "NavigationStart": 2002405.606296
+          }
+        },
+        {
+          "name": "cold-settled",
+          "at": 3189.4000000953674,
+          "mounts": 8,
+          "calls": [
+            "quiz-25",
+            "quiz-29",
+            "quiz-26",
+            "quiz-28",
+            "quiz-23",
+            "quiz-27",
+            "quiz-24",
+            "quiz-22"
+          ],
+          "top": 5826,
+          "height": 6506,
+          "viewport": 680,
+          "bottom": 0,
+          "mountedCards": [
+            "scroll-22",
+            "scroll-23",
+            "scroll-24",
+            "scroll-25",
+            "scroll-26",
+            "scroll-27",
+            "scroll-28",
+            "scroll-29"
+          ],
+          "metrics": {
+            "Timestamp": 2002408.797004,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 18,
+            "Frames": 9,
+            "JSEventListeners": 2148,
+            "LayoutObjects": 1009,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 8495,
+            "Resources": 522,
+            "ContextLifecycleStateObservers": 123,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 18,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 2,
+            "ArrayBufferContents": 73,
+            "LayoutCount": 40,
+            "RecalcStyleCount": 98,
+            "LayoutDuration": 0.055119,
+            "RecalcStyleDuration": 0.331233,
+            "DevToolsCommandDuration": 0.081632,
+            "ScriptDuration": 0.411558,
+            "V8CompileDuration": 0.000215,
+            "TaskDuration": 2.427224,
+            "TaskOtherDuration": 1.547525,
+            "ThreadTime": 3.031192,
+            "ProcessTime": 3.846798,
+            "JSHeapUsedSize": 108139812,
+            "JSHeapTotalSize": 158236672,
+            "FirstMeaningfulPaint": 2002407.679692,
+            "DomContentLoaded": 2002405.702058,
+            "NavigationStart": 2002405.606296
+          }
+        },
+        {
+          "name": "saved-at-top",
+          "at": 4392.799999952316,
+          "mounts": 12,
+          "calls": [
+            "quiz-25",
+            "quiz-29",
+            "quiz-26",
+            "quiz-28",
+            "quiz-23",
+            "quiz-27",
+            "quiz-24",
+            "quiz-22",
+            "quiz-2",
+            "quiz-3",
+            "quiz-1",
+            "quiz-0"
+          ],
+          "top": 0,
+          "height": 7732,
+          "viewport": 680,
+          "bottom": 7052,
+          "mountedCards": [
+            "scroll-0",
+            "scroll-1",
+            "scroll-2",
+            "scroll-3",
+            "scroll-22",
+            "scroll-23",
+            "scroll-24",
+            "scroll-25",
+            "scroll-26"
+          ],
+          "metrics": {
+            "Timestamp": 2002410.000037,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 22,
+            "Frames": 11,
+            "JSEventListeners": 2599,
+            "LayoutObjects": 1192,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 10457,
+            "Resources": 534,
+            "ContextLifecycleStateObservers": 133,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 22,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 2,
+            "ArrayBufferContents": 104,
+            "LayoutCount": 53,
+            "RecalcStyleCount": 148,
+            "LayoutDuration": 0.064925,
+            "RecalcStyleDuration": 0.524629,
+            "DevToolsCommandDuration": 0.103777,
+            "ScriptDuration": 0.439585,
+            "V8CompileDuration": 0.000215,
+            "TaskDuration": 2.945474,
+            "TaskOtherDuration": 1.812401,
+            "ThreadTime": 4.068149,
+            "ProcessTime": 4.963528,
+            "JSHeapUsedSize": 112766752,
+            "JSHeapTotalSize": 164790272,
+            "FirstMeaningfulPaint": 2002407.679692,
+            "DomContentLoaded": 2002405.702058,
+            "NavigationStart": 2002405.606296
+          }
+        },
+        {
+          "name": "returned-settled",
+          "at": 5697.900000095367,
+          "mounts": 18,
+          "calls": [
+            "quiz-25",
+            "quiz-29",
+            "quiz-26",
+            "quiz-28",
+            "quiz-23",
+            "quiz-27",
+            "quiz-24",
+            "quiz-22",
+            "quiz-2",
+            "quiz-3",
+            "quiz-1",
+            "quiz-0",
+            "quiz-29",
+            "quiz-27",
+            "quiz-28",
+            "quiz-1",
+            "quiz-2",
+            "quiz-0"
+          ],
+          "top": 0,
+          "height": 7782,
+          "viewport": 680,
+          "bottom": 7102,
+          "mountedCards": [
+            "scroll-0",
+            "scroll-1",
+            "scroll-2",
+            "scroll-3",
+            "scroll-22",
+            "scroll-23",
+            "scroll-24",
+            "scroll-25",
+            "scroll-26"
+          ],
+          "metrics": {
+            "Timestamp": 2002411.305008,
+            "AudioHandlers": 0,
+            "AudioWorkletProcessors": 0,
+            "Documents": 13,
+            "Frames": 12,
+            "JSEventListeners": 1728,
+            "LayoutObjects": 993,
+            "MediaKeySessions": 0,
+            "MediaKeys": 0,
+            "Nodes": 9166,
+            "Resources": 347,
+            "ContextLifecycleStateObservers": 152,
+            "V8PerContextDatas": 2,
+            "WorkerGlobalScopes": 0,
+            "UACSSResources": 0,
+            "RTCPeerConnections": 0,
+            "ResourceFetchers": 13,
+            "AdSubframes": 0,
+            "DetachedScriptStates": 0,
+            "ArrayBufferContents": 13,
+            "LayoutCount": 76,
+            "RecalcStyleCount": 218,
+            "LayoutDuration": 0.085333,
+            "RecalcStyleDuration": 0.900282,
+            "DevToolsCommandDuration": 0.125744,
+            "ScriptDuration": 0.4708,
+            "V8CompileDuration": 0.000215,
+            "TaskDuration": 3.8891649999999998,
+            "TaskOtherDuration": 2.306849,
+            "ThreadTime": 5.287958,
+            "ProcessTime": 6.408741,
+            "JSHeapUsedSize": 110091188,
+            "JSHeapTotalSize": 178880512,
+            "FirstMeaningfulPaint": 2002407.679692,
+            "DomContentLoaded": 2002405.702058,
+            "NavigationStart": 2002405.606296
+          }
+        }
+      ],
+      "sources": [
+        {
+          "url": "http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=d89a0139",
+          "originalHash": "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4",
+          "deliveredHash": "d87820ae621ac8d63a88480b4b32a39af404b9d7e4312c401d1acf398c1747b7"
+        }
+      ],
+      "errors": [],
+      "audit": {
+        "receipts": [
+          {
+            "at": 2195.7999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-25",
+            "runtime": "page"
+          },
+          {
+            "at": 2232.100000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-29",
+            "runtime": "page"
+          },
+          {
+            "at": 2253.2999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-26",
+            "runtime": "page"
+          },
+          {
+            "at": 2272.7000000476837,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-28",
+            "runtime": "page"
+          },
+          {
+            "at": 2292.2000000476837,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-23",
+            "runtime": "page"
+          },
+          {
+            "at": 2312.2999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-27",
+            "runtime": "page"
+          },
+          {
+            "at": 2331.2000000476837,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-24",
+            "runtime": "page"
+          },
+          {
+            "at": 2353,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-22",
+            "runtime": "page"
+          },
+          {
+            "at": 3364.4000000953674,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-2",
+            "runtime": "page"
+          },
+          {
+            "at": 3387.2999999523163,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-3",
+            "runtime": "page"
+          },
+          {
+            "at": 3410,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-1",
+            "runtime": "page"
+          },
+          {
+            "at": 3431.5,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-0",
+            "runtime": "page"
+          },
+          {
+            "at": 4619.200000047684,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-29",
+            "runtime": "page"
+          },
+          {
+            "at": 4650.200000047684,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-27",
+            "runtime": "page"
+          },
+          {
+            "at": 4670.799999952316,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-28",
+            "runtime": "page"
+          },
+          {
+            "at": 4923.799999952316,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-1",
+            "runtime": "page"
+          },
+          {
+            "at": 4945.600000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-2",
+            "runtime": "page"
+          },
+          {
+            "at": 4965.600000143051,
+            "pluginId": null,
+            "tool": "quiz_ask",
+            "callId": "quiz-0",
+            "runtime": "page"
+          }
+        ],
+        "longTasks": [
+          {
+            "name": "self",
+            "at": 426.2000000476837,
+            "duration": 180
+          },
+          {
+            "name": "self",
+            "at": 762.1000001430511,
+            "duration": 114
+          },
+          {
+            "name": "self",
+            "at": 917.5,
+            "duration": 54
+          },
+          {
+            "name": "self",
+            "at": 1033.2000000476837,
+            "duration": 107
+          },
+          {
+            "name": "self",
+            "at": 1221.2999999523163,
+            "duration": 77
+          },
+          {
+            "name": "self",
+            "at": 1351.1000001430511,
+            "duration": 712
+          },
+          {
+            "name": "self",
+            "at": 2072.100000143051,
+            "duration": 51
+          },
+          {
+            "name": "self",
+            "at": 2188.2000000476837,
+            "duration": 182
+          },
+          {
+            "name": "self",
+            "at": 3261.2000000476837,
+            "duration": 95
+          },
+          {
+            "name": "self",
+            "at": 3360.100000143051,
+            "duration": 92
+          },
+          {
+            "name": "self",
+            "at": 3514,
+            "duration": 79
+          },
+          {
+            "name": "self",
+            "at": 4461.799999952316,
+            "duration": 147
+          },
+          {
+            "name": "self",
+            "at": 4672.400000095367,
+            "duration": 95
+          },
+          {
+            "name": "self",
+            "at": 4828.100000143051,
+            "duration": 90
+          },
+          {
+            "name": "self",
+            "at": 4919.200000047684,
+            "duration": 65
+          },
+          {
+            "name": "self",
+            "at": 5301,
+            "duration": 66
+          }
+        ],
+        "paints": [
+          {
+            "name": "first-paint",
+            "at": 92,
+            "duration": 0
+          },
+          {
+            "name": "first-contentful-paint",
+            "at": 976,
+            "duration": 0
+          }
+        ]
+      }
+    }
+  ]
+}

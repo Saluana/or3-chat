@@ -1,0 +1,10 @@
+{
+  "freshApply": true,
+  "reverseCheck": true,
+  "matchesInstalled": true,
+  "pristineSha256": "398bf39401c28faaf7935d26ebacea7ba6969cdc2746493151154e55092491d8",
+  "installedSha256": "d1cbc0b44c858aa5aaa4de524cabac3dbaa506021e91d2d5c92fe4b9691659fa",
+  "patchSha256": "b12eec5f0c9f2b96d6719ac3510037a72c1016d6205bc705a58462d5fd9e8f06",
+  "referenceOptimizerInputSha256": "f00f654fc16240a1ae9bfe3a2590532b03477568629eaf9dfd5eb98f194eb909",
+  "method": "Fresh apply and reverse check from reconstructed pristine 0.1.3; result byte-equal to installed ESM."
+}

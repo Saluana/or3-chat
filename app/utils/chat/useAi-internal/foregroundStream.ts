@@ -486,6 +486,7 @@ export async function runForegroundStreamLoop(
                                         separator + placeholder,
                                         { iterationText: iterationSeparator + placeholder }
                                     );
+                                    ctx.streamAcc.append(separator + placeholder, { kind: 'text' });
                                     current.text = normalizedState.cumulativeText;
                                 }
                                 current.file_hashes = ctx.assistantFileHashes;
@@ -507,6 +508,7 @@ export async function runForegroundStreamLoop(
                                     separator + placeholder,
                                     { iterationText: iterationSeparator + placeholder }
                                 );
+                                ctx.streamAcc.append(separator + placeholder, { kind: 'text' });
                                 current.text = normalizedState.cumulativeText;
                                 writeCoalescer.markDirty(placeholder.length);
                             }

@@ -1,0 +1,1 @@
+$ eslint --no-warn-ignored --quiet app/components/chat/tool-cards/ToolCardSlot.vue app/utils/chat/tool-card-context.ts app/db/__tests__/messages-transactions.test.ts

@@ -1,22 +1,37 @@
 // Disposable production journey; no production measurement seams or network traffic.
 // bunx tsx audit-evidence/performance-20261022/stream-media-probe.mjs '{"mode":"image","cpuRate":4}' /tmp/media.json
 import { chromium, webkit } from '@playwright/test';
-import { readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
 
 const options = JSON.parse(process.argv[2] ?? '{}');
 const output = process.argv[3];
 assert(output, 'Supply an output JSON path');
 const mode = options.mode ?? 'image';
-const browser = await (options.browser === 'webkit' ? webkit : chromium).launch();
-const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+const engine = options.browser === 'webkit' ? webkit : chromium;
+// WebKit private contexts cannot write IndexedDB Blobs in this environment.
+// An explicit, disposable disk profile qualifies the normal storage path.
+const profile = options.persistent ? await mkdtemp(join(tmpdir(), 'or3-media-')) : null;
+const browser = profile ? null : await engine.launch();
+const contextOptions = { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 };
+const context = profile ? await engine.launchPersistentContext(profile, contextOptions) : await browser.newContext(contextOptions);
+const browserVersion = context.browser().version();
+const close = () => browser ? browser.close() : context.close();
 const page = await context.newPage();
 page.setDefaultTimeout(30_000);
 const errors = [];
 page.on('pageerror', error => errors.push(String(error)));
-const timer = setTimeout(() => browser.close().catch(() => {}), 90_000);
+const timer = setTimeout(() => close().catch(() => {}), 90_000);
 try {
-    await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort());
+    await context.route('**/*', route => {
+        const url = new URL(route.request().url());
+        // WebKit routes Blob requests too; their hostname is empty. Permit
+        // only Blob URLs created by this local origin, keeping egress blocked.
+        return url.hostname === '127.0.0.1' || (url.protocol === 'blob:' && url.origin === 'http://127.0.0.1:3147')
+            ? route.continue() : route.abort();
+    });
     // Count actual watcher entries in the served production module. The body
     // and reactive dependencies are unchanged; fail closed if the match drifts.
     let instrumentationApplied = 0;
@@ -45,8 +60,8 @@ try {
     await page.addInitScript(() => { localStorage.setItem('activeTheme', 'blank'); localStorage.setItem('theme', 'light'); });
     await page.goto('http://127.0.0.1:3147/__or3-chat-journey-test?workspace=1');
     await page.getByRole('textbox', { name: 'Message input' }).waitFor();
-    await page.evaluate(({ mode, decodeDelay, secondImage }) => {
-        const audit = window.__mediaAudit = { active: false, syncs: 0, gets: {}, decodeStarted: 0, decoded: 0, decodeErrors: [], instances: {}, updates: {}, imageMutations: 0, toolMutations: 0, chunks: 0, gaps: [], longTasks: [] };
+    await page.evaluate(({ mode, decodeDelay, secondImage, verifyLiveImages }) => {
+        const audit = window.__mediaAudit = { active: false, syncs: 0, gets: {}, decodeStarted: 0, decoded: 0, decodeErrors: [], instances: {}, updates: {}, imageMutations: 0, toolMutations: 0, chunks: 0, gaps: [], longTasks: [], liveImageCounts: [] };
         const originalFetch = window.fetch;
         const get = IDBObjectStore.prototype.get;
         IDBObjectStore.prototype.get = function (...args) {
@@ -125,7 +140,12 @@ try {
             observer.observe(document.querySelector('.chat-message-list'), { subtree: true, attributes: true, childList: true, characterData: true });
             cleanups.push(() => observer.disconnect());
             let last = performance.now(), raf;
-            const tick = now => { if (!audit.active) return; audit.gaps.push(now - last); last = now; raf = requestAnimationFrame(tick); };
+            const tick = now => {
+                if (!audit.active) return;
+                audit.gaps.push(now - last); last = now;
+                if (verifyLiveImages && mode === 'image') audit.liveImageCounts.push(document.querySelectorAll('img[data-hydrated="true"]').length);
+                raf = requestAnimationFrame(tick);
+            };
             cleanups.push(() => cancelAnimationFrame(raf));
             const longTasks = PerformanceObserver.supportedEntryTypes.includes('longtask') ? new PerformanceObserver(list => audit.longTasks.push(...list.getEntries().map(e => ({ start: e.startTime, duration: e.duration })))) : null;
             longTasks?.observe({ type: 'longtask' }); cleanups.push(() => longTasks?.disconnect());
@@ -152,12 +172,13 @@ try {
             window.fetch = originalFetch; IDBObjectStore.prototype.get = get; HTMLImageElement.prototype.decode = decode;
             return { ...audit, gaps: undefined, frames: gaps.length, p95: gaps[Math.floor(gaps.length * .95)], max: gaps.at(-1), images };
         };
-    }, { mode, decodeDelay: options.decodeDelay ?? 0, secondImage: options.secondImage ?? false });
+    }, { mode, decodeDelay: options.decodeDelay ?? 0, secondImage: options.secondImage ?? false, verifyLiveImages: options.verifyLiveImages ?? false });
     await page.getByRole('textbox', { name: 'Message input' }).fill(mode === 'tool' ? 'journey:workspace-find' : 'media-performance-audit');
     await page.getByRole('button', { name: 'Send message', exact: true }).click();
     await page.waitForFunction(() => window.__mediaAudit.transportReady);
     await page.getByText('Streaming media audit.', { exact: false }).waitFor();
     if (mode === 'image') await page.waitForFunction(() => window.__mediaAudit.decoded > 0);
+    if (mode === 'image' && options.verifyLiveImages) await page.waitForFunction(() => document.querySelector('img[data-hydrated="true"]')?.naturalWidth > 0);
     if (mode === 'image' && !options.decodeDelay) await page.waitForTimeout(150);
     if (mode === 'tool') await page.getByRole('button', { name: 'Open source: Workspace evidence', exact: true }).first().waitFor();
     let cdp;
@@ -180,9 +201,15 @@ try {
         db.close();
         const row = rows.find(row => row.role === 'assistant' && String(row.data?.content).includes('MEDIA-AUDIT-END'));
         const hashes = typeof row?.file_hashes === 'string' ? JSON.parse(row.file_hashes) : row?.file_hashes;
+        const content = row?.data?.content ?? '';
+        const images = [...content.matchAll(/!\[file-hash:([^\]]+)\]\([^)]*\)/g)];
+        const chunk = 'Steady trailing text keeps the response moving. ';
         return { exactTail: row?.data?.content?.endsWith(window.__mediaExpectedTail) === true,
             textChunks: row?.data?.content?.split('Steady trailing text keeps the response moving. ').length - 1,
             endsWithMarker: row?.data?.content?.endsWith('MEDIA-AUDIT-END') === true,
+            imageOrderMatchesHashes: images.every((image, index) => image[1] === hashes?.[index]),
+            textChunksBetweenImages: images.length === 2 ? content.slice(images[0].index + images[0][0].length, images[1].index).split(chunk).length - 1 : null,
+            textChunksAfterLastImage: images.length ? content.slice(images.at(-1).index + images.at(-1)[0].length).split(chunk).length - 1 : null,
             fileHashes: hashes?.length ?? 0, toolNames: row?.data?.tool_calls?.map(call => call.name) ?? [] };
     });
     assert.equal(instrumentationApplied, 1);
@@ -192,9 +219,26 @@ try {
         assert.equal(result.persisted.fileHashes, options.secondImage ? 2 : 1); assert.equal(result.finalImages.length, options.secondImage ? 2 : 1);
         for (const image of result.finalImages) { assert.equal(image.hydrated, 'true'); assert(image.width > 0); }
         assert.equal(new Set(result.finalImages.map(image => image.src)).size, result.finalImages.length);
+        assert.equal(result.persisted.imageOrderMatchesHashes, true);
+        if (options.secondImage) assert.equal(result.persisted.textChunksBetweenImages, 80);
+        assert.equal(result.persisted.textChunksAfterLastImage, options.secondImage ? 80 : 160);
+        if (options.verifyReload) {
+            await page.reload();
+            await page.waitForFunction(count => document.querySelectorAll('img[data-hydrated="true"]').length === count, options.secondImage ? 2 : 1);
+            await page.getByText(/MEDIA-AUDIT-END/).waitFor();
+            result.reloadedImages = await page.locator('img[data-hydrated="true"]').evaluateAll(images => images.map(image => ({ width: image.naturalWidth, height: image.naturalHeight })));
+            for (const image of result.reloadedImages) assert(image.width > 0);
+        }
     }
     if (mode === 'tool') { assert.equal(result.toolRoots, 1); assert.equal(result.toolRootsConnected, true); assert(result.persisted.toolNames.includes('workspace_read')); }
-    await writeFile(output, JSON.stringify({ options, browser: browser.version(), instrumentationApplied, errors, ...result }, null, 2) + '\n');
+    await writeFile(output, JSON.stringify({ options, browser: browserVersion, instrumentationApplied, errors, ...result }, null, 2) + '\n');
+    if (mode === 'image' && options.verifyLiveImages) {
+        assert(result.initialImage?.width > 0, 'First image must be visible before trailing text');
+        assert(result.liveImageCounts.length > 0, 'Capture live image visibility samples');
+        assert(result.liveImageCounts.every(count => count >= 1), 'First image must remain visible throughout trailing text');
+        assert.equal(result.images.length, options.secondImage ? 2 : 1, 'All images must be visible before stream completion');
+        for (const image of result.images) { assert.equal(image.hydrated, 'true'); assert(image.width > 0); }
+    }
     console.log(JSON.stringify({ output, syncs: result.syncs, gets: result.gets, updates: result.updates, imageMutations: result.imageMutations, toolMutations: result.toolMutations, p95: result.p95, max: result.max, persisted: result.persisted, errors }));
 } catch (error) {
     console.error(await page.locator('body').innerText().catch(() => 'Page closed'));
@@ -207,6 +251,10 @@ try {
     }).catch(() => null);
     console.error(diagnostic);
     console.error(errors);
-    await writeFile(output, JSON.stringify({ options, browser: browser.version(), failure: String(error), errors, diagnostic }, null, 2) + '\n');
+    await writeFile(output, JSON.stringify({ options, browser: browserVersion, failure: String(error), errors, diagnostic }, null, 2) + '\n');
     throw error;
-} finally { clearTimeout(timer); await browser.close(); }
+} finally {
+    clearTimeout(timer);
+    await close();
+    if (profile) await rm(profile, { recursive: true, force: true });
+}

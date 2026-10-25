@@ -713,6 +713,10 @@ export async function continueMessageImpl(
             current.text += delta;
             writeCoalescer.markDirty(utf8Bytes(delta));
         };
+        const assertImageOwner = () => {
+            if (!ownsThread() || continuationAbortController.signal.aborted)
+                throw new ContinuationOwnershipLost();
+        };
 
         innerStreamLifecycleStarted = true;
         try {
@@ -738,27 +742,27 @@ export async function continueMessageImpl(
                         else if (/^https?:/.test(ev.url)) {
                             blob = await fetchImageBlob(ev.url);
                         }
+                        assertImageOwner();
                         if (blob) {
                             try {
-                                const meta = await createOrRefFile(blob, 'gen-image');
+                                const meta = await createOrRefFile(blob, 'gen-image', { assertCurrent: assertImageOwner });
+                                assertImageOwner();
                                 assistantFileHashes.push(meta.hash);
                                 const placeholder = `![file-hash:${meta.hash}](${TRANSPARENT_PIXEL_GIF_DATA_URI})`;
                                 const already = current.text.includes(placeholder);
                                 if (!already) {
-                                    current.text += (current.text ? '\n\n' : '') + placeholder;
-                                }
+                                    appendTextDelta((current.text ? '\n\n' : '') + placeholder);
+                                } else writeCoalescer.markDirty(placeholder.length);
                                 current.file_hashes = assistantFileHashes;
-                                writeCoalescer.markDirty(placeholder.length);
                             } catch {
-                                /* intentionally empty */
+                                assertImageOwner();
                             }
                         } else {
                             // Fallback: couldn't convert to blob, use URL directly
                             const placeholder = `![generated image](${ev.url})`;
                             const already = current.text.includes(placeholder);
                             if (!already) {
-                                current.text += (current.text ? '\n\n' : '') + placeholder;
-                                writeCoalescer.markDirty(placeholder.length);
+                                appendTextDelta((current.text ? '\n\n' : '') + placeholder);
                             }
                         }
                     }

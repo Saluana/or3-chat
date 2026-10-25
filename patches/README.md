@@ -76,3 +76,30 @@ Remove this patch after qualifying a published scroller with the same fix.
 Run the production sidebar recycling journey and all scroll canaries against
 that exact dependency before removal. Measurements and provenance are in
 `audit-evidence/performance-20261022/SIDEBAR.md`.
+
+The patch also distinguishes an instant programmatic scroll's target event from
+later native movement. An upward native offset is classified before queued
+viewport work can resume bottom following; a stale instant-write marker cannot
+hide that movement. Smooth requests and keyed jumps retain their asynchronous
+settlement. The anchor formulas, overscan and geometry are unchanged. The real
+browser regression is in `tests/e2e/or3-scroll-canary.spec.ts`; evidence and the
+earlier large-wheel reversal evaluation are in
+`audit-evidence/performance-20261023/SCROLL-INTENT.md`.
+
+Wheel input is acknowledged before native scrolling when `maintainBottom` is
+enabled, so a following write cannot displace a clamped compositor wheel jump
+before its event reaches the main thread. No default action is canceled.
+The owned listener updates with that prop and is removed on unmount. Lists with
+bottom following disabled, including sidebars, retain passive wheel handling.
+Following keeps its existing next-tick path and checks active browsing; the
+extra follow frame was removed after a controlled startup comparison exposed
+additional card mounts. Explicit bottom/smooth navigation, thresholds, anchor
+formulas and geometry retain their existing paths.
+
+A non-passive listener can delay wheel scrolling on a busy main thread. This
+is a stability/performance tradeoff, not proof of universally faster scrolling.
+Native default behavior, prop changes and actual unmount are qualified in the
+real browser; physical-device latency and sustained work remain open.
+The native card journey checks its top endpoint and persisted state at normal
+and 4× CPU. See `audit-evidence/performance-20261023/WHEEL-OWNER.md` for current
+evidence; `WHEEL-REVERSAL.md` and `CARD-COLD-OPEN.md` retain prior experiments.

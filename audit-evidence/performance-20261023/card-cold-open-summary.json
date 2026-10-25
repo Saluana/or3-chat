@@ -1,0 +1,492 @@
+[
+  {
+    "file": "card-cold-open-normal.json",
+    "cpuRate": 1,
+    "mode": "immediate",
+    "runs": 3,
+    "mounts": [
+      25,
+      27,
+      23
+    ],
+    "coldSettledMs": [
+      2125.4000000953674,
+      2102.9000000953674,
+      2051.5
+    ],
+    "scriptMs": [
+      101.305,
+      100.801,
+      103.65
+    ],
+    "layoutMs": [
+      16.867,
+      16.898,
+      16.651
+    ],
+    "medianScriptMs": 101.305,
+    "medianLayoutMs": 16.867,
+    "returnedTop": [
+      1337,
+      0,
+      1335
+    ],
+    "errors": [
+      1,
+      0,
+      1
+    ],
+    "uniqueAtCold": [
+      25,
+      27,
+      23
+    ],
+    "originalHashes": [
+      "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4"
+    ],
+    "deliveredHashes": [
+      "717b9f31134a6402ce189e02acff37e0c7d3b5572a51cee4d93d5e683b079908"
+    ]
+  },
+  {
+    "file": "card-cold-open-normal.json",
+    "cpuRate": 1,
+    "mode": "frame",
+    "runs": 3,
+    "mounts": [
+      21,
+      27,
+      19
+    ],
+    "coldSettledMs": [
+      2060.7999999523163,
+      2096.7000000476837,
+      2076.100000143051
+    ],
+    "scriptMs": [
+      107.59299999999999,
+      103.186,
+      106.07600000000001
+    ],
+    "layoutMs": [
+      16.645,
+      17.869,
+      16.476000000000003
+    ],
+    "medianScriptMs": 106.07600000000001,
+    "medianLayoutMs": 16.645,
+    "returnedTop": [
+      0,
+      0,
+      0
+    ],
+    "errors": [
+      0,
+      0,
+      0
+    ],
+    "uniqueAtCold": [
+      21,
+      27,
+      19
+    ],
+    "originalHashes": [
+      "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4"
+    ],
+    "deliveredHashes": [
+      "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4"
+    ]
+  },
+  {
+    "file": "card-cold-open-slow.json",
+    "cpuRate": 4,
+    "mode": "immediate",
+    "runs": 3,
+    "mounts": [
+      8,
+      8,
+      8
+    ],
+    "coldSettledMs": [
+      3248.300000190735,
+      3203.7999999523163,
+      3199.5999999046326
+    ],
+    "scriptMs": [
+      440.595,
+      410.10400000000004,
+      416
+    ],
+    "layoutMs": [
+      56.723000000000006,
+      55.52,
+      55.065999999999995
+    ],
+    "medianScriptMs": 416,
+    "medianLayoutMs": 55.52,
+    "returnedTop": [
+      0,
+      0,
+      0
+    ],
+    "errors": [
+      0,
+      0,
+      0
+    ],
+    "uniqueAtCold": [
+      8,
+      8,
+      8
+    ],
+    "originalHashes": [
+      "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4"
+    ],
+    "deliveredHashes": [
+      "717b9f31134a6402ce189e02acff37e0c7d3b5572a51cee4d93d5e683b079908"
+    ]
+  },
+  {
+    "file": "card-cold-open-slow.json",
+    "cpuRate": 4,
+    "mode": "frame",
+    "runs": 3,
+    "mounts": [
+      28,
+      25,
+      27
+    ],
+    "coldSettledMs": [
+      3950.5,
+      3747.7999999523163,
+      3825.5999999046326
+    ],
+    "scriptMs": [
+      442.51,
+      415.18,
+      433.068
+    ],
+    "layoutMs": [
+      73.46600000000001,
+      70.378,
+      73.007
+    ],
+    "medianScriptMs": 433.068,
+    "medianLayoutMs": 73.007,
+    "returnedTop": [
+      0,
+      0,
+      0
+    ],
+    "errors": [
+      0,
+      0,
+      0
+    ],
+    "uniqueAtCold": [
+      28,
+      25,
+      27
+    ],
+    "originalHashes": [
+      "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4"
+    ],
+    "deliveredHashes": [
+      "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4"
+    ]
+  },
+  {
+    "file": "card-cold-open-range.json",
+    "cpuRate": 4,
+    "mode": "frame",
+    "runs": 3,
+    "mounts": [
+      23,
+      28,
+      25
+    ],
+    "coldSettledMs": [
+      3576.2999999523163,
+      4048.600000143051,
+      3757.7000000476837
+    ],
+    "scriptMs": [
+      417.586,
+      430.225,
+      417.464
+    ],
+    "layoutMs": [
+      70.368,
+      88.48599999999999,
+      68.199
+    ],
+    "medianScriptMs": 417.586,
+    "medianLayoutMs": 70.368,
+    "returnedTop": [
+      0,
+      0,
+      0
+    ],
+    "errors": [
+      0,
+      0,
+      0
+    ],
+    "uniqueAtCold": [
+      23,
+      28,
+      25
+    ],
+    "originalHashes": [
+      "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4"
+    ],
+    "deliveredHashes": [
+      "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4"
+    ]
+  },
+  {
+    "file": "card-cold-open-range.json",
+    "cpuRate": 4,
+    "mode": "frame-range",
+    "runs": 3,
+    "mounts": [
+      26,
+      25,
+      25
+    ],
+    "coldSettledMs": [
+      3670,
+      3785.300000190735,
+      3676.4000000953674
+    ],
+    "scriptMs": [
+      416.434,
+      455.40599999999995,
+      417.625
+    ],
+    "layoutMs": [
+      68.077,
+      72.896,
+      72.101
+    ],
+    "medianScriptMs": 417.625,
+    "medianLayoutMs": 72.101,
+    "returnedTop": [
+      0,
+      0,
+      532
+    ],
+    "errors": [
+      0,
+      0,
+      1
+    ],
+    "uniqueAtCold": [
+      26,
+      25,
+      25
+    ],
+    "originalHashes": [
+      "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4"
+    ],
+    "deliveredHashes": [
+      "e947f310300223c6cfb05c889a5298779ad08af4e581e74bb5c33746169e12a8"
+    ]
+  },
+  {
+    "file": "card-cold-open-measure-slow.json",
+    "cpuRate": 4,
+    "mode": "frame-measure",
+    "runs": 3,
+    "mounts": [
+      8,
+      8,
+      8
+    ],
+    "coldSettledMs": [
+      3192.9000000953674,
+      3212.2999999523163,
+      3189.4000000953674
+    ],
+    "scriptMs": [
+      414.912,
+      435.339,
+      411.558
+    ],
+    "layoutMs": [
+      55.18,
+      55.339,
+      55.119
+    ],
+    "medianScriptMs": 414.912,
+    "medianLayoutMs": 55.18,
+    "returnedTop": [
+      0,
+      0,
+      0
+    ],
+    "errors": [
+      0,
+      0,
+      0
+    ],
+    "uniqueAtCold": [
+      8,
+      8,
+      8
+    ],
+    "originalHashes": [
+      "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4"
+    ],
+    "deliveredHashes": [
+      "d87820ae621ac8d63a88480b4b32a39af404b9d7e4312c401d1acf398c1747b7"
+    ]
+  },
+  {
+    "file": "card-cold-open-measure-slow.json",
+    "cpuRate": 4,
+    "mode": "frame",
+    "runs": 3,
+    "mounts": [
+      22,
+      26,
+      23
+    ],
+    "coldSettledMs": [
+      3649.7000000476837,
+      3779.2999999523163,
+      3676.0999999046326
+    ],
+    "scriptMs": [
+      421.733,
+      434.558,
+      417.396
+    ],
+    "layoutMs": [
+      66.512,
+      69.245,
+      69.68199999999999
+    ],
+    "medianScriptMs": 421.733,
+    "medianLayoutMs": 69.245,
+    "returnedTop": [
+      0,
+      1337,
+      0
+    ],
+    "errors": [
+      0,
+      1,
+      0
+    ],
+    "uniqueAtCold": [
+      22,
+      26,
+      23
+    ],
+    "originalHashes": [
+      "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4"
+    ],
+    "deliveredHashes": [
+      "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4"
+    ]
+  },
+  {
+    "file": "card-cold-open-measure-normal.json",
+    "cpuRate": 1,
+    "mode": "frame-measure",
+    "runs": 3,
+    "mounts": [
+      8,
+      25,
+      28
+    ],
+    "coldSettledMs": [
+      1520.9000000953674,
+      2107.5999999046326,
+      2093.2000000476837
+    ],
+    "scriptMs": [
+      100.529,
+      102.541,
+      111.243
+    ],
+    "layoutMs": [
+      15.006,
+      16.988,
+      18.377000000000002
+    ],
+    "medianScriptMs": 102.541,
+    "medianLayoutMs": 16.988,
+    "returnedTop": [
+      534,
+      0,
+      1070
+    ],
+    "errors": [
+      1,
+      0,
+      1
+    ],
+    "uniqueAtCold": [
+      8,
+      25,
+      28
+    ],
+    "originalHashes": [
+      "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4"
+    ],
+    "deliveredHashes": [
+      "474bb11fe2c1cc6483866c8cb0ff96d25b802fa81ef29d214c576fa503311891"
+    ]
+  },
+  {
+    "file": "card-cold-open-measure-normal.json",
+    "cpuRate": 1,
+    "mode": "frame",
+    "runs": 3,
+    "mounts": [
+      25,
+      25,
+      28
+    ],
+    "coldSettledMs": [
+      2100.9000000953674,
+      2076.899999856949,
+      2058.5999999046326
+    ],
+    "scriptMs": [
+      102.181,
+      103.614,
+      102.223
+    ],
+    "layoutMs": [
+      17.016,
+      17.367,
+      18.001
+    ],
+    "medianScriptMs": 102.223,
+    "medianLayoutMs": 17.367,
+    "returnedTop": [
+      0,
+      0,
+      0
+    ],
+    "errors": [
+      0,
+      0,
+      0
+    ],
+    "uniqueAtCold": [
+      25,
+      25,
+      28
+    ],
+    "originalHashes": [
+      "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4"
+    ],
+    "deliveredHashes": [
+      "9fbb7ea2e42698dfd2e17cfe1a5a11e7421fd3a976256dc7f2a13f56ca540ab4"
+    ]
+  }
+]
