@@ -1,0 +1,144 @@
+{
+  "sourceCommit": "55d47ec77b38e40b9d473f26af1c1f7af39e33a6",
+  "browser": "Installed Google Chrome 155; user profile, extension connection",
+  "profile": {
+    "width": 390,
+    "height": 844,
+    "dpr": 1,
+    "touchPoints": 5,
+    "cpuRate": 4,
+    "latencyMs": 150,
+    "downBytesPerSecond": 200000,
+    "upBytesPerSecond": 93750,
+    "serviceWorkerBypassed": true
+  },
+  "cold": {
+    "samples": [
+      {
+        "sample": 1,
+        "fcpMs": 1580,
+        "lcpMs": 8364,
+        "readyObservedMs": 7485.699999809265,
+        "localResources": 77
+      },
+      {
+        "sample": 2,
+        "fcpMs": 1556,
+        "lcpMs": 8332,
+        "readyObservedMs": 7466.599999904633,
+        "localResources": 77
+      },
+      {
+        "sample": 3,
+        "fcpMs": 1620,
+        "lcpMs": 8632,
+        "readyObservedMs": 7770.400000095367,
+        "localResources": 77
+      }
+    ],
+    "medianFcpMs": 1580,
+    "medianLcpMs": 8364,
+    "medianReadyObservedMs": 7485.699999809265
+  },
+  "warm": {
+    "samples": [
+      {
+        "sample": 1,
+        "fcpMs": 580,
+        "lcpMs": 1296,
+        "readyObservedMs": 1429,
+        "localResources": 72
+      },
+      {
+        "sample": 2,
+        "fcpMs": 592,
+        "lcpMs": 1256,
+        "readyObservedMs": 1375.2000000476837,
+        "localResources": 76
+      },
+      {
+        "sample": 3,
+        "fcpMs": 588,
+        "lcpMs": 1320,
+        "readyObservedMs": 1454.6000001430511,
+        "localResources": 76
+      }
+    ],
+    "medianFcpMs": 588,
+    "medianLcpMs": 1296,
+    "medianReadyObservedMs": 1429
+  },
+  "foreground": [
+    {
+      "file": "call-1.json",
+      "firstVisibleTextMs": 2689.899999856949,
+      "settledMs": 3027.699999809265,
+      "observedFinalMarkdownSectionChars": 189,
+      "uiUsage": {
+        "promptTokens": 4371,
+        "completionTokens": 84,
+        "reasoningTokens": 42,
+        "totalTokens": 4455,
+        "model": "deepseek/deepseek-v4.1-flash-1017",
+        "displayedCost": "$0"
+      }
+    },
+    {
+      "file": "call-2.json",
+      "firstVisibleTextMs": 4823,
+      "settledMs": 5459.200000047684,
+      "observedFinalMarkdownSectionChars": 208,
+      "uiUsage": {
+        "promptTokens": 4466,
+        "completionTokens": 616,
+        "reasoningTokens": 487,
+        "totalTokens": 5082,
+        "model": "deepseek/deepseek-v4.1-flash-1017",
+        "displayedCost": "$0"
+      }
+    },
+    {
+      "file": "call-5-stopped.json",
+      "firstVisibleTextMs": 8076.399999856949,
+      "settledMs": 8601.700000047684,
+      "observedFinalMarkdownSectionChars": 299
+    }
+  ],
+  "stoppedPersistence": {
+    "draft": "Unsent mobile draft: preserve this after stopping.",
+    "stopped": [
+      " Response stopped. You can retry or continue the conversation. "
+    ],
+    "partialChars": 299,
+    "continueVisible": true
+  },
+  "cleanup": {
+    "commands": {
+      "cpuRate": 1,
+      "network": {
+        "offline": false,
+        "latency": 0,
+        "downloadThroughput": -1,
+        "uploadThroughput": -1
+      },
+      "cacheDisabled": false,
+      "bypassServiceWorker": false,
+      "touchEmulation": false,
+      "deviceMetricsOverride": "cleared",
+      "viewportOverride": "reset"
+    },
+    "actual": {
+      "width": 1512,
+      "height": 716,
+      "dpr": 2,
+      "touch": 0,
+      "instrumentationPresent": false
+    }
+  },
+  "limitations": [
+    "Ready is the first observation of the app-init flag plus mounted editor; warm samples can be upper bounds because instrumentation is installed after reload.",
+    "Calls 3 and 4 completed but are excluded from timing conclusions: virtualization changes the observer Markdown node-count baseline.",
+    "Call 2 network events were evicted; call 1 response body was unavailable. Visible app receipts supply token usage, not an independently verified bill.",
+    "These are current-build observations, not a Chrome before/after optimization comparison or physical-phone qualification."
+  ]
+}

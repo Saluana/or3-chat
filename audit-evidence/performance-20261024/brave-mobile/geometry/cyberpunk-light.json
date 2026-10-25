@@ -1,0 +1,92 @@
+{
+  "theme": "cyberpunk",
+  "initial": {
+    "dark": false,
+    "background": "rgb(220, 228, 236)",
+    "composer": {
+      "x": 3.75,
+      "y": 704,
+      "width": 382.5,
+      "height": 119.125,
+      "top": 704,
+      "right": 386.25,
+      "bottom": 823.125,
+      "left": 3.75
+    },
+    "editor": {
+      "x": 17.875,
+      "y": 714.375,
+      "width": 354.25,
+      "height": 45,
+      "top": 714.375,
+      "right": 372.125,
+      "bottom": 759.375,
+      "left": 17.875
+    },
+    "settings": {
+      "x": 75.375,
+      "y": 774.75,
+      "width": 32,
+      "height": 32,
+      "top": 774.75,
+      "right": 107.375,
+      "bottom": 806.75,
+      "left": 75.375
+    },
+    "navigation": {
+      "x": 2,
+      "y": 10,
+      "width": 32,
+      "height": 32,
+      "top": 10,
+      "right": 34,
+      "bottom": 42,
+      "left": 2
+    }
+  },
+  "ready": {
+    "dark": false,
+    "background": "rgb(220, 228, 236)",
+    "composer": {
+      "x": 3.75,
+      "y": 704,
+      "width": 382.5,
+      "height": 119.125,
+      "top": 704,
+      "right": 386.25,
+      "bottom": 823.125,
+      "left": 3.75
+    },
+    "editor": {
+      "x": 17.875,
+      "y": 714.375,
+      "width": 354.25,
+      "height": 45,
+      "top": 714.375,
+      "right": 372.125,
+      "bottom": 759.375,
+      "left": 17.875
+    },
+    "settings": {
+      "x": 75.375,
+      "y": 774.75,
+      "width": 32,
+      "height": 32,
+      "top": 774.75,
+      "right": 107.375,
+      "bottom": 806.75,
+      "left": 75.375
+    },
+    "navigation": {
+      "x": 2,
+      "y": 10,
+      "width": 32,
+      "height": 32,
+      "top": 10,
+      "right": 34,
+      "bottom": 42,
+      "left": 2
+    }
+  },
+  "errors": []
+}

@@ -849,6 +849,21 @@ export default defineNuxtConfig({
                                     test: (id: string) => id.replaceAll('\\', '/').includes('/app/components/PageShell.vue'),
                                     maxSize: 500_000,
                                 },
+                                {
+                                    // A theme's definition and icons
+                                    // are requested in sequence during activation.
+                                    // Keep them together without pulling replacement
+                                    // components or stylesheet/font assets into it.
+                                    name: (id: string) => {
+                                        const match = id.replaceAll('\\', '/').match(
+                                            /\/app\/theme\/([^/]+)\/(?:theme\.ts|icons\.config\.ts|app\.config\.ts)$/,
+                                        );
+                                        return match && match[1] !== '_shared'
+                                            ? `theme-${match[1]}`
+                                            : null;
+                                    },
+                                    maxSize: 500_000,
+                                },
                             ],
                         },
                     },

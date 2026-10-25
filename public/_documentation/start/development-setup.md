@@ -224,6 +224,9 @@ order preserves module initialization order; the server bundle keeps its existin
 configuration. This trades a small increase in complete JavaScript size for fewer
 requests and less compressed JavaScript on the initial chat route. Optional feature
 roots remain lazy, and the composer keeps its existing editor and extensions.
+Each theme's definition, optional icons and legacy app configuration share a
+client chunk, removing serial activation requests on slow networks. Replacement
+components and stylesheet/font assets keep their existing loading boundaries.
 A closed mobile drawer mounts its page on first opening and retains it afterward.
 The first-run welcome starts its key and dismissal reads together, shares an
 in-flight key read with other startup consumers, and remains hidden until mount

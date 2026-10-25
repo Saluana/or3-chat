@@ -11,6 +11,31 @@ with 1,000/10,000-chat browser qualification at normal and slower CPU settings.
 Total index memory, long sessions and the measured legacy sidebar family scan
 remain open; that report is the current evidence for this selected scale path.
 
+The subsequent [Brave mobile investigation](../performance-20261024/BRAVE-MOBILE.md)
+groups each theme's definition and optional icons to remove one serial activation
+boundary and two page requests. After macOS locked, the user-authorized Playwright
+fallback completed three cold runs per matched build in installed Brave at
+440 × 956, Slow 4G and 4× CPU. Median LCP improves from **13.392 to 12.776 s**;
+all six screenshots are byte-identical, with matching control geometry.
+Production builds, 112 theme tests and six mobile startup controls pass. The
+existing complete-JavaScript/precache budgets still fail on baseline and
+candidate. The owned headless browser and preview are stopped; the original
+visible tab's DevTools preferences still need restoration after unlocking the
+Mac. Startup graph size, late artwork, font build reproducibility, deployed HTML
+compression and physical-device/provider qualification remain open in that report.
+
+The subsequent [Chrome mobile and real AI evaluation](../performance-20261024/CHROME-MOBILE.md)
+uses installed Chrome, 390 × 844, throttled 4G and 4× CPU. Median current-build
+LCP is **8.364 s with HTTP cache disabled and 1.296 s with it enabled**; this is
+not a matched optimization or browser comparison. Five real DeepSeek foreground
+calls cover short/rich output and stopping. A stopped partial answer and an
+unsent draft survive reload. No new production or appearance change was made.
+Cold startup, admission cost, long-output timing, paid failure recovery and
+physical-device/provider combinations remain open in that report. Chrome's
+temporary emulation and injected observers are removed; its preview remains
+running on port 3156 for review. The previous Brave cleanup limitation remains
+historical and Brave was not accessed for the Chrome round.
+
 Work began on `or3-cloud`, freshly synced with upstream `25c758b2`, preserving
 image commit `a996424a`. The subsequent card, notification, workspace-lifecycle,
 scroll and browser-qualification changes and their evidence are included in the
