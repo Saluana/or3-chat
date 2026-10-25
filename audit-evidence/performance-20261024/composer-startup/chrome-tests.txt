@@ -1,0 +1,30 @@
+
+Running 22 tests using 1 worker
+
+(node:34698) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/22] [chromium] › tests/e2e/performance-budgets.e2e.ts:181:5 › blank wide saved sidebar geometry stays stable through hydration
+[2/22] [chromium] › tests/e2e/performance-budgets.e2e.ts:181:5 › blank collapsed saved sidebar geometry stays stable through hydration
+[3/22] [chromium] › tests/e2e/performance-budgets.e2e.ts:181:5 › blank oversized saved sidebar geometry stays stable through hydration
+[4/22] [chromium] › tests/e2e/performance-budgets.e2e.ts:181:5 › blank invalid saved sidebar geometry stays stable through hydration
+[5/22] [chromium] › tests/e2e/performance-budgets.e2e.ts:181:5 › retro wide saved sidebar geometry stays stable through hydration
+[6/22] [chromium] › tests/e2e/performance-budgets.e2e.ts:181:5 › retro collapsed saved sidebar geometry stays stable through hydration
+[7/22] [chromium] › tests/e2e/performance-budgets.e2e.ts:181:5 › retro oversized saved sidebar geometry stays stable through hydration
+[8/22] [chromium] › tests/e2e/performance-budgets.e2e.ts:181:5 › retro invalid saved sidebar geometry stays stable through hydration
+[9/22] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › blank light 1x mobile startup keeps the composer and navigation stable while JavaScript loads
+[10/22] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › blank light 2x mobile startup keeps the composer and navigation stable while JavaScript loads
+[11/22] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › blank dark 1x mobile startup keeps the composer and navigation stable while JavaScript loads
+[12/22] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › blank dark 2x mobile startup keeps the composer and navigation stable while JavaScript loads
+[13/22] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › retro light 1x mobile startup keeps the composer and navigation stable while JavaScript loads
+[14/22] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › retro dark 1x mobile startup keeps the composer and navigation stable while JavaScript loads
+[15/22] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › cyberpunk light 1x mobile startup keeps the composer and navigation stable while JavaScript loads
+[16/22] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › cyberpunk dark 1x mobile startup keeps the composer and navigation stable while JavaScript loads
+[17/22] [chromium] › tests/e2e/theme-token-migrations.spec.ts:1378:27 › empty chat: Blank light artwork, focus, and responsive controls
+[18/22] [chromium] › tests/e2e/theme-token-migrations.spec.ts:1378:27 › empty chat: Blank dark artwork, focus, and responsive controls
+[19/22] [chromium] › tests/e2e/theme-token-migrations.spec.ts:1472:49 › empty chat: missing responsive artwork falls back to originals
+[20/22] [chromium] › tests/e2e/theme-token-migrations.spec.ts:1472:49 › empty chat: missing decoration keeps actions usable
+[21/22] [chromium] › tests/e2e/theme-token-migrations.spec.ts:1492:54 › empty chat: retro remains opted out
+[22/22] [chromium] › tests/e2e/theme-token-migrations.spec.ts:1492:54 › empty chat: cyberpunk remains opted out
+  22 passed (20.9s)

@@ -202,6 +202,15 @@ baseline includes the extraction worker while retaining the initial-load limit.
 Preview screenshots and unused icon variants are served on demand rather than
 cached during PWA installation.
 
+Rendered HTML also uses negotiated gzip when the Nitro runtime supports
+`CompressionStream`; static assets keep Nitro's precompressed gzip/Brotli files.
+The HTML encoder preserves the document bytes and cookies, varies responses by
+`Accept-Encoding`, and leaves range requests, existing encodings and
+`Cache-Control: no-transform` alone. Prerendered files remain ordinary HTML.
+Theme stylesheet URLs are available without another module download, and the
+client reuses already-parsed SSR stylesheets without moving their cascade order.
+Measure deployed behavior separately when a reverse proxy already compresses HTML.
+
 The browser model catalog uses the SDK's Models entry point only after checking
 its persisted catalog. The full SDK loads when OAuth exchange, memory
 classification, or a trusted plugin requests a provider client; plugin activation

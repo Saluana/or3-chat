@@ -1,0 +1,17 @@
+{
+  "baselineSize": [
+    390,
+    844
+  ],
+  "finalSize": [
+    390,
+    844
+  ],
+  "meanAbsoluteRgbDifference": 0.19167881881152024,
+  "changedBoundingBox": [
+    0,
+    0,
+    390,
+    68
+  ]
+}
