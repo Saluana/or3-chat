@@ -1,0 +1,661 @@
+{
+  "capturedAt": "2026-10-25T02:12:14.305Z",
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+  "viewport": {
+    "width": 390,
+    "height": 844,
+    "dpr": 1,
+    "touch": 5
+  },
+  "theme": "blank",
+  "dark": false,
+  "proof": {
+    "paints": [
+      {
+        "name": "first-paint",
+        "startMs": 584
+      },
+      {
+        "name": "first-contentful-paint",
+        "startMs": 584
+      }
+    ],
+    "lcp": [
+      {
+        "startMs": 612,
+        "size": 486,
+        "tag": "SPAN",
+        "path": null
+      },
+      {
+        "startMs": 612,
+        "size": 1080,
+        "tag": "SPAN",
+        "path": null
+      },
+      {
+        "startMs": 628,
+        "size": 5205,
+        "tag": "SPAN",
+        "path": null
+      },
+      {
+        "startMs": 1068,
+        "size": 35777,
+        "path": "/images/cursor-chat.png"
+      },
+      {
+        "startMs": 1492,
+        "size": 309660,
+        "tag": "DIV",
+        "path": "/blank-chat-background.webp"
+      }
+    ],
+    "shifts": [
+      {
+        "startMs": 1458.9000000953674,
+        "value": 0.08603383796410682
+      }
+    ],
+    "longTasks": [
+      {
+        "startMs": 696.4000000953674,
+        "durationMs": 195
+      },
+      {
+        "startMs": 894.7999999523163,
+        "durationMs": 65
+      },
+      {
+        "startMs": 1129.5999999046326,
+        "durationMs": 166
+      },
+      {
+        "startMs": 1354.0999999046326,
+        "durationMs": 80
+      }
+    ],
+    "events": [],
+    "readyMs": 1632.2999999523163,
+    "calls": []
+  },
+  "navigation": [
+    {
+      "startMs": 0,
+      "dclMs": 877.2000000476837,
+      "loadMs": 962.5999999046326,
+      "transferBytes": 107136
+    }
+  ],
+  "resources": [
+    {
+      "path": "/themes/blank.css",
+      "startMs": 224,
+      "endMs": 224,
+      "transferBytes": 0,
+      "encodedBytes": 2653
+    },
+    {
+      "path": "/_nuxt/styles.ecVrasWO.css",
+      "startMs": 226.70000004768372,
+      "endMs": 226.70000004768372,
+      "transferBytes": 0,
+      "encodedBytes": 9949
+    },
+    {
+      "path": "/_nuxt/startup.x1XGuNl0.css",
+      "startMs": 441.59999990463257,
+      "endMs": 441.59999990463257,
+      "transferBytes": 0,
+      "encodedBytes": 1
+    },
+    {
+      "path": "/_nuxt/startup.DByHQnRK.css",
+      "startMs": 442.09999990463257,
+      "endMs": 442.09999990463257,
+      "transferBytes": 0,
+      "encodedBytes": 41193
+    },
+    {
+      "path": "/_nuxt/chat-shell.eqqznHAT.css",
+      "startMs": 442.09999990463257,
+      "endMs": 442.09999990463257,
+      "transferBytes": 0,
+      "encodedBytes": 3509
+    },
+    {
+      "path": "/_nuxt/chat-shell.BvpwCJ2m.css",
+      "startMs": 442.2000000476837,
+      "endMs": 442.2000000476837,
+      "transferBytes": 0,
+      "encodedBytes": 550
+    },
+    {
+      "path": "/_nuxt/-VQLPnMc.js",
+      "startMs": 485.40000009536743,
+      "endMs": 485.40000009536743,
+      "transferBytes": 0,
+      "encodedBytes": 82
+    },
+    {
+      "path": "/_nuxt/ibm-plex-sans-latin.BD64o3ke.woff2",
+      "startMs": 486.2000000476837,
+      "endMs": 486.2000000476837,
+      "transferBytes": 0,
+      "encodedBytes": 40240
+    },
+    {
+      "path": "/_nuxt/press-start-2p-latin.ClsvrIBJ.woff2",
+      "startMs": 486.40000009536743,
+      "endMs": 486.40000009536743,
+      "transferBytes": 0,
+      "encodedBytes": 4704
+    },
+    {
+      "path": "/_nuxt/vt323-latin.EhPR265H.woff2",
+      "startMs": 486.40000009536743,
+      "endMs": 486.40000009536743,
+      "transferBytes": 0,
+      "encodedBytes": 7192
+    },
+    {
+      "path": "/_nuxt/CJpvaReV.js",
+      "startMs": 486.5,
+      "endMs": 486.5,
+      "transferBytes": 0,
+      "encodedBytes": 1706
+    },
+    {
+      "path": "/_nuxt/BbzqZ3r5.js",
+      "startMs": 487.2999999523163,
+      "endMs": 487.2999999523163,
+      "transferBytes": 0,
+      "encodedBytes": 817
+    },
+    {
+      "path": "/_nuxt/D_kdL4Wg.js",
+      "startMs": 487.5,
+      "endMs": 487.5,
+      "transferBytes": 0,
+      "encodedBytes": 39075
+    },
+    {
+      "path": "/_nuxt/BNF5wwvH.js",
+      "startMs": 488,
+      "endMs": 488,
+      "transferBytes": 0,
+      "encodedBytes": 16482
+    },
+    {
+      "path": "/_nuxt/BzritqgS.js",
+      "startMs": 488,
+      "endMs": 488,
+      "transferBytes": 0,
+      "encodedBytes": 38086
+    },
+    {
+      "path": "/_nuxt/C8ASTrqz.js",
+      "startMs": 493.5,
+      "endMs": 493.5,
+      "transferBytes": 0,
+      "encodedBytes": 18603
+    },
+    {
+      "path": "/_nuxt/BFVT9FiP.js",
+      "startMs": 494.09999990463257,
+      "endMs": 494.09999990463257,
+      "transferBytes": 0,
+      "encodedBytes": 32184
+    },
+    {
+      "path": "/_nuxt/BsP2s6hS.js",
+      "startMs": 494.09999990463257,
+      "endMs": 494.09999990463257,
+      "transferBytes": 0,
+      "encodedBytes": 15695
+    },
+    {
+      "path": "/_nuxt/YWUO72PY.js",
+      "startMs": 494.2000000476837,
+      "endMs": 494.2000000476837,
+      "transferBytes": 0,
+      "encodedBytes": 5436
+    },
+    {
+      "path": "/_nuxt/C36rfmvo.js",
+      "startMs": 494.2000000476837,
+      "endMs": 494.2000000476837,
+      "transferBytes": 0,
+      "encodedBytes": 28289
+    },
+    {
+      "path": "/_nuxt/eHt6juKA.js",
+      "startMs": 495,
+      "endMs": 495,
+      "transferBytes": 0,
+      "encodedBytes": 34421
+    },
+    {
+      "path": "/_nuxt/_v9mlS2l.js",
+      "startMs": 495,
+      "endMs": 495,
+      "transferBytes": 0,
+      "encodedBytes": 34114
+    },
+    {
+      "path": "/_nuxt/B-hqgN-U.js",
+      "startMs": 495.40000009536743,
+      "endMs": 495.40000009536743,
+      "transferBytes": 0,
+      "encodedBytes": 25281
+    },
+    {
+      "path": "/_nuxt/D45oWxD6.js",
+      "startMs": 495.5,
+      "endMs": 495.5,
+      "transferBytes": 0,
+      "encodedBytes": 639
+    },
+    {
+      "path": "/_nuxt/B0dcTwUO.js",
+      "startMs": 496,
+      "endMs": 496,
+      "transferBytes": 0,
+      "encodedBytes": 51706
+    },
+    {
+      "path": "/_nuxt/CyMuZZ5N.js",
+      "startMs": 496.40000009536743,
+      "endMs": 496.40000009536743,
+      "transferBytes": 0,
+      "encodedBytes": 20950
+    },
+    {
+      "path": "/_nuxt/hfp-ruKE.js",
+      "startMs": 496.40000009536743,
+      "endMs": 496.40000009536743,
+      "transferBytes": 0,
+      "encodedBytes": 2736
+    },
+    {
+      "path": "/_nuxt/Bt8vDEZa.js",
+      "startMs": 496.40000009536743,
+      "endMs": 496.40000009536743,
+      "transferBytes": 0,
+      "encodedBytes": 6238
+    },
+    {
+      "path": "/_nuxt/ce8t1kqd.js",
+      "startMs": 497.09999990463257,
+      "endMs": 497.09999990463257,
+      "transferBytes": 0,
+      "encodedBytes": 32804
+    },
+    {
+      "path": "/_nuxt/Cx97zBE_.js",
+      "startMs": 497.2000000476837,
+      "endMs": 497.2000000476837,
+      "transferBytes": 0,
+      "encodedBytes": 16765
+    },
+    {
+      "path": "/_nuxt/DfuDOC3k.js",
+      "startMs": 497.2999999523163,
+      "endMs": 497.2999999523163,
+      "transferBytes": 0,
+      "encodedBytes": 546
+    },
+    {
+      "path": "/_nuxt/CJl29FEw.js",
+      "startMs": 497.2999999523163,
+      "endMs": 497.2999999523163,
+      "transferBytes": 0,
+      "encodedBytes": 35188
+    },
+    {
+      "path": "/_nuxt/D9dBoXLU.js",
+      "startMs": 497.2999999523163,
+      "endMs": 497.2999999523163,
+      "transferBytes": 0,
+      "encodedBytes": 5372
+    },
+    {
+      "path": "/_nuxt/DdJ3EDup.js",
+      "startMs": 497.40000009536743,
+      "endMs": 497.40000009536743,
+      "transferBytes": 0,
+      "encodedBytes": 12230
+    },
+    {
+      "path": "/_nuxt/DX84N08M.js",
+      "startMs": 497.40000009536743,
+      "endMs": 497.40000009536743,
+      "transferBytes": 0,
+      "encodedBytes": 1563
+    },
+    {
+      "path": "/_nuxt/2VelsGGf.js",
+      "startMs": 500.2999999523163,
+      "endMs": 500.2999999523163,
+      "transferBytes": 0,
+      "encodedBytes": 20996
+    },
+    {
+      "path": "/_nuxt/7BFGXvGI.js",
+      "startMs": 500.90000009536743,
+      "endMs": 500.90000009536743,
+      "transferBytes": 0,
+      "encodedBytes": 954
+    },
+    {
+      "path": "/_nuxt/yjIkFtQh.js",
+      "startMs": 501,
+      "endMs": 501,
+      "transferBytes": 0,
+      "encodedBytes": 36481
+    },
+    {
+      "path": "/_nuxt/kRaj522f.js",
+      "startMs": 501.59999990463257,
+      "endMs": 501.59999990463257,
+      "transferBytes": 0,
+      "encodedBytes": 35073
+    },
+    {
+      "path": "/_nuxt/BgIs-0up.js",
+      "startMs": 501.7000000476837,
+      "endMs": 501.7000000476837,
+      "transferBytes": 0,
+      "encodedBytes": 30498
+    },
+    {
+      "path": "/_nuxt/I1vmiXhG.js",
+      "startMs": 501.7999999523163,
+      "endMs": 501.7999999523163,
+      "transferBytes": 0,
+      "encodedBytes": 31527
+    },
+    {
+      "path": "/_nuxt/BlXQsmTV.js",
+      "startMs": 502.59999990463257,
+      "endMs": 502.59999990463257,
+      "transferBytes": 0,
+      "encodedBytes": 4203
+    },
+    {
+      "path": "/_nuxt/DGt-pUPd.js",
+      "startMs": 502.7000000476837,
+      "endMs": 502.7000000476837,
+      "transferBytes": 0,
+      "encodedBytes": 12979
+    },
+    {
+      "path": "/_nuxt/C4l-T60b.js",
+      "startMs": 502.7000000476837,
+      "endMs": 502.7000000476837,
+      "transferBytes": 0,
+      "encodedBytes": 11290
+    },
+    {
+      "path": "/_nuxt/CpM0PcFl.js",
+      "startMs": 502.7999999523163,
+      "endMs": 502.7999999523163,
+      "transferBytes": 0,
+      "encodedBytes": 7637
+    },
+    {
+      "path": "/_nuxt/C6d6kKEP.js",
+      "startMs": 502.7999999523163,
+      "endMs": 502.7999999523163,
+      "transferBytes": 0,
+      "encodedBytes": 168
+    },
+    {
+      "path": "/_nuxt/wTm2Uutj.js",
+      "startMs": 502.90000009536743,
+      "endMs": 502.90000009536743,
+      "transferBytes": 0,
+      "encodedBytes": 178
+    },
+    {
+      "path": "/_nuxt/BRHNS-Tx.js",
+      "startMs": 503.5,
+      "endMs": 503.5,
+      "transferBytes": 0,
+      "encodedBytes": 1038
+    },
+    {
+      "path": "/_nuxt/-dGDozAC.js",
+      "startMs": 503.7000000476837,
+      "endMs": 503.7000000476837,
+      "transferBytes": 0,
+      "encodedBytes": 655
+    },
+    {
+      "path": "/manifest.webmanifest",
+      "startMs": 511.5,
+      "endMs": 513.9000000953674,
+      "transferBytes": 0,
+      "encodedBytes": 696
+    },
+    {
+      "path": "/logos/logo-svg.svg",
+      "startMs": 526.7999999523163,
+      "endMs": 526.7999999523163,
+      "transferBytes": 0,
+      "encodedBytes": 35148
+    },
+    {
+      "path": "/_nuxt/Cs-cnoG4.js",
+      "startMs": 874.5999999046326,
+      "endMs": 874.5999999046326,
+      "transferBytes": 0,
+      "encodedBytes": 47301
+    },
+    {
+      "path": "/_nuxt/BG92ynNB.js",
+      "startMs": 875.7999999523163,
+      "endMs": 875.7999999523163,
+      "transferBytes": 0,
+      "encodedBytes": 42160
+    },
+    {
+      "path": "/_nuxt/chat-shell.DE8wC3pP.css",
+      "startMs": 876.7000000476837,
+      "endMs": 876.7000000476837,
+      "transferBytes": 0,
+      "encodedBytes": 4370
+    },
+    {
+      "path": "/favicon.ico",
+      "startMs": 994.2999999523163,
+      "endMs": 995.5,
+      "transferBytes": 0,
+      "encodedBytes": 4154
+    },
+    {
+      "path": "/logos/app-icon-192.png",
+      "startMs": 1042.7000000476837,
+      "endMs": 1044.2999999523163,
+      "transferBytes": 0,
+      "encodedBytes": 13394
+    },
+    {
+      "path": "/_nuxt/BNwrh3tR.js",
+      "startMs": 1061,
+      "endMs": 1061,
+      "transferBytes": 0,
+      "encodedBytes": 9776
+    },
+    {
+      "path": "/favicon.ico",
+      "startMs": 1080.4000000953674,
+      "endMs": 1081.7000000476837,
+      "transferBytes": 0,
+      "encodedBytes": 4154
+    },
+    {
+      "path": "/favicon.ico",
+      "startMs": 1088.5999999046326,
+      "endMs": 1101.4000000953674,
+      "transferBytes": 0,
+      "encodedBytes": 4154
+    },
+    {
+      "path": "/_nuxt/D2aCOiaB.js",
+      "startMs": 1097.7000000476837,
+      "endMs": 1097.7000000476837,
+      "transferBytes": 0,
+      "encodedBytes": 156
+    },
+    {
+      "path": "/_nuxt/D4Him7rU.js",
+      "startMs": 1157.7000000476837,
+      "endMs": 1157.7000000476837,
+      "transferBytes": 0,
+      "encodedBytes": 1997
+    },
+    {
+      "path": "/_nuxt/ChatEmptyState.DXKINS8A.css",
+      "startMs": 1281.0999999046326,
+      "endMs": 1281.0999999046326,
+      "transferBytes": 0,
+      "encodedBytes": 853
+    },
+    {
+      "path": "/_nuxt/ChatInput.C40fO-TX.css",
+      "startMs": 1286.4000000953674,
+      "endMs": 1286.4000000953674,
+      "transferBytes": 0,
+      "encodedBytes": 1662
+    },
+    {
+      "path": "/favicon.ico",
+      "startMs": 1336.2999999523163,
+      "endMs": 1337.2000000476837,
+      "transferBytes": 0,
+      "encodedBytes": 4154
+    },
+    {
+      "path": "/_nuxt/CncTN47R.js",
+      "startMs": 1375.7999999523163,
+      "endMs": 1375.7999999523163,
+      "transferBytes": 0,
+      "encodedBytes": 4383
+    },
+    {
+      "path": "/_nuxt/DKrA2Wwt.js",
+      "startMs": 1377,
+      "endMs": 1377,
+      "transferBytes": 0,
+      "encodedBytes": 2779
+    },
+    {
+      "path": "/_nuxt/lf4kSn1m.js",
+      "startMs": 1377.9000000953674,
+      "endMs": 1377.9000000953674,
+      "transferBytes": 0,
+      "encodedBytes": 3137
+    },
+    {
+      "path": "/_nuxt/suggestions.D1ChPnYQ.css",
+      "startMs": 1379,
+      "endMs": 1379,
+      "transferBytes": 0,
+      "encodedBytes": 1304
+    },
+    {
+      "path": "/blank-chat-background.webp",
+      "startMs": 1433.7000000476837,
+      "endMs": 1437.2999999523163,
+      "transferBytes": 0,
+      "encodedBytes": 135324
+    },
+    {
+      "path": "/bird-on-cloud.webp",
+      "startMs": 1433.7999999523163,
+      "endMs": 1437.4000000953674,
+      "transferBytes": 0,
+      "encodedBytes": 211866
+    },
+    {
+      "path": "/favicon.ico",
+      "startMs": 1549.5,
+      "endMs": 1550.2999999523163,
+      "transferBytes": 0,
+      "encodedBytes": 4154
+    },
+    {
+      "path": "/_nuxt/CYsJsn1x.js",
+      "startMs": 1597.7999999523163,
+      "endMs": 1597.7999999523163,
+      "transferBytes": 0,
+      "encodedBytes": 21509
+    },
+    {
+      "path": "/_nuxt/BYISmA0E.js",
+      "startMs": 1612.7999999523163,
+      "endMs": 1612.7999999523163,
+      "transferBytes": 0,
+      "encodedBytes": 5140
+    },
+    {
+      "path": "/_nuxt/CuoyDTgQ.js",
+      "startMs": 1613.7000000476837,
+      "endMs": 1613.7000000476837,
+      "transferBytes": 0,
+      "encodedBytes": 2874
+    },
+    {
+      "path": "/_nuxt/BpEuRCHZ.js",
+      "startMs": 1613.7999999523163,
+      "endMs": 1613.7999999523163,
+      "transferBytes": 0,
+      "encodedBytes": 120
+    },
+    {
+      "path": "/_nuxt/CvRaq1XU.js",
+      "startMs": 1647.5999999046326,
+      "endMs": 1647.5999999046326,
+      "transferBytes": 0,
+      "encodedBytes": 4702
+    },
+    {
+      "path": "/_nuxt/NqNg6E-u.js",
+      "startMs": 1765.9000000953674,
+      "endMs": 1765.9000000953674,
+      "transferBytes": 0,
+      "encodedBytes": 2953
+    },
+    {
+      "path": "/_nuxt/builds/meta/024b2a78-90b5-46e9-bab9-642203649be2.json",
+      "startMs": 2654.5999999046326,
+      "endMs": 2656.7999999523163,
+      "transferBytes": 0,
+      "encodedBytes": 88
+    }
+  ],
+  "geometry": {
+    "bodyWidth": 411,
+    "composer": {
+      "x": 22.7890625,
+      "y": 770.8203125,
+      "width": 344.421875,
+      "height": 46.5859375,
+      "top": 770.8203125,
+      "right": 367.2109375,
+      "bottom": 817.40625,
+      "left": 22.7890625
+    },
+    "input": {
+      "x": 103.0859375,
+      "y": 784.109375,
+      "width": 218.03125,
+      "height": 20,
+      "top": 784.109375,
+      "right": 321.1171875,
+      "bottom": 804.109375,
+      "left": 103.0859375
+    }
+  }
+}

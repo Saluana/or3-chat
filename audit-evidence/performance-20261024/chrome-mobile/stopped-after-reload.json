@@ -1,0 +1,8 @@
+{
+  "draft": "Unsent mobile draft: preserve this after stopping.",
+  "stopped": [
+    " Response stopped. You can retry or continue the conversation. "
+  ],
+  "partialChars": 299,
+  "continueVisible": true
+}

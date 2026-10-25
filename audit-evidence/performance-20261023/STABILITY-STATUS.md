@@ -24,6 +24,18 @@ visible tab's DevTools preferences still need restoration after unlocking the
 Mac. Startup graph size, late artwork, font build reproducibility, deployed HTML
 compression and physical-device/provider qualification remain open in that report.
 
+The subsequent [Chrome mobile and real AI evaluation](../performance-20261024/CHROME-MOBILE.md)
+uses installed Chrome, 390 × 844, throttled 4G and 4× CPU. Median current-build
+LCP is **8.364 s with HTTP cache disabled and 1.296 s with it enabled**; this is
+not a matched optimization or browser comparison. Five real DeepSeek foreground
+calls cover short/rich output and stopping. A stopped partial answer and an
+unsent draft survive reload. No new production or appearance change was made.
+Cold startup, admission cost, long-output timing, paid failure recovery and
+physical-device/provider combinations remain open in that report. Chrome's
+temporary emulation and injected observers are removed; its preview remains
+running on port 3156 for review. The previous Brave cleanup limitation remains
+historical and Brave was not accessed for the Chrome round.
+
 Work began on `or3-cloud`, freshly synced with upstream `25c758b2`, preserving
 image commit `a996424a`. The subsequent card, notification, workspace-lifecycle,
 scroll and browser-qualification changes and their evidence are included in the
