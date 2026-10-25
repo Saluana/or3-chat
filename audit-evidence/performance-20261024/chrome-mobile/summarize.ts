@@ -1,15 +1,36 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
+type StartupSample = {
+    proof: {
+        paints: Array<{ name: string; startMs: number }>;
+        lcp: Array<{ startMs: number }>;
+        readyMs: number;
+    };
+    resources: unknown[];
+};
+type ForegroundSample = {
+    proof: { proof: { calls: Array<{
+        firstTextMs: number; sendMs: number; completeMs: number; textLength: number;
+    }> } };
+    uiUsage: unknown;
+};
+
 const directory = new URL('./', import.meta.url);
-const read = async (name: string) => JSON.parse(await readFile(new URL(name, directory), 'utf8'));
+// These local receipts are emitted by observer.js and capture-expression.js.
+// Opaque receipts stay unknown; only the measured fields have a typed shape.
+const read = async <T = unknown>(name: string): Promise<T> =>
+    JSON.parse(await readFile(new URL(name, directory), 'utf8')) as T;
 const median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
 const startup = async (kind: string) => {
     const samples = await Promise.all([1, 2, 3].map(async (index) => {
-        const value = await read(`${kind}-${index}.json`);
+        const value = await read<StartupSample>(`${kind}-${index}.json`);
+        const fcp = value.proof.paints.find(entry => entry.name === 'first-contentful-paint');
+        const lcp = value.proof.lcp.at(-1);
+        if (!fcp || !lcp) throw new Error(`Missing paint measurements in ${kind}-${index}.json`);
         return {
             sample: index,
-            fcpMs: value.proof.paints.find((entry: { name: string }) => entry.name === 'first-contentful-paint').startMs,
-            lcpMs: value.proof.lcp.at(-1).startMs,
+            fcpMs: fcp.startMs,
+            lcpMs: lcp.startMs,
             readyObservedMs: value.proof.readyMs,
             localResources: value.resources.length,
         };
@@ -23,8 +44,9 @@ const startup = async (kind: string) => {
 };
 
 const foreground = await Promise.all(['call-1.json', 'call-2.json', 'call-5-stopped.json'].map(async file => {
-    const value = await read(file);
+    const value = await read<ForegroundSample>(file);
     const call = value.proof.proof.calls.at(-1);
+    if (!call) throw new Error(`Missing foreground call measurements in ${file}`);
     return {
         file,
         firstVisibleTextMs: call.firstTextMs - call.sendMs,
