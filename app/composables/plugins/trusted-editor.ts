@@ -1,4 +1,4 @@
-import { Extension } from '@tiptap/core';
+import type { Extension } from '@tiptap/core';
 import { ref } from 'vue';
 
 export interface TrustedEditorExtensionInput {
@@ -48,8 +48,4 @@ export async function interceptTrustedEditorSend(text: string): Promise<boolean>
         if (await entry.onSlashCommand(command)) return true;
     }
     return false;
-}
-
-export function slashFixtureExtension(name = 'slash-fixture'): Extension {
-    return Extension.create({ name });
 }

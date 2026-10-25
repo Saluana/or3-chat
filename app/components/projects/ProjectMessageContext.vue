@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, useId } from 'vue';
 import { useChatProjectOwner } from '~/composables/projects/useChatProjectOwner';
-import { captureProjectOperation } from '~/utils/projects/context';
+import { captureProjectOperation } from '~/utils/projects/operation';
 import { resolveChatProject } from '~/db/project-workspace';
 import { saveClassifiedProjectMemory } from '~/utils/projects/memory';
 import AppModal from '~/components/ui/AppModal.vue';

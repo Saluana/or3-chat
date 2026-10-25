@@ -1386,8 +1386,8 @@ for (const mode of modes) test('empty chat: Blank ' + mode + ' artwork, focus, a
     await expect(state.locator('[data-empty-chat-action]')).toHaveCount(3);
     expect(await state.locator('[data-empty-chat-action]').evaluateAll(elements => elements.map(element => element.getAttribute('data-empty-chat-action'))))
         .toEqual(['start-chat', 'start-project', 'create-document']);
-    await expect(state.locator('.chat-empty-hero')).toHaveAttribute('src', mode === 'dark' ? '/bird-on-cloud-dark.webp' : '/bird-on-cloud.webp');
-    await expect(page.locator('.chat-empty-background-image')).toHaveAttribute('src', mode === 'dark' ? '/blank-chat-bg-dark.webp' : '/blank-chat-background.webp');
+    await expect(state.locator('.chat-empty-hero:visible')).toHaveAttribute('src', mode === 'dark' ? '/bird-on-cloud-dark.webp' : '/bird-on-cloud.webp');
+    await expect(page.locator('.chat-empty-background-image:visible')).toHaveAttribute('src', mode === 'dark' ? '/blank-chat-bg-dark.webp' : '/blank-chat-background.webp');
     const input = page.getByRole('textbox', { name: 'Message input' });
     const draft = 'Keep my unsent ' + mode + ' draft';
     await input.fill(draft);
@@ -1419,7 +1419,7 @@ for (const mode of modes) test('empty chat: Blank ' + mode + ' artwork, focus, a
             }));
             expect(rows.every(row => row.containsCopy), 'Every mobile card contains its complete title and description').toBe(true);
             expect(rows.every((row, i) => i === 0 || (Math.abs(row.x - rows[0]!.x) < 1 && row.y >= rows[i - 1]!.bottom))).toBe(true);
-            await expect(state.locator('.chat-empty-hero')).toBeInViewport({ ratio: 1 });
+            await expect(state.locator('.chat-empty-hero:visible')).toBeInViewport({ ratio: 1 });
         }
         await expect(input).toHaveText(draft);
         await captureChat(page, info, 'empty-chat-' + mode + '-' + viewport.width + 'x' + viewport.height);
@@ -1430,9 +1430,10 @@ for (const mode of modes) test('empty chat: Blank ' + mode + ' artwork, focus, a
         const restored = await state.boundingBox();
         return Boolean(restored && desktopFrame && ['x', 'y', 'width', 'height'].every(key => Math.abs(restored[key as keyof typeof restored] - desktopFrame[key as keyof typeof desktopFrame]) < 1));
     }).toBe(true);
-    expect(assets.length).toBeGreaterThan(0);
-    expect(assets.every(url => mode === 'dark' ? /-dark\.webp/.test(url) : !/-dark\.webp/.test(url))).toBe(true);
+    await writeFile(info.outputPath('empty-chat-assets.json'), JSON.stringify(assets));
     await info.attach('empty-chat-assets', { body: JSON.stringify(assets), contentType: 'application/json' });
+    expect(assets.length).toBeGreaterThan(0);
+    expect(assets.every(url => mode === 'dark' ? /-dark(?:-\d+)?\.(?:webp|avif)/.test(url) : !/-dark(?:-\d+)?\.(?:webp|avif)/.test(url))).toBe(true);
 });
 
 test('empty chat: creation keeps the original draft and persists new resources', async ({ page }, info) => {
@@ -1468,13 +1469,25 @@ test('empty chat: creation keeps the original draft and persists new resources',
     await captureChat(page, info, 'empty-chat-created-resources-draft');
 });
 
-test('empty chat: missing decoration keeps actions usable', async ({ page }, info) => {
-    await page.route('**/bird-on-cloud.webp', route => route.abort());
-    await openResponsiveChat(page, 'blank', 'light');
-    await expect(page.locator('.chat-empty-state').getByRole('button', { name: 'Start a chat', exact: true })).toBeVisible();
-    await expect(page.locator('.chat-empty-hero')).toHaveCount(0);
-    await captureChat(page, info, 'empty-chat-missing-hero');
-});
+for (const originalsAvailable of [true, false]) test(
+    originalsAvailable ? 'empty chat: missing responsive artwork falls back to originals'
+        : 'empty chat: missing decoration keeps actions usable',
+    async ({ page }, info) => {
+        await page.route('**/chat-artwork/**', route => route.abort());
+        if (!originalsAvailable) await page.route('**/bird-on-cloud.webp', route => route.abort());
+        await openResponsiveChat(page, 'blank', 'light');
+        await expect(page.locator('.chat-empty-state').getByRole('button', { name: 'Start a chat', exact: true })).toBeVisible();
+        const hero = page.locator('.chat-empty-hero:visible');
+        if (originalsAvailable) {
+            await expect(hero).toBeVisible();
+            await expect.poll(() => hero.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBe(1536);
+            expect(await hero.evaluate(image => new URL((image as HTMLImageElement).currentSrc).pathname)).toBe('/bird-on-cloud.webp');
+            const background = page.locator('.chat-empty-background-image:visible');
+            await expect.poll(() => background.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBe(1448);
+        } else await expect(hero).toHaveCount(0);
+        await captureChat(page, info, originalsAvailable ? 'empty-chat-original-fallback' : 'empty-chat-missing-hero');
+    },
+);
 
 for (const theme of ['retro', 'cyberpunk'] as const) test('empty chat: ' + theme + ' remains opted out', async ({ page }) => {
     const assets: string[] = [];
@@ -1515,7 +1528,7 @@ test('empty chat: theme changes and the first send preserve composer ownership',
     const input = page.getByRole('textbox', { name: 'Message input' });
     await input.fill('First message from the illustrated pane');
     await page.getByRole('button', { name: 'Switch to dark mode', exact: true }).click();
-    await expect(page.locator('.chat-empty-hero')).toHaveAttribute('src', '/bird-on-cloud-dark.webp');
+    await expect(page.locator('.chat-empty-hero:visible')).toHaveAttribute('src', '/bird-on-cloud-dark.webp');
     await expect(input).toHaveText('First message from the illustrated pane');
     await page.getByRole('button', { name: 'Send message', exact: true }).click();
     await expect(page.locator('.cm-text-user').getByText('First message from the illustrated pane', { exact: true })).toBeVisible();

@@ -51,6 +51,14 @@ one; a recommendation is an explicit action. See
 
 ## SSR and hydration
 
+The core empty-chat renderer can render equal-sized public light/dark artwork
+before hydration, selecting the visible variant with the pre-paint color-mode
+class. It retains both elements across a mode change to avoid downloading hidden
+variants during remounts. Internal-file assets, different-sized variants, and
+replacement components retain their existing resolution contracts. Bundled Blank
+artwork has responsive copies; source theme URLs and dimensions remain unchanged.
+
+
 The server selects an available theme from the SSR cookie/default and prepares
 its tokens, stylesheets, app config, and component map for rendering. The client
 first reapplies the theme named by the server-rendered HTML, including its

@@ -30,12 +30,15 @@ export function useCommandPaletteShortcut(): void {
     onMounted(() => {
         window.addEventListener('keydown', onKeydown, { capture: true });
         window.addEventListener('keydown', onEscape);
-        // Preload code only; workspace-wide indexes are built on first open.
-        scheduleCommandPalettePrewarm();
+        // Idle callbacks can run while critical network requests are pending.
+        // Warm optional search code only after the initial page resources settle.
+        if (document.readyState === 'complete') scheduleCommandPalettePrewarm();
+        else window.addEventListener('load', scheduleCommandPalettePrewarm, { once: true });
     });
 
     onBeforeUnmount(() => {
         window.removeEventListener('keydown', onKeydown, { capture: true });
         window.removeEventListener('keydown', onEscape);
+        window.removeEventListener('load', scheduleCommandPalettePrewarm);
     });
 }

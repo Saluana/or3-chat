@@ -1,0 +1,4 @@
+$ eslint --no-warn-ignored --quiet app/components/PageShell.vue app/components/chat/ChatContainer.vue app/components/chat/ChatEmptyState.vue app/components/chat/ChatEmptyStateMedia.vue app/components/chat/ChatEmptyStateColorMedia.vue app/components/search/CommandPalette.vue app/composables/search/useCommandPaletteShortcut.ts app/plugins/mentions.client.ts app/core/sync/subscription-registry.ts app/core/sync/subscription-manager.ts app/utils/chat/empty-state-artwork.ts app/utils/projects/operation.ts nuxt.config.ts "tests/e2e/performance-budgets.e2e.ts" "tests/e2e/theme-token-migrations.spec.ts" scripts/images/build-chat-artwork.ts
+
+Final changed-file recheck:
+$ eslint --no-warn-ignored --quiet app/components/chat/ChatEmptyStateMedia.vue "tests/e2e/performance-budgets.e2e.ts" "tests/e2e/theme-token-migrations.spec.ts"

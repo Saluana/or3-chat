@@ -1,3 +1,4 @@
+import { Extension } from '@tiptap/core';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine } from '~/core/hooks/useHooks';
@@ -9,7 +10,6 @@ import { TRUSTED_HOST_GRANTS } from '../trusted-host-context';
 import {
     createLocalStorageSecretStore,
 } from '../trusted-production-stores';
-import { slashFixtureExtension } from '../trusted-editor';
 import { readTrustedExecutionModel } from '../trusted-models';
 
 beforeEach(() => { setHookEngine(createTypedHookEngine(createHookEngine())); });
@@ -426,7 +426,7 @@ describe('trusted host context', () => {
             kind: 'editor.extension',
             id: 'slash-fixture',
             definition: {
-                extension: slashFixtureExtension(),
+                extension: Extension.create({ name: 'slash-fixture' }),
                 suggestion: { char: '/' },
                 onSlashCommand(command: string) {
                     commands.push(command);
@@ -604,7 +604,7 @@ describe('trusted host context', () => {
     });
 
     it.each([
-        ['editor.extension', { id: 'denied-editor', extension: slashFixtureExtension() }],
+        ['editor.extension', { id: 'denied-editor', extension: Extension.create({ name: 'slash-fixture' }) }],
         ['chat.message.renderer', { id: 'denied-renderer', match: () => true, component: defineComponent({}) }],
     ] as const)('requires the reviewed grant for %s contributions', async (kind, definition) => {
         const { createTrustedHostContext } = await import('../trusted-host-context');
