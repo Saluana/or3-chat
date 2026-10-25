@@ -36,7 +36,7 @@ import {
 import { saveClassifiedProjectMemory } from '~/utils/projects/memory';
 import { captureAutomaticMemories, createAutomaticMemoryCapture } from '~/utils/projects/automatic-memory';
 import { reportError } from '~/utils/errors';
-import * as projectContext from '~/utils/projects/context';
+import * as projectContext from '~/utils/projects/operation';
 import { defaultProjectSettings } from '~~/shared/projects/workspace';
 import { useUserApiKey } from '~/core/auth/useUserApiKey';
 

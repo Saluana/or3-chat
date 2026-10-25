@@ -443,7 +443,7 @@
             :modal-props="emptyCreateModalProps" :form-field-props="{}" :icon="emptyDocumentIcon" :loading-icon="emptyLoadingIcon"
             @update:open="!$event && emptyCreate.close()" @close="emptyCreate.close" @submit="emptyCreate.submit"
             @update:value="emptyCreate.form.title = $event" />
-        <SearchCommandPalette />
+        <LazySearchCommandPalette v-if="commandPaletteActivated" />
     </resizable-sidebar-layout>
 </template>
 <script setup lang="ts">
@@ -540,6 +540,7 @@ import {
     setPaletteHostContext,
     useCommandPalette,
 } from '~/composables/search/useCommandPalette';
+import { useCommandPaletteShortcut } from '~/composables/search/useCommandPaletteShortcut';
 import { createPaletteHostContext } from '~/core/search/command-palette/host-context';
 import { registerCorePaletteSources } from '~/core/search/command-palette/sources/register-core';
 import { setWorkspaceTabPaletteProvider } from '~/core/search/command-palette/sources/workspace-tab-source';
@@ -2070,9 +2071,15 @@ const coreDashboardItems = dashboardEnabled.value
 registerCoreDashboardPages(coreDashboardItems);
 const dashboardNavigation = useDashboardNavigation({ baseItems: coreDashboardItems });
 const {
+    isOpen: commandPaletteOpen,
     close: closeCommandPalette,
     getCoordinator: getPaletteCoordinator,
 } = useCommandPalette();
+useCommandPaletteShortcut();
+const commandPaletteActivated = ref(commandPaletteOpen.value);
+watch(commandPaletteOpen, (open) => {
+    if (open) commandPaletteActivated.value = true;
+});
 const {
     isOpen: systemPromptsModalOpen,
     request: systemPromptsModalRequest,

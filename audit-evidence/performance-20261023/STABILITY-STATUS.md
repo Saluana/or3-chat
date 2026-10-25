@@ -36,6 +36,20 @@ temporary emulation and injected observers are removed; its preview remains
 running on port 3156 for review. The previous Brave cleanup limitation remains
 historical and Brave was not accessed for the Chrome round.
 
+The subsequent [cold-startup repair](../performance-20261024/COLD-STARTUP.md)
+uses matched three-run Chrome measurements and user-approved responsive artwork
+copies. Median cold LCP improves from **8.316 to 1.740 s**, observed composer
+readiness from **7.435 to 6.374 s**, and CLS from **0.0860 to zero** under the
+same 4× CPU/throttled-network profile. The existing design and original artwork
+are preserved. Earlier artwork discovery, lighter import boundaries, selected
+shell/theme preloads and deferred search initialization are implemented fixes.
+**217 focused tests and 14 Chrome E2Es pass**, as do build, typecheck, lint and
+documentation checks. One additional real DeepSeek call produces a visible
+answer in 1.580 s and persists through reload. Cold composer readiness, complete
+JavaScript/precache budget failures, deployed/provider paths, full PWA lifecycle
+and physical devices remain open. Chrome's temporary settings are restored;
+the final production preview remains available on port 3156.
+
 Work began on `or3-cloud`, freshly synced with upstream `25c758b2`, preserving
 image commit `a996424a`. The subsequent card, notification, workspace-lifecycle,
 scroll and browser-qualification changes and their evidence are included in the
@@ -179,6 +193,10 @@ latest 69-test result does not turn every historical browser or device observati
 into a pass.
 
 ## Still needs evaluation
+
+The latest [cold-startup report](../performance-20261024/COLD-STARTUP.md) adds the
+specific remaining composer, full-bundle, PWA and deployed-device evaluation
+items. Its visual load improvement does not close the broader inventory below.
 
 1. **Rich streaming:** remaining changing-DOM, style/layout and worker costs;
    long tool arguments/results; first-use behavior beyond the observed font and

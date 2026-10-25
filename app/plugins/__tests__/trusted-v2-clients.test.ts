@@ -1,3 +1,4 @@
+import { Extension } from '@tiptap/core';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import ts from 'typescript';
@@ -7,7 +8,7 @@ import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { TrustedV2ClientManager } from '~/composables/plugins/trusted-v2-manager';
 import { createTrustedHostContext } from '~/composables/plugins/trusted-host-context';
-import { applyTrustedEditorExtensions, slashFixtureExtension } from '~/composables/plugins/trusted-editor';
+import { applyTrustedEditorExtensions } from '~/composables/plugins/trusted-editor';
 
 // Execute the actual Nuxt plugin with the HMR metadata supplied by this loader.
 // The engine and contribution registry survive module disposal, as in 00-hooks.
@@ -45,7 +46,7 @@ describe('trusted editor host bridge lifecycle', () => {
         const hooks = createTypedHookEngine(createHookEngine());
         const hotDisposers: Array<() => void> = [];
         const trusted = createTrustedHostContext({ pluginId: 'fixture.editor.lifecycle', version: '1.0.0', grants: ['chat.editor.extension'] });
-        const extension = slashFixtureExtension('owned-extension');
+        const extension = Extension.create({ name: 'owned-extension' });
         trusted.context.contributions.register({ kind: 'editor.extension', id: 'owned-extension', definition: { extension } });
         const base = { name: 'base' };
         try {

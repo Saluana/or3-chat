@@ -248,9 +248,11 @@ for (const theme of ['blank', 'retro']) for (const preference of [
     });
 }
 
-for (const theme of ['blank', 'retro', 'cyberpunk']) for (const mode of ['light', 'dark'] as const) {
-    test(`${theme} ${mode} mobile startup keeps the composer and navigation stable while JavaScript loads`, async ({ page, context }, testInfo) => {
+for (const theme of ['blank', 'retro', 'cyberpunk']) for (const mode of ['light', 'dark'] as const) for (const dpr of (theme === 'blank' ? [1, 2] : [1])) {
+    test(`${theme} ${mode} ${dpr}x mobile startup keeps the composer and navigation stable while JavaScript loads`, async ({ page, context }, testInfo) => {
         await page.setViewportSize({ width: 390, height: 844 });
+        const cdp = await context.newCDPSession(page);
+        await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: dpr, mobile: true });
         // The saved choice must win over the device setting before first paint.
         await page.emulateMedia({ colorScheme: mode === 'dark' ? 'light' : 'dark' });
         const colorFrames: Array<{ dark: boolean; classes: string }> = [];
@@ -301,6 +303,7 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) for (const mode of ['light'
                 editor: rect(element.querySelector('.chat-input-editor')),
                 settings: rect(element.querySelector('[aria-label="Settings"]')),
                 navigation: rect(document.querySelector('#main-content [aria-label="Open sidebar"]')),
+                artwork: rect(document.querySelector('.chat-empty-artwork')),
             };
         });
         try {
@@ -312,6 +315,28 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) for (const mode of ['light'
                 Array.from(document.querySelectorAll('.chat-input-main, .workspace-chrome-active-label'))
                     .map(element => document.fonts.load(getComputedStyle(element).font))
             ));
+            if (theme === 'blank') {
+                // Public artwork must paint without waiting for application JS,
+                // while the saved preference wins over the opposite device mode.
+                const hero = page.locator('.chat-empty-hero:visible');
+                await expect(hero).toHaveAttribute('src', mode === 'dark'
+                    ? '/bird-on-cloud-dark.webp' : '/bird-on-cloud.webp');
+                await expect.poll(() => hero.evaluate(image =>
+                    (image as HTMLImageElement).complete &&
+                    (image as HTMLImageElement).naturalWidth > 0
+                )).toBe(true);
+                expect(await hero.evaluate(image => new URL((image as HTMLImageElement).currentSrc).pathname))
+                    .toBe(`/chat-artwork/bird-on-cloud${mode === 'dark' ? '-dark' : ''}-${dpr === 1 ? 480 : 960}.webp`);
+                const background = page.locator('.chat-empty-background-image:visible');
+                await expect.poll(() => background.evaluate(image =>
+                    (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0
+                )).toBe(true);
+                expect(await background.evaluate(image => new URL((image as HTMLImageElement).currentSrc).pathname))
+                    .toBe(`/chat-artwork/${mode === 'dark' ? 'blank-chat-bg-dark' : 'blank-chat-background'}-${dpr === 1 ? 768 : 1448}.avif`);
+                const artworkRequests = await page.evaluate(() => performance.getEntriesByType('resource')
+                    .map(entry => new URL(entry.name).pathname).filter(path => path.startsWith('/chat-artwork/')));
+                if (dpr === 1) expect(artworkRequests.some(path => /-1448\./.test(path)), 'phone preloads must wait for the viewport meta').toBe(false);
+            }
             const initial = await geometry();
             await testInfo.attach('before-javascript', { body: await page.screenshot({ path: testInfo.outputPath('before-javascript.png') }), contentType: 'image/png' });
             // Require live paint samples before releasing the application.
@@ -330,6 +355,11 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) for (const mode of ['light'
             });
             expect(initial.dark, 'saved color scheme applies before JavaScript bundles').toBe(mode === 'dark');
             expect(ready.dark).toBe(initial.dark);
+            if (theme === 'blank') {
+                expect(initial.artwork).not.toBeNull();
+                expect(ready.artwork!.y, 'early artwork keeps its final position').toBeCloseTo(initial.artwork!.y, 0);
+                expect(ready.artwork!.height).toBeCloseTo(initial.artwork!.height, 0);
+            }
             await testInfo.attach('hydration-color-frames', { body: Buffer.from(JSON.stringify(colorFrames, null, 2)), contentType: 'application/json' });
             expect(colorFrames.length).toBeGreaterThan(0);
             expect(colorFrames.filter(frame => frame.dark !== initial.dark), 'saved color scheme stays stable throughout hydration').toEqual([]);

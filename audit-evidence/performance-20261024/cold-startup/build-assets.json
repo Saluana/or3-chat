@@ -1,0 +1,54 @@
+{
+  "baseline": {
+    "javascript": {
+      "files": 395,
+      "rawBytes": 13814716,
+      "gzipBytes": 4409417
+    },
+    "precache": {
+      "files": 470,
+      "rawBytes": 19378304
+    },
+    "rootHtml": {
+      "present": true,
+      "modulepreload": {
+        "files": 27,
+        "rawBytes": 1819265,
+        "gzipBytes": 572337,
+        "missing": []
+      },
+      "prefetch": {
+        "files": 0,
+        "rawBytes": 0,
+        "gzipBytes": 0,
+        "missing": []
+      }
+    }
+  },
+  "candidate": {
+    "javascript": {
+      "files": 403,
+      "rawBytes": 13809636,
+      "gzipBytes": 4411347
+    },
+    "precache": {
+      "files": 479,
+      "rawBytes": 19373008
+    },
+    "rootHtml": {
+      "present": true,
+      "modulepreload": {
+        "files": 18,
+        "rawBytes": 1414419,
+        "gzipBytes": 446463,
+        "missing": []
+      },
+      "prefetch": {
+        "files": 0,
+        "rawBytes": 0,
+        "gzipBytes": 0,
+        "missing": []
+      }
+    }
+  }
+}

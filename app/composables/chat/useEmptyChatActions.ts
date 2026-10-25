@@ -13,7 +13,7 @@ import {
     getWorkspaceGeneration,
     subscribeActiveWorkspaceDb,
 } from '~/db/client';
-import { captureProjectOperation } from '~/utils/projects/context';
+import { captureProjectOperation } from '~/utils/projects/operation';
 import type { WorkspaceOperationScope } from '~/utils/chat/workspace-access';
 import type { EmptyChatActionId } from '~/theme/_shared/chat-empty-state';
 

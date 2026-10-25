@@ -1,0 +1,26 @@
+$ tsx scripts/cli/nuxt-task.ts type-check
+[nuxt:icon] ✔ Nuxt Icon loaded local collection blank-solar with 152 icons
+
+ WARN  Duplicated imports "WorkspacePluginReconcileEventDetail", the one from "<checkout>/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "<checkout>/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WorkspacePluginReconcileReason", the one from "<checkout>/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "<checkout>/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "requestWorkspacePluginReconcile", the one from "<checkout>/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "<checkout>/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WORKSPACE_PLUGIN_RECONCILE_EVENT", the one from "<checkout>/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "<checkout>/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+ℹ Nuxt Icon client bundle consist of 195 icons with 107.38KB(uncompressed) in size
+
+ WARN  Duplicated imports "WorkspacePluginReconcileEventDetail", the one from "<checkout>/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "<checkout>/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WorkspacePluginReconcileReason", the one from "<checkout>/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "<checkout>/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "requestWorkspacePluginReconcile", the one from "<checkout>/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "<checkout>/app/composables/plugins/workspace-plugin-coordinator.ts" is used
+
+
+ WARN  Duplicated imports "WORKSPACE_PLUGIN_RECONCILE_EVENT", the one from "<checkout>/app/composables/plugins/bundled-v1-manager-runtime.ts" has been ignored and "<checkout>/app/composables/plugins/workspace-plugin-coordinator.ts" is used

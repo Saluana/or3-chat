@@ -28,6 +28,7 @@
  * @see core/sync/cursor-manager for cursor persistence
  * @see core/sync/recent-op-cache for echo filtering
  */
+import { subscriptionManagerInstances, getScopeKey } from './subscription-registry';
 import type { Or3DB } from '~/db/client';
 import type {
     SyncProvider,
@@ -1082,15 +1083,7 @@ export class SubscriptionManager {
     }
 }
 
-// Singleton instances per scope
-const subscriptionManagerInstances = new Map<string, SubscriptionManager>();
-
-/**
- * Get scope key for instance lookup
- */
-function getScopeKey(scope: SyncScope): string {
-    return `${scope.workspaceId}:${scope.projectId ?? 'default'}`;
-}
+export { getSubscriptionManager, cleanupSubscriptionManager, cleanupSubscriptionManagersByWorkspace, _resetSubscriptionManagers } from './subscription-registry';
 
 /** Create or replace the manager owned by a sync scope. */
 export function createSubscriptionManager(
@@ -1112,48 +1105,4 @@ export function createSubscriptionManager(
     const manager = new SubscriptionManager(db, provider, scope, config);
     subscriptionManagerInstances.set(key, manager);
     return manager;
-}
-
-/** Return the manager currently owned by a sync scope. */
-export function getSubscriptionManager(scope: SyncScope): SubscriptionManager | null {
-    return subscriptionManagerInstances.get(getScopeKey(scope)) ?? null;
-}
-
-/** Stop and clear all managers. Test-only lifecycle support. */
-export async function _resetSubscriptionManagers(): Promise<void> {
-    for (const manager of subscriptionManagerInstances.values()) {
-        await manager.stop();
-    }
-    subscriptionManagerInstances.clear();
-}
-
-/**
- * Purpose:
- * Stop and remove a SubscriptionManager instance by scope key.
- */
-export function cleanupSubscriptionManager(scopeKey: string): void {
-    const manager = subscriptionManagerInstances.get(scopeKey);
-    if (manager) {
-        manager.stop().catch((error) => {
-            console.error('[SubscriptionManager] Failed to stop instance:', error);
-        });
-    }
-    subscriptionManagerInstances.delete(scopeKey);
-}
-
-/**
- * Purpose:
- * Stop and remove all SubscriptionManager instances for a workspace.
- */
-export function cleanupSubscriptionManagersByWorkspace(
-    workspaceId: string
-): void {
-    const prefix = `${workspaceId}:`;
-    for (const [scopeKey, manager] of subscriptionManagerInstances.entries()) {
-        if (!scopeKey.startsWith(prefix)) continue;
-        manager.stop().catch((error) => {
-            console.error('[SubscriptionManager] Failed to stop instance:', error);
-        });
-        subscriptionManagerInstances.delete(scopeKey);
-    }
 }

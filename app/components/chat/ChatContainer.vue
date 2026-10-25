@@ -12,10 +12,11 @@
         <!-- Or3Scroll is now the scroll container -->
         <!-- Virtualized messages (Req 3.1) -->
         <!-- Or3Scroll is now the scroll container -->
-        <ClientOnly>
-            <ChatEmptyStateMedia v-if="emptyAppearance?.background" :key="emptyMediaKey"
-                class="chat-empty-background" :background="emptyAppearance.background" :src="emptyAppearance.background.image" />
-        </ClientOnly>
+        <ChatEmptyStateColorMedia v-if="emptyAppearance?.background" :key="emptyMediaKey"
+            class="chat-empty-background"
+            :fallback="{ background: emptyAppearance.background, src: emptyAppearance.background.image }"
+            :light="emptyMediaVariants.light?.background && { background: emptyMediaVariants.light.background, src: emptyMediaVariants.light.background.image }"
+            :dark="emptyMediaVariants.dark?.background && { background: emptyMediaVariants.dark.background, src: emptyMediaVariants.dark.background.image }" />
         <ClientOnly v-if="!emptyAppearance">
             <Or3Scroll
                 ref="scroller"
@@ -113,7 +114,7 @@
                  not become an anchor in the chat's outer render block. -->
             <div v-if="emptyAppearance" class="contents">
                 <component :is="$theme.activeComponents.value['chat-empty-state'] || CORE_APP_COMPONENT_DEFAULTS['chat-empty-state']"
-                    :key="emptyMediaKey" :appearance="emptyAppearance" :actions="emptyActions" @action="onEmptyChatAction" />
+                    :key="emptyMediaKey" v-bind="emptyStateMediaProps" :appearance="emptyAppearance" :actions="emptyActions" @action="onEmptyChatAction" />
             </div>
             <div
                 v-bind="innerInputContainerProps"
@@ -217,7 +218,7 @@ import type {
 import { Or3Scroll } from 'or3-scroll';
 import ChatInputDropper from '~/components/chat/ChatInputDropper.vue';
 import ChatMessageHost from '~/components/chat/ChatMessageHost.vue';
-import ChatEmptyStateMedia from './ChatEmptyStateMedia.vue';
+import ChatEmptyStateColorMedia from './ChatEmptyStateColorMedia.vue';
 import { resolveChatEmptyState, type EmptyChatActionId } from '~/theme/_shared/chat-empty-state';
 import { useEmptyChatActionHost } from '~/composables/chat/useEmptyChatActions';
 import { useSignInGate } from '~/composables/auth/useSignInGate';
@@ -1485,7 +1486,7 @@ const emptyActionHost = useEmptyChatActionHost();
 const { signInRequired: emptySignInRequired, promptSignIn: promptEmptySignIn } = useSignInGate();
 const emptyTheme = useNuxtApp().$theme;
 // The server cannot read a localStorage color preference. Hydrate text with
-// its emitted mode, then select artwork only once the client mode is applied.
+// its emitted mode; paired public artwork follows the pre-paint CSS mode.
 const emptyMounted = ref(false);
 const emptyInitialMode = useState('chat-empty-initial-mode', () => emptyTheme.current.value);
 const emptyMode = computed(() => emptyMounted.value ? emptyTheme.current.value : emptyInitialMode.value);
@@ -1495,10 +1496,35 @@ const emptyAppearance = computed(() => {
     void emptyTheme.resolversVersion.value;
     return resolveChatEmptyState(emptyTheme.getTheme(emptyTheme.activeTheme.value)?.chatEmptyState, emptyMode.value);
 });
-const emptyMediaKey = computed(() => emptyTheme.activeTheme.value + ':' + emptyMode.value);
-// Workspace authority can hydrate before this async component. Keep its first
-// client render identical to SSR, then expose authorized creation actions.
-const emptyActions = computed(() => emptyAppearance.value?.actions.filter(action => action.id === 'start-chat' || (emptyMounted.value && emptyActionHost?.available.value.includes(action.id))) ?? []);
+const emptyMediaVariants = computed(() => {
+    void emptyTheme.resolversVersion.value;
+    const definition = emptyTheme.getTheme(emptyTheme.activeTheme.value)?.chatEmptyState;
+    return { light: resolveChatEmptyState(definition, 'light'), dark: resolveChatEmptyState(definition, 'dark') };
+});
+const emptyStateMediaProps = computed(() => {
+    const component = emptyTheme.activeComponents.value['chat-empty-state'];
+    return !component || component === CORE_APP_COMPONENT_DEFAULTS['chat-empty-state']
+        ? { mediaVariants: emptyMediaVariants.value } : {};
+});
+// Paired media already contains both modes; retain its DOM through hydration
+// so creating a hidden img cannot eagerly request the opposite mode's source.
+const emptyMediaKey = computed(() => emptyTheme.activeTheme.value +
+    (emptyStateMediaProps.value.mediaVariants ? '' : ':' + emptyMode.value));
+// Snapshot the local-mode actions in the payload so the first client render
+// matches SSR even if workspace preferences hydrate before this async component.
+// Cloud authority still resolves before exposing creation actions.
+const emptyInitialActions = useState<readonly EmptyChatActionId[]>(
+    'chat-empty-initial-actions',
+    () => runtimeConfig.public.ssrAuthEnabled === true
+        ? ['start-chat']
+        : [...(emptyActionHost?.available.value ?? ['start-chat'])],
+);
+const emptyActions = computed(() => {
+    const available = emptyMounted.value
+        ? emptyActionHost?.available.value : emptyInitialActions.value;
+    return emptyAppearance.value?.actions.filter(action =>
+        action.id === 'start-chat' || available?.includes(action.id)) ?? [];
+});
 async function onEmptyChatAction(id: EmptyChatActionId) {
     // Let the pane click/focus handler select an inactive split before dispatch.
     await nextTick();

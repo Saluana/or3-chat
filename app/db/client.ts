@@ -32,7 +32,7 @@ import type { PendingOp, Tombstone, SyncState, SyncRun, SnapshotItem } from '~~/
 import type { FileTransfer } from '~~/shared/storage/types';
 import { cleanupCursorManager } from '~/core/sync/cursor-manager';
 import { cleanupHookBridge } from '~/core/sync/hook-bridge';
-import { cleanupSubscriptionManagersByWorkspace } from '~/core/sync/subscription-manager';
+import { cleanupSubscriptionManagersByWorkspace } from '~/core/sync/subscription-registry';
 import { cleanupSyncCircuitBreakers } from '~~/shared/sync/circuit-breaker';
 import {
     applyDocumentReferenceKey,
