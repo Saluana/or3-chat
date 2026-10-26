@@ -24,6 +24,8 @@ let editor: Editor | undefined;
 afterEach(() => {
     editor?.destroy();
     editor = undefined;
+    vi.useRealTimers();
+    vi.restoreAllMocks();
     openRouterStream.mockReset();
     globalState.value.openrouterKey = null;
     localStorage.removeItem('openrouter_api_key');
@@ -49,6 +51,73 @@ function makeEditor() {
 }
 
 describe('AutocompleteExtension decorations', () => {
+    it.each(['already offline', 'brief disconnect during debounce'] as const)('pauses autocomplete for %s and resumes only on new online typing', async phase => {
+        testRuntimeConfig.value.public.ssrAuthEnabled = false;
+        globalState.value.openrouterKey = 'synthetic-key';
+        AutocompleteState.value.isEnabled = true;
+        const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(phase !== 'already offline');
+        openRouterStream.mockImplementation(async function* () {
+            yield { type: 'text', text: '<next_line> continuation</next_line>' };
+        });
+        const current = makeEditor();
+        current.commands.setTextSelection(current.state.doc.content.size - 1);
+        current.view.focus();
+        current.commands.insertContent('A');
+        if (phase === 'brief disconnect during debounce') {
+            online.mockReturnValue(false);
+            window.dispatchEvent(new Event('offline'));
+            online.mockReturnValue(true);
+            window.dispatchEvent(new Event('online'));
+        }
+        await new Promise(resolve => setTimeout(resolve, 750));
+        expect(openRouterStream).not.toHaveBeenCalled();
+        online.mockReturnValue(true);
+        window.dispatchEvent(new Event('online'));
+        current.commands.insertContent('B');
+        await vi.waitFor(() => expect(openRouterStream).toHaveBeenCalledOnce());
+        await vi.waitFor(() => expect(current.view.dom.querySelector('.autocomplete-suggestion')?.textContent).toContain('continuation'));
+    });
+
+    it.each(['completion', 'error'] as const)('aborts on disconnect and ignores a late %s after reconnect', async result => {
+        testRuntimeConfig.value.public.ssrAuthEnabled = false;
+        globalState.value.openrouterKey = 'synthetic-key';
+        AutocompleteState.value.isEnabled = true;
+        const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+        let finish!: () => void;
+        let completed = false;
+        const gate = new Promise<void>(resolve => { finish = resolve; });
+        openRouterStream.mockImplementationOnce(async function* () {
+            try {
+                await gate;
+                if (result === 'error') throw new TypeError('Failed to fetch');
+                yield { type: 'text', text: '<next_line> obsolete</next_line>' };
+            } finally { completed = true; }
+        }).mockImplementationOnce(async function* () {
+            yield { type: 'text', text: '<next_line> reconnected</next_line>' };
+        });
+        const current = makeEditor();
+        current.commands.setTextSelection(current.state.doc.content.size - 1);
+        current.view.focus();
+        current.commands.insertContent('A');
+        try {
+            await vi.waitFor(() => expect(openRouterStream).toHaveBeenCalledOnce());
+            const signal: AbortSignal = openRouterStream.mock.calls[0]![0].signal;
+            online.mockReturnValue(false);
+            window.dispatchEvent(new Event('offline'));
+            expect(signal.aborted).toBe(true);
+            online.mockReturnValue(true);
+            window.dispatchEvent(new Event('online'));
+            finish();
+            await vi.waitFor(() => expect(completed).toBe(true));
+            await new Promise(resolve => setTimeout(resolve, 0));
+            expect(current.view.dom.querySelector('.autocomplete-suggestion')).toBeNull();
+            expect(errors).not.toHaveBeenCalled();
+            current.commands.insertContent('B');
+            await vi.waitFor(() => expect(current.view.dom.querySelector('.autocomplete-suggestion')?.textContent).toContain('reconnected'));
+        } finally { finish(); }
+    });
+
     it.each([
         { name: 'signed in without any key', signedIn: true, instanceKey: false, userKey: null, requiresUserKey: false, calls: 0 },
         { name: 'guest with only an instance key', signedIn: false, instanceKey: true, userKey: null, requiresUserKey: false, calls: 0 },
@@ -125,4 +194,25 @@ describe('AutocompleteExtension decorations', () => {
         await new Promise((resolve) => setTimeout(resolve, 700));
         expect(openRouterStream).not.toHaveBeenCalled();
     });
+});
+
+it('times out a hung autocomplete and allows the next edit to request a suggestion', async () => {
+    testRuntimeConfig.value.public.ssrAuthEnabled = false;
+    globalState.value.openrouterKey = 'synthetic-key';
+    AutocompleteState.value.isEnabled = true;
+    openRouterStream.mockImplementationOnce(async function* () { await new Promise(() => {}); })
+        .mockImplementationOnce(async function* () { yield { type: 'text', text: '<next_line> recovered</next_line>' }; });
+    const current = makeEditor();
+    current.view.focus();
+    current.commands.setTextSelection(current.state.doc.content.size - 1);
+    current.commands.insertContent('A');
+    await vi.waitFor(() => expect(openRouterStream).toHaveBeenCalledTimes(1));
+    expect(openRouterStream).toHaveBeenCalledTimes(1);
+    const signal = openRouterStream.mock.calls[0]![0].signal;
+    await vi.waitFor(() => expect(signal.aborted).toBe(true), { timeout: 6000 });
+    expect(signal.aborted).toBe(true);
+    current.commands.insertContent('B');
+    await new Promise(resolve => setTimeout(resolve, 750));
+    expect(openRouterStream).toHaveBeenCalledTimes(2);
+    expect(current.view.dom.querySelector('.autocomplete-suggestion')?.textContent).toContain('recovered');
 });

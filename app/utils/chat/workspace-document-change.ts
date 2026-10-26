@@ -6,14 +6,15 @@ import type { ToolExecutionContext } from './types';
 import { readWorkspaceItem, workspaceRevision, type WorkspaceSource } from './workspace-items';
 import { messageData, persistWorkspaceReceipt, readIdentity, type WorkspaceDocumentRead } from './workspace-document-read';
 import { prepareDocumentUpdate } from '~/db/documents';
-import { prepareDocumentRevision, listCompleteDocumentRevisions } from '~/db/document-revisions';
+import { prepareDocumentRevision, listCompleteDocumentRevisions, pruneDocumentRevisions } from '~/db/document-revisions';
 import { getWriteTxTableNames, nextClock, nowSec } from '~/db/util';
 import { MessageSchema, type Message } from '~/db/schema';
 import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
 import { serializeDocumentFileHashes } from '~/utils/documents/document-content';
 import { leaseWorkspaceDocumentEditors } from '~/composables/documents/useDocumentEditorSessions';
 
-export const WORKSPACE_CHANGE_KEY = 'or3.workspace-change:';
+import { WORKSPACE_CHANGE_KEY } from '~~/shared/posts/document-change';
+export { WORKSPACE_CHANGE_KEY } from '~~/shared/posts/document-change';
 interface ChangeIdentity { version: 1; documentId: string; inputDigest: string }
 export type WorkspaceDocumentChange = ChangeIdentity & (
     | { status: 'pending'; readId: string; baseRevision: string; operations: DocumentAiOperation[] }
@@ -221,6 +222,9 @@ async function persistDocumentAction(
             // Accept synchronously before notification hooks can navigate or initiate another read.
             lease.accept(prepared.row);
             try { await prepared.afterCommit(); } catch (error) { console.warn('Document change saved; notification failed.', error); }
+            // The committed receipt pins its Undo checkpoint during shared retention.
+            try { await pruneDocumentRevisions(base.id, scope.db); }
+            catch (error) { console.warn('Document change saved; history cleanup will retry on the next checkpoint.', error); }
         }
         return result;
     } finally { lease.release(); }

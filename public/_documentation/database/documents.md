@@ -18,6 +18,32 @@ their existing conflict baseline. Open tab titles also follow stored renames.
 Autocomplete requires a usable user key or an authenticated instance-key path,
 and saved-content restoration never starts a suggestion request.
 
+Unreadable JSON or unavailable node/mark schemas enter a read-only recovery view.
+The original stored content is preserved, with **Download original document** and
+**Try again** controls. A failed IndexedDB read remains a retryable error.
+
+When a save conflicts, **Save local copy and reload** first saves the local draft
+as a separate document in Files, then reloads the original. It preserves the
+committed version and other panes' pending drafts. If the copy cannot be saved or
+the draft changes during recovery, the original pending draft remains retained.
+
+Native documents remain local-first. A saved row exceeding the shared 256 KiB
+sync payload ceiling shows a size warning; its content is never truncated. Use
+**Download Markdown** or split the document into smaller documents before syncing.
+Markdown downloads include embedded local image bytes, alt text, width and alignment; a
+missing image fails the export visibly instead of producing an incomplete copy.
+
+AI proposals retain the version and workspace/account identity of their frozen
+snapshot. Newer edits require regeneration. Partial approvals apply in proposal
+order, and a failed save after acceptance offers **Retry save** without applying
+the edit twice. Formatting, title and insertion controls respect the review lock.
+Inline approval buttons support native click, Enter and Space activation.
+Removed/added review panes render the frozen native rich-text nodes, retaining
+headings, paragraph spacing, lists and inline marks. Long changes collapse
+visually and expand without flattening or truncating their formatting.
+Autocomplete retires timed-out requests so later typing can request suggestions.
+Document AI preferences are scoped to the originating workspace database.
+
 Document storage built on the shared `posts` table (`postType: 'doc'`) with TipTap JSON payloads and hook integration.
 
 ---
@@ -129,6 +155,12 @@ Find matches span inline formatting such as bold and links. Replace and All
 insert literal text, including angle brackets, and refresh the result count as
 the document changes. Replacement, table editing and image controls respect
 the editor's read-only state. Image controls remain usable at reduced widths.
+Native tables share chat's cell spacing, header colors, alternating row colors
+and visible grid lines, including themes that remove subtle decorative borders.
+Tables stay within the document text column, scrolling horizontally when needed;
+the header has a distinct fill and stripes count only data rows.
+Inserted dividers retain a visible, opaque line even when the theme disables
+subtle decorative borders.
 Word counts separate paragraphs, hard breaks and table cells; moving the caret
 updates the active outline heading without recounting the document. Statistics
 reuse unchanged immutable editor blocks and update after a 150 ms editing pause
@@ -141,6 +173,21 @@ query, preventing a stale command from deleting the wrong range.
 
 The document AI composer accepts a request, attachments, saved/plugin slash actions, and document/chat references. Slash actions insert a prompt without immediately sending it. References are deduplicated and resolved again before submission; a missing/deleted reference or a reference to the current document is refused.
 
+Document AI pauses network generation while the browser reports offline. The
+composer keeps its draft, attachments and references, and shows an offline
+message. Disconnecting during preparation or generation cancels that run and
+unlocks the editor; late results cannot replace a newer request. Reconnecting
+enables Send again, but does not replay requests automatically. Send the retained
+request again to retry. Saved/plugin quick actions use this same submission path.
+
+Existing suggestions can still be accepted or rejected offline, including their
+local revision checkpoints and saves. Offline revision reads/writes use the
+already-loaded codec instead of fetching a cold worker. References, settings and token estimates
+remain local; offline estimates use the tokenizer's character approximation
+without downloading tokenizer code. Cached models remain available offline and
+the catalog refreshes after reconnecting. Connectivity does not imply provider
+availability: a failed online request keeps its draft for a manual retry.
+
 The request separates the user prompt, frozen editable document context, and escaped read-only reference context. With a selection, only that selection is writable through a single replace_selection operation. Without a selection, the cursor block is the default target unless the request calls for broader edits. Large documents use bounded local context plus outline/chunk lookup instead of duplicating the entire document in every request.
 
 Reference content counts toward context limits but does not grant editable block references. Proposed operations must validate against the frozen snapshot and enter the review UI. Only accepting the proposal writes the edit. Changes to the document, stale snapshots, workspace switches, and another pending proposal can invalidate edit authority.
@@ -148,8 +195,18 @@ Reference content counts toward context limits but does not grant editable block
 Source hooks `ai.document.edit:filter:request` and `ai.document.edit:action:before` expose editable context and separate referenceContext; preserve that distinction. The implementation is `app/composables/documents/useDocumentAiAgent.ts`. Its live editor bridge also serves [document tools in chat](/documentation/utils/chat-tools).
 
 Optional editor autocomplete does not start inference requests for guests without a personal API key. Signed-in users can use the instance key through the server route. Local editing and autosave remain available without credentials.
+When the browser reports offline, autocomplete skips inference and clears its
+suggestion/loading state. Disconnecting aborts active requests and retires queued
+debounces; late results cannot reappear after reconnecting. New online typing
+can request suggestions again, without replaying offline edits automatically.
 
 Document image node views capture their database, workspace generation and account when mounted. A delayed blob read cannot create or replace a preview after node removal, workspace/account changes, or a newer image request. Owned preview URLs are revoked on teardown or scope invalidation; read failures show the existing unavailable-image placeholder.
+
+Selecting an image shows its own toolbar; the text-formatting popup appears only
+for a nonempty text selection. Image controls include alt text, a labeled Resize
+slider with a percentage, and left/center/right alignment buttons. Alignment is
+stored on the native `or3Image` node as `align` and defaults to center for older
+documents. The toolbar wraps within the document column at narrow widths.
 
 Image intake uses the file API ownership callback bound to the mounted editor, document, database, account and workspace generation. An upload paused before commit is canceled if its editor closes or changes scope. A local storage rejection shows a persistent "Image could not be added" banner and leaves the document intact; selecting the file again retries intake. The file API and its transaction contracts are unchanged.
 

@@ -1,12 +1,10 @@
 import type { Editor, JSONContent } from '@tiptap/core';
-import { Fragment } from '@tiptap/pm/model';
 import type {
     DocumentAiFrozenSnapshot,
     DocumentAiOperation,
 } from './document-ai-operations';
 import {
     buildDocumentAiCandidate,
-    buildDocumentAiSelectionSlice,
 } from './document-ai-operations';
 
 export type DocumentAiHunkStatus = 'pending' | 'accepted' | 'discarded';
@@ -278,72 +276,24 @@ export function acceptedDocumentAiOperations(
     return hunks.filter((hunk) => hunk.status === 'accepted').map((hunk) => hunk.op);
 }
 
-/**
- * Apply a single freeze-scoped op to the live editor.
- * Live doc must already reflect `acceptedBefore`. Avoids full-document setContent.
- */
+/** Apply the accepted subset in proposal order as one undoable transaction. */
 export function applyDocumentAiOperationLive(
     editor: Editor,
     snapshot: DocumentAiFrozenSnapshot,
     acceptedBefore: readonly DocumentAiOperation[],
     operation: DocumentAiOperation,
+    proposalOrder: readonly DocumentAiOperation[] = [...acceptedBefore, operation],
 ): void {
-    // Validate the combined plan against the freeze before mutating the live doc.
-    buildDocumentAiCandidate(editor, snapshot, [...acceptedBefore, operation]);
-
-    if (operation.kind === 'replace_selection') {
-        if (acceptedBefore.length) {
-            throw new Error('Selection replacement cannot follow other accepted edits.');
-        }
-        if (!snapshot.selection) {
-            throw new Error('Selection replacement requires a frozen selection.');
-        }
-        const fragment = Fragment.fromArray(
-            operation.content.map((node) => editor.schema.nodeFromJSON(node)),
-        );
-        const { from, to, openStart, openEnd } = snapshot.selection;
-        const tr = editor.state.tr.replace(
-            from,
-            to,
-            buildDocumentAiSelectionSlice(fragment, openStart, openEnd),
-        );
-        editor.view.dispatch(tr);
-        return;
-    }
-
-    const anchor = resolveHunkAnchor(editor, snapshot, acceptedBefore, operation);
-    if (!anchor) {
-        throw new Error('Could not locate the edit target in the live document.');
-    }
-
-    switch (operation.kind) {
-        case 'delete_block': {
-            if (!anchor.nodeRange) throw new Error('Delete target is missing.');
-            editor.view.dispatch(
-                editor.state.tr.delete(anchor.nodeRange.from, anchor.nodeRange.to),
-            );
-            return;
-        }
-        case 'replace_block': {
-            if (!anchor.nodeRange) throw new Error('Replace target is missing.');
-            const nodes = operation.content.map((node) => editor.schema.nodeFromJSON(node));
-            editor.view.dispatch(
-                editor.state.tr.replaceWith(anchor.nodeRange.from, anchor.nodeRange.to, nodes),
-            );
-            return;
-        }
-        case 'insert_before':
-        case 'insert_after':
-        case 'insert_end': {
-            const nodes = Fragment.fromArray(
-                operation.content.map((node) => editor.schema.nodeFromJSON(node)),
-            );
-            editor.view.dispatch(editor.state.tr.insert(anchor.widgetPos, nodes));
-            return;
-        }
-        default: {
-            const _exhaustive: never = operation;
-            return _exhaustive;
-        }
-    }
+    const accepted = new Set([...acceptedBefore, operation]);
+    const operations = proposalOrder.filter((entry) => accepted.has(entry));
+    const candidate = editor.schema.nodeFromJSON(buildDocumentAiCandidate(editor, snapshot, operations));
+    candidate.check();
+    const before = editor.state.doc;
+    const start = before.content.findDiffStart(candidate.content);
+    if (start === null) return;
+    const end = before.content.findDiffEnd(candidate.content)!;
+    const overlap = start - Math.min(end.a, end.b);
+    const endA = end.a + Math.max(0, overlap);
+    const endB = end.b + Math.max(0, overlap);
+    editor.view.dispatch(editor.state.tr.replace(start, endA, candidate.slice(start, endB)));
 }

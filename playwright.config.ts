@@ -38,7 +38,8 @@ export default defineConfig({
   webServer: skipWebServer
     ? undefined
     : {
-        command: `bun run dev -- --host 127.0.0.1 --port ${port}`,
+        // Local journey fixtures must not inherit personal Cloud/vault settings.
+        command: `bun run dev -- ${isProductionJourneyHarness ? '--or3-offline ' : ''}--host 127.0.0.1 --port ${port}`,
         url: baseURL,
         timeout: 120 * 1000,
         reuseExistingServer: !process.env.CI,

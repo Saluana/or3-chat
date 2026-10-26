@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { downloadBlob } from '~/utils/download-blob';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { liveQuery } from 'dexie';
 import AppModal from '~/components/ui/AppModal.vue';
@@ -426,13 +427,13 @@ async function download(row = selected.value) {
         if (!current || !isVisibleWorkspaceItem(current)) throw new Error('This file is unavailable.');
         if (current.postType === 'doc') {
             const { documentToMarkdown } = await import('~/utils/documents/document-to-markdown');
-            const markdown = await documentToMarkdown(JSON.parse(current.content));
+            const markdown = await documentToMarkdown(JSON.parse(current.content), origin.db);
             const latest = await origin.db.posts.get(row.id);
             origin.assertCurrent();
             if (!latest || !isVisibleWorkspaceItem(latest) || JSON.stringify(latest) !== JSON.stringify(current)) {
                 throw new Error('This document changed. Download it again.');
             }
-            saveDownload(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }), `${current.title}.md`);
+            downloadBlob(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }), `${current.title}.md`);
             return;
         }
         const hash = parseFileHashes(current.file_hashes)[0];
@@ -446,19 +447,10 @@ async function download(row = selected.value) {
         origin.assertCurrent();
         if (!latest || !isVisibleWorkspaceItem(latest) || JSON.stringify(latest) !== JSON.stringify(current)
             || !metadata || metadata.deleted) throw new Error('This file changed. Open it again before downloading.');
-        saveDownload(blob, current.title);
+        downloadBlob(blob, current.title);
     } catch (caught) { error.value = fileErrorMessage(caught, 'The download could not be completed. Try again.'); }
 }
-function saveDownload(blob: Blob, filename: string) {
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = filename;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+
 async function askInChat(row: Post) {
     error.value = '';
     try {

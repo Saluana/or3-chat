@@ -1,3 +1,5 @@
+import { workspaceRevision } from '~~/shared/posts/workspace-revision';
+import { WORKSPACE_CHANGE_KEY } from '~~/shared/posts/document-change';
 import { getDb, type Or3DB } from './client';
 import { getWriteTxTableNames, newId, nextClock, nowSec } from './util';
 import type { Post } from './schema';
@@ -48,12 +50,13 @@ function parseManifest(row: Post): DocumentRevisionManifest | null {
             || value.revisionId !== row.id
             || value.documentId !== row.title
             || !Array.isArray(value.chunkIds)
-            || !value.chunkIds.every((id) => typeof id === 'string')
-            || typeof value.titleContentHash !== 'string'
+            || !value.chunkIds.length || value.chunkIds.length > 4096
+            || !value.chunkIds.every((id, index) => id === `${row.id}:chunk:${index}`)
+            || typeof value.titleContentHash !== 'string' || !/^[a-f0-9]{64}$/u.test(value.titleContentHash)
             || (value.encoding !== 'gzip-base64url' && value.encoding !== 'identity-base64url')
-            || !Number.isSafeInteger(value.createdAt)
-            || !Number.isSafeInteger(value.originalBytes)
-            || !Number.isSafeInteger(value.encodedBytes)
+            || !Number.isSafeInteger(value.createdAt) || value.createdAt! < 0 || value.createdAt! > 8_640_000_000_000
+            || !Number.isSafeInteger(value.originalBytes) || value.originalBytes! < 0
+            || !Number.isSafeInteger(value.encodedBytes) || value.encodedBytes! < 0
         ) return null;
         return {
             version: 1,
@@ -112,7 +115,8 @@ export async function readDocumentRevision(
     db = getDb()
 ): Promise<CompleteDocumentRevision | null> {
     const rows = await db.posts.bulkGet(manifest.chunkIds);
-    if (rows.some((row) => !row || row.deleted || row.postType !== DOCUMENT_REVISION_CHUNK_POST_TYPE)) {
+    if (rows.some((row, index) => !row || row.deleted || row.postType !== DOCUMENT_REVISION_CHUNK_POST_TYPE
+        || row.title !== manifest.revisionId || row.id !== `${manifest.revisionId}:chunk:${index}`)) {
         return null;
     }
     try {
@@ -136,8 +140,12 @@ export async function listCompleteDocumentRevisions(
         .filter((value): value is DocumentRevisionManifest => Boolean(value))
         .sort((left, right) => right.createdAt - left.createdAt
             || right.revisionId.localeCompare(left.revisionId));
-    const complete = await Promise.all(manifests.map((manifest) => readDocumentRevision(manifest, db)));
-    return complete.filter((value): value is CompleteDocumentRevision => Boolean(value));
+    const complete: CompleteDocumentRevision[] = [];
+    for (const manifest of manifests) {
+        const revision = await readDocumentRevision(manifest, db);
+        if (revision) complete.push(revision);
+    }
+    return complete;
 }
 
 export async function prepareDocumentRevision(input: {
@@ -255,24 +263,73 @@ export async function pruneDocumentRevisions(documentId: string, db = getDb()): 
     removed: number;
     overBudget: boolean;
 }> {
+    const document = await db.posts.get(documentId);
+    const documentRevision = document ? await workspaceRevision(document) : null;
     const rows = await manifestRows(documentId, db);
     const manifests = rows.map(parseManifest)
         .filter((value): value is DocumentRevisionManifest => Boolean(value));
-    const retained = selectRevisionIdsForRetention(manifests);
+    // Decode outside the write transaction, then fence every assessed row in it.
+    // A synced/imported manifest is not evidence that a checkpoint is recoverable.
+    const assessed: Array<{ manifest: DocumentRevisionManifest; chunks: Array<Post | undefined>; complete: boolean }> = [];
+    for (const manifest of manifests) {
+        const chunks = await db.posts.bulkGet(manifest.chunkIds);
+        assessed.push({ manifest, chunks, complete: Boolean(await readDocumentRevision(manifest, db)) });
+    }
+    if (assessed.length && !assessed.some(item => item.complete)) {
+        // Worker/storage failure must never turn cleanup into loss of all history.
+        return { removed: 0, overBudget: true };
+    }
+    const retained = selectRevisionIdsForRetention(assessed.filter(item => item.complete).map(item => item.manifest));
+    // Allow partial sync/import deliveries to finish before reclaiming their rows.
+    const graceStart = nowSec() - 7 * 24 * 60 * 60;
+    for (const item of assessed) {
+        if (!item.complete && item.manifest.createdAt >= graceStart) retained.add(item.manifest.revisionId);
+    }
     const pruned = manifests.filter((item) => !retained.has(item.revisionId));
+    let removed = 0;
     if (pruned.length) {
-        const ids = pruned.flatMap((item) => [item.revisionId, ...item.chunkIds]);
         await db.transaction(
             'rw',
-            getWriteTxTableNames(db, 'posts', { includeTombstones: true }),
-            async () => db.posts.bulkDelete(ids)
+            getWriteTxTableNames(db, ['posts', 'messages'], { includeTombstones: true }),
+            async () => {
+                const same = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
+                if (!same(document, await db.posts.get(documentId))) return;
+                // Read receipts under the same lock as deletion. Only receipts for
+                // the current document revision can still Undo; older ones expire.
+                await db.messages.where('role').equals('assistant').and(message => !message.deleted).each(message => {
+                    if (!message.data || typeof message.data !== 'object' || Array.isArray(message.data)) return;
+                    for (const [key, raw] of Object.entries(message.data)) {
+                        if (!key.startsWith(WORKSPACE_CHANGE_KEY) || !raw || typeof raw !== 'object') continue;
+                        const receipt = raw as Record<string, unknown>;
+                        if (receipt.version === 1 && receipt.status === 'applied' && receipt.documentId === documentId
+                            && receipt.afterRevision === documentRevision && typeof receipt.beforeRevisionId === 'string') {
+                            retained.add(receipt.beforeRevisionId);
+                        }
+                    }
+                });
+                for (const item of assessed) {
+                    const before = rows.find(row => row.id === item.manifest.revisionId);
+                    if (!same(before, await db.posts.get(item.manifest.revisionId))
+                        || !same(item.chunks, await db.posts.bulkGet(item.manifest.chunkIds))) return;
+                }
+                for (const manifest of pruned) {
+                    if (retained.has(manifest.revisionId)) continue;
+                    // Never let a stored manifest authorize deletion of another post.
+                    const chunks = await db.posts.bulkGet(manifest.chunkIds);
+                    const owned = chunks.filter((row): row is Post => Boolean(row
+                        && row.postType === DOCUMENT_REVISION_CHUNK_POST_TYPE && row.title === manifest.revisionId
+                        && manifest.chunkIds.includes(row.id)));
+                    await db.posts.bulkDelete([manifest.revisionId, ...owned.map(row => row.id)]);
+                    removed += 1;
+                }
+            }
         );
     }
     const retainedBytes = manifests
         .filter((item) => retained.has(item.revisionId))
         .reduce((sum, item) => sum + item.encodedBytes, 0);
     return {
-        removed: pruned.length,
+        removed,
         overBudget: retainedBytes > DOCUMENT_REVISION_BUDGET_BYTES,
     };
 }

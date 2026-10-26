@@ -21,9 +21,11 @@ stream ends that attempt. In the optional fallback path, proxy errors other
 than 404/405 propagate instead of marking the route unavailable.
 
 The route-availability result is cached in `localStorage` for 15 minutes. In
-the optional server-first path, 404/405 responses and network failures mark the
-route unavailable; other proxy errors do not. When SSR auth requires the
-server route, 404/405 and network failures throw without marking it unavailable.
+the optional server-first path, unmarked 404/405 responses mark the route
+unavailable. Network failures preserve the cache, so reconnection can try the
+server route again. A failed server fetch does not fall back to direct OpenRouter
+while the browser reports offline. When SSR auth requires the server route,
+404/405 and network failures throw without marking it unavailable.
 The route marks every response it produces with `X-OR3-Stream-Route: 1`. A
 404/405 carrying that header is a relayed provider error (for example, no
 endpoint supports the request's input), reported as `ERR_UNSUPPORTED_MODEL`;

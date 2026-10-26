@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Locator } from '@playwright/test';
 import type { Editor } from '@tiptap/core';
 import { writeFile } from 'node:fs/promises';
 
@@ -42,6 +42,81 @@ test.describe('local document recovery faults', () => {
     }
     const intakePng = { name: 'synthetic-document-intake.png', mimeType: 'image/png',
         buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=', 'base64') };
+
+    test('image selection hides text formatting while text selection still shows it', async ({ page }, info) => {
+        const body = page.getByRole('textbox', { name: 'Document body' });
+        await body.fill('Selectable text');
+        await page.locator('input[type="file"][accept="image/*"]').setInputFiles(intakePng);
+        // Intake finishes asynchronously and moves the caret when it inserts.
+        await expect(page.locator('.or3-document-image img')).toBeVisible();
+        const paragraph = body.locator('p').filter({ hasText: 'Selectable text' });
+        await paragraph.dblclick({ position: { x: 20, y: 10 } });
+        await expect(page.locator('.selection-menu')).toBeVisible();
+        await page.locator('.or3-document-image img').click();
+        await expect(page.getByRole('textbox', { name: 'Image alt text' })).toBeVisible();
+        await expect(page.locator('.selection-menu')).toBeHidden();
+        await paragraph.dblclick({ position: { x: 20, y: 10 } });
+        await expect(page.locator('.selection-menu')).toBeVisible();
+        await page.screenshot({ path: info.outputPath('text-selection-menu.png') });
+    });
+
+    test('image controls identify resizing and preserve alignment after reload', async ({ page }, info) => {
+        await page.locator('input[type="file"][accept="image/*"]').setInputFiles(intakePng);
+        const image = page.locator('.or3-document-image');
+        await image.locator('img').click();
+        await expect(image.locator('.image-size')).toContainText('Resize');
+        const slider = page.getByRole('slider', { name: 'Image width' });
+        await slider.focus();
+        await slider.press('Home');
+        for (let i = 0; i < 5; i++) await slider.press('ArrowRight');
+        await expect(slider).toHaveAttribute('aria-valuenow', '50');
+        for (const align of ['left', 'center', 'right']) {
+            const button = page.getByRole('button', { name: `Align image ${align}`, exact: true });
+            await button.click();
+            await expect(button).toHaveAttribute('aria-pressed', 'true');
+            await expect(image).toHaveAttribute('data-align', align);
+            await expect.poll(() => image.evaluate((element, expected) => {
+                const outer = element.getBoundingClientRect();
+                const frame = element.querySelector('.image-frame')!.getBoundingClientRect();
+                const left = frame.left - outer.left;
+                const right = outer.right - frame.right;
+                return expected === 'left' ? Math.abs(left) < 1 : expected === 'right'
+                    ? Math.abs(right) < 1 : Math.abs(left - right) < 1;
+            }, align)).toBe(true);
+        }
+        // Observe the canonical row, rather than treating the live editor as a save receipt.
+        const id = (await page.getByTestId('document-journey-id').textContent())!.trim();
+        await expect.poll(() => page.evaluate(async documentId => {
+            for (const { name } of await indexedDB.databases()) {
+                if (!name?.startsWith('or3-db')) continue;
+                const db = await new Promise<IDBDatabase>((resolve, reject) => {
+                    const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                });
+                try {
+                    const row = await new Promise<{ content: string } | undefined>((resolve, reject) => {
+                        const request = db.transaction('posts').objectStore('posts').get(documentId);
+                        request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                    });
+                    if (row) {
+                        const attrs = JSON.parse(row.content).content.find((node: { type: string }) => node.type === 'or3Image')?.attrs;
+                        return { align: attrs?.align, width: attrs?.width };
+                    }
+                } finally { db.close(); }
+            }
+            return null;
+        }, id)).toEqual({ align: 'right', width: 50 });
+        await page.reload();
+        await image.locator('img').click();
+        await expect(image).toHaveAttribute('data-align', 'right');
+        await expect(page.getByRole('button', { name: 'Align image right', exact: true })).toHaveAttribute('aria-pressed', 'true');
+        await expect(page.getByRole('slider', { name: 'Image width' })).toHaveAttribute('aria-valuenow', '50');
+        await page.setViewportSize({ width: 390, height: 844 });
+        await expect.poll(() => image.locator('.image-controls').evaluate(element => {
+            const bounds = element.getBoundingClientRect();
+            return bounds.left >= 0 && bounds.right <= innerWidth;
+        })).toBe(true);
+        await page.screenshot({ path: info.outputPath('image-controls-mobile.png') });
+    });
 
     test('a destroyed editor cancels an image intake held before file hashing completes', async ({ page }, info) => {
         await expect(page.getByRole('textbox', { name: 'Document body' })).toHaveAttribute('contenteditable', 'true');
@@ -277,6 +352,109 @@ test.describe('local document recovery faults', () => {
         await info.attach('late-document-read', { path, contentType: 'application/json' });
     });
 
+    for (const control of ['inline', 'dock', 'all'] as const) test(`AI review ${control} acceptance saves a real worker checkpoint and keeps rich formatting`, async ({ page }, info) => {
+        const errors: string[] = [];
+        const workers: string[] = [];
+        page.on('pageerror', error => errors.push(error.message));
+        page.on('worker', worker => workers.push(worker.url()));
+        const scripts = recoveryScripts.get(page) ?? [];
+        const sessionsURL = scripts.find(url => /\/useDocumentEditorSessions\.ts(?:\?|$)/.test(url));
+        const revisionsURL = scripts.find(url => /\/document-revisions\.ts(?:\?|$)/.test(url));
+        expect(sessionsURL).toBeTruthy(); expect(revisionsURL).toBeTruthy();
+        const id = (await page.getByTestId('document-journey-id').textContent())!.trim();
+        const body = page.getByRole('textbox', { name: 'Document body' });
+        await body.evaluate(async (element, { sessionsURL, id }) => {
+            const { getActiveDocumentEditorSession } = await import(sessionsURL!);
+            const editor = (element as HTMLElement & { editor: Editor }).editor;
+            editor.commands.setContent('<h2>Original <em>heading</em></h2><p>Unchanged body</p>');
+            editor.commands.setTextSelection(1);
+            const session = getActiveDocumentEditorSession(id)!;
+            await session.ensureLocalDurability();
+            const requestId = 'worker-checkpoint-review';
+            const { snapshotId } = JSON.parse(session.getChatContext!(requestId));
+            session.executeChatTool!('propose_edits', JSON.stringify({ documentId: id, snapshotId, operations: [{
+                kind: 'replace_block', ref: 'b1', content: [
+                    { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Revised heading' }] },
+                    { type: 'paragraph', content: [{ type: 'text', text: 'Bold words', marks: [{ type: 'bold' }] }, { type: 'text', text: ' and plain words.' }] },
+                ],
+            }] }), requestId);
+        }, { sessionsURL, id });
+        await expect(page.locator('.is-before .document-ai-hunk-pane-text h2 em')).toHaveText('heading');
+        const after = page.locator('.is-after .document-ai-hunk-pane-text');
+        await expect(after.locator('h2')).toHaveText('Revised heading');
+        await expect(after.locator('p strong')).toHaveText('Bold words');
+        expect(await after.evaluate(element => {
+            const heading = getComputedStyle(element.querySelector('h2')!);
+            const paragraph = getComputedStyle(element.querySelector('p')!);
+            const strong = getComputedStyle(element.querySelector('strong')!);
+            return parseFloat(heading.fontSize) > parseFloat(paragraph.fontSize)
+                && Number(strong.fontWeight) > Number(paragraph.fontWeight);
+        })).toBe(true);
+        await page.screenshot({ path: info.outputPath('formatted-review.png'), animations: 'disabled' });
+        if (control === 'dock') {
+            // A rejected checkpoint must leave the proposal retryable without
+            // mutating the body or leaking the button handler's rejection.
+            await page.evaluate(() => {
+                const original = Worker.prototype.postMessage;
+                Worker.prototype.postMessage = function (...args: Parameters<typeof original>) {
+                    if (args[0]?.kind === 'encode') {
+                        Worker.prototype.postMessage = original;
+                        throw new DOMException('Synthetic checkpoint transport failure', 'DataCloneError');
+                    }
+                    return original.apply(this, args);
+                };
+            });
+            await page.locator('.review-accept').click();
+            await expect(page.locator('.document-ai-composer .error-message')).toContainText('Synthetic checkpoint transport failure');
+            await expect(page.getByTestId('persisted-document-body')).toHaveText('Original headingUnchanged body');
+            await expect(page.locator('.review-bar')).toBeVisible();
+        }
+        await page.locator(control === 'inline' ? '.document-ai-hunk-accept' : control === 'dock' ? '.review-accept' : '.review-accept-all').click();
+        await expect(page.locator('.review-bar')).toBeHidden();
+        await expect(page.locator('.document-ai-composer .error-message')).toBeHidden();
+        await expect(page.getByTestId('persisted-document-body')).toHaveText('Revised headingBold words and plain words.Unchanged body');
+        const checkpoint = await page.evaluate(async ({ revisionsURL, id }) => {
+            const { listCompleteDocumentRevisions } = await import(revisionsURL!);
+            const revisions = await listCompleteDocumentRevisions(id);
+            return revisions.find((revision: { manifest: { source: string } }) => revision.manifest.source === 'ai')?.snapshot.content;
+        }, { revisionsURL, id });
+        expect(checkpoint?.content[0]).toMatchObject({ type: 'heading', attrs: { level: 2 }, content: [
+            { type: 'text', text: 'Original ' }, { type: 'text', text: 'heading', marks: [{ type: 'italic' }] },
+        ] });
+        expect(workers.some(url => url.includes('document-revision.worker'))).toBe(true);
+        expect(errors).toEqual([]);
+        await page.reload();
+        await expect(body.locator('h2')).toHaveText('Revised heading', { timeout: 45_000 });
+        await expect(body.locator('p strong')).toHaveText('Bold words');
+    });
+
+    test('inline AI review accepts Enter and Space once per activation in a locked editor', async ({ page }, info) => {
+        const scripts = recoveryScripts.get(page) ?? [];
+        const operationsURL = scripts.find(url => /\/document-ai-operations\.ts(?:\?|$)/.test(url));
+        const hunksURL = scripts.find(url => /\/document-ai-hunks\.ts(?:\?|$)/.test(url));
+        expect(operationsURL).toBeTruthy(); expect(hunksURL).toBeTruthy();
+        await page.getByRole('textbox', { name: 'Document body' }).evaluate(async (element, { operationsURL, hunksURL }) => {
+            const { freezeDocumentForAi } = await import(operationsURL!);
+            const { createDocumentAiHunks } = await import(hunksURL!);
+            const editor = (element as HTMLElement & { editor: Editor }).editor;
+            const snapshot = freezeDocumentForAi(editor);
+            const hunks = createDocumentAiHunks([{ kind: 'insert_end', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Keyboard review evidence' }] }] }], snapshot);
+            const receipt = { activations: 0 };
+            (window as unknown as { keyboardReviewReceipt: typeof receipt }).keyboardReviewReceipt = receipt;
+            editor.commands.setDocumentAiHunkHandlers({ onAcceptHunk: () => { receipt.activations++; } });
+            editor.commands.setDocumentAiHunks({ snapshot, hunks });
+            editor.setEditable(false, false);
+        }, { operationsURL, hunksURL });
+        const button = page.locator('.document-ai-hunk-accept');
+        await button.focus();
+        await page.keyboard.press('Enter');
+        await expect.poll(() => page.evaluate(() => (window as unknown as { keyboardReviewReceipt: { activations: number } }).keyboardReviewReceipt.activations)).toBe(1);
+        await button.focus();
+        await page.keyboard.press('Space');
+        await expect.poll(() => page.evaluate(() => (window as unknown as { keyboardReviewReceipt: { activations: number } }).keyboardReviewReceipt.activations)).toBe(2);
+        await info.attach('keyboard-review', { body: JSON.stringify({ keys: ['Enter', 'Space'], activations: 2 }), contentType: 'application/json' });
+    });
+
     test('refresh before the capture debounce protects the unsaved document', async ({ page }, info) => {
         const body = page.getByRole('textbox', { name: 'Document body' });
         await body.click();
@@ -320,15 +498,128 @@ test.describe('local document recovery faults', () => {
         await expect(body).toContainText('Quota retry recovery marker', { timeout: 30_000 });
     });
 
+    test('document AI keeps an interrupted prompt, retries online, and accepts existing edits offline', async ({ context, page }, info) => {
+        const body = page.getByRole('textbox', { name: 'Document body' });
+        const prompt = page.getByRole('textbox', { name: 'Document AI prompt' });
+        const send = page.getByRole('button', { name: 'Send to document AI', exact: true });
+        const keyURL = recoveryScripts.get(page)?.find(url => /\/useUserApiKey\.ts(?:\?|$)/.test(url));
+        expect(keyURL).toBeTruthy();
+        await page.evaluate(async keyURL => {
+            const { useUserApiKey } = await import(keyURL!);
+            useUserApiKey().setKey('synthetic-document-ai-offline-key');
+        }, keyURL);
+        const offlineTokenizerRequests: string[] = [];
+        context.on('request', request => {
+            if (/gpt-tokenizer/.test(request.url())) offlineTokenizerRequests.push(request.url());
+        });
+        let requests = 0;
+        let releaseFirst!: () => void;
+        const firstResponse = new Promise<void>(resolve => { releaseFirst = resolve; });
+        const sse = (delta: unknown, finishReason = 'stop') => `data: ${JSON.stringify({ choices: [{ delta, finish_reason: finishReason }] })}\n\ndata: [DONE]\n\n`;
+        await page.route('**/api/openrouter/stream', async route => {
+            const attempt = ++requests;
+            if (attempt === 1) await firstResponse;
+            await route.fulfill({ status: 200, contentType: 'text/event-stream', body: attempt === 2
+                ? sse({ tool_calls: [{ index: 0, id: 'offline-retry-edit', type: 'function', function: {
+                    name: 'propose_edits', arguments: JSON.stringify({ operations: [{ kind: 'insert_end', content: [
+                        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Recovered AI edit' }] },
+                    ] }] }),
+                } }] }, 'tool_calls')
+                : sse({ content: 'Finished.' }),
+            }).catch(() => {}); // The deliberately interrupted fetch may already be gone.
+        });
+        try {
+            await context.setOffline(true);
+            await expect(page.locator('.offline-message')).toContainText("You're offline");
+            await page.locator('input[accept="image/*,application/pdf"]').setInputFiles(intakePng);
+            await expect(page.locator('.attachment-name')).toHaveText(intakePng.name);
+            await prompt.fill('Add a heading after the existing document.');
+            await expect(send).toBeDisabled();
+            await prompt.press('Enter');
+            await page.waitForTimeout(600);
+            expect(requests).toBe(0);
+            expect(offlineTokenizerRequests).toEqual([]);
+            await context.setOffline(false);
+            await expect(send).toBeEnabled();
+            await send.click();
+            await expect.poll(() => requests).toBe(1);
+            await expect(body).toHaveAttribute('contenteditable', 'false');
+            await context.setOffline(true);
+            await expect(page.getByRole('button', { name: 'Stop AI', exact: true })).toBeHidden();
+            await expect(body).toHaveAttribute('contenteditable', 'true');
+            await expect(page.locator('.document-ai-composer .error-message')).toContainText('connection was lost');
+            await expect(prompt).toHaveText('Add a heading after the existing document.');
+            await expect(page.locator('.attachment-name')).toHaveText(intakePng.name);
+            releaseFirst();
+            await page.screenshot({ path: info.outputPath('interrupted-ai-prompt.png') });
+            await context.setOffline(false);
+            await expect(send).toBeEnabled();
+            await page.waitForTimeout(900);
+            expect(requests).toBe(1); // Reconnect never replays a request automatically.
+            await send.click();
+            await expect(page.locator('.review-bar')).toBeVisible();
+            await expect(page.locator('.is-after .document-ai-hunk-pane-text h2')).toHaveText('Recovered AI edit');
+            expect(requests).toBe(3); // Tool proposal, then the final assistant turn.
+            await expect(page.locator('.document-ai-composer .error-message')).toBeHidden();
+            await context.setOffline(true);
+            await expect(page.locator('.offline-message')).toBeVisible();
+            await page.locator('.review-accept-all').click();
+            await expect(page.locator('.review-bar')).toBeHidden();
+            await expect(page.getByTestId('persisted-document-body')).toHaveText('Initial document text.Recovered AI edit');
+            expect(requests).toBe(3);
+            await context.setOffline(false);
+            await page.reload();
+            await expect(body.locator('h2')).toHaveText('Recovered AI edit', { timeout: 45_000 });
+            await info.attach('document-ai-connectivity', { body: JSON.stringify({ offlineRequests: 0, interruptedRequests: 1,
+                retryRequests: 2, autoReplay: false, localAcceptWhileOffline: true, survivedReload: true, paidRequests: 0 }), contentType: 'application/json' });
+        } finally {
+            releaseFirst();
+            await context.setOffline(false);
+        }
+    });
+
     test('offline editing persists locally through reconnect and reload', async ({ context, page }, info) => {
         const body = page.getByRole('textbox', { name: 'Document body' });
+        const scripts = recoveryScripts.get(page) ?? [];
+        const keyURL = scripts.find(url => /\/useUserApiKey\.ts(?:\?|$)/.test(url));
+        expect(keyURL).toBeTruthy();
+        // An in-memory synthetic key makes inference eligible without writing
+        // credentials. Every inference response below is local and scripted.
+        await page.evaluate(async keyURL => {
+            const { useUserApiKey } = await import(keyURL!);
+            useUserApiKey().setKey('synthetic-offline-journey-key');
+        }, keyURL);
+        const inferenceRequests: string[] = [];
+        const errors: string[] = [];
+        page.on('request', request => {
+            if (/\/api\/openrouter\/stream|\/chat\/completions/.test(request.url())) inferenceRequests.push(request.url());
+        });
+        page.on('console', message => {
+            if (message.type() === 'error' && message.text().includes('API call failed')) errors.push(message.text());
+        });
+        await page.route('**/api/openrouter/stream', route => route.fulfill({
+            status: 200, contentType: 'text/event-stream',
+            body: 'data: {"choices":[{"delta":{"content":"<next_line> restored suggestion</next_line>"}}]}\n\ndata: [DONE]\n\n',
+        }));
         await context.setOffline(true);
+        await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
         await body.fill('Offline document recovery marker');
         await expect(page.getByTestId('persisted-document-body')).toHaveText('Offline document recovery marker');
+        await page.waitForTimeout(900); // Observe beyond the autocomplete debounce.
+        expect(inferenceRequests).toEqual([]);
+        expect(errors).toEqual([]);
         await context.setOffline(false);
+        await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(true);
+        await body.press('End');
+        await body.pressSequentially(' online');
+        await expect(body.locator('.autocomplete-suggestion')).toContainText('restored suggestion');
+        expect(inferenceRequests).toHaveLength(1);
+        expect(inferenceRequests[0]).toContain('/api/openrouter/stream');
+        await expect(page.getByTestId('persisted-document-body')).toHaveText('Offline document recovery marker online');
         await page.reload();
-        await expect(body).toContainText('Offline document recovery marker', { timeout: 30_000 });
-        await info.attach('offline-local-durability', { body: JSON.stringify({ recovered: await body.textContent(), cloudSyncEnabled: false }), contentType: 'application/json' });
+        await expect(body).toContainText('Offline document recovery marker online', { timeout: 30_000 });
+        await info.attach('offline-local-durability', { body: JSON.stringify({ recovered: await body.textContent(), cloudSyncEnabled: false,
+            offlineInferenceRequests: 0, reconnectedInferenceRequests: inferenceRequests.length, paidRequests: 0, autocompleteErrors: errors }), contentType: 'application/json' });
     });
 
     test('two tabs refuse a stale save and preserve both the committed row and unsaved buffer', async ({ context, page }, info) => {
@@ -337,16 +628,31 @@ test.describe('local document recovery faults', () => {
             await other.goto('/__or3-document-journey-test');
             const otherBody = other.getByRole('textbox', { name: 'Document body' });
             await expect(otherBody).toContainText('Initial document text.', { timeout: 30_000 });
-            await page.getByRole('textbox', { name: 'Document body' }).fill('First tab committed content');
-            await expect(page.getByTestId('persisted-document-body')).toHaveText('First tab committed content');
+            // Keep the second tab dirty before the first commits. A clean tab
+            // legitimately refreshes its baseline from IndexedDB notifications.
+            await other.evaluate(() => {
+                const original = IDBObjectStore.prototype.put;
+                IDBObjectStore.prototype.put = function (...args: Parameters<typeof original>) {
+                    if (this.name === 'posts') throw new DOMException('Synthetic pending draft', 'QuotaExceededError');
+                    return original.apply(this, args);
+                };
+                (window as unknown as { restoreRecoveryPut: () => void }).restoreRecoveryPut = () => { IDBObjectStore.prototype.put = original; };
+            });
             await otherBody.fill('Second tab unsaved content');
             await expect(other.getByRole('button', { name: 'Retry document save', exact: true })).toBeVisible();
+            await page.getByRole('textbox', { name: 'Document body' }).fill('First tab committed content');
+            await expect(page.getByTestId('persisted-document-body')).toHaveText('First tab committed content');
+            await other.evaluate(() => (window as unknown as { restoreRecoveryPut: () => void }).restoreRecoveryPut());
             await expect(other.getByTestId('persisted-document-body')).toHaveText('First tab committed content');
             await expect(otherBody).toContainText('Second tab unsaved content');
             await other.getByRole('button', { name: 'Retry document save', exact: true }).click();
             await expect(other.getByText('Your changes have not been saved locally.', { exact: true })).toBeVisible();
             await expect(page.getByTestId('persisted-document-body')).toHaveText('First tab committed content');
-            await info.attach('two-tab-conflict', { body: JSON.stringify({ saved: await other.getByTestId('persisted-document-body').textContent(), unsaved: await otherBody.textContent() }), contentType: 'application/json' });
+            await other.getByRole('button', { name: 'Save local copy and reload', exact: true }).click();
+            await expect(otherBody).toContainText('First tab committed content');
+            await expect(other.getByText(/Your local edits were saved as/)).toBeVisible();
+            await expect(other.getByRole('button', { name: 'Retry document save', exact: true })).toBeHidden();
+            await info.attach('two-tab-conflict', { body: JSON.stringify({ saved: await other.getByTestId('persisted-document-body').textContent(), reloaded: await otherBody.textContent() }), contentType: 'application/json' });
         } finally { await other.close(); }
     });
 });
@@ -656,4 +962,88 @@ test('autosaves the production document editor and restores title and content af
     await expect(
         page.getByRole('textbox', { name: 'Document body' })
     ).toContainText('Autosaved browser document body.');
+});
+
+for (const mode of ['light', 'dark'] as const) test(`blank ${mode} keyboard focus fits sidebar rows, workspace tabs and document actions`, async ({ page, context }, info) => {
+    test.setTimeout(120_000);
+    await context.addCookies([{ name: 'or3_active_theme', value: 'blank', domain: '127.0.0.1', path: '/' }]);
+    await page.addInitScript(mode => { localStorage.setItem('activeTheme', 'blank'); localStorage.setItem('theme', mode);
+        localStorage.setItem('or3:user-theme-accessibility', JSON.stringify({ version: 1, focusRingWidthPx: mode === 'dark' ? 4 : 2, motion: 'reduced' })); }, mode);
+    await context.route('**/*', route => {
+        const url = new URL(route.request().url());
+        return url.hostname === '127.0.0.1' || url.protocol === 'blob:' || url.protocol === 'data:' ? route.continue() : route.abort('blockedbyclient');
+    });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto('/__or3-chat-journey-test?project=1');
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 60_000 });
+    await page.goto('/chat');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'blank');
+    const evidence: unknown[] = [];
+    async function checkFocus(control: Locator, owner = control) {
+        await control.scrollIntoViewIfNeeded({ timeout: 10_000 });
+        await control.focus();
+        await page.keyboard.press('Shift+Tab');
+        await page.keyboard.press('Tab');
+        await expect(control).toBeFocused();
+        expect(await control.evaluate(element => element.matches(':focus-visible'))).toBe(true);
+        await owner.evaluate(async element => { await Promise.all(element.getAnimations().map(animation => animation.finished.catch(() => {}))); });
+        const result = await owner.evaluate(element => {
+            const style = getComputedStyle(element);
+            const rect = element.getBoundingClientRect();
+            const scale = rect.width / (element as HTMLElement).offsetWidth || 1;
+            const outside = Math.max(0, parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset)) * scale;
+            const clipped: string[] = [];
+            for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+                const css = getComputedStyle(parent); const box = parent.getBoundingClientRect();
+                if (/(hidden|auto|scroll|clip)/.test(css.overflowX) && (rect.left - outside < box.left - 1 || rect.right + outside > box.right + 1)) clipped.push(parent.className + ':x');
+                if (/(hidden|auto|scroll|clip)/.test(css.overflowY) && (rect.top - outside < box.top - 1 || rect.bottom + outside > box.bottom + 1)) clipped.push(parent.className + ':y');
+            }
+            const probe = document.createElement('span'); probe.style.cssText = 'position:fixed;color:var(--md-focus-ring);outline:var(--app-focus-ring-width) solid'; element.append(probe);
+            const expected = getComputedStyle(probe); const expectedColor = expected.color; const expectedWidth = expected.outlineWidth; probe.remove();
+            return { label: element.getAttribute('aria-label') || element.textContent?.trim().slice(0, 60),
+                color: style.outlineColor, expectedColor, expectedWidth, width: style.outlineWidth, offset: style.outlineOffset, line: style.outlineStyle,
+                opacity: style.opacity, ring: style.getPropertyValue('--tw-ring-shadow').trim(), clipped,
+                beforeOutline: getComputedStyle(element.querySelector(':scope > button') || element, '::before').outlineStyle };
+        });
+        evidence.push(result);
+        expect.soft(result.line, JSON.stringify(result)).toBe('solid');
+        expect.soft(result.width, JSON.stringify(result)).toBe(result.expectedWidth);
+        expect.soft(parseFloat(result.offset) + parseFloat(result.width), JSON.stringify(result)).toBeLessThanOrEqual(0.01);
+        expect.soft(result.color, JSON.stringify(result)).toBe(result.expectedColor);
+        expect.soft(result.opacity, JSON.stringify(result)).toBe('1');
+        expect.soft(result.clipped, JSON.stringify(result)).toEqual([]);
+        expect.soft(result.ring, JSON.stringify(result)).toMatch(/^(0 0 #0000|0 0 rgba\(0, 0, 0, 0\))$/);
+        expect.soft(result.beforeOutline, JSON.stringify(result)).toBe('none');
+        if (owner !== control) expect(await control.evaluate(element => getComputedStyle(element).outlineStyle)).toBe('none');
+    }
+    for (const label of ['Chats', 'Documents', 'Projects']) await checkFocus(page.getByRole('button', { name: label, exact: true }));
+    const documentButton = page.getByRole('button', { name: 'Open Workspace evidence', exact: true }).first();
+    const documentRow = page.locator('.unified-sb-item').filter({ has: documentButton }).first();
+    await checkFocus(documentButton, documentRow);
+    await checkFocus(documentRow.getByRole('button', { name: 'Actions for Workspace evidence', exact: true }));
+    expect(await documentRow.evaluate(element => getComputedStyle(element).outlineStyle)).toBe('none');
+    const chatButton = page.getByRole('button', { name: 'Open Saffron project chat', exact: true }).first();
+    await checkFocus(chatButton, page.locator('.unified-sb-item').filter({ has: chatButton }).first());
+    const projectButton = page.getByRole('button', { name: 'Open project Workspace fixture project', exact: true });
+    await checkFocus(projectButton, page.locator('.project-root-toggle').filter({ has: projectButton }));
+    await page.screenshot({ path: info.outputPath(`blank-${mode}-sidebar-focus.png`), animations: 'disabled' });
+    await page.getByRole('button', { name: 'Projects', exact: true }).click();
+    const projectRow = page.getByRole('list', { name: 'Project list', exact: true }).locator('.unified-sb-item').filter({ hasText: 'Workspace fixture project' });
+    await checkFocus(projectRow.locator(':scope > button').first(), projectRow);
+    await checkFocus(projectRow.getByRole('button', { name: 'Pin project', exact: true }));
+    expect(await projectRow.evaluate(element => getComputedStyle(element).outlineStyle)).toBe('none');
+    await page.getByRole('region', { name: 'Projects', exact: true }).getByRole('button', { name: 'Home', exact: true }).click();
+    await documentButton.click();
+    await expect(page.getByRole('textbox', { name: 'Document body' })).toBeVisible({ timeout: 30_000 });
+    for (const width of [1440, 1000]) {
+        await page.setViewportSize({ width, height: 1000 });
+        for (const control of [page.locator('.workspace-tab[aria-selected="true"]'),
+            page.getByRole('button', { name: 'New split', exact: true }),
+            page.getByRole('button', { name: /^Switch to (light|dark) mode$/ }),
+            page.getByRole('combobox', { name: 'Text style', exact: true }).or(page.getByRole('button', { name: /^Text style:/ })),
+            page.getByRole('button', { name: /Italic \(/ }),
+            page.getByRole('button', { name: 'Outline & info', exact: true })]) await checkFocus(control);
+        await page.screenshot({ path: info.outputPath(`blank-${mode}-${width}-toolbar-focus.png`), animations: 'disabled' });
+    }
+    await writeFile(info.outputPath('keyboard-focus.json'), JSON.stringify(evidence, null, 2));
 });

@@ -1,5 +1,6 @@
+import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
 import { getActiveWorkspaceId, getDb, getWorkspaceGeneration, type Or3DB } from '~/db/client';
-import { prepareDocumentCreate, getDocument, getDocumentInDb, type CreateDocumentInput } from '~/db/documents';
+import { prepareDocumentCreate, getDocumentInDb, type CreateDocumentInput } from '~/db/documents';
 import { getWriteTxTableNames } from '~/db/util';
 import { parseFileHashes } from '~/db/files-util';
 import { captureWorkspaceOperation } from '~/utils/chat/workspace-access';
@@ -49,7 +50,7 @@ async function saveChatDocument(input: CreateDocumentInput, context: ToolExecuti
         await context.assertToolAuthorized?.();
         if (sourceId) {
             const source = await scope.db.posts.get(sourceId);
-            if (!source || source.deleted || source.postType !== 'doc') throw new Error('The source document is no longer available.');
+            if (!source || !isVisibleWorkspaceItem(source) || source.postType !== 'doc') throw new Error('The source document is no longer available.');
         }
         for (const hash of parseFileHashes(prepared.row.file_hashes)) {
             const file = await scope.db.file_meta.get(hash);
@@ -111,7 +112,7 @@ export async function duplicateChatDocument(
     }
     assertWriteOrigin(context, db, generation);
     const source = await getDocumentInDb(db, documentId);
-    if (!source || source.deleted) throw new Error('The source document is no longer available.');
+    if (!source || !isVisibleWorkspaceItem(source)) throw new Error('The source document is no longer available.');
     assertWriteOrigin(context, db, generation);
     const copy = await saveChatDocument({
         title: title?.trim() || `${source.title} (copy)`,
@@ -218,14 +219,15 @@ export async function openPaneContext(tabId: string | undefined, context: ToolEx
     let content: string;
     let emptyChat = false;
     if (resource.kind === 'document') {
+        const db = getDb();
+        const generation = getWorkspaceGeneration();
+        const row = await getDocumentInDb(db, resource.documentId);
+        assertWriteOrigin(context, db, generation);
+        if (!row) throw new Error('This document is unavailable.');
         const session = getActiveDocumentEditorSession(resource.documentId, tab.id);
         if (session?.getChatContext) {
             content = session.getChatContext(context.requestId);
         } else {
-            const row = await getDocument(resource.documentId);
-            if (!row || row.deleted) {
-                throw new Error('This document is no longer available.');
-            }
             content = tiptapToPlainText(row.content);
         }
     } else if (resource.kind === 'chat' && resource.threadId) {
@@ -281,9 +283,14 @@ export async function openPaneContext(tabId: string | undefined, context: ToolEx
 }
 
 
-export function executeDocumentEditorTool(name: string, args: Record<string, unknown>, context: ToolExecutionContext) {
+export async function executeDocumentEditorTool(name: string, args: Record<string, unknown>, context: ToolExecutionContext) {
     assertChatWorkspace(context);
     const documentId = String(args.documentId);
+    const db = getDb();
+    const generation = getWorkspaceGeneration();
+    const row = await getDocumentInDb(db, documentId);
+    assertWriteOrigin(context, db, generation);
+    if (!row) throw new Error('This document is unavailable.');
     const candidates = getOpenWorkspaceTabs().filter((entry) =>
         entry.resource.kind === 'document'
         && entry.resource.documentId === documentId

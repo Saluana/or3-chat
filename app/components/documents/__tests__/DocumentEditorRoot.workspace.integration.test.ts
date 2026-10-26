@@ -185,7 +185,7 @@ describe('mounted document editor workspace lifecycle', () => {
                 await expect(second.ensureLocalDurability()).rejects.toThrow(/another pane/i);
                 expect(peerEditor.getText()).toBe('A original body with an independent draft');
                 expect((await dbA.posts.get(documentId))?.content).toContain('First pane committed body');
-                expect(peer.get('[role="alert"]').text()).toContain('undo');
+                expect(peer.get('[role="alert"]').text()).toContain('Save a local copy');
                 if (mode === 'retained') {
                     setActiveWorkspaceDb(idB);
                     peer.unmount(); wrapper!.unmount(); wrapper = undefined;
@@ -205,7 +205,7 @@ describe('mounted document editor workspace lifecycle', () => {
                     peerEditor = currentEditor();
                     second = getDocumentEditorSession({ paneId: 'restored-peer-pane', tabId: 'peer-tab' })!;
                     expect(peerEditor.getText()).toBe('A original body with an independent draft');
-                    expect(peer.get('[role="alert"]').text()).toContain('undo');
+                    expect(peer.get('[role="alert"]').text()).toContain('Save a local copy');
                     expect((await reopened.posts.get(documentId))?.content).toContain('First pane committed body');
                 }
                 peerEditor.commands.undo();
@@ -352,7 +352,7 @@ describe('mounted document editor workspace lifecycle', () => {
         await updateWorkspaceFile(scope, documentId, await workspaceRevision(trashed), { trashed: false });
         await vi.waitFor(() => expect(editor.isEditable).toBe(true));
     });
-    it('accepts committed Apply without another storage reload that can revive the old buffer', async () => {
+    it('preserves committed Apply through post-commit read failures', async () => {
         vi.stubGlobal('Blob', NodeBlob);
         const originalAuth = testRuntimeConfig.value.public.ssrAuthEnabled;
         testRuntimeConfig.value.public.ssrAuthEnabled = false;
@@ -374,13 +374,11 @@ describe('mounted document editor workspace lifecycle', () => {
             }), { ...context, callId: 'mounted-proposal' }, { definition: registry.getTool('workspace_propose_document_edit')!.definition });
             expect(proposal.error).toBeUndefined();
             expect((await dbA.posts.get(documentId))!.clock).toBe(revisionBefore);
-            let afterCommitRead = false;
             const get = dbA.posts.get.bind(dbA.posts);
             hooks.addAction('db.documents.update:action:after', () => {
-                vi.spyOn(dbA.posts, 'get').mockImplementationOnce(() => { afterCommitRead = true; throw new Error('Injected post-commit read failure'); });
+                vi.spyOn(dbA.posts, 'get').mockImplementationOnce(() => { throw new Error('Injected post-commit read failure'); });
             });
             expect((await applyWorkspaceDocumentChange(JSON.parse(proposal.result!))).status).toBe('applied');
-            expect(afterCommitRead).toBe(false);
             expect(JSON.stringify(currentEditor().getJSON())).toContain('Mounted applied body');
             vi.restoreAllMocks();
             wrapper!.unmount(); wrapper = undefined;

@@ -197,9 +197,13 @@
 .document-content { width: 100%; }
 .document-content :deep(.ProseMirror) { min-height: 55vh; outline: none; caret-color: var(--md-primary); }
 .document-content :deep(.document-ai-hunk) { box-sizing: border-box; width: 100%; max-width: 100%; }
+.document-content :deep(.document-ai-hunk .document-ai-hunk-rich-text) { white-space: normal; font-weight: 400; line-height: 1.5; }
+.document-content :deep(.document-ai-hunk-rich-text > :first-child) { margin-top: 0; }
+.document-content :deep(.document-ai-hunk-rich-text > :last-child) { margin-bottom: 0; }
+.document-content :deep(.document-ai-hunk-body.is-collapsed .document-ai-hunk-rich-text) { max-height: 14rem; overflow: hidden; }
 /* Fallback tint for the AI's selection target; themes style it more specifically. */
 .document-content :deep(:where(.document-ai-scope-target.is-selection)) { background: color-mix(in srgb, var(--md-primary) 14%, transparent); border-radius: 2px; }
-.document-content :deep(hr) { margin: 2.5rem 0; border: 0; border-top: var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color); }
+.document-content :deep(hr) { margin: 2.5rem 0; border: 0; border-top: max(1px, var(--md-border-width, 1px)) solid var(--md-outline-variant, var(--md-border-color)); opacity: 1; }
 .document-content :deep(ul) { list-style-type: disc; }
 .document-content :deep(ol) { list-style-type: decimal; }
 .document-content :deep(ul ul) { list-style-type: circle; }
@@ -247,10 +251,12 @@
     color: var(--md-on-surface-variant);
     text-decoration: line-through;
 }
-.document-content :deep(.tableWrapper) { width: min(1040px, calc(100cqw - 3rem)); margin: 1.75rem 50%; transform: translateX(-50%); overflow-x: auto; border: var(--md-border-width) solid var(--md-border-color); border-radius: var(--md-border-radius); }
-.document-content :deep(table) { width: 100%; min-width: 38rem; border-collapse: collapse; table-layout: fixed; }
-.document-content :deep(th), .document-content :deep(td) { min-width: 7rem; padding: 0.55rem 0.65rem; border-inline-end: var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color); border-bottom: var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color); vertical-align: top; }
-.document-content :deep(th) { background: var(--md-surface-container-low); text-align: left; font-size: 0.75rem; }
+.document-content :deep(.tableWrapper) { width: 100%; max-width: 100%; margin: 1.75rem 0; overflow-x: auto; border: var(--or3-prose-table-border-width) solid var(--md-border-color); border-radius: var(--md-border-radius); }
+.document-content :deep(table) { width: 100%; min-width: 38rem; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+/* The wrapper owns the outer border; draw each internal edge exactly once. */
+.document-content :deep(table :is(th, td)) { min-width: 7rem; vertical-align: top; border: 0; border-inline-end: var(--or3-prose-table-border-width) solid var(--md-border-color); border-block-end: var(--or3-prose-table-border-width) solid var(--md-border-color); }
+.document-content :deep(table :is(th, td):last-child) { border-inline-end: 0; }
+.document-content :deep(table tr:last-child > :is(th, td)) { border-block-end: 0; }
 .document-content :deep(.selectedCell::after) { background: color-mix(in oklab, var(--md-primary), transparent 86%); }
 .document-content :deep(p.is-editor-empty:first-child::before), .document-content :deep(.is-empty::before) { float: left; height: 0; color: color-mix(in oklab, var(--md-on-surface-variant), transparent 45%); content: attr(data-placeholder); pointer-events: none; }
 
@@ -341,7 +347,6 @@
 }
 .inspector-backdrop { display: none; }
 .document-inspector::before { content: none; display: none; }
-.document-content :deep(.tableWrapper) { width: calc(100cqw - 2rem); }
 .selection-menu button { width: 44px; height: 44px; }
 }
 

@@ -215,7 +215,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "Native editing and custom schemas, live remote title/body refresh, credential-gated autocomplete, synchronized split panes and retained conflicting drafts, literal format-aware find/replace, read-only controls, cached and deferred statistics, editor-owned cache cleanup, title-only rename capture, captured workspace history, review/Undo, recoverable Files Trash and selection toolbar restoration, failed-save retry, unsaved-change guards, and scoped image delivery and intake recovery. Immediate message document creation with heading reuse, asynchronous titles and idempotent message snapshots."
+                    "summary": "Native editing and custom schemas, live remote title/body refresh, credential-gated autocomplete, synchronized split panes and retained conflicting drafts, literal format-aware find/replace, read-only controls, cached and deferred statistics, editor-owned cache cleanup, title-only rename capture, captured workspace history, review/Undo, recoverable Files Trash and selection toolbar restoration, failed-save retry, unsaved-change guards, and scoped image delivery and intake recovery. Immediate message document creation with heading reuse, asynchronous titles and idempotent message snapshots. Read-only raw/schema recovery, non-destructive conflict copies, size-ceiling warnings, embedded-image exports, frozen AI snapshot ownership, ordered acceptance and retryable durability. Shared chat/document table styling with visible cell grids across themes. Visible inserted dividers independent of subtle border settings. Image-only selection controls, labeled resizing and persisted/exported alignment. Native rich-text AI review previews and retryable worker checkpoint acceptance. Autocomplete pauses offline, retires active/queued requests, and resumes on new typing after reconnect. Document AI cancels interrupted preparation/generation, retains drafts for manual retry, supports local review and approximate token estimates offline, and refreshes cached models on reconnect."
                 },
                 {
                     "name": "prompts.md",
@@ -233,7 +233,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 7,
-                    "summary": "Source API reference for document history."
+                    "summary": "Workspace-scoped live history, clone-safe worker checkpoints with an offline local codec, bounded retries, safe restore preparation, complete-checkpoint retention, chunk ownership validation, and receipt-aware chat Undo pins."
                 },
                 {
                     "name": "kv.md",
@@ -416,7 +416,7 @@
                     "category": "Source integration",
                     "categoryOrder": 1,
                     "order": 2,
-                    "summary": "Understand foreground SSE, cancellation, background execution, and provider routing."
+                    "summary": "Understand foreground SSE, cancellation, background execution, provider routing, and connectivity-safe server-route discovery and fallback."
                 },
                 {
                     "name": "file-handling.md",
@@ -518,7 +518,7 @@
                     "category": "Building themes",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Style components with tokens, theme-aware tab and dashboard icons, Blank's Solar icons with heavier strokes and duotone category badges, sidebar project settings, Knowledge and Memory controls, shared responsive modal headers and customizable frame borders, CSS and scoped theme rules. Shared action-menu typography and density variables, Blank's type, radius and control scale, scale-aware sidebar pointer tracking, and the `html[data-theme]` selector convention. Empty-pane layout remains stable beneath the first-run welcome dialog."
+                    "summary": "Style components with tokens, theme-aware tab and dashboard icons, Blank's Solar icons with heavier strokes and duotone category badges, sidebar project settings, Knowledge and Memory controls, shared responsive modal headers and customizable frame borders, CSS and scoped theme rules. Shared action-menu typography and density variables, Blank's type, radius and control scale, scale-aware sidebar pointer tracking, and the `html[data-theme]` selector convention. Empty-pane layout remains stable beneath the first-run welcome dialog. Blank keyboard focus uses a consistent inset outline, full-row primary sidebar indicators, and the user focus-width preference without scroll clipping."
                 },
                 {
                     "name": "package-install.md",

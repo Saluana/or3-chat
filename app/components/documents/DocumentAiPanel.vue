@@ -35,7 +35,7 @@
                 <div class="review-bar-decisions">
                     <UButton color="neutral" variant="outline" size="sm" label="Reject" :disabled="readOnly || !activeHunk || accepting" @click="discardActiveHunk" />
                     <UButton class="review-accept" color="primary" size="sm" label="Accept" :disabled="readOnly || stale || !activeHunk || accepting" @click="acceptActiveHunk" />
-                    <UButton class="review-accept-all" color="neutral" size="sm" label="Accept all" :disabled="readOnly || stale || pendingHunkCount === 0 || accepting" @click="$emit('accept')" />
+                    <UButton class="review-accept-all" color="neutral" size="sm" :label="proposal.applied ? 'Retry save' : 'Accept all'" :disabled="readOnly || stale || (!proposal.applied && pendingHunkCount === 0) || accepting" @click="$emit('accept')" />
                 </div>
             </div>
             <p v-if="stale" class="error-message review-bar-error">The document changed. Regenerate from the latest version.</p>
@@ -58,7 +58,7 @@
             <div class="composer-row">
                 <input ref="attachmentInput" hidden tabindex="-1" aria-hidden="true" type="file" accept="image/*,application/pdf" multiple @change="onAttachmentInput" />
                 <div class="composer-actions composer-actions-leading">
-                    <UButton :icon="icons.attach" color="neutral" variant="ghost" size="xs" square class="attachment-button max-md:min-h-8! max-md:min-w-8! max-md:max-h-8! max-md:max-w-8! max-md:h-8! max-md:w-8! max-md:p-0!" aria-label="Add image or PDF" title="Add image or PDF" :disabled="readOnly || status === 'streaming' || attachments.length >= MAX_ATTACHMENTS" @click="attachmentInput?.click()" />
+                    <UButton :icon="icons.attach" color="neutral" variant="ghost" size="xs" square class="attachment-button max-md:min-h-8! max-md:min-w-8! max-md:max-h-8! max-md:max-w-8! max-md:h-8! max-md:w-8! max-md:p-0!" aria-label="Add image or PDF" title="Add image or PDF" :disabled="readOnly || working || attachments.length >= MAX_ATTACHMENTS" @click="attachmentInput?.click()" />
                     <UButton :icon="icons.settings" color="neutral" :variant="customizeOpen ? 'soft' : 'ghost'" size="xs" square class="settings-button max-md:min-h-8! max-md:min-w-8! max-md:max-h-8! max-md:max-w-8! max-md:h-8! max-md:w-8! max-md:p-0!" :aria-expanded="customizeOpen" aria-label="Document AI settings" @click="customizeOpen = !customizeOpen" />
                 </div>
                 <DocumentAiPromptEditor
@@ -69,13 +69,13 @@
                     :placeholder="selectionAvailable ? 'Describe what to change in the selection…' : 'Describe what you want to change, improve, or create…'"
                     :saved-actions="settings.quickActions"
                     :plugin-actions="pluginActions"
-                    :disabled="readOnly || status === 'streaming'"
+                    :disabled="readOnly || working"
                     @update:references="references = $event"
                     @submit="send"
                 />
                 <div class="composer-actions composer-actions-trailing">
-                    <UButton v-if="status === 'streaming'" :icon="icons.stop" color="error" size="xs" square class="send-button max-md:min-h-8! max-md:min-w-8! max-md:max-h-8! max-md:max-w-8! max-md:h-8! max-md:w-8! max-md:p-0!" aria-label="Stop AI" @click="$emit('abort')" />
-                    <UButton v-else :icon="icons.send" color="primary" size="xs" square class="send-button max-md:min-h-8! max-md:min-w-8! max-md:max-h-8! max-md:max-w-8! max-md:h-8! max-md:w-8! max-md:p-0!" aria-label="Send to document AI" :disabled="readOnly || !prompt.trim() || attachments.some((attachment) => attachment.loading)" @click="send" />
+                    <UButton v-if="working" :icon="icons.stop" color="error" size="xs" square class="send-button max-md:min-h-8! max-md:min-w-8! max-md:max-h-8! max-md:max-w-8! max-md:h-8! max-md:w-8! max-md:p-0!" aria-label="Stop AI" @click="$emit('abort')" />
+                    <UButton v-else :icon="icons.send" color="primary" size="xs" square class="send-button max-md:min-h-8! max-md:min-w-8! max-md:max-h-8! max-md:max-w-8! max-md:h-8! max-md:w-8! max-md:p-0!" aria-label="Send to document AI" :disabled="readOnly || !online || !prompt.trim() || attachments.some((attachment) => attachment.loading)" @click="send" />
                 </div>
             </div>
 
@@ -293,7 +293,7 @@
                                             <USwitch
                                                 :model-value="tool.enabled"
                                                 :label="tool.label"
-                                                :disabled="readOnly || status === 'streaming'"
+                                                :disabled="readOnly || working"
                                                 @update:model-value="(value: boolean) => setToolEnabled(tool.name, value)"
                                             />
                                             <UIcon
@@ -313,10 +313,11 @@
             </div>
         </AppModal>
 
+        <p v-if="!online" class="offline-message" role="status">You're offline. Keep writing or review existing suggestions. Reconnect to send AI requests.</p>
         <p v-if="error" class="error-message" role="alert">{{ error }}</p>
-        <div v-if="status === 'streaming'" class="stream-status" aria-live="polite">
+        <div v-if="working" class="stream-status" aria-live="polite">
             <span class="status-dot" />
-            {{ agentStatus || 'Working on your document…' }}
+            {{ agentStatus || (status === 'preparing' ? 'Preparing your request…' : 'Working on your document…') }}
         </div>
     </ChatComposerShell>
 </template>
@@ -324,6 +325,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useToast } from '#imports';
+import { useOnline } from '@vueuse/core';
 import AppModal from '~/components/ui/AppModal.vue';
 import ChatComposerShell from '~/components/chat/ChatComposerShell.vue';
 import type { DocumentAiAction, DocumentAiScope } from '~/composables/editor/useDocumentAiActions';
@@ -368,6 +370,7 @@ const props = defineProps<{
     pendingHunkCount?: number;
     focusedHunkId?: string | null;
     proposal: {
+        readonly applied?: boolean;
         readonly diff: {
             readonly changed: number;
             readonly added: number;
@@ -394,6 +397,9 @@ const props = defineProps<{
     focusNonce: number;
     autocomplete: { enabled: boolean; loading: boolean; error: string | null };
 }>();
+
+const online = useOnline();
+const working = computed(() => props.status === 'preparing' || props.status === 'streaming');
 
 const icons = reactive({
     close: useIcon('editor.close'),
@@ -442,7 +448,7 @@ const automaticScope = computed<DocumentAiScope>(() =>
 const INHERIT_MODEL_VALUE = 'inherit';
 const { settings, update } = useDocumentAiSettings();
 const toolRegistry = useToolRegistry();
-const { catalog, favoriteModels, fetchModels, getFavoriteModels } = useModelStore();
+const { catalog, favoriteModels, fetchModels, loadCachedModels, getFavoriteModels } = useModelStore();
 const toolToggleRows = computed(() =>
     buildDocumentAiToolToggleRows(settings.value.enabledTools, toolRegistry.listTools.value),
 );
@@ -548,9 +554,12 @@ watch(prompt, scheduleEstimate);
 watch(references, scheduleEstimate, { deep: true });
 onMounted(() => {
     void Promise.all([
-        fetchModels().catch(() => []),
+        (online.value ? fetchModels() : loadCachedModels()).catch(() => []),
         getFavoriteModels().catch(() => []),
     ]);
+});
+watch(online, (connected) => {
+    if (connected) void fetchModels().catch(() => []);
 });
 onBeforeUnmount(() => {
     if (estimateTimer) clearTimeout(estimateTimer);
@@ -571,14 +580,16 @@ function discardActiveHunk() {
     emit('discard-hunk', activeHunk.value.id);
 }
 function scheduleEstimate() {
-    if (props.readOnly) return;
     if (estimateTimer) clearTimeout(estimateTimer);
-    if (!prompt.value.trim()) return;
-    estimateTimer = setTimeout(() => emit('estimate', {
-        prompt: prompt.value,
-        scope: automaticScope.value,
-        references: references.value,
-    }), 250);
+    if (props.readOnly || working.value || props.proposal || !prompt.value.trim()) return;
+    estimateTimer = setTimeout(() => {
+        if (props.readOnly || working.value || props.proposal) return;
+        emit('estimate', {
+            prompt: prompt.value,
+            scope: automaticScope.value,
+            references: references.value,
+        });
+    }, 250);
 }
 // Focus the prompt first; the chip (and its button) unmounts once cleared.
 function clearSelection() {
@@ -586,7 +597,7 @@ function clearSelection() {
     emit('clear-selection');
 }
 function send() {
-    if (props.readOnly) return;
+    if (props.readOnly || !online.value || working.value) return;
     if (!prompt.value.trim() || attachments.value.some((attachment) => attachment.loading)) return;
     const payload = {
         prompt: prompt.value,
@@ -637,11 +648,10 @@ function setAutocomplete(value: boolean) {
     if (value !== props.autocomplete.enabled) emit('toggle-autocomplete');
 }
 function updateQuickAction(index: number, field: 'label' | 'prompt', value: string | number | null | undefined) {
-    const quickActions = settings.value.quickActions.map((action, actionIndex) => {
-        if (actionIndex !== index) return action;
-        return { ...action, [field]: String(value ?? '') };
-    });
-    void update({ quickActions });
+    const id = settings.value.quickActions[index]?.id;
+    if (!id) return;
+    void update(current => ({ quickActions: current.quickActions.map(action => action.id === id
+        ? { ...action, [field]: String(value ?? '') } : action) }));
 }
 function updateQuickActionFromEvent(index: number, field: 'label' | 'prompt', event: Event) {
     updateQuickAction(index, field, (event.target as HTMLInputElement | HTMLTextAreaElement).value);
@@ -649,37 +659,34 @@ function updateQuickActionFromEvent(index: number, field: 'label' | 'prompt', ev
 function addQuickAction() {
     if (settings.value.quickActions.length >= 12) return;
     const id = createRuntimeUuid();
-    void update({
-        quickActions: [
-            ...settings.value.quickActions,
-            {
-                id,
-                label: 'Custom action',
-                prompt: 'Describe the edit to make.',
-                defaultScope: 'document',
-            },
-        ],
-    });
+    void update(current => ({ quickActions: current.quickActions.length >= 12 ? current.quickActions : [
+        ...current.quickActions,
+        { id, label: 'Custom action', prompt: 'Describe the edit to make.', defaultScope: 'document' },
+    ] }));
     editingActionId.value = id;
 }
 function duplicateQuickAction(index: number) {
     if (settings.value.quickActions.length >= 12) return;
-    const source = settings.value.quickActions[index];
-    if (!source) return;
+    const sourceId = settings.value.quickActions[index]?.id;
+    if (!sourceId) return;
     const id = createRuntimeUuid();
-    const copy = { ...source, id, label: `${source.label} copy`.slice(0, 60) };
-    const quickActions = [...settings.value.quickActions];
-    quickActions.splice(index + 1, 0, copy);
-    void update({ quickActions });
+    void update(current => {
+        const sourceIndex = current.quickActions.findIndex(action => action.id === sourceId);
+        const source = current.quickActions[sourceIndex];
+        if (!source || current.quickActions.length >= 12) return {};
+        const quickActions = [...current.quickActions];
+        quickActions.splice(sourceIndex + 1, 0, { ...source, id, label: `${source.label} copy`.slice(0, 60) });
+        return { quickActions };
+    });
     editingActionId.value = id;
 }
 function removeQuickAction(index: number) {
-    const removed = settings.value.quickActions[index];
-    if (removed?.id === editingActionId.value) editingActionId.value = null;
-    void update({
-        quickActions: settings.value.quickActions.filter((_, actionIndex) => actionIndex !== index),
-    });
+    const id = settings.value.quickActions[index]?.id;
+    if (!id) return;
+    if (id === editingActionId.value) editingActionId.value = null;
+    void update(current => ({ quickActions: current.quickActions.filter(action => action.id !== id) }));
 }
+
 function fileToDataUrl(file: File) {
     return new Promise<string>((resolve, reject) => {
         const reader = new FileReader();

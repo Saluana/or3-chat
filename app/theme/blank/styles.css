@@ -336,6 +336,7 @@ html[data-theme="blank"] {
 
     .project-root-toggle,
     .project-child-toggle {
+        height: 100%;
         padding-inline: var(--blank-sb-inset);
     }
 
@@ -2924,5 +2925,29 @@ html.dark[data-theme='blank'] .sb-welcome {
         position: relative;
         z-index: 1;
         margin-left: 2px;
+    }
+}
+
+/* One keyboard indicator for native and Nuxt controls. Inset outlines stay
+   inside virtual rows and horizontal scroll rails, including a wider focus
+   preference. Match the utilities layer so Nuxt's important ring/outline
+   recipes cannot replace it with a second, differently colored halo. */
+@layer utilities {
+    html[data-theme='blank'] :is(button, a[href], [role='button'], [role='tab'], summary):focus-visible,
+    html[data-theme='blank'] .unified-sb-item:has(> button:first-child:focus-visible),
+    html[data-theme='blank'] .project-root-toggle:has(> .project-label:focus-visible) {
+        outline: var(--app-focus-ring-width, 2px) solid var(--md-focus-ring, var(--md-primary)) !important;
+        outline-offset: calc(-1 * var(--app-focus-ring-width, 2px)) !important;
+        --tw-ring-shadow: 0 0 #0000 !important;
+        --tw-ring-offset-shadow: 0 0 #0000 !important;
+        opacity: 1 !important;
+    }
+
+    /* Primary row buttons share the visible row's bounds. Secondary actions
+       retain their own indicator when reached on the next Tab stop. */
+    html[data-theme='blank'] .unified-sb-item > button:first-child:focus-visible,
+    html[data-theme='blank'] .unified-sb-item > button:first-child:focus-visible::before,
+    html[data-theme='blank'] .project-root-toggle > .project-label:focus-visible {
+        outline: none !important;
     }
 }

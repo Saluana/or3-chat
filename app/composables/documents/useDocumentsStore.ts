@@ -284,6 +284,52 @@ async function readDocument(id: string, db: Or3DB, background: boolean) {
     return st.record;
 }
 
+/** Preserve an owned draft as a new document before rebasing its original buffer. */
+export async function saveDocumentRecoveryCopy(
+    id: string,
+    draft: { title: string; content: TipTapDocument },
+    options: { conflictOwner?: string; isCurrent: () => boolean },
+    db = getDb(),
+): Promise<Document> {
+    const st = ensure(id, db);
+    if (st.flushPromise) await st.flushPromise;
+    if (!options.isCurrent()) throw new Error('The document changed. Your draft is still retained.');
+    const generation = st.nextGeneration;
+    const record = st.record;
+    const conflict = options.conflictOwner ? st.editorConflicts?.get(options.conflictOwner) : undefined;
+    const title = st.pendingTitle ?? record?.title ?? '';
+    const content = st.pendingContent !== undefined ? st.pendingContent : record?.content;
+    if (!conflict && (title !== draft.title || JSON.stringify(content) !== JSON.stringify(draft.content))) {
+        throw new Error('The draft changed. Your edits are still retained.');
+    }
+    st.debouncedSave?.cancel?.();
+    pendingSaves.delete(st);
+    const copy = await createDocumentInDb(db, { title: `${draft.title || 'Untitled'} (recovered copy)`, content: draft.content });
+    const latest = await getDocumentInDb(db, id);
+    if (!options.isCurrent() || st.nextGeneration !== generation || st.record !== record || st.flushPromise
+        || (options.conflictOwner && st.editorConflicts?.get(options.conflictOwner) !== conflict)) {
+        throw new Error(`Recovery copy saved as “${copy.title}”. Newer edits remain in the original buffer.`);
+    }
+    if (!latest) throw new Error(`Recovery copy saved as “${copy.title}”. The original is unavailable.`);
+    if (conflict && options.conflictOwner) {
+        // This pane owns only its conflicting draft. Shared pending edits belong
+        // to the other panes and must remain staged for their normal save path.
+        setDocumentEditorConflict(id, options.conflictOwner, undefined, db);
+    } else {
+        st.pendingTitle = undefined;
+        st.pendingContent = undefined;
+        st.pendingTitleGeneration = undefined;
+        st.pendingContentGeneration = undefined;
+        st.nextGeneration++;
+        st.readGeneration = (st.readGeneration ?? 0) + 1;
+        st.record = latest;
+        st.status = 'idle';
+        st.lastError = undefined;
+        forgetRetainedDocument(db, id, st);
+    }
+    return copy;
+}
+
 /** Accept a committed host write only after its existing buffers have been settled. */
 export function acceptCommittedDocument(record: Document, db: Or3DB): void {
     const st = ensure(record.id, db);
