@@ -47,7 +47,8 @@ describe('sync lifecycle with real local write capture', () => {
         const db = getWorkspaceDb(a); const other = getWorkspaceDb(b);
         await db.open(); await other.open(); setActiveWorkspaceDb(a);
         const workspace = ref(a);
-        const session = ref({ session: { authenticated: true, user: { id: 'user-A' } } });
+        const session = ref<{ session: { authenticated: boolean; user: { id: string }; authorizationRevision?: number } }>(
+            { session: { authenticated: true, user: { id: 'user-A' } } });
         const route = ref({ path: '/' });
         state.workspace = workspace; state.session = session; state.starts = [];
         state.dispose = async () => {};

@@ -490,8 +490,7 @@ describe('sync engine plugin', () => {
         await vi.waitFor(() => expect(subscriptionInstances).toHaveLength(1));
 
         expect(subscriptionInstances[0]?.start).toHaveBeenCalledTimes(1);
-        expect(outboxInstances).toHaveLength(1);
-        expect(outboxInstances[0]?.start).not.toHaveBeenCalled();
+        expect(outboxInstances).toHaveLength(0);
 
         pluginControl.releaseStart();
         await flushPluginAsyncWork();
