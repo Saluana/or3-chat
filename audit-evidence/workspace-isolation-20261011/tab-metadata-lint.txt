@@ -1,4 +1,0 @@
-Parent HEAD: 107ffa16; final metadata scope/SSR guard pending commit
-Command: bun x eslint app/composables/core/useWorkspaceTabMetadata.ts
-
-Exit status: 0

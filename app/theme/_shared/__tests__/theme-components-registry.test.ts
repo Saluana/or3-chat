@@ -1,18 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     CORE_APP_COMPONENT_DEFAULTS,
     createThemeComponentMap,
-    invalidateThemeComponentCache,
 } from '../theme-components-registry';
 import { APP_THEME_COMPONENT_KEYS } from '../types';
 
 describe('theme-components-registry', () => {
-    beforeEach(() => {
-        invalidateThemeComponentCache('blank');
-        invalidateThemeComponentCache('retro');
-        vi.restoreAllMocks();
-    });
-
     afterEach(() => {
         vi.restoreAllMocks();
     });
@@ -52,27 +45,5 @@ describe('theme-components-registry', () => {
         expect(componentMap['chat-message']).toBe(
             CORE_APP_COMPONENT_DEFAULTS['chat-message']
         );
-    });
-
-    it('invalidates only the requested theme cache entries', () => {
-        const firstMap = createThemeComponentMap('blank', {
-            'chat-input': './components/ChatInput.vue',
-        });
-
-        invalidateThemeComponentCache('retro');
-
-        const secondMap = createThemeComponentMap('blank', {
-            'chat-input': './components/ChatInput.vue',
-        });
-
-        expect(secondMap['chat-input']).toBe(firstMap['chat-input']);
-
-        invalidateThemeComponentCache('blank');
-
-        const thirdMap = createThemeComponentMap('blank', {
-            'chat-input': './components/ChatInput.vue',
-        });
-
-        expect(thirdMap['chat-input']).not.toBe(firstMap['chat-input']);
     });
 });

@@ -11,7 +11,7 @@
     "app/composables/plugins/workspace-runtime.ts",
     "app/composables/plugins/bundled-v1-manager-runtime.ts",
     "app/plugins/workspace-plugins.client.ts",
-    "planning/plugin-runtime-v2/qualification/manager-canary-rollback.md"
+    "planning/complete/plugin-runtime-v2/qualification/manager-canary-rollback.md"
   ],
   "gates": [
     {
@@ -39,7 +39,6 @@
           "x",
           "vitest",
           "run",
-          "app/composables/plugins/__tests__/manager-canary-rollback.test.ts",
           "app/composables/plugins/__tests__/workspace-runtime.test.ts",
           "tests/unit/or3-cloud-config.test.ts",
           "tests/unit/resolve-config.test.ts"
@@ -61,6 +60,6 @@
       "Verify the Runtime Inspector reports the V2 startup selector disabled and exercise the V1 plugin corpus.",
       "Keep the manager disabled if the complete frozen Milestone 0 qualification is not green."
     ],
-    "drill": "The manager-canary-rollback-drill proves flag-off does not construct the manager and preserves exactly one V1 import/register trace; the frozen-v1-qualification gate then re-runs every Milestone 0 exit gate."
+    "drill": "The configuration tests verify the startup manager rollback flag; workspace runtime tests cover legacy registration and cleanup, and the manager lifecycle gate verifies captured canary selection. The frozen-v1-qualification gate re-runs the Milestone 0 exit gates."
   }
 }

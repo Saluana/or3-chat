@@ -189,7 +189,7 @@ Requirements: 7.1
 
 ### 16. Manual Testing Checklist
 
-- [x] 16.1 Manual test script created in `tests/manual/notification-tests.ts`
+- [x] 16.1 Initial console recipe retired; automated service, composable, and mounted component suites now own notification verification.
 - [ ] 16.2 Verify bell badge appears with correct count
 - [ ] 16.3 Open panel, verify notification displays
 - [ ] 16.4 Click notification, verify it marks as read
@@ -200,15 +200,7 @@ Requirements: 7.1
 - [ ] 16.9 Test sync conflict generates notification
 - [ ] 16.10 Test system warnings generate notifications
 
-**Manual Test Instructions**:
-1. Run `bun run dev` to start the dev server
-2. Open browser console
-3. Run commands from `tests/manual/notification-tests.ts`:
-   - `notificationTests.testCreateNotification()` - Create a test notification
-   - `notificationTests.testMultipleNotifications()` - Create 5 notifications
-   - `notificationTests.testUnreadCount()` - Check unread count
-   - `notificationTests.testMarkAllRead()` - Mark all as read
-   - `notificationTests.testClearAll()` - Clear all notifications
+**Current verification**: run `bunx vitest run app/core/notifications/__tests__ app/composables/notifications/__tests__ app/components/notifications/__tests__`. Use the checklist above for browser interaction checks.
 
 ---
 

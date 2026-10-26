@@ -1,19 +1,15 @@
 import type {
     EnrichedConfigEntry,
     StatusResponse,
-    WorkspaceResponse,
 } from './useAdminTypes';
 import type { ExtensionItem } from './useAdminExtensions';
 
 import { useFetch } from '#app';
-import { computed, unref, watch, type Ref } from 'vue';
 
 // Helper to ensure credentials are always included for admin API calls
 const adminFetchOptions = {
     credentials: 'include' as const,
 };
-
-type MaybeRef<T> = T | Ref<T>;
 
 export function useAdminSession() {
     return useFetch<{ authenticated: boolean; kind: string; workspace?: { id: string; name: string } | null }>(
@@ -36,51 +32,6 @@ export function useAdminSystemStatus() {
         ...adminFetchOptions,
         server: false, // Only fetch client-side to avoid hydration mismatch (auth cookies not available during SSR)
     });
-}
-
-/**
- * Fetch workspace data. For super admins without a current workspace context,
- * pass a workspaceId to fetch a specific workspace's data.
- */
-export function useAdminWorkspace(workspaceId?: MaybeRef<string | null | undefined>) {
-    const { data: session } = useAdminSession();
-    const resolvedWorkspaceId = computed(() => unref(workspaceId) ?? undefined);
-    const shouldFetch = computed(() => {
-        if (resolvedWorkspaceId.value) return true;
-        // For super admins, require explicit workspace selection
-        if (session.value?.kind === 'super_admin') return false;
-        // Default: allow server to resolve workspace from session
-        return session.value?.authenticated === true;
-    });
-
-    const fetchResult = useFetch<WorkspaceResponse>(
-        () =>
-            resolvedWorkspaceId.value
-                ? `/api/admin/workspace?workspaceId=${encodeURIComponent(resolvedWorkspaceId.value)}`
-                : '/api/admin/workspace',
-        {
-            key: () =>
-                resolvedWorkspaceId.value
-                    ? `admin:workspace:${resolvedWorkspaceId.value}`
-                    : 'admin:workspace',
-            dedupe: 'defer',
-            ...adminFetchOptions,
-            server: false, // Only fetch client-side for super admin context
-            immediate: false,
-        }
-    );
-
-    watch(
-        [shouldFetch, resolvedWorkspaceId],
-        ([canFetch]) => {
-            if (canFetch) {
-                fetchResult.refresh();
-            }
-        },
-        { immediate: true }
-    );
-
-    return fetchResult;
 }
 
 export function useAdminExtensions() {

@@ -215,32 +215,6 @@ export type PortableUiNode =
     | { readonly type: 'open-document'; readonly label: string; readonly documentId: string }
     | { readonly type: 'open-pane'; readonly label: string; readonly paneId: string };
 
-export const PORTABLE_UI_NODE_TYPES = [
-    'heading',
-    'badge',
-    'item',
-    'text',
-    'markdown',
-    'link',
-    'divider',
-    'columns',
-    'column',
-    'stack',
-    'box',
-    'form',
-    'field.text',
-    'field.textarea',
-    'field.select',
-    'field.toggle',
-    'table',
-    'list',
-    'progress',
-    'button',
-    'result',
-    'open-document',
-    'open-pane',
-] as const;
-
 export type PortableUiValidation =
     | { readonly ok: true; readonly node: PortableUiNode }
     | { readonly ok: false; readonly code: 'ui-invalid-node'; readonly message: string };

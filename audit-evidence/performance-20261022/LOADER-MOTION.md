@@ -43,7 +43,7 @@ replies, reading anchors, tail following and completed rich nodes. They are
 diagnostic traces, not clean timing samples.
 
 Baseline/control receipts, including the tab-pulse comparison, are in
-[loader-motion-baseline.json](loader-motion-baseline.json).
+[loader-motion-baseline.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/loader-motion-baseline.json).
 
 ## Appearance and browser checks
 
@@ -83,7 +83,7 @@ transitions, absent by the partial phase. The existing global reduced-motion
 policy permits 100 ms state transitions. This section does not qualify all
 startup motion or change that policy.
 
-Final receipts are in [loader-motion-results.json](loader-motion-results.json).
+Final receipts are in [loader-motion-results.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/loader-motion-results.json).
 Visual pairs remain locally under `/tmp/activity-scan-visual/`; final WebKit
 screenshots are under `/tmp/activity-scan-final/`.
 

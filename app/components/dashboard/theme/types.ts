@@ -7,9 +7,6 @@ import type { RegisteredColorToken } from '~/theme/_shared/design-token-registry
 /** User-overridable theme color keys. */
 export type ColorKey = RegisteredColorToken;
 
-/** Local hex input keys (includes background colors and palette colors) */
-export type LocalHexKeys = ColorKey | 'contentBg1Color' | 'contentBg2Color' | 'sidebarBgColor';
-
 /** Allowed image types for security */
 export const ALLOWED_IMAGE_TYPES = [
     'image/png',
@@ -32,15 +29,6 @@ export type BackgroundImageValidationFailure =
 export type BackgroundImageValidationResult =
     | { ok: true; mime: AllowedBackgroundImageType }
     | { ok: false; reason: BackgroundImageValidationFailure };
-
-/**
- * Type predicate for checking if a MIME type is in the allowed list
- */
-export function isAllowedImageType(
-    type: string
-): type is AllowedBackgroundImageType {
-    return ALLOWED_IMAGE_TYPES.some((allowed) => allowed === type);
-}
 
 /**
  * Detect image MIME from file magic numbers.
@@ -86,13 +74,6 @@ export function detectImageMimeFromMagic(
     }
 
     return null;
-}
-
-/**
- * Validate image file magic number for security
- */
-export function validateImageMagicNumber(header: Uint8Array): boolean {
-    return detectImageMimeFromMagic(header) !== null;
 }
 
 /** HEIC/HEIF from iPhone/macOS Photos — browsers cannot paint these as CSS backgrounds. */
@@ -164,15 +145,6 @@ export function backgroundImageValidationMessage(
         default:
             return 'Use a PNG, JPEG, WebP, or GIF image.';
     }
-}
-
-/** Color group structure for organized UI */
-export interface ColorGroup {
-    label: string;
-    colors: Array<{
-        key: string;
-        label: string;
-    }>;
 }
 
 /** Preset for background images */

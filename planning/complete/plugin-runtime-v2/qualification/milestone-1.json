@@ -11,7 +11,7 @@
     "app/composables/plugins/shadow-plugin-manager.ts",
     "app/composables/plugins/workspace-plugin-shadow-observer.ts",
     "app/plugins/workspace-plugins.client.ts",
-    "planning/plugin-runtime-v2/qualification/shadow-rollback.md"
+    "planning/complete/plugin-runtime-v2/qualification/shadow-rollback.md"
   ],
   "gates": [
     {

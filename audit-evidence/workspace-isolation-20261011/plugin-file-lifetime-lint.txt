@@ -1,3 +1,0 @@
-Source checkpoint: 37a54fa374bdfdec81dd082b03db0572b38ded5d
-Synthetic local fixtures only; no paid/provider requests.
-Recorded process exit: 0

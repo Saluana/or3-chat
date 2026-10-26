@@ -59,7 +59,7 @@ zero internal tool computation. `ChatToolCardsEnd` still updated 160 times
 even when empty; that remains a possible follow-up. These native fallback tool
 results do not qualify source plugin cards or ordered assistant-part rendering.
 
-Raw receipts: [stream-media-results.json](stream-media-results.json).
+Raw receipts: [stream-media-results.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/stream-media-results.json).
 Runner: [stream-media-probe.mjs](stream-media-probe.mjs).
 
 ## Findings still open

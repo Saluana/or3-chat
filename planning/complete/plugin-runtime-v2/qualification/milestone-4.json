@@ -6,7 +6,6 @@
     "shared/plugins/activation-table.ts",
     "shared/plugins/contribution-registry.ts",
     "shared/plugins/contribution-surfaces.ts",
-    "shared/plugins/transactional-plugin-scope.ts",
     "shared/plugins/__tests__/milestone-4-leak.test.ts",
     "app/composables/plugins/contribution-surface-kernel.ts",
     "app/composables/plugins/contribution-surface-selection.ts",
@@ -24,9 +23,7 @@
           "x",
           "vitest",
           "run",
-          "shared/plugins/__tests__/activation-table.test.ts",
           "shared/plugins/__tests__/contribution-registry.test.ts",
-          "shared/plugins/__tests__/transactional-plugin-scope.test.ts",
           "shared/plugins/__tests__/milestone-4-leak.test.ts",
           "app/composables/plugins/__tests__/contribution-surface-selection.test.ts",
           "app/composables/__tests__/differential-surface-harness.test.ts",
@@ -70,6 +67,6 @@
       "Verify Runtime Inspector selection and exercise the surface's differential fixture plus the maintained V1 corpus.",
       "Keep that surface on V1 if its differential, leak, compatibility, or frozen Milestone 0 gate is not green."
     ],
-    "drill": "The surface selection matrix proves every contribution surface independently selects V2 and reverts to V1; 1,000-cycle tests prove managed records, subscriptions, tool watchers, and ownership inspection are empty after disposal."
+    "drill": "The surface selection matrix proves every contribution surface independently selects V2 and reverts to V1; The legacy registry leak gate proves exact-owner disposal over 1,000 cycles; registry and runtime lifecycle tests cover managed publication and cleanup."
   }
 }

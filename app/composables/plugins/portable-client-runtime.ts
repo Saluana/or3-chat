@@ -137,7 +137,6 @@ export const PORTABLE_UI_EVENT_REQUEST = 'runtime.ui-event';
 const activations = reactive(
     new Map<string, InternalActivation>()
 ) as Map<string, InternalActivation>;
-let listenerInstalled = false;
 
 /**
  * Per-plugin activation epochs. Starting, blocking or stopping an activation
@@ -1528,10 +1527,6 @@ export function isPortableActivationReady(activation: PortableActivation): boole
     return activation.contributionReadiness.tools !== 'pending';
 }
 
-export function stopAllPortableClients(): void {
-    void stopAllPortableClientsAndAwait();
-}
-
 /** Awaitable teardown used by logout and workspace-switch cleanup. */
 export async function stopAllPortableClientsAndAwait(): Promise<void> {
     for (const pluginId of [...activations.keys()]) {
@@ -1581,13 +1576,6 @@ export async function invokePortableUiEvent(
     return await current.runtime.callPlugin(PORTABLE_UI_EVENT_REQUEST, {
         ...payload,
     });
-}
-
-/** Install the unload teardown once, from the client plugin. */
-export function installPortableUnloadTeardown(): void {
-    if (listenerInstalled || typeof window === 'undefined') return;
-    listenerInstalled = true;
-    window.addEventListener('pagehide', stopAllPortableClients);
 }
 
 export function listPortableActivations(): readonly PortableActivation[] {
