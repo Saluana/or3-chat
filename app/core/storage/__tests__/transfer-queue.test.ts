@@ -54,7 +54,9 @@ class TableStub<T extends Record<string, any>> {
                     toArray: async () => matches,
                 };
             },
-            between: (lower: unknown, upper: unknown) => {
+            between: (lower: unknown, upper: unknown, includeLower = true, includeUpper = false) => {
+                const within = (value: number, min: number, max: number) =>
+                    (includeLower ? value >= min : value > min) && (includeUpper ? value <= max : value < max);
                 const matches = Array.from(this.rows.values()).filter((row) => {
                     if (field === '[state+workspace_id+created_at]') {
                         const [ls, lw] = lower as [string, string, number];
@@ -68,7 +70,7 @@ class TableStub<T extends Record<string, any>> {
                         const minRetryAt = typeof lts === 'number' ? lts : Number.NEGATIVE_INFINITY;
                         const maxRetryAt = typeof uts === 'number' ? uts : Number.POSITIVE_INFINITY;
                         return row.state === ls && row.state === us && row.workspace_id === lw &&
-                            row.workspace_id === uw && retryAt >= minRetryAt && retryAt <= maxRetryAt;
+                            row.workspace_id === uw && within(retryAt, minRetryAt, maxRetryAt);
                     }
                     if (field === '[state+workspace_id+lease_expires_at]') {
                         const [ls, lw, lts] = lower as [string, string, number];
@@ -77,12 +79,12 @@ class TableStub<T extends Record<string, any>> {
                         const minExpiresAt = typeof lts === 'number' ? lts : Number.NEGATIVE_INFINITY;
                         const maxExpiresAt = typeof uts === 'number' ? uts : Number.POSITIVE_INFINITY;
                         return row.state === ls && row.state === us && row.workspace_id === lw &&
-                            row.workspace_id === uw && expiresAt >= minExpiresAt && expiresAt <= maxExpiresAt;
+                            row.workspace_id === uw && within(expiresAt, minExpiresAt, maxExpiresAt);
                     }
                     if (field === '[state+created_at]') {
                         const [ls, lts] = lower as [string, number];
                         const [us, uts] = upper as [string, number];
-                        return row.state === ls && row.state === us && row.created_at >= lts && row.created_at <= uts;
+                        return row.state === ls && row.state === us && within(row.created_at, lts, uts);
                     }
                     return false;
                 });
@@ -111,7 +113,7 @@ function createDbStub(metaRows: FileMeta[], blobRows: Array<{ hash: string; blob
         file_transfers: new TableStub<FileTransfer>('id'),
         file_meta: new TableStub<FileMeta>('hash', metaRows),
         file_blobs: new TableStub<{ hash: string; blob: Blob }>('hash', blobRows),
-        transaction: async (_mode: string, _tables: unknown, fn: () => Promise<unknown>) => fn(),
+        transaction: async (...args: unknown[]) => (args.at(-1) as () => Promise<unknown>)(),
     };
 }
 
@@ -512,6 +514,8 @@ describe('FileTransferQueue', () => {
     });
 
     it('accepts downloads with missing or octet-stream content-type using file_meta mime', async () => {
+        const { Blob: NodeBlob } = await import('node:buffer');
+        vi.stubGlobal('Blob', NodeBlob);
         const meta = makeMeta({ kind: 'image', storage_id: 'st_1', mime_type: 'image/webp' });
         const db = createDbStub([meta], []);
         const provider: ObjectStorageProvider = {
@@ -525,23 +529,7 @@ describe('FileTransferQueue', () => {
             })),
         };
         const queue = new FileTransferQueue(db as any, provider);
-        vi.stubGlobal(
-            'fetch',
-            vi.fn(async () => ({
-                ok: true,
-                status: 200,
-                headers: { get: () => null },
-                body: { cancel: vi.fn() },
-            }))
-        );
-        (queue as any).readBlobWithProgress = vi.fn(async (_response: Response, _id: string, _db: unknown, _max: number, mimeType: string) => ({
-            blob: {
-                size: 5,
-                type: mimeType,
-                arrayBuffer: async () => new TextEncoder().encode('hello').buffer,
-            } as Blob,
-            bytesTotal: 5,
-        }));
+        vi.stubGlobal('fetch', vi.fn(async () => new Response(new TextEncoder().encode('hello'))));
 
         await (queue as any).doDownload(
             {
@@ -559,18 +547,12 @@ describe('FileTransferQueue', () => {
             new AbortController().signal
         );
 
-        expect((queue as any).readBlobWithProgress).toHaveBeenCalledWith(
-            expect.anything(),
-            'missing-mime',
-            expect.anything(),
-            expect.anything(),
-            'image/webp',
-            expect.any(AbortSignal)
-        );
-        expect(await db.file_blobs.get(meta.hash)).toBeDefined();
+        expect((await db.file_blobs.get(meta.hash))?.blob.type).toBe('image/webp');
     });
 
     it('keeps generic downloads inert even when metadata has an active MIME', async () => {
+        const { Blob: NodeBlob } = await import('node:buffer');
+        vi.stubGlobal('Blob', NodeBlob);
         const meta = makeMeta({
             kind: 'file',
             mime_type: 'text/html',
@@ -585,29 +567,7 @@ describe('FileTransferQueue', () => {
             getPresignedDownloadUrl: vi.fn(async () => ({ url: 'download', expiresAt: Date.now() })),
         };
         const queue = new FileTransferQueue(db as any, provider);
-        vi.stubGlobal(
-            'fetch',
-            vi.fn(async () => ({
-                ok: true,
-                status: 200,
-                headers: { get: () => 'application/octet-stream' },
-                body: { cancel: vi.fn() },
-            }))
-        );
-        (queue as any).readBlobWithProgress = vi.fn(async (
-            _response: Response,
-            _id: string,
-            _db: unknown,
-            _max: number,
-            mimeType: string,
-        ) => ({
-            blob: {
-                size: 5,
-                type: mimeType,
-                arrayBuffer: async () => new TextEncoder().encode('hello').buffer,
-            } as Blob,
-            bytesTotal: 5,
-        }));
+        vi.stubGlobal('fetch', vi.fn(async () => new Response('hello', { headers: { 'content-type': 'application/octet-stream' } })));
 
         await (queue as any).doDownload(
             {
@@ -625,14 +585,6 @@ describe('FileTransferQueue', () => {
             new AbortController().signal,
         );
 
-        expect((queue as any).readBlobWithProgress).toHaveBeenCalledWith(
-            expect.anything(),
-            'generic-download',
-            expect.anything(),
-            expect.anything(),
-            'application/octet-stream',
-            expect.any(AbortSignal),
-        );
         expect((await db.file_blobs.get(meta.hash))?.blob.type).toBe(
             'application/octet-stream',
         );
@@ -837,6 +789,9 @@ describe('FileTransferQueue', () => {
                 return reopenedDb as any;
             },
         });
+        transfer.lease_owner = (queue as any).workerId;
+        transfer.lease_token = 'captured-claim';
+        await reopenedDb.file_transfers.put(transfer);
 
         await (queue as any).requeueTransferAfterDatabaseClose(transfer, {
             workspaceId: 'ws-evicted',
@@ -900,8 +855,8 @@ describe('FileTransferQueue', () => {
         upload.succeed(new Response('', { status: 200 }));
         await processing;
 
-        expect((await oldDb.file_meta.get(hash))?.storage_id).toBe('old-storage-id');
-        expect((await oldDb.file_transfers.get(transfer.id))?.state).toBe('done');
+        expect((await oldDb.file_meta.get(hash))?.storage_id).toBeUndefined();
+        expect((await oldDb.file_transfers.get(transfer.id))?.state).toBe('queued');
         expect(await newDb.file_meta.get(hash)).toEqual(newMeta);
         expect((await newDb.file_transfers.get(transfer.id))?.state).toBe('queued');
     });
@@ -936,13 +891,14 @@ describe('FileTransferQueue', () => {
             (queue as any).running.add(transfer.id);
             const processing = (queue as any).processTransfer(transfer);
             try {
-                for (let i = 0; i < 30 && (boundary === 'presign' ? signing.request : response.request).mock.calls.length === 0; i++) await Promise.resolve();
+                await vi.advanceTimersByTimeAsync(0);
                 expect(boundary === 'presign' ? signing.request : response.request).toHaveBeenCalledOnce();
                 activeDb = destinationDb; queue.setWorkspaceId('synthetic-destination');
                 if (boundary === 'presign') signing.succeed(signed);
                 else response.succeed(lateResponse);
                 await processing;
-                expect(cancel).toHaveBeenCalledOnce();
+                expect(cancel).toHaveBeenCalledTimes(boundary === 'presign' ? 0 : 1);
+                if (boundary === 'presign') expect(fetchMock).not.toHaveBeenCalled();
                 expect(await originDb.file_blobs.get(meta.hash)).toBeUndefined();
                 expect(await destinationDb.file_meta.get(meta.hash)).toEqual(destinationMeta);
                 expect((await destinationDb.file_blobs.get(meta.hash))?.blob).toBe(destinationBlob);

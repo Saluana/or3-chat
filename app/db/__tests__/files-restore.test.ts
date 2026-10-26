@@ -33,6 +33,7 @@ describe('restoreMany', () => {
         await db.open();
         await db.file_meta.clear();
         await db.file_blobs.clear();
+        await db.tombstones.clear();
         await db.workspace_tab_drafts.clear();
         await db.workspace_draft_versions.clear();
         mocks.doAction.mockClear();
@@ -97,6 +98,19 @@ describe('restoreMany', () => {
         expect(restored[1]!.updated_at).toBe(mocks.nowSec);
 
         expect(mocks.doAction).toHaveBeenCalledTimes(4); // 2 before, 2 after
+    });
+
+    it('restores above a retained remote delete watermark even when the materialized row is older', async () => {
+        const db = getDb();
+        await db.file_meta.put({ hash: 'late-delete', name: 'restorable.txt', kind: 'file',
+            mime_type: 'text/plain', size_bytes: 3, deleted: true, clock: 2,
+            created_at: 1, updated_at: 1, ref_count: 1 });
+        await db.tombstones.put({ id: 'file_meta:late-delete', tableName: 'file_meta',
+            pk: 'late-delete', clock: 9, deletedAt: 100 });
+
+        await restoreMany(['late-delete']);
+
+        expect(await db.file_meta.get('late-delete')).toMatchObject({ deleted: false, clock: 10 });
     });
 
     it('ignores non-deleted files', async () => {

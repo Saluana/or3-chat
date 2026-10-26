@@ -430,3 +430,10 @@ receipt. No automatic metadata-based ownership backfill is performed.
 Deploy the matching backend templates, including the storage-ID indexes on
 `file_meta` and `upload_intents`, with the rebuilt provider. Host-only changes
 do not secure the public functions of an older deployed backend.
+
+
+### Canonical sync hardening
+
+Deploy the updated schema and sync/storage authoring templates together. Public pushes validate complete canonical table payloads and revision stamps before allocating versions. Puts replace canonical rows, including removal of omitted optional fields. Server-authored change payloads include required canonical timestamps. Replays report whether the operation won and return the current live row or tombstone when it lost; request fingerprints preserve exact idempotency independently from emitted canonical payloads.
+
+Versionless legacy rows participate in snapshots at the version-zero baseline. Device cursor ownership includes authenticated user and device, and retention maintenance retires stale devices and prunes expired snapshot sessions and unneeded preimages. A delayed upload commit cannot restore a file deleted after that upload began; restoration remains an explicit metadata write. Upload completion preserves the existing semantic clock (zero for a new server-only file) and advances its HLC for byte metadata, so a queued user delete at the next clock wins even if completion reaches the server first.

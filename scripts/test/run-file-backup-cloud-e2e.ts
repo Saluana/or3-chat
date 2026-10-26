@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 const directory = await mkdtemp('/tmp/or3-file-backup-cloud-');
+const syncRecovery = process.argv.includes('--sync-recovery');
+const outputRoot = syncRecovery ? 'test-results/sync-hardening-cloud' : 'test-results/file-backup-cloud';
 const development = process.argv.includes('--development-providers');
 const probe = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response('probe') });
 const port = probe.port!;
@@ -11,10 +13,11 @@ let exitCode = 1;
 try {
     const envFile = join(directory, 'fixture.env');
     await writeFile(envFile, '', { mode: 0o600 });
-    const child = Bun.spawn(['bunx', 'playwright', 'test', 'tests/e2e/cloud-file-backup.spec.ts', '--workers=1', '--reporter=line',
-        '--trace=retain-on-failure', '--retries=0', '--output=test-results/file-backup-cloud/browser', ...process.argv.slice(2).filter(value => value !== '--development-providers')], {
+    const child = Bun.spawn(['bunx', 'playwright', 'test', syncRecovery ? 'tests/e2e/cloud-offline-recovery.e2e.ts' : 'tests/e2e/cloud-file-backup.spec.ts', '--workers=1', syncRecovery ? '--reporter=line,json' : '--reporter=line',
+        '--trace=retain-on-failure', '--retries=0', `--output=${outputRoot}/browser`, ...process.argv.slice(2).filter(value => !['--development-providers', '--sync-recovery'].includes(value))], {
         stdout: 'inherit', stderr: 'inherit', env: { ...process.env,
             CI: 'true', TEST: 'true',
+            ...(syncRecovery ? { PLAYWRIGHT_JSON_OUTPUT_NAME: join(process.cwd(), outputRoot, 'playwright.json') } : {}),
             DOTENV_CONFIG_PATH: envFile,
             SSR_AUTH_ENABLED: 'true', AUTH_PROVIDER: 'basic-auth', OR3_AUTH_PROVIDER: 'basic-auth',
             OR3_AUTH_REGISTRATION_MODE: 'invite_only', OR3_AUTH_AUTO_PROVISION: 'false', OR3_GUEST_ACCESS_ENABLED: 'false',
@@ -40,12 +43,12 @@ try {
     process.exitCode = exitCode;
 } finally {
     await rm(directory, { recursive: true, force: true });
-    await mkdir('test-results/file-backup-cloud', { recursive: true });
-    await writeFile('test-results/file-backup-cloud/receipt.json', JSON.stringify({
+    await mkdir(outputRoot, { recursive: true });
+    await writeFile(join(outputRoot, 'receipt.json'), JSON.stringify({
         commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
         dirty: execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim().length > 0,
         largeFixture: process.env.OR3_BACKUP_LARGE_E2E === 'true',
-        command: 'bun run test:e2e:file-backup:cloud', timestamp: new Date().toISOString(), arguments: process.argv.slice(2),
+        command: syncRecovery ? 'bun run test:e2e:sync:cloud' : 'bun run test:e2e:file-backup:cloud', timestamp: new Date().toISOString(), arguments: process.argv.slice(2),
         profile: `Disposable Basic Auth + ${development ? 'development' : 'installed'} providers + SQLite + filesystem storage`, exitCode, temporaryDataRemoved: true,
     }, null, 2));
 }

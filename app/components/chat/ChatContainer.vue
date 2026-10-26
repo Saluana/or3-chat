@@ -1169,7 +1169,7 @@ function waitForDurableSendAcceptance(
     });
 }
 
-const cardComposer = ref<{ getSendOptions?: () => {
+const cardComposer = ref<{ captureDraft?: () => void; getSendOptions?: () => {
     model: string;
     modelVariant: import('~~/shared/openrouter/model-variants').OpenRouterModelVariant;
     thinking: boolean;
@@ -1538,7 +1538,9 @@ async function onEmptyChatAction(id: EmptyChatActionId) {
     else emptyActionHost?.request(id, { paneId: props.paneId, tabId: props.tabId });
 }
 
-defineExpose({ captureViewState, restoreViewState, scrollToMessage, compactThread });
+defineExpose({ captureViewState, restoreViewState, scrollToMessage, compactThread,
+    captureDraft: () => cardComposer.value?.captureDraft?.(),
+});
 </script>
 
 <style>

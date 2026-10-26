@@ -31,7 +31,7 @@ import { NotificationActionSchema } from '~/db/schema';
 import type { Notification } from '~/db/schema';
 import type { TypedHookEngine } from '../hooks/typed-hooks';
 import type { NotificationCreatePayload } from '../hooks/hook-types';
-import { nowSec, getWriteTxTableNames } from '~/db/util';
+import { nowSec, nextClock, getWriteTxTableNames } from '~/db/util';
 import { z } from 'zod';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 
@@ -193,10 +193,12 @@ export class NotificationService {
     async markRead(id: string): Promise<void> {
         const readAt = nowSec();
         await this.runNotificationWriteTx(async () => {
+            const row = await this.db.notifications.get(id);
+            if (!row) return;
             await this.db.notifications.update(id, {
                 read_at: readAt,
                 updated_at: readAt,
-                clock: readAt,
+                clock: nextClock(row.clock),
             });
         });
         await this.hooks.doAction('notify:action:read', { id, readAt });
@@ -212,10 +214,10 @@ export class NotificationService {
                 .where('user_id')
                 .equals(this.userId)
                 .and((n: Notification) => n.read_at === undefined && !n.deleted)
-                .modify({
-                    read_at: readAt,
-                    updated_at: readAt,
-                    clock: readAt,
+                .modify((row: Notification) => {
+                    row.read_at = readAt;
+                    row.updated_at = readAt;
+                    row.clock = nextClock(row.clock);
                 });
         });
     }
@@ -231,11 +233,11 @@ export class NotificationService {
                 .where('user_id')
                 .equals(this.userId)
                 .and((n: Notification) => !n.deleted)
-                .modify({
-                    deleted: true,
-                    deleted_at: deletedAt,
-                    updated_at: deletedAt,
-                    clock: deletedAt,
+                .modify((row: Notification) => {
+                    row.deleted = true;
+                    row.deleted_at = deletedAt;
+                    row.updated_at = deletedAt;
+                    row.clock = nextClock(row.clock);
                 });
         });
         // Dexie modify() returns number of modified records

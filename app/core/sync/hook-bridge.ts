@@ -16,7 +16,7 @@ import type { PendingOp, ChangeStamp, Tombstone } from '~~/shared/sync/types';
 import type { Or3DB } from '~/db/client';
 import { useHooks } from '~/core/hooks/useHooks';
 import { nowSec } from '~/db/util';
-import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
+import { sanitizePayloadForSync, SyncPayloadTooLargeError } from '~~/shared/sync/sanitize';
 import { getPkField } from '~~/shared/sync/table-metadata';
 import { markRecentOpId } from './recent-op-cache';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
@@ -396,8 +396,18 @@ export class HookBridge {
             }
         }
 
-        // Use shared sanitization logic
-        const payloadForSync = sanitizePayloadForSync(tableName, payload, operation);
+        // Sync wire limits must never roll back valid local user content. Keep
+        // the full payload as failed intent so support export/recovery can
+        // preserve it without silently truncating the message.
+        let payloadForSync: unknown;
+        let payloadError: SyncPayloadTooLargeError | undefined;
+        try {
+            payloadForSync = sanitizePayloadForSync(tableName, payload, operation);
+        } catch (error) {
+            if (!(error instanceof SyncPayloadTooLargeError)) throw error;
+            payloadForSync = payload;
+            payloadError = error;
+        }
 
 
         const pendingOp: PendingOp = {
@@ -422,7 +432,13 @@ export class HookBridge {
             stamp,
             createdAt: Date.now(),
             attempts: 0,
-            status: 'pending',
+            status: payloadError ? 'failed_permanent' : 'pending',
+            ...(payloadError ? {
+                lastError: payloadError.message,
+                lastErrorCode: 'OVERSIZED' as const,
+                failureKind: 'permanent' as const,
+                failedAt: Date.now(),
+            } : {}),
         };
 
         const tableNames = transaction.storeNames;
@@ -502,6 +518,8 @@ export class HookBridge {
                 clock: stamp.clock,
                 hlc: stamp.hlc,
                 op_id: stamp.opId,
+                ...(tableName === 'messages' && operation === 'put'
+                    ? { order_key: safePayload.order_key } : {}),
                 ...(softDelete
                     ? {
                         deleted: true,

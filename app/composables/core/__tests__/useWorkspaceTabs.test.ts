@@ -128,6 +128,28 @@ describe('useWorkspaceTabs', () => {
         });
     });
 
+    it('preserves a blank chat when the host has unsent content', async () => {
+        const fake = createHost();
+        const tabs = useWorkspaceTabs({
+            host: fake.host,
+            paneLimit: computed(() => 3),
+            isMobile: ref(false),
+            workspaceId: () => 'local',
+            profileId: () => 'standard',
+            storage: null,
+            canReuseActiveBlank: () => false,
+        });
+        const draftTab = tabs.activeTabId.value;
+
+        await tabs.openResource({ kind: 'document', documentId: 'new-document' });
+
+        expect(tabs.tabs.value).toHaveLength(2);
+        expect(tabs.tabs.value.find(tab => tab.id === draftTab)?.resource)
+            .toEqual({ kind: 'chat', threadId: null });
+        await tabs.activateTab(draftTab);
+        expect(fake.bindings.get('pane-a')).toEqual({ kind: 'chat', threadId: null });
+    });
+
     it('routes open/new/split actions through one tab session and host', async () => {
         const fake = createHost();
         const tabs = useWorkspaceTabs({

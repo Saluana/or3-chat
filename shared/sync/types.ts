@@ -19,6 +19,8 @@ import type { FileKindCapability } from '../files/file-capability';
 export interface SyncScope {
     workspaceId: string;
     projectId?: string;
+    /** Local feed coverage identity; never used for server authorization. */
+    principalId?: string;
 }
 
 /**
@@ -51,6 +53,9 @@ export interface PendingOp {
      * to providers. Absent on pre-migration rows until backfilled.
      */
     readyAt?: number;
+    /** Local-only durable push ownership; stripped from provider requests. */
+    claimId?: string;
+    claimExpiresAt?: number;
     status: PendingOpStatus;
     lastError?: string;
     lastErrorDetails?: ErrorMetadata;
@@ -263,8 +268,14 @@ export interface SyncSubscribeOptions {
 }
 
 /**
- * SyncProvider interface - implemented by each backend adapter
+ * Request lifetime owned by the calling sync lifecycle.
  */
+export interface SyncRequestOptions {
+    /** Cancels this caller’s wait and transport where supported. */
+    signal?: AbortSignal;
+}
+
+/** Sync provider contract implemented by each backend adapter. */
 export interface SyncProvider {
     id: string;
     mode: SyncProviderMode;
@@ -291,20 +302,20 @@ export interface SyncProvider {
     /**
      * Pull changes since cursor (for bootstrap/recovery)
      */
-    pull(request: PullRequest): Promise<PullResponse>;
+    pull(request: PullRequest, options?: SyncRequestOptions): Promise<PullResponse>;
 
     /** Consistent materialized snapshot used before replaying after its watermark. */
-    snapshot?(request: SnapshotRequest): Promise<SnapshotResponse>;
+    snapshot?(request: SnapshotRequest, options?: SyncRequestOptions): Promise<SnapshotResponse>;
 
     /**
      * Push batch of changes
      */
-    push(batch: PushBatch): Promise<PushResult>;
+    push(batch: PushBatch, options?: SyncRequestOptions): Promise<PushResult>;
 
     /**
      * Update device cursor for retention tracking
      */
-    updateCursor(scope: SyncScope, deviceId: string, version: number): Promise<void>;
+    updateCursor(scope: SyncScope, deviceId: string, version: number, options?: SyncRequestOptions): Promise<void>;
 
     /**
      * GC tombstones with a retention window

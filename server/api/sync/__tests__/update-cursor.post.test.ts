@@ -10,6 +10,7 @@ vi.mock('../../../utils/security/cloud-mutation', () => ({ requireCloudMutation:
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
     readBody: readBodyMock,
+    getHeader: () => undefined,
     setResponseHeader: setResponseHeaderMock,
     setHeader: setHeaderMock,
     createError: (opts: { statusCode: number; statusMessage?: string }) => {

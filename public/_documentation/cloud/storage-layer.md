@@ -35,6 +35,29 @@ All files are identified by their SHA-256 hash. This leads to several benefits:
 *   **Binary Data**: Small originals stage in `db.file_blobs` until upload commits. Large selected files upload directly from the disk File. Downloaded originals are cached only within the current policy.
 *   **Transfers**: Managed by `FileTransferQueue` (upload/download).
 
+Cached original intake commits metadata, original bytes, and its upload job in
+one IndexedDB transaction. Startup also repairs older originals missing a job in
+bounded pages. Independent tabs atomically reuse active jobs. Each execution
+uses a unique lease token; a worker that loses its claim aborts requests and
+cannot publish progress, metadata, or completion for the replacement worker.
+A local file deletion observed before native commit cancels that upload. A
+verified replacement of physically deleted bytes preserves Trash state until
+an explicit metadata restore.
+Startup schedules unfinished work at both persisted retry times and future
+lease expirations, including deadlines equal to the current millisecond.
+
+While the browser is offline, transfers keep their retry budget and resume on
+the online event. Network failures, timeouts, rate limits, and server outages
+retain the original and defer work without consuming permanent-failure attempts.
+Gateway control requests have a 60-second deadline; an entire byte transfer has
+a five-minute deadline. Provider operations accept the caller's `AbortSignal`,
+so cancellation and workspace changes also cancel control requests.
+
+Transfer waiters observe durable state across tabs. When another tab completes
+a download that policy excludes from the browser cache, the requesting tab
+retrieves and verifies its own transient bytes. Such bytes are never persisted
+outside the configured cache budget.
+
 After this workspace's file settings have loaded in the current app session,
 small originals can be saved locally while offline using those verified
 settings. Connect once first if settings have not loaded. Reconnecting refreshes
