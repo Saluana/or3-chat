@@ -445,6 +445,7 @@ export async function getDocumentInDb(
  *
  * Constraints:
  * - Sorting is done in-memory for small result sets.
+ * - Rows whose content cannot be parsed are omitted.
  *
  * Non-Goals:
  * - Does not paginate via cursor semantics.
@@ -471,7 +472,15 @@ export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
         'db.documents.list:filter:output',
         sliced.map(toDocumentEntity)
     );
-    return mergeDocumentEntities(filteredEntities, baseMap).map(rowToRecord);
+    // One unreadable document must not fail the whole list. Opening it through
+    // getDocument surfaces the recovery error with its original content kept.
+    return mergeDocumentEntities(filteredEntities, baseMap).flatMap((row) => {
+        try {
+            return [rowToRecord(row)];
+        } catch {
+            return [];
+        }
+    });
 }
 
 /**

@@ -78,7 +78,7 @@ Document storage built on the shared `posts` table (`postType: 'doc'`) with TipT
 | --------------------------- | ------------------------------------------------------------------------------------------ |
 | `createDocument(input?)`    | Validates title/content, runs hooks, writes a new row, returns parsed record.              |
 | `getDocument(id)`           | Loads a single document, applies output filters, returns parsed record.                    |
-| `listDocuments(limit?)`     | Fetches non-deleted docs, sorts by `updated_at` desc, slices to limit, applies filters.    |
+| `listDocuments(limit?)`     | Fetches non-deleted docs, sorts by `updated_at` desc, slices to limit, applies filters. Unreadable content is omitted; `getDocument` reports it. |
 | `listDocumentFileHashes()`  | Unique file hashes referenced by active documents, from index keys only.                   |
 | `updateDocument(id, patch)` | Re-resolves titles/content, fires before/after hooks, persists and returns updated record; rejects with `DocumentConflictError` if the row changed meanwhile. `patch.content: null` means no content change: the stored content and its `file_hashes` are both kept. |
 | `softDeleteDocument(id)`    | Marks `deleted: true` and bumps `updated_at`; rejects with `DocumentConflictError` if the row changed meanwhile.            |

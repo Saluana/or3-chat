@@ -3,7 +3,7 @@ import Dexie from 'dexie';
 import { Blob as NodeBlob } from 'node:buffer';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { setActiveWorkspaceDb, evictWorkspaceDb, type Or3DB } from '~/db/client';
-import { createDocumentInDb, getDocumentInDb, updateDocumentInDb } from '~/db/documents';
+import { createDocumentInDb, getDocumentInDb, listDocuments, updateDocumentInDb } from '~/db/documents';
 import { loadDocument, useDocumentState } from '~/composables/documents/useDocumentsStore';
 import { prepareDocumentRevision, pruneDocumentRevisions, listCompleteDocumentRevisions } from '~/db/document-revisions';
 import { createHookEngine } from '~/core/hooks/hooks';
@@ -31,6 +31,15 @@ afterEach(async () => {
     await Dexie.delete(db.name);
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+});
+
+it('lists readable documents when another document cannot be read', async () => {
+    const readable = await createDocumentInDb(db, { title: 'Readable', content: content('Fine') });
+    const broken = await createDocumentInDb(db, { title: 'Broken', content: content('Lost?') });
+    await db.posts.update(broken.id, { content: '{not json' });
+    expect((await listDocuments()).map((doc) => doc.id)).toEqual([readable.id]);
+    await expect(getDocumentInDb(db, broken.id)).rejects.toThrow(/cannot be read/);
+    expect((await db.posts.get(broken.id))?.content).toBe('{not json');
 });
 
 it('never deletes an unrelated post named by a malformed revision', async () => {
