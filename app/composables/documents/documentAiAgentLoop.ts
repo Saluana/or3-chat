@@ -143,6 +143,7 @@ async function executeAgentToolCall(params: {
     advertisedTools: readonly ToolDefinition[];
     signal?: AbortSignal;
 }): Promise<string> {
+    params.signal?.throwIfAborted();
     if (!isDocumentAiToolEnabled(params.name, params.enabledTools)) {
         throw new Error(`Tool "${params.name}" is disabled for Document AI.`);
     }
@@ -249,6 +250,7 @@ export async function runDocumentAiAgentLoop(
     let iterations = 0;
 
     while (iterations < maxIterations) {
+        params.signal?.throwIfAborted();
         iterations += 1;
         params.onStatus?.({ type: 'iteration', iteration: iterations, maxIterations });
         enforceDocumentAiContextBudget(messages, maxContextTokens);
@@ -270,10 +272,12 @@ export async function runDocumentAiAgentLoop(
             reasoning: params.reasoning,
             orMessages: messages,
         })) {
+            params.signal?.throwIfAborted();
             if (event.type === 'text' && event.text) assistantText += event.text;
             if (event.type === 'tool_call') pendingToolCalls.push(event.tool_call);
         }
 
+        params.signal?.throwIfAborted();
         if (!pendingToolCalls.length) {
             params.onStatus?.({
                 type: 'done',
@@ -289,6 +293,7 @@ export async function runDocumentAiAgentLoop(
         }));
 
         for (const toolCall of pendingToolCalls) {
+            params.signal?.throwIfAborted();
             const name = toolCall.function.name;
             params.onStatus?.({ type: 'tool_start', name, iteration: iterations });
             let resultText = '';
@@ -302,6 +307,7 @@ export async function runDocumentAiAgentLoop(
                     advertisedTools: tools,
                     signal: params.signal,
                 });
+                params.signal?.throwIfAborted();
                 resultText = truncateToolResultText(
                     resultText,
                     DOCUMENT_AI_TOOL_RESULT_SOFT_CAP_CHARS,
@@ -314,6 +320,7 @@ export async function runDocumentAiAgentLoop(
                     detail: statusLabelForTool(name, tools),
                 });
             } catch (caught) {
+                params.signal?.throwIfAborted();
                 ok = false;
                 resultText = JSON.stringify({
                     error: caught instanceof Error ? caught.message : String(caught),

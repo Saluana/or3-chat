@@ -217,6 +217,34 @@ describe('chat document tools', () => {
         expect(proposed.error).toBeUndefined();
         return { ref: JSON.parse(proposed.result!), context };
     }
+    it('prunes chat Apply checkpoints while retaining the checkpoint required by a valid Undo', async () => {
+        const { ref } = await pendingChange();
+        const revisions = await import('~/db/document-revisions');
+        const changes = await import('~/utils/chat/workspace-document-change');
+        const seed = async (prefix: string, createdAt: number) => {
+            for (let index = 0; index < 24; index++) {
+                const prepared = await revisions.prepareDocumentRevision({ documentId: 'apply-doc', title: prefix + index, source: 'auto',
+                    content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: prefix + index }] }] } });
+                prepared.manifest.createdAt = createdAt + index;
+                prepared.rows.at(-1)!.content = JSON.stringify(prepared.manifest);
+                await getDb().posts.bulkPut(prepared.rows);
+            }
+        };
+        const now = Math.floor(Date.now() / 1000);
+        await seed('Old version ', now - 100);
+        const applied = await changes.applyWorkspaceDocumentChange(ref);
+        expect(await revisions.listCompleteDocumentRevisions('apply-doc')).toHaveLength(20);
+        if (applied.status !== 'applied') throw new Error('Apply did not complete');
+        await seed('Later automatic version ', now + 100);
+        await revisions.pruneDocumentRevisions('apply-doc');
+        const retained = await revisions.listCompleteDocumentRevisions('apply-doc');
+        expect(retained.some(item => item.manifest.revisionId === applied.beforeRevisionId)).toBe(true);
+        expect(retained.length).toBeLessThanOrEqual(21);
+        expect((await changes.undoWorkspaceDocumentChange(ref)).status).toBe('undone');
+        expect((await getDb().posts.get('apply-doc'))?.content).toContain('Original apply paragraph');
+        expect((await revisions.listCompleteDocumentRevisions('apply-doc')).length).toBeLessThanOrEqual(20);
+    });
+
     it('commits checkpoint/content/action once across concurrent Apply and guards Undo after later edits', async () => {
         const { ref } = await pendingChange();
         const changes = await import('~/utils/chat/workspace-document-change');
@@ -835,6 +863,7 @@ describe('chat document tools', () => {
         expect(await getDb().posts.count()).toBe(1);
     });
     it('targets the open document session and refuses a different workspace', async () => {
+        await getDb().posts.put({ id: 'doc-a', title: 'Draft', postType: 'doc', content: '{"type":"doc","content":[]}', created_at: 1, updated_at: 1, clock: 0, deleted: false });
         const executeChatTool = vi.fn(() => '{"readableBlockCount":2}');
         disposers.push(setWorkspaceTabPaletteProvider(() => [
             {
@@ -895,7 +924,8 @@ describe('chat document tools', () => {
         expect(executeChatTool).toHaveBeenCalledTimes(1);
     });
 
-    it('lists open tabs and reads the live editor context', async () => {
+    it('reads live editor context only while its canonical document is available', async () => {
+        await getDb().posts.put({ id: 'doc-a', title: 'Draft', postType: 'doc', content: '{"type":"doc","content":[]}', created_at: 1, updated_at: 1, clock: 0, deleted: false });
         disposers.push(setWorkspaceTabPaletteProvider(() => [
             {
                 id: 'tab-doc',
@@ -945,6 +975,12 @@ describe('chat document tools', () => {
             tabId: 'tab-doc',
             content: '{"documentBlocks":[{"ref":"b1"}]}',
         });
+        await getDb().posts.update('doc-a', { meta: JSON.stringify({ 'or3.workspace-item': { version: 1, trashed_at: 1 } }) });
+        const trashed = await registry.executeTool('get_open_pane_context', '{"tabId":"tab-doc"}', context, { definition: tool.definition });
+        expect(trashed.error).toMatch(/unavailable|available/i);
+        const outline = await registry.executeTool('get_document_outline', '{"documentId":"doc-a"}', context,
+            { definition: registry.getTool('get_document_outline')!.definition });
+        expect(outline.error).toMatch(/unavailable|available/i);
     });
 
     it('lists a blank chat and returns that list when tabId is blank or unknown', async () => {

@@ -132,6 +132,15 @@ Patch only the slots you need. Preserve labels, focus styles, loading states,
 and disabled behavior. Theme recipes describe presentation, not application
 logic. Local component props and the shared dialog shell can take precedence.
 
+## Keyboard focus
+
+Blank uses one inset outline for native and Nuxt UI buttons, links and tab
+controls, with the shared focus color and the user's focus-width preference.
+The outline stays inside virtual sidebar rows and horizontal tab/toolbar scroll
+rails. Primary chat/document/project buttons draw the indicator around the
+visible row; secondary actions retain their own indicator. It appears for
+keyboard focus (`:focus-visible`) and adapts to both color modes.
+
 ## Background layers
 
 Authored `backgrounds` supply defaults for workspace base/overlay, sidebar,
@@ -297,6 +306,11 @@ pixel icons while Blank supplies Solar icons. Supplied app images still take
 precedence. `useIcon()` accepts a token, ref, or getter for reactive token props.
 
 The tab bar, tab switcher and mobile tab header resolve built-in content icons through `useWorkspaceTabIcon()` in component setup. Override `shell.tab.chat`, `shell.tab.document` and `shell.tab.app` for their fallback icons, and `shell.tab.close` for tab-bar close buttons. Blank supplies Solar icons; retro supplies pixel icons. Existing open tabs update when the theme changes. Supplied plugin icons and app images remain supported.
+
+The document image toolbar resolves `editor.image.resize`,
+`editor.image.align-left`, `editor.image.align-center` and
+`editor.image.align-right` through `useIcon()`. Blank supplies Solar variants;
+other themes inherit the default icons unless they override these tokens.
 
 For source Vue code, resolve icons in setup so template unwrapping works:
 

@@ -305,7 +305,7 @@ describe('document hooks integration', () => {
         const existing: DocumentRow = {
             id: 'doc-update',
             title: 'Old',
-            content: '{}',
+            content: JSON.stringify({ type: 'doc', content: [] }),
             postType: 'doc',
             created_at: 10,
             updated_at: 10,

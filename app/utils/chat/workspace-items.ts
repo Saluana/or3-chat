@@ -6,7 +6,7 @@ import type { WorkspaceOperationScope } from './workspace-access';
 import type { ToolExecutionContext } from './types';
 import { FILE_CATALOG_POST_TYPE, isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
 import { parseFileHashes } from '~/db/files-util';
-import { sha256Hex } from '~~/shared/runtime-crypto';
+import { workspaceRevision } from '~~/shared/posts/workspace-revision';
 
 export type WorkspaceItemKind = 'chat' | 'document' | 'project' | 'file';
 export interface WorkspaceItemRef { kind: WorkspaceItemKind; id: string }
@@ -14,15 +14,7 @@ export interface WorkspaceSource extends WorkspaceItemRef { title: string; revis
 export const WORKSPACE_RECEIPT_VERSION = 1;
 const READ_PAGE_BYTES = 12 * 1024;
 
-/** Revision fingerprints detect content changes even when timestamps tie. */
-export async function workspaceRevision(row: unknown): Promise<string> {
-    let canonical = row;
-    if (row && typeof row === 'object' && !Array.isArray(row) && 'postType' in row) {
-        const { document_reference_key: _localIndex, ...fields } = row as Record<string, unknown>;
-        canonical = fields;
-    }
-    return sha256Hex(JSON.stringify(canonical));
-}
+export { workspaceRevision } from '~~/shared/posts/workspace-revision';
 
 export async function readWorkspaceItem(scope: WorkspaceOperationScope, item: WorkspaceItemRef): Promise<{
     source: WorkspaceSource; content: string; row: Post | Project | Thread; messages?: Message[];

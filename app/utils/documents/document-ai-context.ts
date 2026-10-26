@@ -1,3 +1,5 @@
+import { getDb, getWorkspaceGeneration } from '~/db/client';
+import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
 import type { MentionItem } from '~/plugins/ChatMentions/useChatMentions';
 
 export interface DocumentAiContextReference {
@@ -36,7 +38,8 @@ async function fallbackSearch(
     query: string,
     options: DocumentAiMentionSearchOptions,
 ): Promise<MentionItem[]> {
-    const { db } = await import('~/db');
+    const db = getDb();
+    const generation = getWorkspaceGeneration();
     const limit = Math.max(1, options.maxPerGroup ?? 5);
     const normalized = normalizeQuery(query);
 
@@ -45,14 +48,15 @@ async function fallbackSearch(
             ? db.posts
                   .where('postType')
                   .equals('doc')
-                  .and((document) => !document.deleted && document.id !== options.currentDocumentId)
+                  .and((document) => isVisibleWorkspaceItem(document) && document.id !== options.currentDocumentId)
                   .toArray()
             : [],
         options.conversationsEnabled
-            ? db.threads.filter((thread) => !thread.deleted).toArray()
+            ? db.threads.filter(isVisibleWorkspaceItem).toArray()
             : [],
     ]);
 
+    if (getDb() !== db || getWorkspaceGeneration() !== generation) return [];
     return [
         ...documents
             .filter((document) => matchesQuery(document.title || 'Untitled', normalized))

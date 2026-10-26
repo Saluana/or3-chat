@@ -30,7 +30,7 @@ afterEach(async () => {
 });
 
 describe('mounted checkpoint history workspace isolation', () => {
-    it('offers read-only checkpoint previews without write controls', async () => {
+    it('refreshes externally saved versions in an open read-only history panel', async () => {
         vi.stubGlobal('CompressionStream', undefined);
         const id = `history-readonly-${crypto.randomUUID()}`;
         const db = setActiveWorkspaceDb(id);
@@ -48,6 +48,10 @@ describe('mounted checkpoint history workspace isolation', () => {
         expect(wrapper.get('.preview-actions').text()).toContain('Cancel');
         expect(wrapper.get('.preview-actions').text()).not.toContain('Restore this version');
         expect(wrapper.emitted('restore')).toBeUndefined();
+        await createDocumentRevision({ documentId: 'history-document', title: 'New version', source: 'auto',
+            content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'New automatic checkpoint' }] }] } }, db);
+        await vi.waitFor(() => expect(wrapper!.findAll('.revision-item')).toHaveLength(2));
+        expect(wrapper.get('.preview-body').text()).toContain('Earlier content');
     });
     it('clears an A preview and reloads B history in a retained same-ID panel', async () => {
         // Real identity codec for the test DOM's Blob implementation.

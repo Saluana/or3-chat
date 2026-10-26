@@ -457,9 +457,8 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
     };
 
     // Req 3, 5, 6: Try server route first (/api/openrouter/stream) if available.
-    // Only 404/405 and genuine network failures are treated as "route unavailable";
-    // other proxy errors (5xx, 401, 403, etc.) propagate so the caller can retry or
-    // surface them instead of silently poisoning the availability cache.
+    // Only an unmarked 404/405 proves the route is absent. A transport failure
+    // can use the optional fallback while online, but cannot poison discovery.
     if (forceServerRoute || isServerRouteAvailable()) {
         let serverResp: Response | undefined;
         let networkError: Error | undefined;
@@ -532,13 +531,12 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
                 });
             }
         } else if (networkError) {
-            if (forceServerRoute) {
+            if (forceServerRoute || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
                 throw new OpenRouterStreamError(networkError.message, {
                     status: 0,
                     retryable: true,
                 });
             }
-            setServerRouteAvailable(false);
         }
     }
 

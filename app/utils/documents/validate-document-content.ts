@@ -6,7 +6,7 @@ import { collectDocumentFileHashes } from './document-content';
 import { isAllowedDocumentHref } from './document-href';
 
 /** Validate the real schema and attributes before allowing native content to persist. */
-export async function validateDocumentContent(schema: Schema, value: unknown, db: Or3DB): Promise<TipTapDocument> {
+export function parseNativeDocumentContent(schema: Schema, value: unknown): TipTapDocument {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Expected native document content.');
     const content = value as JSONContent;
     if (content.type !== 'doc' || !Array.isArray(content.content)) throw new Error('Expected a native document.');
@@ -36,7 +36,11 @@ export async function validateDocumentContent(schema: Schema, value: unknown, db
     visit(content);
     const parsed = schema.nodeFromJSON(content);
     parsed.check();
-    const native = parsed.toJSON() as TipTapDocument;
+    return parsed.toJSON() as TipTapDocument;
+}
+
+export async function validateDocumentContent(schema: Schema, value: unknown, db: Or3DB): Promise<TipTapDocument> {
+    const native = parseNativeDocumentContent(schema, value);
     for (const hash of collectDocumentFileHashes(native)) {
         const file = await db.file_meta.get(hash);
         if (!file || file.deleted) throw new Error('A referenced workspace image is unavailable.');

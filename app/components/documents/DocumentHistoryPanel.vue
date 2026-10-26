@@ -44,6 +44,7 @@
             </UButton>
         </div>
         <p v-if="error" class="history-error" role="alert">{{ error }}</p>
+        <UButton v-if="error" label="Retry history" color="neutral" variant="soft" @click="load" />
 
         <AppModal
             v-model:open="previewOpen"
@@ -67,6 +68,7 @@
 </template>
 
 <script setup lang="ts">
+import { liveQuery } from 'dexie';
 import AppModal from '~/components/ui/AppModal.vue';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { JSONContent } from '@tiptap/core';
@@ -81,6 +83,7 @@ const props = defineProps<{
     documentId: string;
     createCheckpoint?: () => Promise<void>;
     readOnly?: boolean;
+    restoreRevision?: (revision: CompleteDocumentRevision) => Promise<void>;
 }>();
 const emit = defineEmits<{ restore: [revision: CompleteDocumentRevision] }>();
 const historyIcon = useIcon('editor.history');
@@ -106,22 +109,29 @@ const selectedPreviewLines = computed(() =>
     selected.value ? previewLines(selected.value.snapshot.content) : []
 );
 
-async function load() {
+let historySubscription: { unsubscribe(): void } | undefined;
+function load() {
+    historySubscription?.unsubscribe();
     const db = getDb();
     const id = props.documentId;
     const requestGeneration = ++generation;
-    const isCurrent = () => !didUnmount && generation === requestGeneration &&
-        getDb() === db && props.documentId === id;
+    const isCurrent = () => !didUnmount && generation === requestGeneration && getDb() === db && props.documentId === id;
     loading.value = true;
     error.value = '';
-    try {
-        const loaded = await listCompleteDocumentRevisions(id, db);
-        if (isCurrent()) revisions.value = loaded;
-    } catch (caught) {
-        if (isCurrent()) error.value = caught instanceof Error ? caught.message : String(caught);
-    } finally {
-        if (isCurrent()) loading.value = false;
-    }
+    historySubscription = liveQuery(() => listCompleteDocumentRevisions(id, db)).subscribe({
+        next(loaded) {
+            if (!isCurrent()) return;
+            revisions.value = loaded;
+            loading.value = false;
+            error.value = '';
+            if (selected.value && !loaded.some(item => item.manifest.revisionId === selected.value!.manifest.revisionId)) closePreview();
+        },
+        error() {
+            if (!isCurrent()) return;
+            loading.value = false;
+            error.value = 'Saved versions could not be loaded. Your document has not been changed.';
+        },
+    });
 }
 
 async function checkpoint() {
@@ -133,7 +143,7 @@ async function checkpoint() {
         if (props.readOnly || !props.createCheckpoint) return;
         await props.createCheckpoint();
         if (!isCurrent()) return;
-        await load();
+        // The workspace-owned subscription observes the committed checkpoint.
     } catch (caught) {
         if (isCurrent()) {
             error.value = caught instanceof Error ? caught.message : String(caught);
@@ -155,11 +165,21 @@ function closePreview() {
     selected.value = null;
 }
 
-function restoreSelected() {
-    if (!selected.value || props.readOnly) return;
+async function restoreSelected() {
+    if (!selected.value || props.readOnly || busy.value) return;
     const revision = selected.value;
-    closePreview();
-    emit('restore', revision);
+    const scope = scopeGeneration;
+    busy.value = true;
+    error.value = '';
+    try {
+        if (props.restoreRevision) await props.restoreRevision(revision);
+        else emit('restore', revision);
+        if (scope === scopeGeneration) closePreview();
+    } catch {
+        if (scope === scopeGeneration) error.value = 'This version could not be restored. Review your current document and try again.';
+    } finally {
+        if (scope === scopeGeneration) busy.value = false;
+    }
 }
 
 function formatDate(timestamp: number) {
@@ -207,6 +227,7 @@ const stopWorkspaceSubscription = subscribeActiveWorkspaceDb(resetScope);
 onBeforeUnmount(() => {
     didUnmount = true;
     generation += 1;
+    historySubscription?.unsubscribe();
     stopWorkspaceSubscription();
 });
 onMounted(load);

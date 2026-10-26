@@ -9,8 +9,9 @@
     --or3-prose-code-button-fg: var(--md-on-surface-variant);
     --or3-prose-code-button-hover-bg: var(--md-surface-container);
     --or3-prose-code-button-hover-fg: var(--md-on-surface);
-    --or3-prose-table-header-bg: var(--md-surface-container-low);
+    --or3-prose-table-header-bg: var(--md-surface-container);
     --or3-prose-table-header-fg: var(--md-on-surface);
+    --or3-prose-table-border-width: max(1px, var(--md-border-width, 1px));
     font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
         Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue',
         sans-serif !important;
@@ -221,14 +222,25 @@
 
 
 
-/* Rendered cells carry a bare `border` utility (currentColor); every table
-   line follows the theme's border token instead of the text color. */
+/* Share a visible grid across rendered chat and native editor tables. Some
+   themes remove subtle decorative borders; table structure must remain visible. */
 .or3-prose :deep(:is(thead, tr, th, td)) {
     border-color: var(--md-border-color);
 }
 
+.or3-prose :deep(:is(th, td)) {
+    border: var(--or3-prose-table-border-width) solid var(--md-border-color);
+}
+
+.or3-prose :deep(:is(th, td) > p) {
+    margin-block: 0;
+}
+
+.or3-prose :deep(:is(th, td) > p + p) {
+    margin-block-start: 0.5rem;
+}
+
 .or3-prose :deep(th) {
-    border-bottom: var(--md-border-width-subtle) solid var(--md-border-color);
     padding: 0.5rem 0.75rem;
     text-align: left;
     color: var(--or3-prose-table-header-fg);
@@ -239,7 +251,6 @@
 }
 
 .or3-prose :deep(td) {
-    border-bottom: var(--md-border-width-subtle) solid var(--md-border-color);
     padding: 0.5rem 0.75rem;
     text-align: left;
     font-size: 0.875rem;
@@ -248,7 +259,7 @@
 
 /* Safety net for table layout */
 .or3-prose :deep([data-streamdown='table-wrapper']) {
-    border: var(--md-border-width) solid var(--md-border-color);
+    border: var(--or3-prose-table-border-width) solid var(--md-border-color);
     border-radius: var(--md-border-radius);
     margin-top: 32px !important;
     margin-bottom: 32px;
@@ -272,7 +283,6 @@
 .or3-prose :deep([data-streamdown='th']) {
     padding-top: 8px;
     padding-bottom: 8px;
-    border-bottom: var(--md-border-width-subtle) solid var(--md-border-color);
     font-weight: 600;
     border-top: none;
     white-space: nowrap;
@@ -287,15 +297,16 @@
     border-right: 0;
 }
 
-/* Zebra striping for table body rows (every 2nd data row) */
-.or3-prose :deep([data-streamdown='tbody'] [data-streamdown='tr']:nth-child(even)) {
+/* Native tables place the header inside tbody. Count only data rows so the
+   first row stays distinct from the header and striping matches chat tables. */
+.or3-prose :deep(tbody > tr:nth-child(even of :not(:has(> th)))) {
     background: var(--md-surface-container-low);
 }
-.or3-prose :deep([data-streamdown='tbody'] [data-streamdown='tr']:nth-child(odd)) {
+.or3-prose :deep(tbody > tr:nth-child(odd of :not(:has(> th)))) {
     background: var(--md-surface-container-lowest);
 }
 /* Optional hover highlight */
-.or3-prose :deep([data-streamdown='tbody'] [data-streamdown='tr']:hover) {
+.or3-prose :deep(tbody tr:hover) {
     background: var(--md-surface-container-high);
 }
 

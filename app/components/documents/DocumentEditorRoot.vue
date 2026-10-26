@@ -1,9 +1,19 @@
 <template>
     <div ref="rootElement" v-theme="'document.editor'" class="document-editor-root" data-context="document" :inert="externalWrite">
         <div v-if="documentLoaded && (paneConflict || state.status === 'error' && (state.pendingTitle !== undefined || state.pendingContent !== undefined))" class="document-status-banner" role="alert">
-            <p>{{ paneConflict ? 'This document changed in another pane. Copy your edits, then undo the text changes to load the saved version.' : 'Your changes have not been saved locally.' }}<template v-if="paneConflict && titleDraft !== (state.pendingTitle ?? state.record?.title)"> Reset the title to “{{ state.pendingTitle ?? state.record?.title }}” before retrying.</template></p>
-            <UButton color="neutral" variant="soft" label="Retry document save" @click="retryLocalSave" />
+            <p>{{ paneConflict ? 'This document changed in another pane. Save a local copy to preserve your edits and reload the saved version.' : 'Your changes have not been saved locally.' }}</p>
+            <UButton color="neutral" variant="soft" label="Retry document save" :disabled="restoring" @click="retryLocalSave" />
+            <UButton color="neutral" variant="soft" label="Save local copy and reload" :loading="restoring" @click="recoverLocalCopy" />
         </div>
+        <div v-if="documentLoaded && checkpointError" class="document-status-banner" role="alert">
+            <p>Saved version could not be created. Retry to save a history checkpoint.</p>
+            <UButton color="neutral" variant="soft" label="Retry saved version" :loading="checkpointBusy" @click="retryAutomaticRevision" />
+        </div>
+        <div v-if="documentLoaded && tooLargeToSync" class="document-status-banner" role="status">
+            <p>The saved document is too large to sync. It is preserved on this device. Download a copy or split it into smaller documents.</p>
+            <UButton color="neutral" variant="soft" label="Download Markdown" @click="downloadMarkdown" />
+        </div>
+        <div v-if="exportError" class="document-status-banner" role="alert">{{ exportError }}</div>
         <div v-if="documentLoaded && imageIntakeFailed" class="document-status-banner" role="alert">
             Image could not be added. Try attaching it again.
         </div>
@@ -15,8 +25,11 @@
             <UIcon :name="icons.inspector" class="document-status-icon" aria-hidden="true" />
             <h2>{{ loadingDocument ? 'Loading document…' : availability === 'trashed' ? 'Document in Trash' : 'Document unavailable' }}</h2>
             <p>{{ loadingDocument ? 'Your saved content is loading.' : availabilityMessage }}</p>
-            <UButton v-if="state.status === 'error'" color="neutral" variant="soft" label="Try again" @click="loadActiveDocument(documentId)" />
+            <UButton v-if="state.status === 'error' || loadError" color="neutral" variant="soft" label="Try again" @click="loadActiveDocument(documentId)" />
+            <UButton v-if="state.status === 'error' || loadError" color="neutral" variant="soft" label="Download original document" @click="downloadOriginalDocument" />
         </div>
+        <div v-if="recoveryMessage" class="document-status-banner" role="status">{{ recoveryMessage }}</div>
+        <div v-if="restoreError" class="document-status-banner" role="alert">{{ restoreError }}</div>
         <template v-if="documentLoaded">
         <div
             v-theme="'document.toolbar'"
@@ -27,7 +40,7 @@
                 'editor-toolbar--with-inspector': inspectorOpen && !isCompactToolbar,
             }"
             role="toolbar"
-            :inert="itemReadOnly"
+            :inert="editorLocked"
             aria-label="Document formatting"
         >
             <div class="toolbar-primary-rail">
@@ -78,7 +91,7 @@
                     :key="button.id"
                     v-bind="button"
                     :active="button.active?.()"
-                    @activate="button.run"
+                    @activate="runToolbarAction(button.run)"
                 />
                 <template v-if="!isCompactToolbar">
                     <span class="toolbar-separator toolbar-secondary" />
@@ -88,7 +101,7 @@
                         v-bind="button"
                         class="toolbar-secondary"
                         :active="button.active?.()"
-                        @activate="button.run"
+                        @activate="runToolbarAction(button.run)"
                     />
                 </template>
                 <template v-else>
@@ -98,7 +111,7 @@
                         :key="button.id"
                         v-bind="button"
                         :active="button.active?.()"
-                        @activate="button.run"
+                        @activate="runToolbarAction(button.run)"
                     />
                 </template>
             </div>
@@ -107,13 +120,13 @@
                     v-if="!isCompactToolbar"
                     :icon="icons.undo"
                     :label="`Undo (${shortcut('z')})`"
-                    @activate="editor?.chain().focus().undo().run()"
+                    @activate="runToolbarAction(() => editor?.chain().focus().undo().run())"
                 />
                 <ToolbarButton
                     v-if="!isCompactToolbar"
                     :icon="icons.redo"
                     :label="`Redo (${shortcut('z', true)})`"
-                    @activate="editor?.chain().focus().redo().run()"
+                    @activate="runToolbarAction(() => editor?.chain().focus().redo().run())"
                 />
                 <UDropdownMenu
                     v-model:open="overflowOpen"
@@ -185,7 +198,7 @@
         <div class="editor-layout">
             <main ref="editorScroll" class="editor-scroll" @mousedown="focusCanvas">
                 <article v-theme="'document.canvas'" class="document-canvas">
-                    <UTextarea :disabled="itemReadOnly" id="document-title" :model-value="titleDraft" name="document-title" class="document-title-field" :ui="{ base: 'max-lg:text-[length:inherit]!' }" :rows="1" :maxrows="3" autoresize variant="none" maxlength="300" placeholder="Untitled" aria-label="Document title" @update:model-value="onTitleInput" @keydown.enter="onTitleEnter" />
+                    <UTextarea :disabled="editorLocked" id="document-title" :model-value="titleDraft" name="document-title" class="document-title-field" :ui="{ base: 'max-lg:text-[length:inherit]!' }" :rows="1" :maxrows="3" autoresize variant="none" maxlength="300" placeholder="Untitled" aria-label="Document title" @update:model-value="onTitleInput" @keydown.enter="onTitleEnter" />
                     <p class="document-byline">
                         <span>{{ stats.words.toLocaleString() }} {{ stats.words === 1 ? 'word' : 'words' }}</span>
                         <span v-if="stats.readingMinutes">{{ stats.readingMinutes }} min read</span>
@@ -195,10 +208,10 @@
 
                     <!-- TipTap detaches the menu element. Keep Vue's conditional on a stable parent. -->
                     <div v-if="editor && !editorLocked">
-                        <BubbleMenu v-theme="'document.selection-menu'" :editor="editor" :options="{ placement: 'top' }" class="selection-menu">
-                            <UButton :icon="icons.bold" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('bold') }" aria-label="Bold" @click="editor.chain().focus().toggleBold().run()" />
-                            <UButton :icon="icons.italic" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('italic') }" aria-label="Italic" @click="editor.chain().focus().toggleItalic().run()" />
-                            <UButton :icon="icons.underline" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('underline') }" aria-label="Underline" @click="editor.chain().focus().toggleUnderline().run()" />
+                        <BubbleMenu v-theme="'document.selection-menu'" :editor="editor" :should-show="shouldShowTextSelection" :options="{ placement: 'top' }" class="selection-menu">
+                            <UButton :icon="icons.bold" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('bold') }" aria-label="Bold" @click="runToolbarAction(() => editor?.chain().focus().toggleBold().run())" />
+                            <UButton :icon="icons.italic" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('italic') }" aria-label="Italic" @click="runToolbarAction(() => editor?.chain().focus().toggleItalic().run())" />
+                            <UButton :icon="icons.underline" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('underline') }" aria-label="Underline" @click="runToolbarAction(() => editor?.chain().focus().toggleUnderline().run())" />
                             <UButton :icon="icons.ai" color="primary" variant="ghost" size="sm" square aria-label="Edit selection with AI" @click="openAiForSelection" />
                         </BubbleMenu>
                     </div>
@@ -231,7 +244,7 @@
                             @submit="runAi"
                             @estimate="estimateAi"
                             @accept="acceptAi"
-                            @accept-hunk="(id) => !itemReadOnly && !externalWrite && void ai.acceptHunk(id)"
+                            @accept-hunk="acceptAiHunk"
                             @discard-hunk="ai.discardHunk"
                             @focus-hunk="ai.focusHunk"
                             @focus-next-hunk="ai.focusNextHunk(1)"
@@ -259,7 +272,7 @@
                 :css="inspectorTransitionsReady"
                 @after-leave="onInspectorClosed"
             >
-                <DocumentInspector v-if="inspectorOpen" :editor="editor" :document-id="documentId" :create-checkpoint="createManualCheckpoint" :read-only="itemReadOnly" :outline="outline" :active-outline-id="activeOutlineId" :stats="stats" :saved-at="state.record?.updated_at" :plugin-panels="inspectorPanels" :initial-tab="inspectorTab" @update:active-tab="inspectorTab = $event" @close="inspectorOpen = false" @outline-select="onOutlineSelect" @restore="onInspectorRestore" />
+                <DocumentInspector v-if="inspectorOpen" :editor="editor" :document-id="documentId" :create-checkpoint="createManualCheckpoint" :read-only="editorLocked" :restore-revision="onInspectorRestore" :outline="outline" :active-outline-id="activeOutlineId" :stats="stats" :saved-at="state.record?.updated_at" :plugin-panels="inspectorPanels" :initial-tab="inspectorTab" @update:active-tab="inspectorTab = $event" @close="inspectorOpen = false" @outline-select="onOutlineSelect" @restore="(revision) => void onInspectorRestore(revision).catch(() => {})" />
             </Transition>
         </div>
 
@@ -311,6 +324,10 @@ import AppModal from '~/components/ui/AppModal.vue';
 import { formatShortcut, isApplePlatform } from '~/utils/keyboard-shortcuts';
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRef, watch } from 'vue';
 import { onClickOutside } from '@vueuse/core';
+import { getSchema, isTextSelection } from '@tiptap/core';
+import type { BubbleMenuPluginProps } from '@tiptap/extension-bubble-menu';
+import { downloadBlob } from '~/utils/download-blob';
+import { MAX_SYNC_PAYLOAD_BYTES, sanitizePayloadForSync } from '~~/shared/sync/sanitize';
 import { Editor, EditorContent, type JSONContent } from '@tiptap/vue-3';
 import { Selection } from '@tiptap/pm/state';
 import { BubbleMenu } from '@tiptap/vue-3/menus';
@@ -320,7 +337,7 @@ import DocumentTableToolbar from './DocumentTableToolbar.vue';
 import { useIcon } from '~/composables/useIcon';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import AutocompleteState from '~/plugins/EditorAutocomplete/state';
-import { acceptCommittedDocument, flush, loadDocument, refreshDocument, retainDocumentEditor, setDocumentContent, setDocumentEditorConflict, setDocumentTitle, useDocumentState } from '~/composables/documents/useDocumentsStore';
+import { acceptCommittedDocument, flush, loadDocument, refreshDocument, retainDocumentEditor, saveDocumentRecoveryCopy, setDocumentContent, setDocumentEditorConflict, setDocumentTitle, useDocumentState } from '~/composables/documents/useDocumentsStore';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import { liveQuery } from 'dexie';
@@ -353,6 +370,7 @@ import { loadDocumentEditorExtensions } from '~/utils/documents/document-editor-
 import { DEFAULT_DOCUMENT_TITLE } from '~/db/documents';
 import { createOrRefFile } from '~/db/files';
 import { createDocumentRevision, type CompleteDocumentRevision } from '~/db/document-revisions';
+import { parseNativeDocumentContent, validateDocumentContent } from '~/utils/documents/validate-document-content';
 import type { TipTapDocument } from '~/types/database';
 import { isAllowedDocumentHref } from '~/utils/documents/document-href';
 import {
@@ -452,6 +470,17 @@ const tableDialogOpen = ref(false);
 const tableRows = ref(3);
 const tableColumns = ref(3);
 const tableHeaderRow = ref(true);
+const restoring = ref(false);
+const restoreError = ref('');
+const recoveryMessage = ref('');
+const loadError = ref('');
+const exportError = ref('');
+const tooLargeToSync = ref(false);
+const checkpointError = ref(false);
+const checkpointBusy = ref(false);
+let revisionGeneration = 0;
+let automaticRetryCount = 0;
+let pendingAutomaticRevision: { origin: ReturnType<typeof revisionOrigin>; document: Editor['state']['doc']; title: string } | undefined;
 let didUnmount = false;
 let captureTimer: ReturnType<typeof setTimeout> | undefined;
 let revisionTimer: ReturnType<typeof setTimeout> | undefined;
@@ -465,18 +494,20 @@ let loadGeneration = 0;
 const documentLoaded = ref(false);
 const loadingDocument = ref(true);
 const availability = ref<'loading' | 'active' | 'trashed' | 'unavailable'>('loading');
-const itemReadOnly = computed(() => availability.value !== 'active');
+const itemReadOnly = computed(() => availability.value !== 'active' || !!loadError.value);
 const availabilityMessage = computed(() => {
     if (availability.value === 'trashed') return 'This document is read-only. Restore it from Files Trash to edit it.';
-    if (state.value.status === 'error' && !documentLoaded.value) return 'This document could not be loaded. Try again.';
+    if ((state.value.status === 'error' || loadError.value) && !documentLoaded.value) return 'This document could not be read. Its original content has been preserved. Download the original or try again.';
     return 'This document is unavailable in this workspace.';
 });
 let itemSubscription: { unsubscribe(): void } | undefined;
 watch([documentId, editorDb], ([id, db]) => {
     itemSubscription?.unsubscribe();
     availability.value = 'loading';
+    tooLargeToSync.value = false;
     itemSubscription = liveQuery(() => db.posts.get(id)).subscribe({ next: row => {
         if (didUnmount || editorDb.value !== db || props.documentId !== id) return;
+        tooLargeToSync.value = !!row && new TextEncoder().encode(JSON.stringify(sanitizePayloadForSync('posts', row, 'put'))).byteLength > MAX_SYNC_PAYLOAD_BYTES;
         const previous = availability.value;
         availability.value = row?.postType === 'doc' && isVisibleWorkspaceItem(row) ? 'active'
             : row?.postType === 'doc' && !row.deleted && workspaceItemMetadata(row.meta)?.trashed_at != null ? 'trashed' : 'unavailable';
@@ -560,6 +591,41 @@ async function ensureLocalDurability(id = props.documentId, db = editorDb.value)
     }
 }
 
+async function recoverLocalCopy() {
+    if (restoring.value || externalWrite.value) return;
+    const origin = revisionOrigin();
+    const current = origin.current;
+    if (!current || !origin.isCurrent()) return;
+    captureContent(origin.id, origin.db);
+    const document = current.state.doc;
+    const title = titleDraft.value;
+    const owner = paneConflict.value ? conflictKey() : undefined;
+    const isCurrent = () => origin.isCurrent() && current.state.doc === document && titleDraft.value === title;
+    restoring.value = true;
+    recoveryMessage.value = '';
+    try {
+        const copy = await saveDocumentRecoveryCopy(origin.id, { title, content: document.toJSON() }, { conflictOwner: owner, isCurrent }, origin.db);
+        if (!origin.isCurrent()) return;
+        if (captureTimer) clearTimeout(captureTimer);
+        captureTimer = undefined;
+        ai.reset();
+        if (owner) {
+            if (!isCurrent()) return;
+            paneConflict.value = false;
+            await loadActiveDocument(origin.id);
+        } else {
+            // The shared store acknowledgement refreshes clean buffers. Do not
+            // mistake that owned refresh for intervening user typing.
+            await nextTick();
+        }
+        if (editorDb.value === origin.db && props.documentId === origin.id) recoveryMessage.value = `Your local edits were saved as “${copy.title}” in Files. The original has been reloaded.`;
+    } catch (caught) {
+        if (origin.isCurrent()) recoveryMessage.value = caught instanceof Error ? caught.message : 'The copy could not be saved. Your draft is still retained.';
+    } finally {
+        restoring.value = false;
+    }
+}
+
 function retryLocalSave(): void {
     void ensureLocalDurability().catch((caught) => {
         console.error('[DocumentEditor] Local save failed', caught);
@@ -587,16 +653,16 @@ const ai = useDocumentAiAgent({
     title: titleDraft,
     contentVersion,
     persistCurrent: () => ensureLocalDurability(),
-    readOnly: computed(() => itemReadOnly.value || externalWrite.value),
+    readOnly: computed(() => itemReadOnly.value || externalWrite.value || restoring.value),
 });
 
 const editorLocked = computed(() => shouldLockDocumentAiEditor({
-    readOnly: itemReadOnly.value || externalWrite.value, status: ai.status.value, accepting: ai.accepting.value,
+    readOnly: itemReadOnly.value || externalWrite.value || restoring.value, status: ai.status.value, accepting: ai.accepting.value,
 }));
 watch([editor, editorLocked], () => editor.value?.setEditable(!editorLocked.value, false), { flush: 'sync' });
 const aiPanelState = computed(() => ({
     status: ai.status.value,
-    readOnly: itemReadOnly.value || externalWrite.value,
+    readOnly: itemReadOnly.value || externalWrite.value || restoring.value,
     error: ai.error.value,
     tokenEstimate: ai.tokenEstimate.value,
     proposal: ai.proposal.value,
@@ -621,7 +687,8 @@ function emptyDocument(): TipTapDocument {
 function normalizedContent(value: unknown): TipTapDocument {
     if (!value || typeof value !== 'object') return emptyDocument();
     const content = value as JSONContent;
-    if (content.type !== 'doc' || !content.content?.length) return emptyDocument();
+    if (content.type !== 'doc' || (content.content !== undefined && !Array.isArray(content.content))) throw new Error('Invalid native document.');
+    if (!content.content?.length) return { ...content, content: emptyDocument().content } as TipTapDocument;
     return content as TipTapDocument;
 }
 
@@ -634,36 +701,97 @@ function scheduleCapture() {
     }, 750);
 }
 
-function scheduleAutomaticRevision() {
+function revisionOrigin() {
+    const db = editorDb.value;
+    const id = props.documentId;
+    const current = editor.value;
+    const generation = getWorkspaceGeneration();
+    const account = getCachedSessionContext()?.user?.id;
+    return { db, id, current, isCurrent: () => !didUnmount && editorDb.value === db && getDb() === db
+        && props.documentId === id && editor.value === current && !current?.isDestroyed
+        && getWorkspaceGeneration() === generation && getCachedSessionContext()?.user?.id === account };
+}
+
+async function saveAutomaticRevision(token: number) {
+    const retained = pendingAutomaticRevision;
+    const origin = retained?.origin ?? revisionOrigin();
+    const { current, db, id } = origin;
+    if (!current || !origin.isCurrent() || token !== revisionGeneration || itemReadOnly.value || externalWrite.value) return;
+    const candidate = retained ?? { origin, document: current.state.doc, title: titleDraft.value };
+    pendingAutomaticRevision = candidate;
+    checkpointBusy.value = true;
+    try {
+        await ensureLocalDurability(id, db);
+        if (!origin.isCurrent() || token !== revisionGeneration) return;
+        if (!retained && (current.state.doc !== candidate.document || titleDraft.value !== candidate.title)) {
+            pendingAutomaticRevision = undefined;
+            scheduleAutomaticRevision();
+            return;
+        }
+        await createDocumentRevision({ documentId: id, title: candidate.title, content: candidate.document.toJSON(), source: 'auto' }, db);
+        if (!origin.isCurrent() || token !== revisionGeneration) return;
+        pendingAutomaticRevision = undefined;
+        checkpointError.value = false;
+        automaticRetryCount = 0;
+        lastAutomaticRevisionAt = Date.now();
+        if (current.state.doc !== candidate.document || titleDraft.value !== candidate.title) scheduleAutomaticRevision();
+    } catch {
+        if (!origin.isCurrent() || token !== revisionGeneration) return;
+        checkpointError.value = true;
+        const delay = [5_000, 30_000, 60_000][automaticRetryCount++];
+        if (delay !== undefined) revisionTimer = setTimeout(() => { revisionTimer = undefined; void saveAutomaticRevision(token); }, delay);
+    } finally {
+        if (origin.isCurrent() && token === revisionGeneration) checkpointBusy.value = false;
+    }
+}
+
+function retryAutomaticRevision() {
     if (revisionTimer) clearTimeout(revisionTimer);
+    automaticRetryCount = 0;
+    void saveAutomaticRevision(++revisionGeneration);
+}
+
+function scheduleAutomaticRevision() {
+    // Keep the failed immutable snapshot and its existing retry deadline while
+    // typing continues. Only one owned recovery snapshot is retained.
+    if (pendingAutomaticRevision && (checkpointBusy.value || revisionTimer !== undefined)) return;
+    if (revisionTimer) clearTimeout(revisionTimer);
+    const token = ++revisionGeneration;
+    automaticRetryCount = 0;
+    checkpointBusy.value = false;
     const fiveMinutes = 5 * 60 * 1000;
     const earliest = lastAutomaticRevisionAt ? Math.max(30_000, lastAutomaticRevisionAt + fiveMinutes - Date.now()) : 30_000;
-    revisionTimer = setTimeout(async () => {
-        const current = editor.value;
-        const revisionDocumentId = props.documentId;
-        if (!current || didUnmount) return;
-        try {
-            await ensureLocalDurability(revisionDocumentId);
-        } catch (caught) {
-            console.error('[DocumentEditor] Checkpoint save failed', caught);
-            return;
-        }
-        if (
-            didUnmount ||
-            props.documentId !== revisionDocumentId ||
-            editor.value !== current ||
-            current.isDestroyed
-        ) {
-            return;
-        }
-        const created = await createDocumentRevision({
-            documentId: revisionDocumentId,
-            title: titleDraft.value,
-            content: current.getJSON(),
-            source: 'auto',
-        }, editorDb.value).catch(() => null);
-        if (created) lastAutomaticRevisionAt = Date.now();
-    }, earliest);
+    revisionTimer = setTimeout(() => { revisionTimer = undefined; void saveAutomaticRevision(token); }, earliest);
+}
+
+async function downloadOriginalDocument() {
+    const origin = revisionOrigin();
+    exportError.value = '';
+    try {
+        const row = await origin.db.posts.get(origin.id);
+        if (!origin.isCurrent()) return;
+        if (!row || row.postType !== 'doc' || !isVisibleWorkspaceItem(row)) throw new Error('Unavailable');
+        downloadBlob(new Blob([row.content], { type: 'application/json' }), `${row.title || 'Document'}.json`);
+    } catch {
+        if (origin.isCurrent()) exportError.value = 'The original document could not be downloaded. Try again.';
+    }
+}
+
+async function downloadMarkdown() {
+    const origin = revisionOrigin();
+    exportError.value = '';
+    const current = origin.current;
+    if (!current) return;
+    const document = current.state.doc;
+    const title = titleDraft.value;
+    try {
+        const { documentToMarkdown } = await import('~/utils/documents/document-to-markdown');
+        const markdown = await documentToMarkdown(document.toJSON(), origin.db);
+        if (!origin.isCurrent()) return;
+        downloadBlob(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }), `${title || 'Document'}.md`);
+    } catch {
+        if (origin.isCurrent()) exportError.value = 'The document could not be exported completely. Check that its images are available and try again.';
+    }
 }
 
 function updateSlashMenu() {
@@ -737,10 +865,11 @@ async function insertFiles(files: File[]) {
 async function makeEditor(isCurrent: () => boolean) {
     const extensions = await loadDocumentEditorExtensions();
     if (!isCurrent()) return;
+    const native = parseNativeDocumentContent(getSchema(extensions), capturedContent.value);
     editor.value?.destroy();
     editor.value = new Editor({
         extensions,
-        content: capturedContent.value,
+        content: native,
         autofocus: false,
         editorProps: {
             attributes: {
@@ -964,6 +1093,9 @@ async function loadActiveDocument(id: string) {
     imageIntakeFailed.value = false;
     documentLoaded.value = false;
     loadingDocument.value = true;
+    loadError.value = '';
+    exportError.value = '';
+    recoveryMessage.value = '';
     const isCurrent = () => !didUnmount && props.documentId === id &&
         editorDb.value === db && loadGeneration === generation;
     const record = await loadDocument(id, db);
@@ -983,32 +1115,44 @@ async function loadActiveDocument(id: string) {
     capturedContent.value = normalizedContent(state.value.pendingContent !== undefined
         ? state.value.pendingContent : state.value.record?.content);
     contentVersion.value = 0;
-    await makeEditor(isCurrent);
-    editor.value?.setEditable(!itemReadOnly.value, false);
-    if (!isCurrent()) return;
-    // Lazy extension loading can cross a committed Apply. Use the current origin buffer
-    // before registering, then the session lease covers writes still in progress.
-    titleDraft.value = state.value.pendingTitle ?? state.value.record?.title ?? '';
-    capturedTitle = titleDraft.value;
-    capturedContent.value = normalizedContent(state.value.pendingContent !== undefined
-        ? state.value.pendingContent : state.value.record?.content);
-    const conflict = state.value.editorConflicts?.get(conflictKey());
-    editor.value?.commands.setContent(conflict?.content ?? capturedContent.value, { emitUpdate: false, errorOnInvalidContent: true });
-    if (conflict) {
-        titleDraft.value = conflict.title;
-        capturedTitle = conflict.baselineTitle;
-        capturedContent.value = conflict.baselineContent;
-        paneConflict.value = true;
-    } else {
-        capturedContent.value = normalizedContent(editor.value?.getJSON() ?? capturedContent.value);
-        capturedEditorDocument = editor.value?.state.doc;
+    try {
+        await makeEditor(isCurrent);
+        editor.value?.setEditable(!editorLocked.value, false);
+        if (!isCurrent()) return;
+        // Lazy extension loading can cross a committed Apply. Use the current origin buffer
+        // before registering, then the session lease covers writes still in progress.
+        titleDraft.value = state.value.pendingTitle ?? state.value.record?.title ?? '';
+        capturedTitle = titleDraft.value;
+        capturedContent.value = normalizedContent(state.value.pendingContent !== undefined
+            ? state.value.pendingContent : state.value.record?.content);
+        const conflict = state.value.editorConflicts?.get(conflictKey());
+        if (editor.value) {
+            const native = parseNativeDocumentContent(editor.value.schema, conflict?.content ?? capturedContent.value);
+            editor.value.commands.setContent(native, { emitUpdate: false, errorOnInvalidContent: true });
+        }
+        if (conflict) {
+            titleDraft.value = conflict.title;
+            capturedTitle = conflict.baselineTitle;
+            capturedContent.value = conflict.baselineContent;
+            paneConflict.value = true;
+        } else {
+            capturedContent.value = normalizedContent(editor.value?.getJSON() ?? capturedContent.value);
+            capturedEditorDocument = editor.value?.state.doc;
+        }
+        loadedDocumentId = id;
+        if (inspectorDefaultApplied.value) inspectorOpen.value = inspectorOpensByDefault();
+        documentLoaded.value = true;
+        loadingDocument.value = false;
+        registerActiveSession(id);
+        void focusIfJustCreated();
+    } catch {
+        if (!isCurrent()) return;
+        editor.value?.destroy();
+        editor.value = null;
+        documentLoaded.value = false;
+        loadingDocument.value = false;
+        loadError.value = 'The document schema is unavailable. Original content was preserved.';
     }
-    loadedDocumentId = id;
-    if (inspectorDefaultApplied.value) inspectorOpen.value = inspectorOpensByDefault();
-    documentLoaded.value = true;
-    loadingDocument.value = false;
-    registerActiveSession(id);
-    void focusIfJustCreated();
     emit('ready', id);
 }
 
@@ -1059,6 +1203,10 @@ watch(documentId, async (id, previous) => {
     if (revisionTimer) clearTimeout(revisionTimer);
     revisionTimer = undefined;
     lastAutomaticRevisionAt = 0;
+    revisionGeneration++;
+    pendingAutomaticRevision = undefined;
+    checkpointError.value = false;
+    checkpointBusy.value = false;
     inspectorOpen.value = false;
     inspectorTab.value = 'outline';
     findOpen.value = false;
@@ -1089,6 +1237,10 @@ const stopWorkspaceSubscription = subscribeActiveWorkspaceDb(() => {
     loadedDocumentId = undefined;
     const generation = ++loadGeneration;
     lastAutomaticRevisionAt = 0;
+    revisionGeneration++;
+    pendingAutomaticRevision = undefined;
+    checkpointError.value = false;
+    checkpointBusy.value = false;
     editorDb.value = getDb();
     titleDraft.value = '';
     capturedTitle = '';
@@ -1159,8 +1311,16 @@ function syncCleanBuffers(): void {
     if (!documentLoaded.value || loadedDocumentId !== props.documentId || !current || current.isDestroyed || !record) return;
     const title = state.value.pendingTitle ?? record.title;
     syncCleanTitle();
-    const content = current.schema.nodeFromJSON(normalizedContent(state.value.pendingContent !== undefined
-        ? state.value.pendingContent : record.content)).toJSON() as TipTapDocument;
+    let content: TipTapDocument;
+    try {
+        content = parseNativeDocumentContent(current.schema, normalizedContent(state.value.pendingContent !== undefined
+            ? state.value.pendingContent : record.content));
+    } catch {
+        loadError.value = 'The document schema is unavailable. Original content was preserved.';
+        documentLoaded.value = false;
+        current.setEditable(false, false);
+        return;
+    }
     const serialized = JSON.stringify(content);
     const buffer = JSON.stringify(current.getJSON());
     if (buffer === JSON.stringify(capturedContent.value) || buffer === serialized) {
@@ -1217,6 +1377,8 @@ onBeforeUnmount(() => {
     window.removeEventListener('beforeunload', onBeforePageUnload);
     document.removeEventListener('visibilitychange', onDocumentVisibilityChange);
     didUnmount = true;
+    revisionGeneration++;
+    pendingAutomaticRevision = undefined;
     stopWorkspaceSubscription();
     itemSubscription?.unsubscribe();
     paneResizeObserver?.disconnect();
@@ -1235,7 +1397,7 @@ onBeforeUnmount(() => {
 });
 
 function onTitleInput(value: string | number | null) {
-    if (itemReadOnly.value) return;
+    if (editorLocked.value) return;
     titleDraft.value = String(value ?? '');
     captureContent();
 }
@@ -1252,7 +1414,19 @@ const tableActive = computed(() => {
 });
 const blockTypeItems = DOCUMENT_BLOCK_TYPE_ITEMS;
 
+function runToolbarAction(action: () => unknown) {
+    if (!editorLocked.value) action();
+}
+
+function shouldShowTextSelection({ state, view, element }: Parameters<NonNullable<BubbleMenuPluginProps['shouldShow']>>[0]) {
+    const { selection } = state;
+    return !editorLocked.value && isTextSelection(selection) && !selection.empty
+        && !!state.doc.textBetween(selection.from, selection.to).length
+        && (view.hasFocus() || element.contains(document.activeElement));
+}
+
 function setBlockType(value: string | number | undefined) {
+    if (editorLocked.value) return;
     if (typeof value !== 'string') return;
     const chain = editor.value?.chain().focus();
     if (!chain) return;
@@ -1463,7 +1637,7 @@ const toolbarOverflowItems = computed(() => {
     const actionItems = compactButtons.map((button) => ({
         label: button.label,
         icon: button.icon || icons.plugin,
-        onSelect: () => button.run(),
+        onSelect: () => runToolbarAction(button.run),
     }));
     return [
         actionItems,
@@ -1490,10 +1664,12 @@ const toolbarOverflowItems = computed(() => {
 });
 
 function handlePluginButton(button: EditorToolbarButton) {
+    if (editorLocked.value) return;
     if (editor.value) void button.onClick(editor.value);
 }
 
 function editLink() {
+    if (editorLocked.value) return;
     const current = editor.value;
     if (!current) return;
     linkHref.value = (current.getAttributes('link').href as string | undefined) || 'https://';
@@ -1502,6 +1678,7 @@ function editLink() {
 }
 
 function applyLink() {
+    if (editorLocked.value) return;
     const current = editor.value;
     if (!current) return;
     const href = linkHref.value.trim();
@@ -1518,6 +1695,7 @@ function applyLink() {
 }
 
 function removeLink() {
+    if (editorLocked.value) return;
     editor.value?.chain().focus().extendMarkRange('link').unsetLink().run();
     linkDialogOpen.value = false;
 }
@@ -1529,6 +1707,7 @@ function normalizeTableDimension(value: number) {
 }
 
 function openTableDialog() {
+    if (editorLocked.value) return;
     tableRows.value = 3;
     tableColumns.value = 3;
     tableHeaderRow.value = true;
@@ -1536,6 +1715,7 @@ function openTableDialog() {
 }
 
 function insertTable() {
+    if (editorLocked.value) return;
     const rows = normalizeTableDimension(tableRows.value);
     const cols = normalizeTableDimension(tableColumns.value);
     tableRows.value = rows;
@@ -1727,8 +1907,15 @@ async function onInspectorClosed() {
 }
 
 async function onInspectorRestore(revision: CompleteDocumentRevision) {
-    await restoreRevision(revision);
-    if (isCompactToolbar.value) inspectorOpen.value = false;
+    restoreError.value = '';
+    try {
+        await restoreRevision(revision);
+        if (isCompactToolbar.value) inspectorOpen.value = false;
+    } catch (caught) {
+        restoreError.value = 'This version could not be restored. Your current document is retained. Review it and try again.';
+        console.error('[DocumentEditor] Restore failed', caught);
+        throw new Error(restoreError.value);
+    }
 }
 
 function openAiForSelection() {
@@ -1743,7 +1930,7 @@ function onAiComposerFocusOut(event: FocusEvent) {
 // The browser drops its selection highlight once focus moves to the AI input,
 // so tint the text the AI will edit while the composer has focus.
 const aiBusy = computed(() =>
-    ai.status.value === 'streaming' || ai.status.value === 'preview' || Boolean(ai.proposal.value)
+    ai.status.value === 'preparing' || ai.status.value === 'streaming' || ai.status.value === 'preview' || Boolean(ai.proposal.value)
 );
 watch([aiComposerFocused, selectionAvailable, aiBusy], ([focused, hasSelection]) => {
     if (focused && hasSelection) ai.syncScopeHighlight('selection', 'show');
@@ -1782,27 +1969,49 @@ async function acceptAi() {
         console.error('[DocumentAI] accept failed', caught);
     }
 }
+async function acceptAiHunk(id: string) {
+    if (itemReadOnly.value || externalWrite.value) return;
+    try {
+        await ai.acceptHunk(id);
+    } catch (caught) {
+        console.error('[DocumentAI] accept hunk failed', caught);
+    }
+}
 
 async function restoreRevision(revision: CompleteDocumentRevision) {
     const current = editor.value;
     const db = editorDb.value;
     const id = props.documentId;
-    if (!current) return;
-    await createDocumentRevision({
-        documentId: props.documentId,
-        title: titleDraft.value,
-        content: current.getJSON(),
-        source: 'restore',
-    }, db);
-    if (didUnmount || editor.value !== current || editorDb.value !== db || props.documentId !== id) return;
-    current.schema.nodeFromJSON(revision.snapshot.content);
-    titleDraft.value = revision.snapshot.title;
-    setDocumentTitle(id, titleDraft.value, db);
-    current.commands.setContent(revision.snapshot.content, {
-        emitUpdate: true,
-        errorOnInvalidContent: true,
-    });
-    await ensureLocalDurability();
+    if (!current || editorLocked.value || revision.manifest.documentId !== id) throw new Error('This document is not available for restore.');
+    const before = current.state.doc;
+    const version = contentVersion.value;
+    const title = titleDraft.value;
+    const generation = getWorkspaceGeneration();
+    const account = getCachedSessionContext()?.user?.id ?? null;
+    const assertCurrent = () => {
+        if (didUnmount || current.isDestroyed || editor.value !== current || editorDb.value !== db
+            || getDb() !== db || props.documentId !== id || getWorkspaceGeneration() !== generation
+            || (getCachedSessionContext()?.user?.id ?? null) !== account
+            || itemReadOnly.value || externalWrite.value || current.state.doc !== before
+            || contentVersion.value !== version || titleDraft.value !== title) {
+            throw new Error('The document changed while preparing the restore.');
+        }
+    };
+    restoring.value = true;
+    try {
+        const replacement = await validateDocumentContent(current.schema, revision.snapshot.content, db);
+        assertCurrent();
+        await createDocumentRevision({ documentId: id, title, content: before.toJSON(), source: 'restore' }, db);
+        const row = await db.posts.get(id);
+        assertCurrent();
+        if (!row || row.postType !== 'doc' || !isVisibleWorkspaceItem(row)) throw new Error('This document is unavailable.');
+        current.commands.setContent(replacement, { emitUpdate: true, errorOnInvalidContent: true });
+        titleDraft.value = revision.snapshot.title;
+        setDocumentTitle(id, titleDraft.value, db);
+        await ensureLocalDurability(id, db);
+    } finally {
+        restoring.value = false;
+    }
 }
 
 async function createManualCheckpoint() {

@@ -2,55 +2,77 @@
     <NodeViewWrapper
         class="or3-document-image"
         :class="{ 'is-selected': selected }"
-        :style="{ '--image-width': `${node.attrs.width || 100}%` }"
-        data-drag-handle
+        :style="{ '--image-width': `${imageWidth}%` }"
+        :data-align="alignment"
     >
-        <div v-if="loading" class="image-placeholder">Loading image…</div>
-        <img
-            v-else-if="objectUrl"
-            :src="objectUrl"
-            :alt="node.attrs.alt || ''"
-            draggable="false"
-        />
-        <div v-else class="image-placeholder image-error">Image unavailable</div>
+        <div class="image-frame" data-drag-handle>
+            <div v-if="loading" class="image-placeholder">Loading image…</div>
+            <img
+                v-else-if="objectUrl"
+                :src="objectUrl"
+                :alt="node.attrs.alt || ''"
+                draggable="false"
+            />
+            <div v-else class="image-placeholder image-error">Image unavailable</div>
+        </div>
         <div v-if="selected" class="image-controls" contenteditable="false">
-            <label>
+            <label class="image-description">
                 <span class="sr-only">Image alt text</span>
                 <UInput
                     :model-value="node.attrs.alt || ''"
                     size="sm"
+                    class="w-full"
                     aria-label="Image alt text"
                     placeholder="Describe this image"
                     @change="setAlt"
                 />
             </label>
-            <label class="image-size">
-                <span class="sr-only">Image width</span>
+            <div class="image-size">
+                <div class="image-size-heading">
+                    <UIcon :name="resizeIcon" aria-hidden="true" />
+                    <span>Resize</span>
+                    <output>{{ imageWidth }}%</output>
+                </div>
                 <USlider
                     :min="25"
                     :max="100"
                     :step="5"
-                    :model-value="Number(node.attrs.width || 100)"
+                    :model-value="imageWidth"
                     tooltip
                     aria-label="Image width"
                     @update:model-value="setWidth"
                 />
-            </label>
+            </div>
+            <div class="image-alignment" role="group" aria-label="Image alignment">
+                <UButton :icon="alignLeftIcon" :variant="alignment === 'left' ? 'soft' : 'ghost'" :aria-pressed="alignment === 'left'" color="neutral" size="sm" square aria-label="Align image left" title="Align image left" @click="setAlignment('left')" />
+                <UButton :icon="alignCenterIcon" :variant="alignment === 'center' ? 'soft' : 'ghost'" :aria-pressed="alignment === 'center'" color="neutral" size="sm" square aria-label="Align image center" title="Align image center" @click="setAlignment('center')" />
+                <UButton :icon="alignRightIcon" :variant="alignment === 'right' ? 'soft' : 'ghost'" :aria-pressed="alignment === 'right'" color="neutral" size="sm" square aria-label="Align image right" title="Align image right" @click="setAlignment('right')" />
+            </div>
             <UButton color="error" variant="ghost" size="sm" label="Remove" aria-label="Remove image" @click="removeImage" />
         </div>
     </NodeViewWrapper>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/vue-3';
 import { getFileBlob } from '~/db/files';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
+import { useIcon } from '~/composables/useIcon';
 
 const props = defineProps<NodeViewProps>();
 const objectUrl = ref('');
 const loading = ref(false);
+const resizeIcon = useIcon('editor.image.resize');
+const alignLeftIcon = useIcon('editor.image.align-left');
+const alignCenterIcon = useIcon('editor.image.align-center');
+const alignRightIcon = useIcon('editor.image.align-right');
+const alignment = computed(() => props.node.attrs.align === 'left' || props.node.attrs.align === 'right' ? props.node.attrs.align : 'center');
+const imageWidth = computed(() => {
+    const width = Number(props.node.attrs.width);
+    return Number.isFinite(width) && width > 0 ? Math.min(100, width) : 100;
+});
 
 function releaseUrl() {
     if (objectUrl.value) URL.revokeObjectURL(objectUrl.value);
@@ -106,27 +128,39 @@ onBeforeUnmount(() => {
 });
 
 function setAlt(event: Event) {
-    if (!props.editor.isEditable) return;
+    if (!props.editor.isEditable || !hasOwnerScope()) return;
     props.updateAttributes({ alt: (event.target as HTMLInputElement).value });
 }
 
 function setWidth(value: number | number[] | undefined) {
-    if (!props.editor.isEditable) return;
+    if (!props.editor.isEditable || !hasOwnerScope()) return;
     const width = Array.isArray(value) ? value[0] : value;
-    if (typeof width === 'number') props.updateAttributes({ width });
+    if (typeof width === 'number' && Number.isFinite(width)) props.updateAttributes({ width: Math.min(100, Math.max(25, width)) });
+}
+
+function setAlignment(align: 'left' | 'center' | 'right') {
+    if (props.editor.isEditable && hasOwnerScope()) props.updateAttributes({ align });
 }
 
 function removeImage() {
-    if (props.editor.isEditable) props.deleteNode();
+    if (props.editor.isEditable && hasOwnerScope()) props.deleteNode();
 }
 </script>
 
 <style scoped>
 .or3-document-image {
     position: relative;
-    width: min(var(--image-width), 100%);
-    margin: 1.5rem auto;
+    width: 100%;
+    margin: 1.5rem 0;
 }
+
+.image-frame {
+    width: min(var(--image-width), 100%);
+    margin-inline: auto;
+}
+
+.or3-document-image[data-align='left'] .image-frame { margin-inline-start: 0; }
+.or3-document-image[data-align='right'] .image-frame { margin-inline-end: 0; }
 
 .or3-document-image img,
 .image-placeholder {
@@ -151,32 +185,41 @@ function removeImage() {
 }
 
 .image-controls {
-    position: absolute;
+    position: relative;
     z-index: 2;
-    left: 50%;
-    bottom: 0.75rem;
-    width: max-content;
-    max-width: min(32rem, calc(100cqw - 2rem));
-    transform: translateX(-50%);
+    width: min(100%, 40rem);
+    margin: 0.65rem auto 0;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.375rem;
-    border: var(--md-border-width) solid var(--md-border-color);
+    padding: 0.5rem;
+    border: max(1px, var(--md-border-width, 1px)) solid var(--md-border-color);
     border-radius: var(--md-border-radius-small, var(--md-border-radius));
     background: color-mix(in oklab, var(--md-surface), transparent 4%);
     box-shadow: 0 8px 24px rgb(0 0 0 / 14%);
 }
 
-.image-controls label:first-child {
-    width: min(15rem, 42vw);
+.image-description {
+    flex: 1 1 10rem;
     min-width: 0;
 }
 
 .image-size {
-    width: min(9rem, 28vw);
-    min-width: 4rem;
+    flex: 1 1 8rem;
+    min-width: 6rem;
 }
 
+.image-size-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-bottom: 0.25rem;
+    font-size: 0.7rem;
+    color: var(--md-on-surface-variant);
+}
+
+.image-size-heading output { margin-inline-start: auto; font-variant-numeric: tabular-nums; }
+.image-alignment { display: flex; gap: 0.125rem; }
 .image-controls :deep(button) { flex-shrink: 0; }
 </style>

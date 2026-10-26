@@ -53,6 +53,7 @@
                 <DocumentHistoryPanel
                     :document-id="documentId"
                     :create-checkpoint="createCheckpoint"
+                    :restore-revision="restoreRevision"
                     :read-only="readOnly"
                     @restore="(revision) => $emit('restore', revision)"
                 />
@@ -126,6 +127,7 @@ const props = defineProps<{
     documentId: string;
     createCheckpoint: () => Promise<void>;
     readOnly?: boolean;
+    restoreRevision?: (revision: CompleteDocumentRevision) => Promise<void>;
     outline: readonly DocumentOutlineItem[];
     activeOutlineId?: string;
     stats: DocumentStats;
