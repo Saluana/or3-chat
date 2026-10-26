@@ -34,7 +34,7 @@ const gateListeners =
     g.__or3PluginGateListeners ??
     (g.__or3PluginGateListeners = new Set<() => void>());
 // Existing HMR state can predate the retry field.
-state.retryAt ??= {};
+(state as Partial<GateState>).retryAt ??= {};
 const MAX_GATE_BATCH_SIZE = 50;
 const GATE_RETRY_COOLDOWN_MS = 10_000;
 let queuedBatch: { scopeKey: string; pluginIds: string[] } | null = null;

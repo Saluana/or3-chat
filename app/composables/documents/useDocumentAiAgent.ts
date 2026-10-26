@@ -962,6 +962,7 @@ export function useDocumentAiAgent(options: {
 
             if (
                 !ownsRun()
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Stop can abort while the request is awaited.
                 || abortController.signal.aborted
             ) {
                 return;
@@ -1110,7 +1111,7 @@ export function useDocumentAiAgent(options: {
             const acceptedBefore = acceptedDocumentAiOperations(current.hunks);
             applyDocumentAiOperationLive(editor, current.snapshot, acceptedBefore, hunk.op, current.hunks.map((entry) => entry.op));
             const versionAfterAccept = options.contentVersion.value;
-            if (proposal.value && toRaw(proposal.value) === interim) {
+            if (toRaw(proposal.value) === interim) {
                 proposal.value = { ...interim, applied: !pending.length, requestVersion: versionAfterAccept };
             }
             await options.persistCurrent();

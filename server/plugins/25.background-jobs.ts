@@ -79,14 +79,14 @@ export default defineNitroPlugin((nitroApp) => {
         await getShutdownRuntime().controller.track(reconcile());
         if (stopped) return;
         activeInterval = setTimeout(() => { void scan(); }, delay);
-        activeInterval.unref?.();
+        activeInterval.unref();
     };
     activeStartup = setTimeout(() => { void scan(); }, 1_000);
-    activeStartup.unref?.();
+    activeStartup.unref();
 
     const stop = () => {
         stopped = true;
-        if (activeStartup) clearTimeout(activeStartup);
+        clearTimeout(activeStartup);
         if (activeInterval) clearTimeout(activeInterval);
         if (stopActive === stop) stopActive = undefined;
     };

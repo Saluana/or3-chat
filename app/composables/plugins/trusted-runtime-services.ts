@@ -66,7 +66,7 @@ export function createTrustedRuntimeServices(input: {
         models: () => run('ai.models', async () => {
             if (!models.catalog.value.length) await models.fetchModels({ ttlMs: 60 * 60 * 1000 });
             const favorites = new Set(models.favoriteModels.value.map(model => model.id));
-            return { configured: connected.value || runtime.public.openRouter?.hasInstanceKey === true, models: models.catalog.value.map(model => ({ id: model.id, label: model.name || model.id, priced: Boolean(model.pricing), favorite: favorites.has(model.id), metadata: model as unknown as Record<string, unknown> })), limits: { maxOutputTokens: 0, spendLimitUsd: 0, maxConcurrentCalls: 0, deadlineMs: 0 } };
+            return { configured: connected.value || runtime.public.openRouter.hasInstanceKey === true, models: models.catalog.value.map(model => ({ id: model.id, label: model.name || model.id, priced: Boolean(model.pricing), favorite: favorites.has(model.id), metadata: model as unknown as Record<string, unknown> })), limits: { maxOutputTokens: 0, spendLimitUsd: 0, maxConcurrentCalls: 0, deadlineMs: 0 } };
         }),
         provider: originInput => run('ai.provider', async () => {
             if (runtime.public.ssrAuthEnabled === true) throw Object.assign(new Error('Cloud credentials are server-owned. Use context.ai.complete().'), { code: 'unsupported' });

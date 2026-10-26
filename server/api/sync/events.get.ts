@@ -50,10 +50,12 @@ export default defineEventHandler(async event => {
         if (draining || closed) return;
         draining = true;
         try {
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- close() can run while access is rechecked.
             while (!closed && pending !== undefined) {
                 const version = pending; pending = undefined;
                 if (Date.now() >= expiresAt) { close(); return; }
                 await requireStorageWorkspaceAccess(event, session, workspaceId);
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- close() can run while access is rechecked.
                 if (!closed) await stream.push(JSON.stringify({ version }));
             }
         } catch { close(); }
@@ -68,12 +70,13 @@ export default defineEventHandler(async event => {
             }
             close();
         }, Math.max(0, Math.min(startedAt + 60_000, expiresAt) - Date.now()));
-        lifetime.unref?.();
+        lifetime.unref();
         stop = await adapter.watchVersion(event, { workspaceId }, version => {
             if (!Number.isSafeInteger(version) || version < 0 || closed) return;
             pending = version;
             void drain();
         }, close);
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- The watch can close before it resolves.
         if (closed) { stop(); return await stream.send(); }
         // Keep proxies alive and revoke idle listeners without per-pull reads.
         // Do not queue heartbeats behind a slow client or an in-flight check.
@@ -88,7 +91,7 @@ export default defineEventHandler(async event => {
                 })
                 .catch(close).finally(() => { draining = false; void drain(); });
         }, 30_000);
-        heartbeat.unref?.();
+        heartbeat.unref();
         return await stream.send();
     } catch (error) { close(); throw error; }
 });

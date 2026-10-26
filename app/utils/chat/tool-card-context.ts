@@ -61,6 +61,7 @@ export function createToolCardContext(input: {
             queued = false;
             if (controller.signal.aborted) return;
             for (const listener of [...listeners]) {
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- A listener may close the context.
                 if (controller.signal.aborted) break;
                 try {
                     listener(card);

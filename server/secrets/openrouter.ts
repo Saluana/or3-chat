@@ -18,6 +18,7 @@ function requireAccount(session: SessionContext | null): asserts session is Sess
 function accountStore(session: SessionContext) {
     const config = useRuntimeConfig();
     const store = getActiveSecretStore();
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Partial runtime configs can omit secrets.
     if (!store || !config.secrets?.namespace) throw unavailable();
     return { store, scope: { namespace: config.secrets.namespace, ownerUserId: session.user!.id,
         workspaceId: '@account', consumerId: '@or3.openrouter' }, context: { actorId: session.user!.id } };
@@ -40,6 +41,7 @@ export async function resolveOpenRouterCredential(event: H3Event, knownSession?:
         requireAccount(session);
         if (required || override) {
             // An explicit opt-out supports instance billing only, never browser BYOK.
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Partial runtime configs can omit secrets.
             if (config.secrets?.provider) {
                 const { store, scope, context } = accountStore(session);
                 try { personal = (await store.resolve({ scope, selector: { name: KEY_NAME } }, context)).value; }

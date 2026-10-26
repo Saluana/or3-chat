@@ -240,7 +240,7 @@ function readJournals(scope: WorkspaceDraftScope, errors: Map<string, unknown>):
         catch { continue; } // Unknown keys remain untouched and cannot own a valid tab.
         try {
             const raw = storage.getItem(key); if (raw === null) continue;
-            const record = JSON.parse(raw) as JournalRecord;
+            const record = JSON.parse(raw) as JournalRecord | null;
             if (!record || record.tabId !== tabId || typeof record.updatedAt !== 'number'
                 || !(record.draft === null || fromPersisted(record.draft))
                 || (key.startsWith(JOURNAL_PREFIX) && (typeof record.writerId !== 'string'

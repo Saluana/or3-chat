@@ -148,6 +148,7 @@ export default defineEventHandler(async (event): Promise<HealthResponse> => {
         ]);
 
         let secrets: { available: boolean } | undefined;
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Partial runtime configs can omit secrets.
         if (config.secrets?.provider) {
             let timer: ReturnType<typeof setTimeout> | undefined;
             try {

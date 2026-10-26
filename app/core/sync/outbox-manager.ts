@@ -95,7 +95,10 @@ function stripReadyAt(op: PendingOp): Omit<PendingOp, 'readyAt' | 'claimId' | 'c
     return rest;
 }
 
-function hasComparableRevision(op: PendingOp): boolean {
+// Persisted rows are untrusted until this check passes.
+type UncheckedOp = Partial<Omit<PendingOp, 'stamp'>> & { stamp?: Partial<PendingOp['stamp']> };
+
+function hasComparableRevision(op: UncheckedOp): boolean {
     return !!op.stamp && typeof op.stamp.clock === 'number' && Number.isFinite(op.stamp.clock)
         && typeof op.stamp.hlc === 'string' && !!op.stamp.hlc
         && typeof op.stamp.opId === 'string' && !!op.stamp.opId
