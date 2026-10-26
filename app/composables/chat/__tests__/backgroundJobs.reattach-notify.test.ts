@@ -1172,7 +1172,8 @@ describe('backgroundJobs reattach + notifications', () => {
             try {
                 const { emitBackgroundComplete } = await import('~/utils/chat/useAi-internal/backgroundJobNotifications');
                 await emitBackgroundComplete(tracker, makeStatus('complete'));
-                expect(delivery === 'hook' ? hookDelivery : notificationCreateMock).toHaveBeenCalledTimes(originMuted ? 0 : 1);
+                expect(notificationCreateMock).toHaveBeenCalledTimes(originMuted ? 0 : 1);
+                expect(hookDelivery).not.toHaveBeenCalled();
                 if (originMuted !== currentMuted) {
                     expect(originLookup).toHaveBeenCalledWith('notification_muted_threads:origin-user');
                     expect(currentLookup).not.toHaveBeenCalled();

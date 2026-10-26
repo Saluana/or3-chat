@@ -3777,7 +3777,7 @@ export type CoreHookPayloadMap = {
     'ui.chat.message:filter:incoming': [string, string | undefined];
     'ai.chat.model:filter:select': [string];
     'ai.chat.messages:filter:input': [ChatMessage[]];
-    'ui.pane.thread:filter:select': [string, PaneState, string];
+    'ui.pane.thread:filter:select': [string | false, PaneState, string];
     'ui.pane.doc:filter:select': [string, PaneState, string];
     'files.attach:filter:input': [FilesAttachInputPayload | false];
     'db.messages.files.validate:filter:hashes': [string[]];
@@ -4285,6 +4285,7 @@ export interface RegisterOptions {
 export interface ToolRegistryState {
     tools: Map<string, RegisteredTool>;
     storageHydrated: boolean;
+    pendingEnabledStates?: Record<string, boolean>;
     persistDebounceTimer: NodeJS.Timeout | null;
 }
 /**

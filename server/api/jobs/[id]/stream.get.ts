@@ -1043,13 +1043,18 @@ function queuedUpdate(
     update: StreamUpdate,
     encoder: TextEncoder
 ): QueuedUpdate {
-    if (update.kind === 'snapshot')
+    if (update.kind === 'snapshot') {
+        // The viewer never needs recovery input, encrypted credentials or
+        // worker leases. Do not retain/count private execution history in its
+        // bounded queue; admission already captured workspace authorization.
+        const { execution: _execution, leaseOwner: _owner, leaseExpiresAt: _expires, ...job } = update.job;
         return {
-            ...update,
-            bytes: encoder.encode(JSON.stringify(update.job)).byteLength,
+            kind: 'snapshot', job,
+            bytes: encoder.encode(JSON.stringify(job)).byteLength,
             deltaBytes: 0,
             metadata: '',
         };
+    }
     const live = update.live;
     const metadata = JSON.stringify([
         live.attempt,

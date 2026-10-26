@@ -543,7 +543,7 @@ export type CoreHookPayloadMap = {
     'ai.chat.messages:filter:input': [ChatMessage[]];
 
     // Pane Filters
-    'ui.pane.thread:filter:select': [string, PaneState, string];
+    'ui.pane.thread:filter:select': [string | false, PaneState, string];
     'ui.pane.doc:filter:select': [string, PaneState, string];
 
     // Files Filters

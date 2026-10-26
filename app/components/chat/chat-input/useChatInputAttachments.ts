@@ -1,4 +1,4 @@
-import { computed, nextTick, onScopeDispose, reactive, ref, watch } from 'vue';
+import { computed, onScopeDispose, reactive, ref, watch } from 'vue';
 import {
     getActiveWorkspaceId,
     getDb,
@@ -15,16 +15,6 @@ import {
 } from '~/components/chat/file-upload-utils';
 import type { LargeTextBlock, UploadedImage } from './types';
 import type { AttachmentIntakeOwner } from '../file-upload-utils';
-
-type EditorLike = {
-    getText: () => string;
-    commands: {
-        setContent: (
-            content: string,
-            options?: { emitUpdate?: boolean }
-        ) => unknown;
-    };
-};
 
 const LARGE_TEXT_WORD_THRESHOLD = 600;
 
@@ -245,10 +235,7 @@ export function useChatInputAttachments(
         largeTextBlocks.value = nextLargeTextBlocks;
     }
 
-    async function handlePaste(
-        event: ClipboardEvent,
-        editor: EditorLike | null
-    ) {
+    async function handlePaste(event: ClipboardEvent) {
         const cd = event.clipboardData;
         if (!cd) return;
 
@@ -291,7 +278,6 @@ export function useChatInputAttachments(
         event.preventDefault();
         event.stopPropagation();
 
-        const prev = editor ? editor.getText() : '';
         const previewFull = text.slice(0, 800).trim();
         const preview =
             previewFull.split(/\s+/).slice(0, 12).join(' ') +
@@ -305,16 +291,8 @@ export function useChatInputAttachments(
             previewFull,
         });
 
-        nextTick(() => {
-            try {
-                owner.assertCurrent();
-                if (editor) {
-                    editor.commands.setContent(prev, { emitUpdate: false });
-                }
-            } catch {
-                // noop
-            }
-        });
+        // preventDefault tells the editor's handlePaste prop to skip insertion,
+        // so mentions, formatting and selection stay intact without restoration.
     }
 
     const {

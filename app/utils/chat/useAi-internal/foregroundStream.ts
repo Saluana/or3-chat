@@ -35,6 +35,7 @@
  */
 
 import { createOrRefFile } from '~/db/files';
+import { captureChatMediaScope } from '~/utils/chat/media-scope';
 import type { ContextRequestPolicy } from '~~/shared/chat/context-budget';
 import type { Or3DB } from '~/db/client';
 import type { ChatMessage, ToolCall, ToolDefinition } from '~/utils/chat/types';
@@ -311,6 +312,7 @@ export type ForegroundStreamContext = {
 export async function runForegroundStreamLoop(
     ctx: ForegroundStreamContext
 ): Promise<void> {
+    const imageOwner = captureChatMediaScope(ctx.originDb, ctx.abortSignal, 'write');
     const admittedTools = snapshotToolDefinitions(ctx.tools);
     const admittedByName = new Map(
         (admittedTools ?? []).map((definition) => [definition.function.name, definition])
@@ -456,63 +458,26 @@ export async function runForegroundStreamLoop(
                     writeCoalescer.markDirty(utf8Bytes(delta));
                 } else if (ev.type === 'image') {
                     if (current.pending) current.pending = false;
-                    // Store image first, then use hash placeholder (not Base64)
                     if (ctx.assistantFileHashes.length < 6) {
-                        let blob: Blob | null = null;
-                        if (ev.url.startsWith('data:image/'))
-                            blob = dataUrlToBlob(ev.url);
-                        else if (/^https?:/.test(ev.url)) {
-                            blob = await fetchImageBlob(ev.url);
+                        imageOwner.assertCurrent();
+                        const blob = ev.url.startsWith('data:image/') ? dataUrlToBlob(ev.url)
+                            : /^https?:/.test(ev.url) ? await fetchImageBlob(ev.url, ctx.abortSignal) : null;
+                        imageOwner.assertCurrent();
+                        if (!blob) throw new Error('The generated image could not be saved.');
+                        const meta = await createOrRefFile(blob, 'gen-image', imageOwner);
+                        imageOwner.assertCurrent();
+                        ctx.assistantFileHashes.push(meta.hash);
+                        const placeholder = `![file-hash:${meta.hash}](${TRANSPARENT_PIXEL_GIF_DATA_URI})`;
+                        if (!current.text.includes(placeholder)) {
+                            const delta = (current.text ? '\n\n' : '') + placeholder;
+                            normalizedState = appendNormalizedAssistantText(normalizedState,
+                                delta,
+                                { iterationText: (normalizedState.iterationText ? '\n\n' : '') + placeholder });
+                            ctx.streamAcc.append(delta, { kind: 'text' });
+                            current.text = normalizedState.cumulativeText;
                         }
-                        ctx.abortSignal.throwIfAborted();
-                        if (blob) {
-                            try {
-                                const meta = await createOrRefFile(
-                                    blob,
-                                    'gen-image'
-                                );
-                                ctx.abortSignal.throwIfAborted();
-                                ctx.assistantFileHashes.push(meta.hash);
-                                // Use valid 1x1 transparent pixel and store hash in alt text to eliminate console errors
-                                const placeholder = `![file-hash:${meta.hash}](${TRANSPARENT_PIXEL_GIF_DATA_URI})`;
-                                const already = current.text.includes(placeholder);
-                                if (!already) {
-                                    const separator = current.text ? '\n\n' : '';
-                                    const iterationSeparator = normalizedState.iterationText
-                                        ? '\n\n'
-                                        : '';
-                                    normalizedState = appendNormalizedAssistantText(
-                                        normalizedState,
-                                        separator + placeholder,
-                                        { iterationText: iterationSeparator + placeholder }
-                                    );
-                                    ctx.streamAcc.append(separator + placeholder, { kind: 'text' });
-                                    current.text = normalizedState.cumulativeText;
-                                }
-                                current.file_hashes = ctx.assistantFileHashes;
-                                writeCoalescer.markDirty(placeholder.length);
-                            } catch {
-                                ctx.abortSignal.throwIfAborted();
-                            }
-                        } else {
-                            // Fallback: couldn't convert to blob, use URL directly
-                            const placeholder = `![generated image](${ev.url})`;
-                            const already = current.text.includes(placeholder);
-                            if (!already) {
-                                const separator = current.text ? '\n\n' : '';
-                                const iterationSeparator = normalizedState.iterationText
-                                    ? '\n\n'
-                                    : '';
-                                normalizedState = appendNormalizedAssistantText(
-                                    normalizedState,
-                                    separator + placeholder,
-                                    { iterationText: iterationSeparator + placeholder }
-                                );
-                                ctx.streamAcc.append(separator + placeholder, { kind: 'text' });
-                                current.text = normalizedState.cumulativeText;
-                                writeCoalescer.markDirty(placeholder.length);
-                            }
-                        }
+                        current.file_hashes = ctx.assistantFileHashes;
+                        writeCoalescer.markDirty(placeholder.length);
                     }
                 }
 
@@ -680,7 +645,7 @@ export async function runForegroundStreamLoop(
                     // Persist the FULL tool result so reload / sync / retry keep the
                     // real context. The UI already truncates via ToolCallIndicator.formatResult.
                     try {
-                        await appendForegroundToolResult({
+                        const savedResult = await appendForegroundToolResult({
                             threadId: ctx.threadId,
                             turnId: ctx.parentTurnId ?? ctx.assistantId,
                             parentAssistantId: ctx.assistantId,
@@ -692,6 +657,12 @@ export async function runForegroundStreamLoop(
                             error: execution.error,
                             ...(ctx.originDb ? { db: ctx.originDb } : {}),
                         });
+
+                        const retainedResult = (savedResult.data as Record<string, unknown> | null)?.content;
+                        if (typeof retainedResult === 'string' && retainedResult.startsWith('or3-tool-result:v1/')) {
+                            projectedResult.durable = retainedResult;
+                            ctx.activeToolCalls.set(toolCall.id, { ...ctx.activeToolCalls.get(toolCall.id)!, result: retainedResult });
+                        }
 
                         // Both writes must be durable before the next request.
                         const receipt = ctx.activeToolCalls.get(toolCall.id)?.executionReceipt;
@@ -734,7 +705,7 @@ export async function runForegroundStreamLoop(
                         normalizedState,
                         toolCall.id,
                         toolStatus === 'complete'
-                            ? { status: 'complete', result: projectedResult.durable }
+                            ? { status: 'complete', result: ctx.activeToolCalls.get(toolCall.id)?.result ?? projectedResult.ui }
                             : { status: 'error', error: execution.error }
                     );
                 }

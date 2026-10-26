@@ -1,3 +1,4 @@
+import { readToolResultStorage } from '~~/shared/chat/tool-result-artifact';
 import { useRuntimeConfig } from '#imports';
 import { registerAuthWorkspaceStore } from '../../../auth/store/registry';
 import type { AuthWorkspaceStore } from '../../../auth/store/types';
@@ -856,6 +857,7 @@ describe('consumeBackgroundStreamWithTools', () => {
  * duplicate usage, error/abort after a measured iteration, and stale lease writes.
  */
 describe('background usage through terminal history', () => {
+    const artifacts = new Map<string, { value: string }>();
     const delivered: CanonicalGenerationSnapshot[] = [];
     const finalize = vi.fn(async (_actor: unknown, input: { snapshot: CanonicalGenerationSnapshot }) => {
         delivered.push(structuredClone(input.snapshot));
@@ -864,7 +866,7 @@ describe('background usage through terminal history', () => {
     beforeEach(() => {
         clearAllJobs();
         contextCatalog.capacity = 1_000_000; contextCatalog.calls = 0;
-        delivered.length = 0;
+        delivered.length = 0; artifacts.clear();
         finalize.mockClear();
         vi.stubGlobal('useRuntimeConfig', () => ({ backgroundJobs: {}, public: { sync: { provider: 'usage-boundary' } } }));
         vi.mocked(useRuntimeConfig).mockImplementation(() => (globalThis as any).useRuntimeConfig());
@@ -876,6 +878,7 @@ describe('background usage through terminal history', () => {
                 readChatHistory: async (_actor: CanonicalHistoryActor, query: import('~~/shared/chat/history-reader').CanonicalChatQuery) => ({ status: 'ok', project_ownership: 'resolved', thread: query.kind === 'thread' ? { id: query.thread_id, clock: 1, project_id: null } : undefined }),
                 admitChatGeneration: async () => ({ status: 'admitted', replayed: false, serverVersion: 1 }),
                 finalizeChatGeneration: finalize,
+                retainChatToolResult: async (_actor: CanonicalHistoryActor, { rows }: Parameters<NonNullable<SyncGatewayAdapter['retainChatToolResult']>>[1]) => { for (const row of rows) artifacts.set(row.id, { value: row.value }); },
             }) as unknown as SyncGatewayAdapter,
         });
         registerServerTool(toolDef, ({ value }: { value: string }) => value, { override: true });
@@ -945,6 +948,24 @@ describe('background usage through terminal history', () => {
         return { job: reloaded, snapshot: delivered[0]! };
     }
 
+    it('keeps large background tool results inline when the provider cannot retain chunks', async () => {
+        const output = 'x'.repeat(20 * 1024);
+        const { jobId, context } = await admitted(true);
+        registerServerTool(toolDef, () => output, { override: true });
+        registerSyncGatewayAdapter({ id: 'usage-boundary', create: () => ({
+            capabilities: { backgroundGenerationHistory: 'v1', canonicalChatHistory: 'v1' },
+            readChatHistory: async () => ({ status: 'ok', project_ownership: 'resolved', thread: { id: 'thread', clock: 1, project_id: null } }),
+            admitChatGeneration: async () => ({ status: 'admitted', replayed: false, serverVersion: 1 }),
+            finalizeChatGeneration: finalize,
+        }) as unknown as SyncGatewayAdapter });
+        let requests = 0;
+        vi.stubGlobal('fetch', vi.fn(async () => ++requests === 1 ? response(100, true) : response(100)));
+        await executeBackgroundJob(jobId, context, memoryJobProvider);
+        const { snapshot } = await terminal(jobId);
+        expect((snapshot.toolCalls![0] as { result: string }).result).toBe(output);
+        expect(artifacts.size).toBe(0);
+    });
+
     // OpenRouter reserves credit for max_tokens; a small balance refuses the
     // default allowance with the size it can afford.
     const creditRefusal = (affordable: number) => new Response(JSON.stringify({ error: { code: 402,
@@ -994,6 +1015,7 @@ describe('background usage through terminal history', () => {
             readChatHistory: async () => ({ status: 'ok', project_ownership: 'resolved', thread: { id: 'thread', clock: 2, project_id: 'project' } }),
             admitChatGeneration: async () => ({ status: 'admitted', replayed: false, serverVersion: 1 }),
             finalizeChatGeneration: finalize,
+            retainChatToolResult: async () => {},
         }) as unknown as SyncGatewayAdapter });
         vi.stubGlobal('fetch', vi.fn(async () => response(100)));
         await expect(executeBackgroundJob(jobId, context, memoryJobProvider)).rejects.toThrow(/project/i);
@@ -1007,6 +1029,7 @@ describe('background usage through terminal history', () => {
             readChatHistory: async () => ({ status: 'ok', project_ownership: 'resolved', thread: { id: 'thread', clock: 1, project_id: projectId } }),
             admitChatGeneration: async () => ({ status: 'admitted', replayed: false, serverVersion: 1 }),
             finalizeChatGeneration: finalize,
+            retainChatToolResult: async () => {},
         }) as unknown as SyncGatewayAdapter });
         const { jobId, context } = await admitted(true);
         registerServerTool(toolDef, () => { projectId = 'project'; return 'accepted result'; }, { override: true });
@@ -1042,6 +1065,7 @@ describe('background usage through terminal history', () => {
             readChatHistory: read,
             admitChatGeneration: async () => ({ status: 'admitted', replayed: false, serverVersion: 1 }),
             finalizeChatGeneration: finalize,
+            retainChatToolResult: async () => {},
         }) as unknown as SyncGatewayAdapter });
         const fetch = vi.fn(async () => response(100));
         vi.stubGlobal('fetch', fetch);
@@ -1149,6 +1173,35 @@ describe('background usage through terminal history', () => {
         expect((snapshot as unknown as Record<string, unknown>).usage).toEqual(usage);
         expect(snapshot.toolCalls).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'call-1', status: 'complete', result: 'ok' })]));
     });
+    it.each(['x'.repeat(256 * 1024), '"'.repeat(140_000)])('retains complete background tool overflow before settling a bounded history receipt (%#)', async (output) => {
+        const { jobId, context } = await admitted();
+        registerServerTool(toolDef, () => output, { override: true });
+        let requests = 0;
+        vi.stubGlobal('fetch', vi.fn(async () => ++requests === 1 ? response(150, true) : response(150)));
+        await executeBackgroundJob(jobId, context, memoryJobProvider);
+        const { snapshot } = await terminal(jobId);
+        const saved = snapshot.toolCalls![0] as { result: string; transcript: { result: string } };
+        expect(saved.result).toMatch(/^or3-tool-result:v1\//);
+        expect(saved.transcript.result).toBe(saved.result);
+        expect(await readToolResultStorage(saved.result, async id => artifacts.get(id))).toBe(output);
+        expect(new TextEncoder().encode(JSON.stringify(snapshot)).length).toBeLessThan(256 * 1024);
+    });
+    it.each([false, true].flatMap(tools => ['content', 'reasoning'].map(field => ({ tools, field }))))(
+        'saves accepted $field through Stop before a checkpoint (tools=$tools)', async ({ tools, field }) => {
+            const { jobId, context } = await admitted(tools);
+            let controller!: ReadableStreamDefaultController<Uint8Array>;
+            const stream = new ReadableStream<Uint8Array>({ start(value) { controller = value; } });
+            vi.stubGlobal('fetch', vi.fn(async () => new Response(stream)));
+            const running = executeBackgroundJob(jobId, context, memoryJobProvider);
+            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ choices: [{ delta: { [field]: 'accepted before Stop' } }] })}\n\n`));
+            await vi.waitFor(() => expect(getJobLiveState(jobId)?.[field === 'content' ? 'content' : 'reasoning']).toBe('accepted before Stop'));
+            await memoryJobProvider.abortJob(jobId, 'owner');
+            await running;
+            const { snapshot } = await terminal(jobId);
+            expect(snapshot.status).toBe('aborted');
+            expect(snapshot[field as 'content' | 'reasoning']).toBe('accepted before Stop');
+        },
+    );
     it.each(['error', 'aborted'] as const)('preserves a completed measured iteration when a later request is %s', async (status) => {
         const { jobId, context } = await admitted();
         let calls = 0;

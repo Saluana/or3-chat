@@ -70,6 +70,7 @@ import { useIcon } from '~/composables/useIcon';
 import { useHooks } from '~/core/hooks/useHooks';
 import type { Notification, NotificationAction } from '~/db/schema';
 import { NOTIFICATION_POPOVER_CLOSE_KEY } from './notification-popover';
+import { getActiveWorkspaceId } from '~/db/client';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 
 const props = defineProps<{
@@ -130,7 +131,14 @@ const markReadOnce = async (): Promise<void> => {
     await props.onMarkRead(props.notification.id);
 };
 
+function actionIsCurrent(action: NotificationAction): boolean {
+    const workspaceId = action.data?.workspaceId;
+    return typeof workspaceId !== 'string' || workspaceId === (getActiveWorkspaceId() ?? 'local');
+}
+
 async function handleClick() {
+    const scopedAction = props.notification.actions?.find(a => a.kind === 'navigate');
+    if (scopedAction && !actionIsCurrent(scopedAction)) return;
     await markReadOnce();
     closePopover?.();
 
@@ -144,7 +152,9 @@ async function handleClick() {
 }
 
 async function handleActionClick(action: NotificationAction) {
+    if (!actionIsCurrent(action)) return;
     await markReadOnce();
+    if (!actionIsCurrent(action)) return;
     closePopover?.();
 
     if (action.kind === 'navigate') {

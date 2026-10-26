@@ -37,6 +37,17 @@ async function collect(
 }
 
 describe('parseOpenRouterSSE', () => {
+    it.each([false, true])('preserves every final multipart text without replaying prior deltas (streamed=%s)', async streamed => {
+        const content = [{ type: 'text', text: 'First ' },
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,AQ==' } }, { type: 'text', text: 'second' }];
+        const final = `data: ${JSON.stringify({ choices: [{ message: { content }, finish_reason: 'stop' }] })}\n\n`;
+        const deltas = streamed ? `data: ${JSON.stringify({ choices: [{ delta: { content: 'Already streamed' } }] })}\n\n` : '';
+        const events = await collect(streamFromSSE(deltas + final + 'data: [DONE]\n\n'));
+        expect(events.filter(event => event.type === 'text').map(event => event.text).join(''))
+            .toBe(streamed ? 'Already streamed' : 'First second');
+        expect(events.filter(event => event.type === 'image')).toHaveLength(1);
+    });
+
     it('retains explicit provider refusal for auxiliary consumers without converting it into text', async () => {
         const frame = { choices: [{ delta: { refusal: 'Unable to summarize' }, finish_reason: 'stop' }] };
         expect(await collect(streamFromSSE(`data: ${JSON.stringify(frame)}\n\ndata: [DONE]\n\n`))).toEqual([{ type: 'done', refused: true }]);

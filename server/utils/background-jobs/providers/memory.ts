@@ -200,7 +200,15 @@ function claimJobRecord(
         return null;
     }
 
-    const recovering = (job.attempts ?? 0) > 0;
+    const config = getJobConfig();
+    const active = [...jobs.values()].filter(candidate => candidate.status === 'streaming'
+        && !getChatJobExecution(candidate)?.clientToolCall
+        && (candidate.kind === 'workflow' || (candidate.leaseOwner && (candidate.leaseExpiresAt ?? 0) > now)));
+    if (active.length >= config.maxConcurrentJobs
+        || active.filter(candidate => candidate.userId === job.userId).length >= config.maxConcurrentJobsPerUser)
+        return null;
+
+    const recovering = (job.attempts ?? 0) > 0 && !execution.cancellationRequestedAt;
     job.leaseOwner = leaseOwner;
     job.leaseExpiresAt = leaseExpiresAt;
     job.attempts = (job.attempts ?? 0) + 1;
@@ -344,13 +352,8 @@ export const memoryJobProvider: BackgroundJobProvider = {
         );
         if (job) {
             if (job.status === 'streaming') {
-                job.abortController.abort();
-                job.status = 'aborted';
+                await this.abortJob(job.id, userId);
                 job.error = 'Cancelled by user';
-                job.completedAt = Date.now();
-                if (getChatJobExecution(job)?.history && job.historyPhase !== 'admission_pending') {
-                    job.historyPhase = 'finalization_pending';
-                }
                 cancelledAdmissions.set(
                     admissionKey(userId, admissionId),
                     Date.now() + ADMISSION_CANCEL_TTL_MS
@@ -454,6 +457,12 @@ export const memoryJobProvider: BackgroundJobProvider = {
             return false;
         }
 
+        const execution = getChatJobExecution(job);
+        if (execution && !execution.clientToolCall && job.leaseOwner && (job.leaseExpiresAt ?? 0) > Date.now()) {
+            execution.cancellationRequestedAt ??= Date.now();
+            job.abortController.abort();
+            return true;
+        }
         // Abort the controller (stops the upstream fetch)
         job.abortController.abort();
         job.status = 'aborted';
@@ -469,7 +478,8 @@ export const memoryJobProvider: BackgroundJobProvider = {
     },
 
     async checkJobAborted(jobId: string): Promise<boolean> {
-        return jobs.get(jobId)?.status === 'aborted';
+        const job = jobs.get(jobId);
+        return job?.status === 'aborted' || !!(job && getChatJobExecution(job)?.cancellationRequestedAt);
     },
 
     async claimJob(jobId, leaseOwner, now, leaseExpiresAt) {
@@ -519,6 +529,8 @@ export const memoryJobProvider: BackgroundJobProvider = {
         ) {
             return false;
         }
+        if (getChatJobExecution(job)?.cancellationRequestedAt)
+            throw Object.assign(new Error('Job stopped by user'), { name: 'AbortError' });
         job.execution = execution;
         return true;
     },
@@ -596,6 +608,8 @@ export const memoryJobProvider: BackgroundJobProvider = {
             if (job && job.status !== 'streaming') logBackgroundEvent('info', 'background.job.late-snapshot-dropped', { jobId, status: job.status });
             return false;
         }
+        if (getChatJobExecution(job)?.cancellationRequestedAt && snapshot.status !== 'aborted')
+            throw Object.assign(new Error('Job stopped by user'), { name: 'AbortError' });
         job.status = snapshot.status;
         job.content = snapshot.content;
         job.reasoning = snapshot.reasoning;

@@ -19,6 +19,7 @@ beforeEach(() => {
 
 describe('buildOpenRouterMessages attachment hydration', () => {
     it('preserves valid local hash, data URL, and remote URL references', async () => {
+        getFileMeta.mockResolvedValue({ kind: 'pdf', mime_type: 'application/pdf' });
         getFileBlob.mockResolvedValueOnce(
             new Blob(['pdf bytes'], { type: 'application/pdf' })
         );
@@ -245,7 +246,7 @@ describe('buildOpenRouterMessages attachment hydration', () => {
     });
 
     it('hydrates an inline image hash instead of dropping it', async () => {
-        getFileMeta.mockResolvedValueOnce({
+        getFileMeta.mockResolvedValue({
             kind: 'image',
             mime_type: 'image/png',
         });
@@ -342,7 +343,7 @@ describe('buildOpenRouterMessages attachment hydration', () => {
         getFileBlob.mockResolvedValueOnce(
             new Blob(['pdf bytes'], { type: 'application/pdf' })
         );
-        getFileMeta.mockResolvedValueOnce({
+        getFileMeta.mockResolvedValue({
             kind: 'pdf',
             mime_type: 'application/pdf',
         });

@@ -15,7 +15,7 @@ import { OutboxManager } from '~/core/sync/outbox-manager';
 import { createSubscriptionManager, cleanupSubscriptionManager, getScopeKey } from '~/core/sync/subscription-manager';
 import { GcManager } from '~/core/sync/gc-manager';
 import { cleanupCursorManager } from '~/core/sync/cursor-manager';
-import { createWorkspaceDb, type Or3DB } from '~/db/client';
+import { createWorkspaceDb, getActiveWorkspaceId as getActiveDbWorkspaceId, type Or3DB } from '~/db/client';
 import { getCachedSessionContext, useSessionContext } from '~/composables/auth/useSessionContext';
 import { startCoordinatedSubscription } from './subscription-coordinator';
 import { useAuthTokenBroker, type AuthTokenBroker } from '~/composables/auth/useAuthTokenBroker.client';
@@ -40,6 +40,8 @@ let authRetryTimeout: ReturnType<typeof setTimeout> | null = null;
 const AUTH_RETRY_DELAYS = [500, 1000, 2000, 5000];
 let authTokenBroker: AuthTokenBroker | null = null;
 let desiredScope: SyncScope | null = null;
+// Role/membership changes keep the scope but must restart authorized transport.
+let desiredAuthorizationRevision: number | undefined;
 let lifecycleGeneration = 0;
 let lifecycleQueue: Promise<void> = Promise.resolve();
 let reconcilePending = false;
@@ -55,7 +57,7 @@ function scheduleAuthRetry(scope: SyncScope, generation: number, attempt = 1): v
     authRetryTimeout = setTimeout(() => {
         authRetryTimeout = null;
         if (generation !== lifecycleGeneration) return;
-        void requestEngine(scope, true).catch(error => {
+        void requestEngine(scope, true, desiredAuthorizationRevision).catch(error => {
             console.error('[sync-engine] Auth retry failed:', error);
             if (generation === lifecycleGeneration) scheduleAuthRetry(scope, generation, attempt + 1);
         });
@@ -72,26 +74,40 @@ async function hasDirectProviderToken(provider: SyncProvider): Promise<boolean> 
     } catch { return false; }
 }
 
+/**
+ * Capture belongs to the active DB, even while an Admin route pauses
+ * transport. Workspace/account departure and DB eviction release it.
+ */
+function releaseCapture(dbName: string, scope: SyncScope): void {
+    const session = getCachedSessionContext();
+    if (getActiveDbWorkspaceId() !== scope.workspaceId || !session?.authenticated
+        || session.user?.id !== scope.principalId) cleanupHookBridge(dbName);
+}
+
 async function disposeEngine(state: SyncEngineState): Promise<void> {
     state.outboxManager.stop();
-    state.hookBridge.stop();
     state.gcManager.stop();
-    await state.stopSubscription();
-    try { await state.provider.dispose(); }
-    catch (error) { console.warn('[sync-engine] Provider dispose failed:', error); }
-    cleanupSubscriptionManager(getScopeKey(state.scope));
-    cleanupCursorManager(state.db.name, state.scope);
-    cleanupHookBridge(state.db.name);
+    try {
+        await state.stopSubscription();
+    } finally {
+        try { await state.provider.dispose(); }
+        catch (error) { console.warn('[sync-engine] Provider dispose failed:', error); }
+        cleanupSubscriptionManager(getScopeKey(state.scope));
+        cleanupCursorManager(state.db.name, state.scope);
+        releaseCapture(state.db.name, state.scope);
+    }
 }
 
 /** Serialize all ownership changes; only the newest desired scope may publish. */
-function requestEngine(scope: SyncScope | null, force = false): Promise<void> {
+function requestEngine(scope: SyncScope | null, force = false, authorizationRevision?: number): Promise<void> {
     const same = (scope ? getScopeKey(scope) : null) ===
-        (desiredScope ? getScopeKey(desiredScope) : null);
+        (desiredScope ? getScopeKey(desiredScope) : null)
+        && authorizationRevision === desiredAuthorizationRevision;
     if (!force && same && (reconcilePending || (scope ? engineState !== null : engineState === null))) {
         return lifecycleQueue;
     }
     desiredScope = scope;
+    desiredAuthorizationRevision = authorizationRevision;
     const generation = ++lifecycleGeneration;
     clearAuthRetry();
     // Abort network/bootstrap immediately, before waiting for the serialized
@@ -128,10 +144,9 @@ function requestEngine(scope: SyncScope | null, force = false): Promise<void> {
                 })();
             if (generation !== lifecycleGeneration) {
                 await stopSubscription();
-                hookBridge.stop();
                 cleanupSubscriptionManager(getScopeKey(scope));
                 cleanupCursorManager(db.name, scope);
-                cleanupHookBridge(db.name);
+                releaseCapture(db.name, scope);
                 return;
             }
             const outboxManager = new OutboxManager(db, provider, scope);
@@ -142,10 +157,9 @@ function requestEngine(scope: SyncScope | null, force = false): Promise<void> {
                 subscriptionManager, stopSubscription, gcManager };
         } catch (error) {
             await (stopSubscription ? stopSubscription() : subscriptionManager.stop());
-            hookBridge.stop();
             cleanupSubscriptionManager(getScopeKey(scope));
             cleanupCursorManager(db.name, scope);
-            cleanupHookBridge(db.name);
+            releaseCapture(db.name, scope);
             if (generation === lifecycleGeneration) scheduleAuthRetry(scope, generation);
             throw error;
         } finally {
@@ -159,8 +173,12 @@ function requestEngine(scope: SyncScope | null, force = false): Promise<void> {
     return operation;
 }
 
-function startSyncEngine(workspaceId: string, principalId = getCachedSessionContext()?.user?.id): Promise<void> {
-    return requestEngine({ workspaceId, ...(principalId ? { principalId } : {}) });
+function startSyncEngine(
+    workspaceId: string,
+    principalId = getCachedSessionContext()?.user?.id,
+    authorizationRevision = getCachedSessionContext()?.authorizationRevision,
+): Promise<void> {
+    return requestEngine({ workspaceId, ...(principalId ? { principalId } : {}) }, false, authorizationRevision);
 }
 
 function stopSyncEngine(): Promise<void> {
@@ -248,7 +266,8 @@ export async function setupSyncEngine(): Promise<void> {
         workspaceId: string | null,
         path: string,
         authenticated: boolean,
-        principalId?: string
+        principalId?: string,
+        authorizationRevision?: number
     ): void {
         const isAdmin = isAdminPath(path);
 
@@ -270,7 +289,7 @@ export async function setupSyncEngine(): Promise<void> {
         // Note: Workspace DB switching is handled separately by useWorkspaceManager
         // in 00-workspace-db.client.ts. This function only starts/stops the sync engine.
         if (workspaceId && authenticated) {
-            void startSyncEngine(workspaceId, principalId).catch((error) => {
+            void startSyncEngine(workspaceId, principalId, authorizationRevision).catch((error) => {
                 console.error('[sync-engine] Failed to start sync engine:', error);
             });
         } else {
@@ -289,9 +308,11 @@ export async function setupSyncEngine(): Promise<void> {
             workspaceId: activeWorkspaceId.value,
             path: getRoutePathSafe(),
             authenticated: sessionData.value?.session?.authenticated ?? false,
-            principalId: sessionData.value?.session?.user?.id
+            principalId: sessionData.value?.session?.user?.id,
+            authorizationRevision: sessionData.value?.session?.authorizationRevision,
         }),
-        ({ workspaceId, path, authenticated, principalId }) => updateSyncForRouteAndSession(workspaceId, path, authenticated, principalId),
+        ({ workspaceId, path, authenticated, principalId, authorizationRevision }) =>
+            updateSyncForRouteAndSession(workspaceId, path, authenticated, principalId, authorizationRevision),
         { immediate: true }
     );
 

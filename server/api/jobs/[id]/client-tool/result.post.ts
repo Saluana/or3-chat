@@ -1,3 +1,4 @@
+import { retainBackgroundToolResult } from '../../../../utils/background-jobs/history';
 import { backgroundClientToolDigest, backgroundClientToolTokenDigest } from '~~/shared/chat/background-client-tool-claim';
 import { backgroundJobClientToolIdentity } from '../../../../utils/background-jobs/client-tool-identity';
 import { getChatJobExecution } from '../../../../utils/background-jobs/types';
@@ -89,6 +90,7 @@ export default defineEventHandler(async (event) => {
         ? `Error executing tool "${pending.name}": ${error}`
         : result;
     let projected = projectToolResult(rawModelResult);
+    projected.durable = await retainBackgroundToolResult(job, projected.durable, callId);
     let normalizedToolState = execution.normalizedToolState;
     if (normalizedToolState) {
         if (!normalizedToolState.tools[callId]) {

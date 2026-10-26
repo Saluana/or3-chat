@@ -94,6 +94,13 @@ choosing a deployment profile. Local Dexie reads do not contact the backend.
 
 ### Shared foreground subscriptions
 
+Client engine transitions are serialized against the latest requested workspace,
+account and authorization revision. A route or account change during teardown
+cannot discard the next start. Transport can pause on Admin routes while atomic
+write capture remains attached to the active workspace database. Workspace or
+account departure and database eviction release that capture owner.
+
+
 With Web Locks available, windows on the same origin share one incoming gateway
 subscription per local workspace database, provider, scope, and account. The
 owner applies remote changes to the shared Dexie database; its existing
@@ -231,6 +238,14 @@ Selection interleaves the streams starting with the manager's turn (initially `r
 Startup recovery resets stale `syncing`/`in_flight` rows to `pending` with no positive scheduling delay (`readyAt` 0), so a sustained same-status backlog cannot postpone them behind every fresh row. When a push returns `applied: false` with a server winner, the winner is applied only if it is newer than the local materialized row/tombstone under `compareSyncRevision` (fail closed on ambiguous ties); a stale winner never overwrites newer local state, the pushed operation is still acknowledged, and deferred newer rows are preserved for later convergence.
 
 ### Quarantine and snapshot recovery of unsynced content
+
+Snapshot installation also preserves unsynced foreground assistant progress and
+its generation lease inside the replacement transaction. Streaming rows have no
+outbox operation until finalization. A live parent must remain after canonical
+replacement and outbox replay; newer canonical replies and tombstones retain
+the existing clock/HLC ordering. Expired local leases are retained for recovery,
+not treated as permission to discard the only saved partial output.
+
 
 Replacing local tables from a snapshot (expired cursor, rescan) restores every
 unsynced operation on top of the remote state: `pending`, `retry_wait`,
@@ -425,6 +440,9 @@ validation failures remain visible for repair or support export.
 HTTP 401/403 responses stop gateway polling and trigger session refresh. Queued
 writes stay in `retry_wait` without consuming an attempt, so signing out or an
 expired session does not create a retry/log storm or discard local changes.
+Consecutive 401/403 push rejections double the wait from the first retry delay
+up to 60 seconds, so a revoked permission backs off instead of re-pushing and
+refreshing the session every second; any successful push resets the backoff.
 
 ### 3. Build and wire the complete provider
 
@@ -500,10 +518,22 @@ Incremental application and server push admission reject the built-in device-onl
 
 Server maintenance may briefly defer gateway operations. Keep the existing outbox IDs and workspace binding; reconnection must use the normal idempotent push path, without resetting cursors or manufacturing replacement operations. See [server restarts](/documentation/cloud/operations).
 
+### Completed tool output chunks
+
+Large tool results use the existing workspace KV wire schema with the
+`chat.tool-result:<encoded-thread>:` name prefix and content-addressed row IDs.
+Each chunk stays below the sync row limit after JSON escaping. Foreground writes
+use normal atomic outbox capture; background providers that implement
+`retainChatToolResult` authorize the admitted generation and atomically allocate
+contiguous versions for new chunks (older providers keep results inline). Replay
+must preserve the existing bytes and must never resurrect a retained tombstone.
+The tool message carries a versioned reference with a SHA-256 checksum. Readers
+reject incomplete sync or corrupted content and can retry after synchronization.
+Thread hard deletion owns cleanup; retain chunks while their chat history remains.
 
 ## Durable recovery and account ownership
 
-Each authenticated principal has independent local feed coverage within the shared workspace database. Account switches restart incoming sync even when the workspace is unchanged; notification snapshot replacement preserves other principals’ local rows and deletion watermarks. Rapid workspace changes serialize teardown and fence stale startup work before it can publish an outbox or subscription.
+Each authenticated principal has independent local feed coverage within the shared workspace database. Account switches restart incoming sync even when the workspace is unchanged; notification snapshot replacement preserves other principals’ local rows and deletion watermarks. Rapid workspace changes serialize teardown and fence stale startup work before it can publish an outbox or subscription. A changed session authorization revision restarts transport for the same scope. Route pauses such as Admin keep local write capture on the active database; leaving the workspace or account releases it.
 
 Snapshot replay always applies authoritative changes after the snapshot watermark, including recently acknowledged local operation IDs. An acknowledgement received while snapshot pages were in flight cannot make the local echo cache suppress the only surviving copy of that write. Half-open circuit probes retain their ownership throughout bootstrap and replay. Incoming subscriptions continue retrying with capped backoff through long outages.
 

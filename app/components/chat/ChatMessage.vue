@@ -1315,6 +1315,12 @@ const streamMdClasses = [
     min-height: 44px;
 }
 
+/* Scroll rows clip overflow and assistant replies have no bubble padding, so
+   reserve room for the editor's outside focus ring (offset + width). */
+.cm-editor-assistant {
+    padding-top: calc(var(--app-focus-ring-width, 2px) + 6px);
+}
+
 /* Use one transform for desktop positioning. Individual translate utilities
    can survive a mobile transform reset after CSS optimization. */
 .cm-actions {

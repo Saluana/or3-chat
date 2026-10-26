@@ -377,10 +377,9 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
             reuseActiveBlank: false,
         });
         if (!opened.tabId) return NO_TAB;
-        if (opened.existing) {
-            commit(opened.state);
-            return openTabInSplit(opened.tabId);
-        }
+        // openTab already rebound the active pane to an existing tab without
+        // loading it; let the split path focus or bind that tab itself.
+        if (opened.existing) return openTabInSplit(opened.tabId);
         const paneId = options.host.addPane();
         if (!paneId) return NO_TAB;
         commit(bindTabToPane(opened.state, paneId, opened.tabId));

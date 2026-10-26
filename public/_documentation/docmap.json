@@ -161,7 +161,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 2,
-                    "summary": "Workspace-safe writes, atomic sync and tombstone scopes, safe UI errors, deletion, and upgrades."
+                    "summary": "Workspace-safe writes, atomic sync and tombstone scopes, hooks outside transactions, retained tool chunks across message transfers, safe UI errors, deletion, and upgrades."
                 },
                 {
                     "name": "threads.md",
@@ -179,7 +179,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Source API reference for messages."
+                    "summary": "Message CRUD, atomic retry admission, canonical ordering and revision-checked transfers that retain tool-result bytes."
                 },
                 {
                     "name": "branching.md",
@@ -380,7 +380,7 @@
                     "category": "Using tools",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Use the five scoped workspace tools, source receipts, native review/Undo, file coverage, and browser execution limits."
+                    "summary": "Use scoped workspace tools, canonical branch history, source receipts, native review/Undo, file coverage, browser execution limits, and verified full-result downloads."
                 },
                 {
                     "name": "chat-tool-reliability.md",
@@ -629,7 +629,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers authorization, cancellation, recovery, coalesced checkpoints, small viewer controls, idle maintenance backoff, retention and safe dashboard drains."
+                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers authorization, buffered Stop settlement, recovery, resume capacity, durable tool-result provider requirements, coalesced checkpoints, small viewer controls, idle maintenance backoff, retention and safe dashboard drains."
                 },
                 {
                     "name": "notifications.md",
@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Durable snapshot replay, principal-scoped feed coverage, fenced multi-tab outboxes, indefinite outage recovery, request cancellation, bounded gateway bodies, and real Chromium crash verification."
+                    "summary": "Durable snapshot replay, principal-scoped feed coverage, fenced multi-tab outboxes, indefinite outage recovery, request cancellation, bounded gateway bodies, real Chromium crash verification, foreground progress across snapshot replacement, active-database capture during route pauses, and immutable tool-result KV chunks."
                 },
                 {
                     "name": "storage-layer.md",
@@ -859,7 +859,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Preserve durable sends, native admission, tool policy, conversation-scoped history and unchanged presentation rows across refreshes, tabs and quiet draft autosave, with stream-safe guards, generated images retained in live text, trailing inline hydration and owned continuation intake, stable lazy row handlers, unchanged display projections and bottom-follow controls that respect overtaking native movement, owned syntax workers, math styles ready with the lazy renderer, shared lazy grammars, draft recovery, isolated journal failures, and tab-scoped storage notices and retries. Shared backend automatic chat/document titles, administrator model selection, conditional rename protection, one-shot lifecycle and bounded inference costs. Owned wheel handling acknowledges native input before layout following when maintainBottom is enabled, keeps other lists passive, preserves default scrolling and avoids an extra follow frame; busy-main-thread wheel latency remains a qualification limit."
+                    "summary": "Preserve durable sends, native admission, tool policy, conversation-scoped history and unchanged presentation rows across refreshes, tabs and quiet draft autosave, with stream-safe guards, generated images retained in live text, trailing inline hydration and owned continuation intake, stable lazy row handlers, unchanged display projections and bottom-follow controls that respect overtaking native movement, owned syntax workers, math styles ready with the lazy renderer, shared lazy grammars, draft recovery, isolated journal failures, and tab-scoped storage notices and retries. Shared backend automatic chat/document titles, administrator model selection, conditional rename protection, one-shot lifecycle and bounded inference costs. Owned wheel handling acknowledges native input before layout following when maintainBottom is enabled, keeps other lists passive, preserves default scrolling and avoids an extra follow frame; busy-main-thread wheel latency remains a qualification limit. Message edits preserve fresh metadata, literal Markdown and math, and check originating access and live parents before committing. Continuations publish ownership after admission; cancelled tab intent follows stable pane identity. Generated-image intake and attachment hydration retain originating access, live metadata, cancellable bounded downloads and visible save failures."
                 },
                 {
                     "name": "ai-preferences.md",

@@ -87,7 +87,7 @@ export interface UseMultiPaneApi {
     setActive: (index: number) => void;
     focusPrev: (current: number) => void;
     focusNext: (current: number) => void;
-    setPaneThread: (index: number, threadId: string) => Promise<void>;
+    setPaneThread: (index: number, threadId: string, options?: { isCurrent?: () => boolean }) => Promise<boolean>;
     loadMessagesFor: (id: string) => Promise<MultiPaneMessage[]>;
     ensureAtLeastOne: () => void;
     newPaneForApp: (
@@ -366,9 +366,14 @@ export function useMultiPane(
         // A combined liveQuery reruns every open history when any one thread
         // changes. Keep one owned observer per distinct open conversation so
         // an idle pane retains its history objects during neighboring writes.
-        const histories = new Map<string, { subscription?: Subscription }>();
+        type HistoryObserver = { subscription?: Subscription; retry?: ReturnType<typeof setTimeout>; failures: number };
+        const histories = new Map<string, HistoryObserver>();
+        const releaseObserver = (observer: HistoryObserver) => {
+            observer.subscription?.unsubscribe();
+            if (observer.retry) clearTimeout(observer.retry);
+        };
         const releaseHistories = () => {
-            for (const observer of histories.values()) observer.subscription?.unsubscribe();
+            for (const observer of histories.values()) releaseObserver(observer);
             histories.clear();
         };
         const stopWorkspace = subscribeActiveWorkspaceDb(() => {
@@ -384,26 +389,34 @@ export function useMultiPane(
                 const ids = new Set(panes.value.filter(pane => pane.mode === 'chat' && pane.threadId).map(pane => pane.threadId));
                 for (const [id, observer] of histories) {
                     if (ids.has(id)) continue;
-                    observer.subscription?.unsubscribe();
+                    releaseObserver(observer);
                     histories.delete(id);
                 }
                 for (const id of ids) {
                     if (histories.has(id)) continue;
-                    const observer: { subscription?: Subscription } = {};
+                    const observer: HistoryObserver = { failures: 0 };
                     histories.set(id, observer);
-                    observer.subscription = liveQuery(() => loadMessagesInDb(id, db)).subscribe({
+                    const subscribe = () => {
+                        if (histories.get(id) !== observer || getDb() !== db) return;
+                        observer.retry = undefined;
+                        observer.subscription = liveQuery(() => loadMessagesInDb(id, db)).subscribe({
                         next: messages => {
                             if (histories.get(id) !== observer || getDb() !== db) return;
+                            observer.failures = 0;
                             for (const pane of panes.value) {
                                 if (pane.mode === 'chat' && pane.threadId === id) pane.messages = markRaw(messages);
                             }
                         },
                         error: error => {
-                            // A later binding change can retry a failed observer.
-                            if (histories.get(id) === observer) histories.delete(id);
+                            if (histories.get(id) !== observer || getDb() !== db) return;
+                            observer.subscription?.unsubscribe();
+                            const delay = Math.min(30_000, 1000 * 2 ** Math.min(observer.failures++, 5));
+                            observer.retry = setTimeout(subscribe, delay);
                             if (import.meta.dev) console.warn('[useMultiPane] History observation failed:', error);
                         },
-                    });
+                        });
+                    };
+                    subscribe();
                 }
             },
             { immediate: true }
@@ -681,9 +694,9 @@ export function useMultiPane(
 
     // -------- End Width Management Functions --------
 
-    async function setPaneThread(index: number, threadId: string) {
+    async function setPaneThread(index: number, threadId: string, options: { isCurrent?: () => boolean } = {}): Promise<boolean> {
         const pane = panes.value[index];
-        if (!pane) return;
+        if (!pane) return false;
         const workspaceGeneration = workspaceReadGeneration;
         const loadGeneration =
             (threadLoadGenerations.get(pane.id) ?? 0) + 1;
@@ -712,10 +725,12 @@ export function useMultiPane(
         } catch {
             /* intentionally empty */
         }
-        if (threadLoadGenerations.get(pane.id) !== loadGeneration || workspaceGeneration !== workspaceReadGeneration) return;
-        if (requested === false) return; // veto
+        if (threadLoadGenerations.get(pane.id) !== loadGeneration || workspaceGeneration !== workspaceReadGeneration || options.isCurrent?.() === false) return false;
+        if (requested === false) return false; // veto
         // Clear association
         if (requested === '') {
+            pane.mode = 'chat';
+            pane.documentId = undefined;
             pane.threadId = '';
             pane.messages = [];
             if (oldId !== '')
@@ -736,18 +751,20 @@ export function useMultiPane(
                     /* intentionally empty */
                 }
             }
-            return;
+            return true;
         }
-        pane.threadId = requested;
         const loadedMessages = await loadMessagesFor(requested);
         if (
             threadLoadGenerations.get(pane.id) !== loadGeneration ||
             workspaceGeneration !== workspaceReadGeneration ||
-            pane.threadId !== requested ||
+            pane.threadId !== oldId || options.isCurrent?.() === false ||
             !panes.value.includes(pane)
         ) {
-            return;
+            return false;
         }
+        pane.mode = 'chat';
+        pane.documentId = undefined;
+        pane.threadId = requested;
         // Loaded history is replaced as a unit; recursively proxying every
         // message/content payload only adds memory and does not drive updates.
         pane.messages = markRaw(loadedMessages);
@@ -771,6 +788,7 @@ export function useMultiPane(
                 /* intentionally empty */
             }
         }
+        return true;
     }
 
     function setActive(i: number) {

@@ -1,3 +1,4 @@
+import { readToolResultStorage } from '~~/shared/chat/tool-result-artifact';
 vi.unmock('~/utils/errors');
 import { setErrorToastApi } from '~/utils/errors';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -505,6 +506,9 @@ describe('native context admission at the actual durable boundary', () => {
         const dispose = registerWorkspaceChatTools();
         const registry = useToolRegistry();
         const name = 'workspace_create_document';
+        // Each case starts enabled; unload now intentionally retains the prior
+        // case's explicit disabled preference. This fixture tests revocation later.
+        registry.setEnabled(name, true);
         const tool = registry.getTool(name)!;
         let prepared = false;
         useHooks().addFilter('db.documents.create:filter:input', async value => {
@@ -528,7 +532,7 @@ describe('native context admission at the actual durable boundary', () => {
             if (change === 'unchanged') expect(result.error, JSON.stringify(result)).toBeUndefined();
             else expect(result.error, JSON.stringify(result)).toMatch(/changed|disabled|registration|availability/);
             expect(await db.posts.where('postType').equals('doc').count()).toBe(change === 'unchanged' ? 1 : 0);
-        } finally { dispose(); }
+        } finally { tool.enabled.value = true; dispose(); }
     });
 
     // These registered host boundaries protect durable writes after preparation,
@@ -1248,6 +1252,22 @@ describe('native context admission at the actual durable boundary', () => {
         expect(await sending).toMatchObject({ status: 'aborted' });
         expect(external.bodies).toEqual([]);
     });
+    it('rolls back the replacement and the entire old turn when a retry supersession write fails', async () => {
+        const owner = chat();
+        const first = await owner.sendMessage('Retry must replace one coherent turn', { model: 'fixture/model' });
+        if (first.status !== 'complete') throw new Error('Fixture send failed');
+        const db = getDb(); const before = await db.messages.toArray(); const calls = external.bodies.length;
+        const failSupersession = (changes: object, id: string) => {
+            if (id === first.assistantMessageId && JSON.stringify(changes).includes('superseded'))
+                throw new Error('Injected persistent failure on the second old-turn write');
+        };
+        db.messages.hook('updating', failSupersession);
+        try {
+            await owner.retryMessage(first.assistantMessageId, 'fixture/model');
+            expect(await db.messages.toArray()).toEqual(before);
+            expect(external.bodies).toHaveLength(calls);
+        } finally { db.messages.hook('updating').unsubscribe(failSupersession); }
+    });
     it('leaves a refused retry’s original assistant and turn history intact', async () => {
         const owner = chat();
         const first = await owner.sendMessage('Original full request '.repeat(60), { model: 'fixture/model' });
@@ -1290,7 +1310,8 @@ describe('native context admission at the actual durable boundary', () => {
         expect(after.filter((row) => row.id.startsWith('lossy-old-'))).toEqual(before);
         expect(after.find((row) => row.role === 'user' && !row.id.startsWith('lossy-old-'))?.data)
             .toMatchObject({ context_omission: { version: 1, omitted_positions: expect.any(Array) } });
-        expect(JSON.stringify(after.filter((row) => row.role === 'tool'))).toContain(output);
+        const retained = after.find(row => row.role === 'tool')!;
+        expect(await readToolResultStorage((retained.data as Record<string, string>).content!, id => db.kv.get(id))).toBe(output);
         expect(await db.chat_request_recoveries.count()).toBe(0);
     });
     it('stops after an oversized accepted tool result using the captured maximum without repeating the tool', async () => {
@@ -1312,7 +1333,7 @@ describe('native context admission at the actual durable boundary', () => {
         expect(await getDb().chat_request_recoveries.count()).toBe(0);
         const tools = (await getDb().messages.toArray()).filter((row) => row.role === 'tool');
         expect(tools).toHaveLength(1);
-        expect(JSON.stringify(tools[0]?.data)).toContain(output);
+        expect(await readToolResultStorage((tools[0]!.data as Record<string, string>).content!, id => getDb().kv.get(id))).toBe(output);
     });
     it('includes thread-bound tool schema overhead before creating a new conversation', async () => {
         await useAiSettings().set({ maxContextTokens: 200 });

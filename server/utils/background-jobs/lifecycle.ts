@@ -128,6 +128,15 @@ export async function runClaimedBackgroundJob(
     if (typeof heartbeat.unref === 'function') heartbeat.unref();
 
     try {
+        if (execution.cancellationRequestedAt && dependencies.provider.saveTerminalSnapshot) {
+            const saved = await dependencies.provider.saveTerminalSnapshot(job.id, { status: 'aborted',
+                content: job.content, reasoning: job.reasoning, toolCalls: job.tool_calls, usage: job.usage, completedAt: now() }, workerId);
+            if (saved) {
+                const stopped = await dependencies.provider.getJob(job.id, job.userId);
+                if (stopped) await reconcileBackgroundJobHistory(dependencies.provider, stopped);
+            }
+            return;
+        }
         if (hasUnsafeInterruptedTool(job)) {
             throw Object.assign(new Error('Tool execution was interrupted before checkpointing.'), { code: 'ERR_TOOL_OUTCOME_UNKNOWN', retryable: false });
         }
@@ -187,6 +196,16 @@ export async function runClaimedBackgroundJob(
         const latest = await dependencies.provider
             .getJob(job.id, job.userId)
             .catch(() => null);
+        if (latest?.status === 'streaming' && getChatJobExecution(latest)?.cancellationRequestedAt
+            && latest.leaseOwner === workerId && dependencies.provider.saveTerminalSnapshot) {
+            const saved = await dependencies.provider.saveTerminalSnapshot(job.id, { status: 'aborted',
+                content: latest.content, reasoning: latest.reasoning, toolCalls: latest.tool_calls, usage: latest.usage, completedAt: now() }, workerId);
+            if (saved) {
+                const stopped = await dependencies.provider.getJob(job.id, job.userId);
+                if (stopped) await reconcileBackgroundJobHistory(dependencies.provider, stopped);
+            }
+            return;
+        }
         if (
             latest?.status === 'streaming' &&
             latest.leaseOwner === workerId &&

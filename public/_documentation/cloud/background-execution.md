@@ -49,6 +49,18 @@ provider lacks the durable claim/settle bridge, that turn uses the foreground
 tool loop. The server also rejects an unsupported browser-tool admission before
 creating a job or contacting the model.
 
+Tool results larger than 16 KiB (JSON-escaped) are retained through the selected
+sync gateway's optional `retainChatToolResult(actor, { admission, rows })` method.
+The provider authorizes the current workspace writer and live admitted generation,
+then commits immutable workspace KV chunks and contiguous change-log versions in
+one transaction. Identical replays allocate no versions; conflicting or deleted
+artifacts fail closed. The terminal tool receipt contains a bounded reference.
+Providers without this method keep the complete result inline in the tool
+receipt, as earlier releases did; a result that then exceeds the canonical
+message limit fails that history delivery. Update the provider to store large
+results as chunks; the installed package version alone does not prove that its
+deployed backend has this method.
+
 ## Chat Background Streaming Flow
 
 1. Client starts with `startBackgroundStream(...)` in `app/utils/chat/openrouterStream.ts`.
@@ -188,12 +200,14 @@ classifies retryable failures (network, timeout, 429, 5xx), pauses on auth, and
 stops reconnection on malformed protocol responses. A job confirmed missing via
 bounded 404s is projected as `stream_interrupted` so Continue is offered.
 
+Viewer queues retain delivery state without server-only execution input or worker leases. A large input history therefore does not consume the output viewer queue.
+
 ### Output limits
 
 Canonical sync history has a per-operation ceiling (`MAX_SYNC_PAYLOAD_BYTES`,
 256 KiB). When canonical sync is enabled, generated output is bounded
 *before it is accepted* by `MAX_CANONICAL_MESSAGE_OUTPUT_BYTES` (224 KiB),
-counting text, reasoning, tool arguments/results, and terminal fields. Exceeding
+counting JSON-escaped text and reasoning, tool arguments/results, and terminal fields. Exceeding
 the budget stops the stream with an explicit `OutputLimitExceededError`; the
 accepted prefix is preserved and the message is finalized as failed, never
 silently truncated. Local-only workspaces do not have canonical history and keep
@@ -484,3 +498,24 @@ until their execution settles. Parked work or failed history delivery can keep
 preparation waiting; cancel the restart and resolve that work through its existing
 controls before trying again. Uncertain tools are never replayed by restart.
 See [server restarts](/documentation/cloud/operations).
+
+Detached local completion notifications use the admitted account and captured
+workspace database through NotificationService, including its before-store filter.
+They do not send through a push listener rebound to another active workspace.
+The Open chat action retains the originating workspace and refuses navigation
+from a stale notification view after switching workspaces.
+
+### Stop settlement and resumed capacity
+
+For a chat with a live worker lease, Stop commits cancellation intent in the
+private execution checkpoint. The worker saves its buffered text, reasoning and
+tool state as one aborted terminal snapshot before canonical finalization. If it
+dies, recovery claims the expired lease and settles the last durable checkpoint
+without dispatching another model request. Unclaimed, parked and workflow jobs
+can stop immediately. A cancellation acknowledgement confirms the intent;
+terminal viewer events wait for the saved snapshot.
+
+Settling a browser tool result saves its outcome before trying to resume. Worker
+claims enforce the configured global and per-user limits atomically, including
+resumed jobs. A full worker pool leaves the settled job ready for recovery to
+claim later; it never asks the browser to repeat the effect.

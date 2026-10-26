@@ -1,3 +1,4 @@
+import { prepareToolResultStorage } from '~~/shared/chat/tool-result-artifact';
 import { getDb, type Or3DB } from '~/db/client';
 import { appendMessageRows, prepareMessageAppend } from '~/db/messages';
 import { getWriteTxTableNames } from '~/db/util';
@@ -18,6 +19,8 @@ export async function appendForegroundToolResult(params: {
     db?: Or3DB;
 }) {
     const targetDb = params.db ?? getDb();
+    const storage = await prepareToolResultStorage(params.durableResult, { threadId: params.threadId,
+        parentAssistantId: params.parentAssistantId, callId: params.call.id });
     const data = toolResultTranscriptData({
         turnId: params.turnId,
         parentAssistantId: params.parentAssistantId,
@@ -25,7 +28,7 @@ export async function appendForegroundToolResult(params: {
         toolName: params.call.function.name,
         fingerprint: params.fingerprint,
         status: params.status,
-        result: params.durableResult,
+        result: storage.result,
         error: params.error,
     });
     const prepared = await prepareMessageAppend({ thread_id: params.threadId, role: 'tool', data });
@@ -34,7 +37,7 @@ export async function appendForegroundToolResult(params: {
         throw new Error('Cannot persist tool result: transcript changed during preparation');
     const result = await targetDb.transaction(
         'rw',
-        getWriteTxTableNames(targetDb, 'messages', { include: ['threads'] }),
+        getWriteTxTableNames(targetDb, 'messages', { include: ['threads', 'kv'] }),
         async () => {
             // Hard deletion and insertion serialize over these tables. No pre-read
             // authorizes a later append; ownership is checked under the write lock.
@@ -70,6 +73,7 @@ export async function appendForegroundToolResult(params: {
                     'Cannot persist tool result: parent generation was superseded'
                 );
             }
+            if (storage.rows.length) await targetDb.kv.bulkPut(storage.rows);
             return await appendMessageRows(targetDb, prepared.value);
         }
     );

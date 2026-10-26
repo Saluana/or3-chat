@@ -265,6 +265,15 @@ describe('memory background job admission and lifecycle', () => {
             )
         ).resolves.toBeNull();
 
+        // Fill the worker slots freed by parking. Settling a completed browser
+        // effect must stay durable while its model continuation waits for room.
+        const running: string[] = [];
+        for (let index = 0; index < 2; index++) {
+            const id = await memoryJobProvider.createJob({ userId: 'user-1', threadId: 'other', messageId: `other-${index}`,
+                model: 'test-model', execution: execution() });
+            await memoryJobProvider.claimJob!(id, `active-${index}`, Date.now(), Date.now() + 30_000);
+            running.push(id);
+        }
         const settledExecution = {
             ...pendingExecution,
             pendingToolCalls: undefined,
@@ -280,6 +289,10 @@ describe('memory background job admission and lifecycle', () => {
                 [{ id: 'call-1', name: 'client_tool', status: 'complete', result: 'ok' }]
             )
         ).resolves.toBe(true);
+        await expect(memoryJobProvider.claimJob!(jobId, 'too-early', Date.now(), Date.now() + 30_000)).resolves.toBeNull();
+        await expect(memoryJobProvider.claimNextJob!('too-early', Date.now(), Date.now() + 30_000)).resolves.toBeNull();
+        expect(getChatJobExecution((await memoryJobProvider.getJob(jobId, 'user-1'))!)?.clientToolCall).toBeUndefined();
+        await memoryJobProvider.completeJob(running[0]!, 'done', 'active-0');
         await expect(
             memoryJobProvider.claimJob?.(
                 jobId,
@@ -837,6 +850,22 @@ describe('memory background job admission and lifecycle', () => {
             ).toBe('complete');
         });
         expect(fetchMock).toHaveBeenCalledOnce();
+    });
+
+    it('settles a cancelled dead worker from its last durable checkpoint without dispatching again', async () => {
+        const now = Date.now();
+        const id = await memoryJobProvider.createJob({ userId: 'user-1', threadId: 'thread-1', messageId: 'message-1', model: 'test-model', execution: execution('older iteration:') });
+        await memoryJobProvider.claimJob!(id, 'dead', now, now + 10);
+        await memoryJobProvider.updateJob(id, { contentChunk: 'durable checkpoint', reasoningChunk: 'durable reason', leaseOwner: 'dead' });
+        await memoryJobProvider.abortJob(id, 'user-1');
+        vi.spyOn(Date, 'now').mockReturnValue(now + 11);
+        try {
+            const recovered = await memoryJobProvider.claimJob!(id, 'recovery', now + 11, now + 60_000);
+            const execute = vi.fn();
+            await runClaimedBackgroundJob(recovered!, { provider: memoryJobProvider, encryptionKey: secret, execute });
+            expect(execute).not.toHaveBeenCalled();
+            expect(await memoryJobProvider.getJob(id, 'user-1')).toMatchObject({ status: 'aborted', content: 'durable checkpoint', reasoning: 'durable reason' });
+        } finally { vi.restoreAllMocks(); }
     });
 
     it('reclaims an expired lease, resets partial text, and fences the old worker', async () => {

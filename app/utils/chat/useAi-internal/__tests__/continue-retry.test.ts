@@ -57,6 +57,8 @@ vi.mock('~/db/client', () => ({
 }));
 
 vi.mock('~/db/messages', () => ({
+    // Admission races are exercised against real Dexie in the integration suite.
+    patchMessageInDb: async (...args: unknown[]) => { await updateMessageRecordSpy(...args); return dbState.messagesGet(); },
     messagesByThread: (...args: unknown[]) => messagesByThreadSpy(...args),
     compareMessageOrder: (a: { index?: number; order_key?: string; id: string }, b: { index?: number; order_key?: string; id: string }) =>
         (a.index ?? 0) - (b.index ?? 0) ||
@@ -1047,8 +1049,7 @@ describe('continue/retry regressions', () => {
         const sendMessageSpy = vi.fn(async (_text: string, params: SendMessageParams) => {
             expect(params.historyOverride?.map((message) => message.id)).toEqual(['u0', 'a0', 'u2', 'a2']);
             expect(rawMessages.value.map((message: { id: string }) => message.id)).toEqual(['u0', 'a0', 'u2', 'a2']);
-            await params.onUserPersisted?.('u1-new');
-            expect(updateMessageRecordSpy.mock.calls.map((call) => call[1]).sort()).toEqual(['a1', 'u1']);
+            expect(params.retryReplacement?.map(row => row.id).sort()).toEqual(['a1', 'u1']);
             return {
                 status: 'complete' as const, requestId: 'retry-7',
                 userMessageId: 'u1-new', assistantMessageId: 'a1-new',
@@ -1069,13 +1070,7 @@ describe('continue/retry regressions', () => {
             'u1'
         );
 
-        const markedIds = updateMessageRecordSpy.mock.calls.map((call) => call[1] as string).sort();
-        expect(markedIds).toEqual(['a1', 'u1']);
-        for (const call of updateMessageRecordSpy.mock.calls) {
-            expect(call[2]).toMatchObject({
-                data: expect.objectContaining({ superseded_by: 'u1-new' }),
-            });
-        }
+        expect(updateMessageRecordSpy).not.toHaveBeenCalled();
         expect(rawMessages.value.map((m: { id: string }) => m.id)).toEqual(['u0', 'a0', 'u2', 'a2']);
         expect(hooksSpy.doAction).toHaveBeenCalledWith(
             'ai.chat.retry:action:after',
@@ -1109,7 +1104,7 @@ describe('continue/retry regressions', () => {
         );
 
         expect(result).toEqual(accepted);
-        expect(updateMessageRecordSpy.mock.calls.map((call) => call[1]).sort()).toEqual(['a1', 'u1']);
+        expect(updateMessageRecordSpy).not.toHaveBeenCalled();
         expect(reportErrorSpy).toHaveBeenCalledWith(expect.any(Error), expect.anything());
     });
 
@@ -1220,6 +1215,8 @@ describe('continue/retry regressions', () => {
 
         const history = (sendMessageSpy.mock.calls[0] as unknown as [string, { historyOverride: ChatMessage[] }])[1].historyOverride;
         expect(history.map((message) => message.id)).toEqual(['u2']);
-        expect(updateMessageRecordSpy.mock.calls.map((call) => call[1]).sort()).toEqual(['a1', 'tool1', 'u1']);
+        const params = (sendMessageSpy.mock.calls[0] as unknown as [string, SendMessageParams])[1];
+        expect(params.retryReplacement?.map(row => row.id).sort()).toEqual(['a1', 'tool1', 'u1']);
+        expect(updateMessageRecordSpy).not.toHaveBeenCalled();
     });
 });

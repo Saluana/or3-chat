@@ -1,3 +1,4 @@
+import { createHookEngine } from '~~/shared/hooks/hook-engine-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Message, Thread } from '../schema';
 import Dexie from 'dexie';
@@ -827,26 +828,38 @@ describe('message transaction and ordering contracts', () => {
         expect((await db.threads.get('thread-1'))?.clock).toBeGreaterThan(0);
     });
 
-    it('does not write a message or thread when preparation fails', async () => {
+    it.each(['missing', 'deleted', 'deleted-during-hook'] as const)('refuses append into a %s parent without writing a message', async (state) => {
+        const db = testState.db!;
+        if (state !== 'missing') await db.threads.put(makeThread('thread-1', { deleted: state === 'deleted' }));
+        if (state === 'deleted-during-hook') testState.doAction.mockImplementation(async (name: string) => {
+            if (name === 'db.messages.append:action:before') await db.threads.update('thread-1', { deleted: true });
+        });
+        await expect(appendMessage({ id: 'orphan', thread_id: 'thread-1', role: 'user' })).rejects.toThrow(/thread/i);
+        expect(await db.messages.get('orphan')).toBeUndefined();
+    });
+
+    it('keeps the canonical order of colliding indexes when normalizing', async () => {
+        const db = testState.db!;
+        await db.messages.bulkPut([
+            makeMessage('a', 'thread-1', 10, { order_key: 'z' }),
+            makeMessage('z', 'thread-1', 10, { order_key: 'a' }),
+            makeMessage('b', 'thread-1', 10, { order_key: 'a' }),
+        ]);
+        expect(((await messagesByThread('thread-1')) as Message[]).map(row => row.id)).toEqual(['b', 'z', 'a']);
+        await normalizeThreadIndexes('thread-1');
+        expect(((await messagesByThread('thread-1')) as Message[]).map(row => row.id)).toEqual(['b', 'z', 'a']);
+    });
+
+    it('commits an append despite a real observational action callback failing', async () => {
         const db = testState.db!;
         await db.threads.put(makeThread('thread-1', { clock: 8 }));
-        testState.doAction.mockImplementation(async (name: string) => {
-            if (name === 'db.messages.append:action:before') {
-                throw new Error('forced hook failure');
-            }
-        });
-
-        await expect(
-            appendMessage({
-                id: 'rolled-back',
-                thread_id: 'thread-1',
-                role: 'user',
-            })
-        ).rejects.toThrow('forced hook failure');
-
-        expect(await db.messages.get('rolled-back')).toBeUndefined();
-        expect(await db.threads.get('thread-1')).toEqual(
-            makeThread('thread-1', { clock: 8 })
-        );
+        const engine = createHookEngine();
+        const callback = vi.fn(() => { throw new Error('forced hook failure'); });
+        engine.addAction('db.messages.append:action:before', callback);
+        testState.doAction.mockImplementation(engine.doAction);
+        await expect(appendMessage({ id: 'committed', thread_id: 'thread-1', role: 'user' })).resolves.toMatchObject({ id: 'committed' });
+        expect(callback).toHaveBeenCalledOnce();
+        expect(await db.messages.get('committed')).toBeDefined();
+        expect((await db.threads.get('thread-1'))?.clock).toBe(9);
     });
 });

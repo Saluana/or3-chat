@@ -9,6 +9,8 @@ enableAutoUnmount(afterEach);
 import ChatInputDropper from '../ChatInputDropper.vue';
 import { ref } from 'vue';
 import { EditorContent } from '@tiptap/vue-3';
+import type { AnyExtension } from '@tiptap/core';
+import Mention from '@tiptap/extension-mention';
 import type { SendResult } from '~/utils/chat/types';
 import { useWorkspaceTabDrafts } from '~/composables/core/useWorkspaceTabDrafts';
 
@@ -107,10 +109,15 @@ vi.mock('~/utils/errors', () => ({
 const attachmentFilter = vi.hoisted(() => ({ apply: undefined as undefined | ((value: unknown) => Promise<unknown>) }));
 const beforeSendAction = vi.hoisted(() => ({ apply: undefined as undefined | (() => Promise<void>) }));
 const editorExtensionsAction = vi.hoisted(() => ({ apply: undefined as undefined | (() => Promise<void>) }));
+const editorExtensionsFilter = vi.hoisted(() => ({ apply: undefined as undefined | ((extensions: unknown) => unknown) }));
 vi.mock('~/core/hooks/useHooks', () => ({
     useHooks: () => ({
         doAction: vi.fn(async (name: string) => { if (name === 'ui.chat.editor:action:before_send') await beforeSendAction.apply?.(); if (name === 'editor:request-extensions') await editorExtensionsAction.apply?.(); }),
-        applyFilters: vi.fn(async (name: string, value: unknown) => name === 'files.attach:filter:input' && attachmentFilter.apply ? attachmentFilter.apply(value) : value),
+        applyFilters: vi.fn(async (name: string, value: unknown) => {
+            if (name === 'files.attach:filter:input' && attachmentFilter.apply) return attachmentFilter.apply(value);
+            if (name === 'ui.chat.editor:filter:extensions' && editorExtensionsFilter.apply) return editorExtensionsFilter.apply(value);
+            return value;
+        }),
     }),
 }));
 
@@ -247,11 +254,49 @@ describe('ChatInputDropper', () => {
         attachmentFilter.apply = undefined;
         beforeSendAction.apply = undefined;
         editorExtensionsAction.apply = undefined;
+        editorExtensionsFilter.apply = undefined;
         vi.mocked(persistAttachment).mockResolvedValue(undefined);
         mockFiles.value = null;
         mockIsOverDropZone.value = false;
         mockEnsureAiSettingsLoaded.mockResolvedValue(undefined);
         useWorkspaceTabDrafts().clear();
+    });
+
+    it('retains structured mentions, formatting and selection when a large paste becomes an attachment', async () => {
+        const client = process.client;
+        process.client = true;
+        editorExtensionsFilter.apply = value => [
+            ...(value as AnyExtension[]).map(extension => extension.name === 'starterKit'
+                ? extension.configure({ bold: {} }) : extension),
+            Mention,
+        ];
+        const wrapper = mount(ChatInputDropper, { props: { loading: false },
+            global: { mocks: { $theme: createThemeMock() } } });
+        try {
+            await vi.waitFor(() => expect(wrapper.findComponent(EditorContent).exists()).toBe(true));
+            const editor = wrapper.getComponent(EditorContent).props('editor')!;
+            editor.commands.setContent({ type: 'doc', content: [{ type: 'paragraph', content: [
+                { type: 'mention', attrs: { id: 'retained-file', label: 'Retained file' } },
+                { type: 'text', text: ' Read this', marks: [{ type: 'bold' }] },
+            ] }] });
+            editor.commands.setTextSelection(3);
+            const original = editor.getJSON();
+            const selection = editor.state.selection.toJSON();
+            const event = new Event('paste', { bubbles: true, cancelable: true });
+            Object.defineProperty(event, 'clipboardData', { value: {
+                items: [], getData: (type: string) => type === 'text/plain' ? 'word '.repeat(600) : '',
+            } });
+            editor.view.dom.dispatchEvent(event);
+            await flushPromises();
+            expect(event.defaultPrevented).toBe(true);
+            expect((wrapper.vm as unknown as { largeTextBlocks: Array<{ wordCount: number }> })
+                .largeTextBlocks[0]?.wordCount).toBe(600);
+            expect(editor.getJSON()).toEqual(original);
+            expect(editor.state.selection.toJSON()).toEqual(selection);
+        } finally {
+            wrapper.unmount();
+            process.client = client;
+        }
     });
 
     it.each(['tab', 'workspace'] as const)('does not submit into another owner after a held before-send hook and %s transition', async transition => {

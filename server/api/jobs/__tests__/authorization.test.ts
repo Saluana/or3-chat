@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as h3 from 'h3';
 import { memoryJobProvider, clearAllJobs } from '../../../utils/background-jobs/providers/memory';
 import { resetJobProvider } from '../../../utils/background-jobs/store';
-import type { BackgroundJobExecution } from '../../../utils/background-jobs/types';
+import type { BackgroundJobExecution, CreateJobParams } from '../../../utils/background-jobs/types';
 import { backgroundClientToolDigest } from '../../../../shared/chat/background-client-tool-claim';
 import { backgroundJobClientToolIdentity } from '../../../utils/background-jobs/client-tool-identity';
 import type { RequestUsage } from '../../../../shared/chat/compaction';
@@ -24,6 +24,9 @@ import { gunzipSync } from 'node:zlib';
 import * as ts from 'typescript';
 import * as convexValues from 'convex/values';
 import { internalMutationGeneric, internalQueryGeneric } from 'convex/server';
+import { registerSyncGatewayAdapter } from '../../../sync/gateway/registry';
+import type { SyncGatewayAdapter } from '../../../sync/gateway/types';
+import { readToolResultStorage } from '../../../../shared/chat/tool-result-artifact';
 
 // This HTTP owner qualifies job/workspace admission and provider persistence;
 // canonical project fences have their own scoped-provider integration owner.
@@ -97,13 +100,13 @@ describe('background job workspace authorization at the HTTP boundary', () => {
         });
     }
 
-    async function createBoundToolJob() {
+    async function createBoundToolJob(options: Pick<CreateJobParams, 'syncProviderId' | 'tool_calls'> = {}) {
         membership.role = 'editor';
         const execution: BackgroundJobExecution = { version: 1, workspaceId: 'revoked-workspace',
             body: { _clientDeviceId: 'device', messages: [] }, referer: 'http://chat.example.test', apiKeyCiphertext: 'test',
             clientToolCall: { callId: 'call', name: 'client-tool', arguments: '{}', argumentFingerprint: 'unchanged-diagnostic',
                 definition: { type: 'function', function: { name: 'client-tool', description: 'Client tool', parameters: { type: 'object' } } } } };
-        const jobId = await memoryJobProvider.createJob({ userId: 'former-member', threadId: 't', messageId: 'm', model: 'test', execution });
+        const jobId = await memoryJobProvider.createJob({ userId: 'former-member', threadId: 't', messageId: 'm', model: 'test', execution, ...options });
         const job = (await memoryJobProvider.getJob(jobId, 'former-member'))!;
         const digest = backgroundClientToolDigest(backgroundJobClientToolIdentity(job)!);
         const claimToken = `or3ct1.${digest}.d00d76db-9bd0-49e8-974f-e6096b9c2137`;
@@ -126,6 +129,30 @@ describe('background job workspace authorization at the HTTP boundary', () => {
             server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         }
     }
+
+    it('accepts JSON-escaped browser output and retains complete bytes before acknowledging its claim', async () => {
+        const { jobId, execution, claimToken } = await createBoundToolJob({ syncProviderId: 'artifact-http',
+            tool_calls: [{ id: 'call', name: 'client-tool', status: 'pending' }] });
+        execution.history = { version: 1, kind: 'new-turn', admissionId: 'http-admission', generationId: 'generation',
+            workspaceId: execution.workspaceId, threadId: 't', messageId: 'm',
+            thread: { id: 't', clock: 1 }, userMessage: { id: 'u', clock: 1, thread_id: 't', role: 'user' },
+            assistantMessage: { id: 'm', clock: 1, thread_id: 't', role: 'assistant' } };
+        const rows = new Map<string, { value: string }>();
+        registerSyncGatewayAdapter({ id: 'artifact-http', create: () => ({
+            retainChatToolResult: async (actor, input) => {
+                expect(actor).toEqual({ userId: 'former-member', workspaceId: 'revoked-workspace' });
+                for (const row of input.rows) rows.set(row.id, { value: row.value });
+            },
+        }) as SyncGatewayAdapter });
+        await memoryJobProvider.claimClientToolCall!(jobId, 'former-member', 'call', claimToken, Date.now() + 30_000);
+        const output = '\u0000'.repeat(256 * 1024);
+        expect(await postTool(jobId, 'result', { callId: 'call', claimToken, result: output })).toMatchObject({ status: 200, body: { accepted: true } });
+        const saved = (await memoryJobProvider.getJob(jobId, 'former-member'))!;
+        const reference = saved.tool_calls![0]!.result!;
+        expect(reference.length).toBeLessThan(1024);
+        expect(await readToolResultStorage(reference, async id => rows.get(id))).toBe(output);
+        expect((saved.execution as BackgroundJobExecution).clientToolCall).toBeUndefined();
+    });
 
     it('rejects a changed snapshot returned by the atomic claim before giving it to the browser', async () => {
         const { jobId, execution } = await createBoundToolJob();

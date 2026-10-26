@@ -50,7 +50,7 @@ async function snapshot(page: Page) {
     return JSON.parse(await page.locator('[data-fixture-snapshot]').textContent() ?? '{}') as {
         threadId: string;
         executions: { callId: string; tool: string }[];
-        results: { callId: string; status: string; content: string; threadId: string; generationId: string }[];
+        results: { callId: string; status: string; content: string; resolvedLength?: number; threadId: string; generationId: string }[];
         calls: { id: string; status: string; outcome?: string; error?: string; executionReceipt?: { state: string } }[];
         foreignResults: number;
     };
@@ -190,7 +190,10 @@ test('large results respect durable model and rendering limits', async ({ page }
     await open(page, [[fixtureCall('large', 'test_large_result')]]);
     await send(page);
     await expect(page.locator('[data-msg-id]').filter({ hasText: 'Fixture completed.' })).toBeVisible();
-    expect((await snapshot(page)).results[0]!.content.length).toBe(160 * 1024);
+    // The row holds a bounded artifact reference; the stored artifact keeps the full result.
+    const [result] = (await snapshot(page)).results;
+    expect(result!.content).toMatch(/^or3-tool-result:v1\//);
+    expect(result!.resolvedLength).toBe(160 * 1024);
     const continuation = JSON.stringify(requests.get(page)!.at(-1));
     expect(continuation).toContain('omitted');
     expect(continuation.length).toBeLessThan(128 * 1024);

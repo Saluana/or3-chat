@@ -1,3 +1,4 @@
+import { prepareToolResultStorage } from '~~/shared/chat/tool-result-artifact';
 import type { BackgroundJob, BackgroundJobProvider } from "./types";
 import { getChatJobExecution } from './types';
 import { getSyncGatewayAdapter } from "../../sync/gateway/registry";
@@ -139,4 +140,16 @@ export async function reconcilePendingBackgroundHistory(
     if (result !== "unchanged") settled += 1;
   }
   return settled;
+}
+
+/** Retain complete effect output before replacing it with its bounded reference. */
+export async function retainBackgroundToolResult(job: BackgroundJob, result: string, callId: string): Promise<string> {
+  const storage = await prepareToolResultStorage(result, { threadId: job.threadId, parentAssistantId: job.messageId, callId });
+  if (!storage.rows.length) return result;
+  const admission = getChatJobExecution(job)?.history;
+  const adapter = historyAdapterFor(job);
+  // Providers released before chunk retention keep the complete result inline, as before.
+  if (!admission || !adapter?.retainChatToolResult) return result;
+  await adapter.retainChatToolResult({ userId: job.userId, workspaceId: admission.workspaceId }, { admission, rows: storage.rows });
+  return storage.result;
 }

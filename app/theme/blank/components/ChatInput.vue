@@ -146,6 +146,11 @@ function forwardResize(payload: ResizePayload) {
     gap: 0 !important;
 }
 
+/* Notices above the editor keep clear of the pill's rounded edge. */
+:deep(.blank2-chat-dropper .chat-input-inner-container > :is([role='status'], [role='alert'])) {
+    padding: 0.25rem 1.25rem 0.5rem;
+}
+
 /* ── Hide model selector & composer actions ── */
 :deep(.blank2-chat-dropper .chat-input-composer-actions),
 :deep(.blank2-chat-dropper .chat-input-model-select),

@@ -779,6 +779,22 @@ describe('fresh authorization of bounded, ordered SSE batches', () => {
         await stream.consumed;
     });
 
+    it('keeps viewing bounded output when private execution input exceeds the viewer queue', async () => {
+        const jobId = await memoryJobProvider.createJob({ userId: 'owner', threadId: 't', messageId: 'm', model: 'test',
+            execution: { version: 1, referer: 'http://chat.test', apiKeyCiphertext: 'synthetic-encrypted-placeholder', workspaceId: 'workspace', body: { messages: [{ role: 'user', content: 'private-input '.repeat(100_000) }] } } as BackgroundJobExecution });
+        const stream = await attach(jobId);
+        try {
+            await memoryJobProvider.updateJob(jobId, { contentChunk: 'remote progress', chunksReceived: 1 });
+            await vi.advanceTimersByTimeAsync(1100);
+            expect(stream.done).toBe(false);
+            expect(stream.content).toBe('remote progress');
+            expect(JSON.stringify(stream.frames)).not.toContain('private-input');
+            await memoryJobProvider.completeJob(jobId, 'remote progress');
+            await vi.advanceTimersByTimeAsync(1100);
+            expect(stream.frames.at(-1)?.status.status).toBe('complete');
+        } finally { await stream.reader.cancel(); await stream.consumed; }
+    });
+
     it('skips unchanged remote snapshots without delaying changed or terminal output', async () => {
         const provider: BackgroundJobProvider = memoryJobProvider;
         const control = { status: 'streaming' as BackgroundJob['status'], attempts: 0,

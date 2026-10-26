@@ -69,6 +69,20 @@ describe('openrouterStream', () => {
         vi.useRealTimers();
     });
 
+    it('closes the provider iterator when its retry wrapper consumer exits early', async () => {
+        let closed = false;
+        parseMock.mockImplementationOnce(async function* () {
+            try { yield { type: 'text', text: 'first' }; yield { type: 'text', text: 'unconsumed' }; }
+            finally { closed = true; }
+        });
+        vi.stubGlobal('fetch', vi.fn(async () => createStreamResponse()));
+        const stream = openRouterStreamWithRetry({ apiKey: 'synthetic', model: 'model',
+            orMessages: [{ role: 'user', content: 'Question' }], modalities: ['text'] });
+        expect(await stream.next()).toMatchObject({ done: false, value: { type: 'text', text: 'first' } });
+        await stream.return();
+        expect(closed).toBe(true);
+    });
+
     it.each(['context_length_exceeded', 'context_window_exceeded'] as const)('preserves %s as a permanent actionable context error without retrying', async (providerCode) => {
         parseMock.mockImplementationOnce(async function* () {
             throw new OpenRouterProviderError('Untrusted upstream text token=secret', { status: 400, providerCode });

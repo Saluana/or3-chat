@@ -30,6 +30,8 @@ export type NormalizedStreamState = {
     reasoningText: string;
     chunks: number;
     outputBytes: number;
+    /** Escaped JSON string bytes, conservatively counting split surrogates. */
+    outputJsonBytes?: number;
     images: string[];
     iterationToolCallIds: string[];
     tools: Record<string, NormalizedToolState>;
@@ -56,6 +58,7 @@ export function createNormalizedStreamState(options?: {
         reasoningText: '',
         chunks: 0,
         outputBytes: 0,
+        outputJsonBytes: 0,
         images: [],
         iterationToolCallIds: [],
         tools: {},
@@ -88,7 +91,8 @@ function assertCanonicalBudget(
 ): void {
     const limit = state.outputLimitBytes;
     if (limit === undefined) return;
-    // `content` is serialized both top-level and inside `data`; reasoning once.
+    // Count JSON escaping as well as UTF-8. Two copies conservatively cover
+    // content/data representations; reasoning may only need one.
     const projected =
         nextOutputBytes * 2 + nextToolBytes + CANONICAL_MESSAGE_FIXED_BYTES;
     if (projected > limit) {
@@ -122,20 +126,27 @@ function applyToolBytes(
         0,
         state.toolBytes - previous + nextEntryBytes
     );
-    assertCanonicalBudget(state, state.outputBytes, nextToolBytes);
+    assertCanonicalBudget(state, outputJsonBytes(state), nextToolBytes);
     return {
         toolBytes: nextToolBytes,
         toolBytesById: { ...state.toolBytesById, [toolId]: nextEntryBytes },
     };
 }
 
-function addOutputBytes(state: NormalizedStreamState, value: string): number {
+function outputJsonBytes(state: NormalizedStreamState): number {
+    // Persisted reducer snapshots from earlier versions have no counter.
+    return state.outputJsonBytes ?? utf8Bytes(JSON.stringify(state.cumulativeText)) - 2
+        + utf8Bytes(JSON.stringify(state.reasoningText)) - 2;
+}
+
+function addOutputBytes(state: NormalizedStreamState, value: string): Pick<NormalizedStreamState, 'outputBytes' | 'outputJsonBytes'> {
     const next = state.outputBytes + utf8Bytes(value);
     if (next > MAX_STREAM_OUTPUT_BYTES) {
         throw new Error('Chat output exceeded UTF-8 byte limit');
     }
-    assertCanonicalBudget(state, next, state.toolBytes);
-    return next;
+    const nextJsonBytes = outputJsonBytes(state) + utf8Bytes(JSON.stringify(value)) - 2;
+    assertCanonicalBudget(state, nextJsonBytes, state.toolBytes);
+    return { outputBytes: next, outputJsonBytes: nextJsonBytes };
 }
 
 export function reduceNormalizedStreamEvent(
@@ -158,14 +169,14 @@ export function reduceNormalizedStreamEvent(
             cumulativeText: state.cumulativeText + event.text,
             iterationText: state.iterationText + event.text,
             chunks: state.chunks + 1,
-            outputBytes: addOutputBytes(state, event.text),
+            ...addOutputBytes(state, event.text),
         };
     }
     if (event.type === 'reasoning') {
         return {
             ...state,
             reasoningText: state.reasoningText + event.text,
-            outputBytes: addOutputBytes(state, event.text),
+            ...addOutputBytes(state, event.text),
         };
     }
     if (event.type === 'image') {
@@ -207,7 +218,7 @@ export function appendNormalizedAssistantText(
         ...state,
         cumulativeText: state.cumulativeText + text,
         iterationText: state.iterationText + iterationText,
-        outputBytes: addOutputBytes(state, text),
+        ...addOutputBytes(state, text),
     };
 }
 

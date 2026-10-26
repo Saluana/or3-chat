@@ -10,7 +10,7 @@ import type { TypedHookEngine } from '~/core/hooks/typed-hooks';
 import { NotificationService } from '~/core/notifications/notification-service';
 import { resolveNotificationUserId } from '~/core/notifications/notification-user';
 import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
-import { getDb } from '~/db/client';
+import { getDb, getActiveWorkspaceId } from '~/db/client';
 import { newId } from '~/db/util';
 import type { BackgroundJobStatus } from '~/utils/chat/openrouterStream';
 import type { BackgroundJobTracker } from './types';
@@ -67,6 +67,10 @@ export async function emitBackgroundComplete(
 ): Promise<void> {
     if (!isClientRuntime() || !tracker.threadId) return;
 
+    const originDb = tracker.originDb ?? (
+        !tracker.workspaceId || tracker.workspaceId === (getActiveWorkspaceId() ?? 'local') ? getDb() : undefined
+    );
+    if (!originDb) return;
     const initialSession = getCachedSessionContext();
     const authenticatedAtStart = Boolean(initialSession?.authenticated && initialSession.user?.id);
     const belongsToCurrentAccount = () => {
@@ -83,7 +87,7 @@ export async function emitBackgroundComplete(
         typeof document !== 'undefined' &&
         document.visibilityState === 'hidden';
     if (hasSubscribers && !isTabHidden) return;
-    if (await isThreadMuted(tracker.threadId, tracker.userId, tracker.originDb)) return;
+    if (await isThreadMuted(tracker.threadId, tracker.userId, originDb)) return;
     // A completion can outlive the account that admitted it, including while
     // the mute lookup awaits IndexedDB. Never hand its payload to a new user.
     if (!belongsToCurrentAccount()) return;
@@ -115,17 +119,15 @@ export async function emitBackgroundComplete(
                 label: 'Open chat',
                 kind: 'navigate' as const,
                 target: { threadId: tracker.threadId },
-                data: { messageId: tracker.messageId },
+                data: { messageId: tracker.messageId, workspaceId: tracker.workspaceId ?? getActiveWorkspaceId() ?? 'local' },
             },
         ],
     };
 
     try {
-        if (hooks.hasAction('notify:action:push')) {
-            await hooks.doAction('notify:action:push', payload);
-            return;
-        }
-
+        // Push listeners belong to the currently active workspace and can
+        // rebind while hooks await. Store through the captured service instead;
+        // its normal before_store filter still applies.
         const session = getCachedSessionContext();
         const sessionUserId =
             session?.authenticated && session.user?.id ? session.user.id : null;
@@ -133,7 +135,7 @@ export async function emitBackgroundComplete(
             sessionUserId ||
             tracker.userId ||
             resolveNotificationUserId(session);
-        await new NotificationService(getDb(), hooks, userId).create(payload);
+        await new NotificationService(originDb, hooks, userId).create(payload);
     } catch {
         // Notifications are best-effort and must never fail job finalization.
     }

@@ -44,7 +44,7 @@ vi.mock('~/utils/chat/uiMessages', () => ({
 }));
 
 describe('runForegroundStreamLoop', () => {
-    it.each(['stored', 'url'] as const)('keeps %s images in live text between provider text deltas', async (mode) => {
+    it.each(['stored', 'url'] as const)('retains stored image deltas and refuses unsaved image URLs (%s)', async (mode) => {
         const { createStreamAccumulator } = await import('~/composables/chat/useStreamAccumulator');
         const { createOrRefFile } = await import('~/db/files');
         const { dataUrlToBlob } = await import('~/utils/chat/files');
@@ -52,6 +52,7 @@ describe('runForegroundStreamLoop', () => {
         const { runForegroundStreamLoop } = await import('~/utils/chat/useAi-internal/foregroundStream');
         const accumulator = createStreamAccumulator();
         vi.mocked(dataUrlToBlob).mockReturnValue(mode === 'stored' ? new Blob(['image']) : null);
+        vi.mocked(createOrRefFile).mockReset();
         vi.mocked(createOrRefFile).mockResolvedValueOnce({ hash: 'first' } as any)
             .mockResolvedValueOnce({ hash: 'second' } as any);
         const first = mode === 'stored'
@@ -80,7 +81,15 @@ describe('runForegroundStreamLoop', () => {
             tailAssistant: { value: null as any }, rawMessages: { value: [] as any[] },
         };
         try {
-            await runForegroundStreamLoop(ctx);
+            const run = runForegroundStreamLoop(ctx);
+            if (mode === 'url') {
+                await expect(run).rejects.toThrow('The generated image could not be saved.');
+                expect(accumulator.state.text).toBe('');
+                expect(persistAssistant).not.toHaveBeenCalled();
+                expect(createOrRefFile).not.toHaveBeenCalled();
+                return;
+            }
+            await run;
             const expected = first + '\n\nBetween images.\n\n' + second + '\n\nAfter images.';
             await vi.waitFor(() => expect(accumulator.state.text).toBe(expected));
             expect(ctx.tailAssistant.value.text).toBe(expected);

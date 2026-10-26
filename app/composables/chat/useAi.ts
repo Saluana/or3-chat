@@ -2269,7 +2269,7 @@ export function useChat(
         let orMessages = await buildOpenRouterMessagesForSend({ effectiveMessages: sanitizedEffectiveMessages,
             assistantHashes, prevAssistantId: prevAssistant?.id, contextHashes: context_hashes,
             fileHashes: Array.isArray(file_hashes) ? file_hashes : [], maxImageInputs: 5, imageInclusionPolicy: 'all',
-            acceptsImageInput: imageInput });
+            acceptsImageInput: imageInput, signal: preparationSignal });
         const preparation: ChatSendPreparation = { requestId, workspaceId: requestScope.workspaceId,
             workspaceGeneration, model: modelId, messages: JSON.parse(JSON.stringify(orMessages)) as ChatSendPreparation['messages'],
             editorDoc: sendMessagesParams.editorDoc, signal: preparationSignal };
@@ -2397,7 +2397,7 @@ export function useChat(
             file_hashes: file_hashes.length
                 ? serializeFileHashes(file_hashes)
                 : undefined,
-        }).catch((error: unknown) => {
+        }, { replace: sendMessagesParams.retryReplacement }).catch((error: unknown) => {
             // A storage transaction abort is a failed save, not a user Stop.
             // Keep app-owned save guidance rather than cancellation copy.
             if (error instanceof Error && error.name === 'AbortError'
@@ -2410,7 +2410,7 @@ export function useChat(
         });
         if (isMeaningfulTitleInput(persistedUserText) && !rawMessages.value.some(message => message.role === 'user'
             && isMeaningfulTitleInput(typeof message.content === 'string' ? message.content
-                : message.content.filter(part => part.type === 'text').map(part => part.text ?? '').join(' ')))) void import('~/utils/titles/generate')
+                : message.content.filter(part => part.type === 'text').map(part => part.text).join(' ')))) void import('~/utils/titles/generate')
             .then(({ generateAutomaticTitle }) => generateAutomaticTitle(requestScope.originDb, { type: 'chat', id: requestThreadId, content: persistedUserText, sourceMessage: { id: userDbMsg.id, clock: userDbMsg.clock } }))
             .catch(() => { /* Auxiliary naming cannot reject the primary send. */ });
         requestScope.userMessageId = userDbMsg.id;
@@ -2970,7 +2970,7 @@ export function useChat(
                 throw Object.assign(new Error('A final request filter changed the reviewed lossy candidate. Inspect the omissions again.'),
                     { code: 'context_full' });
             }
-            const { onUserPersisted: _persisted, historyOverride: _history, lossyConfirmation: _confirmation, inspectLossyRequest: _inspect, ...savedInput } = recoveryInput;
+            const { retryReplacement: _replacement, onUserPersisted: _persisted, historyOverride: _history, lossyConfirmation: _confirmation, inspectLossyRequest: _inspect, ...savedInput } = recoveryInput;
             const checkpoint: NativeRecoveryCheckpoint = {
                 version: 1, request_id: requestId, thread_id: requestThreadId, user_message_id: userDbMsg.id, assistant_message_id: assistantDbMsg.id,
                 input: structuredClone(savedInput), input_fingerprint: await recoveryInputFingerprint(savedInput.content, savedInput),

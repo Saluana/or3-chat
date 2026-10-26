@@ -34,6 +34,14 @@
                             :title="fileNames[h] || h.slice(0, 8)"
                             >{{ fileNames[h] || 'document.pdf' }}</span
                         >
+                        <button
+                            type="button"
+                            class="message-attachment-file-download text-[10px] underline"
+                            :disabled="downloading[h] === true"
+                            @click="downloadAttachment(h)"
+                        >
+                            {{ downloading[h] ? 'Downloading…' : 'Download' }}
+                        </button>
                     </div>
                 </template>
                 <template v-else-if="meta[h]?.kind === 'file'">
@@ -119,6 +127,7 @@
 
 <script setup lang="ts">
 import { reactive, watch, onBeforeUnmount } from 'vue';
+import { useToast } from '#imports';
 import { getFileBlob, getFileMeta } from '~/db/files';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import type { FileMeta } from '../../../types/chat-internal';
@@ -155,6 +164,7 @@ const thumbs = reactive<Record<string, LocalThumbState>>({});
 const meta = reactive<Record<string, FileMeta>>({});
 const fileNames = reactive<Record<string, string>>({});
 const downloading = reactive<Record<string, boolean>>({});
+const toast = useToast();
 
 async function ensure(h: string) {
     const generation = getWorkspaceGeneration();
@@ -202,15 +212,18 @@ async function downloadAttachment(hash: string): Promise<void> {
     try {
         const blob = await getFileBlob(hash);
         if (!isComponentActive || generation !== getWorkspaceGeneration()) return;
-        if (!blob) return;
+        if (!blob) throw new Error('This file is not on this device yet. Try again once sync finishes.');
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement('a');
         anchor.href = url;
         anchor.download = fileNames[hash] || 'attachment';
         anchor.click();
-        window.setTimeout(() => URL.revokeObjectURL(url), 0);
+        // Some browsers read the blob after click returns.
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (error) {
-        if (isComponentActive && generation === getWorkspaceGeneration()) throw error;
+        if (isComponentActive && generation === getWorkspaceGeneration()) {
+            toast.add({ title: 'Download failed', description: error instanceof Error ? error.message : String(error), color: 'error' });
+        }
     } finally {
         if (generation === getWorkspaceGeneration()) delete downloading[hash];
     }

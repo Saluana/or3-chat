@@ -1118,7 +1118,7 @@ type ChatInputSendPayload = {
     lossyConfirmation?: import('~/utils/chat/lossy-request').LossyRequestPreview;
 };
 
-function waitForDurableSendAcceptance(
+function waitForProviderSendAcceptance(
     activeChat: ChatInstance,
     terminal: Promise<SendResult>
 ): Promise<SendResult> {
@@ -1142,16 +1142,14 @@ function waitForDurableSendAcceptance(
         };
         const inspect = (state: ChatRequestState) => {
             if (state.status === 'idle' || state.requestId !== requestId) return;
-            // Saving the outgoing turn accepts the draft; provider latency
-            // must not keep that same message in the composer.
-            if (state.status === 'persisted' || state.status === 'streaming') {
+            // A saved turn can still be refused by final context preparation.
+            // Only the matching provider receipt authorizes early draft clear.
+            if (state.status === 'streaming' && state.providerAccepted === true) {
                 finish({
                     status: 'accepted',
                     requestId,
                     userMessageId: state.userMessageId,
-                    ...(state.status === 'streaming'
-                        ? { assistantMessageId: state.assistantMessageId }
-                        : {}),
+                    assistantMessageId: state.assistantMessageId,
                 });
             }
             // Finalization publishes an intermediate terminal projection.
@@ -1193,11 +1191,11 @@ const cardBridge = createToolCardChatBridge({
             file_hashes: [],
         });
         try {
-            const accepted = await waitForDurableSendAcceptance(
+            const accepted = await waitForProviderSendAcceptance(
                 activeChat,
                 result
             );
-            if ('userMessageId' in accepted && accepted.userMessageId)
+            if ((accepted.status === 'accepted' || accepted.status === 'complete') && accepted.userMessageId)
                 return pluginOk(undefined);
             return pluginError('conflict', 'Message was not accepted', {
                 retryable: true,
@@ -1292,7 +1290,7 @@ function onSend(payload: ChatInputSendPayload) {
     });
     payload.registerResult(
         result,
-        waitForDurableSendAcceptance(activeChat, result)
+        waitForProviderSendAcceptance(activeChat, result)
     );
     void result
         .then(() => {

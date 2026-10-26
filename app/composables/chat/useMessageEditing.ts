@@ -9,7 +9,7 @@
  * **Responsibilities**
  * - Track editing state (editing/saving flags)
  * - Maintain draft and original text values
- * - Save edited messages to Dexie DB via `upsert.message`
+ * - Save content deltas into the originating workspace's current message row
  * - Update message object in-place after save (for UI sync)
  * - Support both `Ref<EditableMessage>` and plain object sources
  *
@@ -17,7 +17,7 @@
  * - Does NOT re-render message history (caller must watch message object)
  * - Does NOT handle optimistic updates (save is committed before UI reflects)
  * - Does NOT emit hooks (future enhancement if needed)
- * - Does NOT validate message ownership or permissions
+ * - Does NOT authorize server operations
  *
  * **State Lifecycle**
  * - `beginEdit()` captures original text and enters edit mode
@@ -46,11 +46,11 @@
  * - UI should disable cancel/save buttons when `saving` is true
  */
 
-import { ref, isRef, type Ref } from 'vue';
-import { upsert } from '~/db';
-import { getDb } from '~/db/client';
-import { nowSec } from '~/db/util';
-import type { Message } from '~/db/schema';
+import { ref, isRef, getCurrentScope, onScopeDispose, type Ref } from 'vue';
+import { useRuntimeConfig } from '#imports';
+import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
+import { getDb, getWorkspaceGeneration } from '~/db/client';
+import { patchMessageInDb } from '~/db/messages';
 
 /**
  * How a `saveEdit()` call ended:
@@ -97,6 +97,26 @@ export function useMessageEditing(message: EditableMessageSource) {
     const draft = ref('');
     const original = ref('');
     const saving = ref(false);
+    let disposed = false;
+    if (getCurrentScope()) onScopeDispose(() => { disposed = true; });
+    // Capture scalar authorization fields: session objects may update in place.
+    const identity = () => {
+        const session = getCachedSessionContext();
+        return JSON.stringify([session?.authenticated, session?.user?.id,
+            session?.workspace?.id, session?.role, session?.authorizationRevision]);
+    };
+    let origin: { db: ReturnType<typeof getDb>; generation: number; identity: string; id?: string } | undefined;
+    const assertCurrent = () => {
+        const session = getCachedSessionContext();
+        if (disposed || !origin || origin.db !== getDb()
+            || origin.generation !== getWorkspaceGeneration() || origin.identity !== identity()
+            || origin.id !== getMessage()?.id) throw new Error('The originating message is no longer available.');
+        if (useRuntimeConfig().public.ssrAuthEnabled === true
+            && (!session?.authenticated || !['owner', 'editor'].includes(session.role ?? '')
+                || (session.expiresAt && Date.parse(session.expiresAt) <= Date.now()))) {
+            throw new Error('Workspace write access is no longer available.');
+        }
+    };
 
     /**
      * Begins edit mode.
@@ -111,6 +131,7 @@ export function useMessageEditing(message: EditableMessageSource) {
         if (editing.value) return;
         // Some message objects use .text (UiChatMessage), others .content; fall back gracefully.
         const m = getMessage() || {};
+        origin = { db: getDb(), generation: getWorkspaceGeneration(), identity: identity(), id: m.id };
         const base =
             typeof m.content === 'string'
                 ? m.content
@@ -145,7 +166,7 @@ export function useMessageEditing(message: EditableMessageSource) {
      * - Trims draft text; treats empty as cancel (no write)
      * - Text identical to the original exits edit mode without a write
      * - Loads existing message from DB
-     * - Updates `data.content` field via `upsert.message`
+     * - Patches `data.content` on the latest live row with a live parent thread
      * - Updates message object in-place (both `content` and `text` fields)
      * - Exits edit mode on success
      *
@@ -157,6 +178,8 @@ export function useMessageEditing(message: EditableMessageSource) {
      * @returns How the call ended; only `saved` changed the stored text
      * @throws {Error} If message not found in DB
      */
+    // Deleted targets are not retryable; the code selects accurate user copy.
+    const notFound = (message: string) => Object.assign(new Error(message), { code: 'ERR_NOT_FOUND' as const });
     async function saveEdit(): Promise<EditSaveOutcome> {
         if (saving.value) return 'ignored';
         const m = getMessage();
@@ -173,21 +196,29 @@ export function useMessageEditing(message: EditableMessageSource) {
         }
         try {
             saving.value = true;
-            const db = getDb();
-            const existing: Message | undefined = await db.messages.get(id);
-            if (!existing) throw new Error('Message not found');
-            const existingData =
-                existing.data && typeof existing.data === 'object'
-                    ? (existing.data as Record<string, unknown>)
-                    : {};
-            await upsert.message({
-                ...existing,
-                data: { ...existingData, content: trimmed },
-                updated_at: nowSec(),
-            });
+            assertCurrent();
+            const db = origin!.db;
+            const existing = await db.messages.get(id);
+            assertCurrent();
+            if (!existing || existing.deleted) throw notFound('Message not found');
+            const saved = await patchMessageInDb(db, id, { data: { content: trimmed } }, undefined,
+                current => {
+                    assertCurrent();
+                    return Boolean(current && !current.deleted && current.thread_id === existing.thread_id);
+                }, undefined, { tables: ['threads'], assertCurrent: async () => {
+                    assertCurrent();
+                    const thread = await db.threads.get(existing.thread_id);
+                    assertCurrent();
+                    if (!thread || thread.deleted) throw notFound('Conversation not found');
+                } });
+            if (!saved) throw notFound('Message not found');
+            // A committed write can outlive its presentation owner.
+            if (disposed || getMessage() !== m || origin?.db !== getDb()
+                || origin.generation !== getWorkspaceGeneration() || origin.identity !== identity()) return 'saved';
             // Persist to both fields so renderers using either stay in sync
-            m.content = trimmed;
-            m.text = trimmed;
+            const content = (saved.data as Record<string, unknown> | null)?.content;
+            m.content = typeof content === 'string' ? content : trimmed;
+            m.text = m.content;
             editing.value = false;
             return 'saved';
         } finally {

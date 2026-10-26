@@ -167,6 +167,8 @@ export interface BackgroundJobExecution {
     referer: string;
     apiKeyCiphertext: string;
     credentialSource?: 'personal' | 'server';
+    /** Durable Stop intent. The live worker settles its buffered aborted snapshot. */
+    cancellationRequestedAt?: number;
     /** Immutable canonical-history admission captured before paid execution. */
     history?: ChatGenerationAdmissionEnvelope;
     /** Text that is already represented by a durable tool-loop checkpoint. */

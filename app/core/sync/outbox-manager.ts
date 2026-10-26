@@ -54,6 +54,7 @@ import {
 
 /** Default retry delays in milliseconds */
 const DEFAULT_RETRY_DELAYS = [250, 1000, 3000, 5000];
+const MAX_AUTH_RETRY_DELAY_MS = 60_000;
 
 /** Default flush interval */
 const DEFAULT_FLUSH_INTERVAL_MS = 1000;
@@ -241,6 +242,9 @@ export class OutboxManager {
     private isRunning = false;
     private needsSyncingRecovery = true;
     private providerRateLimitedUntil = 0;
+    // A revoked permission keeps returning 403, and each rejection refreshes
+    // the session, so consecutive auth failures back off instead of looping.
+    private authFailures = 0;
     private lifecycleGeneration = 0;
     private nextStatus: EligibleStatus = 'retry_wait';
 
@@ -270,6 +274,7 @@ export class OutboxManager {
         this.isRunning = true;
         this.needsSyncingRecovery = true;
         this.providerRateLimitedUntil = 0;
+        this.authFailures = 0;
         this.scheduleNextFlush(0, generation);
     }
 
@@ -655,6 +660,7 @@ export class OutboxManager {
             if (generation !== this.lifecycleGeneration) {
                 return { successCount: 0, failCount: 0, deferred: false };
             }
+            this.authFailures = 0;
 
             const resultsById = new Map(result.results.map((res) => [res.opId, res]));
             let successCount = 0;
@@ -726,9 +732,10 @@ export class OutboxManager {
 
             const status = httpStatusOf(error);
             if (status === 401 || status === 403) {
+                const firstDelay = this.config.retryDelays[0] ?? DEFAULT_RETRY_DELAYS[0] ?? 250;
                 await this.releaseBatchForDeferredRetry(
                     batch,
-                    this.config.retryDelays[0] ?? DEFAULT_RETRY_DELAYS[0] ?? 250
+                    Math.min(MAX_AUTH_RETRY_DELAY_MS, firstDelay * 2 ** this.authFailures++)
                 );
                 await hooks.doAction('sync.push:action:after', {
                     scope: this.scope,

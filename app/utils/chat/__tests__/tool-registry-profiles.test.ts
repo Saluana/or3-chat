@@ -136,6 +136,22 @@ describe('V1 client tool registry profile', () => {
         registered.dispose();
     });
 
+    it.each([true, false])('retains an unloaded tool preference opposite to default %s, including before debounce', async (defaultEnabled) => {
+        vi.useFakeTimers();
+        const name = `unloaded_${defaultEnabled}`;
+        const def = { ...definition(name), defaultEnabled };
+        const first = registry.registerTool(def, () => 'ok');
+        registry.setEnabled(name, !defaultEnabled);
+        first.dispose();
+        const replacement = registry.registerTool(def, () => 'ok');
+        expect(replacement.enabled.value).toBe(!defaultEnabled);
+        registry.unregisterTool(name);
+        await nextTick();
+        await vi.advanceTimersByTimeAsync(300);
+        expect(JSON.parse(localStorage.getItem('or3.tools.enabled') ?? '{}')[name]).toBe(!defaultEnabled);
+        expect(registry.registerTool(def, () => 'ok').enabled.value).toBe(!defaultEnabled);
+    });
+
     it('lets explicit enabled state override storage and definition defaults', () => {
         const name = 'profile_enabled_precedence';
         localStorage.setItem('or3.tools.enabled', JSON.stringify({ [name]: false }));

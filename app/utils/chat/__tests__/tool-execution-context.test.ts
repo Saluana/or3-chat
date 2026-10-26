@@ -197,6 +197,9 @@ describe('client tool execution context', () => {
         await expect(registry.executeTool(definition.function.name, '{}', undefined, { definition }))
             .resolves.toMatchObject({ error: expect.stringContaining('disabled') });
 
+        // Replacing a tool now preserves its preference. Enable this fixture
+        // before independently exercising the server-runtime admission guard.
+        registry.setEnabled(definition.function.name, true);
         registry.registerTool({ ...definition, runtime: 'server' }, handler, { override: true });
         await expect(registry.executeTool(definition.function.name, '{}', undefined, { definition: { ...definition, runtime: 'server' } }))
             .resolves.toMatchObject({ error: expect.stringContaining('server-only') });

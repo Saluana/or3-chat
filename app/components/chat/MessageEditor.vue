@@ -17,6 +17,7 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { Node } from '@tiptap/core';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Editor, EditorContent } from '@tiptap/vue-3';
 // If you still want markdown extension keep it; otherwise remove these two lines:
@@ -51,6 +52,82 @@ const editorProps = useThemeOverrides({
 
 const editor = ref<Editor | null>(null);
 let lastEmitted = '';
+
+// Chat rendering treats escaped brackets as math delimiters. Encode literal
+// brackets as entities so saving cannot turn them into math or Markdown links.
+type MarkdownState = { esc(str: string, startOfLine?: boolean): string; text(text: string, escape?: boolean): void };
+const MessageText = Node.create({
+    name: 'text',
+    group: 'inline',
+    addStorage() {
+        return {
+            markdown: {
+                serialize(state: MarkdownState, node: { text: string }) {
+                    const esc = state.esc;
+                    state.esc = (str, startOfLine) => esc.call(state, str, startOfLine)
+                        .replace(/\\\[/g, '&#91;').replace(/\\\]/g, '&#93;');
+                    try { state.text(node.text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')); }
+                    finally { state.esc = esc; }
+                },
+            },
+        };
+    },
+});
+
+type MathToken = { content: string; markup: string };
+type MathInlineState = { src: string; pos: number; posMax: number; push(type: string, tag: string, nesting: 0): MathToken };
+type MathMarkdownParser = {
+    inline: { ruler: { before(before: string, name: string, rule: (state: MathInlineState, silent: boolean) => boolean): void } };
+    renderer: { rules: Record<string, (tokens: MathToken[], index: number) => string> };
+    utils: { escapeHtml(text: string): string };
+};
+// Keep genuine LaTeX spans distinct from literal brackets, including in mixed
+// messages. Code spans/fences are consumed by markdown-it before this rule.
+const MessageMath = Node.create({
+    name: 'messageMath',
+    inline: true,
+    group: 'inline',
+    content: 'text*',
+    marks: '',
+    addAttributes: () => ({ delimiter: { default: 'display' } }),
+    parseHTML: () => [{ tag: 'span[data-message-math]', preserveWhitespace: 'full',
+        getAttrs: element => ({ delimiter: element.getAttribute('data-message-math') }) }],
+    renderHTML: ({ node }) => ['span', { 'data-message-math': node.attrs.delimiter }, 0],
+    renderText: ({ node }) => node.attrs.delimiter === 'inline'
+        ? `\\(${node.textContent}\\)` : `\\[${node.textContent}\\]`,
+    addStorage() {
+        return { markdown: {
+            serialize(state: MarkdownState, node: { attrs: { delimiter: string }; textContent: string }) {
+                const [open, close] = node.attrs.delimiter === 'inline' ? ['\\(', '\\)'] : ['\\[', '\\]'];
+                state.text(open + node.textContent + close, false);
+            },
+            parse: { setup(parser: MathMarkdownParser) {
+                parser.inline.ruler.before('escape', 'or3_message_math', (state, silent) => {
+                    for (const [open, close, delimiter] of [['\\[', '\\]', 'display'], ['\\(', '\\)', 'inline']] as const) {
+                        if (!state.src.startsWith(open, state.pos)) continue;
+                        const start = state.pos + open.length;
+                        const end = state.src.indexOf(close, start);
+                        if (end < 0 || end + close.length > state.posMax) continue;
+                        const content = state.src.slice(start, end);
+                        if (!content.trim() || content.includes('`')) continue;
+                        if (!silent) {
+                            const token = state.push('or3_message_math', '', 0);
+                            token.content = content;
+                            token.markup = delimiter;
+                        }
+                        state.pos = end + close.length;
+                        return true;
+                    }
+                    return false;
+                });
+                parser.renderer.rules.or3_message_math = (tokens, index) => {
+                    const token = tokens[index]!;
+                    return `<span data-message-math="${token.markup}">${parser.utils.escapeHtml(token.content)}</span>`;
+                } },
+            },
+        } };
+    },
+});
 let emitTimer: ReturnType<typeof setTimeout> | undefined;
 let pendingValue: string | undefined;
 
@@ -80,7 +157,7 @@ function flushPendingEmit(): void {
 }
 
 async function init() {
-    const extensions = [StarterKit.configure({ codeBlock: {} }), Markdown];
+    const extensions = [StarterKit.configure({ codeBlock: {}, text: false }), MessageText, MessageMath, Markdown];
 
     function hasGetMarkdown(v: unknown): v is { getMarkdown: () => string } {
         if (v === null || typeof v !== 'object') return false;

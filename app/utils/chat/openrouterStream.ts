@@ -1,3 +1,4 @@
+import { shallowRef } from 'vue';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { captureUsagePrefix, attachRequestUsage, estimateMeasuredChatRequest } from '~~/shared/chat/request-usage';
 import { readRequestUsage, type RequestUsage } from '~~/shared/chat/compaction';
@@ -450,8 +451,13 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
         return await transportRequest(url, init);
     };
     let providerAccepted = false;
-    const measuredEvent = (event: ORStreamEvent): ORStreamEvent => {
+    // A successful upstream response is the provider's receipt; reasoning
+    // models may send no event until their answer starts.
+    const acceptProvider = () => {
         if (!providerAccepted && !signal?.aborted) { providerAccepted = true; params.onProviderAccepted?.(); }
+    };
+    const measuredEvent = (event: ORStreamEvent): ORStreamEvent => {
+        acceptProvider();
         return event.type === 'usage' ? { ...event, requestUsage: attachRequestUsage(usagePrefix, event.usage,
             { requestId: usageRequestId, iteration: 1, measuredAt: Date.now() }) } : event;
     };
@@ -490,6 +496,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
 
         if (serverResp) {
             if (serverResp.ok && serverResp.body) {
+                acceptProvider();
                 // Server route available; use shared parser on response
                 const guardedBody = withIdleWatchdog(serverResp.body, {
                     signal,
@@ -611,6 +618,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
         );
     }
 
+    acceptProvider();
     // Req 6: Use shared parser on fallback (direct) path to ensure identical behavior
     const guardedBody = withIdleWatchdog(resp.body, {
         signal,
@@ -667,17 +675,23 @@ export async function* openRouterStreamWithRetry(
         try {
             const stream = openRouterStream(streamParams);
             const iterator = stream[Symbol.asyncIterator]();
-            const first = await iterator.next();
-            if (first.done) {
-                return;
-            }
-            yieldedAnyEvent = true;
-            yield first.value;
-            // First event succeeded; drain the rest without retry to avoid duplicates.
-            for (;;) {
-                const next = await iterator.next();
-                if (next.done) return;
-                yield next.value;
+            try {
+                const first = await iterator.next();
+                if (first.done) {
+                    return;
+                }
+                yieldedAnyEvent = true;
+                yield first.value;
+                // First event succeeded; drain the rest without retry to avoid duplicates.
+                for (;;) {
+                    const next = await iterator.next();
+                    if (next.done) return;
+                    yield next.value;
+                }
+            } finally {
+                // Manual next() forwarding does not close the inner generator
+                // when the outer consumer breaks or returns early.
+                await iterator.return();
             }
         } catch (e) {
             // Local admission is a final decision for this exact full payload;
@@ -732,9 +746,10 @@ const BACKGROUND_STREAMING_CACHE_KEY = 'or3:background-streaming-available';
 /**
  * Session-scoped override set when the server explicitly rejects background
  * execution. It beats explicit client config so a mismatched deployment does
- * not cause repeated admissions on every send.
+ * not cause repeated admissions on every send. Reactive so computed gates
+ * such as useAi's observe the refusal.
  */
-let backgroundStreamingCapabilityDisabled = false;
+const backgroundStreamingCapabilityDisabled = shallowRef(false);
 
 /**
  * `BackgroundJobStatus`
@@ -881,7 +896,7 @@ async function readErrorMessage(
 export function isBackgroundStreamingEnabled(
     configuredEnabled?: boolean
 ): boolean {
-    if (backgroundStreamingCapabilityDisabled) return false;
+    if (backgroundStreamingCapabilityDisabled.value) return false;
     const configEnabled =
         configuredEnabled ??
         (
@@ -1012,7 +1027,7 @@ export async function startBackgroundStream(params: {
                     // Server explicitly rejected durable execution. Refresh the
                     // capability cache; do not retry and do not fall through to
                     // a different execution mode.
-                    backgroundStreamingCapabilityDisabled = true;
+                    backgroundStreamingCapabilityDisabled.value = true;
                     setBackgroundStreamingAvailable(false);
                     setServerRouteAvailable(true);
                     throw makeBackgroundAdmissionError(message, {

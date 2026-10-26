@@ -38,11 +38,11 @@ Thread message CRUD utilities with hook integration, sparse indexing, and attach
 | `messagesByThread(threadId)`                      | Fetches ordered messages, applying output filters.                                          |
 | `getMessage(id)` / `messageByStream(streamId)`    | Targeted lookups with output filters.                                                       |
 | `softDeleteMessage(id)` / `hardDeleteMessage(id)` | Delete flows with before/after hook actions.                                                |
-| `appendMessage(input)` / `appendMessageToDb(db, input)` | Transactionally inserts at end of thread and updates timestamps.                      |
+| `appendMessage(input)` / `appendMessageToDb(db, input, { replace }?)` | Transactionally inserts at end of a live thread and updates timestamps; optional captured revisions atomically supersede a retry's old turn. |
 | `prepareMessageAppend(input)` | Runs append preparation hooks and returns a validated value plus its `afterCommit` notification. |
 | `appendMessageRows(db, value)` | Hook-free append and timestamp update within the caller's captured write transaction. |
-| `moveMessage(messageId, toThreadId)`              | Moves a message to another thread and reindexes.                                            |
-| `copyMessage(messageId, toThreadId)`              | Duplicates a message into another thread with new ID.                                       |
+| `moveMessage(messageId, toThreadId)`              | Moves a message to another live thread, retains referenced tool-result bytes, and reindexes. |
+| `copyMessage(messageId, toThreadId)`              | Duplicates a message into another live thread with a new ID and retains referenced tool-result bytes. |
 | `insertMessageAfter(afterId, input)`              | Inserts between two messages, normalizing indexes as needed.                                |
 | `normalizeThreadIndexes(threadId, start?, step?)` | Reassigns sequential indexes (default 1000 spacing).                                        |
 | `compareMessageOrder(a, b)`                       | Orders by `index`, then `order_key`, then `id`; used by `messagesByThread`.                 |
@@ -110,6 +110,13 @@ commit. A notification failure is reported without failing a durable append.
 Tools that must authorize and append atomically use `prepareMessageAppend`,
 recheck the prepared destination/content, call `appendMessageRows` within their
 guarded transaction, then call `afterCommit` after that outer transaction succeeds.
+
+Move and copy prepare referenced tool-result chunks for the destination thread,
+then commit them with the message and outbox in one transaction. Deleting the
+source thread cannot remove the destination's retained output. A source revision
+change during preparation rejects the transfer for retry, including when a tool
+result first appears during that interval. These helpers transfer one message;
+they do not copy its other transcript rows.
 
 -   Creation helpers accept hash arrays and serialize them; full-row upserts use the stored JSON string contract. Use [message-file helpers](/documentation/database/message-files) to change an existing message's attachments.
 -   Use `appendMessage` rather than manual `createMessage` when you need thread timestamps updated.

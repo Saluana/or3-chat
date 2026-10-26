@@ -202,6 +202,7 @@ vi.mock('~/core/sync/cursor-manager', () => ({
 }));
 
 vi.mock('~/db/client', () => ({
+    getActiveWorkspaceId: () => workspaceState.value,
     createWorkspaceDb,
     setActiveWorkspaceDb,
 }));
@@ -486,9 +487,8 @@ describe('sync engine plugin', () => {
     it('starts OutboxManager only after subscription bootstrap resolves', async () => {
         pluginControl.blockStart();
         await (await import('~/plugins/convex-sync.client')).default;
-        await Promise.resolve();
+        await vi.waitFor(() => expect(subscriptionInstances).toHaveLength(1));
 
-        expect(subscriptionInstances).toHaveLength(1);
         expect(subscriptionInstances[0]?.start).toHaveBeenCalledTimes(1);
         expect(outboxInstances).toHaveLength(0);
 
