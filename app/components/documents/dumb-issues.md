@@ -17,13 +17,13 @@ The review followed the docmap, source map, document CRUD and revision guides, e
 | Existing Chromium recovery/polish harness | **Not executed successfully** | Initial startup required the pinned Bun runtime. Retrying with cached Bun 1.3.14 timed out waiting for the dev server; the log also reported the local vault stopping. No browser pass is claimed. |
 | Diff inspection | Production source unchanged | Only this report and the document-editor audit evidence were authored for this review. |
 
-Evidence, runnable commands, mocks, and limitations are documented in [the evidence README](/Users/brendon/Documents/or3/or3-chat/audit-evidence/document-editor-review-20261024/README.md). “Runtime” below means the specific described boundary was exercised, not that a complete paid-model or cloud-provider workflow ran. “Source” means the finding follows from inspected callers and implementation, without a dedicated runtime reproduction.
+Evidence, runnable commands, mocks, and limitations are documented in [the evidence README](../../../audit-evidence/document-editor-review-20261024/README.md). “Runtime” below means the specific described boundary was exercised, not that a complete paid-model or cloud-provider workflow ran. “Source” means the finding follows from inspected callers and implementation, without a dedicated runtime reproduction.
 
 ## Findings
 
 ### DE-01 — P1 — AI proposals bless an old snapshot with the latest version
 
-**Location:** [useDocumentAiAgent.ts:788](/Users/brendon/Documents/or3/or3-chat/app/composables/documents/useDocumentAiAgent.ts:788), [proposal creation:925](/Users/brendon/Documents/or3/or3-chat/app/composables/documents/useDocumentAiAgent.ts:925), [acceptance:975](/Users/brendon/Documents/or3/or3-chat/app/composables/documents/useDocumentAiAgent.ts:975). **Evidence: runtime, two cases.**
+**Location:** [useDocumentAiAgent.ts:788](../../../app/composables/documents/useDocumentAiAgent.ts:788), [proposal creation:925](../../../app/composables/documents/useDocumentAiAgent.ts:925), [acceptance:975](../../../app/composables/documents/useDocumentAiAgent.ts:975). **Evidence: runtime, two cases.**
 
 `submit()` freezes the document before awaiting settings, references, model resolution, tokenization, and request hooks. It locks the editor only later. When generation finishes, it assigns `requestVersion` from the *current* content version instead of the version of the frozen snapshot. A newer edit is therefore treated as part of the proposal's baseline even though the candidate does not contain it.
 
@@ -33,7 +33,7 @@ Evidence, runnable commands, mocks, and limitations are documented in [the evide
 
 ### DE-02 — P1 — History restore overwrites typing made while its checkpoint is saving
 
-**Location:** [DocumentEditorRoot.vue:1786](/Users/brendon/Documents/or3/or3-chat/app/components/documents/DocumentEditorRoot.vue:1786), [history restore event:155](/Users/brendon/Documents/or3/or3-chat/app/components/documents/DocumentHistoryPanel.vue:155). **Evidence: runtime, mounted editor.**
+**Location:** [DocumentEditorRoot.vue:1786](../../../app/components/documents/DocumentEditorRoot.vue:1786), [history restore event:155](../../../app/components/documents/DocumentHistoryPanel.vue:155). **Evidence: runtime, mounted editor.**
 
 Restore captures a pre-restore checkpoint, awaits its persistence, and then replaces the live title/body. Its post-await checks cover editor/document/DB identity but not content version, availability, or a restore lease. The editor stays editable during the await. The history panel closes its preview and emits the restore event without owning the asynchronous busy/error state.
 
@@ -43,7 +43,7 @@ Restore captures a pre-restore checkpoint, awaits its persistence, and then repl
 
 ### DE-03 — P1 — Revision pruning can delete unrelated documents or other posts
 
-**Location:** [document-revisions.ts:43](/Users/brendon/Documents/or3/or3-chat/app/db/document-revisions.ts:43), [deletion:254](/Users/brendon/Documents/or3/or3-chat/app/db/document-revisions.ts:254). **Evidence: runtime, real helpers over disposable IndexedDB.**
+**Location:** [document-revisions.ts:43](../../../app/db/document-revisions.ts:43), [deletion:254](../../../app/db/document-revisions.ts:254). **Evidence: runtime, real helpers over disposable IndexedDB.**
 
 Manifest parsing accepts arbitrary string `chunkIds`. Pruning passes those IDs directly to `posts.bulkDelete()` without checking that each target is a chunk belonging to that revision. Documents, prompts, manifests, and chunks share this table.
 
@@ -53,7 +53,7 @@ Manifest parsing accepts arbitrary string `chunkIds`. Pruning passes those IDs d
 
 ### DE-04 — P1 — Incomplete revisions can displace the only recoverable checkpoint
 
-**Location:** [retention selection:216](/Users/brendon/Documents/or3/or3-chat/app/db/document-revisions.ts:216), [pruning:254](/Users/brendon/Documents/or3/or3-chat/app/db/document-revisions.ts:254). **Evidence: runtime.**
+**Location:** [retention selection:216](../../../app/db/document-revisions.ts:216), [pruning:254](../../../app/db/document-revisions.ts:254). **Evidence: runtime.**
 
 Pruning selects retained IDs from manifest metadata without checking chunk availability or checksum validity. Its comment promises to preserve the newest complete checkpoint, but the implementation preserves the newest manifest. Incremental synchronization or interrupted imports can expose manifests before all their chunks are usable.
 
@@ -63,7 +63,7 @@ Pruning selects retained IDs from manifest metadata without checking chunk avail
 
 ### DE-05 — P1 — AI settings from one workspace can be saved into another
 
-**Location:** [useDocumentAiSettings.ts:66](/Users/brendon/Documents/or3/or3-chat/app/composables/documents/useDocumentAiSettings.ts:66), [loading/update:122](/Users/brendon/Documents/or3/or3-chat/app/composables/documents/useDocumentAiSettings.ts:122), [KV writer:508](/Users/brendon/Documents/or3/or3-chat/app/db/kv.ts:508). **Evidence: runtime with a deferred KV boundary.**
+**Location:** [useDocumentAiSettings.ts:66](../../../app/composables/documents/useDocumentAiSettings.ts:66), [loading/update:122](../../../app/composables/documents/useDocumentAiSettings.ts:122), [KV writer:508](../../../app/db/kv.ts:508). **Evidence: runtime with a deferred KV boundary.**
 
 The settings value and in-flight load promise are module singletons. A workspace-B caller can inherit workspace A's pending promise. A late A load publishes its value unconditionally. `update()` then merges that value and calls the KV writer without a captured DB, so the write resolves against whichever workspace is currently active.
 
@@ -73,7 +73,7 @@ The settings value and in-flight load promise are module singletons. A workspace
 
 ### DE-06 — P2 — Malformed persisted content is silently presented as a blank document
 
-**Location:** [documents.ts:244](/Users/brendon/Documents/or3/or3-chat/app/db/documents.ts:244). **Evidence: runtime.**
+**Location:** [documents.ts:244](../../../app/db/documents.ts:244). **Evidence: runtime.**
 
 `parseContent()` returns an ordinary empty TipTap document on JSON parse failure or an invalid root. The record carries no corruption status and remains editable. A subsequent save can overwrite the original raw payload, removing material that might have been recoverable by repair or export.
 
@@ -83,7 +83,7 @@ The settings value and in-flight load promise are module singletons. A workspace
 
 ### DE-07 — P2 — Document hooks can make image ownership metadata disagree with the body
 
-**Location:** [creation:352](/Users/brendon/Documents/or3/or3-chat/app/db/documents.ts:352), [update:655](/Users/brendon/Documents/or3/or3-chat/app/db/documents.ts:655), [file deletion guard:57](/Users/brendon/Documents/or3/or3-chat/app/db/files.ts:57). **Evidence: runtime for creation; matching update path inspected.**
+**Location:** [creation:352](../../../app/db/documents.ts:352), [update:655](../../../app/db/documents.ts:655), [file deletion guard:57](../../../app/db/files.ts:57). **Evidence: runtime for creation; matching update path inspected.**
 
 `file_hashes` is derived before the documented content filters and before-actions run. A hook can change `content` without recalculating the metadata. The final row persists both values as supplied, while file ownership/deletion checks trust `file_hashes`.
 
@@ -93,7 +93,7 @@ The settings value and in-flight load promise are module singletons. A workspace
 
 ### DE-08 — P2 — A detected cross-tab conflict has no usable reconciliation path
 
-**Location:** [useDocumentsStore.ts:123](/Users/brendon/Documents/or3/or3-chat/app/composables/documents/useDocumentsStore.ts:123), [refresh:258](/Users/brendon/Documents/or3/or3-chat/app/composables/documents/useDocumentsStore.ts:258). **Evidence: runtime.**
+**Location:** [useDocumentsStore.ts:123](../../../app/composables/documents/useDocumentsStore.ts:123), [refresh:258](../../../app/composables/documents/useDocumentsStore.ts:258). **Evidence: runtime.**
 
 The optimistic comparison correctly prevents overwriting a remote edit. However, the failed pending buffer keeps its original comparison baseline, and refresh refuses to adopt a newer record while pending work exists. Repeated Retry compares against the same stale baseline. The editor has no explicit keep-local/keep-remote/merge/save-copy operation that can reconcile this state safely.
 
@@ -103,7 +103,7 @@ The optimistic comparison correctly prevents overwriting a remote edit. However,
 
 ### DE-09 — P2 — Storage read failures are misreported as unavailable documents
 
-**Location:** [getDocumentInDb:406](/Users/brendon/Documents/or3/or3-chat/app/db/documents.ts:406), [load state:258](/Users/brendon/Documents/or3/or3-chat/app/composables/documents/useDocumentsStore.ts:258), [load banner:17](/Users/brendon/Documents/or3/or3-chat/app/components/documents/DocumentEditorRoot.vue:17). **Evidence: runtime.**
+**Location:** [getDocumentInDb:406](../../../app/db/documents.ts:406), [load state:258](../../../app/composables/documents/useDocumentsStore.ts:258), [load banner:17](../../../app/components/documents/DocumentEditorRoot.vue:17). **Evidence: runtime.**
 
 The document read uses `dbTry` without rethrowing. A storage exception becomes `undefined`; the store treats it as missing/unavailable and clears `lastError`. The root's error-only retry path is therefore bypassed.
 
@@ -113,7 +113,7 @@ The document read uses `dbTry` without rethrowing. A storage exception becomes `
 
 ### DE-10 — P2 — The AI edit lock does not cover toolbar mutations
 
-**Location:** [toolbar:30](/Users/brendon/Documents/or3/or3-chat/app/components/documents/DocumentEditorRoot.vue:30), [lock definition:593](/Users/brendon/Documents/or3/or3-chat/app/components/documents/DocumentEditorRoot.vue:593), [lock policy](/Users/brendon/Documents/or3/or3-chat/app/composables/documents/documentAiLifecycle.ts:37). **Evidence: runtime, mounted editor.**
+**Location:** [toolbar:30](../../../app/components/documents/DocumentEditorRoot.vue:30), [lock definition:593](../../../app/components/documents/DocumentEditorRoot.vue:593), [lock policy](../../../app/composables/documents/documentAiLifecycle.ts:37). **Evidence: runtime, mounted editor.**
 
 AI streaming/review/acceptance sets the editor noneditable, but toolbar inertness is tied only to item availability. TipTap's `setEditable(false)` stops native typing; it does not make command calls immutable. Toolbar handlers can still change the document. Some controls already use `editorLocked`, so behavior is inconsistent.
 
@@ -123,7 +123,7 @@ AI streaming/review/acceptance sets the editor noneditable, but toolbar inertnes
 
 ### DE-11 — P2 — Accepting append hunks out of order changes the proposed result
 
-**Location:** [document-ai-hunks.ts:218](/Users/brendon/Documents/or3/or3-chat/app/utils/documents/document-ai-hunks.ts:218), [live insertion:337](/Users/brendon/Documents/or3/or3-chat/app/utils/documents/document-ai-hunks.ts:337), [acceptHunk:1012](/Users/brendon/Documents/or3/or3-chat/app/composables/documents/useDocumentAiAgent.ts:1012). **Evidence: runtime.**
+**Location:** [document-ai-hunks.ts:218](../../../app/utils/documents/document-ai-hunks.ts:218), [live insertion:337](../../../app/utils/documents/document-ai-hunks.ts:337), [acceptHunk:1012](../../../app/composables/documents/useDocumentAiAgent.ts:1012). **Evidence: runtime.**
 
 Each `insert_end` hunk appends to the current document end. The full candidate and accepted-operation projection use proposal order, but incremental application uses click order.
 
@@ -133,7 +133,7 @@ Each `insert_end` hunk appends to the current document end. The full candidate a
 
 ### DE-12 — P2 — A failed Accept All leaves an applied proposal that cannot retry acceptance
 
-**Location:** [useDocumentAiAgent.ts:995](/Users/brendon/Documents/or3/or3-chat/app/composables/documents/useDocumentAiAgent.ts:995), [stale calculation:339](/Users/brendon/Documents/or3/or3-chat/app/composables/documents/useDocumentAiAgent.ts:339). **Evidence: runtime.**
+**Location:** [useDocumentAiAgent.ts:995](../../../app/composables/documents/useDocumentAiAgent.ts:995), [stale calculation:339](../../../app/composables/documents/useDocumentAiAgent.ts:339). **Evidence: runtime.**
 
 Accept All changes editor content before awaiting persistence. If persistence fails, the candidate remains visible and the proposal retains its old request version. The next acceptance attempt fails its own stale check before trying storage again.
 
@@ -143,7 +143,7 @@ Accept All changes editor content before awaiting persistence. If persistence fa
 
 ### DE-13 — P2 — Markdown download drops usable native image content
 
-**Location:** [document-to-markdown.ts:11](/Users/brendon/Documents/or3/or3-chat/app/utils/documents/document-to-markdown.ts:11), [or3-document-image.ts:27](/Users/brendon/Documents/or3/or3-chat/app/extensions/or3-document-image.ts:27), [download:428](/Users/brendon/Documents/or3/or3-chat/app/components/files/WorkspaceFilesPane.vue:428). **Evidence: runtime serializer plus inspected download caller.**
+**Location:** [document-to-markdown.ts:11](../../../app/utils/documents/document-to-markdown.ts:11), [or3-document-image.ts:27](../../../app/extensions/or3-document-image.ts:27), [download:428](../../../app/components/files/WorkspaceFilesPane.vue:428). **Evidence: runtime serializer plus inspected download caller.**
 
 The custom image node serializes to a hash-bearing `figure`, without an image URL or Markdown serializer. The download path emits only a `.md` Blob and supplies no referenced image assets. Text exports successfully, making the missing image payload easy to overlook.
 
@@ -153,7 +153,7 @@ The custom image node serializes to a hash-bearing `figure`, without an image UR
 
 ### DE-14 — P2 — Autocomplete's loading timeout cannot clear loading
 
-**Location:** [timeout:187](/Users/brendon/Documents/or3/or3-chat/app/plugins/EditorAutocomplete/TiptapExtension.ts:187), [fetch guard:238](/Users/brendon/Documents/or3/or3-chat/app/plugins/EditorAutocomplete/TiptapExtension.ts:238), [state reducer:535](/Users/brendon/Documents/or3/or3-chat/app/plugins/EditorAutocomplete/TiptapExtension.ts:535). **Evidence: runtime plugin state.**
+**Location:** [timeout:187](../../../app/plugins/EditorAutocomplete/TiptapExtension.ts:187), [fetch guard:238](../../../app/plugins/EditorAutocomplete/TiptapExtension.ts:238), [state reducer:535](../../../app/plugins/EditorAutocomplete/TiptapExtension.ts:535). **Evidence: runtime plugin state.**
 
 The five-second timeout dispatches `loading: false`. The reducer handles only `loadingMeta === true`; a false value leaves the old state unchanged. The request guard refuses new work while loading, so the timeout fails precisely when a hung request needs recovery.
 
@@ -163,7 +163,7 @@ The five-second timeout dispatches `loading: false`. The reducer handles only `l
 
 ### DE-15 — P2 — Inline AI review buttons ignore keyboard and semantic click activation
 
-**Location:** [makeButton:64](/Users/brendon/Documents/or3/or3-chat/app/plugins/DocumentAiHunks/TiptapExtension.ts:64), [marker button:101](/Users/brendon/Documents/or3/or3-chat/app/plugins/DocumentAiHunks/TiptapExtension.ts:101). **Evidence: runtime DOM activation.**
+**Location:** [makeButton:64](../../../app/plugins/DocumentAiHunks/TiptapExtension.ts:64), [marker button:101](../../../app/plugins/DocumentAiHunks/TiptapExtension.ts:101). **Evidence: runtime DOM activation.**
 
 Accept, Reject, expand, and marker buttons attach their action to `mousedown` only. Native keyboard button activation and assistive technology activation normally dispatch a click, not a mouse-down gesture. The controls look semantic but do not implement semantic activation.
 
@@ -173,7 +173,7 @@ Accept, Reject, expand, and marker buttons attach their action to `mousedown` on
 
 ### DE-16 — P2 — Valid local documents can exceed the cloud row ceiling with no editor-level recovery
 
-**Location:** [document persistence:320](/Users/brendon/Documents/or3/or3-chat/app/db/documents.ts:320), [shared size ceiling:17](/Users/brendon/Documents/or3/or3-chat/shared/sync/sanitize.ts:17), [permanent failure classification:918](/Users/brendon/Documents/or3/or3-chat/app/core/sync/outbox-manager.ts:918). Installed SQLite gateway validation was also inspected at `or3-provider-sqlite/dist/runtime/server/sync/sqlite-sync-gateway-adapter.js:185`. **Evidence: runtime local/sanitizer boundary; provider rejection source-traced.**
+**Location:** [document persistence:320](../../../app/db/documents.ts:320), [shared size ceiling:17](../../../shared/sync/sanitize.ts:17), [permanent failure classification:918](../../../app/core/sync/outbox-manager.ts:918). Installed SQLite gateway validation was also inspected at `or3-provider-sqlite/dist/runtime/server/sync/sqlite-sync-gateway-adapter.js:185`. **Evidence: runtime local/sanitizer boundary; provider rejection source-traced.**
 
 A native document is one unchunked JSON string in a posts row. The editor/CRUD path permits large bodies and the posts sanitizer retains them. The inspected gateway rejects payloads over 256 KiB, and oversized failures are permanent. Revision chunking does not chunk the current document body.
 
@@ -183,7 +183,7 @@ A native document is one unchunked JSON string in a posts row. The editor/CRUD p
 
 ### DE-17 — P2 — Chat Apply/Undo bypasses revision retention
 
-**Location:** [workspace-document-change.ts:187](/Users/brendon/Documents/or3/or3-chat/app/utils/chat/workspace-document-change.ts:187), [atomic checkpoint write:219](/Users/brendon/Documents/or3/or3-chat/app/utils/chat/workspace-document-change.ts:219), [normal revision wrapper:190](/Users/brendon/Documents/or3/or3-chat/app/db/document-revisions.ts:190). **Evidence: source.**
+**Location:** [workspace-document-change.ts:187](../../../app/utils/chat/workspace-document-change.ts:187), [atomic checkpoint write:219](../../../app/utils/chat/workspace-document-change.ts:219), [normal revision wrapper:190](../../../app/db/document-revisions.ts:190). **Evidence: source.**
 
 Workspace chat Apply/Undo correctly writes its checkpoint, changed document, and receipt atomically. However, it calls `prepareDocumentRevision()` and writes the prepared rows directly; it never runs the pruning performed by `createDocumentRevision()`. No other caller schedules pruning for these successful actions. Repeated actions against an unopened document can accumulate history indefinitely instead of respecting the documented retention target.
 
@@ -191,7 +191,7 @@ Workspace chat Apply/Undo correctly writes its checkpoint, changed document, and
 
 ### DE-18 — P2 — An open editor can expose trashed document text to chat tools
 
-**Location:** [openPaneContext:219](/Users/brendon/Documents/or3/or3-chat/app/utils/documents/document-chat-tool-execution.ts:219), [chatToolRun:390](/Users/brendon/Documents/or3/or3-chat/app/composables/documents/useDocumentAiAgent.ts:390), [fallback mention search:43](/Users/brendon/Documents/or3/or3-chat/app/utils/documents/document-ai-context.ts:43). **Evidence: runtime read-only agent boundary plus source-traced Trash route.**
+**Location:** [openPaneContext:219](../../../app/utils/documents/document-chat-tool-execution.ts:219), [chatToolRun:390](../../../app/composables/documents/useDocumentAiAgent.ts:390), [fallback mention search:43](../../../app/utils/documents/document-ai-context.ts:43). **Evidence: runtime read-only agent boundary plus source-traced Trash route.**
 
 For an inactive document, the chat context path reads through the visibility-filtered CRUD helper. For a mounted editor, it uses the live session directly. `chatToolRun()` does not enforce the read-only/availability option, so retaining a read-only editor after Trash does not stop it from supplying its content to chat. The fallback mention search also filters only `deleted`, not full workspace-item visibility.
 
@@ -201,7 +201,7 @@ For an inactive document, the chat context path reads through the visibility-fil
 
 ### DE-19 — P2 — Automatic checkpoint failures disappear without a recovery signal
 
-**Location:** [DocumentEditorRoot.vue:637](/Users/brendon/Documents/or3/or3-chat/app/components/documents/DocumentEditorRoot.vue:637). **Evidence: source.**
+**Location:** [DocumentEditorRoot.vue:637](../../../app/components/documents/DocumentEditorRoot.vue:637). **Evidence: source.**
 
 After the body saves, automatic history creation catches any checkpoint failure and converts it to null. That is indistinguishable from “identical snapshot; no new revision needed.” It neither exposes a history failure nor schedules a retry independent of further editing. A worker/storage failure can therefore leave the body saved but history absent while the UI offers no indication that protection failed.
 
@@ -209,7 +209,7 @@ After the body saves, automatic history creation catches any checkpoint failure 
 
 ### DE-20 — P3 — An open history panel never notices automatic or externally added revisions
 
-**Location:** [DocumentHistoryPanel.vue:109](/Users/brendon/Documents/or3/or3-chat/app/components/documents/DocumentHistoryPanel.vue:109), [subscriptions:194](/Users/brendon/Documents/or3/or3-chat/app/components/documents/DocumentHistoryPanel.vue:194). **Evidence: source.**
+**Location:** [DocumentHistoryPanel.vue:109](../../../app/components/documents/DocumentHistoryPanel.vue:109), [subscriptions:194](../../../app/components/documents/DocumentHistoryPanel.vue:194). **Evidence: source.**
 
 History loads on mount, document/workspace change, and manual Save version. It does not subscribe to revision writes or refresh after an automatic/AI checkpoint. Leave the panel open while a new version is created and it keeps showing the old list, potentially “No saved versions yet,” until remounted or manually refreshed through another action.
 
@@ -219,8 +219,8 @@ History loads on mount, document/workspace change, and manual Save version. It d
 
 These are source-supported risk areas, **not additional demonstrated failures counted in the 20 findings**.
 
-- **History decode/resource bounds:** [listCompleteDocumentRevisions:130](/Users/brendon/Documents/or3/or3-chat/app/db/document-revisions.ts:130) loads and decodes every manifest concurrently. [revision-codec.ts:50](/Users/brendon/Documents/or3/or3-chat/app/utils/documents/revision-codec.ts:50) collects an entire decompressed stream before checking its hash, and [the worker client](/Users/brendon/Documents/or3/or3-chat/app/utils/documents/revision-codec-client.ts:43) has no operation deadline/cancellation. Encoded retention size is not a decompressed-memory limit. Qualify bounded decode sizes, decompression ratios, chunk counts, worker failure, and cancellation before claiming imported/synced history is safe under hostile or very large inputs. No OOM/crash was intentionally induced.
-- **Large-document find/replace:** [searchMatches:1646](/Users/brendon/Documents/or3/or3-chat/app/components/documents/DocumentEditorRoot.vue:1646) synchronously scans all text blocks and materializes every match per query/content change. Replace All builds a transaction containing every replacement. Qualify sustained typing, large tables, repeated-character searches, responsiveness, and undo memory; no latency threshold was measured here.
+- **History decode/resource bounds:** [listCompleteDocumentRevisions:130](../../../app/db/document-revisions.ts:130) loads and decodes every manifest concurrently. [revision-codec.ts:50](../../../app/utils/documents/revision-codec.ts:50) collects an entire decompressed stream before checking its hash, and [the worker client](../../../app/utils/documents/revision-codec-client.ts:43) has no operation deadline/cancellation. Encoded retention size is not a decompressed-memory limit. Qualify bounded decode sizes, decompression ratios, chunk counts, worker failure, and cancellation before claiming imported/synced history is safe under hostile or very large inputs. No OOM/crash was intentionally induced.
+- **Large-document find/replace:** [searchMatches:1646](../../../app/components/documents/DocumentEditorRoot.vue:1646) synchronously scans all text blocks and materializes every match per query/content change. Replace All builds a transaction containing every replacement. Qualify sustained typing, large tables, repeated-character searches, responsiveness, and undo memory; no latency threshold was measured here.
 - **Extension/schema recovery:** validate load/export/restore with a removed, renamed, failed, or upgraded custom node/mark. Strict schema checks are useful, but users also need a way to preserve/export original content when the matching extension is unavailable. Do not silently strip unknown content to make loading succeed.
 - **Orphan cleanup integration:** the production tree defines `repairOrphanRevisionChunks()` but contains no call to it. The public guide tells import callers to invoke it. Verify real import/bootstrap lifecycle wiring and concurrency before relying on orphan cleanup, including partially delivered manifests and the seven-day grace period.
 - **Browser coverage still needed:** run the existing recovery/polish harness after the source launcher starts reliably, then add genuine keyboard/IME/touch, clipboard/drop, navigation during failed saves, offline blob retrieval, workspace/account switches during AI/history work, and multi-provider size/partial-sync cases. The audit's jsdom and fake-indexeddb results do not substitute for browser lifecycle or live-provider qualification.
