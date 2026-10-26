@@ -2011,6 +2011,33 @@ async function waitForDurableReply(page: Page, content: string): Promise<void> {
 }
 
 test.describe('production chat journey', () => {
+    test('chat keeps literal LaTeX in code while rendering prose math after reload', async ({ page }, info) => {
+        test.setTimeout(120_000);
+        await openChat(page);
+        await send(page, 'journey:literal-math');
+        const markdown = page.locator('.cm-markdown-assistant');
+        const verify = async () => {
+            await expect(markdown).toContainText('End of math sample.');
+            const inlineCode = markdown.locator('code').filter({ hasNot: page.locator('[data-line-number]') });
+            for (const literal of ['\\[inline\\]', '\\[double`tick\\]', '\\[neighbor\\]']) {
+                await expect(inlineCode.filter({ hasText: literal })).toHaveCount(1);
+            }
+            for (const literal of ['\\[indented\\]', '\\[fenced\\]']) {
+                await expect(markdown.locator('pre').filter({ hasText: literal })).toHaveCount(1);
+            }
+            await expect(markdown.locator('.katex')).toHaveCount(2);
+            await expect(markdown.locator('code .katex')).toHaveCount(0);
+        };
+        await verify();
+        await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
+        await page.reload();
+        await verify();
+        const screenshot = info.outputPath('literal-code-and-prose-math.png');
+        await page.screenshot({ path: screenshot, animations: 'disabled' });
+        await info.attach('literal-code-and-prose-math', { path: screenshot, contentType: 'image/png' });
+        await info.attach('rendered-markdown', { body: await markdown.innerHTML(), contentType: 'text/html' });
+    });
+
     test('mobile More keeps nested confirmations above the sheet and releases their stacking after close and unmount', async ({ page }, info) => {
         await page.setViewportSize({ width: 390, height: 844 });
         await page.context().addCookies([

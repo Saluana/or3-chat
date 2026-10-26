@@ -447,6 +447,22 @@ function installDeterministicFetch(): void {
                                 index: 0, id: `journey-${name}-${attempt}`, type: 'function', function: { name, arguments: JSON.stringify(args) },
                             }] }, finish_reason: 'tool_calls' }] })}\n\n`));
                         }
+                    } else if (text.includes('journey:literal-math')) {
+                        enqueue(sseChunk([
+                            'Literal examples: `\\[inline\\]` and `` \\[double`tick\\] ``.',
+                            '',
+                            '    \\[indented\\]',
+                            '',
+                            '```text',
+                            '\\[fenced\\]',
+                            '```',
+                            '',
+                            'A code example next to math: `\\[neighbor\\]` then \\[x + 1\\].',
+                            '',
+                            '\\[ a^2 + b^2 = c^2 \\]',
+                            '',
+                            'End of math sample.',
+                        ].join('\n')));
                     } else if (text.includes('journey:responsive')) {
                         enqueue(sseChunk([
                             '## Responsive reply',
