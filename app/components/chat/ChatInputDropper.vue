@@ -1061,12 +1061,16 @@ watch([() => props.tabId, draftAccountId, () => tabDrafts.hasSaveFailure(props.t
     });
 }, { immediate: true });
 
-async function restoreDraft(tabId = props.tabId): Promise<void> {
+function dismissDraftRestoreNotice(): void {
     if (draftRestoreNoticeId) toast.remove(draftRestoreNoticeId);
     draftRestoreNoticeId = undefined;
+}
+
+async function restoreDraft(tabId = props.tabId): Promise<void> {
     const revision = ++draftRestoreRevision;
     draftRestoreFailed = false;
     if (!tabId) {
+        dismissDraftRestoreNotice();
         restoringDraft.value = false;
         return;
     }
@@ -1074,8 +1078,10 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
     // The editor stays editable while saved content loads; anything typed meanwhile wins.
     const revisionBeforeLoad = draftEditRevision;
     const scope = tabDrafts.scope();
-    const noticeId = `draft-restore-failed:${encodeURIComponent(scope.key)}:${encodeURIComponent(tabId)}`;
-    draftRestoreNoticeId = noticeId;
+    // Keep any earlier warning until this attempt settles, and give each failure
+    // its own id: a removed toast id is deleted after its close animation, which
+    // would also drop a same-id warning re-added in that window.
+    const noticeId = `draft-restore-failed:${encodeURIComponent(scope.key)}:${encodeURIComponent(tabId)}:${revision}`;
     let keptTypedText = false;
     try {
         let draft: WorkspaceChatTabDraft | undefined;
@@ -1087,7 +1093,7 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
             if (componentDisposed || revision !== draftRestoreRevision || props.tabId !== tabId) return;
         }
         draftContentLoading = false;
-        toast.remove(noticeId);
+        dismissDraftRestoreNotice();
         draftScope = scope;
         keptTypedText = draftEditRevision !== revisionBeforeLoad;
         if (!keptTypedText) {
@@ -1136,6 +1142,8 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
         draftScope = scope;
         keptTypedText = draftEditRevision !== revisionBeforeLoad;
         draftRestoreFailed = !keptTypedText;
+        dismissDraftRestoreNotice();
+        draftRestoreNoticeId = noticeId;
         toast.add({
             id: noticeId,
             title: 'Draft could not be restored',
