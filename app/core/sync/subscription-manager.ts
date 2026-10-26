@@ -19,7 +19,7 @@
  *
  * Constraints:
  * - Singleton per workspace scope (via `createSubscriptionManager`)
- * - Maximum 20 reconnect attempts before giving up
+ * - Retries outages indefinitely with capped backoff
  * - Change application is serialized (queued) to prevent cursor races
  * - Registers a `beforeunload` listener for clean shutdown
  * - Circuit breaker prevents bootstrap/rescan during provider outages
@@ -28,12 +28,14 @@
  * @see core/sync/cursor-manager for cursor persistence
  * @see core/sync/recent-op-cache for echo filtering
  */
+import { subscriptionManagerInstances, getScopeKey } from './subscription-registry';
 import type { Or3DB } from '~/db/client';
 import type {
     SyncProvider,
     SyncScope,
     SyncChange,
     PullResponse,
+    PullRequest,
 } from '~~/shared/sync/types';
 import { ConflictResolver } from './conflict-resolver';
 import { getCursorManager, type CursorManager } from './cursor-manager';
@@ -55,7 +57,7 @@ const BOOTSTRAP_PAGE_SIZE = 300;
 /** Reconnect delays (exponential backoff) */
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000];
 
-/** Max reconnect attempts before giving up (about 10 minutes of trying) */
+/** Emit diagnostics at this retry count; capped retries continue afterward. */
 const MAX_RECONNECT_ATTEMPTS = 20;
 
 /**
@@ -109,6 +111,8 @@ export class SubscriptionManager {
     private changeQueue: Promise<void> = Promise.resolve();
     /** Invalidates every async continuation created by an older lifecycle. */
     private lifecycleGeneration = 0;
+    private requestController = new AbortController();
+    private probeGeneration: number | null = null;
     private pendingCursorAcknowledgement: number | null = null;
 
     constructor(
@@ -150,6 +154,8 @@ export class SubscriptionManager {
             return;
         }
 
+        this.requestController.abort();
+        this.requestController = new AbortController();
         const generation = ++this.lifecycleGeneration;
         this.setStatus('connecting');
 
@@ -160,6 +166,7 @@ export class SubscriptionManager {
                     'Circuit breaker is open; subscription cannot start'
                 );
             }
+            this.probeGeneration = generation;
             let probeSettled = false;
             try {
                 const needsBootstrap = await this.cursorManager.isBootstrapNeeded();
@@ -187,7 +194,8 @@ export class SubscriptionManager {
                 circuitBreaker.recordSuccess();
                 probeSettled = true;
             } finally {
-                if (!probeSettled) {
+                if (this.probeGeneration === generation) this.probeGeneration = null;
+                if (!probeSettled && this.isCurrentGeneration(generation)) {
                     circuitBreaker.recordFailure();
                 }
             }
@@ -206,6 +214,7 @@ export class SubscriptionManager {
      */
     async stop(): Promise<void> {
         this.lifecycleGeneration++;
+        this.requestController.abort();
         this.clearReconnectTimeout();
 
         if (this.unsubscribe) {
@@ -248,8 +257,7 @@ export class SubscriptionManager {
      */
     private async bootstrap(generation: number): Promise<void> {
         // Check circuit breaker to prevent retry storm during outages
-        const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
-        if (!circuitBreaker.canRetry()) {
+        if (!this.canContinueProbe(generation)) {
             throw new Error(
                 'Circuit breaker is open; bootstrap cannot complete'
             );
@@ -276,7 +284,7 @@ export class SubscriptionManager {
             }
 
             // Kick off the first fetch
-            let pendingFetch: Promise<PullResponse> | null = this.provider.pull({
+            let pendingFetch: Promise<PullResponse> | null = this.pull({
                 scope: this.scope,
                 cursor,
                 limit: this.config.bootstrapPageSize,
@@ -287,7 +295,7 @@ export class SubscriptionManager {
                 if (!this.isCurrentGeneration(generation)) break;
 
                 // Check circuit breaker each iteration
-                if (!circuitBreaker.canRetry()) {
+                if (!this.canContinueProbe(generation)) {
                     throw new Error(
                         'Circuit breaker opened during bootstrap'
                     );
@@ -314,7 +322,7 @@ export class SubscriptionManager {
 
                 // Start prefetching the next page while we apply the current one
                 if (response.hasMore && response.nextCursor > cursor) {
-                    pendingFetch = this.provider.pull({
+                    pendingFetch = this.pull({
                         scope: this.scope,
                         cursor: response.nextCursor,
                         limit: this.config.bootstrapPageSize,
@@ -360,7 +368,7 @@ export class SubscriptionManager {
             this.provider.updateCursor(
                 this.scope,
                 this.cursorManager.getDeviceId(),
-                cursor
+                cursor, { signal: this.requestController.signal }
             ).catch((err) => {
                 if (!this.isCurrentGeneration(generation) || isAbortLikeError(err)) {
                     return;
@@ -399,7 +407,6 @@ export class SubscriptionManager {
         const snapshot = this.provider.snapshot?.bind(this.provider);
         if (!snapshot) return;
 
-        const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
         const stager = new SnapshotStager(this.db, this.scope, this.config.tables);
         const seenPageTokens = new Set<string>();
         let pageToken: string | undefined;
@@ -410,7 +417,7 @@ export class SubscriptionManager {
         try {
             for (;;) {
                 if (!this.isCurrentGeneration(generation)) return;
-                if (!circuitBreaker.canRetry()) {
+                if (!this.canContinueProbe(generation)) {
                     throw new Error('Circuit breaker opened during snapshot bootstrap');
                 }
 
@@ -419,7 +426,7 @@ export class SubscriptionManager {
                     pageSize: this.config.bootstrapPageSize,
                     tables: this.config.tables,
                     ...(pageToken ? { pageToken } : {}),
-                });
+                }, { signal: this.requestController.signal });
                 if (!this.isCurrentGeneration(generation)) return;
 
                 await stager.appendPage(page);
@@ -454,7 +461,7 @@ export class SubscriptionManager {
 
         // The watermark and materialized rows commit atomically. Pull semantics
         // are exclusive, so the first incremental request starts exactly here.
-        const replay = await this.drainBacklog(highWatermark, generation);
+        const replay = await this.drainBacklog(highWatermark, generation, true);
         if (!this.isCurrentGeneration(generation)) return;
         totalPulled += replay.applied + replay.skipped;
 
@@ -466,7 +473,7 @@ export class SubscriptionManager {
         this.provider.updateCursor(
             this.scope,
             this.cursorManager.getDeviceId(),
-            replay.cursor
+            replay.cursor, { signal: this.requestController.signal }
         ).catch((error) => {
             if (!this.isCurrentGeneration(generation) || isAbortLikeError(error)) return;
             console.warn(
@@ -501,7 +508,7 @@ export class SubscriptionManager {
             // this first request to apply the backlog immediately, instead of
             // discarding a one-row probe and waiting for the next poll timer.
             while (this.isCurrentGeneration(generation)) {
-                const page = await this.provider.pull({
+                const page = await this.pull({
                     scope: this.scope, cursor,
                     limit: this.config.bootstrapPageSize,
                     tables: this.config.tables,
@@ -514,7 +521,7 @@ export class SubscriptionManager {
             return true;
         }
         try {
-            const probe = await this.provider.pull({
+            const probe = await this.pull({
                 scope: this.scope,
                 cursor,
                 limit: 1,
@@ -557,8 +564,7 @@ export class SubscriptionManager {
      */
     private async rescan(generation: number): Promise<void> {
         // Check circuit breaker to prevent retry storm during outages
-        const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
-        if (!circuitBreaker.canRetry()) {
+        if (!this.canContinueProbe(generation)) {
             throw new Error('Circuit breaker is open; rescan cannot complete');
         }
 
@@ -594,11 +600,11 @@ export class SubscriptionManager {
                 if (!this.isCurrentGeneration(generation)) break;
 
                 // Check circuit breaker each iteration
-                if (!circuitBreaker.canRetry()) {
+                if (!this.canContinueProbe(generation)) {
                     throw new Error('Circuit breaker opened during rescan');
                 }
 
-                const response = await this.provider.pull({
+                const response = await this.pull({
                     scope: this.scope,
                     cursor,
                     limit: this.config.bootstrapPageSize,
@@ -643,7 +649,7 @@ export class SubscriptionManager {
             this.provider.updateCursor(
                 this.scope,
                 this.cursorManager.getDeviceId(),
-                cursor
+                cursor, { signal: this.requestController.signal }
             ).catch((err) => {
                 if (!this.isCurrentGeneration(generation) || isAbortLikeError(err)) {
                     return;
@@ -760,7 +766,7 @@ export class SubscriptionManager {
         }
         if (!this.isCurrentGeneration(generation)) return;
         if (!parsed.hasMore && this.pendingCursorAcknowledgement !== null) {
-            await this.provider.updateCursor(this.scope, this.cursorManager.getDeviceId(), this.pendingCursorAcknowledgement);
+            await this.provider.updateCursor(this.scope, this.cursorManager.getDeviceId(), this.pendingCursorAcknowledgement, { signal: this.requestController.signal });
             if (!this.isCurrentGeneration(generation)) return;
             this.pendingCursorAcknowledgement = null;
         }
@@ -855,7 +861,7 @@ export class SubscriptionManager {
             await this.provider.updateCursor(
                 this.scope,
                 this.cursorManager.getDeviceId(),
-                maxVersion
+                maxVersion, { signal: this.requestController.signal }
             );
             if (!this.isCurrentGeneration(generation)) return;
 
@@ -927,21 +933,20 @@ export class SubscriptionManager {
         return versions[versions.length - 1] ?? currentCursor;
     }
 
-    private async drainBacklog(startCursor: number, generation: number) {
+    private async drainBacklog(startCursor: number, generation: number, replayRecent = false) {
         let cursor = startCursor;
         let hasMore = true;
         const totals = { applied: 0, skipped: 0, conflicts: 0, cursor };
-        const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
 
         while (hasMore) {
             if (!this.isCurrentGeneration(generation)) break;
-            if (!circuitBreaker.canRetry()) {
+            if (!this.canContinueProbe(generation)) {
                 throw new Error(
                     'Circuit breaker opened during backlog drain'
                 );
             }
 
-            const response = await this.provider.pull({
+            const response = await this.pull({
                 scope: this.scope,
                 cursor,
                 limit: this.config.bootstrapPageSize,
@@ -957,7 +962,7 @@ export class SubscriptionManager {
                 (change) => change.serverVersion > cursor
             );
             if (newChanges.length) {
-                const filtered = this.filterRecentOps(newChanges);
+                const filtered = replayRecent ? newChanges : this.filterRecentOps(newChanges);
                 const result = filtered.length
                     ? await this.applyChanges(filtered)
                     : { applied: 0, skipped: 0, conflicts: 0 };
@@ -1009,15 +1014,12 @@ export class SubscriptionManager {
         if (!this.isCurrentGeneration(generation)) return;
         this.clearReconnectTimeout();
 
-        // Give up after max attempts to prevent infinite reconnection loop
-        if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-            console.error('[SubscriptionManager] Max reconnect attempts reached, giving up');
-            this.setStatus('error');
+        // Retain diagnostics at the former retry limit, but never strand a
+        // durable cursor after a long outage. Backoff stays capped below.
+        if (this.reconnectAttempts === MAX_RECONNECT_ATTEMPTS) {
             useHooks().doAction('sync.subscription:action:maxRetriesExceeded', {
-                scope: this.scope,
-                attempts: this.reconnectAttempts,
+                scope: this.scope, attempts: this.reconnectAttempts,
             }).catch(() => {});
-            return;
         }
 
         const delayIndex = Math.min(
@@ -1071,6 +1073,15 @@ export class SubscriptionManager {
         }
     }
 
+    private canContinueProbe(generation: number): boolean {
+        return this.probeGeneration === generation ||
+            getSyncCircuitBreaker(this.circuitBreakerKey).canRetry();
+    }
+
+    private pull(request: PullRequest): Promise<PullResponse> {
+        return this.provider.pull(request, { signal: this.requestController.signal });
+    }
+
     private getWindow(): Window | null {
         if (typeof globalThis === 'undefined') return null;
         const globalWithWindow = globalThis as { window?: Window & typeof globalThis };
@@ -1082,15 +1093,7 @@ export class SubscriptionManager {
     }
 }
 
-// Singleton instances per scope
-const subscriptionManagerInstances = new Map<string, SubscriptionManager>();
-
-/**
- * Get scope key for instance lookup
- */
-function getScopeKey(scope: SyncScope): string {
-    return `${scope.workspaceId}:${scope.projectId ?? 'default'}`;
-}
+export { getScopeKey, getSubscriptionManager, cleanupSubscriptionManager, cleanupSubscriptionManagersByWorkspace, _resetSubscriptionManagers } from './subscription-registry';
 
 /** Create or replace the manager owned by a sync scope. */
 export function createSubscriptionManager(
@@ -1112,48 +1115,4 @@ export function createSubscriptionManager(
     const manager = new SubscriptionManager(db, provider, scope, config);
     subscriptionManagerInstances.set(key, manager);
     return manager;
-}
-
-/** Return the manager currently owned by a sync scope. */
-export function getSubscriptionManager(scope: SyncScope): SubscriptionManager | null {
-    return subscriptionManagerInstances.get(getScopeKey(scope)) ?? null;
-}
-
-/** Stop and clear all managers. Test-only lifecycle support. */
-export async function _resetSubscriptionManagers(): Promise<void> {
-    for (const manager of subscriptionManagerInstances.values()) {
-        await manager.stop();
-    }
-    subscriptionManagerInstances.clear();
-}
-
-/**
- * Purpose:
- * Stop and remove a SubscriptionManager instance by scope key.
- */
-export function cleanupSubscriptionManager(scopeKey: string): void {
-    const manager = subscriptionManagerInstances.get(scopeKey);
-    if (manager) {
-        manager.stop().catch((error) => {
-            console.error('[SubscriptionManager] Failed to stop instance:', error);
-        });
-    }
-    subscriptionManagerInstances.delete(scopeKey);
-}
-
-/**
- * Purpose:
- * Stop and remove all SubscriptionManager instances for a workspace.
- */
-export function cleanupSubscriptionManagersByWorkspace(
-    workspaceId: string
-): void {
-    const prefix = `${workspaceId}:`;
-    for (const [scopeKey, manager] of subscriptionManagerInstances.entries()) {
-        if (!scopeKey.startsWith(prefix)) continue;
-        manager.stop().catch((error) => {
-            console.error('[SubscriptionManager] Failed to stop instance:', error);
-        });
-        subscriptionManagerInstances.delete(scopeKey);
-    }
 }

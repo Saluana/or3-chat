@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { nextTick, reactive } from 'vue';
+import type { SyncScope } from '~~/shared/sync/types';
 
 type SessionRecord = {
     session: null | {
+        user?: { id: string };
         authenticated?: boolean;
         workspace?: { id: string };
     };
@@ -18,13 +21,8 @@ type MockProvider = {
     dispose: ReturnType<typeof vi.fn>;
 };
 
-type WatchRecord = {
-    source: unknown;
-    callback: (value: unknown, oldValue?: unknown) => void;
-    lastValue: unknown;
-};
-
 type OutboxInstance = {
+    scope: SyncScope;
     start: ReturnType<typeof vi.fn>;
     stop: ReturnType<typeof vi.fn>;
     flush: ReturnType<typeof vi.fn>;
@@ -33,6 +31,7 @@ type OutboxInstance = {
 };
 
 type SubscriptionInstance = {
+    scope: SyncScope;
     start: ReturnType<typeof vi.fn>;
     stop: ReturnType<typeof vi.fn>;
 };
@@ -60,32 +59,25 @@ function createProvider(id = 'convex', mode: 'gateway' | 'direct' = 'gateway'): 
     };
 }
 
-function readWatchSource(source: unknown): unknown {
-    if (typeof source === 'function') return (source as () => unknown)();
-    if (source && typeof source === 'object' && 'value' in source) {
-        return (source as { value: unknown }).value;
-    }
-    return source;
-}
-
-const sessionState: { value: SessionRecord } = {
+const sessionState = reactive<{ value: SessionRecord }>({
     value: {
         session: {
             authenticated: true,
             workspace: { id: 'ws-1' },
         },
     },
-};
+});
 
-const workspaceState: { value: string | null } = {
+const workspaceState = reactive<{ value: string | null }>({
     value: 'ws-1',
-};
+});
 
-const routeState: { value: { path: string } } = {
+const routeState = reactive({
     value: { path: '/chat' },
-};
+});
 
-const watchRecords: WatchRecord[] = [];
+const watcherStops: Array<() => void> = [];
+const nuxtAppMock = { provide: vi.fn() };
 
 const pluginControl = vi.hoisted(() => {
     let release: () => void = () => undefined;
@@ -166,8 +158,9 @@ vi.mock('~/core/sync/hook-bridge', () => ({
 }));
 
 vi.mock('~/core/sync/outbox-manager', () => ({
-    OutboxManager: vi.fn(function () {
+    OutboxManager: vi.fn(function (_db: unknown, _provider: unknown, scope: SyncScope) {
         const instance: OutboxInstance = {
+            scope,
             start: vi.fn(),
             stop: vi.fn(),
             flush: vi.fn(async () => true),
@@ -179,9 +172,11 @@ vi.mock('~/core/sync/outbox-manager', () => ({
     }),
 }));
 
-vi.mock('~/core/sync/subscription-manager', () => ({
-    createSubscriptionManager: vi.fn(() => {
+vi.mock('~/core/sync/subscription-manager', async importOriginal => ({
+    ...(await importOriginal<typeof import('~/core/sync/subscription-manager')>()),
+    createSubscriptionManager: vi.fn((_db: unknown, _provider: unknown, scope: SyncScope) => {
         const instance: SubscriptionInstance = {
+            scope,
             start: vi.fn(async () => pluginControl.waitStart()),
             stop: vi.fn(async () => undefined),
         };
@@ -219,23 +214,10 @@ vi.mock('vue', async () => {
     const actual = await vi.importActual<typeof import('vue')>('vue');
     return {
         ...actual,
-        watch: (
-            source: unknown,
-            callback: (value: unknown, oldValue?: unknown) => void,
-            options?: { immediate?: boolean }
-        ) => {
-            const initialValue = readWatchSource(source);
-            watchRecords.push({
-                source,
-                callback,
-                lastValue: initialValue,
-            });
-
-            if (options?.immediate !== false) {
-                callback(initialValue, undefined);
-            }
-
-            return () => undefined;
+        watch: (...args: Parameters<typeof actual.watch>) => {
+            const stop = actual.watch(...args);
+            watcherStops.push(stop);
+            return stop;
         },
     };
 });
@@ -245,7 +227,7 @@ vi.mock('#app', () => ({
     useRuntimeConfig: () => ({
         public: pluginControl.runtime,
     }),
-    useNuxtApp: () => ({ provide: vi.fn() }),
+    useNuxtApp: () => nuxtAppMock,
     useRouter: () => ({
         currentRoute: routeState,
         afterEach: vi.fn(() => () => undefined),
@@ -268,17 +250,8 @@ type NuxtTestGlobals = typeof globalThis & {
     };
 };
 
-async function triggerWatchers(): Promise<void> {
-    for (const record of watchRecords) {
-        const nextValue = readWatchSource(record.source);
-        record.callback(nextValue, record.lastValue);
-        record.lastValue = nextValue;
-    }
-    await Promise.resolve();
-}
-
 async function flushPluginAsyncWork(): Promise<void> {
-    await Promise.resolve();
+    await nextTick();
     await vi.runOnlyPendingTimersAsync();
     await Promise.resolve();
 }
@@ -289,7 +262,7 @@ describe('sync engine plugin', () => {
         vi.resetModules();
 
         pluginControl.reset();
-        watchRecords.length = 0;
+        nuxtAppMock.provide.mockClear();
         outboxInstances.length = 0;
         subscriptionInstances.length = 0;
         gcInstances.length = 0;
@@ -322,14 +295,19 @@ describe('sync engine plugin', () => {
         globals.useRuntimeConfig = () => ({
             public: pluginControl.runtime,
         });
-        globals.useNuxtApp = () => ({ provide: vi.fn() });
+        globals.useNuxtApp = () => nuxtAppMock;
         globals.useRouter = () => ({
             currentRoute: routeState,
             afterEach: vi.fn(() => () => undefined),
         });
     });
 
-    afterEach(() => {
+    afterEach(async () => {
+        for (const stop of watcherStops.splice(0)) stop();
+        pluginControl.releaseStart();
+        const engine = nuxtAppMock.provide.mock.calls.find(([key]) => key === 'syncEngine')?.[1] as
+            { stop: () => Promise<void> } | undefined;
+        await engine?.stop();
         vi.unstubAllGlobals();
         vi.useRealTimers();
     });
@@ -351,7 +329,7 @@ describe('sync engine plugin', () => {
         expect(outboxInstances[0]?.start).toHaveBeenCalledTimes(1);
         expect(request).toHaveBeenCalledTimes(2);
         sessionState.value = { session: { authenticated: false, workspace: { id: 'ws-1' } } };
-        await triggerWatchers();
+        await nextTick();
         await flushPluginAsyncWork();
         expect(signal?.aborted).toBe(true);
         expect(subscriptionInstances[0]?.start).not.toHaveBeenCalled();
@@ -403,7 +381,7 @@ describe('sync engine plugin', () => {
             },
         };
 
-        await triggerWatchers();
+        await nextTick();
 
         expect(outboxInstances).toHaveLength(0);
 
@@ -457,7 +435,7 @@ describe('sync engine plugin', () => {
                 workspace: { id: 'ws-1' },
             },
         };
-        await triggerWatchers();
+        await nextTick();
 
         sessionState.value = {
             session: {
@@ -465,7 +443,7 @@ describe('sync engine plugin', () => {
                 workspace: { id: 'ws-1' },
             },
         };
-        await triggerWatchers();
+        await nextTick();
 
         providerRegistryState.active = createProvider('convex');
         await vi.advanceTimersByTimeAsync(6000);
@@ -479,7 +457,7 @@ describe('sync engine plugin', () => {
 
         const firstProvider = providerRegistryState.active;
         workspaceState.value = 'ws-2';
-        await triggerWatchers();
+        await nextTick();
         await flushPluginAsyncWork();
 
         expect(outboxInstances).toHaveLength(2);
@@ -495,7 +473,7 @@ describe('sync engine plugin', () => {
         await flushPluginAsyncWork();
 
         routeState.value = { path: '/admin/extensions' };
-        await triggerWatchers();
+        await nextTick();
         await flushPluginAsyncWork();
 
         expect(setActiveWorkspaceDb).not.toHaveBeenCalled();
@@ -543,4 +521,40 @@ describe('sync engine plugin', () => {
         expect(outboxInstances).toHaveLength(0);
         expect(createGatewaySyncProvider).not.toHaveBeenCalled();
     });
+    it('cancels superseded starts and runs only the latest workspace after an A/B/C race', async () => {
+        pluginControl.blockStart();
+        await (await import('~/plugins/convex-sync.client')).default;
+        await Promise.resolve();
+        workspaceState.value = 'ws-2';
+        await nextTick();
+        workspaceState.value = 'ws-3';
+        await nextTick();
+        pluginControl.releaseStart();
+        await flushPluginAsyncWork();
+        expect(outboxInstances).toHaveLength(1);
+        expect(outboxInstances[0]?.scope.workspaceId).toBe('ws-3');
+        expect(outboxInstances[0]?.start).toHaveBeenCalledOnce();
+        for (const subscription of subscriptionInstances) {
+            expect(subscription.start).toHaveBeenCalledOnce();
+            if (subscription.scope.workspaceId === 'ws-3') {
+                expect(subscription.stop).not.toHaveBeenCalled();
+            } else {
+                expect(subscription.stop).toHaveBeenCalled();
+            }
+        }
+    });
+
+    it('restarts visibility coverage when the principal changes within one workspace', async () => {
+        sessionState.value.session!.user = { id: 'alice' };
+        await (await import('~/plugins/convex-sync.client')).default;
+        await flushPluginAsyncWork();
+        sessionState.value.session!.user = { id: 'bob' };
+        await nextTick();
+        await flushPluginAsyncWork();
+        expect(outboxInstances).toHaveLength(2);
+        expect(outboxInstances[0]?.stop).toHaveBeenCalledTimes(1);
+        expect(outboxInstances[1]?.scope).toEqual({ workspaceId: 'ws-1', principalId: 'bob' });
+        expect(outboxInstances[1]?.start).toHaveBeenCalledOnce();
+    });
+
 });

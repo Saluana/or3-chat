@@ -1,0 +1,18 @@
+[
+  {
+    "build": "baseline",
+    "file": "startup.Be1ykXt4.css",
+    "bytes": 393089,
+    "fontFaces": 10,
+    "sortedFontFacesSha256": "bddb52efc714202cfb5de1c82fb6f262796f4f90035754deafd730253de7bf75",
+    "remainingCssSha256": "4ecf14ad1e4bc7db749aae0928b2742ff4490827d7f3ec29620fa3478f5729ce"
+  },
+  {
+    "build": "final",
+    "file": "startup.DByHQnRK.css",
+    "bytes": 393089,
+    "fontFaces": 10,
+    "sortedFontFacesSha256": "bddb52efc714202cfb5de1c82fb6f262796f4f90035754deafd730253de7bf75",
+    "remainingCssSha256": "4ecf14ad1e4bc7db749aae0928b2742ff4490827d7f3ec29620fa3478f5729ce"
+  }
+]

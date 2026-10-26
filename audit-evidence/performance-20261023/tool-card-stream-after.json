@@ -1,0 +1,15 @@
+{
+  "browser": "153.0.8010.12",
+  "harness": "development",
+  "errors": [],
+  "updates": {
+    "ChatToolCardsEnd": 120
+  },
+  "notifications": [],
+  "mutations": 0,
+  "chunks": 120,
+  "reads": 32,
+  "aborted": false,
+  "connected": true,
+  "question": true
+}

@@ -102,6 +102,8 @@ export interface WorkspaceTabsOptions {
     workspaceId: () => string | null | undefined;
     profileId: () => string | null | undefined;
     storage?: WorkspaceTabStorage | null;
+    /** A chat without a thread may still hold an unsent composer draft. */
+    canReuseActiveBlank?: (tabId: string) => boolean;
     /** Capture should make the outgoing view locally safe, never remotely block. */
     captureOutgoing?: (
         tabId: string,
@@ -317,7 +319,8 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
         if (options_.target === 'split') return openInSplit(resource, options_);
         const opened = openTab(state.value, resource, {
             allowDuplicate: options_.allowDuplicate,
-            reuseActiveBlank: options_.reuseActiveBlank,
+            reuseActiveBlank: options_.reuseActiveBlank !== false &&
+                options.canReuseActiveBlank?.(state.value.activeTabId) !== false,
         });
         commit(opened.state);
         if (!opened.tabId) return NO_TAB;

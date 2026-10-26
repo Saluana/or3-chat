@@ -23,6 +23,8 @@ export interface FileTransfer {
     attempts: number;
     last_attempt_at?: number;
     lease_owner?: string;
+    /** Unique claim generation; an old worker cannot settle a replacement lease. */
+    lease_token?: string;
     lease_expires_at?: number;
     retry_at?: number;
     last_error?: string;

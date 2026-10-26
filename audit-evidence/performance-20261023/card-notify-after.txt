@@ -1,0 +1,10 @@
+$ vitest run --project=core-node --project=core-app --project=app-integration --reporter=dot --silent=passed-only --hideSkippedTests "--project=core-app" app/db/__tests__/messages-transactions.test.ts app/components/chat/__tests__/workspace-thumbnails.test.ts app/components/chat/__tests__/ChatContainer.test.ts
+
+ RUN  v4.1.12 /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat
+
+···································································
+
+ Test Files  3 passed (3)
+      Tests  67 passed (67)
+   Start at  00:48:26
+   Duration  3.98s (transform 1.78s, setup 166ms, import 3.17s, tests 4.96s, environment 469ms)

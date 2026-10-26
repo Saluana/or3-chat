@@ -1,0 +1,94 @@
+{
+  "theme": "retro",
+  "initial": {
+    "dark": true,
+    "background": "rgb(26, 30, 35)",
+    "composer": {
+      "x": 4,
+      "y": 704,
+      "width": 382,
+      "height": 126,
+      "top": 704,
+      "right": 386,
+      "bottom": 830,
+      "left": 4
+    },
+    "editor": {
+      "x": 20,
+      "y": 716,
+      "width": 350,
+      "height": 48,
+      "top": 716,
+      "right": 370,
+      "bottom": 764,
+      "left": 20
+    },
+    "settings": {
+      "x": 78,
+      "y": 780,
+      "width": 32,
+      "height": 32,
+      "top": 780,
+      "right": 110,
+      "bottom": 812,
+      "left": 78
+    },
+    "navigation": {
+      "x": 10,
+      "y": 8,
+      "width": 36,
+      "height": 36,
+      "top": 8,
+      "right": 46,
+      "bottom": 44,
+      "left": 10
+    },
+    "artwork": null
+  },
+  "ready": {
+    "dark": true,
+    "background": "rgb(26, 30, 35)",
+    "composer": {
+      "x": 4,
+      "y": 704,
+      "width": 382,
+      "height": 126,
+      "top": 704,
+      "right": 386,
+      "bottom": 830,
+      "left": 4
+    },
+    "editor": {
+      "x": 20,
+      "y": 716,
+      "width": 350,
+      "height": 48,
+      "top": 716,
+      "right": 370,
+      "bottom": 764,
+      "left": 20
+    },
+    "settings": {
+      "x": 78,
+      "y": 780,
+      "width": 32,
+      "height": 32,
+      "top": 780,
+      "right": 110,
+      "bottom": 812,
+      "left": 78
+    },
+    "navigation": {
+      "x": 10,
+      "y": 8,
+      "width": 36,
+      "height": 36,
+      "top": 8,
+      "right": 46,
+      "bottom": 44,
+      "left": 10
+    },
+    "artwork": null
+  },
+  "errors": []
+}

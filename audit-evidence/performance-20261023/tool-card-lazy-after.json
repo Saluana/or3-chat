@@ -1,0 +1,134 @@
+{
+  "commit": "a996424a965abbf6251071a7a248aa3e56939a04",
+  "dirty": true,
+  "command": "bun run test:e2e:tool-cards",
+  "timestamp": "2026-10-24T06:00:54.126Z",
+  "cases": [
+    {
+      "case": "saved card state survives virtualization and receives persisted updates",
+      "status": "passed",
+      "durationMs": 3450,
+      "mounts": [
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.7
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.6
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.7
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.8
+        }
+      ],
+      "browser": "153.0.8010.12"
+    },
+    {
+      "case": "30-card scroll",
+      "durationMs": 301.84191700000065,
+      "initialMounted": 19,
+      "finalMounted": 25
+    },
+    {
+      "case": "lazy cards mount during scrolling without rerunning their tools",
+      "status": "passed",
+      "durationMs": 1723,
+      "mounts": [
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.4
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.8
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.4
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.6
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.4
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.4
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        }
+      ],
+      "browser": "153.0.8010.12"
+    }
+  ]
+}

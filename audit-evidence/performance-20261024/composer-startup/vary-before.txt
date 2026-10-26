@@ -1,0 +1,29 @@
+
+ RUN  v4.1.12 /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat
+
+x
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |core-node| server/plugins/__tests__/html-compression.test.ts > rendered HTML compression > preserves exact UTF-8 content and cookies while sending a smaller negotiated representation
+AssertionError: expected 'Cookie, Accept-Encoding' to be 'Cookie, Origin, Accept-Encoding' // Object.is equality
+
+Expected: "Cookie, Origin, Accept-Encoding"
+Received: "Cookie, Accept-Encoding"
+
+ ❯ server/plugins/__tests__/html-compression.test.ts:41:46
+     39|         expect(response.headers.get('content-encoding')).toBe('gzip');
+     40|         expect(response.headers.get('content-length')).toBe(String(byt…
+     41|         expect(response.headers.get('vary')).toBe('Cookie, Origin, Acc…
+       |                                              ^
+     42|         expect(response.headers.get('etag')).toBe('W/"page"');
+     43|         expect(response.headers.get('set-cookie')).toBe('test-preferen…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (14)
+   Start at  21:19:12
+   Duration  169ms (transform 26ms, setup 57ms, import 31ms, tests 10ms, environment 0ms)
+

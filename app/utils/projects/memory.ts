@@ -1,6 +1,6 @@
 import Dexie from 'dexie';
 import { useRuntimeConfig } from '#imports';
-import { captureProjectOperation } from './context';
+import { captureProjectOperation } from './operation';
 import {
     readProjectPolicy,
     resolveChatProject,

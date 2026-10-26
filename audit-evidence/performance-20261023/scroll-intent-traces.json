@@ -1,0 +1,1202 @@
+{
+  "date": "2026-10-24",
+  "commit": "a996424a965abbf6251071a7a248aa3e56939a04",
+  "dirty": true,
+  "note": "Instrumented development diagnostics, not a timing comparison. After offset is sampled when the card-state assertion passes; explicit-top control follows. Full traces remain in /tmp.",
+  "traces": [
+    {
+      "phase": "before",
+      "browser": "153.0.8010.12",
+      "options": {
+        "traceInternals": true
+      },
+      "assertionErrors": [
+        "Error: expect(locator).toBeDisabled() failed\n\nLocator: locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true })\nExpected: disabled\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"toBeDisabled\" locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true }) with timeout 5000ms\n  - waiting for locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true })\n"
+      ],
+      "snapshots": [
+        {
+          "phase": "returned",
+          "now": 9318.399999856949,
+          "root": {
+            "top": 40,
+            "bottom": 720,
+            "height": 680,
+            "scrollTop": 6291,
+            "scrollHeight": 6971
+          },
+          "mounts": 20
+        },
+        {
+          "phase": "explicit-top",
+          "now": 9842.199999809265,
+          "root": {
+            "top": 40,
+            "bottom": 720,
+            "height": 680,
+            "scrollTop": 0,
+            "scrollHeight": 8304
+          },
+          "mounts": 25,
+          "firstCard": {
+            "id": "scroll-0",
+            "top": 68,
+            "bottom": 397,
+            "height": 329,
+            "pool": false,
+            "mounted": true,
+            "frame": false,
+            "saved": true
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "now": 4200.799999952316,
+          "type": "wheel",
+          "deltaY": 20000,
+          "top": 7853
+        },
+        {
+          "now": 4201.199999809265,
+          "type": "scroll",
+          "top": 7853
+        },
+        {
+          "now": 4201.199999809265,
+          "type": "scrollend",
+          "top": 7853
+        },
+        {
+          "now": 4265.199999809265,
+          "type": "scroll",
+          "top": 6823
+        },
+        {
+          "now": 4313.799999952316,
+          "type": "wheel",
+          "deltaY": -20000,
+          "top": 6289
+        },
+        {
+          "now": 4314.099999904633,
+          "type": "scroll",
+          "top": 6289
+        },
+        {
+          "now": 4314.099999904633,
+          "type": "scrollend",
+          "top": 6289
+        },
+        {
+          "now": 4342.899999856949,
+          "type": "scroll",
+          "top": 801
+        },
+        {
+          "now": 4342.899999856949,
+          "type": "scrollend",
+          "top": 801
+        },
+        {
+          "now": 4365.199999809265,
+          "type": "scroll",
+          "top": 6823
+        },
+        {
+          "now": 4365.199999809265,
+          "type": "scrollend",
+          "top": 6823
+        },
+        {
+          "now": 4401.799999952316,
+          "type": "scroll",
+          "top": 6291
+        }
+      ],
+      "writes": [
+        {
+          "now": 4264.099999904633,
+          "previous": 6823,
+          "value": 6823,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at U (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:389:21)",
+            "    at lt (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:621:4)",
+            "    at http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:429:74"
+          ]
+        },
+        {
+          "now": 4307.399999856949,
+          "previous": 6823,
+          "value": 6289,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at U (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:389:21)",
+            "    at lt (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:621:4)",
+            "    at http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:429:74"
+          ]
+        },
+        {
+          "now": 4328.599999904633,
+          "previous": 6289,
+          "value": 7090,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at U (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:389:21)",
+            "    at lt (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:621:4)",
+            "    at http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:429:74"
+          ]
+        },
+        {
+          "now": 4364,
+          "previous": 801,
+          "value": 6823,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at U (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:389:21)",
+            "    at lt (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:621:4)",
+            "    at http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:429:74"
+          ]
+        },
+        {
+          "now": 4387.299999952316,
+          "previous": 6291,
+          "value": 6291,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at U (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:389:21)",
+            "    at lt (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:621:4)",
+            "    at http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:429:74"
+          ]
+        },
+        {
+          "now": 4433.5,
+          "previous": 6291,
+          "value": 6291,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at U (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:389:21)",
+            "    at lt (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:621:4)",
+            "    at http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:429:74"
+          ]
+        }
+      ],
+      "internals": [
+        {
+          "now": 4200.899999856949,
+          "stage": "intent",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 7853,
+          "domHeight": 8533,
+          "trackHeight": 8363,
+          "modelHeight": 8363,
+          "atBottom": false
+        },
+        {
+          "now": 4201.199999809265,
+          "stage": "scrollend",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 7853,
+          "top": 7853,
+          "domHeight": 8533,
+          "trackHeight": 8363,
+          "modelHeight": 8363,
+          "atBottom": false
+        },
+        {
+          "now": 4201.199999809265,
+          "stage": "settle",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 7853,
+          "top": 7853,
+          "domHeight": 8533,
+          "trackHeight": 8363,
+          "modelHeight": 8363,
+          "atBottom": false
+        },
+        {
+          "now": 4201.199999809265,
+          "stage": "processScroll",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 7853,
+          "top": 7853,
+          "domHeight": 8533,
+          "trackHeight": 8363,
+          "modelHeight": 8363,
+          "atBottom": false
+        },
+        {
+          "now": 4264.099999904633,
+          "stage": "followCallback",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7853,
+          "cachedTop": 6823,
+          "top": 6823,
+          "domHeight": 7503,
+          "trackHeight": 7333,
+          "modelHeight": 7333,
+          "atBottom": true
+        },
+        {
+          "now": 4264.099999904633,
+          "stage": "write",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7853,
+          "cachedTop": 6823,
+          "top": 6823,
+          "domHeight": 7503,
+          "trackHeight": 7333,
+          "modelHeight": 7333,
+          "atBottom": true,
+          "next": 6823,
+          "writeSource": "bottom"
+        },
+        {
+          "now": 4265.199999809265,
+          "stage": "processScroll",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": "bottom",
+          "target": 6823,
+          "lastHandledTop": 7853,
+          "cachedTop": 6823,
+          "top": 6823,
+          "domHeight": 7503,
+          "trackHeight": 7333,
+          "modelHeight": 7333,
+          "atBottom": true
+        },
+        {
+          "now": 4307.399999856949,
+          "stage": "followCallback",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6823,
+          "cachedTop": 6823,
+          "top": 6823,
+          "domHeight": 7628,
+          "trackHeight": 6799,
+          "modelHeight": 6799,
+          "atBottom": true
+        },
+        {
+          "now": 4307.399999856949,
+          "stage": "write",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6823,
+          "cachedTop": 6823,
+          "top": 6823,
+          "domHeight": 7628,
+          "trackHeight": 6799,
+          "modelHeight": 6799,
+          "atBottom": true,
+          "next": 6289,
+          "writeSource": "bottom"
+        },
+        {
+          "now": 4313.799999952316,
+          "stage": "intent",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": "bottom",
+          "target": 6289,
+          "lastHandledTop": 6823,
+          "cachedTop": 6289,
+          "top": 6289,
+          "domHeight": 7895,
+          "trackHeight": 6799,
+          "modelHeight": 6799,
+          "atBottom": true
+        },
+        {
+          "now": 4314.099999904633,
+          "stage": "scrollend",
+          "mode": "followingBottom",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6823,
+          "cachedTop": 6289,
+          "top": 6289,
+          "domHeight": 7895,
+          "trackHeight": 6799,
+          "modelHeight": 6799,
+          "atBottom": true
+        },
+        {
+          "now": 4314.099999904633,
+          "stage": "settle",
+          "mode": "followingBottom",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6823,
+          "cachedTop": 6289,
+          "top": 6289,
+          "domHeight": 7895,
+          "trackHeight": 6799,
+          "modelHeight": 6799,
+          "atBottom": true
+        },
+        {
+          "now": 4314.099999904633,
+          "stage": "processScroll",
+          "mode": "followingBottom",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6823,
+          "cachedTop": 6289,
+          "top": 6289,
+          "domHeight": 7895,
+          "trackHeight": 6799,
+          "modelHeight": 6799,
+          "atBottom": true
+        },
+        {
+          "now": 4328.599999904633,
+          "stage": "followCallback",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6289,
+          "cachedTop": 6289,
+          "top": 6289,
+          "domHeight": 7770,
+          "trackHeight": 7600,
+          "modelHeight": 7600,
+          "atBottom": false
+        },
+        {
+          "now": 4328.599999904633,
+          "stage": "write",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6289,
+          "cachedTop": 6289,
+          "top": 6289,
+          "domHeight": 7770,
+          "trackHeight": 7600,
+          "modelHeight": 7600,
+          "atBottom": false,
+          "next": 7090,
+          "writeSource": "bottom"
+        },
+        {
+          "now": 4342.899999856949,
+          "stage": "scrollend",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": "bottom",
+          "target": 7090,
+          "lastHandledTop": 6289,
+          "cachedTop": 801,
+          "top": 801,
+          "domHeight": 7770,
+          "trackHeight": 7600,
+          "modelHeight": 7600,
+          "atBottom": false
+        },
+        {
+          "now": 4342.899999856949,
+          "stage": "settle",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": "bottom",
+          "target": 7090,
+          "lastHandledTop": 6289,
+          "cachedTop": 801,
+          "top": 801,
+          "domHeight": 7770,
+          "trackHeight": 7600,
+          "modelHeight": 7600,
+          "atBottom": false
+        },
+        {
+          "now": 4342.899999856949,
+          "stage": "processScroll",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": "bottom",
+          "target": 7090,
+          "lastHandledTop": 6289,
+          "cachedTop": 801,
+          "top": 801,
+          "domHeight": 7770,
+          "trackHeight": 7600,
+          "modelHeight": 7600,
+          "atBottom": false
+        },
+        {
+          "now": 4364,
+          "stage": "followCallback",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 801,
+          "cachedTop": 801,
+          "top": 801,
+          "domHeight": 7503,
+          "trackHeight": 7333,
+          "modelHeight": 7333,
+          "atBottom": false
+        },
+        {
+          "now": 4364,
+          "stage": "write",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 801,
+          "cachedTop": 801,
+          "top": 801,
+          "domHeight": 7503,
+          "trackHeight": 7333,
+          "modelHeight": 7333,
+          "atBottom": false,
+          "next": 6823,
+          "writeSource": "bottom"
+        },
+        {
+          "now": 4365.199999809265,
+          "stage": "scrollend",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": "bottom",
+          "target": 6823,
+          "lastHandledTop": 801,
+          "cachedTop": 6823,
+          "top": 6823,
+          "domHeight": 7503,
+          "trackHeight": 7333,
+          "modelHeight": 7333,
+          "atBottom": false
+        },
+        {
+          "now": 4365.199999809265,
+          "stage": "settle",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": "bottom",
+          "target": 6823,
+          "lastHandledTop": 801,
+          "cachedTop": 6823,
+          "top": 6823,
+          "domHeight": 7503,
+          "trackHeight": 7333,
+          "modelHeight": 7333,
+          "atBottom": false
+        },
+        {
+          "now": 4365.199999809265,
+          "stage": "processScroll",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": "bottom",
+          "target": 6823,
+          "lastHandledTop": 801,
+          "cachedTop": 6823,
+          "top": 6823,
+          "domHeight": 7503,
+          "trackHeight": 7333,
+          "modelHeight": 7333,
+          "atBottom": false
+        },
+        {
+          "now": 4383.599999904633,
+          "stage": "followCallback",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6823,
+          "cachedTop": 6414,
+          "top": 6291,
+          "domHeight": 6971,
+          "trackHeight": 6801,
+          "modelHeight": 6801,
+          "atBottom": true
+        },
+        {
+          "now": 4387.299999952316,
+          "stage": "write",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6823,
+          "cachedTop": 6414,
+          "top": 6291,
+          "domHeight": 6971,
+          "trackHeight": 6801,
+          "modelHeight": 6801,
+          "atBottom": true,
+          "next": 6291,
+          "writeSource": "bottom"
+        },
+        {
+          "now": 4401.799999952316,
+          "stage": "processScroll",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": "bottom",
+          "target": 6291,
+          "lastHandledTop": 6823,
+          "cachedTop": 6291,
+          "top": 6291,
+          "domHeight": 7096,
+          "trackHeight": 6801,
+          "modelHeight": 6801,
+          "atBottom": true
+        },
+        {
+          "now": 4433.5,
+          "stage": "followCallback",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6291,
+          "cachedTop": 6291,
+          "top": 6291,
+          "domHeight": 6971,
+          "trackHeight": 6801,
+          "modelHeight": 6801,
+          "atBottom": true
+        },
+        {
+          "now": 4433.5,
+          "stage": "write",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6291,
+          "cachedTop": 6291,
+          "top": 6291,
+          "domHeight": 6971,
+          "trackHeight": 6801,
+          "modelHeight": 6801,
+          "atBottom": true,
+          "next": 6291,
+          "writeSource": "bottom"
+        },
+        {
+          "now": 4449.899999856949,
+          "stage": "processScroll",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": "bottom",
+          "target": 6291,
+          "lastHandledTop": 6291,
+          "cachedTop": 6291,
+          "top": 6291,
+          "domHeight": 6971,
+          "trackHeight": 6801,
+          "modelHeight": 6801,
+          "atBottom": true
+        }
+      ]
+    },
+    {
+      "phase": "after",
+      "browser": "153.0.8010.12",
+      "options": {
+        "traceInternals": true
+      },
+      "assertionErrors": [],
+      "snapshots": [
+        {
+          "phase": "returned",
+          "now": 3005.2000000476837,
+          "root": {
+            "top": 40,
+            "bottom": 720,
+            "height": 680,
+            "scrollTop": 1335,
+            "scrollHeight": 9906
+          },
+          "mounts": 44,
+          "firstCard": {
+            "id": "scroll-0",
+            "top": -1267,
+            "bottom": -938,
+            "height": 329,
+            "pool": false,
+            "mounted": true,
+            "frame": false,
+            "saved": true
+          }
+        },
+        {
+          "phase": "explicit-top",
+          "now": 3520,
+          "root": {
+            "top": 40,
+            "bottom": 720,
+            "height": 680,
+            "scrollTop": 0,
+            "scrollHeight": 9906
+          },
+          "mounts": 44,
+          "firstCard": {
+            "id": "scroll-0",
+            "top": 68,
+            "bottom": 397,
+            "height": 329,
+            "pool": false,
+            "mounted": true,
+            "frame": false,
+            "saved": true
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "now": 2708.100000143051,
+          "type": "wheel",
+          "deltaY": 20000,
+          "top": 7319
+        },
+        {
+          "now": 2708.300000190735,
+          "type": "scroll",
+          "top": 7319
+        },
+        {
+          "now": 2708.300000190735,
+          "type": "scrollend",
+          "top": 7319
+        },
+        {
+          "now": 2810.100000143051,
+          "type": "scroll",
+          "top": 7090
+        },
+        {
+          "now": 2846,
+          "type": "wheel",
+          "deltaY": -20000,
+          "top": 1335
+        },
+        {
+          "now": 2846.2000000476837,
+          "type": "scroll",
+          "top": 1335
+        },
+        {
+          "now": 2846.2000000476837,
+          "type": "scrollend",
+          "top": 1335
+        },
+        {
+          "now": 2919.5,
+          "type": "scroll",
+          "top": 536
+        },
+        {
+          "now": 2919.5,
+          "type": "scrollend",
+          "top": 536
+        },
+        {
+          "now": 2974.800000190735,
+          "type": "scroll",
+          "top": 1337
+        },
+        {
+          "now": 2974.800000190735,
+          "type": "scrollend",
+          "top": 1337
+        },
+        {
+          "now": 2993.7000000476837,
+          "type": "scroll",
+          "top": 1335
+        },
+        {
+          "now": 2993.7000000476837,
+          "type": "scrollend",
+          "top": 1335
+        }
+      ],
+      "writes": [
+        {
+          "now": 2777.100000143051,
+          "previous": 7090,
+          "value": 7090,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at U (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:389:21)",
+            "    at lt (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:625:4)",
+            "    at http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:429:74"
+          ]
+        },
+        {
+          "now": 2826.9000000953674,
+          "previous": 7090,
+          "value": 8425,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at U (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:389:21)",
+            "    at lt (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:625:4)",
+            "    at http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:429:74"
+          ]
+        },
+        {
+          "now": 2903.2000000476837,
+          "previous": 1335,
+          "value": 536,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at U (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:389:21)",
+            "    at Ne (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:407:30)",
+            "    at Ie (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:430:9)"
+          ]
+        },
+        {
+          "now": 2963.9000000953674,
+          "previous": 536,
+          "value": 1337,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at U (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:389:21)",
+            "    at Ne (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:407:30)",
+            "    at Ie (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:430:9)"
+          ]
+        },
+        {
+          "now": 2988.600000143051,
+          "previous": 1337,
+          "value": 1335,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at U (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:389:21)",
+            "    at Ne (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:407:30)",
+            "    at Ie (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:430:9)"
+          ]
+        }
+      ],
+      "internals": [
+        {
+          "now": 2708.2000000476837,
+          "stage": "intent",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 7319,
+          "domHeight": 7999,
+          "trackHeight": 7829,
+          "modelHeight": 7829,
+          "atBottom": false
+        },
+        {
+          "now": 2708.300000190735,
+          "stage": "scrollend",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 7319,
+          "top": 7319,
+          "domHeight": 7999,
+          "trackHeight": 7829,
+          "modelHeight": 7829,
+          "atBottom": false
+        },
+        {
+          "now": 2708.300000190735,
+          "stage": "settle",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 7319,
+          "top": 7319,
+          "domHeight": 7999,
+          "trackHeight": 7829,
+          "modelHeight": 7829,
+          "atBottom": false
+        },
+        {
+          "now": 2708.300000190735,
+          "stage": "processScroll",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 7319,
+          "top": 7319,
+          "domHeight": 7999,
+          "trackHeight": 7829,
+          "modelHeight": 7829,
+          "atBottom": false
+        },
+        {
+          "now": 2777,
+          "stage": "followCallback",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7319,
+          "cachedTop": 7090,
+          "top": 7090,
+          "domHeight": 7770,
+          "trackHeight": 7600,
+          "modelHeight": 7600,
+          "atBottom": true
+        },
+        {
+          "now": 2777,
+          "stage": "write",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7319,
+          "cachedTop": 7090,
+          "top": 7090,
+          "domHeight": 7770,
+          "trackHeight": 7600,
+          "modelHeight": 7600,
+          "atBottom": true,
+          "next": 7090,
+          "writeSource": "bottom"
+        },
+        {
+          "now": 2810.2000000476837,
+          "stage": "processScroll",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": "bottom",
+          "target": 7090,
+          "lastHandledTop": 7319,
+          "cachedTop": 7090,
+          "top": 7090,
+          "domHeight": 9230,
+          "trackHeight": 7600,
+          "modelHeight": 7600,
+          "atBottom": true
+        },
+        {
+          "now": 2822.4000000953674,
+          "stage": "followCallback",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7090,
+          "cachedTop": 7090,
+          "top": 7090,
+          "domHeight": 9105,
+          "trackHeight": 8935,
+          "modelHeight": 8935,
+          "atBottom": false
+        },
+        {
+          "now": 2826.9000000953674,
+          "stage": "write",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7090,
+          "cachedTop": 7090,
+          "top": 7090,
+          "domHeight": 9105,
+          "trackHeight": 8935,
+          "modelHeight": 8935,
+          "atBottom": false,
+          "next": 8425,
+          "writeSource": "bottom"
+        },
+        {
+          "now": 2846,
+          "stage": "intent",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": "bottom",
+          "target": 8425,
+          "lastHandledTop": 7090,
+          "cachedTop": 8425,
+          "top": 1335,
+          "domHeight": 9230,
+          "trackHeight": 8935,
+          "modelHeight": 8935,
+          "atBottom": false
+        },
+        {
+          "now": 2846.2000000476837,
+          "stage": "scrollend",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7090,
+          "cachedTop": 1335,
+          "top": 1335,
+          "domHeight": 9230,
+          "trackHeight": 8935,
+          "modelHeight": 8935,
+          "atBottom": false
+        },
+        {
+          "now": 2846.2000000476837,
+          "stage": "settle",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7090,
+          "cachedTop": 1335,
+          "top": 1335,
+          "domHeight": 9230,
+          "trackHeight": 8935,
+          "modelHeight": 8935,
+          "atBottom": false
+        },
+        {
+          "now": 2846.2000000476837,
+          "stage": "processScroll",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7090,
+          "cachedTop": 1335,
+          "top": 1335,
+          "domHeight": 9230,
+          "trackHeight": 8935,
+          "modelHeight": 8935,
+          "atBottom": false
+        },
+        {
+          "now": 2903.100000143051,
+          "stage": "write",
+          "mode": "compensatingLayout",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 1335,
+          "cachedTop": 1335,
+          "top": 1335,
+          "domHeight": 8347,
+          "trackHeight": 8136,
+          "modelHeight": 8136,
+          "atBottom": false,
+          "next": 536,
+          "writeSource": "compensation"
+        },
+        {
+          "now": 2919.5,
+          "stage": "scrollend",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": "compensation",
+          "target": 536,
+          "lastHandledTop": 1335,
+          "cachedTop": 536,
+          "top": 536,
+          "domHeight": 8627,
+          "trackHeight": 8136,
+          "modelHeight": 8136,
+          "atBottom": false
+        },
+        {
+          "now": 2919.5,
+          "stage": "settle",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": "compensation",
+          "target": 536,
+          "lastHandledTop": 1335,
+          "cachedTop": 536,
+          "top": 536,
+          "domHeight": 8627,
+          "trackHeight": 8136,
+          "modelHeight": 8136,
+          "atBottom": false
+        },
+        {
+          "now": 2919.5,
+          "stage": "processScroll",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": "compensation",
+          "target": 536,
+          "lastHandledTop": 1335,
+          "cachedTop": 536,
+          "top": 536,
+          "domHeight": 8627,
+          "trackHeight": 8136,
+          "modelHeight": 8136,
+          "atBottom": false
+        },
+        {
+          "now": 2963.9000000953674,
+          "stage": "write",
+          "mode": "compensatingLayout",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 536,
+          "cachedTop": 536,
+          "top": 536,
+          "domHeight": 10175,
+          "trackHeight": 10005,
+          "modelHeight": 10005,
+          "atBottom": false,
+          "next": 1337,
+          "writeSource": "compensation"
+        },
+        {
+          "now": 2974.800000190735,
+          "stage": "scrollend",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": "compensation",
+          "target": 1337,
+          "lastHandledTop": 536,
+          "cachedTop": 1337,
+          "top": 1337,
+          "domHeight": 10175,
+          "trackHeight": 10005,
+          "modelHeight": 10005,
+          "atBottom": false
+        },
+        {
+          "now": 2974.800000190735,
+          "stage": "settle",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": "compensation",
+          "target": 1337,
+          "lastHandledTop": 536,
+          "cachedTop": 1337,
+          "top": 1337,
+          "domHeight": 10175,
+          "trackHeight": 10005,
+          "modelHeight": 10005,
+          "atBottom": false
+        },
+        {
+          "now": 2974.800000190735,
+          "stage": "processScroll",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": "compensation",
+          "target": 1337,
+          "lastHandledTop": 536,
+          "cachedTop": 1337,
+          "top": 1337,
+          "domHeight": 10175,
+          "trackHeight": 10005,
+          "modelHeight": 10005,
+          "atBottom": false
+        },
+        {
+          "now": 2988.600000143051,
+          "stage": "write",
+          "mode": "compensatingLayout",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 1337,
+          "cachedTop": 1337,
+          "top": 1337,
+          "domHeight": 10173,
+          "trackHeight": 10003,
+          "modelHeight": 10003,
+          "atBottom": false,
+          "next": 1335,
+          "writeSource": "compensation"
+        },
+        {
+          "now": 2993.7000000476837,
+          "stage": "scrollend",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": "compensation",
+          "target": 1335,
+          "lastHandledTop": 1337,
+          "cachedTop": 1335,
+          "top": 1335,
+          "domHeight": 10173,
+          "trackHeight": 10003,
+          "modelHeight": 10003,
+          "atBottom": false
+        },
+        {
+          "now": 2993.7000000476837,
+          "stage": "settle",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": "compensation",
+          "target": 1335,
+          "lastHandledTop": 1337,
+          "cachedTop": 1335,
+          "top": 1335,
+          "domHeight": 10173,
+          "trackHeight": 10003,
+          "modelHeight": 10003,
+          "atBottom": false
+        },
+        {
+          "now": 2993.7000000476837,
+          "stage": "processScroll",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": "compensation",
+          "target": 1335,
+          "lastHandledTop": 1337,
+          "cachedTop": 1335,
+          "top": 1335,
+          "domHeight": 10173,
+          "trackHeight": 10003,
+          "modelHeight": 10003,
+          "atBottom": false
+        }
+      ]
+    }
+  ]
+}

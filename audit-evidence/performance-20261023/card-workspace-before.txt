@@ -1,0 +1,93 @@
+$ vitest run --project=core-node --project=core-app --project=app-integration --reporter=dot --silent=passed-only --hideSkippedTests "--project=core-app" app/db/__tests__/messages-transactions.test.ts -t "retires a mounted card"
+
+ RUN  v4.1.12 /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat
+
+--------x----------------
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |core-app| app/db/__tests__/messages-transactions.test.ts > message transaction and ordering contracts > retires a mounted card before unmount after switching to other workspace
+AssertionError: the departing card must abort before Vue unmount: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ app/db/__tests__/messages-transactions.test.ts:399:103
+    397|             call.value = { ...call.value, args: '{"step":2}' };
+    398|             await vi.waitFor(() => expect(cards[1]!.args).toEqual({ st…
+    399|             expect.soft(cards[0]!.signal.aborted, 'the departing card …
+       |                                                                                                       ^
+    400|             expect.soft(aborts).toBe(1);
+    401|             expect.soft(cards[0]!.args, 'retired cards must stop parsi…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |core-app| app/db/__tests__/messages-transactions.test.ts > message transaction and ordering contracts > retires a mounted card before unmount after switching to other workspace
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ app/db/__tests__/messages-transactions.test.ts:400:33
+    398|             await vi.waitFor(() => expect(cards[1]!.args).toEqual({ st…
+    399|             expect.soft(cards[0]!.signal.aborted, 'the departing card …
+    400|             expect.soft(aborts).toBe(1);
+       |                                 ^
+    401|             expect.soft(cards[0]!.args, 'retired cards must stop parsi…
+    402|             expect.soft(old.text(), 'the retired host must not receive…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |core-app| app/db/__tests__/messages-transactions.test.ts > message transaction and ordering contracts > retires a mounted card before unmount after switching to other workspace
+AssertionError: retired cards must stop parsing later call snapshots: expected { step: 2 } to deeply equal { step: 1 }
+
+- Expected
++ Received
+
+  {
+-   "step": 1,
++   "step": 2,
+  }
+
+ ❯ app/db/__tests__/messages-transactions.test.ts:401:97
+    399|             expect.soft(cards[0]!.signal.aborted, 'the departing card …
+    400|             expect.soft(aborts).toBe(1);
+    401|             expect.soft(cards[0]!.args, 'retired cards must stop parsi…
+       |                                                                                                 ^
+    402|             expect.soft(old.text(), 'the retired host must not receive…
+    403|             expect.soft(reads.mock.calls.length, 'only the current hos…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |core-app| app/db/__tests__/messages-transactions.test.ts > message transaction and ordering contracts > retires a mounted card before unmount after switching to other workspace
+AssertionError: only the current host may read the returning workspace: expected 3 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 3
+
+ ❯ app/db/__tests__/messages-transactions.test.ts:403:108
+    401|             expect.soft(cards[0]!.args, 'retired cards must stop parsi…
+    402|             expect.soft(old.text(), 'the retired host must not receive…
+    403|             expect.soft(reads.mock.calls.length, 'only the current hos…
+       |                                                                                                            ^
+    404|             expect((await cards[0]!.setState('stale')).ok).toBe(false);
+    405|             expect(cards[1]!.signal.aborted).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 24 skipped (26)
+   Start at  01:04:16
+   Duration  1.27s (transform 424ms, setup 50ms, import 526ms, tests 421ms, environment 207ms)
+
+error: script "test" exited with code 1

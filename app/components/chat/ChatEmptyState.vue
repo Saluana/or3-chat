@@ -9,9 +9,10 @@ import { EMPTY_CHAT_ACTION_IDS } from '~/theme/_shared/chat-empty-state';
 import type { IconToken } from '~/config/icon-tokens';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
-import ChatEmptyStateMedia from './ChatEmptyStateMedia.vue';
+import ChatEmptyStateColorMedia from './ChatEmptyStateColorMedia.vue';
 const props = defineProps<{
     appearance: ResolvedChatEmptyState;
+    mediaVariants?: { light: ResolvedChatEmptyState | null; dark: ResolvedChatEmptyState | null };
     actions: readonly EmptyChatAction[];
 }>();
 const emit = defineEmits<{ action: [id: EmptyChatActionId] }>();
@@ -56,18 +57,20 @@ const hasArtwork = computed(() =>
         :data-layout="appearance.layout"
     >
         <div v-if="hasArtwork" class="chat-empty-artwork">
-            <ClientOnly>
-                <ChatEmptyStateMedia
-                    v-if="appearance.hero"
-                    v-bind="appearance.hero"
-                    class="chat-empty-hero"
-                />
-                <ChatEmptyStateMedia
-                    v-if="appearance.accent"
-                    v-bind="appearance.accent"
-                    class="chat-empty-accent"
-                />
-            </ClientOnly>
+            <ChatEmptyStateColorMedia
+                v-if="appearance.hero"
+                :fallback="appearance.hero"
+                :light="mediaVariants?.light?.hero"
+                :dark="mediaVariants?.dark?.hero"
+                class="chat-empty-hero"
+            />
+            <ChatEmptyStateColorMedia
+                v-if="appearance.accent"
+                :fallback="appearance.accent"
+                :light="mediaVariants?.light?.accent"
+                :dark="mediaVariants?.dark?.accent"
+                class="chat-empty-accent"
+            />
         </div>
         <h1 v-if="appearance.heading" class="chat-empty-heading">
             {{ appearance.heading }}

@@ -23,6 +23,7 @@ import { normalizeError, presentError, parseRetryAfter } from '~~/shared/errors'
  */
 import type { ObjectStorageProvider, PresignedUrlResult } from '../types';
 import { FILE_KIND_CAPABILITY } from '~~/shared/files/file-capability';
+import { withStorageDeadline } from '../storage-request';
 
 /**
  * Purpose:
@@ -41,25 +42,29 @@ export interface GatewayStorageProviderConfig {
 async function requestJson<T>(
     path: string,
     body: Record<string, unknown>,
-    baseUrl: string
+    baseUrl: string,
+    signal?: AbortSignal,
 ): Promise<T> {
-    const res = await fetch(`${baseUrl}${path}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-            'Content-Type': 'application/json',
-            'x-or3-cloud-intent': 'mutation',
-        },
-        body: JSON.stringify(body),
-    });
+    return withStorageDeadline(async requestSignal => {
+        const res = await fetch(`${baseUrl}${path}`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-or3-cloud-intent': 'mutation',
+            },
+            body: JSON.stringify(body),
+            signal: requestSignal,
+        });
 
-    if (!res.ok) {
-        const metadata = normalizeError({ status: res.status,
-            retryAfterMs: parseRetryAfter(res.headers.get('retry-after')) }, { source: 'storage' });
-        throw Object.assign(new Error(presentError(metadata).message), metadata);
-    }
+        if (!res.ok) {
+            const metadata = normalizeError({ status: res.status,
+                retryAfterMs: parseRetryAfter(res.headers.get('retry-after')) }, { source: 'storage' });
+            throw Object.assign(new Error(presentError(metadata).message), metadata);
+        }
 
-    return (await res.json()) as T;
+        return (await res.json()) as T;
+    }, signal);
 }
 
 /**
@@ -107,7 +112,7 @@ export function createGatewayStorageProvider(
                 expires_in_ms: input.expiresInMs,
                 disposition: input.disposition,
                 file_kind_capability: FILE_KIND_CAPABILITY,
-            }, baseUrl);
+            }, baseUrl, input.signal);
 
             return {
                 url: result.url,
@@ -136,7 +141,7 @@ export function createGatewayStorageProvider(
                 expires_in_ms: input.expiresInMs,
                 disposition: input.disposition,
                 file_kind_capability: FILE_KIND_CAPABILITY,
-            }, baseUrl);
+            }, baseUrl, input.signal);
 
             return {
                 url: result.url,
@@ -163,7 +168,7 @@ export function createGatewayStorageProvider(
                 height: input.meta.height,
                 page_count: input.meta.pageCount,
                 file_kind_capability: FILE_KIND_CAPABILITY,
-            }, baseUrl);
+            }, baseUrl, input.signal);
         },
 
         async deleteObject(input): Promise<void> {
@@ -171,7 +176,7 @@ export function createGatewayStorageProvider(
                 workspace_id: input.workspaceId,
                 hash: input.hash,
                 storage_id: input.storageId,
-            }, baseUrl);
+            }, baseUrl, input.signal);
         },
     };
 }

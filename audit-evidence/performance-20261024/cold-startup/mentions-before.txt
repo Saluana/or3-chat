@@ -1,0 +1,40 @@
+
+ RUN  v4.1.12 <checkout>
+
+·x
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |core-app| app/plugins/ChatMentions/__tests__/useChatMentions.init.test.ts > mentions index initialization > refreshes a warm mention index after sync.pull:action:applied without local CRUD hooks
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      Object {
+        "snippet": "string",
+        "source": "string",
+        "title": "string",
+      },
+    ]
+
+
+Number of calls: 1
+
+ ❯ app/plugins/ChatMentions/__tests__/useChatMentions.init.test.ts:81:40
+     79|             // Editor setup must finish without scanning the workspace…
+     80|             // the search engine. The first actual suggestion request …
+     81|             expect(mocks.createDb).not.toHaveBeenCalled();
+       |                                        ^
+     82|             const extensions = await useHooks().applyFilters('ui.chat.…
+     83|             const mention = (extensions as Array<{ name: string; optio…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (6)
+   Start at  19:40:33
+   Duration  734ms (transform 206ms, setup 60ms, import 144ms, tests 214ms, environment 244ms)

@@ -1,0 +1,86 @@
+
+Running 10 tests using 1 worker
+
+(node:91201) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/10] [chromium] › tests/e2e/tool-cards.spec.ts:114:1 › quiz executes inline, sends an attributed answer, and persists the locked state across reload
+[2/10] [chromium] › tests/e2e/tool-cards.spec.ts:196:1 › saved card state survives virtualization and receives persisted updates
+  1) [chromium] › tests/e2e/tool-cards.spec.ts:196:1 › saved card state survives virtualization and receives persisted updates
+
+    Error: expect(locator).toBeDisabled() failed
+
+    Locator: locator('[data-msg-id="scroll-0"]').first().getByRole('button', { name: 'A', exact: true })
+    Expected: disabled
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeDisabled" locator('[data-msg-id="scroll-0"]').first().getByRole('button', { name: 'A', exact: true }) with timeout 5000ms
+      - waiting for locator('[data-msg-id="scroll-0"]').first().getByRole('button', { name: 'A', exact: true })
+
+
+      209 |   await expect(
+      210 |     card.getByRole("button", { name: "A", exact: true }),
+    > 211 |   ).toBeDisabled();
+          |     ^
+      212 |   await page.getByRole("button", { name: "Reset saved quiz" }).click();
+      213 |   await expect(
+      214 |     card.getByRole("button", { name: "A", exact: true }),
+        at /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/tool-cards.spec.ts:211:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../tmp/or3-card-browser-artifacts/tool-cards-saved-card-stat-7abf0--receives-persisted-updates-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../tmp/or3-card-browser-artifacts/tool-cards-saved-card-stat-7abf0--receives-persisted-updates-chromium/error-context.md
+
+    Error Context: ../../../../../../tmp/or3-card-browser-artifacts/tool-cards-saved-card-stat-7abf0--receives-persisted-updates-chromium/error-context.md
+
+
+(node:91366) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[3/10] [chromium] › tests/e2e/tool-cards.spec.ts:218:1 › card saves stay ordered across panes while preparation is delayed
+[4/10] [chromium] › tests/e2e/tool-cards.spec.ts:243:3 › card save completion preserves remote persisted state
+[5/10] [chromium] › tests/e2e/tool-cards.spec.ts:243:3 › card save completion preserves normalized persisted state
+[6/10] [chromium] › tests/e2e/tool-cards.spec.ts:321:1 › always cards receive persisted status updates
+[7/10] [chromium] › tests/e2e/tool-cards.spec.ts:331:1 › trusted Vue card uses the SDK adapter and is removed on activation teardown
+[8/10] [chromium] › tests/e2e/tool-cards.spec.ts:355:1 › lazy cards mount during scrolling without rerunning their tools
+  2) [chromium] › tests/e2e/tool-cards.spec.ts:355:1 › lazy cards mount during scrolling without rerunning their tools
+
+    Error: expect(received).toBeLessThan(expected)
+
+    Expected: < 30
+    Received:   30
+
+      361 |   ).toBeVisible();
+      362 |   const count = await page.locator("[data-card-receipt]").textContent();
+    > 363 |   expect(JSON.parse(count || "[]").length).toBeLessThan(30);
+          |                                            ^
+      364 |   const scrollStart = performance.now();
+      365 |   await page.locator(".chat-message-list").hover();
+      366 |   await page.mouse.wheel(0, -10000);
+        at /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/tool-cards.spec.ts:363:44
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../tmp/or3-card-browser-artifacts/tool-cards-lazy-cards-moun-f5f92-thout-rerunning-their-tools-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../tmp/or3-card-browser-artifacts/tool-cards-lazy-cards-moun-f5f92-thout-rerunning-their-tools-chromium/error-context.md
+
+    Error Context: ../../../../../../tmp/or3-card-browser-artifacts/tool-cards-lazy-cards-moun-f5f92-thout-rerunning-their-tools-chromium/error-context.md
+
+
+(node:91496) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[9/10] [chromium] › tests/e2e/tool-cards.spec.ts:444:1 › card actions reject invalid state, text and links and enforce send cooldown
+[10/10] [chromium] › tests/e2e/tool-cards.spec.ts:466:1 › busy chat refuses a card send before reserving its cooldown
+  2 failed
+    [chromium] › tests/e2e/tool-cards.spec.ts:196:1 › saved card state survives virtualization and receives persisted updates
+    [chromium] › tests/e2e/tool-cards.spec.ts:355:1 › lazy cards mount during scrolling without rerunning their tools
+  8 passed (24.1s)

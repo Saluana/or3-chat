@@ -103,7 +103,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         {};
 
     const hooks = useHooks();
-    let indexInitialized = false;
+    let indexRequested = false;
     let mentionsModule: MentionsModule | null = null;
     let mentionsModulePromise: Promise<MentionsModule | null> | null = null;
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
@@ -111,6 +111,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     const refreshMentions = () => {
         if (!mentionsModule) return;
         mentionsModule.resetIndex();
+        if (!indexRequested) return;
         clearTimeout(refreshTimer);
         refreshTimer = setTimeout(() => { void mentionsModule?.initMentionsIndex(); }, 120);
     };
@@ -178,7 +179,13 @@ export default defineNuxtPlugin((nuxtApp) => {
             mentionsModule = {
                 Mention: MentionModule.default,
                 initMentionsIndex,
-                searchMentions,
+                async searchMentions(query) {
+                    indexRequested = true;
+                    const origin = getDb();
+                    await initMentionsIndex();
+                    if (origin !== getDb()) return [];
+                    return searchMentions(query);
+                },
                 collectMentions,
                 resolveMention,
                 upsertDocument,
@@ -188,12 +195,6 @@ export default defineNuxtPlugin((nuxtApp) => {
                 resetIndex,
                 createMentionSuggestion,
             };
-
-            // Initialize index once
-            if (!indexInitialized) {
-                await initMentionsIndex();
-                indexInitialized = true;
-            }
 
             return mentionsModule;
         } catch (error) {

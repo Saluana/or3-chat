@@ -11,7 +11,50 @@ function okJson(body: unknown) {
 
 describe('createGatewayStorageProvider', () => {
     afterEach(() => {
+        vi.useRealTimers();
         vi.unstubAllGlobals();
+    });
+
+    // A storage control request is part of the caller's cancellation scope,
+    // including response parsing; hanging gateways must also have a deadline.
+    it.each(['presign-upload', 'presign-download', 'commit', 'delete'] as const)('cancels an in-flight %s control operation', async operation => {
+        let requestSignal: AbortSignal | undefined;
+        vi.stubGlobal('fetch', vi.fn((_url: string, init: RequestInit) => {
+            requestSignal = init.signal ?? undefined;
+            return new Promise((_resolve, reject) => requestSignal?.addEventListener('abort',
+                () => reject(requestSignal?.reason), { once: true }));
+        }));
+        const provider = createGatewayStorageProvider();
+        const controller = new AbortController();
+        const input = { workspaceId: 'ws', hash: 'sha256:abc', mimeType: 'text/plain', sizeBytes: 3,
+            storageId: 'object', meta: { name: 'a.txt', mimeType: 'text/plain', sizeBytes: 3, kind: 'file' as const },
+            signal: controller.signal };
+        const result = (operation === 'presign-upload' ? provider.getPresignedUploadUrl(input)
+            : operation === 'presign-download' ? provider.getPresignedDownloadUrl(input)
+            : operation === 'commit' ? provider.commitUpload!(input) : provider.deleteObject!(input))
+            .then(() => 'resolved', () => 'aborted');
+        controller.abort();
+        expect(await Promise.race([result, new Promise(resolve => setTimeout(() => resolve('hung'), 100))])).toBe('aborted');
+        expect(requestSignal?.aborted).toBe(true);
+    });
+
+    it.each(['headers', 'body'] as const)('bounds an uncooperative gateway %s wait without caller cancellation', async phase => {
+        vi.useFakeTimers();
+        let requestSignal: AbortSignal | undefined;
+        const stalled = new Promise<never>(() => {});
+        const readBody = vi.fn(() => stalled);
+        vi.stubGlobal('fetch', vi.fn((_url: string, init: RequestInit) => {
+            requestSignal = init.signal ?? undefined;
+            return phase === 'headers' ? stalled : Promise.resolve({ ok: true, json: readBody });
+        }));
+        const result = createGatewayStorageProvider().getPresignedUploadUrl({ workspaceId: 'ws',
+            hash: 'sha256:abc', mimeType: 'text/plain', sizeBytes: 3 }).then(() => 'resolved', () => 'aborted');
+        let outcome = 'pending';
+        void result.then(value => { outcome = value; });
+        await vi.advanceTimersByTimeAsync(60_001);
+        expect(requestSignal?.aborted).toBe(true);
+        expect(outcome).toBe('aborted');
+        if (phase === 'body') expect(readBody).toHaveBeenCalledOnce();
     });
 
     it('joins base URL and maps upload/download/commit payloads', async () => {

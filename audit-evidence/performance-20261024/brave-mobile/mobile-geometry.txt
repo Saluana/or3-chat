@@ -1,0 +1,14 @@
+
+Running 6 tests using 1 worker
+
+(node:74852) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/6] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › blank light mobile startup keeps the composer and navigation stable while JavaScript loads
+[2/6] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › blank dark mobile startup keeps the composer and navigation stable while JavaScript loads
+[3/6] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › retro light mobile startup keeps the composer and navigation stable while JavaScript loads
+[4/6] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › retro dark mobile startup keeps the composer and navigation stable while JavaScript loads
+[5/6] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › cyberpunk light mobile startup keeps the composer and navigation stable while JavaScript loads
+[6/6] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › cyberpunk dark mobile startup keeps the composer and navigation stable while JavaScript loads
+  6 passed (5.4s)

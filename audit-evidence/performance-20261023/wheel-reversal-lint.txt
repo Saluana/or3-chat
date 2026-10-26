@@ -1,0 +1,2 @@
+$ eslint --no-warn-ignored --quiet "tests/e2e/or3-scroll-canary.spec.ts" "tests/e2e/tool-cards.spec.ts" "audit-evidence/performance-20261023/tool-card-scroll-probe.mjs"
+$ eslint --no-warn-ignored --quiet "audit-evidence/performance-20261023/scroll-epoch-follow-control.mjs"

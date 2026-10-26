@@ -1,0 +1,121 @@
+{
+  "browser": "153.0.8010.12",
+  "harness": "development",
+  "errors": [],
+  "updates": {
+    "ChatToolCardsEnd": 120
+  },
+  "notifications": [
+    {
+      "status": "complete",
+      "args": {
+        "question": "Capital of France?",
+        "choices": [
+          "Paris",
+          "Rome"
+        ]
+      },
+      "result": {
+        "shown": true,
+        "note": "The interactive card already displays the question and choices. Do not repeat them. Wait for the user to answer the card."
+      },
+      "state": null
+    },
+    {
+      "status": "complete",
+      "args": {
+        "question": "Capital of France?",
+        "choices": [
+          "Paris",
+          "Rome"
+        ]
+      },
+      "result": {
+        "shown": true,
+        "note": "The interactive card already displays the question and choices. Do not repeat them. Wait for the user to answer the card."
+      },
+      "state": null
+    },
+    {
+      "status": "complete",
+      "args": {
+        "question": "Capital of France?",
+        "choices": [
+          "Paris",
+          "Rome"
+        ]
+      },
+      "result": {
+        "shown": true,
+        "note": "The interactive card already displays the question and choices. Do not repeat them. Wait for the user to answer the card."
+      },
+      "state": null
+    },
+    {
+      "status": "complete",
+      "args": {
+        "question": "Capital of France?",
+        "choices": [
+          "Paris",
+          "Rome"
+        ]
+      },
+      "result": {
+        "shown": true,
+        "note": "The interactive card already displays the question and choices. Do not repeat them. Wait for the user to answer the card."
+      },
+      "state": null
+    },
+    {
+      "status": "complete",
+      "args": {
+        "question": "Capital of France?",
+        "choices": [
+          "Paris",
+          "Rome"
+        ]
+      },
+      "result": {
+        "shown": true,
+        "note": "The interactive card already displays the question and choices. Do not repeat them. Wait for the user to answer the card."
+      },
+      "state": null
+    },
+    {
+      "status": "complete",
+      "args": {
+        "question": "Capital of France?",
+        "choices": [
+          "Paris",
+          "Rome"
+        ]
+      },
+      "result": {
+        "shown": true,
+        "note": "The interactive card already displays the question and choices. Do not repeat them. Wait for the user to answer the card."
+      },
+      "state": null
+    },
+    {
+      "status": "complete",
+      "args": {
+        "question": "Capital of France?",
+        "choices": [
+          "Paris",
+          "Rome"
+        ]
+      },
+      "result": {
+        "shown": true,
+        "note": "The interactive card already displays the question and choices. Do not repeat them. Wait for the user to answer the card."
+      },
+      "state": null
+    }
+  ],
+  "mutations": 0,
+  "chunks": 120,
+  "reads": 35,
+  "aborted": false,
+  "connected": true,
+  "question": true
+}

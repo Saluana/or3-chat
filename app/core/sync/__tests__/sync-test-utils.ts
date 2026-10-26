@@ -216,6 +216,9 @@ export function createPendingOpsTable(initial: PendingOp[] = []) {
                 },
             };
         },
+        async get(id: string) {
+            return rows.get(id);
+        },
         async bulkPut(ops: PendingOp[]) {
             for (const op of ops) {
                 rows.set(op.id, { ...op });

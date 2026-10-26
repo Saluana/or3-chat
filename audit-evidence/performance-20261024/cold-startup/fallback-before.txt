@@ -1,0 +1,40 @@
+
+Running 1 test using 1 worker
+
+(node:8626) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/1] [chromium] › tests/e2e/theme-token-migrations.spec.ts:1472:49 › empty chat: missing responsive artwork falls back to originals
+  1) [chromium] › tests/e2e/theme-token-migrations.spec.ts:1472:49 › empty chat: missing responsive artwork falls back to originals
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('.chat-empty-hero:visible')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" locator('.chat-empty-hero:visible') with timeout 5000ms
+      - waiting for locator('.chat-empty-hero:visible')
+
+
+      1480 |         const hero = page.locator('.chat-empty-hero:visible');
+      1481 |         if (originalsAvailable) {
+    > 1482 |             await expect(hero).toBeVisible();
+           |                                ^
+      1483 |             await expect.poll(() => hero.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBe(1536);
+      1484 |             expect(await hero.evaluate(image => new URL((image as HTMLImageElement).currentSrc).pathname)).toBe('/bird-on-cloud.webp');
+      1485 |             const background = page.locator('.chat-empty-background-image:visible');
+        at <checkout>/tests/e2e/theme-token-migrations.spec.ts:1482:32
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/cold-startup-fallback/theme-token-migrations-emp-f8cc8-ork-falls-back-to-originals-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/cold-startup-fallback/theme-token-migrations-emp-f8cc8-ork-falls-back-to-originals-chromium/error-context.md
+
+
+  1 failed
+    [chromium] › tests/e2e/theme-token-migrations.spec.ts:1472:49 › empty chat: missing responsive artwork falls back to originals

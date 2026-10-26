@@ -148,6 +148,23 @@ describe('NotificationService (Dexie)', () => {
         expect(clearedSpy).toHaveBeenCalledWith({ count: 2 });
     });
 
+    it.each(['markRead', 'markAllRead', 'clearAll'] as const)(
+        '%s advances an existing notification revision after clock skew',
+        async (operation) => {
+            const hooks = createTypedHookEngine(createHookEngine());
+            const service = new NotificationService(getDb(), hooks, 'user-1');
+            const created = await service.create({ type: 'system.warning', title: 'Clock skew' });
+            if (!created) throw new Error('Failed to create notification');
+            const futureClock = 9_000_000_000;
+            await getDb().notifications.update(created.id, { clock: futureClock });
+
+            if (operation === 'markRead') await service.markRead(created.id);
+            else await service[operation]();
+
+            expect((await getDb().notifications.get(created.id))?.clock).toBe(futureClock + 1);
+        }
+    );
+
     it('startListening is idempotent', async () => {
         const engine = createHookEngine();
         const hooks = createTypedHookEngine(engine);

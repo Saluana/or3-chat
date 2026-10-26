@@ -1,0 +1,62 @@
+{
+  "options": {
+    "mode": "image",
+    "cpuRate": 4,
+    "secondImage": true,
+    "verifyLiveImages": true
+  },
+  "browser": "153.0.8010.12",
+  "failure": "TimeoutError: page.waitForFunction: Timeout 30000ms exceeded.",
+  "errors": [],
+  "diagnostic": {
+    "audit": {
+      "active": false,
+      "syncs": 0,
+      "gets": {},
+      "decodeStarted": 1,
+      "decoded": 1,
+      "decodeErrors": [],
+      "instances": {},
+      "updates": {},
+      "imageMutations": 0,
+      "toolMutations": 0,
+      "chunks": 0,
+      "gaps": [],
+      "longTasks": [],
+      "liveImageCounts": [],
+      "transportReady": true
+    },
+    "metadata": [
+      {
+        "hash": "sha256:7dc64b4909dbb35416e686ca57be1eb98aef33304cab86579842e2db1260fa99",
+        "name": "gen-image",
+        "mime_type": "image/png",
+        "kind": "image",
+        "size_bytes": 230,
+        "width": 64,
+        "height": 48,
+        "ref_count": 1,
+        "created_at": 1792815063,
+        "updated_at": 1792815063,
+        "deleted": false,
+        "clock": 1,
+        "gallery_state": "active"
+      }
+    ],
+    "cache": [
+      [
+        "sha256:7dc64b4909dbb35416e686ca57be1eb98aef33304cab86579842e2db1260fa99",
+        {
+          "status": "ready",
+          "url": "blob:http://127.0.0.1:3147/f16398c2-cde1-42b0-927d-096cd20a2a2d",
+          "width": 64,
+          "height": 48
+        }
+      ]
+    ],
+    "images": [
+      "<img data-v-4d1a2fe2=\"\" src=\"/logos/logo-svg.svg\" alt=\"OR3\" width=\"1632\" height=\"344\" class=\"h-7 w-auto\">",
+      "<img src=\"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7\" alt=\"file-hash:sha256:7dc64b4909dbb35416e686ca57be1eb98aef33304cab86579842e2db1260fa99\" data-streamdown=\"img\">"
+    ]
+  }
+}

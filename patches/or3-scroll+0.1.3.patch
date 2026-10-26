@@ -1,8 +1,66 @@
 diff --git a/node_modules/or3-scroll/dist/or3-scroll.js b/node_modules/or3-scroll/dist/or3-scroll.js
-index 4b74b84dd83f1522e7fc40293cd8f78a765b8ca9..5b37741426b34cebf9d14ee8b11c62b01b4686ed 100644
+index 4b74b84d..9ce433c4 100644
 --- a/node_modules/or3-scroll/dist/or3-scroll.js
 +++ b/node_modules/or3-scroll/dist/or3-scroll.js
-@@ -497,10 +497,11 @@ var re = class e {
+@@ -363,11 +363,11 @@ var re = class e {
+ 		}, H = (e) => {
+ 			let t = Math.max(0, e);
+ 			S.value = t, pe.value && (pe.value.style.height = `${t + g.paddingTop + g.paddingBottom}px`);
+-		}, U = (e, t, n = !1) => {
++		}, smoothScroll = !1, programmaticScrollMatches = (top) => T !== null && (T === "jump" || smoothScroll || E !== null && Math.abs(top - E) < 1), U = (e, t, n = !1) => {
+ 			let r = _.value;
+ 			if (!r) return;
+ 			let i = Math.max(0, S.value + g.paddingTop + g.paddingBottom - r.clientHeight), a = Math.max(0, Math.min(e, i));
+-			T = t, E = a, n ? r.scrollTo({
++			T = t, E = a, smoothScroll = n, n ? r.scrollTo({
+ 				top: a,
+ 				behavior: "smooth"
+ 			}) : r.scrollTop = a, C = r.scrollTop;
+@@ -410,7 +410,7 @@ var re = class e {
+ 			}));
+ 		}, Ie = (e, t) => {
+ 			H(F.getTotalHeight()), t && g.maintainBottom ? o(() => {
+-				!k && w === "followingBottom" && lt();
++				!k && w === "followingBottom" && !D && lt();
+ 			}) : Ne(e);
+ 		}, K = (e, t) => {
+ 			if (D) {
+@@ -445,7 +445,8 @@ var re = class e {
+ 			let e = _.value;
+ 			if (!e || k) return;
+ 			C = e.scrollTop;
+-			let t = C - _e, n = T !== null;
++			let t = C - _e, n = programmaticScrollMatches(C);
++			n || (T = null, E = null);
+ 			!n && Math.abs(t) > h && (D = !0), E !== null && Math.abs(C - E) < 1 && T !== "jump" && (T = null, E = null), q(t, n), W(), G(), de.__debug && (ge.value = C), ue("scroll", {
+ 				scrollTop: C,
+ 				scrollHeight: e.scrollHeight,
+@@ -459,9 +460,23 @@ var re = class e {
+ 				e === be && Ve();
+ 			});
+ 		}, He = () => {
+-			_.value && (C = _.value.scrollTop, Y());
++			if (!_.value) return;
++			// Classify native movement before queued viewport/row work can follow.
++			let top = _.value.scrollTop;
++			if (!programmaticScrollMatches(top) && top < C - h) {
++				T = null, E = null, D = !0, q(top - C, !1);
++			}
++			C = top, Y();
+ 		}, Ue = () => {
+ 			T === "jump" && (ve = Date.now() + ce), D = !0, T = null, E = null, N++, y.value || (w = "userBrowsing"), $(), Be();
++		}, stopWheel, syncWheel = () => {
++			stopWheel?.(), stopWheel = void 0;
++			let e = _.value;
++			if (!e) return;
++			// Following writes must acknowledge wheel intent before native clamping.
++			// No default action is canceled; non-following lists remain passive.
++			e.addEventListener("wheel", Ue, { passive: !g.maintainBottom });
++			stopWheel = () => e.removeEventListener("wheel", Ue);
+ 		}, We = () => {
+ 			O = !0, Ue();
+ 		}, Ge = () => {
+@@ -497,10 +512,11 @@ var re = class e {
  				}
  			};
  			return Z.set(n, i), i;
@@ -16,7 +74,7 @@ index 4b74b84dd83f1522e7fc40293cd8f78a765b8ca9..5b37741426b34cebf9d14ee8b11c62b0
  			if (Qe = !1, Q.size === 0 || k) return;
  			_.value && (C = _.value.scrollTop);
  			let e = Me(), t = !1;
-@@ -653,7 +654,7 @@ var re = class e {
+@@ -653,19 +669,26 @@ var re = class e {
  				n > 0 && $e(e, n);
  			}
  			Qe ? et() : W();
@@ -25,8 +83,10 @@ index 4b74b84dd83f1522e7fc40293cd8f78a765b8ca9..5b37741426b34cebf9d14ee8b11c62b0
  			if (!_.value || e === v.value) return;
  			let t = V();
  			v.value = e, W(), Ie(t, g.maintainBottom && w === "followingBottom"), q(0, !0), G();
-@@ -662,10 +663,17 @@ var re = class e {
- 			ye = !0;
+ 		};
+ 		return c(() => {
+-			ye = !0;
++			ye = !0, syncWheel();
  			let e = _.value;
  			e && (C = e.scrollTop, _e = e.scrollTop, v.value = e.clientHeight, typeof ResizeObserver < "u" && (_t = new ResizeObserver((e) => {
 -				for (let t of e) vt(t.contentRect.height);
@@ -41,7 +101,23 @@ index 4b74b84dd83f1522e7fc40293cd8f78a765b8ca9..5b37741426b34cebf9d14ee8b11c62b0
  			}), _t.observe(e)), W(), H(F.getTotalHeight()), G(), g.maintainBottom && st(!0));
  		}), l(() => {
 -			k = !0, M++, we++, N++, be++, B(A), A = 0, $(), j && clearTimeout(j), _t?.disconnect(), X.forEach((e) => m.unobserve(e)), X.clear(), Z.clear(), Q.clear();
-+			k = !0, M++, we++, N++, be++, B(A), A = 0, $(), j && clearTimeout(j), _t?.disconnect(), B(viewportResizeFrame), viewportResizeFrame = 0, X.forEach((e) => m.unobserve(e)), X.clear(), Z.clear(), Q.clear(), B(measurementFrame), measurementFrame = 0;
++			k = !0, stopWheel?.(), stopWheel = void 0, M++, we++, N++, be++, B(A), A = 0, $(), j && clearTimeout(j), _t?.disconnect(), B(viewportResizeFrame), viewportResizeFrame = 0, X.forEach((e) => m.unobserve(e)), X.clear(), Z.clear(), Q.clear(), B(measurementFrame), measurementFrame = 0;
  		}), p(() => {
  			let e = g.items;
  			return g.mutationMode === "arbitrary" ? e.map(z) : [e, e.length];
+@@ -679,6 +702,7 @@ var re = class e {
+ 		}), p(() => g.tailCount, (e) => {
+ 			F.updateTailCount(e), W();
+ 		}), p(() => g.maintainBottom, (e) => {
++			syncWheel();
+ 			e && (q(0, !0), w = y.value ? "followingBottom" : "userBrowsing");
+ 		}), p(() => g.estimateHeight, (e, t) => {}), re({
+ 			scrollToBottom: lt,
+@@ -698,7 +722,6 @@ var re = class e {
+ 			onTouchendPassive: Ge,
+ 			onTouchcancelPassive: Ge,
+ 			onMousedownPassive: Ue,
+-			onWheelPassive: Ue,
+ 			onKeydown: Ke,
+ 			onScrollendPassive: qe
+ 		}, [i("div", {

@@ -122,8 +122,18 @@ The context contains only tool, callId, messageId, runtime, status, args, result
 error, state, theme, signal, setState, send, openLink and onUpdate.
 Args/results parse as JSON where possible and otherwise remain strings.
 Results exceeding 32 KiB are omitted from the view. Theme contains light/dark
-mode and host CSS tokens. signal aborts on unmount; use it for asynchronous work.
+mode and host CSS tokens. signal aborts on unmount, runtime failure or a workspace
+change; use it for asynchronous work. A workspace change retires the old card's
+state subscription plus lazy-mount, visibility and theme observers immediately,
+even before its host unmounts.
+Returning to the same workspace requires a newly mounted context; a retired
+context does not resume or parse later snapshots.
 onUpdate returns an unsubscribe function and batches updates per microtask.
+If a card fails or is disposed during notification, the rest of that card's
+pending batch stops; other live cards continue receiving their updates.
+Reply-text saves and refreshed call objects with unchanged card fields do not
+notify card subscribers. Reobserving unchanged persisted JSON state preserves
+the visible state object while retaining save-order and reconciliation guards.
 
 | Option      | Default  | Behavior                                                     |
 | ----------- | -------- | ------------------------------------------------------------ |
@@ -132,7 +142,9 @@ onUpdate returns an unsubscribe function and batches updates per microtask.
 | chrome      | card     | Host surface/border/padding; none leaves styling to the card |
 | minHeight   | 64       | Reserved height, between 48 and 720 px                       |
 
-Cards mount within 600 px of the viewport. Missing bindings use the existing
+Cards mount within 600 px of the viewport. The host checks the current position
+before mounting because scrolling or row resizing can make an intersection
+observation stale. Missing bindings use the existing
 indicator. Runtime failures preserve that indicator with a muted reason line.
 Containers have a group role and accessible label. Content must fit 320 px;
 provide keyboard controls and visible focus styles.
@@ -213,6 +225,8 @@ entry and stylesheet hashes before transferring bytes into an opaque-origin
 frame. Cards receive their own call snapshot and actions over a private port.
 Each pane admits at most 12 frames. Offscreen preloads wait when capacity is full;
 visible frames retain their slots and deferred frames resume when capacity frees.
+If more than 12 cards are visible at once, additional frames continue waiting
+until scrolling, resizing or removal makes capacity available.
 Network APIs and workers are denied. A tool must use reviewed network.http
 mediation, as examples/plugins/weather-card does for Open-Meteo.
 

@@ -1,0 +1,35 @@
+
+Running 1 test using 1 worker
+
+(node:28295) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/1] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › blank light 1x mobile startup keeps the composer and navigation stable while JavaScript loads
+  1) [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › blank light 1x mobile startup keeps the composer and navigation stable while JavaScript loads 
+
+    Error: hydration reuses the parsed SSR stylesheet
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 2
+
+      351 |             const themeSheets = await page.locator('link[data-theme-stylesheet]').evaluateAll(links =>
+      352 |                 links.map(link => (link as HTMLLinkElement).href));
+    > 353 |             expect(themeSheets.length, 'hydration reuses the parsed SSR stylesheet').toBe(new Set(themeSheets).size);
+          |                                                                                      ^
+      354 |             writeFileSync(testInfo.outputPath('startup-geometry.json'), JSON.stringify({ theme, initial, ready, errors }, null, 2));
+      355 |             await testInfo.attach('startup-geometry', {
+      356 |                 body: Buffer.from(JSON.stringify({ theme, initial, ready, errors }, null, 2)),
+        at /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/performance-budgets.e2e.ts:353:86
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/composer-startup-before/performance-budgets.e2e.ts-9c20d-able-while-JavaScript-loads-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/composer-startup-before/performance-budgets.e2e.ts-9c20d-able-while-JavaScript-loads-chromium/error-context.md
+
+
+  1 failed
+    [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › blank light 1x mobile startup keeps the composer and navigation stable while JavaScript loads 

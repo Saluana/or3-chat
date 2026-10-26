@@ -32,7 +32,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 2,
-                    "summary": "Search workspace sources and saved-file excerpts with resource-level chunk results, incremental conversation refresh, keyboard navigation, previews, coverage, and workspace-scoped action feedback."
+                    "summary": "Search workspace sources and saved-file excerpts with resource-level chunk results, bounded cancellable initial chat reads, incremental conversation refresh, keyboard navigation, previews, coverage, and workspace-scoped action feedback."
                 },
                 {
                     "name": "projects.md",
@@ -50,7 +50,7 @@
                     "category": "Development",
                     "categoryOrder": 1,
                     "order": 0,
-                    "summary": "Run and verify source builds on Node.js 24.22.1+ (24.x), interactive secret-store setup before authenticated launches, safe stale-vault-socket recovery with serialized launchers and awaited signal cleanup, bounded readiness probes that preserve the launcher, phone development over LAN or Tailscale, bare --host argument handling, native development HTTPS, module-loading and VueUse dependency troubleshooting, isolated browser harnesses, typed audit-runner lint and reviewed plugin compatibility checks, and production loading boundaries for document conversion, Cloud sync, welcome hydration, mobile navigation and composer first paint, saved color schemes, bounded sidebar layout with saved geometry before hydration, stable CSS cascade layers, gated plugin and storage startup, on-demand history/SDK execution, and cold-cache PDF/DOCX knowledge extraction."
+                    "summary": "Run and verify source builds on Node.js 24.22.1+ (24.x), interactive secret-store setup before authenticated launches, safe stale-vault-socket recovery with serialized launchers and awaited signal cleanup, bounded readiness probes that preserve the launcher, phone development over LAN or Tailscale, bare --host argument handling, native development HTTPS, module-loading and VueUse dependency troubleshooting, isolated browser harnesses, typed audit-runner lint and reviewed plugin compatibility checks, and production loading boundaries for document conversion, Cloud sync, welcome hydration, mobile navigation and composer first paint, theme activation, negotiated HTML compression and parsed stylesheet reuse, responsive artwork and SSR preloads, deferred palette/mention indexing, saved color schemes, bounded sidebar layout with saved geometry before hydration, stable CSS cascade layers, gated plugin and storage startup, on-demand history/SDK execution, and cold-cache PDF/DOCX knowledge extraction."
                 },
                 {
                     "name": "plugin-quickstart.md",
@@ -563,7 +563,7 @@
                     "category": "Advanced",
                     "categoryOrder": 3,
                     "order": 1,
-                    "summary": "Understand discovery, compilation, activation, icon hydration, and persistence."
+                    "summary": "Understand discovery, compilation, activation, icon hydration, early public empty-chat artwork, and persistence."
                 }
             ]
         },
@@ -674,7 +674,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 9,
-                    "summary": "SQLite auth/sync, maintenance controls, durable limits, bounded user-bound sync and Trash archive snapshots with eviction-safe paging, contiguous D1 admission versions, atomic quota reservations and exact commit retries, short signup codes, and D1 support limits. Verified commit receipts own quota accounting; device acknowledgements are scoped by workspace, user and device."
+                    "summary": "SQLite auth/sync, owner-bound notification deletion, atomic native/D1 Files and Trash capability admission, bounded snapshots, exact commit retries, quotas, maintenance controls and D1 support limits."
                 },
                 {
                     "name": "provider-fs.md",
@@ -701,7 +701,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 12,
-                    "summary": "Convex setup, synchronized title sources, background message ordering and admission recovery, authenticated downloads and server-only Trash backups with advancing native revisions, durable plugin connections, fail-closed limits and restart drain accounting, retained metadata, and atomic signup invitations with short codes. Host-controlled enrollment and receipt-bound native object ownership prevent direct-token enrollment and cross-workspace storage aliases."
+                    "summary": "Convex setup, strict canonical sync admission, truthful winner/replay receipts, legacy snapshot recovery, account-scoped cursors, bounded retention, and explicit file restoration after deletion."
                 },
                 {
                     "name": "provider-s3.md",
@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Sync authorization, content-free notifications, polling recovery, and graceful notification closure during managed restart."
+                    "summary": "Durable snapshot replay, principal-scoped feed coverage, fenced multi-tab outboxes, indefinite outage recovery, request cancellation, bounded gateway bodies, and real Chromium crash verification."
                 },
                 {
                     "name": "storage-layer.md",
@@ -782,7 +782,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 20,
-                    "summary": "Configure upload and retained storage quotas, offline intake with verified workspace settings, indexed browser cache budgeting, verified redundancy proofs, bounded thumbnail loading, authorized transfers and retained-original backup reads."
+                    "summary": "Hash-addressed Cloud files with atomic upload staging, offline and crash recovery, fenced cross-tab transfers, cancellation deadlines, and bounded browser caching."
                 },
                 {
                     "name": "plugin-access-gating.md",
@@ -859,7 +859,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Preserve durable sends, native admission, tool policy, conversation-scoped history and unchanged presentation rows across refreshes, tabs and quiet draft autosave, with stream-safe guards, stable lazy row handlers, unchanged display projections and bottom-follow controls, owned syntax workers, math styles ready with the lazy renderer, shared lazy grammars, draft recovery, isolated journal failures, and tab-scoped storage notices and retries. Shared backend automatic chat/document titles, administrator model selection, conditional rename protection, one-shot lifecycle and bounded inference costs."
+                    "summary": "Preserve durable sends, native admission, tool policy, conversation-scoped history and unchanged presentation rows across refreshes, tabs and quiet draft autosave, with stream-safe guards, generated images retained in live text, trailing inline hydration and owned continuation intake, stable lazy row handlers, unchanged display projections and bottom-follow controls that respect overtaking native movement, owned syntax workers, math styles ready with the lazy renderer, shared lazy grammars, draft recovery, isolated journal failures, and tab-scoped storage notices and retries. Shared backend automatic chat/document titles, administrator model selection, conditional rename protection, one-shot lifecycle and bounded inference costs. Owned wheel handling acknowledges native input before layout following when maintainBottom is enabled, keeps other lists passive, preserves default scrolling and avoids an extra follow frame; busy-main-thread wheel latency remains a qualification limit."
                 },
                 {
                     "name": "ai-preferences.md",
@@ -991,7 +991,7 @@
                     "category": "Building plugins",
                     "categoryOrder": 2,
                     "order": 3,
-                    "summary": "Build source and trusted tool cards, explicitly register reference examples to try them, and understand portable authoring and its containment qualification gate. Inherited cards persist state on the source message while sends use the current branch."
+                    "summary": "Build source and trusted tool cards, explicitly register reference examples to try them, and understand portable authoring and its containment qualification gate. Inherited cards persist state on the source message while sends use the current branch. Unchanged text projections and persisted card state do not notify card subscribers. Disposed cards stop their pending notification batch. Workspace changes immediately retire old card subscriptions, observers and snapshots. Lazy mounting validates current card geometry against the existing preload range."
                 }
             ]
         }
