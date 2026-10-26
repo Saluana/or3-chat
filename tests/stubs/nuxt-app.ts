@@ -4,8 +4,6 @@ import { createHookEngine } from '../../app/core/hooks/hooks';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
 
 const engine = createHookEngine();
-// Expose globally for optional introspection
-(globalThis as Record<string, unknown>).__TEST_HOOK_ENGINE__ = engine;
 
 const currentScheme = ref('light');
 const activeTheme = ref('retro');

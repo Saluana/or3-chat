@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
     backgroundImageValidationMessage,
-    detectImageMimeFromMagic,
-    isLikelyHeicOrHeif,
     MAX_BACKGROUND_IMAGE_BYTES,
     validateBackgroundImageFile,
-    validateImageMagicNumber,
 } from '../types';
 
 function headerFrom(...bytes: number[]): Uint8Array {
@@ -47,21 +44,15 @@ const HEIC = headerFrom(
 );
 
 describe('background image validation', () => {
-    it('detects png/jpeg/webp/gif magic numbers', () => {
-        expect(detectImageMimeFromMagic(PNG)).toBe('image/png');
-        expect(detectImageMimeFromMagic(JPEG)).toBe('image/jpeg');
-        expect(detectImageMimeFromMagic(WEBP)).toBe('image/webp');
-        expect(detectImageMimeFromMagic(GIF)).toBe('image/gif');
-        expect(validateImageMagicNumber(PNG)).toBe(true);
-    });
-
-    it('accepts valid images even when File.type is empty', () => {
-        const result = validateBackgroundImageFile({
-            type: '',
-            size: 128_000,
-            header: JPEG,
-        });
-        expect(result).toEqual({ ok: true, mime: 'image/jpeg' });
+    it.each([
+        ['image/png', PNG],
+        ['image/jpeg', JPEG],
+        ['image/webp', WEBP],
+        ['image/gif', GIF],
+    ] as const)('accepts %s magic bytes when File.type is empty', (mime, header) => {
+        expect(
+            validateBackgroundImageFile({ type: '', size: 128_000, header })
+        ).toEqual({ ok: true, mime });
     });
 
     it('rejects oversized images', () => {
@@ -75,7 +66,6 @@ describe('background image validation', () => {
     });
 
     it('rejects HEIC/HEIF with a specific reason', () => {
-        expect(isLikelyHeicOrHeif(HEIC)).toBe(true);
         const result = validateBackgroundImageFile({
             type: 'image/heic',
             size: 500_000,

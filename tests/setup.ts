@@ -237,35 +237,6 @@ vi.mock('#imports', async (importOriginal) => {
     };
 });
 
-vi.mock('virtua/vue', () => {
-    const Base = defineComponent({
-        name: 'MockVirtualListBase',
-        props: {
-            data: { type: Array, default: () => [] },
-            itemSize: { type: [Number, Function], default: 0 },
-            itemSizeEstimation: { type: [Number, Function], default: 0 },
-            overscan: { type: Number, default: 0 },
-        },
-        setup(props, { slots }) {
-            return () =>
-                h(
-                    'div',
-                    { class: 'mock-virtualizer' },
-                    (props.data as unknown[]).map(
-                        (item: unknown, index: number) =>
-                            slots.default
-                                ? slots.default({ item, index })
-                                : null
-                    )
-                );
-        },
-    });
-    return {
-        VList: Base,
-        Virtualizer: Base,
-    };
-});
-
 vi.mock('or3-scroll', () => {
     const Base = defineComponent({
         name: 'MockOr3Scroll',

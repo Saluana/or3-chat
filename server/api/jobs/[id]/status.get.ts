@@ -13,11 +13,6 @@ import { getJobLiveState } from '../../../utils/background-jobs/viewers';
 import { shouldResetBackgroundContent } from '../../../utils/background-jobs/recovery';
 import { readRequestUsage } from '../../../../shared/chat/compaction';
 
-function logBgStream(
-    _stage: string,
-    _details?: Record<string, unknown>
-): void {}
-
 /**
  * GET /api/jobs/:id/status
  *
@@ -36,7 +31,7 @@ export default defineEventHandler(async (event) => {
     const jobId = getRouterParam(event, 'id');
 
     if (!jobId) {
-        logBgStream('jobs-status-missing-job-id', {});
+
         setResponseStatus(event, 400);
         return { error: 'Missing job ID' };
     }
@@ -56,9 +51,7 @@ export default defineEventHandler(async (event) => {
     }
 
     if (!userId) {
-        logBgStream('jobs-status-auth-required', {
-            jobId,
-        });
+
         setResponseStatus(event, 401);
         return { error: 'Authentication required' };
     }
@@ -67,10 +60,7 @@ export default defineEventHandler(async (event) => {
     const job = await provider.getJob(jobId, userId);
 
     if (!job) {
-        logBgStream('jobs-status-job-not-found', {
-            jobId,
-            userId,
-        });
+
         setResponseStatus(event, 404);
         return { error: 'Job not found or unauthorized' };
     }
@@ -145,22 +135,6 @@ export default defineEventHandler(async (event) => {
         liveState && (liveAttemptAdvanced || liveState.status !== 'streaming')
             ? liveState.status
             : job.status;
-    const shouldLogStatusRequest =
-        effectiveStatus !== 'streaming' ||
-        offset === null ||
-        !Number.isFinite(offset);
-    if (shouldLogStatusRequest) {
-        logBgStream('jobs-status-request', {
-            jobId,
-            userId,
-            requestedOffset: offset,
-            jobStatus: job.status,
-            effectiveStatus,
-            jobContentLength: job.content.length,
-            liveStatePresent: Boolean(liveState),
-            liveContentLength: liveState?.content.length ?? 0,
-        });
-    }
 
     if (
         typeof offset === 'number' &&
@@ -173,22 +147,7 @@ export default defineEventHandler(async (event) => {
         const contentDelta = attemptChanged
             ? undefined
             : effectiveContent.slice(safeOffset);
-        const shouldLogDeltaResponse =
-            effectiveStatus !== 'streaming' ||
-            (contentDelta?.length ?? 0) >= 256 ||
-            safeOffset < offset;
-        if (shouldLogDeltaResponse) {
-            logBgStream('jobs-status-response-delta', {
-                jobId,
-                userId,
-                status: effectiveStatus,
-                requestedOffset: offset,
-                safeOffset,
-                contentLength,
-                deltaLength: contentDelta?.length ?? 0,
-                includesFullContent: attemptChanged || safeOffset < offset,
-            });
-        }
+
         const reasoningLength = effectiveReasoning.length;
         const safeReasoningOffset = attemptChanged
             ? 0
@@ -238,12 +197,6 @@ export default defineEventHandler(async (event) => {
         };
     }
 
-    logBgStream('jobs-status-response-full', {
-        jobId,
-        userId,
-        status: effectiveStatus,
-        contentLength: effectiveContent.length,
-    });
     return {
         id: job.id,
         status: effectiveStatus,

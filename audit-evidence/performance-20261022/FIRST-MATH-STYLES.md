@@ -59,7 +59,7 @@ part of the repair. The inline-size control also changes initial history layout.
 All seven retained diagnostics/controls preserve exact saved replies, the left
 reading anchor, right bottom distance zero, final-marker navigation, and
 completed rich nodes without mutations. Receipts are in
-[first-math-baseline.json](first-math-baseline.json).
+[first-math-baseline.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/first-math-baseline.json).
 
 ## Final qualification
 
@@ -93,7 +93,7 @@ remains about 33.4 ms, and completion can still contain long intervals (includin
 a 50 ms completion p95 in one first-math run). All seven final runs preserve
 saved text, anchors, tail following, navigation, and completed rich nodes.
 Receipts, browser regression observations and the normal empty-chat check are in
-[first-math-results.json](first-math-results.json).
+[first-math-results.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/first-math-results.json).
 
 Local browser artifacts are under `test-results/first-math-journeys/` and
 `test-results/first-math-webkit/`, including `first-math-frames.json` and

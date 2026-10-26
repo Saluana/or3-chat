@@ -36,7 +36,7 @@ coverage and all negative controls had 0%. No sequence reached the probe's
 of conversations. Their existing `loading` state only covers an empty list;
 the suspected pagination overlay flash was not reproduced.
 
-Raw results: [scroll-paint-results.json](scroll-paint-results.json).
+Raw results: [scroll-paint-results.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/scroll-paint-results.json).
 
 ## Large-jump comparison
 
@@ -58,12 +58,12 @@ range updates are not necessary to produce this symptom in this environment.
 It does not establish the entire cause or exclude a contribution from the
 virtualizer in other frames.
 
-Raw comparison: [scroll-paint-comparison.json](scroll-paint-comparison.json).
+Raw comparison: [scroll-paint-comparison.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/scroll-paint-comparison.json).
 Representative PNGs remain local under `.playwright-mcp/paint-final-large/`.
 
 Earlier same-build controls are retained in
-[scroll-paint-diagnostic.json](scroll-paint-diagnostic.json) and
-[scroll-paint-controls.json](scroll-paint-controls.json). These explored:
+[scroll-paint-diagnostic.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/scroll-paint-diagnostic.json) and
+[scroll-paint-controls.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/scroll-paint-controls.json). These explored:
 
 - Computing the range immediately in the scroll listener instead of waiting
   for its scheduled callback: gaps persisted.

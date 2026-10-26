@@ -118,7 +118,7 @@ landmark navigation journey also passes after correcting two stale test assumpti
   samples, with the row intersecting the scroller. The same viewport assertion
   now polls for a valid intersecting box; temporary geometry instrumentation is
   removed. The samples are retained in
-  [shell-wrapper-webkit-navigation.json](shell-wrapper-webkit-navigation.json).
+  [shell-wrapper-webkit-navigation.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/shell-wrapper-webkit-navigation.json).
 
 WebKit passes the three responsive theme journeys and the corrected navigation
 journey. Its initial run was three passed, one failed at the immediate box read;
@@ -132,7 +132,7 @@ error. Three additional traced repeats all pass; one records the same error
 during the first reload, before its navigation commits. The affected module and
 root cause remain unidentified, so this is not an error-free WebKit qualification.
 The timing excerpt is retained in
-[shell-wrapper-webkit-import.json](shell-wrapper-webkit-import.json); full local
+[shell-wrapper-webkit-import.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/shell-wrapper-webkit-import.json); full local
 traces are under `test-results/shell-wrapper-webkit-import/`. This reload/import
 behavior remains follow-up audit work rather than a reason to suppress errors.
 
@@ -153,8 +153,8 @@ Use `cpuRate:1` for normal speed or `profile:true,trace:true` for diagnostics.
 The runner creates and closes its own browser, blocks external requests, resets
 throttling, and has a 90-second watchdog.
 
-Raw receipts are [shell-wrapper-baseline.json](shell-wrapper-baseline.json) and
-[shell-wrapper-results.json](shell-wrapper-results.json). An earlier exploratory
+Raw receipts are [shell-wrapper-baseline.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/shell-wrapper-baseline.json) and
+[shell-wrapper-results.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/shell-wrapper-results.json). An earlier exploratory
 baseline observed a hidden tablist rather than the visible tab bar; it is excluded
 from these receipts. This section does not qualify physical devices, all themes'
 streaming performance, tool output, every painted frame, search updates, or the

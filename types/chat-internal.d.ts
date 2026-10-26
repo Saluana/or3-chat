@@ -26,39 +26,6 @@ export type MultiPanePane = PaneState;
 export type MultiPaneApi = UseMultiPaneApi;
 
 /**
- * Database message types
- */
-export interface DbMessageData {
-    content?: string;
-    reasoning_text?: string | null;
-    tool_calls?: ToolCall[];
-    [key: string]: unknown;
-}
-
-export interface DbMessage {
-    id: string;
-    role: 'user' | 'assistant' | 'system' | 'tool';
-    data?: DbMessageData;
-    file_hashes?: string | null;
-    deleted?: boolean;
-    created_at: number;
-    updated_at?: number;
-    thread_id?: string;
-    content?: ChatMessage['content'];
-    index?: number | string;
-    clock?: number;
-    stream_id?: string;
-}
-
-export interface DbUserMessage extends DbMessage {
-    role: 'user';
-}
-
-export interface DbAssistantMessage extends DbMessage {
-    role: 'assistant';
-}
-
-/**
  * Settings types
  */
 export interface ChatSettings {
@@ -141,13 +108,6 @@ export interface LargeTextAttachment {
     name?: string;
 }
 
-export interface SendPayload {
-    content: string;
-    images?: ImageAttachment[];
-    largeTexts?: LargeTextAttachment[];
-    webSearchEnabled?: boolean;
-}
-
 /**
  * Image/File input types for send operations
  */
@@ -155,33 +115,6 @@ export interface ImageInput {
     url: string;
     type?: string;
     status?: 'ready' | 'pending';
-}
-
-export interface FileReference {
-    type: string;
-    url?: string;
-    hash?: string;
-}
-
-/**
- * Settings overrides types
- */
-export interface ChatSettingsOverrides {
-    temperature?: number;
-    maxTokens?: number;
-    topP?: number;
-    frequencyPenalty?: number;
-    presencePenalty?: number;
-    [key: string]: unknown;
-}
-
-/**
- * Thumbnail cache types for MessageAttachmentsGallery
- */
-export interface ThumbCache {
-    cache: Map<string, { status: 'loading' | 'ready' | 'error'; url?: string }>;
-    inflight: Map<string, Promise<void>>;
-    refCounts: Map<string, number>;
 }
 
 export interface FileMeta {

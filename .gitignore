@@ -62,3 +62,11 @@ scripts/docker/backup-inspection-profile.json
 
 # Built and packaged by packages/or3-cloud's build/prepack command.
 packages/or3-cloud/assets/dashboard-lifecycle.mjs
+
+# Generated audit captures; reusable probes and reports remain versioned.
+audit-evidence/**/*.json
+audit-evidence/**/*.jsonl
+audit-evidence/**/*.txt
+audit-evidence/**/*.png
+audit-evidence/**/*.jpg
+audit-evidence/**/*.jpeg

@@ -2,7 +2,7 @@ import './import-meta.d.ts';
 import type { Ref } from 'vue';
 import type { RegisteredPaneApp } from '~/composables/core/usePaneApps';
 import type { RegisteredSidebarPage } from '~/composables/sidebar/useSidebarPages';
-import type { MultiPaneApi, ThumbCache } from './chat-internal';
+import type { MultiPaneApi } from './chat-internal';
 import type { UserThemeOverrides } from '~/core/theme/user-overrides-types';
 import type {
     DashboardPlugin,
@@ -103,7 +103,6 @@ declare global {
         | Map<string, RegisteredSidebarPage>
         | undefined;
     var __or3MultiPaneApi: MultiPaneApi | undefined;
-    var __or3ThumbCache: ThumbCache | undefined;
     var __or3ChatInputBridge: ChatInputBridge | undefined;
     var __or3PanePendingPrompts: PanePendingPrompts | undefined;
     var __or3UserThemeOverrides: UserThemeOverridesStore | undefined;

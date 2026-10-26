@@ -1,3 +1,0 @@
-Commit: f9ea3ce69b598bfca7e3a1978024a0b9f9d49655
-Command: bun x eslint server/api/storage/presign-upload.post.ts server/utils/storage/workspace-access.ts
-Exit status: 0; no warnings or errors.

@@ -24,9 +24,9 @@ Every search sample asserted the same single resource without fallback. Both sta
 
 In the rendered production editor, a separate 467,800-character, 500-paragraph fixture displayed 50,000 words. Renaming through the UI made zero body serialization calls. The renamed title and complete content survived a reload. The full application's command palette found body text, returned a single resource with a preview, opened the document, and allowed closing the modern workspace tab. Cache eviction and split-pane safety were verified by the mounted integration tests. Synthetic local fixture data remains confined to this test origin; no credentials were entered.
 
-![Rendered editor after save and reload](chrome-editor.jpg)
+![Rendered editor after save and reload](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/neckbeard-fixes-20261022/chrome-editor.jpg)
 
-![Full application body-search result](chrome-palette.jpg)
+![Full application body-search result](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/neckbeard-fixes-20261022/chrome-palette.jpg)
 
 ## Validation
 

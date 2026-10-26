@@ -1,5 +1,4 @@
 import { measureWireValue } from './rpc-envelope';
-export const TOOL_CARD_BUNDLE_BYTES = 1536 * 1024;
 export const TOOL_CARD_SNAPSHOT_BYTES = 160 * 1024;
 export type CardAction = 'setState' | 'send' | 'openLink';
 export type CardFrameMessage =
@@ -89,21 +88,6 @@ export interface CardFrameSnapshot {
     state: unknown;
     theme: { mode: 'light' | 'dark'; tokens: Record<string, string> };
 }
-export type CardHostMessage =
-    | { type: 'or3-card:connect'; protocol: 1 }
-    | {
-          type: 'boot';
-          module: ArrayBuffer;
-          stylesheet?: string;
-          snapshot: CardFrameSnapshot;
-      }
-    | { type: 'update'; snapshot: CardFrameSnapshot }
-    | {
-          type: 'action-result';
-          id: string;
-          result: import('../../../packages/plugin-sdk/src/results').PluginResult<void>;
-      }
-    | { type: 'teardown' };
 export function validateCardSnapshot(value: unknown): value is CardFrameSnapshot {
     if (
         !measureWireValue(value, {
@@ -144,57 +128,4 @@ export function validateCardSnapshot(value: unknown): value is CardFrameSnapshot
                 token.length <= 2048
         )
     );
-}
-export function validateCardHostMessage(value: unknown): value is CardHostMessage {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    const message = value as Record<string, unknown>;
-    const keys = Object.keys(message).sort().join(',');
-    if (message.type === 'or3-card:connect')
-        return keys === 'protocol,type' && message.protocol === 1;
-    if (message.type === 'teardown') return keys === 'type';
-    if (message.type === 'boot')
-        return (
-            (keys === 'module,snapshot,stylesheet,type' ||
-                keys === 'module,snapshot,type') &&
-            message.module instanceof ArrayBuffer &&
-            (message.stylesheet === undefined ||
-                typeof message.stylesheet === 'string') &&
-            message.module.byteLength +
-                new TextEncoder().encode((message.stylesheet as string | undefined) ?? '')
-                    .byteLength <=
-                TOOL_CARD_BUNDLE_BYTES &&
-            validateCardSnapshot(message.snapshot)
-        );
-    if (message.type === 'update')
-        return keys === 'snapshot,type' && validateCardSnapshot(message.snapshot);
-    if (message.type === 'action-result') {
-        if (
-            keys !== 'id,result,type' ||
-            typeof message.id !== 'string' ||
-            !message.id ||
-            message.id.length > 128 ||
-            !measureWireValue(message, {
-                maxBytes: 64 * 1024,
-                maxDepth: 32,
-                maxNodes: 20000
-            }).ok
-        )
-            return false;
-        const result = message.result as Record<string, unknown> | null;
-        if (!result || typeof result.ok !== 'boolean') return false;
-        if (result.ok)
-            return (
-                Object.keys(result).sort().join(',') === 'ok,value' &&
-                result.value === undefined
-            );
-        const error = result.error as Record<string, unknown> | null;
-        return (
-            Object.keys(result).sort().join(',') === 'error,ok' &&
-            !!error &&
-            typeof error.code === 'string' &&
-            typeof error.message === 'string' &&
-            typeof error.retryable === 'boolean'
-        );
-    }
-    return false;
 }

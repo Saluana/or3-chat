@@ -27,26 +27,6 @@ vi.mock('~/core/hooks/useHooks', () => ({
         doAction: vi.fn(),
     }),
 }));
-vi.mock('~/composables/useModelStore', () => {
-    const { ref } = require('vue');
-    return {
-        useModelStore: () => ({
-            selectedModelId: ref('model-x'),
-            favoriteModels: ref([]),
-            catalog: ref([]),
-            setSelectedModelId: () => {},
-        }),
-    };
-});
-vi.mock('~/composables/useUserApiKey', () => ({
-    useUserApiKey: () => ({ apiKey: { value: 'k' } }),
-}));
-vi.mock('~/composables/useOpenrouter', () => ({ useOpenRouter: () => ({}) }));
-vi.mock('~/composables/useOpenrouter', () => ({ useOpenrouter: () => ({}) }));
-vi.mock('~/composables/useOpenRouterAuth', () => ({
-    useOpenRouterAuth: () => ({ startLogin: () => {} }),
-}));
-
 function makeFile(name: string, type: string, size = 1000): File {
     const file = new File(['a'], name, { type });
     Object.defineProperty(file, 'size', { value: size });

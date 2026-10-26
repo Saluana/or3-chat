@@ -1,5 +1,6 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { sha256CspHash, sha256Identity } from '../../digest';
+import { sha256Identity } from '../../digest';
 import type { PluginGrantReviewSnapshot } from '../../grant-review';
 import { PORTABLE_FRAME_CSP } from '../containment-policy';
 import {
@@ -234,7 +235,10 @@ describe('portable sandbox transport (4.1)', () => {
     it('keeps the frame script hash in sync with the served document', async () => {
         // The CSP authorises the relay script by hash; a drift would silently
         // break the sandbox in every engine.
-        expect(await sha256CspHash(PORTABLE_FRAME_SCRIPT)).toBe(PORTABLE_FRAME_SCRIPT_HASH);
+        const scriptHash = createHash('sha256')
+            .update(PORTABLE_FRAME_SCRIPT)
+            .digest('base64');
+        expect(`sha256-${scriptHash}`).toBe(PORTABLE_FRAME_SCRIPT_HASH);
         expect(PORTABLE_FRAME_DOCUMENT).toContain(`<script>${PORTABLE_FRAME_SCRIPT}</script>`);
         expect(PORTABLE_FRAME_CSP).toContain(`'${PORTABLE_FRAME_SCRIPT_HASH}'`);
         expect(PORTABLE_FRAME_CSP).toContain('sandbox allow-scripts');

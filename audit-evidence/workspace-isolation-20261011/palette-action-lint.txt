@@ -1,3 +1,0 @@
-Commit: f3468423fb342be1720564ef090101835230fb65
-Command: PATH=/workspace/.bun/bin:$PATH bun x eslint app/composables/search/useCommandPalette.ts
-Exit status: 0; no warnings.

@@ -549,23 +549,6 @@ export function createRpcRequest(
     };
 }
 
-/** Attach host-issued session identity to an outbound sandbox request. */
-export function withHostSession(
-    request: RpcRequestEnvelope,
-    session: {
-        readonly sessionId: string;
-        readonly sourceId: string;
-        readonly generation: number;
-    }
-): RpcRequestEnvelope {
-    return {
-        ...request,
-        sessionId: session.sessionId,
-        sourceId: session.sourceId,
-        generation: session.generation,
-    };
-}
-
 export function createRpcResponse(
     input: Omit<RpcResponseEnvelope, 'v' | 'kind' | 'ok'>
 ): RpcResponseEnvelope {

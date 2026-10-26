@@ -98,9 +98,7 @@ app/
 
 ## Testing
 - **Linting**: All code passes ESLint with zero warnings
-- **Manual Testing**: Test script created at `tests/manual/notification-tests.ts`
-- **Unit Tests**: Ready for implementation (phase 6)
-- **Integration Tests**: Ready for implementation (phase 6)
+- **Current verification**: service, composable, and mounted component tests live under their respective notification `__tests__` directories. The original assertion-free console recipe has been retired.
 
 ## Usage Examples
 
