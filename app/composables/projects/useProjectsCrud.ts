@@ -5,7 +5,7 @@ import { ProjectSettingsSchema } from '~~/shared/projects/workspace';
 import { workspaceRevision } from '~/utils/chat/workspace-items';
 import { prepareDocumentCreate } from '~/db/documents';
 import { createThreadInDb } from '~/db/threads';
-import { captureProjectOperation } from '~/utils/projects/context';
+import { captureProjectOperation } from '~/utils/projects/operation';
 import { nowSec, newId, nextClock, getWriteTxTableNames } from '~/db/util';
 import {
     normalizeProjectData,

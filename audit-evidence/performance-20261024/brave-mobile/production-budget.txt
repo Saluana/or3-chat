@@ -1,0 +1,17 @@
+$ bun run scripts/performance/production-build.perf.ts
+69 |         .map(
+70 |             ([name, budget]) =>
+71 |                 `${name}: ${budget.actual} must be ${budget.direction === 'max' ? '<=' : '>='} ${budget.limit}`
+72 |         )
+73 |         .join('\n');
+74 |     throw new Error(`${benchmark} performance budget failed:\n${details}`);
+                   ^
+error: production-build-assets performance budget failed:
+totalJavascriptRawBytes: 13814716 must be <= 13480000
+totalJavascriptGzipBytes: 4409417 must be <= 4200000
+precacheRawBytes: 19378304 must be <= 18400000
+      at assertBudgets (/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/scripts/performance/report.ts:74:15)
+      at /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/scripts/performance/production-build.perf.ts:439:5
+
+Bun v1.4.4 (macOS arm64)
+error: script "performance:production-build:check" exited with code 1

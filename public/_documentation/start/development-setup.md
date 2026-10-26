@@ -202,6 +202,15 @@ baseline includes the extraction worker while retaining the initial-load limit.
 Preview screenshots and unused icon variants are served on demand rather than
 cached during PWA installation.
 
+Rendered HTML also uses negotiated gzip when the Nitro runtime supports
+`CompressionStream`; static assets keep Nitro's precompressed gzip/Brotli files.
+The HTML encoder preserves the document bytes and cookies, varies responses by
+`Accept-Encoding`, and leaves range requests, existing encodings and
+`Cache-Control: no-transform` alone. Prerendered files remain ordinary HTML.
+Theme stylesheet URLs are available without another module download, and the
+client reuses already-parsed SSR stylesheets without moving their cascade order.
+Measure deployed behavior separately when a reverse proxy already compresses HTML.
+
 The browser model catalog uses the SDK's Models entry point only after checking
 its persisted catalog. The full SDK loads when OAuth exchange, memory
 classification, or a trusted plugin requests a provider client; plugin activation
@@ -224,6 +233,26 @@ order preserves module initialization order; the server bundle keeps its existin
 configuration. This trades a small increase in complete JavaScript size for fewer
 requests and less compressed JavaScript on the initial chat route. Optional feature
 roots remain lazy, and the composer keeps its existing editor and extensions.
+Each theme's definition, optional icons and legacy app configuration share a
+client chunk, removing serial activation requests on slow networks. Replacement
+components and stylesheet/font assets keep their existing loading boundaries.
+SSR restores manifest lookups for the rendered chat shell and selected theme so
+those chunks preload with the document. Project-operation capture and sync
+subscription cleanup use lightweight modules without importing retrieval or
+transport implementations. Editor test fixtures stay in tests. The command palette
+mounts on first opening; its optional search prewarm waits for page load. Mentions
+build their workspace index on the first query, retaining refreshes after that.
+Bundled empty-chat artwork has responsive WebP copies and AVIF backgrounds with
+WebP fallbacks. Matching light/dark geometry renders before hydration; CSS chooses
+the saved mode and only that image is preloaded after the viewport declaration.
+Internal-file artwork and differently sized variants retain client resolution.
+Local-mode action availability is snapshotted in the SSR payload to avoid moving
+artwork when the remaining cards appear. Cloud actions retain their auth gating.
+To regenerate the artwork, run `bun run scripts/images/build-chat-artwork.ts` with
+Python/Pillow (including WebP and AVIF support); `OR3_ARTWORK_PYTHON` can select that
+Python installation. Original artwork files are preserved. Responsive copies use the existing image
+runtime cache rather than increasing PWA precache size; a failed copy falls back
+to its original artwork.
 A closed mobile drawer mounts its page on first opening and retains it afterward.
 The first-run welcome starts its key and dismissal reads together, shares an
 in-flight key read with other startup consumers, and remains hidden until mount

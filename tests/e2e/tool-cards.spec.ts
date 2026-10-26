@@ -193,27 +193,70 @@ test("quiz weather and map rehydrate in light and dark mode and fit 320px", asyn
   ).toBe(true);
 });
 
-test("saved card state survives virtualization and receives persisted updates", async ({
-  page,
-}) => {
-  await open(page, "scroll");
-  const card = page.locator('[data-msg-id="scroll-0"]').first();
-  await page.locator(".chat-message-list").hover();
-  await page.mouse.wheel(0, -20000);
-  await card.getByRole("button", { name: "A", exact: true }).click();
-  await expect(card.getByRole("status")).toHaveText("Answer saved");
-  await page.locator(".chat-message-list").hover();
-  await page.mouse.wheel(0, 20000);
-  await expect(card).toHaveCount(0);
-  await page.mouse.wheel(0, -20000);
-  await expect(
-    card.getByRole("button", { name: "A", exact: true }),
-  ).toBeDisabled();
-  await page.getByRole("button", { name: "Reset saved quiz" }).click();
-  await expect(
-    card.getByRole("button", { name: "A", exact: true }),
-  ).toBeEnabled();
-});
+for (const cpuRate of [1, 4]) {
+  test(
+    "saved card state survives virtualization and receives persisted updates" +
+      (cpuRate === 4 ? " with a slower CPU" : ""),
+    async ({ page }) => {
+      if (cpuRate === 4) {
+        const client = await page.context().newCDPSession(page);
+        await client.send("Emulation.setCPUThrottlingRate", { rate: cpuRate });
+      }
+      await open(page, "scroll");
+      if (cpuRate === 4) {
+        // Cover input after cold opening has settled, as well as the original
+        // immediate journey. Card growth during reversal must not offset the wheel.
+        let previous = "";
+        let quietSince = 0;
+        await expect
+          .poll(
+            async () => {
+              const next = await page
+                .locator(".chat-message-list")
+                .evaluate((root) =>
+                  JSON.stringify([root.scrollTop, root.scrollHeight]),
+                );
+              if (next !== previous) {
+                previous = next;
+                quietSince = Date.now();
+              }
+              return Date.now() - quietSince;
+            },
+            { timeout: 10000, intervals: [100] },
+          )
+          .toBeGreaterThanOrEqual(600);
+      }
+      const card = page.locator('[data-msg-id="scroll-0"]').first();
+      await page.locator(".chat-message-list").hover();
+      await page.mouse.wheel(0, -20000);
+      await card.getByRole("button", { name: "A", exact: true }).click();
+      await expect(card.getByRole("status")).toHaveText("Answer saved");
+      await page.locator(".chat-message-list").hover();
+      await page.mouse.wheel(0, 20000);
+      await expect(card).toHaveCount(0);
+      await page.mouse.wheel(0, -20000);
+      // A preloaded offscreen card can satisfy the state assertion even when
+      // layout compensation loses the native wheel's intended top endpoint.
+      await expect
+        .poll(() =>
+          page.locator(".chat-message-list").evaluate((root) => root.scrollTop),
+        )
+        .toBe(0);
+      await expect(
+        card.getByRole("button", { name: "A", exact: true }),
+      ).toBeDisabled();
+      await page.getByRole("button", { name: "Reset saved quiz" }).click();
+      await expect(
+        card.getByRole("button", { name: "A", exact: true }),
+      ).toBeEnabled();
+      expect(
+        await page
+          .locator(".chat-message-list")
+          .evaluate((root) => root.scrollTop),
+      ).toBe(0);
+    },
+  );
+}
 
 test("card saves stay ordered across panes while preparation is delayed", async ({
   page,
@@ -526,6 +569,14 @@ test("30 frame cards obey the per-pane cap and resume as the chat scrolls", asyn
   expect(initial).toBeLessThanOrEqual(12);
   await page.locator(".chat-message-list").hover();
   await page.mouse.wheel(0, -10000);
+  await expect(page.locator('[data-msg-id="scroll-0"]').first()).toBeVisible();
+  const tall = await page.locator('iframe[title="Frame fixture"]').count();
+  expect(tall).toBeLessThanOrEqual(12);
+  // This tall viewport can show more than 12 cards. Visible frames keep their
+  // slots, so make capacity available before requiring the first one to resume.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.locator(".chat-message-list").hover();
+  await page.mouse.wheel(0, -10000);
   await expect(
     page
       .locator('[data-msg-id="scroll-0"]')
@@ -538,6 +589,7 @@ test("30 frame cards obey the per-pane cap and resume as the chat scrolls", asyn
   results.push({
     case: "30-frame scroll",
     initialFrames: initial,
+    tallViewportFrames: tall,
     finalFrames: final,
     cap: 12,
   });

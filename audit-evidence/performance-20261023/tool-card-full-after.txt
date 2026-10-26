@@ -1,0 +1,60 @@
+$ env OR3_PLUGIN_CONTRIBUTION_V2_SURFACES=chat-tool-cards OR3_TOOL_CARDS_TEST_HARNESS=true SSR_AUTH_ENABLED=false OR3_SYNC_ENABLED=false OR3_CLOUD_SYNC_ENABLED=false OR3_STORAGE_ENABLED=false OR3_CLOUD_STORAGE_ENABLED=false OR3_BACKGROUND_STREAMING_ENABLED=false PW_PORT=3116 bunx playwright test tests/e2e/tool-cards.spec.ts --workers=1 --reporter=line --output=test-results/tool-cards/browser
+
+Running 16 tests using 1 worker
+
+(node:11083) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/16] [chromium] › tests/e2e/tool-cards.spec.ts:114:1 › quiz executes inline, sends an attributed answer, and persists the locked state across reload
+[2/16] [chromium] › tests/e2e/tool-cards.spec.ts:150:1 › quiz weather and map rehydrate in light and dark mode and fit 320px
+[3/16] [chromium] › tests/e2e/tool-cards.spec.ts:196:1 › saved card state survives virtualization and receives persisted updates
+[4/16] [chromium] › tests/e2e/tool-cards.spec.ts:218:1 › card saves stay ordered across panes while preparation is delayed
+[5/16] [chromium] › tests/e2e/tool-cards.spec.ts:243:3 › card save completion preserves remote persisted state
+[6/16] [chromium] › tests/e2e/tool-cards.spec.ts:243:3 › card save completion preserves normalized persisted state
+[7/16] [chromium] › tests/e2e/tool-cards.spec.ts:272:1 › offscreen preloads preserve visible frames and resume when capacity frees
+[8/16] [chromium] › tests/e2e/tool-cards.spec.ts:292:1 › legacy placement, crashing card fallback and timer sends stay isolated
+[9/16] [chromium] › tests/e2e/tool-cards.spec.ts:321:1 › always cards receive persisted status updates
+[10/16] [chromium] › tests/e2e/tool-cards.spec.ts:331:1 › trusted Vue card uses the SDK adapter and is removed on activation teardown
+[11/16] [chromium] › tests/e2e/tool-cards.spec.ts:355:1 › lazy cards mount during scrolling without rerunning their tools
+[12/16] [chromium] › tests/e2e/tool-cards.spec.ts:377:1 › verified frame mounts, resizes and receives live theme changes
+[13/16] [chromium] › tests/e2e/tool-cards.spec.ts:419:1 › SDK vanilla, Vue and React helpers update, record actions and clean up once
+[14/16] [chromium] › tests/e2e/tool-cards.spec.ts:444:1 › card actions reject invalid state, text and links and enforce send cooldown
+[15/16] [chromium] › tests/e2e/tool-cards.spec.ts:466:1 › busy chat refuses a card send before reserving its cooldown
+[16/16] [chromium] › tests/e2e/tool-cards.spec.ts:507:1 › 30 frame cards obey the per-pane cap and resume as the chat scrolls
+  1) [chromium] › tests/e2e/tool-cards.spec.ts:507:1 › 30 frame cards obey the per-pane cap and resume as the chat scrolls
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-msg-id="scroll-0"]').first().locator('iframe').contentFrame().getByRole('button', { name: 'Frame answer' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" locator('[data-msg-id="scroll-0"]').first().locator('iframe').contentFrame().getByRole('button', { name: 'Frame answer' }) with timeout 5000ms
+      - waiting for locator('[data-msg-id="scroll-0"]').first().locator('iframe').contentFrame().getByRole('button', { name: 'Frame answer' })
+
+
+      533 |       .frameLocator("iframe")
+      534 |       .getByRole("button", { name: "Frame answer" }),
+    > 535 |   ).toBeVisible();
+          |     ^
+      536 |   const final = await page.locator('iframe[title="Frame fixture"]').count();
+      537 |   expect(final).toBeLessThanOrEqual(12);
+      538 |   results.push({
+        at /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/tool-cards.spec.ts:535:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/tool-cards/browser/tool-cards-30-frame-cards--cb48f--resume-as-the-chat-scrolls-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/tool-cards/browser/tool-cards-30-frame-cards--cb48f--resume-as-the-chat-scrolls-chromium/error-context.md
+
+    Error Context: test-results/tool-cards/browser/tool-cards-30-frame-cards--cb48f--resume-as-the-chat-scrolls-chromium/error-context.md
+
+
+  1 failed
+    [chromium] › tests/e2e/tool-cards.spec.ts:507:1 › 30 frame cards obey the per-pane cap and resume as the chat scrolls
+  15 passed (44.9s)
+error: script "test:e2e:tool-cards" exited with code 1

@@ -20,8 +20,6 @@ import { GENERATED_THEME_METADATA } from './theme-manifest.generated';
 
 type ThemeModuleLoader = () => Promise<{ default: ThemeDefinition }>;
 
-type StylesheetModuleLoader = () => Promise<string>;
-
 type ThemeAppConfig = Record<string, unknown>;
 
 type ThemeAppConfigLoader = () => Promise<
@@ -46,14 +44,13 @@ const iconModules = import.meta.glob('../*/icons.config.ts') as Record<
     ThemeIconsLoader
 >;
 
-// Stylesheet asset loaders. These are resolved lazily so the CSS is only
-// fetched when the corresponding theme becomes active. Using `as: 'url'`
-// keeps the CSS out of the main bundle while still letting Vite emit an
-// asset that can be referenced at runtime.
+// Import only the emitted URL strings eagerly. The CSS itself still loads
+// when its theme becomes active, without a separate JS request to find its URL.
 const stylesheetModules = import.meta.glob('../**/*.css', {
     query: '?url',
     import: 'default',
-}) as Record<string, StylesheetModuleLoader>;
+    eager: true,
+}) as Record<string, string>;
 
 const configModules = import.meta.glob('../*/app.config.ts') as Record<
     string,
@@ -226,18 +223,22 @@ export async function loadThemeStylesheets(
             return;
         }
 
-        const dedupeKey = `${entry.name}|${href}`;
+        const absoluteHref = new URL(href, doc.baseURI).href;
+        const dedupeKey = `${entry.name}|${absoluteHref}`;
 
         const existingInFlight = stylesheetInFlight.get(dedupeKey);
         if (existingInFlight) {
             return existingInFlight;
         }
 
-        const existingLink = doc.querySelector<HTMLLinkElement>(
-            `link[data-theme-stylesheet="${entry.name}"][href="${href}"]`
-        );
+        const existingLink = Array.from(doc.querySelectorAll<HTMLLinkElement>(
+            `link[data-theme-stylesheet="${entry.name}"]`
+        )).find(link => link.href === absoluteHref);
 
-        if (existingLink && stylesheetLoaded.has(dedupeKey)) {
+        if (existingLink && (stylesheetLoaded.has(dedupeKey) || existingLink.sheet)) {
+            // A parsed SSR stylesheet is already usable. Keep its cascade order
+            // and accept either relative SSR or absolute client asset URLs.
+            stylesheetLoaded.add(dedupeKey);
             existingLink.disabled = false;
             return;
         }
@@ -412,22 +413,8 @@ export async function resolveThemeStylesheetHref(
     }
 
     for (const key of moduleKeyCandidates) {
-        const loader = stylesheetModules[key];
-        if (loader) {
-            try {
-                const href = await loader();
-                if (typeof href === 'string' && href.length > 0) {
-                    return href;
-                }
-            } catch (error) {
-                if (import.meta.dev) {
-                    console.warn(
-                        `[theme] Failed to resolve stylesheet module "${key}" for theme "${entry.name}".`,
-                        error
-                    );
-                }
-            }
-        }
+        const href = stylesheetModules[key];
+        if (href) return href;
     }
 
     // Fallback to path-based resolution for assets placed under /public

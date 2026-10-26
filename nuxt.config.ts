@@ -502,6 +502,8 @@ export default defineNuxtConfig({
                 // These assets remain available online, but are not required to
                 // install or operate the offline application shell.
                 'screenshots/**',
+                // Fetch/cache only the responsive artwork sizes actually used.
+                'chat-artwork/**',
                 'logos/logo-8bit-raw.png',
                 'logos/logo-xl.png',
                 'logos/logo-1024.png',
@@ -567,7 +569,7 @@ export default defineNuxtConfig({
                 },
                 // Static images
                 {
-                    urlPattern: /\.(?:png|webp|jpg|jpeg|gif|svg|ico)$/,
+                    urlPattern: /\.(?:png|webp|avif|jpg|jpeg|gif|svg|ico)$/,
                     handler: 'CacheFirst',
                     method: 'GET',
                     options: {
@@ -849,6 +851,21 @@ export default defineNuxtConfig({
                                     test: (id: string) => id.replaceAll('\\', '/').includes('/app/components/PageShell.vue'),
                                     maxSize: 500_000,
                                 },
+                                {
+                                    // A theme's definition and icons
+                                    // are requested in sequence during activation.
+                                    // Keep them together without pulling replacement
+                                    // components or stylesheet/font assets into it.
+                                    name: (id: string) => {
+                                        const match = id.replaceAll('\\', '/').match(
+                                            /\/app\/theme\/([^/]+)\/(?:theme\.ts|icons\.config\.ts|app\.config\.ts)$/,
+                                        );
+                                        return match && match[1] !== '_shared'
+                                            ? `theme-${match[1]}`
+                                            : null;
+                                    },
+                                    maxSize: 500_000,
+                                },
                             ],
                         },
                     },
@@ -859,8 +876,27 @@ export default defineNuxtConfig({
             // Dynamic imports still load on navigation and NuxtLink keeps its
             // interaction prefetch. Avoid fetching every possible route from
             // SSR-generated <link rel="prefetch"> tags during initial load.
+            // Manual chunk groups have no component facade in Vite's manifest.
+            // Restore the rendered shell's lookup so its code/CSS can load with
+            // the document instead of after the main entry has executed.
+            const shellChunks = Object.entries(manifest).filter(([, resource]) => resource.name === 'chat-shell');
+            const shell = shellChunks[0];
+            if (shell) {
+                manifest['components/PageShell.vue'] = {
+                    ...shell[1],
+                    imports: [...new Set([
+                        ...(shell[1].imports ?? []),
+                        ...shellChunks.slice(1).map(([key]) => key),
+                    ])],
+                };
+            }
             for (const resource of Object.values(manifest)) {
                 resource.prefetch = false;
+                // Plain theme modules do not register as rendered Vue components.
+                // Give SSR a stable key for the selected theme's emitted chunk.
+                if (resource.name?.startsWith('theme-')) {
+                    manifest[`or3:theme:${resource.name.slice('theme-'.length)}`] = resource;
+                }
                 // Extraction runs in a worker only after an upload. Nuxt
                 // otherwise modulepreloads this emitted worker on every page.
                 if (/\.worker-[^/]+\.js$/.test(resource.file ?? '')) {

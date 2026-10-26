@@ -1,0 +1,268 @@
+{
+  "config": {
+    "argv": [
+      "/Users/brendon/.vite-plus/js_runtime/node/24.22.1/bin/node",
+      "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.bin/playwright",
+      "test",
+      "tests/e2e/tool-cards.spec.ts",
+      "--grep",
+      "saved card state survives",
+      "--repeat-each=3",
+      "--workers=1",
+      "--reporter=json",
+      "--output=/tmp/or3-scroll-card-reversal-repeat"
+    ],
+    "configFile": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/playwright.config.ts",
+    "rootDir": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/tmp/or3-scroll-card-reversal-repeat",
+        "repeatEach": 3,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.spec.ts",
+          "**/*.e2e.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "tool-cards.spec.ts",
+      "file": "tool-cards.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "saved card state survives virtualization and receives persisted updates",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 7825,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeDisabled\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true })\nExpected: disabled\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeDisabled\" locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true }) with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeDisabled\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true })\nExpected: disabled\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeDisabled\" locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true }) with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true })\u001b[22m\n\n    at /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/tool-cards.spec.ts:211:5",
+                    "location": {
+                      "file": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/tool-cards.spec.ts",
+                      "column": 5,
+                      "line": 211
+                    },
+                    "snippet": "  209 |   await expect(\n  210 |     card.getByRole(\"button\", { name: \"A\", exact: true }),\n> 211 |   ).toBeDisabled();\n      |     ^\n  212 |   await page.getByRole(\"button\", { name: \"Reset saved quiz\" }).click();\n  213 |   await expect(\n  214 |     card.getByRole(\"button\", { name: \"A\", exact: true }),"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/tool-cards.spec.ts",
+                        "column": 5,
+                        "line": 211
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeDisabled\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true })\nExpected: disabled\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeDisabled\" locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true }) with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true })\u001b[22m\n\n\n  209 |   await expect(\n  210 |     card.getByRole(\"button\", { name: \"A\", exact: true }),\n> 211 |   ).toBeDisabled();\n      |     ^\n  212 |   await page.getByRole(\"button\", { name: \"Reset saved quiz\" }).click();\n  213 |   await expect(\n  214 |     card.getByRole(\"button\", { name: \"A\", exact: true }),\n    at /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/tool-cards.spec.ts:211:5"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T07:06:33.093Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/tmp/or3-scroll-card-reversal-repeat/tool-cards-saved-card-stat-7abf0--receives-persisted-updates-chromium/test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/tmp/or3-scroll-card-reversal-repeat/tool-cards-saved-card-stat-7abf0--receives-persisted-updates-chromium/error-context.md"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/tmp/or3-scroll-card-reversal-repeat/tool-cards-saved-card-stat-7abf0--receives-persisted-updates-chromium/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/tool-cards.spec.ts",
+                    "column": 5,
+                    "line": 211
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "2832a9dc82b38c2c0891-ec116a12829aa458ae3d",
+          "file": "tool-cards.spec.ts",
+          "line": 196,
+          "column": 1
+        },
+        {
+          "title": "saved card state survives virtualization and receives persisted updates",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 7830,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeDisabled\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true })\nExpected: disabled\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeDisabled\" locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true }) with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true })\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeDisabled\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true })\nExpected: disabled\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeDisabled\" locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true }) with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true })\u001b[22m\n\n    at /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/tool-cards.spec.ts:211:5",
+                    "location": {
+                      "file": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/tool-cards.spec.ts",
+                      "column": 5,
+                      "line": 211
+                    },
+                    "snippet": "  209 |   await expect(\n  210 |     card.getByRole(\"button\", { name: \"A\", exact: true }),\n> 211 |   ).toBeDisabled();\n      |     ^\n  212 |   await page.getByRole(\"button\", { name: \"Reset saved quiz\" }).click();\n  213 |   await expect(\n  214 |     card.getByRole(\"button\", { name: \"A\", exact: true }),"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/tool-cards.spec.ts",
+                        "column": 5,
+                        "line": 211
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeDisabled\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true })\nExpected: disabled\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeDisabled\" locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true }) with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('[data-msg-id=\"scroll-0\"]').first().getByRole('button', { name: 'A', exact: true })\u001b[22m\n\n\n  209 |   await expect(\n  210 |     card.getByRole(\"button\", { name: \"A\", exact: true }),\n> 211 |   ).toBeDisabled();\n      |     ^\n  212 |   await page.getByRole(\"button\", { name: \"Reset saved quiz\" }).click();\n  213 |   await expect(\n  214 |     card.getByRole(\"button\", { name: \"A\", exact: true }),\n    at /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/tool-cards.spec.ts:211:5"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T07:06:41.224Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/tmp/or3-scroll-card-reversal-repeat/tool-cards-saved-card-stat-7abf0--receives-persisted-updates-chromium-repeat1/test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/tmp/or3-scroll-card-reversal-repeat/tool-cards-saved-card-stat-7abf0--receives-persisted-updates-chromium-repeat1/error-context.md"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/tmp/or3-scroll-card-reversal-repeat/tool-cards-saved-card-stat-7abf0--receives-persisted-updates-chromium-repeat1/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/tool-cards.spec.ts",
+                    "column": 5,
+                    "line": 211
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "2832a9dc82b38c2c0891-6f22cc0b90ed1e83cb26",
+          "file": "tool-cards.spec.ts",
+          "line": 196,
+          "column": 1
+        },
+        {
+          "title": "saved card state survives virtualization and receives persisted updates",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3040,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T07:06:49.359Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2832a9dc82b38c2c0891-420fcd6c0e046b9c0e16",
+          "file": "tool-cards.spec.ts",
+          "line": 196,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-24T07:06:32.914Z",
+    "duration": 19632.479,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 2,
+    "flaky": 0
+  }
+}

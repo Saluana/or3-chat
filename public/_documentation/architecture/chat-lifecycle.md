@@ -75,6 +75,13 @@ download action in the expanded message gallery.
 Closing a retry stream closes its provider iterator. Caller cancellation remains
 attached to the response body even when prefetch has filled the wrapper queue.
 
+Generated-image placeholders enter the same live text accumulator as provider
+text, including during Continue, so later text retains their order and visibility.
+Inline thumbnail hydration retains a bounded trailing check when readiness
+arrives during a quiet stream; unmount cancels that check. Delayed continuation
+image intake rechecks request ownership before publishing content after Stop or
+navigation.
+
 The default message renderer loads through the theme registry when a message
 row mounts. Empty chats keep Markdown and highlighting out of the initial
 preload graph; theme-provided message components keep their existing selection.
@@ -130,6 +137,19 @@ ignored until a reset. This display state is not a durable message receipt.
 Preserve keyed message anchors and the existing user's scroll intent when
 updating stream projections or restoring a tab. Do not recreate the removed
 `VirtualMessageList.vue` thresholds in another watcher.
+Native upward movement that overtakes an instant bottom-follow write must enter
+browsing before queued layout work runs. A stale programmatic target must not
+hide that movement; explicit smooth navigation and keyed jumps still settle
+through the scroller's existing paths.
+When bottom following is enabled, the scroller acknowledges wheel intent before
+the browser applies native scrolling. This prevents an automatic layout-follow
+write from displacing a clamped wheel jump. It does not cancel the default wheel
+action. The owned listener updates with `maintainBottom` and is removed on
+unmount; lists with bottom following disabled retain passive wheel handling.
+Layout following keeps its existing next-tick path and checks active browsing,
+without adding another animation frame. Row-height and anchor formulas are
+unchanged. Wheel input on a following scroller can wait for a busy main thread;
+reducing that work remains part of performance qualification.
 
 `abort()` requests cancellation. `dispose()` releases view listeners/subscriptions and can leave admitted generation tracking detached. It does not delete saved messages. `clearConversation({ persistence: 'preserve' })` clears in-memory projections and preserves durable rows. Do not use teardown as a destructive conversation operation or report it as a completed cancellation.
 

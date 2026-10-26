@@ -1,0 +1,22 @@
+
+Running 14 tests using 1 worker
+
+(node:12080) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/14] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › blank light 1x mobile startup keeps the composer and navigation stable while JavaScript loads
+[2/14] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › blank light 2x mobile startup keeps the composer and navigation stable while JavaScript loads
+[3/14] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › blank dark 1x mobile startup keeps the composer and navigation stable while JavaScript loads
+[4/14] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › blank dark 2x mobile startup keeps the composer and navigation stable while JavaScript loads
+[5/14] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › retro light 1x mobile startup keeps the composer and navigation stable while JavaScript loads
+[6/14] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › retro dark 1x mobile startup keeps the composer and navigation stable while JavaScript loads
+[7/14] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › cyberpunk light 1x mobile startup keeps the composer and navigation stable while JavaScript loads
+[8/14] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › cyberpunk dark 1x mobile startup keeps the composer and navigation stable while JavaScript loads
+[9/14] [chromium] › tests/e2e/theme-token-migrations.spec.ts:1378:27 › empty chat: Blank light artwork, focus, and responsive controls
+[10/14] [chromium] › tests/e2e/theme-token-migrations.spec.ts:1378:27 › empty chat: Blank dark artwork, focus, and responsive controls
+[11/14] [chromium] › tests/e2e/theme-token-migrations.spec.ts:1472:49 › empty chat: missing responsive artwork falls back to originals
+[12/14] [chromium] › tests/e2e/theme-token-migrations.spec.ts:1472:49 › empty chat: missing decoration keeps actions usable
+[13/14] [chromium] › tests/e2e/theme-token-migrations.spec.ts:1492:54 › empty chat: retro remains opted out
+[14/14] [chromium] › tests/e2e/theme-token-migrations.spec.ts:1492:54 › empty chat: cyberpunk remains opted out
+  14 passed (15.4s)

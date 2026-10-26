@@ -3,7 +3,7 @@ import { computed, ref } from 'vue';
 import { useToast, useRuntimeConfig } from '#imports';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { useAmbiguousChatProjects } from '~/composables/projects/useChatProjectOwner';
-import { captureProjectOperation } from '~/utils/projects/context';
+import { captureProjectOperation } from '~/utils/projects/operation';
 import { moveChatToProject } from '~/db/project-workspace';
 import { reportError } from '~/utils/errors';
 import { relatedChatsNotice } from '~/utils/projects/related-chats';

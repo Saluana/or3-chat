@@ -53,7 +53,7 @@ import { useThumbnailUrlCache } from '~/composables/core/useThumbnailUrlCache';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 
 type ScrollApi = {
-    scrollToBottom: () => void;
+    scrollToBottom: (options?: { smooth?: boolean }) => void;
     scrollToIndex: (
         index: number,
         options?: { align?: 'start' | 'center' | 'end' }
@@ -324,10 +324,10 @@ const api = {
                 -1,
         };
     },
-    scrollToBottom: async () => {
+    scrollToBottom: async (options?: { smooth?: boolean }) => {
         const element = document.querySelector<HTMLElement>('.canary-scroll');
         const before = element?.scrollTop ?? -1;
-        scroller.value?.scrollToBottom();
+        scroller.value?.scrollToBottom(options);
         const immediate = element?.scrollTop ?? -1;
         await nextTick();
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));

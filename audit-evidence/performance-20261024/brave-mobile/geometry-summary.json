@@ -1,0 +1,44 @@
+[
+  {
+    "fixture": "cyberpunk-light.json",
+    "theme": "cyberpunk",
+    "dark": false,
+    "maxGeometryDeltaPx": 0,
+    "errors": []
+  },
+  {
+    "fixture": "blank-dark.json",
+    "theme": "blank",
+    "dark": true,
+    "maxGeometryDeltaPx": 0,
+    "errors": []
+  },
+  {
+    "fixture": "retro-light.json",
+    "theme": "retro",
+    "dark": false,
+    "maxGeometryDeltaPx": 0,
+    "errors": []
+  },
+  {
+    "fixture": "blank-light.json",
+    "theme": "blank",
+    "dark": false,
+    "maxGeometryDeltaPx": 0,
+    "errors": []
+  },
+  {
+    "fixture": "cyberpunk-dark.json",
+    "theme": "cyberpunk",
+    "dark": true,
+    "maxGeometryDeltaPx": 0,
+    "errors": []
+  },
+  {
+    "fixture": "retro-dark.json",
+    "theme": "retro",
+    "dark": true,
+    "maxGeometryDeltaPx": 0,
+    "errors": []
+  }
+]

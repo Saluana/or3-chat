@@ -130,6 +130,13 @@ using indexed database reads. Mutations without an originating conversation ID
 and incoming sync batches reconcile the source. Search selects the best matching
 chunk per resource so a long conversation cannot crowd out other results.
 
+Initial chat loading reads bounded primary-key pages, including legacy messages
+without an ordering key. It retains searchable text and branch-anchor metadata
+instead of raw tool and reasoning payloads, and yields while preparing conversation
+resources. Cancellation stops subsequent reads. This preserves full-history search;
+it does not impose a workspace size cap or remove older conversations. The complete
+text index still consumes memory proportional to the searchable history.
+
 ## Accessibility
 
 The palette is a combobox over a listbox: the query owns focus and announces the

@@ -469,9 +469,11 @@ export async function runForegroundStreamLoop(
                         ctx.assistantFileHashes.push(meta.hash);
                         const placeholder = `![file-hash:${meta.hash}](${TRANSPARENT_PIXEL_GIF_DATA_URI})`;
                         if (!current.text.includes(placeholder)) {
+                            const delta = (current.text ? '\n\n' : '') + placeholder;
                             normalizedState = appendNormalizedAssistantText(normalizedState,
-                                (current.text ? '\n\n' : '') + placeholder,
+                                delta,
                                 { iterationText: (normalizedState.iterationText ? '\n\n' : '') + placeholder });
+                            ctx.streamAcc.append(delta, { kind: 'text' });
                             current.text = normalizedState.cumulativeText;
                         }
                         current.file_hashes = ctx.assistantFileHashes;

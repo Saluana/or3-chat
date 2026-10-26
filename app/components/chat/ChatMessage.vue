@@ -261,7 +261,7 @@
                         props.message.toolCalls.length > 0
                     "
                     :tool-calls="props.message.toolCalls"
-                    :message="props.message"
+                    :message="toolCardMessage"
                     @resize="emit('content-resize')"
                 />
 
@@ -327,7 +327,7 @@
                             <ChatToolBlock
                                 v-else
                                 :tool-calls="part.toolCalls"
-                                :message="props.message"
+                                :message="toolCardMessage"
                                 @resize="emit('content-resize')"
                             />
                         </template>
@@ -349,8 +349,9 @@
                     <!-- legacy rendered html path removed -->
                 </div>
                 <ChatToolCardsEnd
-                    v-if="props.message.role === 'assistant'"
-                    :message="props.message"
+                    v-if="props.message.role === 'assistant' && props.message.toolCalls?.length"
+                    :message="toolCardMessage"
+                    :tool-calls="props.message.toolCalls"
                     @resize="emit('content-resize')"
                 />
             </div>
@@ -597,6 +598,7 @@ import {
     watch,
     nextTick,
     onMounted,
+    onBeforeUnmount,
 } from 'vue';
 import LoadingGenerating from './LoadingGenerating.vue';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
@@ -625,6 +627,7 @@ import ProjectMessageContext from '~/components/projects/ProjectMessageContext.v
 import { useMessageActions } from '~/composables/chat/useMessageActions';
 import { resolveMessageRenderer } from '~/composables/chat/message-renderers';
 import { buildUsageLabel } from '~/utils/chat/usage-label';
+import type { ToolCardMessage } from '~/utils/chat/tool-card-context';
 
 // UI message now exposed as UiChatMessage with .text field
 type UIMessage = UiChatMessage & { pre_html?: string };
@@ -859,6 +862,16 @@ const innerClass = computed(() => ({
 
 // Detect if assistant message currently has any textual content yet
 const hasContent = computed(() => (props.message.text || '').trim().length > 0);
+const toolCardMessage = computed<ToolCardMessage>((previous) => {
+    const { id, sourceThreadId, toolCards } = props.message;
+    if (
+        previous?.id === id &&
+        previous.sourceThreadId === sourceThreadId &&
+        previous.toolCards === toolCards
+    )
+        return previous;
+    return { id, sourceThreadId, toolCards };
+});
 const orderedAssistantParts = computed(() =>
     props.message.role === 'assistant' && Array.isArray(props.message.parts)
         ? props.message.parts
@@ -1104,6 +1117,14 @@ const rafHydrate = useRafFn(
 // Throttle hydration checks to avoid excessive re-renders during streaming
 let lastHydrateCheck = 0;
 const HYDRATE_THROTTLE_MS = 200; // Only check every 200ms during streaming
+let hydrateTimer: ReturnType<typeof setTimeout> | undefined;
+function resumeInlineHydration() {
+    clearTimeout(hydrateTimer);
+    hydrateTimer = undefined;
+    lastHydrateCheck = Date.now();
+    rafHydrate.resume();
+}
+onBeforeUnmount(() => clearTimeout(hydrateTimer));
 
 watch(
     [
@@ -1117,11 +1138,14 @@ watch(
 
         const now = Date.now();
         const isPending = props.message.pending === true;
-        if (isPending && now - lastHydrateCheck < HYDRATE_THROTTLE_MS) {
+        const remaining = HYDRATE_THROTTLE_MS - (now - lastHydrateCheck);
+        if (isPending && remaining > 0) {
+            // Retain a trailing check: thumbnail readiness or the last image
+            // placeholder may arrive while the provider is otherwise quiet.
+            hydrateTimer ??= setTimeout(resumeInlineHydration, remaining);
             return;
         }
-        lastHydrateCheck = now;
-        rafHydrate.resume();
+        resumeInlineHydration();
     },
     { immediate: true }
 );

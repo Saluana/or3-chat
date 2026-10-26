@@ -1,5 +1,4 @@
 import { useOverlay } from '@nuxt/ui/composables/useOverlay';
-import { getActiveWorkspaceId } from '~/db/client';
 import {
     readProjectWorkspace,
     readProjectPolicy,
@@ -11,14 +10,10 @@ import type { Post } from '~/db/schema';
 import { chunkText } from '~/core/search/command-palette/chunker';
 import { tiptapToPlainText } from '~/core/search/command-palette/normalize';
 import { readVisibleWorkspaceProjectEntries } from '~/utils/chat/workspace-projects';
-import {
-    captureWorkspaceOperation,
-    type WorkspaceOperationScope,
-} from '~/utils/chat/workspace-access';
+import type { WorkspaceOperationScope } from '~/utils/chat/workspace-access';
 import { normalizeProjectData } from '~/utils/projects/normalizeProjectData';
 import { parseFileHashes } from '~/db/files-util';
 import { PROJECT_MEMORY_HEADING, PROJECT_POST_TYPES, ProjectSourceSchema, readPersistedProjectRecord } from '~~/shared/projects/workspace';
-import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { asAppError } from '~/utils/errors';
 import { workspaceRevision } from '~/utils/chat/workspace-items';
 import { workspaceSourceReceipts } from '~/utils/chat/workspace-source-receipts';
@@ -29,20 +24,7 @@ import type {
     ProjectSettings,
 } from '~~/shared/projects/workspace';
 
-export function captureProjectOperation(
-    signal = new AbortController().signal,
-    threadId = 'project-home',
-) {
-    return captureWorkspaceOperation({
-        subject: null,
-        workspaceId: getActiveWorkspaceId() ?? 'local',
-        threadId,
-        messageId: null,
-        requestId: createRuntimeUuid(),
-        callId: createRuntimeUuid(),
-        abortSignal: signal,
-    });
-}
+export { captureProjectOperation } from './operation';
 
 import type { ProjectContextSnapshot } from './types';
 export type { ProjectContextSnapshot } from './types';

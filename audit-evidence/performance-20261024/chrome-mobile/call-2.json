@@ -1,0 +1,1426 @@
+{
+  "profile": {
+    "width": 390,
+    "height": 844,
+    "cpuRate": 4,
+    "latencyMs": 150,
+    "downBytesPerSecond": 200000,
+    "upBytesPerSecond": 93750
+  },
+  "proof": {
+    "capturedAt": "2026-10-25T02:06:31.836Z",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+    "viewport": {
+      "width": 390,
+      "height": 844,
+      "dpr": 1,
+      "touch": 5
+    },
+    "theme": "blank",
+    "dark": false,
+    "proof": {
+      "paints": [
+        {
+          "name": "first-paint",
+          "startMs": 1520
+        },
+        {
+          "name": "first-contentful-paint",
+          "startMs": 1520
+        }
+      ],
+      "lcp": [
+        {
+          "startMs": 1520,
+          "size": 2178,
+          "tag": "::before",
+          "path": null
+        },
+        {
+          "startMs": 5252,
+          "size": 34895,
+          "path": "/images/cursor-chat.png"
+        }
+      ],
+      "shifts": [
+        {
+          "startMs": 8113.699999809265,
+          "value": 0.05652737524847825
+        },
+        {
+          "startMs": 20169.89999985695,
+          "value": 0.002760635430471014
+        },
+        {
+          "startMs": 20191.89999985695,
+          "value": 0.033233548669448124
+        },
+        {
+          "startMs": 22862,
+          "value": 0.0005334561218301476
+        },
+        {
+          "startMs": 25358.299999952316,
+          "value": 0.0030847281066925924
+        },
+        {
+          "startMs": 25420.799999952316,
+          "value": 0.0013802999986069668
+        },
+        {
+          "startMs": 25466.099999904633,
+          "value": 0.0033484401365717867
+        },
+        {
+          "startMs": 26138.299999952316,
+          "value": 0.010775030754717307
+        }
+      ],
+      "longTasks": [
+        {
+          "startMs": 4857.099999904633,
+          "durationMs": 104
+        },
+        {
+          "startMs": 6129.599999904633,
+          "durationMs": 114
+        },
+        {
+          "startMs": 6403.899999856949,
+          "durationMs": 91
+        },
+        {
+          "startMs": 7995.399999856949,
+          "durationMs": 89
+        },
+        {
+          "startMs": 20450.799999952316,
+          "durationMs": 77
+        },
+        {
+          "startMs": 20655.799999952316,
+          "durationMs": 67
+        },
+        {
+          "startMs": 21067.199999809265,
+          "durationMs": 75
+        }
+      ],
+      "events": [
+        {
+          "name": "pointerover",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "mouseover",
+          "startMs": 20410.699999809265,
+          "durationMs": 24,
+          "processingStartMs": 20417.799999952316,
+          "processingEndMs": 20417.799999952316,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerdown",
+          "startMs": 20422.39999985695,
+          "durationMs": 32,
+          "processingStartMs": 20422.89999985695,
+          "processingEndMs": 20423.699999809265,
+          "interactionId": 1973
+        },
+        {
+          "name": "mousedown",
+          "startMs": 20422.39999985695,
+          "durationMs": 32,
+          "processingStartMs": 20423.699999809265,
+          "processingEndMs": 20423.699999809265,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerout",
+          "startMs": 20444.89999985695,
+          "durationMs": 16,
+          "processingStartMs": 20445.39999985695,
+          "processingEndMs": 20445.39999985695,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerleave",
+          "startMs": 20444.89999985695,
+          "durationMs": 16,
+          "processingStartMs": 20445.39999985695,
+          "processingEndMs": 20445.39999985695,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerover",
+          "startMs": 20444.89999985695,
+          "durationMs": 16,
+          "processingStartMs": 20445.39999985695,
+          "processingEndMs": 20445.39999985695,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20444.89999985695,
+          "durationMs": 16,
+          "processingStartMs": 20445.39999985695,
+          "processingEndMs": 20445.39999985695,
+          "interactionId": 0
+        },
+        {
+          "name": "mouseout",
+          "startMs": 20444.89999985695,
+          "durationMs": 16,
+          "processingStartMs": 20445.39999985695,
+          "processingEndMs": 20445.39999985695,
+          "interactionId": 0
+        },
+        {
+          "name": "mouseover",
+          "startMs": 20444.89999985695,
+          "durationMs": 16,
+          "processingStartMs": 20445.39999985695,
+          "processingEndMs": 20445.39999985695,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerup",
+          "startMs": 20449.099999904633,
+          "durationMs": 112,
+          "processingStartMs": 20450.799999952316,
+          "processingEndMs": 20451.599999904633,
+          "interactionId": 1973
+        },
+        {
+          "name": "mouseup",
+          "startMs": 20449.099999904633,
+          "durationMs": 112,
+          "processingStartMs": 20451.599999904633,
+          "processingEndMs": 20451.599999904633,
+          "interactionId": 0
+        },
+        {
+          "name": "click",
+          "startMs": 20449.099999904633,
+          "durationMs": 112,
+          "processingStartMs": 20451.599999904633,
+          "processingEndMs": 20490.5,
+          "interactionId": 1973
+        },
+        {
+          "name": "pointerover",
+          "startMs": 20449.099999904633,
+          "durationMs": 112,
+          "processingStartMs": 20490.599999904633,
+          "processingEndMs": 20490.599999904633,
+          "interactionId": 0
+        },
+        {
+          "name": "mouseover",
+          "startMs": 20449.099999904633,
+          "durationMs": 112,
+          "processingStartMs": 20490.599999904633,
+          "processingEndMs": 20490.599999904633,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerout",
+          "startMs": 20528.799999952316,
+          "durationMs": 32,
+          "processingStartMs": 20531,
+          "processingEndMs": 20531,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerover",
+          "startMs": 20528.799999952316,
+          "durationMs": 32,
+          "processingStartMs": 20531,
+          "processingEndMs": 20531,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20528.799999952316,
+          "durationMs": 32,
+          "processingStartMs": 20531,
+          "processingEndMs": 20531,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 20528.799999952316,
+          "durationMs": 32,
+          "processingStartMs": 20531,
+          "processingEndMs": 20531,
+          "interactionId": 0
+        },
+        {
+          "name": "mouseout",
+          "startMs": 20528.799999952316,
+          "durationMs": 32,
+          "processingStartMs": 20531,
+          "processingEndMs": 20531,
+          "interactionId": 0
+        },
+        {
+          "name": "mouseover",
+          "startMs": 20528.799999952316,
+          "durationMs": 32,
+          "processingStartMs": 20531,
+          "processingEndMs": 20531,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerover",
+          "startMs": 25909.89999985695,
+          "durationMs": 16,
+          "processingStartMs": 25909.89999985695,
+          "processingEndMs": 25910.5,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 25909.89999985695,
+          "durationMs": 16,
+          "processingStartMs": 25910.5,
+          "processingEndMs": 25910.5,
+          "interactionId": 0
+        },
+        {
+          "name": "pointerenter",
+          "startMs": 25909.89999985695,
+          "durationMs": 16,
+          "processingStartMs": 25910.5,
+          "processingEndMs": 25910.5,
+          "interactionId": 0
+        },
+        {
+          "name": "mouseover",
+          "startMs": 25909.89999985695,
+          "durationMs": 16,
+          "processingStartMs": 25910.5,
+          "processingEndMs": 25910.5,
+          "interactionId": 0
+        }
+      ],
+      "readyMs": 7798.299999952316,
+      "calls": [
+        {
+          "sendMs": 20451.599999904633,
+          "assistantCountBefore": 1,
+          "firstTextMs": 25274.599999904633,
+          "lastTextMs": 25606,
+          "textLength": 208,
+          "updates": 14,
+          "completeMs": 25910.799999952316
+        }
+      ]
+    },
+    "navigation": [
+      {
+        "startMs": 0,
+        "dclMs": 4961.099999904633,
+        "loadMs": 5196.599999904633,
+        "transferBytes": 99412
+      }
+    ],
+    "resources": [
+      {
+        "path": "/themes/blank.css",
+        "startMs": 223.29999995231628,
+        "endMs": 410.5,
+        "transferBytes": 2953,
+        "encodedBytes": 2653
+      },
+      {
+        "path": "/_nuxt/styles.ecVrasWO.css",
+        "startMs": 223.39999985694885,
+        "endMs": 492,
+        "transferBytes": 10249,
+        "encodedBytes": 9949
+      },
+      {
+        "path": "/_nuxt/startup.x1XGuNl0.css",
+        "startMs": 485.69999980926514,
+        "endMs": 650.7999999523163,
+        "transferBytes": 301,
+        "encodedBytes": 1
+      },
+      {
+        "path": "/_nuxt/chat-shell.eqqznHAT.css",
+        "startMs": 485.7999999523163,
+        "endMs": 727.5,
+        "transferBytes": 3809,
+        "encodedBytes": 3509
+      },
+      {
+        "path": "/_nuxt/startup.DByHQnRK.css",
+        "startMs": 485.7999999523163,
+        "endMs": 1347.2999999523163,
+        "transferBytes": 41493,
+        "encodedBytes": 41193
+      },
+      {
+        "path": "/_nuxt/chat-shell.BvpwCJ2m.css",
+        "startMs": 486.59999990463257,
+        "endMs": 672.5999999046326,
+        "transferBytes": 850,
+        "encodedBytes": 550
+      },
+      {
+        "path": "/_nuxt/-VQLPnMc.js",
+        "startMs": 522.8999998569489,
+        "endMs": 702.1999998092651,
+        "transferBytes": 382,
+        "encodedBytes": 82
+      },
+      {
+        "path": "/_nuxt/ibm-plex-sans-latin.BD64o3ke.woff2",
+        "startMs": 523.5,
+        "endMs": 1811.5,
+        "transferBytes": 40540,
+        "encodedBytes": 40240
+      },
+      {
+        "path": "/_nuxt/CJpvaReV.js",
+        "startMs": 523.5999999046326,
+        "endMs": 881.8999998569489,
+        "transferBytes": 2006,
+        "encodedBytes": 1706
+      },
+      {
+        "path": "/_nuxt/vt323-latin.EhPR265H.woff2",
+        "startMs": 523.5999999046326,
+        "endMs": 935.5,
+        "transferBytes": 7492,
+        "encodedBytes": 7192
+      },
+      {
+        "path": "/_nuxt/press-start-2p-latin.ClsvrIBJ.woff2",
+        "startMs": 523.5999999046326,
+        "endMs": 1167.6999998092651,
+        "transferBytes": 5004,
+        "encodedBytes": 4704
+      },
+      {
+        "path": "/_nuxt/BbzqZ3r5.js",
+        "startMs": 523.6999998092651,
+        "endMs": 889.1999998092651,
+        "transferBytes": 1117,
+        "encodedBytes": 817
+      },
+      {
+        "path": "/_nuxt/D_kdL4Wg.js",
+        "startMs": 523.6999998092651,
+        "endMs": 2060.199999809265,
+        "transferBytes": 39375,
+        "encodedBytes": 39075
+      },
+      {
+        "path": "/_nuxt/BNF5wwvH.js",
+        "startMs": 524.3999998569489,
+        "endMs": 1503.8999998569489,
+        "transferBytes": 16782,
+        "encodedBytes": 16482
+      },
+      {
+        "path": "/_nuxt/BzritqgS.js",
+        "startMs": 524.3999998569489,
+        "endMs": 2097.199999809265,
+        "transferBytes": 38386,
+        "encodedBytes": 38086
+      },
+      {
+        "path": "/_nuxt/C8ASTrqz.js",
+        "startMs": 524.5,
+        "endMs": 1842.8999998569489,
+        "transferBytes": 18903,
+        "encodedBytes": 18603
+      },
+      {
+        "path": "/_nuxt/BFVT9FiP.js",
+        "startMs": 529.5999999046326,
+        "endMs": 2201.899999856949,
+        "transferBytes": 32484,
+        "encodedBytes": 32184
+      },
+      {
+        "path": "/_nuxt/BsP2s6hS.js",
+        "startMs": 529.7999999523163,
+        "endMs": 2067.2999999523163,
+        "transferBytes": 15995,
+        "encodedBytes": 15695
+      },
+      {
+        "path": "/_nuxt/YWUO72PY.js",
+        "startMs": 529.7999999523163,
+        "endMs": 2120.199999809265,
+        "transferBytes": 5736,
+        "encodedBytes": 5436
+      },
+      {
+        "path": "/_nuxt/C36rfmvo.js",
+        "startMs": 529.7999999523163,
+        "endMs": 2532.7999999523163,
+        "transferBytes": 28589,
+        "encodedBytes": 28289
+      },
+      {
+        "path": "/_nuxt/eHt6juKA.js",
+        "startMs": 529.8999998569489,
+        "endMs": 3011.5999999046326,
+        "transferBytes": 34721,
+        "encodedBytes": 34421
+      },
+      {
+        "path": "/_nuxt/_v9mlS2l.js",
+        "startMs": 530.1999998092651,
+        "endMs": 3005.199999809265,
+        "transferBytes": 34414,
+        "encodedBytes": 34114
+      },
+      {
+        "path": "/_nuxt/B-hqgN-U.js",
+        "startMs": 530.1999998092651,
+        "endMs": 3260.199999809265,
+        "transferBytes": 25581,
+        "encodedBytes": 25281
+      },
+      {
+        "path": "/_nuxt/D45oWxD6.js",
+        "startMs": 530.2999999523163,
+        "endMs": 2277.0999999046326,
+        "transferBytes": 939,
+        "encodedBytes": 639
+      },
+      {
+        "path": "/_nuxt/hfp-ruKE.js",
+        "startMs": 530.2999999523163,
+        "endMs": 2464.899999856949,
+        "transferBytes": 3036,
+        "encodedBytes": 2736
+      },
+      {
+        "path": "/_nuxt/Bt8vDEZa.js",
+        "startMs": 530.2999999523163,
+        "endMs": 2607.5999999046326,
+        "transferBytes": 6538,
+        "encodedBytes": 6238
+      },
+      {
+        "path": "/_nuxt/CyMuZZ5N.js",
+        "startMs": 530.2999999523163,
+        "endMs": 2786.7999999523163,
+        "transferBytes": 21250,
+        "encodedBytes": 20950
+      },
+      {
+        "path": "/_nuxt/ce8t1kqd.js",
+        "startMs": 530.2999999523163,
+        "endMs": 3573.899999856949,
+        "transferBytes": 33104,
+        "encodedBytes": 32804
+      },
+      {
+        "path": "/_nuxt/B0dcTwUO.js",
+        "startMs": 530.2999999523163,
+        "endMs": 3837.5999999046326,
+        "transferBytes": 52006,
+        "encodedBytes": 51706
+      },
+      {
+        "path": "/_nuxt/DfuDOC3k.js",
+        "startMs": 530.7999999523163,
+        "endMs": 3193.199999809265,
+        "transferBytes": 846,
+        "encodedBytes": 546
+      },
+      {
+        "path": "/_nuxt/Cx97zBE_.js",
+        "startMs": 530.7999999523163,
+        "endMs": 3349.2999999523163,
+        "transferBytes": 17065,
+        "encodedBytes": 16765
+      },
+      {
+        "path": "/_nuxt/D9dBoXLU.js",
+        "startMs": 530.7999999523163,
+        "endMs": 3635.399999856949,
+        "transferBytes": 5672,
+        "encodedBytes": 5372
+      },
+      {
+        "path": "/_nuxt/DdJ3EDup.js",
+        "startMs": 530.7999999523163,
+        "endMs": 3649.0999999046326,
+        "transferBytes": 12530,
+        "encodedBytes": 12230
+      },
+      {
+        "path": "/_nuxt/CJl29FEw.js",
+        "startMs": 530.7999999523163,
+        "endMs": 3920.199999809265,
+        "transferBytes": 35488,
+        "encodedBytes": 35188
+      },
+      {
+        "path": "/_nuxt/DX84N08M.js",
+        "startMs": 530.8999998569489,
+        "endMs": 3485.399999856949,
+        "transferBytes": 1863,
+        "encodedBytes": 1563
+      },
+      {
+        "path": "/_nuxt/2VelsGGf.js",
+        "startMs": 536.8999998569489,
+        "endMs": 4069.0999999046326,
+        "transferBytes": 21296,
+        "encodedBytes": 20996
+      },
+      {
+        "path": "/_nuxt/BqF2ItCA.js",
+        "startMs": 537.3999998569489,
+        "endMs": 3747.2999999523163,
+        "transferBytes": 872,
+        "encodedBytes": 572
+      },
+      {
+        "path": "/_nuxt/yjIkFtQh.js",
+        "startMs": 537.5999999046326,
+        "endMs": 4616.399999856949,
+        "transferBytes": 36781,
+        "encodedBytes": 36481
+      },
+      {
+        "path": "/_nuxt/BgIs-0up.js",
+        "startMs": 537.5999999046326,
+        "endMs": 4826.899999856949,
+        "transferBytes": 30798,
+        "encodedBytes": 30498
+      },
+      {
+        "path": "/_nuxt/kRaj522f.js",
+        "startMs": 537.5999999046326,
+        "endMs": 4850.199999809265,
+        "transferBytes": 35373,
+        "encodedBytes": 35073
+      },
+      {
+        "path": "/_nuxt/BlXQsmTV.js",
+        "startMs": 537.6999998092651,
+        "endMs": 4031.5999999046326,
+        "transferBytes": 4503,
+        "encodedBytes": 4203
+      },
+      {
+        "path": "/_nuxt/I1vmiXhG.js",
+        "startMs": 537.6999998092651,
+        "endMs": 4519.5,
+        "transferBytes": 31827,
+        "encodedBytes": 31527
+      },
+      {
+        "path": "/_nuxt/C4l-T60b.js",
+        "startMs": 538.0999999046326,
+        "endMs": 4220,
+        "transferBytes": 11590,
+        "encodedBytes": 11290
+      },
+      {
+        "path": "/_nuxt/DGt-pUPd.js",
+        "startMs": 538.0999999046326,
+        "endMs": 4610.399999856949,
+        "transferBytes": 13279,
+        "encodedBytes": 12979
+      },
+      {
+        "path": "/_nuxt/CpM0PcFl.js",
+        "startMs": 538.0999999046326,
+        "endMs": 4624.5,
+        "transferBytes": 7937,
+        "encodedBytes": 7637
+      },
+      {
+        "path": "/_nuxt/C6d6kKEP.js",
+        "startMs": 538.1999998092651,
+        "endMs": 4099.5,
+        "transferBytes": 468,
+        "encodedBytes": 168
+      },
+      {
+        "path": "/_nuxt/wTm2Uutj.js",
+        "startMs": 538.1999998092651,
+        "endMs": 4685.299999952316,
+        "transferBytes": 478,
+        "encodedBytes": 178
+      },
+      {
+        "path": "/_nuxt/-dGDozAC.js",
+        "startMs": 538.1999998092651,
+        "endMs": 4782.799999952316,
+        "transferBytes": 955,
+        "encodedBytes": 655
+      },
+      {
+        "path": "/manifest.webmanifest",
+        "startMs": 539.7999999523163,
+        "endMs": 4805.699999809265,
+        "transferBytes": 996,
+        "encodedBytes": 696
+      },
+      {
+        "path": "/logos/logo-svg.svg",
+        "startMs": 551.8999998569489,
+        "endMs": 5006.599999904633,
+        "transferBytes": 35448,
+        "encodedBytes": 35148
+      },
+      {
+        "path": "/_nuxt/BG92ynNB.js",
+        "startMs": 4959,
+        "endMs": 5668,
+        "transferBytes": 42460,
+        "encodedBytes": 42160
+      },
+      {
+        "path": "/_nuxt/Cs-cnoG4.js",
+        "startMs": 4959,
+        "endMs": 5697.399999856949,
+        "transferBytes": 47601,
+        "encodedBytes": 47301
+      },
+      {
+        "path": "/_nuxt/chat-shell.DE8wC3pP.css",
+        "startMs": 4959.899999856949,
+        "endMs": 5194.599999904633,
+        "transferBytes": 4670,
+        "encodedBytes": 4370
+      },
+      {
+        "path": "/favicon.ico",
+        "startMs": 5209.299999952316,
+        "endMs": 5443.199999809265,
+        "transferBytes": 4454,
+        "encodedBytes": 4154
+      },
+      {
+        "path": "/logos/app-icon-192.png",
+        "startMs": 5223.599999904633,
+        "endMs": 5614.899999856949,
+        "transferBytes": 13694,
+        "encodedBytes": 13394
+      },
+      {
+        "path": "/favicon.ico",
+        "startMs": 5725.299999952316,
+        "endMs": 5906.799999952316,
+        "transferBytes": 4454,
+        "encodedBytes": 4154
+      },
+      {
+        "path": "/_nuxt/BNwrh3tR.js",
+        "startMs": 5737.599999904633,
+        "endMs": 5952.099999904633,
+        "transferBytes": 10076,
+        "encodedBytes": 9776
+      },
+      {
+        "path": "/_nuxt/D2aCOiaB.js",
+        "startMs": 5961.599999904633,
+        "endMs": 6125.899999856949,
+        "transferBytes": 456,
+        "encodedBytes": 156
+      },
+      {
+        "path": "/_nuxt/D4Him7rU.js",
+        "startMs": 6149.299999952316,
+        "endMs": 6312.399999856949,
+        "transferBytes": 2297,
+        "encodedBytes": 1997
+      },
+      {
+        "path": "/_nuxt/ChatInput.C40fO-TX.css",
+        "startMs": 6236.199999809265,
+        "endMs": 6402.399999856949,
+        "transferBytes": 1962,
+        "encodedBytes": 1662
+      },
+      {
+        "path": "/favicon.ico",
+        "startMs": 6274.899999856949,
+        "endMs": 6448.599999904633,
+        "transferBytes": 4454,
+        "encodedBytes": 4154
+      },
+      {
+        "path": "/_nuxt/CncTN47R.js",
+        "startMs": 6427.799999952316,
+        "endMs": 6701.899999856949,
+        "transferBytes": 4683,
+        "encodedBytes": 4383
+      },
+      {
+        "path": "/_nuxt/DKrA2Wwt.js",
+        "startMs": 6428.399999856949,
+        "endMs": 6671.899999856949,
+        "transferBytes": 3079,
+        "encodedBytes": 2779
+      },
+      {
+        "path": "/_nuxt/lf4kSn1m.js",
+        "startMs": 6429.599999904633,
+        "endMs": 6664.099999904633,
+        "transferBytes": 3437,
+        "encodedBytes": 3137
+      },
+      {
+        "path": "/_nuxt/suggestions.D1ChPnYQ.css",
+        "startMs": 6430.5,
+        "endMs": 6656.599999904633,
+        "transferBytes": 1604,
+        "encodedBytes": 1304
+      },
+      {
+        "path": "/_nuxt/BzEYXohn.js",
+        "startMs": 6454.699999809265,
+        "endMs": 6956.599999904633,
+        "transferBytes": 20381,
+        "encodedBytes": 20081
+      },
+      {
+        "path": "/_nuxt/BEqakNVc.js",
+        "startMs": 6454.799999952316,
+        "endMs": 7992.899999856949,
+        "transferBytes": 107512,
+        "encodedBytes": 107212
+      },
+      {
+        "path": "/_nuxt/BIpHqeex.js",
+        "startMs": 6454.899999856949,
+        "endMs": 6890.099999904633,
+        "transferBytes": 860,
+        "encodedBytes": 560
+      },
+      {
+        "path": "/_nuxt/MTeNkXvQ.js",
+        "startMs": 6454.899999856949,
+        "endMs": 7843,
+        "transferBytes": 64078,
+        "encodedBytes": 63778
+      },
+      {
+        "path": "/_nuxt/BJtWW7X1.js",
+        "startMs": 6455.699999809265,
+        "endMs": 7061.5,
+        "transferBytes": 972,
+        "encodedBytes": 672
+      },
+      {
+        "path": "/_nuxt/QaanuTaZ.js",
+        "startMs": 6455.799999952316,
+        "endMs": 7144.099999904633,
+        "transferBytes": 3002,
+        "encodedBytes": 2702
+      },
+      {
+        "path": "/_nuxt/stream-markdown.Eh1nzpFl.css",
+        "startMs": 6455.899999856949,
+        "endMs": 6980.399999856949,
+        "transferBytes": 7210,
+        "encodedBytes": 6910
+      },
+      {
+        "path": "/_nuxt/ChatMessage.DS61vYCt.css",
+        "startMs": 6456.599999904633,
+        "endMs": 6920.5,
+        "transferBytes": 3632,
+        "encodedBytes": 3332
+      },
+      {
+        "path": "/favicon.ico",
+        "startMs": 6547.399999856949,
+        "endMs": 7205.799999952316,
+        "transferBytes": 4454,
+        "encodedBytes": 4154
+      },
+      {
+        "path": "/_nuxt/BYISmA0E.js",
+        "startMs": 6643.399999856949,
+        "endMs": 7256.5,
+        "transferBytes": 5440,
+        "encodedBytes": 5140
+      },
+      {
+        "path": "/_nuxt/BpEuRCHZ.js",
+        "startMs": 6644.399999856949,
+        "endMs": 7243,
+        "transferBytes": 420,
+        "encodedBytes": 120
+      },
+      {
+        "path": "/_nuxt/CuoyDTgQ.js",
+        "startMs": 6644.399999856949,
+        "endMs": 7353.899999856949,
+        "transferBytes": 3174,
+        "encodedBytes": 2874
+      },
+      {
+        "path": "/_nuxt/CvRaq1XU.js",
+        "startMs": 6645.299999952316,
+        "endMs": 7467.799999952316,
+        "transferBytes": 5002,
+        "encodedBytes": 4702
+      },
+      {
+        "path": "/_nuxt/CYsJsn1x.js",
+        "startMs": 6704.799999952316,
+        "endMs": 7775.399999856949,
+        "transferBytes": 21809,
+        "encodedBytes": 21509
+      },
+      {
+        "path": "/_nuxt/NqNg6E-u.js",
+        "startMs": 6770.699999809265,
+        "endMs": 7511.5,
+        "transferBytes": 3253,
+        "encodedBytes": 2953
+      },
+      {
+        "path": "/_nuxt/builds/meta/024b2a78-90b5-46e9-bab9-642203649be2.json",
+        "startMs": 7649.799999952316,
+        "endMs": 7821.099999904633,
+        "transferBytes": 388,
+        "encodedBytes": 88
+      },
+      {
+        "path": "/api/_nuxt_icon/pixelarticons.json",
+        "startMs": 8128.199999809265,
+        "endMs": 8284,
+        "transferBytes": 560,
+        "encodedBytes": 260
+      },
+      {
+        "path": "/_nuxt/q5R1h7Jy.js",
+        "startMs": 20871.799999952316,
+        "endMs": 21065.099999904633,
+        "transferBytes": 4521,
+        "encodedBytes": 4221
+      },
+      {
+        "path": "/_nuxt/D1sKKib5.js",
+        "startMs": 20872.699999809265,
+        "endMs": 21035,
+        "transferBytes": 841,
+        "encodedBytes": 541
+      },
+      {
+        "path": "/api/openrouter/stream",
+        "startMs": 21179.39999985695,
+        "endMs": 25849.199999809265,
+        "transferBytes": 265560,
+        "encodedBytes": 265260
+      },
+      {
+        "path": "/_nuxt/markdown-highlight.worker-JhMGyQXm.js",
+        "startMs": 25746.299999952316,
+        "endMs": 26051.89999985695,
+        "transferBytes": 51138,
+        "encodedBytes": 50838
+      }
+    ],
+    "geometry": {
+      "bodyWidth": 411,
+      "composer": {
+        "x": 11.390625,
+        "y": 770.8203125,
+        "width": 367.21875,
+        "height": 46.5859375,
+        "top": 770.8203125,
+        "right": 378.609375,
+        "bottom": 817.40625,
+        "left": 11.390625
+      },
+      "input": {
+        "x": 91.6875,
+        "y": 784.109375,
+        "width": 240.828125,
+        "height": 20,
+        "top": 784.109375,
+        "right": 332.515625,
+        "bottom": 804.109375,
+        "left": 91.6875
+      }
+    }
+  },
+  "network": [],
+  "beforeMetrics": {
+    "metrics": [
+      {
+        "name": "Timestamp",
+        "value": 2064194.021833
+      },
+      {
+        "name": "AudioHandlers",
+        "value": 0
+      },
+      {
+        "name": "AudioWorkletProcessors",
+        "value": 0
+      },
+      {
+        "name": "Documents",
+        "value": 64
+      },
+      {
+        "name": "Frames",
+        "value": 55
+      },
+      {
+        "name": "JSEventListeners",
+        "value": 385
+      },
+      {
+        "name": "LayoutObjects",
+        "value": 532
+      },
+      {
+        "name": "MediaKeySessions",
+        "value": 0
+      },
+      {
+        "name": "MediaKeys",
+        "value": 0
+      },
+      {
+        "name": "Nodes",
+        "value": 1691
+      },
+      {
+        "name": "Resources",
+        "value": 161
+      },
+      {
+        "name": "ContextLifecycleStateObservers",
+        "value": 90
+      },
+      {
+        "name": "V8PerContextDatas",
+        "value": 3
+      },
+      {
+        "name": "WorkerGlobalScopes",
+        "value": 1
+      },
+      {
+        "name": "UACSSResources",
+        "value": 0
+      },
+      {
+        "name": "RTCPeerConnections",
+        "value": 0
+      },
+      {
+        "name": "ResourceFetchers",
+        "value": 64
+      },
+      {
+        "name": "AdSubframes",
+        "value": 0
+      },
+      {
+        "name": "DetachedScriptStates",
+        "value": 0
+      },
+      {
+        "name": "ArrayBufferContents",
+        "value": 18
+      },
+      {
+        "name": "LayoutCount",
+        "value": 32
+      },
+      {
+        "name": "RecalcStyleCount",
+        "value": 245
+      },
+      {
+        "name": "LayoutDuration",
+        "value": 0.022123
+      },
+      {
+        "name": "RecalcStyleDuration",
+        "value": 0.226999
+      },
+      {
+        "name": "DevToolsCommandDuration",
+        "value": 0.057531
+      },
+      {
+        "name": "ScriptDuration",
+        "value": 0.210866
+      },
+      {
+        "name": "V8CompileDuration",
+        "value": 0.002632
+      },
+      {
+        "name": "TaskDuration",
+        "value": 1.371428
+      },
+      {
+        "name": "TaskOtherDuration",
+        "value": 0.851277
+      },
+      {
+        "name": "ThreadTime",
+        "value": 15.610621
+      },
+      {
+        "name": "ProcessTime",
+        "value": 115.115116
+      },
+      {
+        "name": "JSHeapUsedSize",
+        "value": 32956552
+      },
+      {
+        "name": "JSHeapTotalSize",
+        "value": 59375616
+      },
+      {
+        "name": "FirstMeaningfulPaint",
+        "value": 2064181.927909
+      },
+      {
+        "name": "DomContentLoaded",
+        "value": 2064178.754195
+      },
+      {
+        "name": "NavigationStart",
+        "value": 2064173.793427
+      }
+    ]
+  },
+  "afterMetrics": {
+    "metrics": [
+      {
+        "name": "Timestamp",
+        "value": 2064220.762237
+      },
+      {
+        "name": "AudioHandlers",
+        "value": 0
+      },
+      {
+        "name": "AudioWorkletProcessors",
+        "value": 0
+      },
+      {
+        "name": "Documents",
+        "value": 23
+      },
+      {
+        "name": "Frames",
+        "value": 22
+      },
+      {
+        "name": "JSEventListeners",
+        "value": 373
+      },
+      {
+        "name": "LayoutObjects",
+        "value": 563
+      },
+      {
+        "name": "MediaKeySessions",
+        "value": 0
+      },
+      {
+        "name": "MediaKeys",
+        "value": 0
+      },
+      {
+        "name": "Nodes",
+        "value": 1847
+      },
+      {
+        "name": "Resources",
+        "value": 161
+      },
+      {
+        "name": "ContextLifecycleStateObservers",
+        "value": 54
+      },
+      {
+        "name": "V8PerContextDatas",
+        "value": 3
+      },
+      {
+        "name": "WorkerGlobalScopes",
+        "value": 2
+      },
+      {
+        "name": "UACSSResources",
+        "value": 0
+      },
+      {
+        "name": "RTCPeerConnections",
+        "value": 0
+      },
+      {
+        "name": "ResourceFetchers",
+        "value": 25
+      },
+      {
+        "name": "AdSubframes",
+        "value": 0
+      },
+      {
+        "name": "DetachedScriptStates",
+        "value": 0
+      },
+      {
+        "name": "ArrayBufferContents",
+        "value": 14
+      },
+      {
+        "name": "LayoutCount",
+        "value": 215
+      },
+      {
+        "name": "RecalcStyleCount",
+        "value": 1030
+      },
+      {
+        "name": "LayoutDuration",
+        "value": 0.19667
+      },
+      {
+        "name": "RecalcStyleDuration",
+        "value": 0.670293
+      },
+      {
+        "name": "DevToolsCommandDuration",
+        "value": 0.105058
+      },
+      {
+        "name": "ScriptDuration",
+        "value": 0.400063
+      },
+      {
+        "name": "V8CompileDuration",
+        "value": 0.003595
+      },
+      {
+        "name": "TaskDuration",
+        "value": 4.038393
+      },
+      {
+        "name": "TaskOtherDuration",
+        "value": 2.662714
+      },
+      {
+        "name": "ThreadTime",
+        "value": 36.570212
+      },
+      {
+        "name": "ProcessTime",
+        "value": 137.157085
+      },
+      {
+        "name": "JSHeapUsedSize",
+        "value": 28771972
+      },
+      {
+        "name": "JSHeapTotalSize",
+        "value": 31277056
+      },
+      {
+        "name": "FirstMeaningfulPaint",
+        "value": 2064181.927909
+      },
+      {
+        "name": "DomContentLoaded",
+        "value": 2064178.754195
+      },
+      {
+        "name": "NavigationStart",
+        "value": 2064173.793427
+      }
+    ]
+  },
+  "uiUsage": {
+    "promptTokens": 4466,
+    "completionTokens": 616,
+    "reasoningTokens": 487,
+    "totalTokens": 5082,
+    "model": "deepseek/deepseek-v4.1-flash-1017",
+    "displayedCost": "$0"
+  },
+  "limitation": "CDP event buffer was truncated before collection; no reliable request timing for this call."
+}

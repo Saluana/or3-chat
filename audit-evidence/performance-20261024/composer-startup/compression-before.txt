@@ -1,0 +1,35 @@
+
+Running 1 test using 1 worker
+
+(node:32667) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/1] [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › blank light 1x mobile startup keeps the composer and navigation stable while JavaScript loads
+  1) [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › blank light 1x mobile startup keeps the composer and navigation stable while JavaScript loads 
+
+    Error: the rendered page uses negotiated compression
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "gzip"
+    Received: undefined
+
+      309 |         try {
+      310 |             const navigation = await page.goto('/chat', { waitUntil: 'commit' });
+    > 311 |             expect(navigation?.headers()['content-encoding'], 'the rendered page uses negotiated compression').toBe('gzip');
+          |                                                                                                                ^
+      312 |             await expect(page.locator('.chat-input-main').first()).toBeVisible();
+      313 |             // WebKit's fonts.ready also waits for the held module scripts.
+      314 |             // Load the visible text faces independently of document completion.
+        at /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/performance-budgets.e2e.ts:311:112
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/composer-compression-before/performance-budgets.e2e.ts-9c20d-able-while-JavaScript-loads-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/composer-compression-before/performance-budgets.e2e.ts-9c20d-able-while-JavaScript-loads-chromium/error-context.md
+
+
+  1 failed
+    [chromium] › tests/e2e/performance-budgets.e2e.ts:252:5 › blank light 1x mobile startup keeps the composer and navigation stable while JavaScript loads 

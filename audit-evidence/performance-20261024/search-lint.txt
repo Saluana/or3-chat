@@ -1,0 +1,1 @@
+$ eslint --no-warn-ignored --quiet app/core/search/command-palette/sources/chat-source.ts

@@ -76,8 +76,16 @@ describe('mentions index initialization', () => {
             const plugin = (await import('../../mentions.client')).default;
             await (plugin as any)({ vueApp: { onUnmount: (callback: () => void) => { dispose = callback; } } });
             await useHooks().doAction('editor:request-extensions');
-            const before = mocks.buildIndex.mock.calls.length;
-            expect(before).toBe(1);
+            // Editor setup must finish without scanning the workspace or loading
+            // the search engine. The first actual suggestion request owns that work.
+            expect(mocks.createDb).not.toHaveBeenCalled();
+            const extensions = await useHooks().applyFilters('ui.chat.editor:filter:extensions', []);
+            const mention = (extensions as Array<{ name: string; options: {
+                suggestion: { items(args: { query: string }): Promise<unknown[]> };
+            } }>).find(extension => extension.name === 'mention')!;
+            mocks.searchWithIndex.mockResolvedValue({ hits: [] });
+            await mention.options.suggestion.items({ query: 'Document' });
+            expect(mocks.buildIndex).toHaveBeenCalledTimes(1);
             const hash = 'sha256:' + 'b'.repeat(64);
             await getDb().file_meta.put({ hash, name: 'Remote', mime_type: 'text/plain', kind: 'file', size_bytes: 4,
                 ref_count: 1, clock: 1, created_at: 1, updated_at: 1, deleted: false });

@@ -1,0 +1,233 @@
+{
+  "baselineCommit": "452f7ec0a0bfb1de849bd3adb5ee3ac9715df540",
+  "profile": {
+    "browser": "Chrome 155",
+    "viewport": "390x844",
+    "dpr": 1,
+    "cpuSlowdown": 4,
+    "latencyMs": 150,
+    "downloadBytesPerSecond": 200000,
+    "uploadBytesPerSecond": 93750,
+    "cacheDisabled": true,
+    "serviceWorkerBypassed": true
+  },
+  "baseline": {
+    "runs": [
+      {
+        "file": "baseline-1.json",
+        "readyMs": 6536.799999952316,
+        "fcpMs": 1732,
+        "lcpMs": 1732,
+        "cls": 0,
+        "htmlTransferBytes": 117336,
+        "encodedJsBytes": 751973,
+        "geometry": {
+          "bodyWidth": 411,
+          "composer": {
+            "x": 22.7890625,
+            "y": 770.8203125,
+            "width": 344.421875,
+            "height": 46.5859375,
+            "top": 770.8203125,
+            "right": 367.2109375,
+            "bottom": 817.40625,
+            "left": 22.7890625
+          },
+          "input": {
+            "x": 103.0859375,
+            "y": 784.109375,
+            "width": 218.03125,
+            "height": 20,
+            "top": 784.109375,
+            "right": 321.1171875,
+            "bottom": 804.109375,
+            "left": 103.0859375
+          }
+        }
+      },
+      {
+        "file": "baseline-2.json",
+        "readyMs": 6395.900000095367,
+        "fcpMs": 1748,
+        "lcpMs": 1748,
+        "cls": 0,
+        "htmlTransferBytes": 117336,
+        "encodedJsBytes": 751973,
+        "geometry": {
+          "bodyWidth": 411,
+          "composer": {
+            "x": 22.7890625,
+            "y": 770.8203125,
+            "width": 344.421875,
+            "height": 46.5859375,
+            "top": 770.8203125,
+            "right": 367.2109375,
+            "bottom": 817.40625,
+            "left": 22.7890625
+          },
+          "input": {
+            "x": 103.0859375,
+            "y": 784.109375,
+            "width": 218.03125,
+            "height": 20,
+            "top": 784.109375,
+            "right": 321.1171875,
+            "bottom": 804.109375,
+            "left": 103.0859375
+          }
+        }
+      },
+      {
+        "file": "baseline-3.json",
+        "readyMs": 6391.900000095367,
+        "fcpMs": 1776,
+        "lcpMs": 1776,
+        "cls": 0,
+        "htmlTransferBytes": 117336,
+        "encodedJsBytes": 751973,
+        "geometry": {
+          "bodyWidth": 411,
+          "composer": {
+            "x": 22.7890625,
+            "y": 770.8203125,
+            "width": 344.421875,
+            "height": 46.5859375,
+            "top": 770.8203125,
+            "right": 367.2109375,
+            "bottom": 817.40625,
+            "left": 22.7890625
+          },
+          "input": {
+            "x": 103.0859375,
+            "y": 784.109375,
+            "width": 218.03125,
+            "height": 20,
+            "top": 784.109375,
+            "right": 321.1171875,
+            "bottom": 804.109375,
+            "left": 103.0859375
+          }
+        }
+      }
+    ],
+    "median": {
+      "readyMs": 6395.900000095367,
+      "fcpMs": 1748,
+      "lcpMs": 1748,
+      "cls": 0,
+      "htmlTransferBytes": 117336,
+      "encodedJsBytes": 751973
+    }
+  },
+  "final": {
+    "runs": [
+      {
+        "file": "final-1.json",
+        "readyMs": 6359,
+        "fcpMs": 1568,
+        "lcpMs": 1568,
+        "cls": 0,
+        "htmlTransferBytes": 23760,
+        "encodedJsBytes": 752131,
+        "geometry": {
+          "bodyWidth": 411,
+          "composer": {
+            "x": 22.7890625,
+            "y": 770.8203125,
+            "width": 344.421875,
+            "height": 46.5859375,
+            "top": 770.8203125,
+            "right": 367.2109375,
+            "bottom": 817.40625,
+            "left": 22.7890625
+          },
+          "input": {
+            "x": 103.0859375,
+            "y": 784.109375,
+            "width": 218.03125,
+            "height": 20,
+            "top": 784.109375,
+            "right": 321.1171875,
+            "bottom": 804.109375,
+            "left": 103.0859375
+          }
+        }
+      },
+      {
+        "file": "final-2.json",
+        "readyMs": 5966.899999856949,
+        "fcpMs": 1356,
+        "lcpMs": 1356,
+        "cls": 0,
+        "htmlTransferBytes": 23760,
+        "encodedJsBytes": 752131,
+        "geometry": {
+          "bodyWidth": 411,
+          "composer": {
+            "x": 22.7890625,
+            "y": 770.8203125,
+            "width": 344.421875,
+            "height": 46.5859375,
+            "top": 770.8203125,
+            "right": 367.2109375,
+            "bottom": 817.40625,
+            "left": 22.7890625
+          },
+          "input": {
+            "x": 103.0859375,
+            "y": 784.109375,
+            "width": 218.03125,
+            "height": 20,
+            "top": 784.109375,
+            "right": 321.1171875,
+            "bottom": 804.109375,
+            "left": 103.0859375
+          }
+        }
+      },
+      {
+        "file": "final-3.json",
+        "readyMs": 5991.400000095367,
+        "fcpMs": 1360,
+        "lcpMs": 1360,
+        "cls": 0,
+        "htmlTransferBytes": 23760,
+        "encodedJsBytes": 752131,
+        "geometry": {
+          "bodyWidth": 411,
+          "composer": {
+            "x": 22.7890625,
+            "y": 770.8203125,
+            "width": 344.421875,
+            "height": 46.5859375,
+            "top": 770.8203125,
+            "right": 367.2109375,
+            "bottom": 817.40625,
+            "left": 22.7890625
+          },
+          "input": {
+            "x": 103.0859375,
+            "y": 784.109375,
+            "width": 218.03125,
+            "height": 20,
+            "top": 784.109375,
+            "right": 321.1171875,
+            "bottom": 804.109375,
+            "left": 103.0859375
+          }
+        }
+      }
+    ],
+    "median": {
+      "readyMs": 5991.400000095367,
+      "fcpMs": 1360,
+      "lcpMs": 1360,
+      "cls": 0,
+      "htmlTransferBytes": 23760,
+      "encodedJsBytes": 752131
+    }
+  },
+  "readyImprovementMs": 404.5,
+  "readyImprovementPercent": 6.324364045622488,
+  "composerGeometryUnchanged": true
+}

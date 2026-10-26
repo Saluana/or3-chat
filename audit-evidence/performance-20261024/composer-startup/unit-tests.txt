@@ -1,0 +1,10 @@
+
+ RUN  v4.1.12 /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat
+
+···································
+
+ Test Files  5 passed (5)
+      Tests  35 passed (35)
+   Start at  21:13:34
+   Duration  1.88s (transform 532ms, setup 327ms, import 488ms, tests 1.66s, environment 1.37s)
+

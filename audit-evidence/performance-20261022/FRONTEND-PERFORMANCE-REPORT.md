@@ -11,7 +11,14 @@ The work removed substantial unnecessary rendering, repeated database reads,
 mount-time work and paint invalidation. It also fixed specific flashing and
 geometry defects. It does **not** establish that every interaction is smooth or
 that OR3 is faster than other applications. Large wheel jumps, rich-stream
-layout costs, image streaming and some WebKit/theme cases remain unresolved.
+layout costs and some WebKit/theme cases remained unresolved at that stopping point.
+
+Follow-up work resumed from synced `or3-cloud` at `25c758b2` after the PRs were
+merged. The [October 23 stability follow-up](../performance-20261023/FOLLOWUP-STABILITY.md)
+records fixes for live image retention, quiet inline hydration, continuation
+ownership and empty tool-card work, plus the WebKit storage/routing diagnosis.
+It preserves appearance and lists the remaining work. The original measurements
+and stopping-point validation below remain historical evidence.
 
 ## Delivery status
 
@@ -128,19 +135,19 @@ release qualification was not performed after the final patch.
 
 | Priority | Known gap or finding | Next useful evaluation |
 | --- | --- | --- |
-| High | Generated images are absent from the live Chromium display after trailing text starts, then hydrate at completion. Source inspection suggests the accumulator projection omits image placeholders added only to the message snapshot. | Reproduce image → text → image ordering through the real foreground stream; repair the projection/accumulator contract and verify continuous visibility, stop, reload and persistence. |
-| High | WebKit generated-image probes save no metadata and never reach decoding. The original-behavior control fails the same way. Two canonical image-backed fixtures also fail during startup. | Isolate file intake/IndexedDB mutation errors in the actual WebKit environment, compare original and final source, and distinguish harness/engine failures from product defects before claiming Safari image support or performance. |
+| Follow-up fixed | Generated images previously disappeared during trailing text, and hydration readiness could be dropped during a quiet stream. Both defects are repaired; two images remain visible and persist in Chromium and normal-profile WebKit probes. | See the October 23 follow-up for regressions and receipts. Physical Safari/iOS and real-provider variations remain unqualified. |
+| Platform qualification | WebKit private contexts reject raw IndexedDB Blob writes without OR3 or Dexie. Normal profiles store them. The audit network filter also blocked local Blob URLs in WebKit; the corrected filter permits only the local origin. | Qualify private-mode support separately and run physical-device storage/recovery cases. Do not infer private-mode support from normal-profile passes. |
 | High | Large instantaneous wheel jumps still expose blank regions. The headed 4× comparison observed gaps in 17/109 virtual frames and 8/77 static-control frames. | Capture compositor/raster behavior with realistic wheel cadence and touch inertia, then repeat on physical devices. The static control rules out virtualization as a necessary cause, not as every possible contributor. Do not increase overscan without evidence. |
 | High | Rich code/math streams still reach about 33.4 ms p95 at 4× main-thread throttle, with appreciable layout work. Early list workloads also retained long tasks. | Separate parsing, font loading, layout, measurement and scrolling costs in representative long replies and populated lists. Measure cold and warm runs without diagnostic geometry wrappers, including worker CPU cost. |
 | Medium | Blank-theme mobile targets and scaled geometry fail existing checks: 41.796875 px tab-switcher targets against 44 px, 40 px density controls against 44 px, and fractional tab/outline expectations. | Resolve actual target-size defects and distinguish rounding-sensitive assertions from accessibility failures across scale, viewport and color modes. Original-CSS controls reproduced representative failures. |
-| Medium | `ChatToolCardsEnd` still updates on every text projection, including when empty. The ordered assistant-part path and source plugin tool cards were not qualified by the native-tool probe. | Exercise registered cards, argument/result updates, bridge subscriptions, visibility gating and cleanup during long text/tool streams. Optimize only demonstrated work; preserve card state and tool-execution boundaries. |
+| Medium | The follow-up removes `ChatToolCardsEnd` entirely for replies without tool calls, eliminating its 160 updates in the image-stream probe. Replies with actual tool calls still use the existing path. Ordered assistant parts and source plugin tool cards remain unqualified by that probe. | Exercise registered cards, argument/result updates, bridge subscriptions, visibility gating and cleanup during long text/tool streams. Preserve card state and tool-execution boundaries. |
 | Medium | Intermittent WebKit compaction/import errors occurred in earlier streaming checks. Font readiness is not guaranteed by the math-CSS repair, and WebKit screenshots used the existing font-wait workaround. Reduced-motion waiting traces contained some unattributed paint/layout work. | Reproduce each independently with error/trace evidence; qualify first font paint and reduced-motion idle behavior without treating functional passes as error-free runs. |
 | Broader qualification | Startup fixes covered sidebar restoration and selected cold modules. Not every dialog, editor, search path, plugin surface, workspace size or background/sync combination was audited. Physical iOS/Android, inertial touch, sustained memory usage and thermal pressure remain unqualified. | Run a prioritized device/workload matrix on representative local-first datasets, including repeated mount/unmount, workspace switching, concurrent panes and long sessions. Establish practical latency/paint/memory budgets per interaction. |
 
-The highest-value follow-up is to resolve the image-stream correctness and
-WebKit intake failures, then continue large-jump painting and rich-stream layout
-diagnosis. The current goal ends at this report, as requested; these items are
-an explicit handoff, not background work scheduled to continue automatically.
+The image-stream fixes and WebKit diagnosis are recorded in the follow-up.
+Large-jump painting, rich-stream layout, real plugin cards and physical-device
+qualification remain open. Visual sizing changes are deferred under the user's
+appearance-preservation constraint. No recurring background audit is scheduled.
 
 ## Reviewing and maintaining the stack
 

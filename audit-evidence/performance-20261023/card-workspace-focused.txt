@@ -1,0 +1,10 @@
+$ vitest run --project=core-node --project=core-app --project=app-integration --reporter=dot --silent=passed-only --hideSkippedTests "--project=core-app" app/db/__tests__/messages-transactions.test.ts -t "retires a mounted card"
+
+ RUN  v4.1.12 /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat
+
+--------··----------------
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 24 skipped (26)
+   Start at  01:05:28
+   Duration  1.50s (transform 389ms, setup 45ms, import 469ms, tests 808ms, environment 123ms)

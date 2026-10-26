@@ -5,7 +5,7 @@ import {
     useUserApiKey,
     getUserApiKeyGeneration,
 } from '~/core/auth/useUserApiKey';
-import { captureProjectOperation } from './context';
+import { captureProjectOperation } from './operation';
 import {
     readProjectPolicy,
     resolveChatProject,

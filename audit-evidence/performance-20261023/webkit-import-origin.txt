@@ -1,0 +1,27 @@
+[import-request-failed] {"at":1792827343106,"url":"http://127.0.0.1:3147/api/_nuxt_icon/lucide.json?icons=activity","type":"fetch","error":{"errorText":"cancelled"}}
+[import-request-failed] {"at":1792827343106,"url":"http://127.0.0.1:3147/_nuxt/CbHtDGuD.js","type":"script","error":{"errorText":"cancelled"}}
+[import-request-failed] {"at":1792827343106,"url":"http://127.0.0.1:3147/api/_nuxt_icon/pixelarticons.json?icons=notes-plus","type":"fetch","error":{"errorText":"cancelled"}}
+[import-component-origin] {"at":1792827343131,"document":1792827342508,"info":"https://vuejs.org/error-reference/#runtime-13","name":"AsyncComponentWrapper","parents":["WorkspaceTabsWorkspaceChrome","ResizableSidebarLayout"]}
+[production-chat-journey] captured component error TypeError: Importing a module script failed.
+[import-pagehide] 1792827343151 1792827342508
+[import-pagehide] 1792827344093 1792827343105
+[import-pagehide] 1792827346193 1792827344090
+[import-request-failed] {"at":1792827349681,"url":"http://127.0.0.1:3147/_nuxt/WorkspaceTabBar.Dv-rS-Ay.css","type":"stylesheet","error":{"errorText":"cancelled"}}
+[import-request-failed] {"at":1792827349682,"url":"http://127.0.0.1:3147/_nuxt/BA7OAx49.js","type":"script","error":{"errorText":"cancelled"}}
+[import-request-failed] {"at":1792827349682,"url":"http://127.0.0.1:3147/_nuxt/CbHtDGuD.js","type":"script","error":{"errorText":"cancelled"}}
+[import-request-failed] {"at":1792827349682,"url":"http://127.0.0.1:3147/api/_nuxt_icon/lucide.json?icons=activity","type":"fetch","error":{"errorText":"cancelled"}}
+[import-request-failed] {"at":1792827349682,"url":"http://127.0.0.1:3147/api/_nuxt_icon/pixelarticons.json?icons=notes-plus","type":"fetch","error":{"errorText":"cancelled"}}
+[import-component-origin] {"at":1792827349697,"document":1792827349101,"info":"https://vuejs.org/error-reference/#runtime-13","name":"AsyncComponentWrapper","parents":["WorkspaceTabsWorkspaceChrome","ResizableSidebarLayout"]}
+[production-chat-journey] captured component error TypeError: Importing a module script failed.
+[import-pagehide] 1792827349718 1792827349101
+[import-pagehide] 1792827350637 1792827349681
+[import-pagehide] 1792827352704 1792827350634
+[import-request-failed] {"at":1792827356191,"url":"http://127.0.0.1:3147/_nuxt/CbHtDGuD.js","type":"script","error":{"errorText":"cancelled"}}
+[import-request-failed] {"at":1792827356191,"url":"http://127.0.0.1:3147/api/_nuxt_icon/pixelarticons.json?icons=notes-plus","type":"fetch","error":{"errorText":"cancelled"}}
+[import-request-failed] {"at":1792827356191,"url":"http://127.0.0.1:3147/api/_nuxt_icon/lucide.json?icons=activity","type":"fetch","error":{"errorText":"cancelled"}}
+[import-component-origin] {"at":1792827356216,"document":1792827355612,"info":"https://vuejs.org/error-reference/#runtime-13","name":"AsyncComponentWrapper","parents":["WorkspaceTabsWorkspaceChrome","ResizableSidebarLayout"]}
+[production-chat-journey] captured component error TypeError: Importing a module script failed.
+[import-pagehide] 1792827356237 1792827355612
+[import-pagehide] 1792827357205 1792827356191
+[import-pagehide] 1792827359338 1792827357202
+  3 passed (20.0s)

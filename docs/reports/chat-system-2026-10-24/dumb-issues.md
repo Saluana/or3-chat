@@ -709,3 +709,31 @@ Additional manual checks for this follow-up:
 The provider activation, live-browser, paid-network and deployment limits in the
 preceding completion state still apply. Host changes are prepared for a draft PR;
 provider packages, images and backends have not been published or deployed.
+
+## PR preparation and current-base integration — 2026-10-25
+
+Host repairs were committed on `codex/chat-hardening`, then integrated with
+`or3-cloud` at `ddc44e0808d65d06b31345077cb7b63ba444432a`. The four
+overlapping files were resolved without discarding either side's behavior.
+Generated-image placeholders retain the upstream live-accumulator update, along
+with captured workspace/account ownership, bounded downloads, cancellation and
+visible persistence failures. The upstream URL-fallback test now checks the
+intentional error outcome when conversion cannot produce a durable image;
+successful stored-image ordering remains covered.
+
+Report links now resolve to the baseline commit or repository-relative repaired
+sources. The provider patches retain their recorded bytes and SHA-256 checksums;
+a scoped `.gitattributes` preserves the required spaces on unified-diff context
+lines.
+
+| PR qualification | Result |
+| --- | --- |
+| Merged streaming, continuation, image ownership, transaction and thumbnail suites | **115 tests passed across 5 files** |
+| Final integrated host `bun run test:full --bail=0` | **746 files passed; 6,907 tests passed, 1 skipped** |
+| Supported Nuxt type check | Passed; existing duplicate auto-import warnings remain |
+| ESLint over all 92 PR TypeScript/Vue files | Passed with zero warnings |
+| Guides, docmap and examples | Passed: 115 files, 103 mapped routes, 20 typechecked examples |
+
+The PR remains a draft for the manual walkthrough and coordinated provider
+release/activation described above. This integration does not publish packages,
+deploy backends or change live data.

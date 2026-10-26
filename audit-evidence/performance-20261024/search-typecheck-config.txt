@@ -1,0 +1,21 @@
+$ tsx scripts/cli/nuxt-task.ts type-check
+
+ ERROR  [or3-cloud-config] Configuration validation failed:
+- auth.clerk.publishableKey is required when auth is enabled.
+- auth.clerk.secretKey is required when auth is enabled.
+- sync.convex.url is required for the auth workspace store or sync.
+
+    at validateConfig (utils/or3-cloud-config.ts:513:11)
+    at defineOr3CloudConfig (utils/or3-cloud-config.ts:526:3)
+    at buildOr3CloudConfigFromEnv (server/admin/config/resolve-config.ts:511:67)
+    at config.or3cloud.ts:4:95
+    at async import (node_modules/jiti/dist/jiti.cjs:1:187718)
+    at async nuxt.config.ts:5:15
+    at async Function.import (node_modules/jiti/dist/jiti.cjs:1:187718)
+    at async Object.importConfigFile [as import] (node_modules/@nuxt/kit/dist/index.mjs:846:14)
+    at async resolveConfig (node_modules/@nuxt/kit/dist/index.mjs:643:51)
+    at async loadConfig (node_modules/@nuxt/kit/dist/index.mjs:463:22)
+
+
+/Users/brendon/.vite-plus/js_runtime/node/24.22.1/bin/node /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/nuxt/bin/nuxt.mjs typecheck exited with code 1.
+error: script "type-check" exited with code 1
