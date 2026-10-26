@@ -19,6 +19,9 @@ let workerPromise: Promise<Worker | null> | null = null;
 let nextMessageId = 1;
 const pendingRequests = new Map<number, PendingRequest>();
 
+const isOffline = (): boolean =>
+    typeof navigator !== 'undefined' && navigator.onLine === false;
+
 // Keep the main thread fallback tiny. Exact tokenization lives in the worker;
 // if workers are unavailable, a conservative character heuristic avoids
 // downloading a second ~2 MB tokenizer bundle onto the UI thread.
@@ -80,7 +83,7 @@ const setupWorker = (worker: Worker) => {
 };
 
 const ensureWorker = async (): Promise<Worker | null> => {
-    if (!import.meta.client) return null;
+    if (!import.meta.client || isOffline()) return null;
     if (workerInstance) return workerInstance;
     
     // Use atomic promise initialization to prevent race conditions
@@ -130,10 +133,13 @@ const runWorkerRequest = async <T>(
     payload: Record<string, unknown>,
     fallback: () => Promise<T>
 ): Promise<T> => {
-    if (!process.client) return fallback();
+    // A failed offline module import can stay rejected in the worker's module
+    // cache after reconnect. Keep offline estimates local and leave exact
+    // tokenization available for the next online request.
+    if (!process.client || isOffline()) return fallback();
 
     const worker = await ensureWorker();
-    if (!worker) return fallback();
+    if (!worker || isOffline()) return fallback();
 
     const id = nextMessageId++;
 

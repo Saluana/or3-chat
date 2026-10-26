@@ -17,6 +17,10 @@ interface AutocompletePluginState {
     recentlyBackspace: boolean;
 }
 
+function isOffline(): boolean {
+    return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
 function isAbortLikeError(error: unknown): boolean {
     if (error instanceof DOMException) return error.name === 'AbortError';
     return error instanceof Error && error.name === 'AbortError';
@@ -33,6 +37,7 @@ function isMissingKeyError(error: unknown): boolean {
 }
 
 async function editorAutoComplete(content: string, abortSignal?: AbortSignal) {
+    if (isOffline()) return { completion: '' };
     const config = useRuntimeConfig();
     const cloud = config.public.ssrAuthEnabled === true;
     const { apiKey, connected } = useUserApiKey();
@@ -43,6 +48,8 @@ async function editorAutoComplete(content: string, abortSignal?: AbortSignal) {
         || (cloud && !getCachedSessionContext()?.user?.id)) return { completion: '' };
 
     const { default: systemPrompt } = await import('./AutocompletePrompt');
+    abortSignal?.throwIfAborted();
+    if (isOffline()) return { completion: '' };
     const prompt = systemPrompt(content);
 
     let generatedText = '';
@@ -153,6 +160,9 @@ export const AutocompleteExtension = Extension.create<{}>({
 
         // Helper function to abort current request and cancel debounce
         function abortCurrentRequest() {
+            requestId++;
+            if (loadingTimeoutId !== null) clearTimeout(loadingTimeoutId);
+            loadingTimeoutId = null;
             if (abortController) {
                 abortController.abort();
                 abortController = null;
@@ -196,7 +206,8 @@ export const AutocompleteExtension = Extension.create<{}>({
                 if (editorView && !editorView.isDestroyed) {
                     const state = pluginKey.getState(editorView.state);
                     if (state?.loading) {
-                        dispatchStateUpdate(editorView, { loading: false });
+                        abortCurrentRequest();
+                        dispatchStateUpdate(editorView, { loading: false, suggestionCleared: true });
                     }
                 }
                 loadingTimeoutId = null;
@@ -204,9 +215,9 @@ export const AutocompleteExtension = Extension.create<{}>({
         }
 
         // Use standard debounce for initial setup
-        const debouncedFetchAndDispatch = useDebounceFn(async (typedDocument: EditorState['doc']) => {
+        const debouncedFetchAndDispatch = useDebounceFn(async (typedDocument: EditorState['doc'], queuedRequestId: number) => {
             // Check if autocomplete is enabled
-            if (!AutocompleteState.value.isEnabled) {
+            if (!AutocompleteState.value.isEnabled || isOffline() || queuedRequestId !== requestId) {
                 return;
             }
 
@@ -285,10 +296,10 @@ export const AutocompleteExtension = Extension.create<{}>({
                 );
                 apiSuggestion = response?.completion ?? null;
             } catch (error: any) {
-                if (error?.name === 'AbortError') {
-                    if (viewAtStart && !viewAtStart.isDestroyed) {
+                if (isAbortLikeError(error) || signal.aborted || thisRequestId !== requestId || isOffline()) {
+                    if (thisRequestId === requestId && !viewAtStart.isDestroyed) {
                         dispatchStateUpdate(viewAtStart, {
-                            suggestionCleared: true,
+                            suggestionCleared: true, loading: false,
                         });
                     }
                     return;
@@ -296,6 +307,10 @@ export const AutocompleteExtension = Extension.create<{}>({
                 console.error('API call failed', error);
                 apiSuggestion = null;
             } finally {
+                if (thisRequestId === requestId && loadingTimeoutId !== null) {
+                    clearTimeout(loadingTimeoutId);
+                    loadingTimeoutId = null;
+                }
                 // Check view validity AGAIN after await, before any potential dispatch
                 if (!viewAtStart || viewAtStart.isDestroyed) {
                     // Reset local abortController if it wasn't used or if it's the one we created
@@ -339,14 +354,6 @@ export const AutocompleteExtension = Extension.create<{}>({
                             loading: false,
                         });
                     }
-                }
-            } else {
-                // Also clear loading state if the request ID is stale
-                if (viewAtStart && !viewAtStart.isDestroyed) {
-                    const tr = viewAtStart.state.tr
-                        .setMeta('suggestionCleared', true)
-                        .setMeta('loading', false);
-                    viewAtStart.dispatch(tr);
                 }
             }
         }, 600);
@@ -445,8 +452,15 @@ export const AutocompleteExtension = Extension.create<{}>({
                         }
                     }
                     function handleFocus() {}
+                    function handleOffline() {
+                        // Retire queued work as well as the active stream. A quick
+                        // reconnect must not replay a pre-disconnect debounce.
+                        abortCurrentRequest();
+                        dispatchStateUpdate(view, { suggestionCleared: true, loading: false });
+                    }
                     view.dom.addEventListener('blur', handleBlur);
                     view.dom.addEventListener('focus', handleFocus);
+                    window.addEventListener('offline', handleOffline);
 
                     return {
                         update(view, prevState) {
@@ -469,6 +483,7 @@ export const AutocompleteExtension = Extension.create<{}>({
                             );
                             view.dom.removeEventListener('blur', handleBlur);
                             view.dom.removeEventListener('focus', handleFocus);
+                            window.removeEventListener('offline', handleOffline);
                             editorView = null;
                         },
                     };
@@ -488,6 +503,10 @@ export const AutocompleteExtension = Extension.create<{}>({
                         oldState: EditorState,
                         newState: EditorState
                     ): AutocompletePluginState {
+                        if (isOffline()) {
+                            abortCurrentRequest();
+                            return { suggestion: '', loading: false, recentlyBackspace: false };
+                        }
                         // Hydration and incoming sync are replacements, not typing.
                         // Cancel any queued request's context as well as its result.
                         if (tr.docChanged && tr.getMeta('preventUpdate')) {
@@ -533,10 +552,10 @@ export const AutocompleteExtension = Extension.create<{}>({
                         let nextState = { ...value };
 
                         // Handle loading meta
-                        if (loadingMeta === true) {
+                        if (typeof loadingMeta === 'boolean') {
                             nextState = {
                                 ...nextState,
-                                loading: true,
+                                loading: loadingMeta,
                                 recentlyBackspace: false,
                             };
                         }
@@ -656,7 +675,7 @@ export const AutocompleteExtension = Extension.create<{}>({
                             !suggestionAccepted &&
                             !suggestionCleared
                         ) {
-                            debouncedFetchAndDispatch(newState.doc);
+                            debouncedFetchAndDispatch(newState.doc, requestId);
                         }
 
                         return nextState;

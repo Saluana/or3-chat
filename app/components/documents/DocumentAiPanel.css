@@ -678,6 +678,11 @@
     color: var(--md-error);
     font-size: 0.72rem;
 }
+.offline-message {
+    margin: 0.5rem 0 0;
+    color: var(--ui-text-muted);
+    font-size: 0.8125rem;
+}
 .stream-status {
     display: flex;
     align-items: center;

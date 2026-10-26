@@ -13,7 +13,10 @@ const pending = new Map<string, {
 }>();
 
 function getWorker(): Worker | null {
-    if (typeof Worker === 'undefined') return null;
+    // A cold worker needs a script fetch. The already-loaded codec keeps local
+    // checkpoints and revision reads available without that offline dependency.
+    if (typeof Worker === 'undefined'
+        || (typeof navigator !== 'undefined' && navigator.onLine === false)) return null;
     if (!worker) {
         worker = new Worker(
             new URL('../../workers/document-revision.worker.ts', import.meta.url),
@@ -45,11 +48,19 @@ function callWorker<T>(message: Omit<Record<string, unknown>, 'id'>): Promise<T>
     if (!activeWorker) return null;
     const id = `revision-${++requestCounter}`;
     return new Promise<T>((resolve, reject) => {
+        // Revisions use a JSON wire format. Detach nested Vue proxies as well
+        // as the root; structuredClone/toRaw alone cannot do that recursively.
+        const payload: unknown = JSON.parse(JSON.stringify({ ...message, id }));
         pending.set(id, {
             resolve: (value) => resolve(value as T),
             reject,
         });
-        activeWorker.postMessage({ ...message, id });
+        try {
+            activeWorker.postMessage(payload);
+        } catch (error) {
+            pending.delete(id);
+            reject(error);
+        }
     });
 }
 

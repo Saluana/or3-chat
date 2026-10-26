@@ -6,6 +6,7 @@
 export type DocumentAiAgentStatus =
     | 'idle'
     | 'estimating'
+    | 'preparing'
     | 'streaming'
     | 'preview'
     | 'error';
@@ -33,7 +34,7 @@ export function canClearStatusAfterAbort(params: {
     status: DocumentAiAgentStatus;
 }): boolean {
     return params.myGeneration === params.runGeneration
-        && params.status === 'streaming';
+        && (params.status === 'streaming' || params.status === 'preparing');
 }
 
 /** Soft-lock the editor while streaming, reviewing, or applying accepts. */

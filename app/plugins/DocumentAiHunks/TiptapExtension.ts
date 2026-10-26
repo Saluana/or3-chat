@@ -1,11 +1,11 @@
-import { Extension } from '@tiptap/core';
+import { Extension, type JSONContent } from '@tiptap/core';
+import { DOMSerializer, Fragment, type Schema } from '@tiptap/pm/model';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { DocumentAiHunk } from '~/utils/documents/document-ai-hunks';
 import type { DocumentAiFrozenSnapshot } from '~/utils/documents/document-ai-operations';
 import {
     acceptedDocumentAiOperations,
-    clipDocumentAiPreview,
     resolveHunkAnchor,
 } from '~/utils/documents/document-ai-hunks';
 import type { DocumentAiScopeRange } from '~/utils/documents/document-ai-scope';
@@ -46,7 +46,7 @@ declare module '@tiptap/core' {
 }
 
 const pluginKey = new PluginKey('documentAiHunks');
-/** Collapsed preview length; expand reveals the full change in-flow (no nested scroll). */
+/** Long previews collapse visually; their native formatting is never truncated. */
 const PREVIEW_CLIP = 320;
 
 function emptyStorage(): DocumentAiHunksStorage {
@@ -69,6 +69,9 @@ function makeButton(className: string, label: string, onClick: () => void): HTML
     button.addEventListener('mousedown', (event) => {
         event.preventDefault();
         event.stopPropagation();
+    });
+    button.addEventListener('click', (event) => {
+        event.stopPropagation();
         onClick();
     });
     return button;
@@ -76,8 +79,8 @@ function makeButton(className: string, label: string, onClick: () => void): HTML
 
 function makePane(
     variant: 'before' | 'after',
-    text: string,
-    expanded: boolean,
+    nodes: JSONContent[],
+    schema: Schema,
 ): HTMLElement {
     const pane = document.createElement('div');
     pane.className = `document-ai-hunk-pane is-${variant}`;
@@ -91,8 +94,17 @@ function makePane(
     label.className = 'document-ai-hunk-pane-label';
     label.textContent = variant === 'before' ? 'Removed' : 'Added';
     const body = document.createElement('div');
-    body.className = 'document-ai-hunk-pane-text';
-    body.textContent = expanded ? text : clipDocumentAiPreview(text, PREVIEW_CLIP);
+    body.className = 'document-ai-hunk-pane-text document-ai-hunk-rich-text';
+    // Use the installed schema's safe DOM serializers, never model-supplied HTML
+    // or a Markdown round trip that would lose native marks and block attrs.
+    const fragment = Fragment.fromArray(nodes.map(node => schema.nodeFromJSON(node)));
+    body.append(DOMSerializer.fromSchema(schema).serializeFragment(fragment));
+    // Review content is a preview, not another editable or navigable surface.
+    body.querySelectorAll('input').forEach(input => { input.disabled = true; });
+    body.querySelectorAll('a').forEach(link => {
+        link.tabIndex = -1;
+        link.addEventListener('click', event => event.preventDefault());
+    });
     stack.append(label, body);
     pane.append(mark, stack);
     return pane;
@@ -114,33 +126,18 @@ function buildMarkerChip(
     root.addEventListener('mousedown', (event) => {
         event.preventDefault();
         event.stopPropagation();
+    });
+    root.addEventListener('click', (event) => {
+        event.stopPropagation();
         onFocus?.(hunk.id);
     });
     return root;
 }
 
-function syncPaneTexts(
-    body: HTMLElement,
-    beforeFull: string,
-    afterFull: string,
-    expanded: boolean,
-) {
-    const beforeText = body.querySelector('.is-before .document-ai-hunk-pane-text');
-    const afterText = body.querySelector('.is-after .document-ai-hunk-pane-text');
-    if (beforeText) {
-        beforeText.textContent = expanded
-            ? beforeFull
-            : clipDocumentAiPreview(beforeFull, PREVIEW_CLIP);
-    }
-    if (afterText) {
-        afterText.textContent = expanded
-            ? afterFull
-            : clipDocumentAiPreview(afterFull, PREVIEW_CLIP);
-    }
-}
-
 function buildReviewCard(
     hunk: DocumentAiHunk,
+    snapshot: DocumentAiFrozenSnapshot,
+    schema: Schema,
     displayNumber: number,
     onAccept: ((id: string) => void) | null,
     onDiscard: ((id: string) => void) | null,
@@ -160,9 +157,14 @@ function buildReviewCard(
     title.textContent = hunk.label;
     header.append(badge, title);
 
-    const beforeFull = hunk.beforePreview;
-    const afterFull = hunk.afterPreview;
-    const needsExpand = beforeFull.length > PREVIEW_CLIP || afterFull.length > PREVIEW_CLIP;
+    const op = hunk.op;
+    const original = op.kind === 'replace_block' || op.kind === 'delete_block'
+        ? snapshot.blocks.find(block => block.ref === op.ref)?.node
+        : null;
+    const before = op.kind === 'replace_selection' ? snapshot.selection?.content ?? [] : original ? [original] : [];
+    const after = op.kind === 'delete_block' ? [] : op.content;
+    const needsExpand = hunk.beforePreview.length > PREVIEW_CLIP || hunk.afterPreview.length > PREVIEW_CLIP
+        || before.length > 4 || after.length > 4;
     let expanded = false;
 
     const body = document.createElement('div');
@@ -170,8 +172,8 @@ function buildReviewCard(
         ? 'document-ai-hunk-body is-collapsed'
         : 'document-ai-hunk-body';
 
-    if (beforeFull) body.appendChild(makePane('before', beforeFull, false));
-    if (afterFull) body.appendChild(makePane('after', afterFull, false));
+    if (before.length) body.appendChild(makePane('before', before, schema));
+    if (after.length) body.appendChild(makePane('after', after, schema));
 
     const actions = document.createElement('div');
     actions.className = 'document-ai-hunk-actions';
@@ -190,7 +192,6 @@ function buildReviewCard(
             body.classList.toggle('is-expanded', expanded);
             toggle.textContent = expanded ? 'Show less' : 'Show full change';
             toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-            syncPaneTexts(body, beforeFull, afterFull, expanded);
             if (expanded) {
                 // Keep Accept/Reject in view after the card grows.
                 root.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -283,6 +284,8 @@ function buildHunkDecorations(
                 () => (isActive
                     ? buildReviewCard(
                         hunk,
+                        storage.snapshot!,
+                        editor.schema,
                         displayNumber,
                         (id) => storage.onAcceptHunk?.(id),
                         (id) => storage.onDiscardHunk?.(id),

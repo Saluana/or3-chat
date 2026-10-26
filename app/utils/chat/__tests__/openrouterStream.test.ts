@@ -402,6 +402,27 @@ describe('openrouterStream', () => {
         expect(direct.map(String)).toEqual(sizes);
     });
 
+    it.each([false, true])('preserves server route discovery after a transport failure (online=%s)', async connected => {
+        const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(connected);
+        const fetchMock = vi.fn().mockRejectedValueOnce(new TypeError('Failed to fetch'))
+            .mockImplementation(async () => createStreamResponse());
+        vi.stubGlobal('fetch', fetchMock);
+        const consume = async () => {
+            const events = [];
+            for await (const event of openRouterStream({ apiKey: 'key-1', model: 'model-1',
+                orMessages: [{ role: 'user', content: 'hi' }], modalities: ['text'] })) events.push(event);
+            return events;
+        };
+        if (connected) await expect(consume()).resolves.toEqual([{ type: 'text', text: 'hello' }]);
+        else await expect(consume()).rejects.toMatchObject({ status: 0, retryable: true });
+        expect(fetchMock).toHaveBeenCalledTimes(connected ? 2 : 1);
+        expect(localStorage.getItem('or3:server-route-available')).toBeNull();
+        online.mockReturnValue(true);
+        await consume();
+        expect(fetchMock.mock.lastCall?.[0]).toBe('/api/openrouter/stream');
+        online.mockRestore();
+    });
+
     it('does not fall back on proxy 5xx; error propagates and cache is not poisoned', async () => {
         const fetchMock = vi.fn((url: RequestInfo | URL) => {
             if (url === '/api/openrouter/stream') {

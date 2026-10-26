@@ -251,12 +251,13 @@ function parseContent(raw: string | null | undefined): TipTapDocument {
             typeof parsed === 'object' &&
             'type' in parsed &&
             (parsed as { type: unknown }).type === 'doc'
+            && (!('content' in parsed) || Array.isArray(parsed.content))
         ) {
             return parsed as TipTapDocument;
         }
-        return emptyDocJSON();
+        throw new Error('The saved document cannot be read. Its original content has been preserved.');
     } catch {
-        return emptyDocJSON();
+        throw new Error('The saved document cannot be read. Its original content has been preserved.');
     }
 }
 
@@ -362,6 +363,7 @@ export async function prepareDocumentCreate(input: CreateDocumentInput, id = new
     };
     await hooks.doAction('db.documents.create:action:before', actionPayload);
     const persistedRow = documentEntityToRow(actionPayload.entity, filteredRow);
+    persistedRow.file_hashes = serializeDocumentFileHashes(parseContent(persistedRow.content));
     // Convert DocumentRow to Post type for getDb().posts.put
     const postRow: Post = {
         id: persistedRow.id,
@@ -412,7 +414,7 @@ export async function getDocumentInDb(
         op: 'read',
         entity: 'posts',
         action: 'getDocument',
-    });
+    }, { rethrow: true });
     if (!isDocumentPost(row) || !isVisibleWorkspaceItem(row)) return undefined;
     const baseRow: DocumentRow = {
         id: row.id,
@@ -443,6 +445,7 @@ export async function getDocumentInDb(
  *
  * Constraints:
  * - Sorting is done in-memory for small result sets.
+ * - Rows whose content cannot be parsed are omitted.
  *
  * Non-Goals:
  * - Does not paginate via cursor semantics.
@@ -469,7 +472,15 @@ export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
         'db.documents.list:filter:output',
         sliced.map(toDocumentEntity)
     );
-    return mergeDocumentEntities(filteredEntities, baseMap).map(rowToRecord);
+    // One unreadable document must not fail the whole list. Opening it through
+    // getDocument surfaces the recovery error with its original content kept.
+    return mergeDocumentEntities(filteredEntities, baseMap).flatMap((row) => {
+        try {
+            return [rowToRecord(row)];
+        } catch {
+            return [];
+        }
+    });
 }
 
 /**
@@ -585,7 +596,7 @@ export async function updateDocumentInDb(
         op: 'read',
         entity: 'posts',
         action: 'getDocument',
-    });
+    }, { rethrow: true });
     if (!isDocumentPost(existing)) return undefined;
     if (expected && (existing.title !== expected.title
         || JSON.stringify(rowToRecord(existing).content) !== JSON.stringify(expected.content))) {
@@ -676,6 +687,7 @@ export async function prepareDocumentUpdate(existing: Post, patch: UpdateDocumen
     await hooks.doAction('db.documents.update:action:before', actionPayload);
 
     const persistedRow = documentEntityToRow(actionPayload.updated, mergedRow);
+    persistedRow.file_hashes = serializeDocumentFileHashes(parseContent(persistedRow.content));
     // Convert DocumentRow to Post type for getDb().posts.put
     const postRow: Post = {
         ...existing,

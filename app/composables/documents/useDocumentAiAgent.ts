@@ -1,11 +1,13 @@
 import { createRuntimeUuid } from '~~/shared/runtime-id';
-import { computed, readonly, ref, watch, type Ref } from 'vue';
+import { computed, onScopeDispose, readonly, ref, toRaw, watch, type Ref } from 'vue';
+import { useOnline } from '@vueuse/core';
 import type { Editor, JSONContent } from '@tiptap/core';
 
 import { useUserApiKey } from '~/core/auth/useUserApiKey';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useTokenizer } from '~/composables/core/useTokenizer';
 import { useHooks } from '~/core/hooks/useHooks';
+import type { DocumentAiEditRequestPayload } from '~/core/hooks/hook-types';
 import type { DocumentAiScope } from '~/composables/editor/useDocumentAiActions';
 import type { OpenRouterModel } from '~~/shared/openrouter/types';
 import {
@@ -58,6 +60,8 @@ import {
     type DocumentAiHunk,
 } from '~/utils/documents/document-ai-hunks';
 import { createDocumentRevision } from '~/db/document-revisions';
+import { getDb, getWorkspaceGeneration } from '~/db/client';
+import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import {
     formatDocumentAiReferenceContext,
     resolveDocumentAiReference,
@@ -93,6 +97,8 @@ export interface DocumentAiProposal {
     hunks: DocumentAiHunk[];
     snapshot: DocumentAiFrozenSnapshot;
     requestVersion: number;
+    /** Content is applied; acceptance retries only its local save. */
+    applied?: boolean;
     prompt: string;
     scope: DocumentAiScope;
 }
@@ -301,7 +307,9 @@ export function useDocumentAiAgent(options: {
     persistCurrent: () => Promise<void>;
     readOnly?: Readonly<Ref<boolean>>;
 }) {
-    const status = ref<'idle' | 'estimating' | 'streaming' | 'preview' | 'error'>('idle');
+    const status = ref<'idle' | 'estimating' | 'preparing' | 'streaming' | 'preview' | 'error'>('idle');
+    const online = useOnline();
+    let estimateGeneration = 0;
     const error = ref('');
     const tokenEstimate = ref(0);
     const proposal = ref<DocumentAiProposal | null>(null);
@@ -375,6 +383,14 @@ export function useDocumentAiAgent(options: {
     }
 
     watch([options.editor, () => options.readOnly?.value, status, accepting], syncEditorLock, { flush: 'sync' });
+    watch(online, connected => {
+        if (connected || (status.value !== 'preparing' && status.value !== 'streaming')) return;
+        abort();
+        error.value = 'AI stopped when the connection was lost. Your request is kept. Send it again when you’re online.';
+        status.value = 'error';
+        syncEditorLock();
+    }, { flush: 'sync' });
+    onScopeDispose(abort);
 
     function retireChatRuns() {
         if (chatPreviewRequestId) retiredChatRequests.add(chatPreviewRequestId);
@@ -389,11 +405,11 @@ export function useDocumentAiAgent(options: {
 
     function chatToolRun(requestId: string, refreshIfChanged = false) {
         const editor = options.editor.value;
-        if (!editor || editor.isDestroyed) throw new Error('The document editor is not open.');
+        if (!editor || editor.isDestroyed || options.readOnly?.value) throw new Error('The document editor is unavailable.');
         if (retiredChatRequests.has(requestId)) {
             throw new Error('This chat edit was reviewed. Start a new chat turn to edit this document again.');
         }
-        if (status.value === 'streaming' || accepting.value) {
+        if (status.value === 'preparing' || status.value === 'streaming' || accepting.value) {
             throw new Error('The document editor is busy.');
         }
         let existing = chatToolRuns.get(requestId);
@@ -480,6 +496,7 @@ export function useDocumentAiAgent(options: {
                 clearScopeHighlight();
                 run.stagedOperations.push(...operations);
                 chatPreviewRequestId = requestId;
+                proposalOriginCurrent = captureProposalOrigin(editor);
                 proposal.value = {
                     documentId: run.documentId,
                     candidate,
@@ -549,6 +566,7 @@ export function useDocumentAiAgent(options: {
 
     function enqueueAccept(work: () => Promise<void>): Promise<void> {
         return acceptControl.enqueue(async () => {
+            error.value = '';
             accepting.value = true;
             syncEditorLock();
             try {
@@ -565,7 +583,20 @@ export function useDocumentAiAgent(options: {
         });
     }
 
+    let proposalOriginCurrent: (() => boolean) | undefined;
+    function captureProposalOrigin(editor: Editor) {
+        const db = getDb();
+        const generation = getWorkspaceGeneration();
+        const account = getCachedSessionContext()?.user?.id;
+        const id = options.documentId.value;
+        return () => getDb() === db && getWorkspaceGeneration() === generation
+            && getCachedSessionContext()?.user?.id === account && options.documentId.value === id
+            && options.editor.value === editor && !editor.isDestroyed;
+    }
+
     function assertAcceptableProposal(current: DocumentAiProposal) {
+        if (proposalOriginCurrent && !proposalOriginCurrent()) throw new Error('This proposal belongs to an earlier editor session.');
+        if (options.readOnly?.value) throw new Error('The document editor is unavailable.');
         if (current.documentId !== options.documentId.value) {
             reject();
             throw new Error('This proposal belongs to a different document.');
@@ -577,8 +608,8 @@ export function useDocumentAiAgent(options: {
 
     function proposalStillOwned(current: DocumentAiProposal): boolean {
         return proposalIdentityOwned({
-            proposal: proposal.value,
-            current,
+            proposal: proposal.value ? toRaw(proposal.value) : null,
+            current: toRaw(current),
             documentId: options.documentId.value,
         });
     }
@@ -634,8 +665,10 @@ export function useDocumentAiAgent(options: {
         }
     }
 
-    async function resolveModel(attachments: readonly DocumentAiAttachment[] = []): Promise<OpenRouterModel> {
+    async function resolveModel(attachments: readonly DocumentAiAttachment[], signal: AbortSignal): Promise<OpenRouterModel> {
         await ensureLoaded();
+        signal.throwIfAborted();
+        if (!online.value) throw new Error('You’re offline. Reconnect to send an AI request.');
         if (!catalog.value.length) await fetchModels().catch(() => []);
         let inherited = FALLBACK_DOCUMENT_MODEL;
         try {
@@ -694,10 +727,20 @@ export function useDocumentAiAgent(options: {
         const editor = options.editor.value;
         if (!editor) return 0;
         // Never let estimate stomp an in-flight agent run / preview.
-        if (status.value === 'streaming' || status.value === 'preview') return tokenEstimate.value;
+        if (status.value === 'preparing' || status.value === 'streaming' || status.value === 'preview' || accepting.value) return tokenEstimate.value;
+        const mine = ++estimateGeneration;
+        const db = getDb();
+        const generation = getWorkspaceGeneration();
+        const account = getCachedSessionContext()?.user?.id;
+        const id = options.documentId.value;
+        const ownsEstimate = () => mine === estimateGeneration && isEstimating()
+            && options.editor.value === editor && !editor.isDestroyed && options.documentId.value === id
+            && getDb() === db && getWorkspaceGeneration() === generation
+            && getCachedSessionContext()?.user?.id === account;
         status.value = 'estimating';
         try {
             await ensureLoaded();
+            if (!ownsEstimate()) return 0;
             const scope = resolveAutomaticDocumentAiScope(editor);
             lastScope.value = scope;
             const chunkWordLimit = settings.value.chunkWordLimit;
@@ -732,34 +775,43 @@ export function useDocumentAiAgent(options: {
                 };
             }
             const references = await referenceContext(request.references);
-            tokenEstimate.value = await countTokens(`${request.prompt}\n${seedText}\n${references}`);
-            if (isEstimating()) error.value = '';
+            if (!ownsEstimate()) return 0;
+            const count = await countTokens(`${request.prompt}\n${seedText}\n${references}`);
+            if (!ownsEstimate()) return 0;
+            tokenEstimate.value = count;
             return tokenEstimate.value;
         } catch (caught) {
-            if (isEstimating()) {
+            if (ownsEstimate()) {
                 error.value = caught instanceof Error ? caught.message : String(caught);
             }
             return 0;
         } finally {
-            if (isEstimating()) status.value = 'idle';
+            if (ownsEstimate()) status.value = 'idle';
         }
     }
 
     async function ensureAiCheckpoint(editor: Editor) {
         if (checkpointCreated.value) return;
+        const isCurrent = captureProposalOrigin(editor);
+        const db = getDb();
         await createDocumentRevision({
             documentId: options.documentId.value,
             title: options.title.value,
             content: editor.getJSON(),
             source: 'ai',
-        });
-        checkpointCreated.value = true;
+        }, db);
+        if (isCurrent()) checkpointCreated.value = true;
     }
 
     async function submit(submission: DocumentAiSubmission) {
         if (options.readOnly?.value) return;
         const editor = options.editor.value;
-        if (!editor || !submission.prompt.trim() || status.value === 'streaming') return;
+        if (!editor || !submission.prompt.trim() || status.value === 'preparing' || status.value === 'streaming' || accepting.value) return;
+        if (!online.value) {
+            error.value = 'You’re offline. Reconnect to send an AI request.';
+            if (!proposal.value) status.value = 'error';
+            return;
+        }
         const submitDocumentId = options.documentId.value;
         retireChatRuns();
         chatPreviewRequestId = null;
@@ -775,84 +827,84 @@ export function useDocumentAiAgent(options: {
         invalidateEstimateCache();
         bindHunkHandlers(editor);
 
-        let attachments: DocumentAiAttachment[];
-        try {
-            attachments = validateDocumentAiAttachments(submission.attachments);
-        } catch (caught) {
-            error.value = caught instanceof Error ? caught.message : String(caught);
-            status.value = 'error';
-            syncEditorLock();
-            return;
-        }
-
-        const snapshot = freezeDocumentForAi(editor);
-        const scope = resolveAutomaticDocumentAiScope(editor);
-        lastScope.value = scope;
-        clearScopeHighlight();
-        await ensureLoaded();
-        if (!runControl.isCurrent(myGeneration)) return;
-        const context = seedEditableContext(
-            editor,
-            snapshot,
-            scope,
-            settings.value.chunkWordLimit,
-        );
-        let references = '';
-        let model: OpenRouterModel;
-        try {
-            references = await referenceContext(submission.references, true);
-            model = await resolveModel(attachments);
-        } catch (caught) {
-            if (!runControl.isCurrent(myGeneration)) return;
-            error.value = caught instanceof Error ? caught.message : String(caught);
-            status.value = 'error';
-            syncEditorLock();
-            return;
-        }
-        if (!runControl.isCurrent(myGeneration) || options.documentId.value !== submitDocumentId) return;
-
-        const tools = resolveDocumentAiToolsForRun(settings.value.enabledTools);
-        if (!tools.length) {
-            error.value = 'Enable at least one tool in Document AI settings.';
-            status.value = 'error';
-            return;
-        }
-        if (!tools.some((tool) => tool.function.name === 'propose_edits')) {
-            error.value = 'Enable “Suggest edits” in Document AI settings to prepare document changes for review.';
-            status.value = 'error';
-            return;
-        }
-
-        tokenEstimate.value = await countTokens(`${submission.prompt}\n${context.seedText}\n${references}`);
-        if (!runControl.isCurrent(myGeneration)) return;
-        const contextLimit = model.top_provider?.context_length ?? model.context_length ?? 32_000;
-        if (tokenEstimate.value + 4096 > contextLimit) {
-            error.value = `This ${scope} is too large for ${model.name}. Choose a larger-context model or a smaller scope.`;
-            status.value = 'error';
-            return;
-        }
-
-        let request = await hooks.applyFilters('ai.document.edit:filter:request', {
-            documentId: submitDocumentId,
-            modelId: model.id,
-            prompt: submission.prompt.trim(),
-            scope,
-            context: context.seedText,
-            references: uniqueDocumentAiReferences(submission.references),
-            referenceContext: references,
-            tokenEstimate: tokenEstimate.value,
-            maxIterations: settings.value.maxIterations,
-            chunkWordLimit: settings.value.chunkWordLimit,
-        });
-        if (!runControl.isCurrent(myGeneration) || options.documentId.value !== submitDocumentId) return;
+        const originDb = getDb();
+        const originGeneration = getWorkspaceGeneration();
+        const originAccount = getCachedSessionContext()?.user?.id ?? null;
+        const ownsRun = () => runControl.isCurrent(myGeneration)
+            && options.editor.value === editor && !editor.isDestroyed
+            && options.documentId.value === submitDocumentId && !options.readOnly?.value
+            && getDb() === originDb && getWorkspaceGeneration() === originGeneration
+            && (getCachedSessionContext()?.user?.id ?? null) === originAccount;
         const abortController = new AbortController();
         controller.value = abortController;
-        status.value = 'streaming';
-        agentStatus.value = 'Starting…';
-        clearScopeHighlight();
-        syncEditorLock();
-        await hooks.doAction('ai.document.edit:action:before', request);
+        status.value = 'preparing';
+        let request: DocumentAiEditRequestPayload | undefined;
         try {
+            const attachments = validateDocumentAiAttachments(submission.attachments);
+            const snapshot = freezeDocumentForAi(editor);
+            const scope = resolveAutomaticDocumentAiScope(editor);
+            lastScope.value = scope;
+            clearScopeHighlight();
+            const requestVersion = options.contentVersion.value;
+            await ensureLoaded();
+            if (!ownsRun()) return;
+            const context = seedEditableContext(
+                editor,
+                snapshot,
+                scope,
+                settings.value.chunkWordLimit,
+            );
+            const references = await referenceContext(submission.references, true);
+            if (!ownsRun()) return;
+            const model = await resolveModel(attachments, abortController.signal);
+            if (!ownsRun()) return;
+
+            const tools = resolveDocumentAiToolsForRun(settings.value.enabledTools);
+            if (!tools.length) {
+                error.value = 'Enable at least one tool in Document AI settings.';
+                status.value = 'error';
+                return;
+            }
+            if (!tools.some((tool) => tool.function.name === 'propose_edits')) {
+                error.value = 'Enable “Suggest edits” in Document AI settings to prepare document changes for review.';
+                status.value = 'error';
+                return;
+            }
+
+            const count = await countTokens(`${submission.prompt}\n${context.seedText}\n${references}`);
+            if (!ownsRun()) return;
+            tokenEstimate.value = count;
+            if (options.contentVersion.value !== requestVersion) {
+                error.value = 'The document changed while preparing the request. Submit it again.';
+                status.value = 'error';
+                return;
+            }
+            const contextLimit = model.top_provider?.context_length ?? model.context_length ?? 32_000;
+            if (tokenEstimate.value + 4096 > contextLimit) {
+                error.value = `This ${scope} is too large for ${model.name}. Choose a larger-context model or a smaller scope.`;
+                status.value = 'error';
+                return;
+            }
+
+            request = await hooks.applyFilters('ai.document.edit:filter:request', {
+                documentId: submitDocumentId,
+                modelId: model.id,
+                prompt: submission.prompt.trim(),
+                scope,
+                context: context.seedText,
+                references: uniqueDocumentAiReferences(submission.references),
+                referenceContext: references,
+                tokenEstimate: tokenEstimate.value,
+                maxIterations: settings.value.maxIterations,
+                chunkWordLimit: settings.value.chunkWordLimit,
+            });
+            if (!ownsRun()) return;
+            status.value = 'streaming';
+            agentStatus.value = 'Starting…';
+            clearScopeHighlight();
+            syncEditorLock();
+            await hooks.doAction('ai.document.edit:action:before', request);
+            if (!ownsRun() || abortController.signal.aborted) return;
             const streamOptions = resolveDocumentAiToolStreamOptions(model);
             const orMessages = [
                 {
@@ -895,7 +947,9 @@ export function useDocumentAiAgent(options: {
                 enabledTools: settings.value.enabledTools,
                 toolChoice: streamOptions.toolChoice,
                 reasoning: streamOptions.reasoning,
-                onStatus: onAgentStatus,
+                onStatus: event => {
+                    if (ownsRun() && !abortController.signal.aborted) onAgentStatus(event);
+                },
                 toolContext: {
                     editor,
                     snapshot,
@@ -907,8 +961,7 @@ export function useDocumentAiAgent(options: {
             });
 
             if (
-                !runControl.isCurrent(myGeneration)
-                || options.documentId.value !== submitDocumentId
+                !ownsRun()
                 || abortController.signal.aborted
             ) {
                 return;
@@ -921,8 +974,6 @@ export function useDocumentAiAgent(options: {
             const candidate = buildDocumentAiCandidate(editor, snapshot, operations);
             editor.schema.nodeFromJSON(candidate);
             const hunks = createDocumentAiHunks(operations, snapshot);
-            // Capture after lock/stream side-effects so soft-lock cannot mark us stale.
-            const requestVersion = options.contentVersion.value;
             const nextProposal: DocumentAiProposal = {
                 documentId: submitDocumentId,
                 candidate,
@@ -934,6 +985,7 @@ export function useDocumentAiAgent(options: {
                 prompt: request.prompt,
                 scope,
             };
+            proposalOriginCurrent = captureProposalOrigin(editor);
             proposal.value = nextProposal;
             focusedHunkId.value = hunks[0]?.id ?? null;
             syncHunkDecorations(editor, nextProposal, focusedHunkId.value);
@@ -947,7 +999,7 @@ export function useDocumentAiAgent(options: {
                 accepted: false,
             });
         } catch (caught) {
-            if (!runControl.isCurrent(myGeneration)) return;
+            if (!ownsRun()) return;
             if (abortController.signal.aborted) {
                 if (canClearStatusAfterAbort({
                     myGeneration,
@@ -963,10 +1015,10 @@ export function useDocumentAiAgent(options: {
             error.value = caught instanceof Error ? caught.message : String(caught);
             status.value = 'error';
             syncEditorLock();
-            await hooks.doAction('ai.document.edit:action:error', { request, error: caught });
+            if (request) await hooks.doAction('ai.document.edit:action:error', { request, error: caught });
         } finally {
             if (controller.value === abortController) controller.value = null;
-            if (runControl.isCurrent(myGeneration) && status.value === 'streaming') {
+            if (runControl.isCurrent(myGeneration) && (status.value === 'streaming' || status.value === 'preparing')) {
                 // Loop ended without preview/error transition (shouldn't happen often).
                 status.value = 'idle';
                 syncEditorLock();
@@ -988,16 +1040,26 @@ export function useDocumentAiAgent(options: {
                 reject();
                 return;
             }
-            await ensureAiCheckpoint(editor);
-            if (!proposalStillOwned(current) || stale.value) return;
-            const candidate = buildDocumentAiCandidate(editor, current.snapshot, operations);
-            editor.schema.nodeFromJSON(candidate);
-            editor.commands.setContent(candidate, {
-                emitUpdate: true,
-                errorOnInvalidContent: true,
-            });
+            const originDb = getDb();
+            const originGeneration = getWorkspaceGeneration();
+            const originAccount = getCachedSessionContext()?.user?.id;
+            let applied = current;
+            if (!current.applied) {
+                await ensureAiCheckpoint(editor);
+                if (!proposalStillOwned(current)) return;
+                if (options.editor.value !== editor || editor.isDestroyed || getDb() !== originDb
+                    || getWorkspaceGeneration() !== originGeneration
+                    || getCachedSessionContext()?.user?.id !== originAccount) return;
+                assertAcceptableProposal(current);
+                const candidate = buildDocumentAiCandidate(editor, current.snapshot, operations);
+                editor.schema.nodeFromJSON(candidate).check();
+                editor.commands.setContent(candidate, { emitUpdate: true, errorOnInvalidContent: true });
+                applied = { ...current, applied: true, requestVersion: options.contentVersion.value };
+                proposal.value = applied;
+                syncHunkDecorations(editor, null);
+            }
             await options.persistCurrent();
-            if (!proposalStillOwned(current)) return;
+            if (!proposalStillOwned(applied)) return;
             proposal.value = null;
             retireChatRuns();
             chatPreviewRequestId = null;
@@ -1020,7 +1082,9 @@ export function useDocumentAiAgent(options: {
             if (!hunk || hunk.status !== 'pending') return;
 
             await ensureAiCheckpoint(editor);
-            if (proposal.value !== current || stale.value) return;
+            if (proposal.value !== current) return;
+            assertAcceptableProposal(current);
+            if (options.editor.value !== editor || editor.isDestroyed) return;
             if (chatPreviewRequestId) retireChatRuns();
 
             const nextHunks = current.hunks.map((entry) => (
@@ -1044,10 +1108,10 @@ export function useDocumentAiAgent(options: {
             syncHunkDecorations(editor, pending.length ? interim : null, nextActiveId);
 
             const acceptedBefore = acceptedDocumentAiOperations(current.hunks);
-            applyDocumentAiOperationLive(editor, current.snapshot, acceptedBefore, hunk.op);
+            applyDocumentAiOperationLive(editor, current.snapshot, acceptedBefore, hunk.op, current.hunks.map((entry) => entry.op));
             const versionAfterAccept = options.contentVersion.value;
-            if (proposal.value === interim) {
-                proposal.value = { ...interim, requestVersion: versionAfterAccept };
+            if (proposal.value && toRaw(proposal.value) === interim) {
+                proposal.value = { ...interim, applied: !pending.length, requestVersion: versionAfterAccept };
             }
             await options.persistCurrent();
             if (!ownsProposal(current.documentId)) return;
@@ -1064,7 +1128,7 @@ export function useDocumentAiAgent(options: {
                 return;
             }
 
-            const previewOps = [...accepted, ...pending];
+            const previewOps = nextHunks.filter((entry) => entry.status !== 'discarded').map((entry) => entry.op);
             const preview = buildDocumentAiCandidate(editor, current.snapshot, previewOps);
             const next: DocumentAiProposal = {
                 ...current,
@@ -1113,7 +1177,7 @@ export function useDocumentAiAgent(options: {
             syncEditorLock();
             return;
         }
-        const applied = [...acceptedOps, ...pendingOps];
+        const applied = nextHunks.filter((entry) => entry.status !== 'discarded').map((entry) => entry.op);
         const candidate = buildDocumentAiCandidate(editor, current.snapshot, applied);
         proposal.value = {
             ...next,
@@ -1143,10 +1207,11 @@ export function useDocumentAiAgent(options: {
 
     function abort() {
         runControl.bump();
+        estimateGeneration++;
         controller.value?.abort();
         controller.value = null;
-        // Only clear streaming — never stomp an unrelated preview/error state.
-        if (status.value === 'streaming') {
+        // Retire active preparation/estimation without clearing a review or error.
+        if (status.value === 'preparing' || status.value === 'streaming' || status.value === 'estimating') {
             status.value = 'idle';
             agentStatus.value = '';
             syncEditorLock();

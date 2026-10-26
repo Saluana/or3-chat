@@ -1,6 +1,7 @@
-import { computed, ref } from 'vue';
-import { getDb } from '~/db/client';
-import { getKvByName, setKvByName } from '~/db/kv';
+import { computed, getCurrentScope, onScopeDispose, ref, shallowRef, type Ref } from 'vue';
+import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb, type Or3DB } from '~/db/client';
+import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
+import { getKvRecordByName, setKvByName } from '~/db/kv';
 import type { DocumentAiScope } from '~/composables/editor/useDocumentAiActions';
 import {
     clampDocumentAiChunkWords,
@@ -64,9 +65,21 @@ function sanitizeEnabledTools(value: unknown): Record<string, boolean> {
     return out;
 }
 
-const settings = ref<DocumentAiSettingsV1>({ ...DEFAULT_DOCUMENT_AI_SETTINGS });
-let loadedDb = '';
-let loadPromise: Promise<void> | null = null;
+interface SettingsState {
+    value: Ref<DocumentAiSettingsV1>;
+    loaded: boolean;
+    loading?: Promise<void>;
+    writes: Promise<void>;
+}
+const scopes = new WeakMap<Or3DB, SettingsState>();
+function stateFor(db: Or3DB): SettingsState {
+    let state = scopes.get(db);
+    if (!state) {
+        state = { value: ref(sanitizeDocumentAiSettings(DEFAULT_DOCUMENT_AI_SETTINGS)), loaded: false, writes: Promise.resolve() };
+        scopes.set(db, state);
+    }
+    return state;
+}
 
 function scope(value: unknown): DocumentAiScope {
     return value === 'selection' || value === 'document' ? value : 'section';
@@ -119,37 +132,49 @@ export function sanitizeDocumentAiSettings(value: unknown): DocumentAiSettingsV1
     };
 }
 
-async function ensureLoaded() {
-    const dbName = getDb().name;
-    if (loadedDb === dbName) return;
-    if (loadPromise) return loadPromise;
-    loadPromise = (async () => {
-        try {
-            const row = await getKvByName(DOCUMENT_AI_SETTINGS_KEY);
-            settings.value = row?.value
-                ? sanitizeDocumentAiSettings(JSON.parse(row.value))
-                : { ...DEFAULT_DOCUMENT_AI_SETTINGS };
-            loadedDb = dbName;
-        } catch {
-            settings.value = { ...DEFAULT_DOCUMENT_AI_SETTINGS };
-            loadedDb = dbName;
-        } finally {
-            loadPromise = null;
-        }
-    })();
-    return loadPromise;
+async function loadSettings(db: Or3DB) {
+    const state = stateFor(db);
+    if (state.loaded) return;
+    if (state.loading) return state.loading;
+    state.loading = (async () => {
+        const { row } = await getKvRecordByName(DOCUMENT_AI_SETTINGS_KEY, db);
+        state.value.value = sanitizeDocumentAiSettings(row?.value ? JSON.parse(row.value) : DEFAULT_DOCUMENT_AI_SETTINGS);
+        state.loaded = true;
+    })().finally(() => { state.loading = undefined; });
+    return state.loading;
 }
 
 export function useDocumentAiSettings() {
-    if (import.meta.client) void ensureLoaded();
-    async function update(patch: Partial<DocumentAiSettingsV1>) {
-        await ensureLoaded();
-        const next = sanitizeDocumentAiSettings({ ...settings.value, ...patch });
-        settings.value = next;
-        await setKvByName(DOCUMENT_AI_SETTINGS_KEY, JSON.stringify(next));
+    const activeDb = shallowRef(getDb());
+    const ensureLoaded = () => loadSettings(getDb());
+    if (getCurrentScope()) {
+        const stop = subscribeActiveWorkspaceDb(() => {
+            activeDb.value = getDb();
+            void ensureLoaded().catch(() => {});
+        });
+        onScopeDispose(stop);
+    }
+    if (import.meta.client) void ensureLoaded().catch(() => {});
+    function update(patch: Partial<DocumentAiSettingsV1> | ((current: DocumentAiSettingsV1) => Partial<DocumentAiSettingsV1>)) {
+        const db = getDb();
+        const generation = getWorkspaceGeneration();
+        const account = getCachedSessionContext()?.user?.id ?? null;
+        const isCurrent = () => getDb() === db && getWorkspaceGeneration() === generation
+            && (getCachedSessionContext()?.user?.id ?? null) === account;
+        const state = stateFor(db);
+        const write = state.writes.then(async () => {
+            await loadSettings(db);
+            if (!isCurrent()) throw new Error('The workspace changed. Update settings in the active workspace.');
+            const changes = typeof patch === 'function' ? patch(state.value.value) : patch;
+            const next = sanitizeDocumentAiSettings({ ...state.value.value, ...changes });
+            await setKvByName(DOCUMENT_AI_SETTINGS_KEY, JSON.stringify(next), db, { isValid: isCurrent });
+            if (isCurrent()) state.value.value = next;
+        });
+        state.writes = write.catch(() => {});
+        return write;
     }
     return {
-        settings: computed(() => settings.value),
+        settings: computed(() => stateFor(activeDb.value).value.value),
         ensureLoaded,
         update,
         reset: () => update(DEFAULT_DOCUMENT_AI_SETTINGS),

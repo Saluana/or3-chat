@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { getDb } from '~/db/client';
 import {
     searchDocumentAiMentions,
     formatDocumentAiReferenceContext,
@@ -19,6 +20,19 @@ describe('Document AI reference context', () => {
         ]);
         expect(await searchDocumentAiMentions('', { currentDocumentId: 'self', documentsEnabled: true, conversationsEnabled: true }))
             .toEqual([{ id: 'doc', source: 'document', label: 'Other document' }, { id: 'chat', source: 'chat', label: 'Conversation' }]);
+    });
+    it('excludes Trash and unsupported item state when indexed mention search is unavailable', async () => {
+        mentions.search.mockRejectedValueOnce(new Error('Index unavailable'));
+        const db = getDb();
+        const ids = ['mention-active', 'mention-trashed', 'mention-future'];
+        try {
+            await db.posts.bulkPut(ids.map((id, index) => ({ id, title: 'Fallback evidence', postType: 'doc', content: '{"type":"doc","content":[]}',
+                created_at: 1, updated_at: 1, clock: 0, deleted: false,
+                meta: index === 0 ? undefined : JSON.stringify({ 'or3.workspace-item': { version: index === 1 ? 1 : 2, trashed_at: index === 1 ? 1 : null } }),
+            })));
+            const items = await searchDocumentAiMentions('Fallback evidence', { currentDocumentId: 'self', documentsEnabled: true, conversationsEnabled: false });
+            expect(items.map(item => item.id)).toEqual(['mention-active']);
+        } finally { await db.posts.bulkDelete(ids); }
     });
     it('deduplicates references by source and id while preserving order', () => {
         expect(uniqueDocumentAiReferences([
