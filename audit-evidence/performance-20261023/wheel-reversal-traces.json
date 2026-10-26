@@ -1,0 +1,3379 @@
+{
+  "date": "2026-10-24T08:36:54.581Z",
+  "note": "Selected events around the final upward wheel. Instrumented diagnosis, not a performance comparison. Before snapshot can satisfy the old disabled-button assertion while offscreen. The explicit-top phase is a later control, never counted as native-wheel success.",
+  "traces": [
+    {
+      "stage": "before",
+      "browser": "153.0.8010.12",
+      "harness": "development",
+      "options": {
+        "traceInternals": true
+      },
+      "errors": [],
+      "snapshots": [
+        {
+          "phase": "returned",
+          "root": {
+            "top": 40,
+            "bottom": 720,
+            "height": 680,
+            "scrollTop": 532,
+            "scrollHeight": 8037
+          },
+          "mounts": 22,
+          "first": {
+            "id": "scroll-0",
+            "top": -464,
+            "bottom": -135,
+            "height": 329,
+            "pool": false,
+            "mounted": true,
+            "frame": false,
+            "saved": true
+          }
+        },
+        {
+          "phase": "explicit-top",
+          "root": {
+            "top": 40,
+            "bottom": 720,
+            "height": 680,
+            "scrollTop": 0,
+            "scrollHeight": 8037
+          },
+          "mounts": 22,
+          "first": {
+            "id": "scroll-0",
+            "top": 68,
+            "bottom": 397,
+            "height": 329,
+            "pool": false,
+            "mounted": true,
+            "frame": false,
+            "saved": true
+          }
+        }
+      ],
+      "reversalTime": 3596,
+      "inputs": [
+        {
+          "now": 3494.0999999046326,
+          "type": "wheel",
+          "deltaY": 20000,
+          "top": 7319
+        },
+        {
+          "now": 3494.2000000476837,
+          "type": "scroll",
+          "top": 7319
+        },
+        {
+          "now": 3494.2000000476837,
+          "type": "scrollend",
+          "top": 7319
+        },
+        {
+          "now": 3555.7999999523163,
+          "type": "scroll",
+          "top": 6556
+        },
+        {
+          "now": 3596,
+          "type": "wheel",
+          "deltaY": -20000,
+          "top": 267
+        },
+        {
+          "now": 3596.0999999046326,
+          "type": "scroll",
+          "top": 267
+        },
+        {
+          "now": 3596.0999999046326,
+          "type": "scrollend",
+          "top": 267
+        },
+        {
+          "now": 3703.7999999523163,
+          "type": "scroll",
+          "top": 534
+        },
+        {
+          "now": 3703.7999999523163,
+          "type": "scrollend",
+          "top": 534
+        },
+        {
+          "now": 3727.7000000476837,
+          "type": "scroll",
+          "top": 532
+        },
+        {
+          "now": 3727.7999999523163,
+          "type": "scrollend",
+          "top": 532
+        },
+        {
+          "now": 3743.5999999046326,
+          "type": "scroll",
+          "top": 0
+        },
+        {
+          "now": 3743.5999999046326,
+          "type": "scrollend",
+          "top": 0
+        }
+      ],
+      "writes": [
+        {
+          "now": 3537.7000000476837,
+          "previous": 6556,
+          "value": 6556,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at U (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:389:21)",
+            "    at lt (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:625:4)",
+            "    at http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:429:74"
+          ]
+        },
+        {
+          "now": 3582.0999999046326,
+          "previous": 6556,
+          "value": 6823,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at U (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:389:21)",
+            "    at lt (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:625:4)",
+            "    at http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:429:74"
+          ]
+        },
+        {
+          "now": 3690.899999856949,
+          "previous": 267,
+          "value": 534,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at U (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:389:21)",
+            "    at Ne (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:407:30)",
+            "    at Ie (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:430:9)"
+          ]
+        },
+        {
+          "now": 3717.2000000476837,
+          "previous": 534,
+          "value": 532,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at U (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:389:21)",
+            "    at Ne (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:407:30)",
+            "    at Ie (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:430:9)"
+          ]
+        },
+        {
+          "now": 3739.7000000476837,
+          "previous": 532,
+          "value": 0,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at eval (eval at evaluate (:311:30), <anonymous>:1:26)",
+            "    at UtilityScript.evaluate (<anonymous>:313:16)",
+            "    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+          ]
+        }
+      ],
+      "internals": [
+        {
+          "now": 3494.2000000476837,
+          "stage": "intent",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 7319,
+          "domHeight": 7999,
+          "trackHeight": 7829,
+          "modelHeight": 7829,
+          "atBottom": false
+        },
+        {
+          "now": 3494.2000000476837,
+          "stage": "scrollend",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 7319,
+          "top": 7319,
+          "domHeight": 7999,
+          "trackHeight": 7829,
+          "modelHeight": 7829,
+          "atBottom": false
+        },
+        {
+          "now": 3494.2000000476837,
+          "stage": "settle",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 7319,
+          "top": 7319,
+          "domHeight": 7999,
+          "trackHeight": 7829,
+          "modelHeight": 7829,
+          "atBottom": false
+        },
+        {
+          "now": 3494.2000000476837,
+          "stage": "processScroll",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 7319,
+          "top": 7319,
+          "domHeight": 7999,
+          "trackHeight": 7829,
+          "modelHeight": 7829,
+          "atBottom": false
+        },
+        {
+          "now": 3537.2000000476837,
+          "stage": "measure",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7319,
+          "cachedTop": 7319,
+          "top": 7319,
+          "domHeight": 7999,
+          "trackHeight": 7829,
+          "modelHeight": 7829,
+          "atBottom": true,
+          "pending": [
+            [
+              "dedfc9de-a255-4cc7-9794-abd0d4815ca7",
+              76
+            ],
+            [
+              "73a7ce12-a177-4a49-b6e0-cc18c1e183c3",
+              122
+            ],
+            [
+              "scroll-29",
+              140
+            ],
+            [
+              "scroll-28",
+              140
+            ],
+            [
+              "scroll-27",
+              140
+            ]
+          ]
+        },
+        {
+          "now": 3537.2999999523163,
+          "stage": "layout",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7319,
+          "cachedTop": 7319,
+          "top": 7319,
+          "domHeight": 7999,
+          "trackHeight": 7829,
+          "modelHeight": 7066,
+          "atBottom": true,
+          "follow": true,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-29",
+                "withinItem": 29,
+                "index": 29
+              }
+            ]
+          }
+        },
+        {
+          "now": 3537.2999999523163,
+          "stage": "commit",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7319,
+          "cachedTop": 7319,
+          "top": 7319,
+          "domHeight": 7999,
+          "trackHeight": 7829,
+          "modelHeight": 7066,
+          "atBottom": true,
+          "follow": true,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-29",
+                "withinItem": 29,
+                "index": 29
+              }
+            ]
+          }
+        },
+        {
+          "now": 3537.2999999523163,
+          "stage": "height",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7319,
+          "cachedTop": 7319,
+          "top": 7319,
+          "domHeight": 7999,
+          "trackHeight": 7829,
+          "modelHeight": 7066,
+          "atBottom": true,
+          "next": 7066
+        },
+        {
+          "now": 3537.5999999046326,
+          "stage": "followCallback",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7319,
+          "cachedTop": 6556,
+          "top": 6556,
+          "domHeight": 7236,
+          "trackHeight": 7066,
+          "modelHeight": 7066,
+          "atBottom": true
+        },
+        {
+          "now": 3537.5999999046326,
+          "stage": "height",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7319,
+          "cachedTop": 6556,
+          "top": 6556,
+          "domHeight": 7236,
+          "trackHeight": 7066,
+          "modelHeight": 7066,
+          "atBottom": true,
+          "next": 7066
+        },
+        {
+          "now": 3537.7000000476837,
+          "stage": "write",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7319,
+          "cachedTop": 6556,
+          "top": 6556,
+          "domHeight": 7236,
+          "trackHeight": 7066,
+          "modelHeight": 7066,
+          "atBottom": true,
+          "next": 6556,
+          "writeSource": "bottom"
+        },
+        {
+          "now": 3555.899999856949,
+          "stage": "processScroll",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": "bottom",
+          "target": 6556,
+          "lastHandledTop": 7319,
+          "cachedTop": 6556,
+          "top": 6556,
+          "domHeight": 7895,
+          "trackHeight": 7066,
+          "modelHeight": 7066,
+          "atBottom": true
+        },
+        {
+          "now": 3576.7000000476837,
+          "stage": "measure",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6556,
+          "cachedTop": 6556,
+          "top": 6556,
+          "domHeight": 7361,
+          "trackHeight": 7066,
+          "modelHeight": 7066,
+          "atBottom": true,
+          "pending": [
+            [
+              "scroll-29",
+              407
+            ],
+            [
+              "scroll-28",
+              407
+            ],
+            [
+              "scroll-27",
+              407
+            ],
+            [
+              "scroll-2",
+              140
+            ],
+            [
+              "scroll-3",
+              140
+            ]
+          ]
+        },
+        {
+          "now": 3576.7999999523163,
+          "stage": "layout",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6556,
+          "cachedTop": 6556,
+          "top": 6556,
+          "domHeight": 7361,
+          "trackHeight": 7066,
+          "modelHeight": 7333,
+          "atBottom": true,
+          "follow": true,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-27",
+                "withinItem": 80,
+                "index": 27
+              }
+            ]
+          }
+        },
+        {
+          "now": 3576.7999999523163,
+          "stage": "commit",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6556,
+          "cachedTop": 6556,
+          "top": 6556,
+          "domHeight": 7361,
+          "trackHeight": 7066,
+          "modelHeight": 7333,
+          "atBottom": true,
+          "follow": true,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-27",
+                "withinItem": 80,
+                "index": 27
+              }
+            ]
+          }
+        },
+        {
+          "now": 3576.7999999523163,
+          "stage": "height",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6556,
+          "cachedTop": 6556,
+          "top": 6556,
+          "domHeight": 7361,
+          "trackHeight": 7066,
+          "modelHeight": 7333,
+          "atBottom": true,
+          "next": 7333
+        },
+        {
+          "now": 3577.399999856949,
+          "stage": "followCallback",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6556,
+          "cachedTop": 6556,
+          "top": 6556,
+          "domHeight": 7503,
+          "trackHeight": 7333,
+          "modelHeight": 7333,
+          "atBottom": false
+        },
+        {
+          "now": 3582,
+          "stage": "height",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6556,
+          "cachedTop": 6556,
+          "top": 6556,
+          "domHeight": 7503,
+          "trackHeight": 7333,
+          "modelHeight": 7333,
+          "atBottom": false,
+          "next": 7333
+        },
+        {
+          "now": 3582,
+          "stage": "write",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6556,
+          "cachedTop": 6556,
+          "top": 6556,
+          "domHeight": 7503,
+          "trackHeight": 7333,
+          "modelHeight": 7333,
+          "atBottom": false,
+          "next": 6823,
+          "writeSource": "bottom"
+        },
+        {
+          "now": 3596,
+          "stage": "intent",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": "bottom",
+          "target": 6823,
+          "lastHandledTop": 6556,
+          "cachedTop": 6823,
+          "top": 267,
+          "domHeight": 7503,
+          "trackHeight": 7333,
+          "modelHeight": 7333,
+          "atBottom": false
+        },
+        {
+          "now": 3596.0999999046326,
+          "stage": "scrollend",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6556,
+          "cachedTop": 267,
+          "top": 267,
+          "domHeight": 7503,
+          "trackHeight": 7333,
+          "modelHeight": 7333,
+          "atBottom": false
+        },
+        {
+          "now": 3596.0999999046326,
+          "stage": "settle",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6556,
+          "cachedTop": 267,
+          "top": 267,
+          "domHeight": 7503,
+          "trackHeight": 7333,
+          "modelHeight": 7333,
+          "atBottom": false
+        },
+        {
+          "now": 3596.0999999046326,
+          "stage": "processScroll",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 6556,
+          "cachedTop": 267,
+          "top": 267,
+          "domHeight": 7503,
+          "trackHeight": 7333,
+          "modelHeight": 7333,
+          "atBottom": false
+        },
+        {
+          "now": 3618.399999856949,
+          "stage": "measure",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 267,
+          "cachedTop": 267,
+          "top": 267,
+          "domHeight": 7503,
+          "trackHeight": 7333,
+          "modelHeight": 7333,
+          "atBottom": false,
+          "pending": [
+            [
+              "scroll-1",
+              140
+            ],
+            [
+              "scroll-0",
+              140
+            ]
+          ]
+        },
+        {
+          "now": 3618.399999856949,
+          "stage": "layout",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 267,
+          "cachedTop": 267,
+          "top": 267,
+          "domHeight": 7503,
+          "trackHeight": 7333,
+          "modelHeight": 6801,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": 239,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 3618.399999856949,
+          "stage": "commit",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 267,
+          "cachedTop": 267,
+          "top": 267,
+          "domHeight": 7503,
+          "trackHeight": 7333,
+          "modelHeight": 6801,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": 239,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 3618.399999856949,
+          "stage": "height",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 267,
+          "cachedTop": 267,
+          "top": 267,
+          "domHeight": 7503,
+          "trackHeight": 7333,
+          "modelHeight": 6801,
+          "atBottom": false,
+          "next": 6801
+        },
+        {
+          "now": 3618.399999856949,
+          "stage": "restore",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 267,
+          "cachedTop": 267,
+          "top": 267,
+          "domHeight": 6971,
+          "trackHeight": 6801,
+          "modelHeight": 6801,
+          "atBottom": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": 239,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 3629.399999856949,
+          "stage": "measure",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 267,
+          "cachedTop": 267,
+          "top": 267,
+          "domHeight": 6971,
+          "trackHeight": 6801,
+          "modelHeight": 6801,
+          "atBottom": false,
+          "pending": [
+            [
+              "scroll-29",
+              140
+            ]
+          ]
+        },
+        {
+          "now": 3629.5,
+          "stage": "layout",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 267,
+          "cachedTop": 267,
+          "top": 267,
+          "domHeight": 6971,
+          "trackHeight": 6801,
+          "modelHeight": 6534,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-1",
+                "withinItem": 99,
+                "index": 1
+              }
+            ]
+          }
+        },
+        {
+          "now": 3629.5,
+          "stage": "commit",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 267,
+          "cachedTop": 267,
+          "top": 267,
+          "domHeight": 6971,
+          "trackHeight": 6801,
+          "modelHeight": 6534,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-1",
+                "withinItem": 99,
+                "index": 1
+              }
+            ]
+          }
+        },
+        {
+          "now": 3629.5,
+          "stage": "height",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 267,
+          "cachedTop": 267,
+          "top": 267,
+          "domHeight": 6971,
+          "trackHeight": 6801,
+          "modelHeight": 6534,
+          "atBottom": false,
+          "next": 6534
+        },
+        {
+          "now": 3629.5,
+          "stage": "restore",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 267,
+          "cachedTop": 267,
+          "top": 267,
+          "domHeight": 6704,
+          "trackHeight": 6534,
+          "modelHeight": 6534,
+          "atBottom": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-1",
+                "withinItem": 99,
+                "index": 1
+              }
+            ]
+          }
+        },
+        {
+          "now": 3690.7000000476837,
+          "stage": "measure",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 267,
+          "cachedTop": 267,
+          "top": 267,
+          "domHeight": 8088,
+          "trackHeight": 6534,
+          "modelHeight": 6534,
+          "atBottom": false,
+          "pending": [
+            [
+              "scroll-5",
+              407
+            ],
+            [
+              "scroll-3",
+              407
+            ],
+            [
+              "scroll-4",
+              407
+            ],
+            [
+              "scroll-2",
+              407
+            ],
+            [
+              "scroll-1",
+              407
+            ],
+            [
+              "scroll-0",
+              407
+            ]
+          ]
+        },
+        {
+          "now": 3690.7999999523163,
+          "stage": "layout",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 267,
+          "cachedTop": 267,
+          "top": 267,
+          "domHeight": 8088,
+          "trackHeight": 6534,
+          "modelHeight": 8136,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-1",
+                "withinItem": 99,
+                "index": 1
+              }
+            ]
+          }
+        },
+        {
+          "now": 3690.7999999523163,
+          "stage": "commit",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 267,
+          "cachedTop": 267,
+          "top": 267,
+          "domHeight": 8088,
+          "trackHeight": 6534,
+          "modelHeight": 8136,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-1",
+                "withinItem": 99,
+                "index": 1
+              }
+            ]
+          }
+        },
+        {
+          "now": 3690.7999999523163,
+          "stage": "height",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 267,
+          "cachedTop": 267,
+          "top": 267,
+          "domHeight": 8088,
+          "trackHeight": 6534,
+          "modelHeight": 8136,
+          "atBottom": false,
+          "next": 8136
+        },
+        {
+          "now": 3690.7999999523163,
+          "stage": "restore",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 267,
+          "cachedTop": 267,
+          "top": 267,
+          "domHeight": 8306,
+          "trackHeight": 8136,
+          "modelHeight": 8136,
+          "atBottom": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-1",
+                "withinItem": 99,
+                "index": 1
+              }
+            ]
+          }
+        },
+        {
+          "now": 3690.899999856949,
+          "stage": "write",
+          "mode": "compensatingLayout",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 267,
+          "cachedTop": 267,
+          "top": 267,
+          "domHeight": 8306,
+          "trackHeight": 8136,
+          "modelHeight": 8136,
+          "atBottom": false,
+          "next": 534,
+          "writeSource": "compensation"
+        },
+        {
+          "now": 3703.7999999523163,
+          "stage": "scrollend",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": "compensation",
+          "target": 534,
+          "lastHandledTop": 267,
+          "cachedTop": 534,
+          "top": 534,
+          "domHeight": 8306,
+          "trackHeight": 8136,
+          "modelHeight": 8136,
+          "atBottom": false
+        },
+        {
+          "now": 3703.7999999523163,
+          "stage": "settle",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": "compensation",
+          "target": 534,
+          "lastHandledTop": 267,
+          "cachedTop": 534,
+          "top": 534,
+          "domHeight": 8306,
+          "trackHeight": 8136,
+          "modelHeight": 8136,
+          "atBottom": false
+        },
+        {
+          "now": 3703.7999999523163,
+          "stage": "processScroll",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": "compensation",
+          "target": 534,
+          "lastHandledTop": 267,
+          "cachedTop": 534,
+          "top": 534,
+          "domHeight": 8306,
+          "trackHeight": 8136,
+          "modelHeight": 8136,
+          "atBottom": false
+        },
+        {
+          "now": 3717.0999999046326,
+          "stage": "measure",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 534,
+          "cachedTop": 534,
+          "top": 534,
+          "domHeight": 8306,
+          "trackHeight": 8136,
+          "modelHeight": 8136,
+          "atBottom": false,
+          "pending": [
+            [
+              "scroll-0",
+              405
+            ],
+            [
+              "scroll-26",
+              140
+            ]
+          ]
+        },
+        {
+          "now": 3717.0999999046326,
+          "stage": "layout",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 534,
+          "cachedTop": 534,
+          "top": 534,
+          "domHeight": 8306,
+          "trackHeight": 8136,
+          "modelHeight": 7867,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-1",
+                "withinItem": 99,
+                "index": 1
+              }
+            ]
+          }
+        },
+        {
+          "now": 3717.0999999046326,
+          "stage": "commit",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 534,
+          "cachedTop": 534,
+          "top": 534,
+          "domHeight": 8306,
+          "trackHeight": 8136,
+          "modelHeight": 7867,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-1",
+                "withinItem": 99,
+                "index": 1
+              }
+            ]
+          }
+        },
+        {
+          "now": 3717.0999999046326,
+          "stage": "height",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 534,
+          "cachedTop": 534,
+          "top": 534,
+          "domHeight": 8306,
+          "trackHeight": 8136,
+          "modelHeight": 7867,
+          "atBottom": false,
+          "next": 7867
+        },
+        {
+          "now": 3717.0999999046326,
+          "stage": "restore",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 534,
+          "cachedTop": 534,
+          "top": 534,
+          "domHeight": 8037,
+          "trackHeight": 7867,
+          "modelHeight": 7867,
+          "atBottom": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-1",
+                "withinItem": 99,
+                "index": 1
+              }
+            ]
+          }
+        },
+        {
+          "now": 3717.2000000476837,
+          "stage": "write",
+          "mode": "compensatingLayout",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 534,
+          "cachedTop": 534,
+          "top": 534,
+          "domHeight": 8037,
+          "trackHeight": 7867,
+          "modelHeight": 7867,
+          "atBottom": false,
+          "next": 532,
+          "writeSource": "compensation"
+        },
+        {
+          "now": 3727.7999999523163,
+          "stage": "scrollend",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": "compensation",
+          "target": 532,
+          "lastHandledTop": 534,
+          "cachedTop": 532,
+          "top": 532,
+          "domHeight": 8037,
+          "trackHeight": 7867,
+          "modelHeight": 7867,
+          "atBottom": false
+        },
+        {
+          "now": 3727.7999999523163,
+          "stage": "settle",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": "compensation",
+          "target": 532,
+          "lastHandledTop": 534,
+          "cachedTop": 532,
+          "top": 532,
+          "domHeight": 8037,
+          "trackHeight": 7867,
+          "modelHeight": 7867,
+          "atBottom": false
+        },
+        {
+          "now": 3727.7999999523163,
+          "stage": "processScroll",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": "compensation",
+          "target": 532,
+          "lastHandledTop": 534,
+          "cachedTop": 532,
+          "top": 532,
+          "domHeight": 8037,
+          "trackHeight": 7867,
+          "modelHeight": 7867,
+          "atBottom": false
+        },
+        {
+          "now": 3743.5999999046326,
+          "stage": "scrollend",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 532,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 8037,
+          "trackHeight": 7867,
+          "modelHeight": 7867,
+          "atBottom": false
+        },
+        {
+          "now": 3743.5999999046326,
+          "stage": "settle",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 532,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 8037,
+          "trackHeight": 7867,
+          "modelHeight": 7867,
+          "atBottom": false
+        },
+        {
+          "now": 3743.5999999046326,
+          "stage": "processScroll",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 532,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 8037,
+          "trackHeight": 7867,
+          "modelHeight": 7867,
+          "atBottom": false
+        }
+      ]
+    },
+    {
+      "stage": "response-only prototype",
+      "browser": "153.0.8010.12",
+      "harness": "development",
+      "options": {
+        "traceInternals": true,
+        "deferFollow": true
+      },
+      "errors": [],
+      "snapshots": [
+        {
+          "phase": "returned",
+          "root": {
+            "top": 40,
+            "bottom": 720,
+            "height": 680,
+            "scrollTop": 0,
+            "scrollHeight": 8037
+          },
+          "mounts": 40,
+          "first": {
+            "id": "scroll-0",
+            "top": 68,
+            "bottom": 397,
+            "height": 329,
+            "pool": false,
+            "mounted": true,
+            "frame": false,
+            "saved": true
+          }
+        },
+        {
+          "phase": "explicit-top",
+          "root": {
+            "top": 40,
+            "bottom": 720,
+            "height": 680,
+            "scrollTop": 0,
+            "scrollHeight": 8037
+          },
+          "mounts": 40,
+          "first": {
+            "id": "scroll-0",
+            "top": 68,
+            "bottom": 397,
+            "height": 329,
+            "pool": false,
+            "mounted": true,
+            "frame": false,
+            "saved": true
+          }
+        }
+      ],
+      "reversalTime": 2760.5999999046326,
+      "inputs": [
+        {
+          "now": 2625.399999856949,
+          "type": "wheel",
+          "deltaY": 20000,
+          "top": 7586
+        },
+        {
+          "now": 2625.5,
+          "type": "scroll",
+          "top": 7586
+        },
+        {
+          "now": 2625.5999999046326,
+          "type": "scrollend",
+          "top": 7586
+        },
+        {
+          "now": 2733,
+          "type": "scroll",
+          "top": 7357
+        },
+        {
+          "now": 2760.5999999046326,
+          "type": "wheel",
+          "deltaY": -20000,
+          "top": 0
+        },
+        {
+          "now": 2760.7000000476837,
+          "type": "scroll",
+          "top": 0
+        },
+        {
+          "now": 2760.7999999523163,
+          "type": "scrollend",
+          "top": 0
+        }
+      ],
+      "writes": [
+        {
+          "now": 2733,
+          "previous": 7357,
+          "value": 7357,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at U (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:389:21)",
+            "    at lt (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:625:4)",
+            "    at http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:429:138"
+          ]
+        },
+        {
+          "now": 2907.5999999046326,
+          "previous": 0,
+          "value": 0,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at eval (eval at evaluate (:311:30), <anonymous>:1:26)",
+            "    at UtilityScript.evaluate (<anonymous>:313:16)",
+            "    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+          ]
+        }
+      ],
+      "internals": [
+        {
+          "now": 2700.7999999523163,
+          "stage": "measure",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7586,
+          "cachedTop": 7586,
+          "top": 7586,
+          "domHeight": 8266,
+          "trackHeight": 8096,
+          "modelHeight": 8096,
+          "atBottom": true,
+          "pending": [
+            [
+              "eaf5bde1-c50a-4b14-8b92-b7a78f5c4e87",
+              76
+            ],
+            [
+              "e5d066a8-e08d-4711-855d-971a9c20341a",
+              122
+            ],
+            [
+              "scroll-29",
+              140
+            ]
+          ]
+        },
+        {
+          "now": 2700.7999999523163,
+          "stage": "layout",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7586,
+          "cachedTop": 7586,
+          "top": 7586,
+          "domHeight": 8266,
+          "trackHeight": 8096,
+          "modelHeight": 7867,
+          "atBottom": true,
+          "follow": true,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-29",
+                "withinItem": 29,
+                "index": 29
+              }
+            ]
+          }
+        },
+        {
+          "now": 2700.7999999523163,
+          "stage": "commit",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7586,
+          "cachedTop": 7586,
+          "top": 7586,
+          "domHeight": 8266,
+          "trackHeight": 8096,
+          "modelHeight": 7867,
+          "atBottom": true,
+          "follow": true,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-29",
+                "withinItem": 29,
+                "index": 29
+              }
+            ]
+          }
+        },
+        {
+          "now": 2700.7999999523163,
+          "stage": "height",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7586,
+          "cachedTop": 7586,
+          "top": 7586,
+          "domHeight": 8266,
+          "trackHeight": 8096,
+          "modelHeight": 7867,
+          "atBottom": true,
+          "next": 7867
+        },
+        {
+          "now": 2701.0999999046326,
+          "stage": "followCallback",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7586,
+          "cachedTop": 7357,
+          "top": 7357,
+          "domHeight": 8037,
+          "trackHeight": 7867,
+          "modelHeight": 7867,
+          "atBottom": true
+        },
+        {
+          "now": 2733,
+          "stage": "height",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7586,
+          "cachedTop": 7357,
+          "top": 7357,
+          "domHeight": 9497,
+          "trackHeight": 7867,
+          "modelHeight": 7867,
+          "atBottom": true,
+          "next": 7867
+        },
+        {
+          "now": 2733,
+          "stage": "write",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7586,
+          "cachedTop": 7357,
+          "top": 7357,
+          "domHeight": 9497,
+          "trackHeight": 7867,
+          "modelHeight": 7867,
+          "atBottom": true,
+          "next": 7357,
+          "writeSource": "bottom"
+        },
+        {
+          "now": 2733.0999999046326,
+          "stage": "processScroll",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": "bottom",
+          "target": 7357,
+          "lastHandledTop": 7586,
+          "cachedTop": 7357,
+          "top": 7357,
+          "domHeight": 9497,
+          "trackHeight": 7867,
+          "modelHeight": 7867,
+          "atBottom": true
+        },
+        {
+          "now": 2744.399999856949,
+          "stage": "measure",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7357,
+          "cachedTop": 7357,
+          "top": 7357,
+          "domHeight": 9230,
+          "trackHeight": 7867,
+          "modelHeight": 7867,
+          "atBottom": true,
+          "pending": [
+            [
+              "scroll-29",
+              407
+            ],
+            [
+              "scroll-27",
+              407
+            ],
+            [
+              "scroll-26",
+              407
+            ],
+            [
+              "scroll-25",
+              407
+            ],
+            [
+              "scroll-24",
+              407
+            ],
+            [
+              "scroll-23",
+              407
+            ],
+            [
+              "scroll-4",
+              140
+            ]
+          ]
+        },
+        {
+          "now": 2744.5999999046326,
+          "stage": "layout",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7357,
+          "cachedTop": 7357,
+          "top": 7357,
+          "domHeight": 9230,
+          "trackHeight": 7867,
+          "modelHeight": 9202,
+          "atBottom": true,
+          "follow": true,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-27",
+                "withinItem": 80,
+                "index": 27
+              }
+            ]
+          }
+        },
+        {
+          "now": 2744.5999999046326,
+          "stage": "commit",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7357,
+          "cachedTop": 7357,
+          "top": 7357,
+          "domHeight": 9230,
+          "trackHeight": 7867,
+          "modelHeight": 9202,
+          "atBottom": true,
+          "follow": true,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-27",
+                "withinItem": 80,
+                "index": 27
+              }
+            ]
+          }
+        },
+        {
+          "now": 2744.5999999046326,
+          "stage": "height",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7357,
+          "cachedTop": 7357,
+          "top": 7357,
+          "domHeight": 9230,
+          "trackHeight": 7867,
+          "modelHeight": 9202,
+          "atBottom": true,
+          "next": 9202
+        },
+        {
+          "now": 2745.0999999046326,
+          "stage": "followCallback",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7357,
+          "cachedTop": 7357,
+          "top": 7357,
+          "domHeight": 9372,
+          "trackHeight": 9202,
+          "modelHeight": 9202,
+          "atBottom": false
+        },
+        {
+          "now": 2760.5999999046326,
+          "stage": "intent",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7357,
+          "cachedTop": 7357,
+          "top": 0,
+          "domHeight": 9497,
+          "trackHeight": 9202,
+          "modelHeight": 9202,
+          "atBottom": false
+        },
+        {
+          "now": 2760.7999999523163,
+          "stage": "scrollend",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7357,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 9497,
+          "trackHeight": 9202,
+          "modelHeight": 9202,
+          "atBottom": false
+        },
+        {
+          "now": 2760.7999999523163,
+          "stage": "settle",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7357,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 9497,
+          "trackHeight": 9202,
+          "modelHeight": 9202,
+          "atBottom": false
+        },
+        {
+          "now": 2760.7999999523163,
+          "stage": "processScroll",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7357,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 9497,
+          "trackHeight": 9202,
+          "modelHeight": 9202,
+          "atBottom": false
+        },
+        {
+          "now": 2798.899999856949,
+          "stage": "measure",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 9372,
+          "trackHeight": 9202,
+          "modelHeight": 9202,
+          "atBottom": false,
+          "pending": [
+            [
+              "scroll-3",
+              140
+            ],
+            [
+              "scroll-2",
+              140
+            ],
+            [
+              "scroll-1",
+              140
+            ],
+            [
+              "scroll-0",
+              140
+            ]
+          ]
+        },
+        {
+          "now": 2798.899999856949,
+          "stage": "layout",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 9372,
+          "trackHeight": 9202,
+          "modelHeight": 8136,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2798.899999856949,
+          "stage": "commit",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 9372,
+          "trackHeight": 9202,
+          "modelHeight": 8136,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2798.899999856949,
+          "stage": "height",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 9372,
+          "trackHeight": 9202,
+          "modelHeight": 8136,
+          "atBottom": false,
+          "next": 8136
+        },
+        {
+          "now": 2798.899999856949,
+          "stage": "restore",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 8306,
+          "trackHeight": 8136,
+          "modelHeight": 8136,
+          "atBottom": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2821.7000000476837,
+          "stage": "measure",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 8306,
+          "trackHeight": 8136,
+          "modelHeight": 8136,
+          "atBottom": false,
+          "pending": [
+            [
+              "scroll-23",
+              140
+            ],
+            [
+              "scroll-24",
+              140
+            ],
+            [
+              "scroll-25",
+              140
+            ]
+          ]
+        },
+        {
+          "now": 2821.7000000476837,
+          "stage": "layout",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 8306,
+          "trackHeight": 8136,
+          "modelHeight": 7335,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2821.7000000476837,
+          "stage": "commit",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 8306,
+          "trackHeight": 8136,
+          "modelHeight": 7335,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2821.7000000476837,
+          "stage": "height",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 8306,
+          "trackHeight": 8136,
+          "modelHeight": 7335,
+          "atBottom": false,
+          "next": 7335
+        },
+        {
+          "now": 2821.7000000476837,
+          "stage": "restore",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 7505,
+          "trackHeight": 7335,
+          "modelHeight": 7335,
+          "atBottom": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2834.7000000476837,
+          "stage": "measure",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 7505,
+          "trackHeight": 7335,
+          "modelHeight": 7335,
+          "atBottom": false,
+          "pending": [
+            [
+              "scroll-26",
+              140
+            ]
+          ]
+        },
+        {
+          "now": 2834.7000000476837,
+          "stage": "layout",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 7505,
+          "trackHeight": 7335,
+          "modelHeight": 7068,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2834.7000000476837,
+          "stage": "commit",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 7505,
+          "trackHeight": 7335,
+          "modelHeight": 7068,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2834.7000000476837,
+          "stage": "height",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 7505,
+          "trackHeight": 7335,
+          "modelHeight": 7068,
+          "atBottom": false,
+          "next": 7068
+        },
+        {
+          "now": 2834.7000000476837,
+          "stage": "restore",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 7238,
+          "trackHeight": 7068,
+          "modelHeight": 7068,
+          "atBottom": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2844.0999999046326,
+          "stage": "measure",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 7238,
+          "trackHeight": 7068,
+          "modelHeight": 7068,
+          "atBottom": false,
+          "pending": [
+            [
+              "scroll-27",
+              140
+            ]
+          ]
+        },
+        {
+          "now": 2844.0999999046326,
+          "stage": "layout",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 7238,
+          "trackHeight": 7068,
+          "modelHeight": 6801,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2844.0999999046326,
+          "stage": "commit",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 7238,
+          "trackHeight": 7068,
+          "modelHeight": 6801,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2844.0999999046326,
+          "stage": "height",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 7238,
+          "trackHeight": 7068,
+          "modelHeight": 6801,
+          "atBottom": false,
+          "next": 6801
+        },
+        {
+          "now": 2844.0999999046326,
+          "stage": "restore",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 6971,
+          "trackHeight": 6801,
+          "modelHeight": 6801,
+          "atBottom": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2881.5999999046326,
+          "stage": "measure",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 7290,
+          "trackHeight": 6801,
+          "modelHeight": 6801,
+          "atBottom": false,
+          "pending": [
+            [
+              "scroll-3",
+              407
+            ],
+            [
+              "scroll-2",
+              407
+            ],
+            [
+              "scroll-1",
+              407
+            ],
+            [
+              "scroll-0",
+              407
+            ]
+          ]
+        },
+        {
+          "now": 2881.5999999046326,
+          "stage": "layout",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 7290,
+          "trackHeight": 6801,
+          "modelHeight": 7869,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2881.5999999046326,
+          "stage": "commit",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 7290,
+          "trackHeight": 6801,
+          "modelHeight": 7869,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2881.5999999046326,
+          "stage": "height",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 7290,
+          "trackHeight": 6801,
+          "modelHeight": 7869,
+          "atBottom": false,
+          "next": 7869
+        },
+        {
+          "now": 2881.5999999046326,
+          "stage": "restore",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 8039,
+          "trackHeight": 7869,
+          "modelHeight": 7869,
+          "atBottom": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2892,
+          "stage": "measure",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 8039,
+          "trackHeight": 7869,
+          "modelHeight": 7869,
+          "atBottom": false,
+          "pending": [
+            [
+              "scroll-0",
+              405
+            ]
+          ]
+        },
+        {
+          "now": 2892.0999999046326,
+          "stage": "layout",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 8039,
+          "trackHeight": 7869,
+          "modelHeight": 7867,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2892.0999999046326,
+          "stage": "commit",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 8039,
+          "trackHeight": 7869,
+          "modelHeight": 7867,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2892.0999999046326,
+          "stage": "height",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 8039,
+          "trackHeight": 7869,
+          "modelHeight": 7867,
+          "atBottom": false,
+          "next": 7867
+        },
+        {
+          "now": 2892.0999999046326,
+          "stage": "restore",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 8037,
+          "trackHeight": 7867,
+          "modelHeight": 7867,
+          "atBottom": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "stage": "prototype without internal tracing",
+      "browser": "153.0.8010.12",
+      "harness": "development",
+      "options": {
+        "deferFollow": true
+      },
+      "errors": [],
+      "snapshots": [
+        {
+          "phase": "returned",
+          "root": {
+            "top": 40,
+            "bottom": 720,
+            "height": 680,
+            "scrollTop": 0,
+            "scrollHeight": 8571
+          },
+          "mounts": 37,
+          "first": {
+            "id": "scroll-0",
+            "top": 68,
+            "bottom": 397,
+            "height": 329,
+            "pool": false,
+            "mounted": true,
+            "frame": false,
+            "saved": true
+          }
+        },
+        {
+          "phase": "explicit-top",
+          "root": {
+            "top": 40,
+            "bottom": 720,
+            "height": 680,
+            "scrollTop": 0,
+            "scrollHeight": 8571
+          },
+          "mounts": 37,
+          "first": {
+            "id": "scroll-0",
+            "top": 68,
+            "bottom": 397,
+            "height": 329,
+            "pool": false,
+            "mounted": true,
+            "frame": false,
+            "saved": true
+          }
+        }
+      ],
+      "reversalTime": 2776.2000000476837,
+      "inputs": [
+        {
+          "now": 2659.100000143051,
+          "type": "wheel",
+          "deltaY": 20000,
+          "top": 7052
+        },
+        {
+          "now": 2659.2999999523163,
+          "type": "scroll",
+          "top": 7052
+        },
+        {
+          "now": 2659.2999999523163,
+          "type": "scrollend",
+          "top": 7052
+        },
+        {
+          "now": 2760.9000000953674,
+          "type": "scroll",
+          "top": 6823
+        },
+        {
+          "now": 2776.2000000476837,
+          "type": "wheel",
+          "deltaY": -20000,
+          "top": 0
+        },
+        {
+          "now": 2776.4000000953674,
+          "type": "scroll",
+          "top": 0
+        },
+        {
+          "now": 2776.4000000953674,
+          "type": "scrollend",
+          "top": 0
+        }
+      ],
+      "writes": [
+        {
+          "now": 2760.9000000953674,
+          "previous": 6823,
+          "value": 6823,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at U (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:381:21)",
+            "    at lt (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:617:4)",
+            "    at http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=7eb21136:421:102"
+          ]
+        },
+        {
+          "now": 2885.7999999523163,
+          "previous": 0,
+          "value": 0,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at eval (eval at evaluate (:311:30), <anonymous>:1:26)",
+            "    at UtilityScript.evaluate (<anonymous>:313:16)",
+            "    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+          ]
+        }
+      ],
+      "internals": []
+    },
+    {
+      "stage": "retained patch",
+      "browser": "153.0.8010.12",
+      "harness": "development",
+      "options": {
+        "traceInternals": true
+      },
+      "errors": [],
+      "snapshots": [
+        {
+          "phase": "returned",
+          "root": {
+            "top": 40,
+            "bottom": 720,
+            "height": 680,
+            "scrollTop": 0,
+            "scrollHeight": 9105
+          },
+          "mounts": 40,
+          "first": {
+            "id": "scroll-0",
+            "top": 68,
+            "bottom": 397,
+            "height": 329,
+            "pool": false,
+            "mounted": true,
+            "frame": false,
+            "saved": true
+          }
+        },
+        {
+          "phase": "explicit-top",
+          "root": {
+            "top": 40,
+            "bottom": 720,
+            "height": 680,
+            "scrollTop": 0,
+            "scrollHeight": 9105
+          },
+          "mounts": 40,
+          "first": {
+            "id": "scroll-0",
+            "top": 68,
+            "bottom": 397,
+            "height": 329,
+            "pool": false,
+            "mounted": true,
+            "frame": false,
+            "saved": true
+          }
+        }
+      ],
+      "reversalTime": 2318.100000143051,
+      "inputs": [
+        {
+          "now": 2159.7000000476837,
+          "type": "wheel",
+          "deltaY": 20000,
+          "top": 8120
+        },
+        {
+          "now": 2159.9000000953674,
+          "type": "scroll",
+          "top": 8120
+        },
+        {
+          "now": 2159.9000000953674,
+          "type": "scrollend",
+          "top": 8120
+        },
+        {
+          "now": 2275.9000000953674,
+          "type": "scroll",
+          "top": 7357
+        },
+        {
+          "now": 2318.100000143051,
+          "type": "wheel",
+          "deltaY": -20000,
+          "top": 0
+        },
+        {
+          "now": 2318.2000000476837,
+          "type": "scroll",
+          "top": 0
+        },
+        {
+          "now": 2318.2000000476837,
+          "type": "scrollend",
+          "top": 0
+        }
+      ],
+      "writes": [
+        {
+          "now": 2275.9000000953674,
+          "previous": 7357,
+          "value": 7357,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at U (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=d89a0139:389:21)",
+            "    at lt (http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=d89a0139:628:4)",
+            "    at http://127.0.0.1:3116/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-scroll/client/deps/or3-scroll.js?v=d89a0139:431:81"
+          ]
+        },
+        {
+          "now": 2441.4000000953674,
+          "previous": 0,
+          "value": 0,
+          "stack": [
+            "    at HTMLDivElement.set [as scrollTop] (<anonymous>:17:32)",
+            "    at eval (eval at evaluate (:311:30), <anonymous>:1:26)",
+            "    at UtilityScript.evaluate (<anonymous>:313:16)",
+            "    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+          ]
+        }
+      ],
+      "internals": [
+        {
+          "now": 2237,
+          "stage": "measure",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 8120,
+          "cachedTop": 8120,
+          "top": 8120,
+          "domHeight": 8800,
+          "trackHeight": 8630,
+          "modelHeight": 8630,
+          "atBottom": true,
+          "pending": [
+            [
+              "fa5dc8f5-20c4-42ba-8efd-a997ebaf44e5",
+              76
+            ],
+            [
+              "6e41f504-884c-4f93-8cf3-bcb4c993ad2b",
+              122
+            ],
+            [
+              "scroll-29",
+              140
+            ],
+            [
+              "scroll-28",
+              140
+            ],
+            [
+              "scroll-20",
+              140
+            ]
+          ]
+        },
+        {
+          "now": 2237,
+          "stage": "layout",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 8120,
+          "cachedTop": 8120,
+          "top": 8120,
+          "domHeight": 8800,
+          "trackHeight": 8630,
+          "modelHeight": 7867,
+          "atBottom": true,
+          "follow": true,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-29",
+                "withinItem": 29,
+                "index": 29
+              }
+            ]
+          }
+        },
+        {
+          "now": 2237,
+          "stage": "commit",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 8120,
+          "cachedTop": 8120,
+          "top": 8120,
+          "domHeight": 8800,
+          "trackHeight": 8630,
+          "modelHeight": 7867,
+          "atBottom": true,
+          "follow": true,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-29",
+                "withinItem": 29,
+                "index": 29
+              }
+            ]
+          }
+        },
+        {
+          "now": 2237,
+          "stage": "height",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 8120,
+          "cachedTop": 8120,
+          "top": 8120,
+          "domHeight": 8800,
+          "trackHeight": 8630,
+          "modelHeight": 7867,
+          "atBottom": true,
+          "next": 7867
+        },
+        {
+          "now": 2275.9000000953674,
+          "stage": "followCallback",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 8120,
+          "cachedTop": 7357,
+          "top": 7357,
+          "domHeight": 9764,
+          "trackHeight": 7867,
+          "modelHeight": 7867,
+          "atBottom": true
+        },
+        {
+          "now": 2275.9000000953674,
+          "stage": "height",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 8120,
+          "cachedTop": 7357,
+          "top": 7357,
+          "domHeight": 9764,
+          "trackHeight": 7867,
+          "modelHeight": 7867,
+          "atBottom": true,
+          "next": 7867
+        },
+        {
+          "now": 2275.9000000953674,
+          "stage": "write",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 8120,
+          "cachedTop": 7357,
+          "top": 7357,
+          "domHeight": 9764,
+          "trackHeight": 7867,
+          "modelHeight": 7867,
+          "atBottom": true,
+          "next": 7357,
+          "writeSource": "bottom"
+        },
+        {
+          "now": 2275.9000000953674,
+          "stage": "processScroll",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": "bottom",
+          "target": 7357,
+          "lastHandledTop": 8120,
+          "cachedTop": 7357,
+          "top": 7357,
+          "domHeight": 9764,
+          "trackHeight": 7867,
+          "modelHeight": 7867,
+          "atBottom": true
+        },
+        {
+          "now": 2294,
+          "stage": "measure",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7357,
+          "cachedTop": 7357,
+          "top": 7357,
+          "domHeight": 9230,
+          "trackHeight": 7867,
+          "modelHeight": 7867,
+          "atBottom": true,
+          "pending": [
+            [
+              "scroll-29",
+              407
+            ],
+            [
+              "scroll-28",
+              407
+            ],
+            [
+              "scroll-27",
+              407
+            ],
+            [
+              "scroll-26",
+              407
+            ],
+            [
+              "scroll-25",
+              407
+            ],
+            [
+              "scroll-24",
+              407
+            ],
+            [
+              "scroll-23",
+              407
+            ],
+            [
+              "scroll-4",
+              140
+            ],
+            [
+              "scroll-5",
+              140
+            ]
+          ]
+        },
+        {
+          "now": 2294.2000000476837,
+          "stage": "layout",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7357,
+          "cachedTop": 7357,
+          "top": 7357,
+          "domHeight": 9230,
+          "trackHeight": 7867,
+          "modelHeight": 9202,
+          "atBottom": true,
+          "follow": true,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-27",
+                "withinItem": 80,
+                "index": 27
+              }
+            ]
+          }
+        },
+        {
+          "now": 2294.2000000476837,
+          "stage": "commit",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7357,
+          "cachedTop": 7357,
+          "top": 7357,
+          "domHeight": 9230,
+          "trackHeight": 7867,
+          "modelHeight": 9202,
+          "atBottom": true,
+          "follow": true,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-27",
+                "withinItem": 80,
+                "index": 27
+              }
+            ]
+          }
+        },
+        {
+          "now": 2294.2000000476837,
+          "stage": "height",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7357,
+          "cachedTop": 7357,
+          "top": 7357,
+          "domHeight": 9230,
+          "trackHeight": 7867,
+          "modelHeight": 9202,
+          "atBottom": true,
+          "next": 9202
+        },
+        {
+          "now": 2318.100000143051,
+          "stage": "intent",
+          "mode": "followingBottom",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7357,
+          "cachedTop": 7357,
+          "top": 0,
+          "domHeight": 9372,
+          "trackHeight": 9202,
+          "modelHeight": 9202,
+          "atBottom": false
+        },
+        {
+          "now": 2318.2000000476837,
+          "stage": "scrollend",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7357,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 9372,
+          "trackHeight": 9202,
+          "modelHeight": 9202,
+          "atBottom": false
+        },
+        {
+          "now": 2318.2000000476837,
+          "stage": "settle",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7357,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 9372,
+          "trackHeight": 9202,
+          "modelHeight": 9202,
+          "atBottom": false
+        },
+        {
+          "now": 2318.2000000476837,
+          "stage": "processScroll",
+          "mode": "userBrowsing",
+          "gesture": true,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 7357,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 9372,
+          "trackHeight": 9202,
+          "modelHeight": 9202,
+          "atBottom": false
+        },
+        {
+          "now": 2377.5,
+          "stage": "measure",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 9372,
+          "trackHeight": 9202,
+          "modelHeight": 9202,
+          "atBottom": false,
+          "pending": [
+            [
+              "scroll-3",
+              140
+            ],
+            [
+              "scroll-2",
+              140
+            ],
+            [
+              "scroll-1",
+              140
+            ],
+            [
+              "scroll-0",
+              140
+            ]
+          ]
+        },
+        {
+          "now": 2377.5,
+          "stage": "layout",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 9372,
+          "trackHeight": 9202,
+          "modelHeight": 8136,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2377.600000143051,
+          "stage": "commit",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 9372,
+          "trackHeight": 9202,
+          "modelHeight": 8136,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2377.600000143051,
+          "stage": "height",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 9372,
+          "trackHeight": 9202,
+          "modelHeight": 8136,
+          "atBottom": false,
+          "next": 8136
+        },
+        {
+          "now": 2377.600000143051,
+          "stage": "restore",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 8306,
+          "trackHeight": 8136,
+          "modelHeight": 8136,
+          "atBottom": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2393.2999999523163,
+          "stage": "measure",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 8306,
+          "trackHeight": 8136,
+          "modelHeight": 8136,
+          "atBottom": false,
+          "pending": [
+            [
+              "scroll-4",
+              407
+            ],
+            [
+              "scroll-3",
+              407
+            ],
+            [
+              "scroll-2",
+              407
+            ],
+            [
+              "scroll-1",
+              407
+            ],
+            [
+              "scroll-0",
+              407
+            ],
+            [
+              "scroll-24",
+              140
+            ],
+            [
+              "scroll-25",
+              140
+            ]
+          ]
+        },
+        {
+          "now": 2393.2999999523163,
+          "stage": "layout",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 8306,
+          "trackHeight": 8136,
+          "modelHeight": 8937,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2393.2999999523163,
+          "stage": "commit",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 8306,
+          "trackHeight": 8136,
+          "modelHeight": 8937,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2393.2999999523163,
+          "stage": "height",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 8306,
+          "trackHeight": 8136,
+          "modelHeight": 8937,
+          "atBottom": false,
+          "next": 8937
+        },
+        {
+          "now": 2393.2999999523163,
+          "stage": "restore",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 9107,
+          "trackHeight": 8937,
+          "modelHeight": 8937,
+          "atBottom": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2425.2999999523163,
+          "stage": "measure",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 9107,
+          "trackHeight": 8937,
+          "modelHeight": 8937,
+          "atBottom": false,
+          "pending": [
+            [
+              "scroll-0",
+              405
+            ]
+          ]
+        },
+        {
+          "now": 2425.4000000953674,
+          "stage": "layout",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 9107,
+          "trackHeight": 8937,
+          "modelHeight": 8935,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2425.4000000953674,
+          "stage": "commit",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 9107,
+          "trackHeight": 8937,
+          "modelHeight": 8935,
+          "atBottom": false,
+          "follow": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        },
+        {
+          "now": 2425.4000000953674,
+          "stage": "height",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 9107,
+          "trackHeight": 8937,
+          "modelHeight": 8935,
+          "atBottom": false,
+          "next": 8935
+        },
+        {
+          "now": 2425.4000000953674,
+          "stage": "restore",
+          "mode": "userBrowsing",
+          "gesture": false,
+          "source": null,
+          "target": null,
+          "lastHandledTop": 0,
+          "cachedTop": 0,
+          "top": 0,
+          "domHeight": 9105,
+          "trackHeight": 8935,
+          "modelHeight": 8935,
+          "atBottom": false,
+          "anchors": {
+            "candidates": [
+              {
+                "key": "scroll-0",
+                "withinItem": -28,
+                "index": 0
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

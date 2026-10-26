@@ -1,0 +1,74 @@
+### Page
+- Page URL: http://127.0.0.1:3152/chat
+- Page Title: OR3
+- Console: 0 errors, 1 warnings
+### Snapshot
+```yaml
+- generic [ref=f6e1]:
+  - generic [ref=f6e3]:
+    - dialog "Navigation" [ref=f6e169]:
+      - generic [ref=f6e5]:
+        - generic [ref=f6e6]:
+          - img "OR3" [ref=f6e9]
+          - button "Collapse sidebar" [active] [ref=f6e10] [cursor=pointer]
+        - generic [ref=f6e14]:
+          - generic [ref=f6e15]:
+            - textbox "Filter sidebar by title" [ref=f6e174]:
+              - /placeholder: Search by title...
+            - generic [ref=f6e183]:
+              - button "Chats" [ref=f6e185] [cursor=pointer]
+              - button "Documents" [ref=f6e192] [cursor=pointer]
+              - button "Projects" [ref=f6e199] [cursor=pointer]
+              - generic [ref=f6e207]:
+                - heading "Nothing here yet" [level=3] [ref=f6e218]
+                - paragraph [ref=f6e219]: Get started by creating a project, starting a chat, or creating a document.
+                - generic [ref=f6e220]:
+                  - button "Create a project" [ref=f6e221] [cursor=pointer]
+                  - button "Start a chat" [ref=f6e224] [cursor=pointer]
+                  - button "Create a document" [ref=f6e226] [cursor=pointer]
+          - navigation "Sidebar navigation" [ref=f6e16]:
+            - button "Home" [pressed] [ref=f6e17] [cursor=pointer]
+            - button "Search everything" [ref=f6e20] [cursor=pointer]:
+              - generic [ref=f6e22]: Search
+            - button "Create" [ref=f6e23] [cursor=pointer]
+            - button "Dashboard" [ref=f6e27] [cursor=pointer]
+            - button "More options" [ref=f6e30] [cursor=pointer]:
+              - generic [ref=f6e32]: More
+    - generic [ref=f6e35]:
+      - banner [ref=f6e36]:
+        - generic [ref=f6e37]:
+          - generic [ref=f6e38]:
+            - button "Open sidebar" [ref=f6e39] [cursor=pointer]
+            - 'button "Open tabs, current: New chat" [ref=f6e41]':
+              - generic [ref=f6e44]: New chat
+          - generic [ref=f6e45]:
+            - button "New chat" [ref=f6e47]
+            - button "More actions" [ref=f6e49] [cursor=pointer]
+      - tabpanel [ref=f6e52]:
+        - main [ref=f6e53]:
+          - generic [ref=f6e54]:
+            - region "New chat" [ref=f6e56]:
+              - generic [ref=f6e59]:
+                - button "Start a chat" [ref=f6e60] [cursor=pointer]:
+                  - generic [ref=f6e63]:
+                    - generic [ref=f6e64]: Start a chat
+                    - generic [ref=f6e65]: Ask anything, explore ideas, or get help.
+                - button "Start a project" [ref=f6e67] [cursor=pointer]:
+                  - generic [ref=f6e70]:
+                    - generic [ref=f6e71]: Start a project
+                    - generic [ref=f6e72]: Keep your chats, docs, and tools organized.
+                - button "Create a document" [ref=f6e74] [cursor=pointer]:
+                  - generic [ref=f6e77]:
+                    - generic [ref=f6e78]: Create a document
+                    - generic [ref=f6e79]: Write, plan, and collaborate with AI.
+            - generic [ref=f6e82]:
+              - textbox "Message input" [ref=f6e86]:
+                - paragraph [ref=f6e87]: Write something…
+              - generic:
+                - generic [ref=f6e88]:
+                  - button "Add attachments" [ref=f6e90] [cursor=pointer]
+                  - button "Settings" [ref=f6e93] [cursor=pointer]
+                - button "Send message" [disabled] [ref=f6e96]
+  - region "Notifications (F8)":
+    - list
+```

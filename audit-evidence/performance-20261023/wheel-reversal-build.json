@@ -1,0 +1,10 @@
+{
+  "date": "2026-10-24T08:36:54.581Z",
+  "asset": ".output/public/_nuxt/BYEfdX6M.js",
+  "sha256": "41410c46de1ea1efde927f82f1136970e9982079e5253150a234cae3195a5589",
+  "bytes": 123482,
+  "coalescedBranch": [
+    "a}))},Me=0,Ne=(e,t)=>{Te(L.getTotalHeight()),t&&r.maintainBottom?D(()=>{Me||=be(()=>{Me=0,!ae&&j===`followingBottom`&&!P&&ot()})}):Oe(e)},Pe=(e,t)=>{P?Oe(e):Ne(e,t)},Fe=("
+  ],
+  "note": "Fresh local harness production build; no deployment. The selected production browser controls validate the shared scroller. The native card route remains development-only."
+}

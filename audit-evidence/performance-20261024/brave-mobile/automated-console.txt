@@ -1,0 +1,4 @@
+### Result
+Total messages: 1 (Errors: 0, Warnings: 1)
+
+[WARNING] Service Worker registration blocked by Playwright @ :2

@@ -225,7 +225,6 @@ import { useBottomSheetDrag } from '~/composables/ui/useBottomSheetDrag';
 import { useDialogFocus } from '~/composables/ui/useDialogFocus';
 import { buildThemeOverrideProps } from '~/composables/ui/themeOverrideProps';
 import { useCommandPalette } from '~/composables/search/useCommandPalette';
-import { useCommandPaletteShortcut } from '~/composables/search/useCommandPaletteShortcut';
 import { useIcon } from '~/composables/useIcon';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import type { PaletteAction } from '~/core/search/command-palette/types';
@@ -270,8 +269,6 @@ const {
     setCategoryFilter,
     retrySource,
 } = useCommandPalette();
-
-useCommandPaletteShortcut();
 
 const inputRef = ref<HTMLInputElement | null>(null);
 const actionTrayRef = ref<InstanceType<typeof CommandPaletteActionTray> | null>(
@@ -667,7 +664,7 @@ watch(isOpen, async (open) => {
     if (!open) return;
     await nextTick();
     focusInput(true);
-});
+}, { immediate: true });
 
 // When the tray closes (or the active result changes) focus must not be
 // stranded on a button that is about to be replaced.

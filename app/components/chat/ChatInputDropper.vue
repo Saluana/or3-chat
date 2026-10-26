@@ -1509,7 +1509,7 @@ async function attachMentionImage(id: string): Promise<void> {
         }
     }
 }
-defineExpose({ setText, focus, triggerSend, insertReference, attachFile,
+defineExpose({ setText, focus, triggerSend, insertReference, attachFile, captureDraft,
     getSendOptions: () => ({
         model: selectedModel.value,
         modelVariant: modelVariant.value,

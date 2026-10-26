@@ -8,7 +8,8 @@ import {
 } from '~/db/client';
 import * as cursorManager from '~/core/sync/cursor-manager';
 import * as hookBridge from '~/core/sync/hook-bridge';
-import * as subscriptionManager from '~/core/sync/subscription-manager';
+import { createSubscriptionManager, getSubscriptionManager } from '~/core/sync/subscription-manager';
+import type { SyncProvider } from '~~/shared/sync/types';
 
 describe('Workspace DB Cache LRU', () => {
     afterEach(async () => {
@@ -26,17 +27,25 @@ describe('Workspace DB Cache LRU', () => {
     it('should retain the previous workspace on switch and cleanup sync singletons', () => {
         const cleanupCursorSpy = vi.spyOn(cursorManager, 'cleanupCursorManager');
         const cleanupHookSpy = vi.spyOn(hookBridge, 'cleanupHookBridge');
-        const cleanupSubscriptionWorkspaceSpy = vi.spyOn(
-            subscriptionManager,
-            'cleanupSubscriptionManagersByWorkspace'
-        );
-
-        setActiveWorkspaceDb('ws-a');
+        const provider: SyncProvider = {
+            id: 'workspace-cleanup', mode: 'gateway',
+            subscribe: vi.fn(), pull: vi.fn(), push: vi.fn(),
+            updateCursor: vi.fn(), dispose: vi.fn(),
+        };
+        const previous = setActiveWorkspaceDb('ws-a');
+        const scope = { workspaceId: 'ws-a' };
+        const manager = createSubscriptionManager(previous, provider, scope);
+        const stop = vi.spyOn(manager, 'stop');
+        const nextScope = { workspaceId: 'ws-b' };
+        const next = createSubscriptionManager(getWorkspaceDb('ws-b'), provider, nextScope);
         setActiveWorkspaceDb('ws-b');
 
         expect(cleanupCursorSpy).toHaveBeenCalledWith('or3-db-ws-a');
         expect(cleanupHookSpy).toHaveBeenCalledWith('or3-db-ws-a');
-        expect(cleanupSubscriptionWorkspaceSpy).toHaveBeenCalledWith('ws-a');
+        // Assert the lifecycle, not the module from which cleanup is imported.
+        expect(stop).toHaveBeenCalledOnce();
+        expect(getSubscriptionManager(scope)).toBeNull();
+        expect(getSubscriptionManager(nextScope)).toBe(next);
 
         const { keys } = getWorkspaceDbCacheStats();
         expect(keys.includes('ws-a')).toBe(true);

@@ -41,7 +41,8 @@ const dbState = vi.hoisted(() => {
     };
 });
 
-vi.mock('~/utils/errors', () => ({
+vi.mock('~/utils/errors', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('~/utils/errors')>()),
     reportError: (...args: unknown[]) => reportErrorSpy(...args),
     err: (code: string, message: string, meta: unknown) => ({
         code,
@@ -304,7 +305,7 @@ describe('continue/retry regressions', () => {
         } finally { vi.useRealTimers(); }
     });
 
-    it.each(['text', 'reasoning'] as const)('continue flushes quiet %s before the model completes and keeps the existing reply', async (type) => {
+    it.each(['text', 'reasoning', 'image', 'superseded-image'] as const)('continue handles quiet %s without losing or leaking reply content', async (type) => {
         vi.useFakeTimers();
         let release!: () => void;
         let consumed!: () => void;
@@ -312,6 +313,19 @@ describe('continue/retry regressions', () => {
         const chunkConsumed = new Promise<void>((resolve) => { consumed = resolve; });
         let continuation: Promise<void> | undefined;
         try {
+            const threadIdRef = ref('t1');
+            const { createOrRefFile } = await import('~/db/files');
+            const { dataUrlToBlob } = await import('~/utils/chat/files');
+            const { TRANSPARENT_PIXEL_GIF_DATA_URI } = await import('~/utils/chat/imagePlaceholders');
+            vi.mocked(dataUrlToBlob).mockReturnValue(new Blob(['image']));
+            vi.mocked(createOrRefFile).mockImplementation(async () => {
+                if (type === 'superseded-image') {
+                    threadIdRef.value = 't2';
+                    consumed();
+                }
+                return { hash: 'continued-image' } as any;
+            });
+            const imageText = `\n\n![file-hash:continued-image](${TRANSPARENT_PIXEL_GIF_DATA_URI})`;
             const target = {
                 id: 'a1',
                 thread_id: 't1',
@@ -339,7 +353,10 @@ describe('continue/retry regressions', () => {
             makeAssistantPersisterSpy.mockReturnValue(persistAssistant);
             openRouterStreamSpy.mockReturnValue(
                 (async function* () {
-                    yield { type, text: type === 'text' ? '>> world' : 'new reasoning' };
+                    if (type === 'image' || type === 'superseded-image') {
+                        yield { type: 'image', url: 'data:image/png;base64,AQ==' };
+                        yield { type: 'text', text: '>>after image' };
+                    } else yield { type, text: type === 'text' ? '>> world' : 'new reasoning' };
                     consumed();
                     await providerPending;
                 })()
@@ -380,7 +397,7 @@ describe('continue/retry regressions', () => {
                     loading: ref(false),
                     aborted: ref(false),
                     abortController: ref(null),
-                    threadIdRef: ref('t1'),
+                    threadIdRef,
                     tailAssistant: tailAssistant as any,
                     rawMessages: rawMessages as any,
                     messages: messages as any,
@@ -407,7 +424,15 @@ describe('continue/retry regressions', () => {
             );
 
             await chunkConsumed;
-            const content = type === 'text' ? 'Hello world' : 'Hello';
+            if (type === 'superseded-image') {
+                await continuation;
+                expect(streamAccAppend.mock.calls.map(([delta]) => delta).join('')).toBe('Hello');
+                expect(tailAssistant.value?.text).toBe('Hello');
+                expect(persistAssistant.mock.calls.every(([patch]) => !String(patch.content).includes('file-hash:'))).toBe(true);
+                expect(reportErrorSpy).not.toHaveBeenCalled();
+                return;
+            }
+            const content = type === 'text' ? 'Hello world' : type === 'image' ? `Hello${imageText} after image` : 'Hello';
             const reasoning = type === 'reasoning' ? 'new reasoning' : null;
             expect(tailAssistant.value).toMatchObject({ text: content, reasoning_text: reasoning });
             expect(messages.value.map((m) => m.id)).toEqual(['a1']);
@@ -415,6 +440,10 @@ describe('continue/retry regressions', () => {
             expect(persistAssistant).toHaveBeenCalledTimes(1);
             expect(persistAssistant.mock.calls[0]?.[0]).toMatchObject({ content, reasoning });
             expect(persistAssistant.mock.calls[0]?.[0].finalize).not.toBe(true);
+            const liveText = streamAccAppend.mock.calls
+                .filter(([, options]) => options.kind === 'text')
+                .map(([delta]) => delta).join('');
+            expect(liveText).toBe(content);
 
             release();
             await continuation;

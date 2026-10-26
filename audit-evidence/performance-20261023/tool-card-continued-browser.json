@@ -1,0 +1,310 @@
+{
+  "commit": "a996424a965abbf6251071a7a248aa3e56939a04",
+  "dirty": true,
+  "command": "bun run test:e2e:tool-cards",
+  "timestamp": "2026-10-24T06:25:03.262Z",
+  "cases": [
+    {
+      "case": "card saves stay ordered across panes while preparation is delayed",
+      "status": "passed",
+      "durationMs": 2102,
+      "mounts": [
+        {
+          "tool": "fixture_state",
+          "durationMs": 0.1
+        },
+        {
+          "tool": "fixture_state",
+          "durationMs": 0.3
+        }
+      ],
+      "browser": "153.0.8010.12"
+    },
+    {
+      "case": "card save completion preserves remote persisted state",
+      "status": "passed",
+      "durationMs": 2105,
+      "mounts": [
+        {
+          "tool": "fixture_state",
+          "durationMs": 0.3
+        }
+      ],
+      "browser": "153.0.8010.12"
+    },
+    {
+      "case": "card save completion preserves normalized persisted state",
+      "status": "passed",
+      "durationMs": 1603,
+      "mounts": [
+        {
+          "tool": "fixture_state",
+          "durationMs": 0.3
+        }
+      ],
+      "browser": "153.0.8010.12"
+    },
+    {
+      "case": "offscreen preloads preserve visible frames and resume when capacity frees",
+      "status": "passed",
+      "durationMs": 918,
+      "mounts": [],
+      "browser": "153.0.8010.12"
+    },
+    {
+      "case": "legacy placement, crashing card fallback and timer sends stay isolated",
+      "status": "passed",
+      "durationMs": 8407,
+      "mounts": [
+        {
+          "tool": "fixture_guards",
+          "durationMs": 0.3
+        },
+        {
+          "tool": "fixture_end",
+          "durationMs": 0.1
+        }
+      ],
+      "browser": "153.0.8010.12"
+    },
+    {
+      "case": "always cards receive persisted status updates",
+      "status": "passed",
+      "durationMs": 1003,
+      "mounts": [
+        {
+          "tool": "fixture_always",
+          "durationMs": 0.3
+        }
+      ],
+      "browser": "153.0.8010.12"
+    },
+    {
+      "case": "trusted Vue card uses the SDK adapter and is removed on activation teardown",
+      "status": "passed",
+      "durationMs": 1017,
+      "mounts": [],
+      "browser": "153.0.8010.12"
+    },
+    {
+      "case": "30-card scroll",
+      "durationMs": 287.97908299999835,
+      "initialMounted": 20,
+      "finalMounted": 26
+    },
+    {
+      "case": "lazy cards mount during scrolling without rerunning their tools",
+      "status": "passed",
+      "durationMs": 1717,
+      "mounts": [
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.9
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.6
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.6
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.7
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.6
+        }
+      ],
+      "browser": "153.0.8010.12"
+    },
+    {
+      "case": "verified frame mounts, resizes and receives live theme changes",
+      "status": "passed",
+      "durationMs": 6601,
+      "mounts": [
+        {
+          "tool": "fixture_frame",
+          "durationMs": 38.6
+        }
+      ],
+      "browser": "153.0.8010.12"
+    },
+    {
+      "case": "SDK vanilla, Vue and React helpers update, record actions and clean up once",
+      "status": "passed",
+      "durationMs": 960,
+      "mounts": [],
+      "browser": "153.0.8010.12"
+    },
+    {
+      "case": "card actions reject invalid state, text and links and enforce send cooldown",
+      "status": "passed",
+      "durationMs": 1078,
+      "mounts": [
+        {
+          "tool": "fixture_guards",
+          "durationMs": 0.4
+        },
+        {
+          "tool": "fixture_end",
+          "durationMs": 0.2
+        }
+      ],
+      "browser": "153.0.8010.12"
+    },
+    {
+      "case": "busy chat refuses a card send before reserving its cooldown",
+      "status": "passed",
+      "durationMs": 994,
+      "mounts": [
+        {
+          "tool": "fixture_guards",
+          "durationMs": 0.3
+        },
+        {
+          "tool": "fixture_end",
+          "durationMs": 0.2
+        }
+      ],
+      "browser": "153.0.8010.12"
+    },
+    {
+      "case": "30-frame scroll",
+      "initialFrames": 12,
+      "tallViewportFrames": 12,
+      "finalFrames": 12,
+      "cap": 12
+    },
+    {
+      "case": "30 frame cards obey the per-pane cap and resume as the chat scrolls",
+      "status": "passed",
+      "durationMs": 2252,
+      "mounts": [
+        {
+          "tool": "fixture_frame",
+          "durationMs": 1452.8
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 1452.9
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 1449.1
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 1442.7
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 1459.1
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 1491.5
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 101.4
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 92.9
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 92.7
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 83.3
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 92.8
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 92.7
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 88.3
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 106.1
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 1466.5
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 93.1
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 92.8
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 84.4
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 93.1
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 1456.7
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 1446.3
+        },
+        {
+          "tool": "fixture_frame",
+          "durationMs": 1440.8
+        }
+      ],
+      "browser": "153.0.8010.12"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+$ vitest run --project=core-node --project=core-app --project=app-integration --reporter=dot --silent=passed-only --hideSkippedTests "--project=core-app" app/core/search/command-palette/__tests__/sources.test.ts
+
+ RUN  v4.1.12 /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat
+
+················
+
+ Test Files  1 passed (1)
+      Tests  16 passed (16)
+   Start at  08:17:12
+   Duration  1.04s (transform 244ms, setup 60ms, import 369ms, tests 304ms, environment 237ms)

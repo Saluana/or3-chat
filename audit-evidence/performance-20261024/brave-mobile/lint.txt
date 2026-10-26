@@ -1,0 +1,1 @@
+$ eslint --no-warn-ignored --quiet nuxt.config.ts "audit-evidence/performance-20261024/brave-mobile/analyze-trace.ts"

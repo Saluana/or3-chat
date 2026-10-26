@@ -1,0 +1,111 @@
+{
+  "commit": "a996424a965abbf6251071a7a248aa3e56939a04",
+  "dirty": true,
+  "command": "PW_SKIP_WEB_SERVER=true PW_PORT=3116 bunx playwright test tests/e2e/tool-cards.spec.ts --grep 'quiz executes inline|legacy placement, crashing card fallback|trusted Vue card uses|lazy cards mount' --workers=1 --reporter=line --output test-results/card-workspace-lifecycle",
+  "timestamp": "2026-10-24T08:09:38.414Z",
+  "cases": [
+    {
+      "case": "quiz executes inline, sends an attributed answer, and persists the locked state across reload",
+      "status": "passed",
+      "durationMs": 3379,
+      "mounts": [
+        {
+          "tool": "quiz_ask",
+          "durationMs": 1.3
+        }
+      ],
+      "browser": "153.0.8010.12"
+    },
+    {
+      "case": "legacy placement, crashing card fallback and timer sends stay isolated",
+      "status": "passed",
+      "durationMs": 8421,
+      "mounts": [
+        {
+          "tool": "fixture_guards",
+          "durationMs": 0.3
+        },
+        {
+          "tool": "fixture_end",
+          "durationMs": 0.2
+        }
+      ],
+      "browser": "153.0.8010.12"
+    },
+    {
+      "case": "trusted Vue card uses the SDK adapter and is removed on activation teardown",
+      "status": "passed",
+      "durationMs": 1014,
+      "mounts": [],
+      "browser": "153.0.8010.12"
+    },
+    {
+      "case": "30-card scroll",
+      "durationMs": 295.75804100000096,
+      "initialMounted": 19,
+      "finalMounted": 24
+    },
+    {
+      "case": "lazy cards mount during scrolling without rerunning their tools",
+      "status": "passed",
+      "durationMs": 1719,
+      "mounts": [
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.9
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.4
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.6
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.6
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.3
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.4
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.5
+        },
+        {
+          "tool": "quiz_ask",
+          "durationMs": 0.7
+        }
+      ],
+      "browser": "153.0.8010.12"
+    }
+  ],
+  "harness": {
+    "OR3_TOOL_CARDS_TEST_HARNESS": true,
+    "OR3_PLUGIN_CONTRIBUTION_V2_SURFACES": "chat-tool-cards",
+    "cloudServices": "disabled"
+  },
+  "scope": "Four existing Chromium journeys. The 30-card scroll entry is an internal diagnostic, not a fifth passing test or a sustained-memory qualification. Workspace-switch retirement is covered by the real-Dexie mounted owner tests, not these browser journeys."
+}

@@ -1,0 +1,7 @@
+{
+  "baselineCommit": "bec4a591",
+  "baselineSourceSha256": "b858e17f3c300d984acb7b34588199b64a7146705cd0f492a07b4329186eae42",
+  "restoredSourceSha256": "adb367918293e079c20ee873b2f9b35d03e0c4291c33f976479d4a5fa3367bb0",
+  "baselineTestExitCode": 1,
+  "restorationVerified": true
+}

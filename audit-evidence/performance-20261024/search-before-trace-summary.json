@@ -1,0 +1,135 @@
+{
+  "rawTraceBytes": 336133864,
+  "rawTraceSha256": "bdec7d9f9db8facaf1ca1d7277adcc7d71dc76b9d68177b2bc89fc144a84426a",
+  "note": "Whole diagnostic operation, including checksum work; nested events overlap and are not independent source-phase durations.",
+  "rendererThreads": [
+    {
+      "pid": 43343,
+      "tid": 95149258
+    },
+    {
+      "pid": 43341,
+      "tid": 95149240
+    },
+    {
+      "pid": 43344,
+      "tid": 95149259
+    }
+  ],
+  "longEvents": [
+    {
+      "name": "ThreadController active",
+      "durationMs": 388.649,
+      "category": "base"
+    },
+    {
+      "name": "ThreadControllerImpl::RunTask",
+      "durationMs": 385.593,
+      "category": "toplevel"
+    },
+    {
+      "name": "Receive mojo message",
+      "durationMs": 369.569,
+      "category": "toplevel,mojom"
+    },
+    {
+      "name": "IDBRequest::SendResult",
+      "durationMs": 323.648,
+      "category": "IndexedDB"
+    },
+    {
+      "name": "IDBRequest::dispatchEvent",
+      "durationMs": 323.643,
+      "category": "IndexedDB"
+    },
+    {
+      "name": "v8.callFunction",
+      "durationMs": 323.605,
+      "category": "v8"
+    },
+    {
+      "name": "FunctionCall",
+      "durationMs": 283.094,
+      "category": "devtools.timeline",
+      "data": {
+        "columnNumber": 33,
+        "frame": "FDB40DCBB896E4DC8964107B1A7DEF8B",
+        "functionName": "req.onsuccess",
+        "isolate": "5236558836073950351",
+        "lineNumber": 3043,
+        "sampleTraceId": 1241298867480713,
+        "scriptId": "341",
+        "url": "http://127.0.0.1:3151/_nuxt/@fs/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.cache/vite-e2e-journeys/client/deps/dexie.js?v=e68dc2ea"
+      }
+    },
+    {
+      "name": "ThreadController active",
+      "durationMs": 85.296,
+      "category": "base"
+    },
+    {
+      "name": "ThreadControllerImpl::RunTask",
+      "durationMs": 68.95,
+      "category": "toplevel"
+    },
+    {
+      "name": "TimerBase::run",
+      "durationMs": 68.827,
+      "category": "blink"
+    },
+    {
+      "name": "TimerFire",
+      "durationMs": 68.826,
+      "category": "devtools.timeline",
+      "data": {
+        "frame": "FDB40DCBB896E4DC8964107B1A7DEF8B",
+        "timerId": 2173
+      }
+    },
+    {
+      "name": "AsyncTask Run",
+      "durationMs": 68.815,
+      "category": "blink"
+    },
+    {
+      "name": "v8.callFunction",
+      "durationMs": 68.809,
+      "category": "v8"
+    },
+    {
+      "name": "RunMicrotasks",
+      "durationMs": 68.798,
+      "category": "v8.execute"
+    },
+    {
+      "name": "BlinkTaskState",
+      "durationMs": 65.781,
+      "category": "blink.task_attribution"
+    }
+  ],
+  "probe": {
+    "digest": 638767308,
+    "index": {
+      "durationMs": 3226.2999999523163,
+      "longTasks": [
+        69
+      ],
+      "maxHeartbeatGapMs": 16.899999856948853,
+      "maxRowsPerRead": 0,
+      "readCount": 0,
+      "readRows": 0,
+      "ticks": 324
+    },
+    "source": {
+      "durationMs": 1322.3000001907349,
+      "longTasks": [
+        385
+      ],
+      "maxHeartbeatGapMs": 387.2000000476837,
+      "maxRowsPerRead": 104990,
+      "readCount": 2,
+      "readRows": 114990,
+      "ticks": 96
+    }
+  }
+}

@@ -417,9 +417,10 @@ the durable background execution checkpoint.
 Server push requests are rate limited (`sync:push`: 200 requests per minute).
 Client outbox flushing treats HTTP 429 (and 502/503/504) as a deferral, not a
 failure: the batch moves back to `retry_wait` with `nextAttemptAt` taken from
-the `Retry-After` header, and `attempts` is not incremented. Only genuine
-failures count against the retry budget (`[250ms, 1s, 3s, 5s]`), so a hot outbox
-cannot exhaust healthy operations under sustained rate limiting.
+the `Retry-After` header, and `attempts` is not incremented. Other transient
+failures use `[250ms, 1s, 3s, 5s]` backoff and continue at the capped delay
+until recovery; they do not become an abandoned terminal queue. Permanent
+validation failures remain visible for repair or support export.
 
 HTTP 401/403 responses stop gateway polling and trigger session refresh. Queued
 writes stay in `retry_wait` without consuming an attempt, so signing out or an
@@ -473,6 +474,16 @@ bounded and does not create large browser quota fixtures. CI also builds the
 production application and enforces total/largest compressed and uncompressed
 JavaScript and CSS budgets. The harnesses retain versioned JSON reports under `output/performance/` for regression review.
 
+`bun run test:e2e:workspace-scale` separately measures the real browser chat-search
+loader and index with 1,000/10,000 chats, a 5,000-message conversation, reference
+branches, legacy ordering-key omissions and unused tool payloads. It uses disposable
+IndexedDB databases without switching or modifying the active workspace. It checks
+complete result coverage, bounded row transfers, cancellation and a source heartbeat
+budget, and attaches timings and sidebar read counts under `test-results/workspace-scale`.
+Use `OR3_SCALE_CPU_RATE=4` for the slower-CPU profile; `OR3_SCALE_MAX_GAP_MS`
+overrides the 150 ms source heartbeat budget. These are development-server owner
+measurements, not production INP, storage-quota limits or long-session leak qualification.
+
 
 ## Related
 
@@ -488,3 +499,18 @@ Incremental application and server push admission reject the built-in device-onl
 ## Restart continuity
 
 Server maintenance may briefly defer gateway operations. Keep the existing outbox IDs and workspace binding; reconnection must use the normal idempotent push path, without resetting cursors or manufacturing replacement operations. See [server restarts](/documentation/cloud/operations).
+
+
+## Durable recovery and account ownership
+
+Each authenticated principal has independent local feed coverage within the shared workspace database. Account switches restart incoming sync even when the workspace is unchanged; notification snapshot replacement preserves other principals’ local rows and deletion watermarks. Rapid workspace changes serialize teardown and fence stale startup work before it can publish an outbox or subscription.
+
+Snapshot replay always applies authoritative changes after the snapshot watermark, including recently acknowledged local operation IDs. An acknowledgement received while snapshot pages were in flight cannot make the local echo cache suppress the only surviving copy of that write. Half-open circuit probes retain their ownership throughout bootstrap and replay. Incoming subscriptions continue retrying with capped backoff through long outages.
+
+Outbox ownership uses atomic IndexedDB claims shared by every tab. Claims expire after 60 seconds; request waits end after 30 seconds. Every acknowledgement, remote-winner application, tombstone update and retry settlement checks the still-live claim token in its write transaction. A second tab cannot steal a live request, and a suspended former owner cannot recreate an acknowledged operation. Existing open tabs recover expired claims automatically. `claimId`, `claimExpiresAt` and `readyAt` remain local and are stripped from provider submissions.
+
+Malformed revisions are quarantined before coalescing. An invalid operation is isolated so healthy siblings still sync. Oversized message content remains committed locally with a durable failed intent and support export; it does not abort the local message save. Snapshot recovery preserves valid local content even when it exceeds the wire size limit. Notification edits and file restores advance above retained row and tombstone revisions despite clock skew.
+
+Providers accept optional `SyncRequestOptions.signal` on `pull`, `snapshot`, `push` and `updateCursor`. First-party transports bound their waits and fence cancelled completions. A cancelled or timed-out mutation may already have committed remotely; retries reuse its operation ID. Gateway disposal aborts outstanding control requests, including stalled response bodies. `/api/sync/snapshot`, `/api/sync/update-cursor`, `/api/sync/gc-change-log` and `/api/sync/gc-tombstones` reject bodies over 8 KiB with HTTP 413 before session lookup, for declared and streamed bodies.
+
+Run `bun run test:e2e:sync:cloud --development-providers` for disposable Basic Auth + SQLite + filesystem verification. The Chromium cases persist edits and upload intent offline, reopen the browser tab, lose an acknowledgement after a real server commit, crash the owning renderer, and verify automatic recovery by an already-open peer after the real claim expiry. Browser traces, screenshots and JSON receipts are written under `test-results/sync-hardening-cloud/`.

@@ -1,0 +1,159 @@
+{
+  "config": {
+    "argv": [
+      "/Users/brendon/.vite-plus/js_runtime/node/24.22.1/bin/node",
+      "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/node_modules/.bin/playwright",
+      "test",
+      "tests/e2e/or3-scroll-canary.spec.ts",
+      "--grep",
+      "native scrolling overtakes",
+      "--workers=1",
+      "--reporter=json",
+      "--output=/tmp/or3-scroll-marker-original"
+    ],
+    "configFile": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/playwright.config.ts",
+    "rootDir": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/tmp/or3-scroll-marker-original",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.spec.ts",
+          "**/*.e2e.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "or3-scroll-canary.spec.ts",
+      "file": "or3-scroll-canary.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "keeps browsing when native scrolling overtakes an instant bottom-follow write",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 4379,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: > \u001b[32m5\u001b[39m\nReceived:   \u001b[31m0\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: > \u001b[32m5\u001b[39m\nReceived:   \u001b[31m0\u001b[39m\n    at /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/or3-scroll-canary.spec.ts:244:37",
+                    "location": {
+                      "file": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/or3-scroll-canary.spec.ts",
+                      "column": 37,
+                      "line": 244
+                    },
+                    "snippet": "  242 |     const browsing = await settledBrowsingPosition(page);\n  243 |     await info.attach('overtaken-write', { contentType: 'application/json', body: JSON.stringify({ immediate, browsing }) });\n> 244 |     expect(browsing.bottomDistance).toBeGreaterThan(5);\n      |                                     ^\n  245 |     await page.evaluate(() =>\n  246 |         (window as typeof window & { __or3ScrollCanary: CanaryApi }).__or3ScrollCanary.appendMessage()\n  247 |     );"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/or3-scroll-canary.spec.ts",
+                        "column": 37,
+                        "line": 244
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: > \u001b[32m5\u001b[39m\nReceived:   \u001b[31m0\u001b[39m\n\n  242 |     const browsing = await settledBrowsingPosition(page);\n  243 |     await info.attach('overtaken-write', { contentType: 'application/json', body: JSON.stringify({ immediate, browsing }) });\n> 244 |     expect(browsing.bottomDistance).toBeGreaterThan(5);\n      |                                     ^\n  245 |     await page.evaluate(() =>\n  246 |         (window as typeof window & { __or3ScrollCanary: CanaryApi }).__or3ScrollCanary.appendMessage()\n  247 |     );\n    at /Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/or3-scroll-canary.spec.ts:244:37"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-24T07:03:21.678Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "overtaken-write",
+                      "contentType": "application/json",
+                      "body": "eyJpbW1lZGlhdGUiOnsicmVuZGVyZWRSb3dzIjo0OCwicmVhZHlJbWFnZXMiOjUsInNjcm9sbFRvcCI6MTA3MzgsInNjcm9sbEhlaWdodCI6MTE3OTIsInRyYWNrSGVpZ2h0IjoxMTc5MiwidmlzaWJsZUFuY2hvciI6ImNhbmFyeS10aHJlYWQtYS05MSIsImFuY2hvck9mZnNldCI6LTQ2LCJib3R0b21EaXN0YW5jZSI6NDAwLCJoYXNTY3JvbGxBcGkiOnRydWUsImhhc1Zpc2libGVSb3dzIjp0cnVlLCJ0YWlsUmV2aXNpb24iOjAsInJldGFpbmVkQXJyYXkiOnRydWV9LCJicm93c2luZyI6eyJyZW5kZXJlZFJvd3MiOjQ4LCJyZWFkeUltYWdlcyI6NSwic2Nyb2xsVG9wIjoxMTEzOCwic2Nyb2xsSGVpZ2h0IjoxMTc5MiwidHJhY2tIZWlnaHQiOjExNzkyLCJ2aXNpYmxlQW5jaG9yIjoiY2FuYXJ5LXRocmVhZC1hLTk1IiwiYW5jaG9yT2Zmc2V0IjotMjQsImJvdHRvbURpc3RhbmNlIjowLCJoYXNTY3JvbGxBcGkiOnRydWUsImhhc1Zpc2libGVSb3dzIjp0cnVlLCJ0YWlsUmV2aXNpb24iOjAsInJldGFpbmVkQXJyYXkiOnRydWV9fQ=="
+                    },
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "/tmp/or3-scroll-marker-original/or3-scroll-canary-keeps-br-22dc8-instant-bottom-follow-write-chromium/test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "/tmp/or3-scroll-marker-original/or3-scroll-canary-keeps-br-22dc8-instant-bottom-follow-write-chromium/error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "/Users/brendon/.codex-workspaces/worktrees/ios-a8b0a748-93ff-4647-9650-03a955860800/or3-chat/tests/e2e/or3-scroll-canary.spec.ts",
+                    "column": 37,
+                    "line": 244
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "d8793ae5e2a9354d67af-067bef3a169d10240bd0",
+          "file": "or3-scroll-canary.spec.ts",
+          "line": 223,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-24T07:03:21.483Z",
+    "duration": 4816.125,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

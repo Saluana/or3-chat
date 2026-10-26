@@ -34,7 +34,7 @@ type CanaryApi = {
     setOverscan(render: number, prefetch: number): Promise<void>;
     setMutationMode(mode: 'append-prepend' | 'arbitrary'): void;
     scrollToIndex(index: number): Promise<{ hasApi: boolean; scrollTop: number }>;
-    scrollToBottom(): Promise<{
+    scrollToBottom(options?: { smooth?: boolean }): Promise<{
         hasApi: boolean;
         before: number;
         immediate: number;
@@ -218,6 +218,53 @@ test('follows streaming at the bottom but never snaps back while browsing', asyn
     );
     await page.waitForTimeout(200);
     await assertBrowsingPosition(page, touchTop, info, 'touchTop');
+});
+
+test('keeps browsing when native scrolling overtakes an instant bottom-follow write', async ({ page }, info) => {
+    await expect.poll(() => page.evaluate(() =>
+        (window as typeof window & { __or3ScrollCanary: CanaryApi }).__or3ScrollCanary.imageReadyAt(95)
+    )).toBe(true);
+    await page.evaluate(() => document.fonts.ready.then(() => undefined));
+    await page.evaluate(() =>
+        (window as typeof window & { __or3ScrollCanary: CanaryApi }).__or3ScrollCanary.scrollToBottom()
+    );
+    await settledBrowsingPosition(page);
+    const immediate = await page.evaluate(() => {
+        const api = (window as typeof window & { __or3ScrollCanary: CanaryApi }).__or3ScrollCanary;
+        const root = document.querySelector<HTMLElement>('.canary-scroll')!;
+        // A native scroll can overtake an instant programmatic write before
+        // its queued scroll event is processed. Keep both in this task.
+        void api.scrollToBottom();
+        root.scrollTop = Math.max(0, root.scrollTop - 400);
+        root.dispatchEvent(new Event('scroll'));
+        return api.getSnapshot();
+    });
+    const browsing = await settledBrowsingPosition(page);
+    await info.attach('overtaken-write', { contentType: 'application/json', body: JSON.stringify({ immediate, browsing }) });
+    expect(browsing.bottomDistance).toBeGreaterThan(5);
+    await page.evaluate(() =>
+        (window as typeof window & { __or3ScrollCanary: CanaryApi }).__or3ScrollCanary.appendMessage()
+    );
+    await page.waitForTimeout(200);
+    await assertBrowsingPosition(page, browsing, info, 'overtaken-bottom-write');
+    // Explicit smooth navigation must still follow the tail while it settles.
+    await page.evaluate(() =>
+        (window as typeof window & { __or3ScrollCanary: CanaryApi }).__or3ScrollCanary.scrollToBottom({ smooth: true })
+    );
+    await expect.poll(async () => (await canary(page)).bottomDistance).toBeLessThanOrEqual(5);
+    await page.evaluate(() =>
+        (window as typeof window & { __or3ScrollCanary: CanaryApi }).__or3ScrollCanary.appendMessage()
+    );
+    await expect.poll(async () => (await canary(page)).bottomDistance).toBeLessThanOrEqual(5);
+    // A hidden pane can clamp an instant write; restoring it must still follow.
+    await page.evaluate(async () => {
+        const api = (window as typeof window & { __or3ScrollCanary: CanaryApi }).__or3ScrollCanary;
+        const root = document.querySelector<HTMLElement>('.canary-scroll')!;
+        root.style.display = 'none';
+        await api.scrollToBottom();
+        root.style.display = '';
+    });
+    await expect.poll(async () => (await canary(page)).bottomDistance).toBeLessThanOrEqual(5);
 });
 
 test('streams in place through the row revision while following the bottom', async ({
@@ -495,10 +542,9 @@ test('rapid content epochs cannot restore a stale thread position', async ({ pag
         api.switchThread();
         api.switchThread();
     });
-    await expect
-        .poll(async () => (await canary(page)).bottomDistance, { timeout: 5_000 })
-        .toBeLessThanOrEqual(5);
-    const after = await canary(page);
+    // Row heights can grow between two reads of a momentary bottom position.
+    // Assert the current epoch after its existing viewport settlement check.
+    const after = await settledBrowsingPosition(page);
 
     expect(after.visibleAnchor).toMatch(/^canary-thread-b-/);
     expect(after.bottomDistance).toBeLessThanOrEqual(5);

@@ -1,0 +1,131 @@
+{
+  "browser": "153.0.8010.12",
+  "options": {
+    "rich": true,
+    "synchronized": true,
+    "cpuRate": 4,
+    "dbCounts": false
+  },
+  "reads": {},
+  "settledMutations": 4,
+  "mutationExamples": [
+    {
+      "type": "attributes",
+      "attribute": "disabled",
+      "message": "pane-audit-left-74",
+      "target": "<button data-v-57072048=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+      "afterTransportDone": true
+    },
+    {
+      "type": "attributes",
+      "attribute": "disabled",
+      "message": "pane-audit-left-73",
+      "target": "<button data-v-57072048=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+      "afterTransportDone": true
+    },
+    {
+      "type": "attributes",
+      "attribute": "disabled",
+      "message": "pane-audit-left-72",
+      "target": "<button data-v-57072048=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+      "afterTransportDone": true
+    },
+    {
+      "type": "attributes",
+      "attribute": "disabled",
+      "message": "pane-audit-left-71",
+      "target": "<button data-v-57072048=\"\" type=\"button\" data-slot=\"base\" popper=\"[object Object]\" teleport=\"true\" data-state=\"closed\" data-grace-area-trigger=\"\" aria-label=\"Retry message\" class=\"font-medium disabled:cursor-not-allowed aria-disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,transform,scale] duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] cursor-pointer motion-safe:active:not-disabled:not-aria-disabled:scale-[0.98] gap-1.5 h-[var(--app-control-height-small,32px)] text-[14px] max-md:min-h-[40px]! max-md:px-[14px]! max-md:text-[16px]! px-0! aspect-square! text-center not-only:first:rounded-e-none not-only:last:r",
+      "afterTransportDone": true
+    }
+  ],
+  "visibleIds": [
+    "pane-audit-left-71",
+    "pane-audit-left-72",
+    "pane-audit-left-73",
+    "pane-audit-left-74"
+  ],
+  "longTasks": [
+    60
+  ],
+  "start": 2779.0999999046326,
+  "before": {
+    "scrollTop": 10981,
+    "id": "pane-audit-left-71",
+    "connected": true,
+    "offset": -53.828125
+  },
+  "producedAtStart": {
+    "left": {
+      "produced": 0,
+      "start": 2609.5
+    },
+    "right": {
+      "produced": 0,
+      "start": 2269.399999856949
+    }
+  },
+  "richMutations": {
+    "count": 0,
+    "examples": []
+  },
+  "richNodesRetained": [
+    {
+      "tag": "H3",
+      "connected": true
+    },
+    {
+      "tag": "PRE",
+      "connected": true
+    },
+    {
+      "tag": "SPAN",
+      "connected": true
+    }
+  ],
+  "after": {
+    "scrollTop": 10981,
+    "id": "pane-audit-left-71",
+    "connected": true,
+    "offset": -53.828125
+  },
+  "elapsed": 2318.4000000953674,
+  "p95": 33.30000000000018,
+  "max": 50,
+  "frames": 126,
+  "states": {
+    "left": {
+      "produced": 2999,
+      "start": 2609.5,
+      "firstChunk": 2779.399999856949,
+      "end": 4333,
+      "done": true
+    },
+    "right": {
+      "produced": 3000,
+      "start": 2269.399999856949,
+      "firstChunk": 2779.2999999523163,
+      "end": 4332.099999904633,
+      "done": true
+    }
+  },
+  "overlapMs": 1552.7000000476837,
+  "savedExact": {
+    "left": true,
+    "right": true
+  },
+  "rightHighlightedBlocks": 12,
+  "rightCodeBlocks": 12,
+  "rightComplete": true,
+  "leftEndInitiallyOffscreen": true,
+  "bottoms": [
+    12563,
+    0
+  ],
+  "theme": "blank",
+  "zoom": "0.9",
+  "leftRevealed": true,
+  "highlightControlApplied": 0,
+  "projectionControlApplied": 0,
+  "bundleControlApplied": 0,
+  "highlightingWorkers": 1
+}

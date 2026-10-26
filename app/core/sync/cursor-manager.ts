@@ -13,7 +13,7 @@
  * - Provide device ID via the HLC generator
  *
  * Constraints:
- * - One cursor per workspace+project scope (singleton per scope)
+ * - One cursor per workspace+project+principal visibility scope
  * - Cursor is a single monotonically increasing number (no per-table cursors)
  * - Expiry detection uses wall-clock age, not server-version gaps
  *
@@ -24,6 +24,12 @@ import type { Or3DB } from '~/db/client';
 // ... imports
 import type { SyncScope, SyncState } from '~~/shared/sync/types';
 import { getDeviceId } from './hlc';
+
+/** Local coverage must not be shared across differently filtered accounts. */
+export function getSyncStateId(scope: SyncScope): string {
+    const principal = scope.principalId ? `:principal:${encodeURIComponent(scope.principalId)}` : '';
+    return `sync_state:${scope.workspaceId}:${scope.projectId ?? 'default'}${principal}`;
+}
 
 /**
  * Purpose:
@@ -47,11 +53,7 @@ export class CursorManager {
         this.db = db;
         this.scope = scope;
         this.deviceId = getDeviceId();
-        this.syncStateId = this.getSyncStateId(scope);
-    }
-
-    private getSyncStateId(scope: SyncScope): string {
-        return `sync_state:${scope.workspaceId}:${scope.projectId ?? 'default'}`;
+        this.syncStateId = getSyncStateId(scope);
     }
 
     /**
@@ -151,7 +153,7 @@ export class CursorManager {
 const cursorManagerInstances = new Map<string, CursorManager>();
 
 function getInstanceKey(dbName: string, scope: SyncScope): string {
-    return `${dbName}:${scope.workspaceId}:${scope.projectId ?? 'default'}`;
+    return `${dbName}:${getSyncStateId(scope)}`;
 }
 
 /**

@@ -1,0 +1,27 @@
+{
+  "model": "DeepSeek: DeepSeek V4.1 Flash 1017",
+  "prompt": "Final startup smoke check. Do not use tools. Reply with exactly STARTUP_OK.",
+  "calls": [
+    {
+      "sendMs": 54568.799999952316,
+      "assistantCountBefore": 0,
+      "firstTextMs": 56148.299999952316,
+      "lastTextMs": 56168.5,
+      "textLength": 10,
+      "updates": 2,
+      "completeMs": 56168.5
+    }
+  ],
+  "verifiedAnswer": "STARTUP_OK",
+  "firstVisibleAnswerMs": 1579.5,
+  "completionMs": 1599.7,
+  "uiUsage": {
+    "promptTokens": 4354,
+    "completionTokens": 43,
+    "reasoningTokens": 39,
+    "cachedTokens": 4096,
+    "totalTokens": 4397,
+    "roundedDisplayedCost": "$0"
+  },
+  "billingNote": "UI cost is rounded; exact billed cost and any separate title-generation cost were not verified."
+}

@@ -1,0 +1,23 @@
+{
+  "commands": {
+    "cpuRate": 1,
+    "network": {
+      "offline": false,
+      "latency": 0,
+      "downloadThroughput": -1,
+      "uploadThroughput": -1
+    },
+    "cacheDisabled": false,
+    "bypassServiceWorker": false,
+    "touchEmulation": false,
+    "deviceMetricsOverride": "cleared",
+    "viewportOverride": "reset"
+  },
+  "actual": {
+    "width": 1512,
+    "height": 716,
+    "dpr": 2,
+    "touch": 0,
+    "instrumentationPresent": false
+  }
+}

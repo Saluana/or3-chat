@@ -443,7 +443,7 @@
             :modal-props="emptyCreateModalProps" :form-field-props="{}" :icon="emptyDocumentIcon" :loading-icon="emptyLoadingIcon"
             @update:open="!$event && emptyCreate.close()" @close="emptyCreate.close" @submit="emptyCreate.submit"
             @update:value="emptyCreate.form.title = $event" />
-        <SearchCommandPalette />
+        <LazySearchCommandPalette v-if="commandPaletteActivated" />
     </resizable-sidebar-layout>
 </template>
 <script setup lang="ts">
@@ -540,6 +540,7 @@ import {
     setPaletteHostContext,
     useCommandPalette,
 } from '~/composables/search/useCommandPalette';
+import { useCommandPaletteShortcut } from '~/composables/search/useCommandPaletteShortcut';
 import { createPaletteHostContext } from '~/core/search/command-palette/host-context';
 import { registerCorePaletteSources } from '~/core/search/command-palette/sources/register-core';
 import { setWorkspaceTabPaletteProvider } from '~/core/search/command-palette/sources/workspace-tab-source';
@@ -685,6 +686,17 @@ const workspaceTabs = useWorkspaceTabs({
     isMobile,
     workspaceId: () => (process.client ? getActiveWorkspaceId() : null),
     profileId: () => resolvedProfile.value.id,
+    canReuseActiveBlank(tabId) {
+        const paneId = [...workspaceTabs.state.value.paneBindings.entries()]
+            .find(([, boundTabId]) => boundTabId === tabId)?.[0];
+        // Capture before checking: typing may still be inside the draft debounce.
+        if (paneId) paneComponentRefs.get(paneId)?.captureDraft?.();
+        if (!workspaceTabDrafts.isLoaded(tabId)) return false;
+        const draft = workspaceTabDrafts.read(tabId);
+        return !draft || (!draft.text.trim() && !draft.attachments.length &&
+            !draft.attachmentRefs?.length && !draft.missingAttachments?.length &&
+            !draft.largeTextBlocks.length);
+    },
     async captureOutgoing(tabId, paneId) {
         const tab = workspaceTabs.state.value.tabs.find((entry) => entry.id === tabId);
         if (!tab) return;
@@ -2070,9 +2082,15 @@ const coreDashboardItems = dashboardEnabled.value
 registerCoreDashboardPages(coreDashboardItems);
 const dashboardNavigation = useDashboardNavigation({ baseItems: coreDashboardItems });
 const {
+    isOpen: commandPaletteOpen,
     close: closeCommandPalette,
     getCoordinator: getPaletteCoordinator,
 } = useCommandPalette();
+useCommandPaletteShortcut();
+const commandPaletteActivated = ref(commandPaletteOpen.value);
+watch(commandPaletteOpen, (open) => {
+    if (open) commandPaletteActivated.value = true;
+});
 const {
     isOpen: systemPromptsModalOpen,
     request: systemPromptsModalRequest,

@@ -9,17 +9,20 @@ import {
 } from "vue";
 import type { ToolCardTheme } from "@or3/plugin-sdk/cards";
 import { liveQuery, type Subscription } from "dexie";
-import { getDb, getWorkspaceGeneration } from "~/db/client";
+import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from "~/db/client";
 import { pluginError, pluginOk, type PluginResult } from "@or3/plugin-sdk";
 import type { ToolCardBinding } from "~/composables/chat/tool-cards";
 import {
   captureCardChatScope,
   useToolCardChatBridge,
 } from "~/composables/chat/tool-card-chat-bridge";
-import { createToolCardContext } from "~/utils/chat/tool-card-context";
+import {
+  createToolCardContext,
+  type ToolCardMessage,
+} from "~/utils/chat/tool-card-context";
 import { readToolCardTheme } from "~/utils/chat/tool-card-theme";
 import { utf8Bytes, readToolCardStates } from "~~/shared/chat/tool-card-data";
-import type { UiChatMessage, ToolCallInfo } from "~/utils/chat/uiMessages";
+import type { ToolCallInfo } from "~/utils/chat/uiMessages";
 import { useHooks } from "~/core/hooks/useHooks";
 import ToolCallIndicator from "../ToolCallIndicator.vue";
 import ToolCardPageHost from "./ToolCardPageHost.vue";
@@ -29,12 +32,13 @@ const ToolCardFrameHost = defineAsyncComponent(
 const props = defineProps<{
   binding: ToolCardBinding;
   call: ToolCallInfo;
-  message: UiChatMessage;
+  message: ToolCardMessage;
 }>();
 const emit = defineEmits<{ resize: [] }>();
 const bridge = useToolCardChatBridge();
 const scope = captureCardChatScope(bridge?.threadId.value ?? null, props.message.sourceThreadId ?? bridge?.threadId.value ?? null);
 const root = ref<HTMLElement>();
+const CARD_PRELOAD_PX = 600;
 const near = ref(false);
 const mountMs = ref<number>();
 let mountStarted = 0;
@@ -72,6 +76,7 @@ function fail(code: string) {
   if (reported) return;
   reported = true;
   failure.value = code;
+  stopLiveResources();
   live.dispose();
   console.warn(
     "[tool-card]",
@@ -236,15 +241,41 @@ const live = createToolCardContext({
   openLink,
   onError: () => fail("mount-error"),
 });
-watch([() => props.call, theme], () => live.update(props.call, theme.value), {
-  deep: true,
-});
+// History refreshes can replace a call without changing its card snapshot.
+// Watch the context's fields so unrelated text saves do not reparse its data.
+watch(
+  [
+    () => props.call.status,
+    () => props.call.args,
+    () => props.call.result,
+    () => props.call.error,
+    theme,
+  ],
+  () => live.update(props.call, theme.value),
+);
 let lazyObserver: IntersectionObserver | undefined;
 let visibilityObserver: IntersectionObserver | undefined;
 let resizeObserver: ResizeObserver | undefined;
 let themeObserver: MutationObserver | undefined;
+let stopWorkspace: (() => void) | undefined;
+function stopLiveResources() {
+  stopWorkspace?.();
+  stopWorkspace = undefined;
+  stateSubscription?.unsubscribe();
+  lazyObserver?.disconnect();
+  visibilityObserver?.disconnect();
+  themeObserver?.disconnect();
+}
 onMounted(() => {
   if (!root.value) return;
+  if (!workspaceCurrent()) {
+    live.dispose();
+    return;
+  }
+  stopWorkspace = subscribeActiveWorkspaceDb(() => {
+    stopLiveResources();
+    live.dispose();
+  });
   if (props.binding.source.kind === "unsupported") {
     fail(props.binding.source.code);
     return;
@@ -264,13 +295,32 @@ onMounted(() => {
   const scrollRoot = root.value.closest(".chat-message-list");
   lazyObserver = new IntersectionObserver(
     (entries) => {
+      if (live.card.signal.aborted) return;
       if (entries.some((entry) => entry.isIntersecting)) {
+        // An earlier card mount or scroll can move this card after the browser
+        // sampled the entry. Do not preload using that stale position.
+        if (scrollRoot && root.value) {
+          const viewport = scrollRoot.getBoundingClientRect();
+          const target = root.value.getBoundingClientRect();
+          if (
+            target.bottom < viewport.top - CARD_PRELOAD_PX ||
+            target.top > viewport.bottom + CARD_PRELOAD_PX ||
+            target.right < viewport.left - CARD_PRELOAD_PX ||
+            target.left > viewport.right + CARD_PRELOAD_PX
+          ) {
+            // The target may return before the browser samples another frame,
+            // leaving its last intersection unchanged. Request a fresh entry.
+            lazyObserver?.disconnect();
+            lazyObserver?.observe(root.value);
+            return;
+          }
+        }
         mountStarted = performance.now();
         near.value = true;
         lazyObserver?.disconnect();
       }
     },
-    { root: scrollRoot, rootMargin: "600px" },
+    { root: scrollRoot, rootMargin: `${CARD_PRELOAD_PX}px` },
   );
   lazyObserver.observe(root.value);
   visibilityObserver = new IntersectionObserver(
@@ -292,12 +342,9 @@ onMounted(() => {
   themeObserver.observe(document.body, { attributes: true });
 });
 onBeforeUnmount(() => {
-  stateSubscription?.unsubscribe();
+  stopLiveResources();
   live.dispose();
-  lazyObserver?.disconnect();
-  visibilityObserver?.disconnect();
   resizeObserver?.disconnect();
-  themeObserver?.disconnect();
   void bridge?.flush(props.message.id, props.call.id);
 });
 </script>

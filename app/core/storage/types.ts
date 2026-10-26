@@ -66,6 +66,7 @@ export interface ObjectStorageProvider {
         sizeBytes: number;
         expiresInMs?: number;
         disposition?: string;
+        signal?: AbortSignal;
     }): Promise<PresignedUrlResult>;
 
     getPresignedDownloadUrl(input: {
@@ -77,6 +78,7 @@ export interface ObjectStorageProvider {
         mimeType?: string;
         expiresInMs?: number;
         disposition?: string;
+        signal?: AbortSignal;
     }): Promise<PresignedUrlResult>;
 
     commitUpload?(input: {
@@ -94,11 +96,13 @@ export interface ObjectStorageProvider {
             pageCount?: number;
         };
         storageProviderId?: string;
+        signal?: AbortSignal;
     }): Promise<void>;
 
     deleteObject?(input: {
         workspaceId: string;
         hash: string;
         storageId?: string;
+        signal?: AbortSignal;
     }): Promise<void>;
 }

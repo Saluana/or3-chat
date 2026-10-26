@@ -1,0 +1,12 @@
+
+Running 4 tests using 1 worker
+
+(node:52765) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/4] [chromium] › tests/e2e/tool-cards.spec.ts:114:1 › quiz executes inline, sends an attributed answer, and persists the locked state across reload
+[2/4] [chromium] › tests/e2e/tool-cards.spec.ts:292:1 › legacy placement, crashing card fallback and timer sends stay isolated
+[3/4] [chromium] › tests/e2e/tool-cards.spec.ts:331:1 › trusted Vue card uses the SDK adapter and is removed on activation teardown
+[4/4] [chromium] › tests/e2e/tool-cards.spec.ts:355:1 › lazy cards mount during scrolling without rerunning their tools
+  4 passed (15.2s)

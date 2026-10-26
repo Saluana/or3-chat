@@ -184,6 +184,14 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         const { compiledTheme, appConfig: themeSpecificConfig } =
             await prepareThemeEntry(manifestEntry);
 
+        // The client reapplies this definition before hydration. Let Nuxt emit
+        // its normal modulepreload instead of discovering it after app startup.
+        if (nuxtApp.ssrContext) {
+            (nuxtApp.ssrContext.modules ??= new Set()).add(
+                `or3:theme:${manifestEntry.dirName}`
+            );
+        }
+
         themeRegistry.set(themeName, compiledTheme);
         if (compiledTheme.icons) {
             iconRegistry.registerTheme(themeName, compiledTheme.icons);

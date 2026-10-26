@@ -975,4 +975,40 @@ describe('GatewaySyncProvider', () => {
             })
         ).rejects.toThrow('invalid response');
     });
+    it.each(['pull', 'snapshot', 'push', 'updateCursor'] as const)('dispose aborts an outstanding %s control request', async method => {
+        let signal: AbortSignal | undefined;
+        vi.stubGlobal('fetch', vi.fn((_url, init) => new Promise((_resolve, reject) => {
+            signal = init.signal;
+            signal!.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+        })));
+        const provider = createGatewaySyncProvider();
+        const request = method === 'pull' ? provider.pull({ scope: { workspaceId: 'ws-1' }, cursor: 0, limit: 100 })
+            : method === 'snapshot' ? provider.snapshot!({ scope: { workspaceId: 'ws-1' }, pageSize: 100 })
+            : method === 'push' ? provider.push(pushBatch())
+            : provider.updateCursor({ workspaceId: 'ws-1' }, 'device', 1);
+        const observed = request.then(() => 'resolved', error => error.name);
+        await provider.dispose();
+        expect(signal?.aborted).toBe(true);
+        expect(await observed).toBe('AbortError');
+    });
+
+    it('bounds a stalled response body and permits the next request to recover', async () => {
+        let signal: AbortSignal | undefined;
+        vi.stubGlobal('fetch', vi.fn(async (_url, init) => {
+            signal = init.signal;
+            return { ok: true, text: () => new Promise((_resolve, reject) => {
+                signal!.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+            }) };
+        }));
+        const provider = createGatewaySyncProvider();
+        const pending = provider.pull({ scope: { workspaceId: 'ws-1' }, cursor: 0, limit: 100 });
+        const observed = pending.then(() => 'resolved', error => error.name);
+        await vi.advanceTimersByTimeAsync(30_001);
+        expect(signal?.aborted).toBe(true);
+        expect(await observed).toBe('TimeoutError');
+        vi.stubGlobal('fetch', vi.fn(async () => makeOkResponse({ ...FULL_HISTORY_PULL_RETENTION, changes: [], nextCursor: 0, hasMore: false })));
+        await expect(provider.pull({ scope: { workspaceId: 'ws-1' }, cursor: 0, limit: 100 })).resolves.toMatchObject({ nextCursor: 0 });
+        await provider.dispose();
+    });
+
 });
