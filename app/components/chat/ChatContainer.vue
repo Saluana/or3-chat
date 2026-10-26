@@ -1118,7 +1118,7 @@ type ChatInputSendPayload = {
     lossyConfirmation?: import('~/utils/chat/lossy-request').LossyRequestPreview;
 };
 
-function waitForProviderSendAcceptance(
+function waitForDurableSendAcceptance(
     activeChat: ChatInstance,
     terminal: Promise<SendResult>
 ): Promise<SendResult> {
@@ -1142,14 +1142,17 @@ function waitForProviderSendAcceptance(
         };
         const inspect = (state: ChatRequestState) => {
             if (state.status === 'idle' || state.requestId !== requestId) return;
-            // A saved turn can still be refused by final context preparation.
-            // Only the matching provider receipt authorizes early draft clear.
-            if (state.status === 'streaming' && state.providerAccepted === true) {
+            // Saving the outgoing turn accepts the draft; provider latency or a
+            // later refusal must not keep that same message in the composer.
+            // Retry on the saved turn owns its recovery.
+            if (state.status === 'persisted' || state.status === 'streaming') {
                 finish({
                     status: 'accepted',
                     requestId,
                     userMessageId: state.userMessageId,
-                    assistantMessageId: state.assistantMessageId,
+                    ...(state.status === 'streaming'
+                        ? { assistantMessageId: state.assistantMessageId }
+                        : {}),
                 });
             }
             // Finalization publishes an intermediate terminal projection.
@@ -1191,7 +1194,7 @@ const cardBridge = createToolCardChatBridge({
             file_hashes: [],
         });
         try {
-            const accepted = await waitForProviderSendAcceptance(
+            const accepted = await waitForDurableSendAcceptance(
                 activeChat,
                 result
             );
@@ -1290,7 +1293,7 @@ function onSend(payload: ChatInputSendPayload) {
     });
     payload.registerResult(
         result,
-        waitForProviderSendAcceptance(activeChat, result)
+        waitForDurableSendAcceptance(activeChat, result)
     );
     void result
         .then(() => {
