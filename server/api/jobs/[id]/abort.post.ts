@@ -115,7 +115,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Completion may win between the initial read and the stop transaction.
-    const latest = providerResult === 'aborted' ? job : await provider.getJob(jobId, userId).catch(() => job);
+    const latest = await provider.getJob(jobId, userId).catch(() => job);
     const outcome = resolveAbortOutcome(latest, providerResult);
     if (outcome.state !== 'aborted') {
         setResponseStatus(event, outcome.httpStatus);
@@ -132,10 +132,11 @@ export default defineEventHandler(async (event) => {
     }
 
     const workflowState = projectBackgroundWorkflowState('aborted', job.workflow_state);
-    emitJobStatus(jobId, 'aborted', {
-        content: job.content,
-        contentLength: job.content.length,
-        chunksReceived: job.chunksReceived,
+    if (latest?.status === 'aborted') emitJobStatus(jobId, 'aborted', {
+        content: latest.content,
+        contentLength: latest.content.length,
+        reasoning: latest.reasoning,
+        chunksReceived: latest.chunksReceived,
         completedAt: Date.now(),
         workflow_state: workflowState
     });
@@ -143,7 +144,7 @@ export default defineEventHandler(async (event) => {
     return {
         aborted: true,
         state: outcome.state,
-        status: 'aborted',
+        status: latest?.status ?? 'aborted',
         workflow_state: workflowState
     };
 });

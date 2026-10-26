@@ -65,6 +65,29 @@ export function startForegroundGenerationHeartbeat(
     return stop;
 }
 
+class ConversationDeletedError extends Error {}
+
+// Generation writes must not revive a reply after its conversation was deleted
+// elsewhere: the deleting client never saw this unsynced row to delete it.
+function liveThreadGuard(db: Or3DB, threadId: string | undefined) {
+    if (!threadId) return undefined;
+    return {
+        tables: ['threads'],
+        assertCurrent: async () => {
+            if ((await db.threads.get(threadId))?.deleted) throw new ConversationDeletedError();
+        },
+    };
+}
+
+async function unlessThreadDeleted<T>(write: Promise<T>): Promise<T | undefined> {
+    try {
+        return await write;
+    } catch (error) {
+        if (error instanceof ConversationDeletedError) return undefined;
+        throw error;
+    }
+}
+
 /**
  * `makeAssistantPersister`
  *
@@ -138,7 +161,7 @@ export function makeAssistantPersister(
             ...(finalize ? { pending: false } : {}),
             updated_at: nowSec(),
         };
-        const saved = await patchMessageInDb(
+        const saved = await unlessThreadDeleted(patchMessageInDb(
             db,
             assistantDbMsg.id,
             patch as Partial<StoredMessage>,
@@ -152,8 +175,10 @@ export function makeAssistantPersister(
                         typeof data.superseded_by !== 'string' &&
                         (ifCurrent?.(latest) ?? true);
                 }
-                : ifCurrent
-        );
+                : ifCurrent,
+            undefined,
+            liveThreadGuard(db, assistantDbMsg.thread_id)
+        ));
         if (requireCurrent && !saved) throw new Error('The tool execution receipt was not acknowledged; the originating generation is no longer current.');
         if (ownedSerialized !== undefined) {
             lastSerialized = ownedSerialized;
@@ -192,7 +217,7 @@ export async function updateMessageRecord(
     // If error is being updated, patchMessageInDb also mirrors it into
     // data.error for reliable sync (data uses v.any() and syncs reliably;
     // top-level error may not).
-    await patchMessageInDb(
+    await unlessThreadDeleted(patchMessageInDb(
         db,
         id,
         {
@@ -200,6 +225,8 @@ export async function updateMessageRecord(
             updated_at: patch.updated_at ?? nowSec(),
         } as Partial<StoredMessage>,
         existing ?? null,
-        ifCurrent
-    );
+        ifCurrent,
+        undefined,
+        patch.deleted === true ? undefined : liveThreadGuard(db, existing?.thread_id)
+    ));
 }

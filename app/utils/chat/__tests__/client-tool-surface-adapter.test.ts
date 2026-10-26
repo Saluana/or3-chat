@@ -110,6 +110,8 @@ async function capture(enabled: boolean) {
             kernel.registry.inspect().filter((record) => record.id === name)
         ).toEqual([]);
     }
+    // Finish the owned preference write before starting the other profile.
+    await vi.advanceTimersByTimeAsync(300);
     vi.clearAllTimers();
     return observation;
 }

@@ -81,7 +81,7 @@
                             v-if="canOpenInNewTab"
                             v-bind="actionButtonProps('open-tab')"
                             class="w-full justify-start"
-                            @click.stop="openInNewTab"
+                            @click.stop="actionsOpen = false; openInNewTab()"
                         >
                             Open in new tab
                         </UButton>
@@ -95,7 +95,7 @@
                                     ? 'Open in new pane'
                                     : 'Maximum pane limit reached'
                             "
-                            @click.stop="openInNewPane"
+                            @click.stop="actionsOpen = false; openInNewPane()"
                         >
                             Open in new pane
                         </UButton>

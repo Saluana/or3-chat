@@ -87,8 +87,25 @@ export function withIdleWatchdog(
     const reader = stream.getReader();
     const timeoutMs = options.timeoutMs ?? DEFAULT_UPSTREAM_IDLE_TIMEOUT_MS;
     let settled = false;
+    let abortLifecycle: (() => void) | undefined;
+    const cleanup = () => {
+        if (abortLifecycle) options.signal?.removeEventListener('abort', abortLifecycle);
+    };
 
     return new ReadableStream<Uint8Array>({
+        start(controller) {
+            // Keep abort attached even when prefetch filled the wrapper queue
+            // and no pull/read deadline is currently pending.
+            abortLifecycle = () => {
+                if (settled) return;
+                settled = true;
+                controller.error(abortError(options.signal));
+                void reader.cancel(options.signal?.reason).catch(() => undefined);
+                cleanup();
+            };
+            options.signal?.addEventListener('abort', abortLifecycle, { once: true });
+            if (options.signal?.aborted) abortLifecycle();
+        },
         async pull(controller) {
             if (settled) return;
             let timer: ReturnType<typeof setTimeout> | undefined;
@@ -118,12 +135,14 @@ export function withIdleWatchdog(
                 );
                 if (result.done) {
                     settled = true;
+                    cleanup();
                     controller.close();
                 } else if (result.value) {
                     controller.enqueue(result.value);
                 }
             } catch (error) {
                 settled = true;
+                cleanup();
                 controller.error(error);
             } finally {
                 if (timer) clearTimeout(timer);
@@ -132,6 +151,7 @@ export function withIdleWatchdog(
         },
         async cancel(reason) {
             settled = true;
+            cleanup();
             await reader.cancel(reason).catch(() => undefined);
         },
     });

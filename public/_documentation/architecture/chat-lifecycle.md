@@ -19,7 +19,9 @@ Dexie database. Incoming user turns, completed replies, edits, and deletes updat
 the open view without reopening it or adding network polls. Each distinct open
 conversation has one observer shared by its panes; writes in another conversation
 do not reread or replace an idle pane's history. An observer releases when its last
-pane leaves that conversation, on workspace switches, and on disposal. Active foreground streams
+pane leaves that conversation, on workspace switches, and on disposal. Transient
+read failures resubscribe with backoff from one to thirty seconds; retries share
+the observer's ownership and stop when it is released. Active foreground streams
 retain their in-memory reply; a saved terminal history received during streaming
 can apply after it settles only when it includes that completed reply from the
 same stream generation, including replies held in the separate foreground tail.
@@ -32,7 +34,46 @@ own-field set and shallow values are unchanged. This keeps unchanged rows idle
 when a stream finishes. New metadata references, edits, and removed fields still
 replace the presentation row; nested reactive metadata keeps its existing behavior.
 
+Message edits capture the originating database, workspace generation and account
+access when editing begins. Saving patches content into the latest live message
+rather than replacing its metadata. The same write transaction checks that its
+parent conversation still exists and is live. Workspace/account or permission
+changes reject stale saves; completed work cannot update a replaced presentation
+row or a disposed editor.
+
+The native message editor preserves literal Markdown and HTML entity text when
+saved and reopened. Literal brackets serialize as entities to avoid the renderer's
+LaTeX delimiter interpretation. Genuine LaTeX spans remain distinct from ordinary
+text and code, so a message can contain both formulas and literal link syntax.
+
+Thread selection returns `true` after applying the selection and loaded history,
+or `false` for a veto, stale operation, or missing pane. Tab activation publishes
+only the pending target while filters run. It preserves the outgoing document or
+history until selection succeeds, and rolls back a rejected activation.
+Pending selection cleanup follows the stable pane ID across split reordering and
+runs on cancellation. An older activation cannot clear a newer activation's intent.
+
+Retry captures the selected turn's revisions. Admitting its replacement user row
+supersedes every selected row in the same Dexie/outbox transaction. A changed
+revision or failed write rejects the replacement without partially hiding the old
+turn. Plugin preparation and completion actions run outside that transaction.
+
+Continuation claims the assistant's current revision and live parent in one write
+transaction before provider dispatch. Another pane preparing that same revision
+cannot claim it again. Presentation and terminal-write ownership start only after
+the claim succeeds; a rejected claim cannot finalize the existing reply. Existing
+content, reasoning and metadata count against the
+continuation budget. Text and reasoning budgets include JSON escaping so control
+characters cannot produce an accepted reply that exceeds durable message limits.
+
+Large pasted text becomes a separate composer block without replacing the editor
+document, preserving mention IDs and formatting. Saved PDF attachments expose a
+download action in the expanded message gallery.
+
 ## Streaming, stopping, and teardown
+
+Closing a retry stream closes its provider iterator. Caller cancellation remains
+attached to the response body even when prefetch has filled the wrapper queue.
 
 The default message renderer loads through the theme registry when a message
 row mounts. Empty chats keep Markdown and highlighting out of the initial
@@ -287,6 +328,19 @@ superseded and tracker-takeover states. They never replay a provider or tool.
 Preparation effects run once; completion effects run once following the durable
 write. Canonical/tracker failures remain with their existing recovery owners.
 
+Generated-image intake captures its workspace database, generation and account
+before waiting for provider output. File creation rechecks that owner through
+hashing, hooks, persistence and upload enqueueing. A failed image save fails the
+generation instead of silently completing with a missing image. Downloads have
+an eight-second deadline through their bodies and stop reading at 20 MiB;
+generated data URLs have the same size cap. Stop cancels outstanding downloads.
+
+Input image hydration retains its 5 MiB download cap and now applies its deadline
+through the body as well. Hydration caches are limited to one captured build
+(64 entries and 32 MiB of cached string storage), and local hash references
+require current, live file metadata. Workspace/account changes reject pending
+hydration; a previous successful send cannot authorize a later reference.
+
 ## Automatic titles
 
 A new chat saves a short first-message title immediately. Its first descriptive
@@ -336,3 +390,9 @@ additional project writes.
 Admission is atomic across tabs sharing the workspace IndexedDB. Disconnected
 profiles/devices still reconcile through OR3's existing clock/HLC LWW policy;
 this feature does not introduce cross-device locks or change that sync contract.
+
+Tool enablement preferences survive temporary unload and replacement, including
+replacement before the persistence debounce fires. Durable execution fingerprints
+use versioned SHA-256 over canonical arguments. Legacy diagnostic fingerprints
+cannot establish replay equality and produce a conflict; start a new explicit
+call rather than automatically replaying an uncertain legacy execution.

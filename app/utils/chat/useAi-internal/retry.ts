@@ -34,7 +34,6 @@ import type { ChatMessage, ContentPart, SendMessageParams, SendResult } from '~/
 import { hasDurableSendAcceptance } from '~/utils/chat/types';
 import { SUPERSEDED_BY_KEY, isSupersededMessage, storedMessagesToCanonicalTranscript, projectTranscriptForOpenRouter, projectTranscriptForUi } from '~/utils/chat/transcript';
 import { resolveThreadProjection } from '~/utils/chat/compaction/history';
-import { updateMessageRecord } from './persistence';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { getDb, getWorkspaceGeneration } from '~/db/client';
 import { compareMessageOrder, messagesByThread } from '~/db/messages';
@@ -372,41 +371,6 @@ export async function retryMessageImpl(
             }
         };
 
-        const supersededIds: string[] = [];
-        const marked = new Set<string>();
-        const markSelectedTurn = async (newUserId: string) => {
-            for (const row of selectedTurn) {
-                if (marked.has(row.id)) continue;
-                try {
-                    await updateMessageRecord(
-                        db,
-                        row.id,
-                        {
-                            data: {
-                                [SUPERSEDED_BY_KEY]: newUserId,
-                                generation_state: 'superseded',
-                            },
-                        },
-                        row as StoredMessage
-                    );
-                    marked.add(row.id);
-                    supersededIds.push(row.id);
-                } catch (markError) {
-                    reportError(
-                        markError instanceof Error
-                            ? markError
-                            : err('ERR_INTERNAL', '[retryMessage] supersede failed', {
-                                  tags: { domain: 'chat', op: 'retryMessage' },
-                              }),
-                        {
-                            code: 'ERR_INTERNAL',
-                            tags: { domain: 'chat', op: 'retryMessage' },
-                        }
-                    );
-                }
-            }
-        };
-
         const textToSend = extractUserText(originalTextRaw);
 
         let result: SendResult;
@@ -418,20 +382,15 @@ export async function retryMessageImpl(
                 online: false,
                 historyOverride: retryHistory,
                 retryExcludedMessageIds: [...selectedIds],
-                onUserPersisted: markSelectedTurn,
+                retryReplacement: selectedTurn.map(row => ({ id: row.id, clock: row.clock, hlc: row.hlc })),
             });
         } catch (sendError) {
             restoreOriginalTurn();
             throw sendError;
         }
 
-        if (hasDurableSendAcceptance(result) && 'userMessageId' in result && result.userMessageId) {
-            // Also cover send implementations that return a durable ID without
-            // invoking the early callback, and retry any failed row patches.
-            await markSelectedTurn(result.userMessageId);
-        } else {
-            restoreOriginalTurn();
-        }
+        const supersededIds = hasDurableSendAcceptance(result) ? [...selectedIds] : [];
+        if (!hasDurableSendAcceptance(result)) restoreOriginalTurn();
 
         if ('userMessageId' in result && result.userMessageId) {
             try {

@@ -73,6 +73,8 @@
                         class="tool-call-detail-value ml-5 mt-1 max-h-56 max-w-full overflow-auto whitespace-pre-wrap break-all font-sans text-xs leading-5 text-[var(--md-on-surface-variant)]"
                         >{{ formatResult(call.result) }}</pre
                     >
+                    <UButton v-if="call.result && parseToolResultArtifact(call.result)" type="button" variant="outline" color="neutral" size="sm"
+                        class="ml-5 mt-2" @click="downloadFullResult(call.result)">Download full result</UButton>
                     <pre
                         v-if="call.status === 'error' && call.error"
                         class="tool-call-detail-value ml-5 mt-1 max-h-56 max-w-full overflow-auto whitespace-pre-wrap break-all font-sans text-xs leading-5 text-[var(--md-error)]"
@@ -81,6 +83,7 @@
                 </div>
             </div>
         </component>
+        <p v-if="artifactError" role="alert" class="text-sm text-error">{{ artifactError }}</p>
         <div v-if="sources.length" class="mt-1 flex max-w-full flex-wrap items-center gap-2">
             <UButton
                 v-for="receipt in visibleSources"
@@ -112,9 +115,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useButtonOverrides } from '~/composables/useTypedThemeOverrides';
+import { captureChatMediaScope } from '~/utils/chat/media-scope';
+import { parseToolResultArtifact, readToolResultStorage } from '~~/shared/chat/tool-result-artifact';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { useIcon } from '~/composables/useIcon';
 import { workspaceDocumentChangeReceipt, workspaceSourceReceipts, type WorkspaceSourceReceipt } from '~/utils/chat/workspace-source-receipts';
@@ -139,6 +144,24 @@ const emit = defineEmits<{
     resize: [];
 }>();
 
+let artifactOwner: ReturnType<typeof captureChatMediaScope> | undefined;
+onMounted(() => { try { artifactOwner = captureChatMediaScope(); } catch { /* Workspace may still be loading. */ } });
+onBeforeUnmount(() => { artifactOwner = undefined; });
+const artifactError = ref('');
+async function downloadFullResult(reference: string) {
+    const owner = artifactOwner;
+    try {
+        if (!owner) throw new Error('The originating workspace is unavailable.');
+        owner.assertCurrent();
+        const result = await readToolResultStorage(reference, id => owner.db.kv.get(id));
+        if (artifactOwner !== owner) return;
+        owner.assertCurrent();
+        const url = URL.createObjectURL(new Blob([result], { type: 'text/plain;charset=utf-8' }));
+        try { const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'tool-result.txt'; anchor.click(); }
+        finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
+        artifactError.value = '';
+    } catch (error) { if (artifactOwner === owner) artifactError.value = error instanceof Error ? error.message : String(error); }
+}
 const toolRegistry = useToolRegistry();
 function toolLabel(call: ToolCall): string {
     return call.label || toolRegistry.getTool(call.name)?.definition.ui?.label

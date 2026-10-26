@@ -1,3 +1,4 @@
+import { toolResultArtifactPrefix } from '~~/shared/chat/tool-result-artifact';
 /**
  * @module app/db/threads
  *
@@ -150,40 +151,24 @@ export async function createThreadInDb(
  * - Does not merge partial updates.
  */
 export async function upsertThread(value: Thread): Promise<void> {
-    const hooks = useHooks();
-    const filtered = await hooks.applyFilters(
-        'db.threads.upsert:filter:input',
-        value
-    );
-    const validated = parseOrThrow(ThreadSchema, filtered);
     const db = getDb();
-    await db.transaction('rw', getWriteTxTableNames(db, 'threads'), async () => {
-        const existing = await dbTry(() => db.threads.get(validated.id), {
-            op: 'read',
-            entity: 'threads',
-            action: 'get',
-        });
-        const next = {
-            ...validated,
-            title_source: existing && validated.title !== existing.title ? 'manual' as const : validated.title_source,
-            clock: nextClock(existing?.clock ?? validated.clock),
-            hlc: validated.hlc ?? generateHLC(),
-        };
-        await hooks.doAction('db.threads.upsert:action:before', {
-            entity: next,
-            tableName: 'threads',
-        });
-        rejectGenericCompactionTransition(next, existing);
-        await dbTry(
-            () => db.threads.put(next),
-            { op: 'write', entity: 'threads', action: 'upsert' },
-            { rethrow: true }
-        );
-        await hooks.doAction('db.threads.upsert:action:after', {
-            entity: next,
-            tableName: 'threads',
-        });
+    const hooks = useHooks();
+    const filtered = await hooks.applyFilters('db.threads.upsert:filter:input', value);
+    const validated = parseOrThrow(ThreadSchema, filtered);
+    const previous = await db.threads.get(validated.id);
+    const prepared = { ...validated, clock: nextClock(previous?.clock ?? validated.clock) };
+    await hooks.doAction('db.threads.upsert:action:before', { entity: prepared, tableName: 'threads' });
+    const input = parseOrThrow(ThreadSchema, prepared);
+    const next = await db.transaction('rw', getWriteTxTableNames(db, 'threads'), async () => {
+        const existing = await db.threads.get(input.id);
+        const fresh = { ...input,
+            title_source: existing && input.title !== existing.title ? 'manual' as const : input.title_source,
+            clock: nextClock(existing?.clock ?? validated.clock), hlc: input.hlc ?? generateHLC() };
+        rejectGenericCompactionTransition(fresh, existing);
+        await db.threads.put(fresh);
+        return fresh;
     });
+    await hooks.doAction('db.threads.upsert:action:after', { entity: next, tableName: 'threads' });
 }
 
 /** Only the atomic compaction writer may create or replace a summary boundary. */
@@ -314,6 +299,7 @@ export async function softDeleteThread(id: string): Promise<void> {
     const db = getDb();
     const existing = await db.threads.get(id);
     if (!existing || existing.deleted) return;
+    await hooks.doAction('db.threads.delete:action:soft:before', { entity: existing, id, tableName: 'threads' });
     const deleted = await db.transaction(
         'rw',
         getWriteTxTableNames(db, 'threads', { include: ['kv', 'chat_request_recoveries'], includeTombstones: true }),
@@ -325,10 +311,6 @@ export async function softDeleteThread(id: string): Promise<void> {
         });
         if (!t) return;
         if (t.deleted) return;
-        // Before hooks share the write transaction; after hooks run after commit.
-        await hooks.doAction('db.threads.delete:action:soft:before', {
-            entity: t, id, tableName: 'threads',
-        });
         const current = await db.threads.get(id);
         if (!current || current.deleted) return;
         const rootId = await resolveSidebarFamilyId(db, current);
@@ -376,6 +358,7 @@ export async function hardDeleteThread(id: string): Promise<void> {
     const source = await db.threads.get(id);
     if (!source) return;
     if (await db.threads.where('parent_thread_id').equals(id).first()) throw new ThreadHasDescendantsError(id);
+    await hooks.doAction('db.threads.delete:action:hard:before', { entity: source, id, tableName: 'threads' });
     const deleted = await db.transaction(
         'rw',
         getWriteTxTableNames(db, 'threads', {
@@ -389,9 +372,6 @@ export async function hardDeleteThread(id: string): Promise<void> {
             action: 'get',
         });
         if (!existing) return;
-        await hooks.doAction('db.threads.delete:action:hard:before', {
-            entity: existing, id, tableName: 'threads',
-        });
         if (!await db.threads.get(id)) return;
         const rootId = await resolveSidebarFamilyId(db, existing);
         // Include soft-deleted children: their retained links still depend on
@@ -399,6 +379,7 @@ export async function hardDeleteThread(id: string): Promise<void> {
         if (await db.threads.where('parent_thread_id').equals(id).first()) {
             throw new ThreadHasDescendantsError(id);
         }
+        await db.kv.where('name').startsWith(toolResultArtifactPrefix(id)).delete();
         await db.messages.where('thread_id').equals(id).delete();
         await db.threads.delete(id);
         await db.chat_request_recoveries.delete(id);
@@ -570,39 +551,19 @@ export async function forkThread(
  * Non-Goals:
  * - Does not validate prompt existence.
  */
-export async function updateThreadSystemPrompt(
-    threadId: string,
-    promptId: string | null
-): Promise<void> {
-    const hooks = useHooks();
-    const db = getDb();
-    await db.transaction('rw', getWriteTxTableNames(db, 'threads'), async () => {
-        const thread = await dbTry(() => db.threads.get(threadId), {
-            op: 'read',
-            entity: 'threads',
-            action: 'get',
-        });
-        if (!thread) return;
-        const updated = {
-            ...thread,
-            system_prompt_id: promptId,
-            updated_at: nowSec(),
-            clock: nextClock(thread.clock),
-        };
-        await hooks.doAction('db.threads.updateSystemPrompt:action:before', {
-            thread,
-            promptId,
-        });
-        await dbTry(
-            () => db.threads.put(updated),
-            { op: 'write', entity: 'threads', action: 'updateSystemPrompt' },
-            { rethrow: true }
-        );
-        await hooks.doAction('db.threads.updateSystemPrompt:action:after', {
-            thread: updated,
-            promptId,
-        });
+export async function updateThreadSystemPrompt(threadId: string, promptId: string | null): Promise<void> {
+    const hooks = useHooks(); const db = getDb();
+    const source = await db.threads.get(threadId);
+    if (!source || source.deleted) return;
+    await hooks.doAction('db.threads.updateSystemPrompt:action:before', { thread: source, promptId });
+    const updated = await db.transaction('rw', getWriteTxTableNames(db, 'threads'), async () => {
+        const current = await db.threads.get(threadId);
+        if (!current || current.deleted) return;
+        const next = { ...current, system_prompt_id: promptId, updated_at: nowSec(), clock: nextClock(current.clock) };
+        await db.threads.put(next);
+        return next;
     });
+    if (updated) await hooks.doAction('db.threads.updateSystemPrompt:action:after', { thread: updated, promptId });
 }
 
 /**

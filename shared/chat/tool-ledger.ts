@@ -1,4 +1,4 @@
-import { sensitiveValueMetadata } from '../logging/sensitive-metadata';
+import { sha256 } from '@noble/hashes/sha2.js';
 
 export type ToolLedgerState = 'pending' | 'running' | 'completed' | 'failed';
 
@@ -15,7 +15,7 @@ function canonicalize(value: unknown): unknown {
     if (Array.isArray(value)) return value.map(canonicalize);
     if (!value || typeof value !== 'object') return value;
     return Object.fromEntries(Object.entries(value as Record<string, unknown>)
-        .sort(([a], [b]) => a.localeCompare(b))
+        .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
         .map(([key, child]) => [key, canonicalize(child)]));
 }
 
@@ -26,7 +26,10 @@ export function toolCallFingerprint(name: string, argumentsJson: string): string
     } catch {
         // Malformed arguments remain fingerprintable without accepting them.
     }
-    return sensitiveValueMetadata(`${name}\0${normalized}`).fingerprint;
+    const digest = sha256(new TextEncoder().encode(JSON.stringify([name, normalized])));
+    // Old diagnostic fingerprints deliberately conflict: they cannot safely
+    // establish argument equality for a completed or uncertain execution.
+    return `sha256:v1:${Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
 export type ToolLedgerDecision =

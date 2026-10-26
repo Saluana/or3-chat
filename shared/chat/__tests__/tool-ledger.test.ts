@@ -20,6 +20,20 @@ describe('tool call ledger decisions', () => {
         expect(decideToolCall(entry('completed'), { ...call, arguments: '{"a":9}' }).action).toBe('conflict');
     });
 
+    it('rejects a completed call whose changed arguments collide under the legacy diagnostic hash', () => {
+        const original = { id: 'collision', name: 'write', arguments: '{"value":"dnzas"}' };
+        const completed: ToolLedgerEntry = {
+            callId: original.id, name: original.name,
+            argumentFingerprint: toolCallFingerprint(original.name, original.arguments),
+            state: 'completed', result: 'wrote first value',
+        };
+        expect(decideToolCall(completed, { ...original, arguments: '{"value":"1nzqii4"}' }).action).toBe('conflict');
+    });
+
+    it('refuses replay of legacy receipts whose argument identity cannot be established', () => {
+        expect(decideToolCall({ ...entry('completed'), argumentFingerprint: 'fnv1a32:205e9a81' }, call).action).toBe('conflict');
+    });
+
     it('fingerprints semantically identical object arguments identically', () => {
         expect(toolCallFingerprint('write', '{"a":1,"b":2}')).toBe(fingerprint);
     });

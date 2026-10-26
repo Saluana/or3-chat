@@ -351,6 +351,7 @@ describe('registered canonical history authorization', () => {
         adapter.capabilities = { backgroundGenerationHistory: 'v1' };
         adapter.admitChatGeneration = async () => ({ status: 'admitted', replayed: false, serverVersion: 1 });
         adapter.finalizeChatGeneration = async () => ({ status: 'committed', replayed: false, serverVersion: 2 });
+        adapter.retainChatToolResult = async () => {};
         const params = { userId: 'owner', workspaceId: 'workspace', threadId: 'current', messageId: 'new-assistant', apiKey: 'fixture-key', referer: 'http://localhost',
             body: { model: 'model', messages: [{ role: 'user', content: 'Read history' }], tools: historyToolDefinitions,
                 _history: { version: 1, kind: 'new-turn', admissionId: 'new-assistant', generationId: 'new-generation', workspaceId: 'workspace', threadId: 'current', messageId: 'new-assistant',
@@ -381,6 +382,7 @@ describe('registered canonical history authorization', () => {
         });
         adapter.admitChatGeneration = admit;
         adapter.finalizeChatGeneration = async () => ({ status: 'committed', replayed: false, serverVersion: 2 });
+        adapter.retainChatToolResult = async () => {};
         const fetch = vi.fn(async () => new Response('data: {"choices":[{"delta":{"content":"Done"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'));
         vi.stubGlobal('fetch', fetch);
         const create = vi.spyOn(memoryJobProvider, 'createJob');

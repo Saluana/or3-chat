@@ -1,3 +1,4 @@
+import { useWorkspaceTabHost, createPaneActivationCoordinator } from '../useWorkspaceTabHost';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, nextTick, watch, type EffectScope } from 'vue';
 import Dexie from 'dexie';
@@ -7,7 +8,7 @@ import { useWorkspaceTabMetadata } from '../useWorkspaceTabMetadata';
 import type { WorkspaceTab } from '~/core/workspace-tabs/types';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
-import { setHookEngine } from '~/core/hooks/useHooks';
+import { setHookEngine, useHooks } from '~/core/hooks/useHooks';
 
 let scope: EffectScope | undefined;
 const workspaces: string[] = [];
@@ -21,6 +22,7 @@ afterEach(async () => {
         await Dexie.delete(`or3-db-${id}`);
     }
     setHookEngine(null);
+    vi.restoreAllMocks();
 });
 
 describe('open workspace views receiving synced rows', () => {
@@ -90,6 +92,61 @@ describe('open workspace views receiving synced rows', () => {
         await otherDb.messages.update('private-reply', { data: { content: 'Disposed view must not update' } });
         await new Promise(resolve => setTimeout(resolve, 80));
         expect(pane.panes.value[0]!.messages[0]!.content).toBe('Other workspace');
+    });
+
+    it('recovers the open history after a transient observer read failure without rebinding the pane', async () => {
+        const id = `observer-recovery-${crypto.randomUUID()}`; workspaces.push(id);
+        const db = setActiveWorkspaceDb(id);
+        await db.messages.put({ id: 'reply', thread_id: 'thread', role: 'assistant', index: 1,
+            created_at: 1, updated_at: 1, clock: 1, deleted: false, data: { content: 'Original' } });
+        scope = effectScope(); const pane = scope.run(() => useMultiPane())!;
+        await pane.setPaneThread(0, 'thread');
+        await new Promise(resolve => setTimeout(resolve, 80));
+        const collection = db.messages.toCollection();
+        const prototype: typeof collection = Object.getPrototypeOf(collection);
+        const reads = vi.spyOn(prototype, 'toArray');
+        reads.mockRejectedValueOnce(new Error('Synthetic transient read error'));
+        await db.messages.update('reply', { data: { content: 'Recovered' }, clock: 2 });
+        await vi.waitFor(() => expect(reads).toHaveBeenCalled());
+        reads.mockRestore();
+        await vi.waitFor(() => expect(pane.panes.value[0]!.messages[0]?.content).toBe('Recovered'), { timeout: 3000 });
+        await db.messages.update('reply', { data: { content: 'Still live' }, clock: 3 });
+        await vi.waitFor(() => expect(pane.panes.value[0]!.messages[0]?.content).toBe('Still live'));
+    });
+
+    it('preserves the outgoing document and reports rejection when thread selection is vetoed', async () => {
+        const id = `veto-${crypto.randomUUID()}`; workspaces.push(id); setActiveWorkspaceDb(id);
+        scope = effectScope(); const pane = scope.run(() => useMultiPane())!;
+        pane.updatePane(0, { mode: 'doc', documentId: 'original-document', threadId: '', messages: [] });
+        useHooks().addFilter('ui.pane.thread:filter:select', () => false as const);
+        const host = useWorkspaceTabHost(pane);
+        const paneId = pane.panes.value[0]!.id;
+        await expect(host.bindResourceToPane(paneId, { kind: 'chat', threadId: 'blocked' },
+            createPaneActivationCoordinator().begin(paneId))).rejects.toThrow(/selection/i);
+        expect(pane.panes.value[0]).toMatchObject({ mode: 'doc', documentId: 'original-document', threadId: '', messages: [] });
+        expect(pane.panes.value[0]!.pendingThreadId).toBeUndefined();
+    });
+
+    it.each(['pane reindexed', 'activation superseded'] as const)('releases its pending chat intent after %s', async change => {
+        const id = `pending-intent-${crypto.randomUUID()}`; workspaces.push(id); setActiveWorkspaceDb(id);
+        scope = effectScope(); const pane = scope.run(() => useMultiPane())!;
+        pane.addPane();
+        const target = pane.panes.value[1]!;
+        const coordinator = createPaneActivationCoordinator();
+        let entered!: () => void; let release!: () => void;
+        const reached = new Promise<void>(resolve => { entered = resolve; });
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        useHooks().addFilter('ui.pane.thread:filter:select', async thread => { entered(); await gate; return thread; });
+        const host = useWorkspaceTabHost(pane);
+        const binding = host.bindResourceToPane(target.id, { kind: 'chat', threadId: 'next-chat' }, coordinator.begin(target.id));
+        try {
+            await reached;
+            if (change === 'pane reindexed') await pane.closePane(0);
+            else coordinator.begin(target.id);
+            release(); await binding;
+            expect(target.pendingThreadId).toBeUndefined();
+            expect(target.threadId).toBe(change === 'pane reindexed' ? 'next-chat' : '');
+        } finally { release(); await binding; }
     });
 
     it('refreshes open tab titles after direct sync writes without document or thread CRUD hooks', async () => {

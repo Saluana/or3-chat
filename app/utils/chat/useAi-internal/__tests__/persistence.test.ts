@@ -68,6 +68,8 @@ describe('latest-row assistant persistence', () => {
             }),
             initial,
             undefined,
+            undefined,
+            expect.objectContaining({ tables: ['threads'] }),
         );
         const patch = patchMessage.mock.calls[0]![2] as Record<string, unknown>;
         expect(patch).not.toHaveProperty('content');
@@ -94,6 +96,8 @@ describe('latest-row assistant persistence', () => {
             }),
             initial,
             undefined,
+            undefined,
+            expect.objectContaining({ tables: ['threads'] }),
         );
 
         patchMessage.mockClear();
@@ -106,6 +110,8 @@ describe('latest-row assistant persistence', () => {
             }),
             initial,
             undefined,
+            undefined,
+            expect.objectContaining({ tables: ['threads'] }),
         );
     });
 
@@ -123,6 +129,8 @@ describe('latest-row assistant persistence', () => {
                 updated_at: 999,
             }),
             null,
+            undefined,
+            undefined,
             undefined,
         );
     });

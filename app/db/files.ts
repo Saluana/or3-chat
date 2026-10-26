@@ -451,9 +451,9 @@ export async function createOrRefFile(
  * Non-Goals:
  * - Does not fetch blobs.
  */
-export async function getFileMeta(hash: string): Promise<FileMeta | undefined> {
+export async function getFileMeta(hash: string, db = getDb()): Promise<FileMeta | undefined> {
     const hooks = useHooks();
-    const meta = await getDb().file_meta.get(hash);
+    const meta = await db.file_meta.get(hash);
     if (!meta) return undefined;
     const entity = await hooks.applyFilters(
         'db.files.get:filter:output',

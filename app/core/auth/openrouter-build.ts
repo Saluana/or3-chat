@@ -1,3 +1,5 @@
+import { parseToolResultArtifact, readToolResultStorage } from '~~/shared/chat/tool-result-artifact';
+import { projectToolResult } from '~~/shared/chat/tool-limits';
 /**
  * @module app/core/auth/openrouter-build
  *
@@ -19,7 +21,7 @@
  * - Does not handle response parsing
  *
  * Constraints:
- * - Global data URL cache is bounded (LRU, max 64 entries)
+ * - Per-build hydration cache is bounded (64 entries / 32 MiB of string storage)
  * - Remote fetches have an 8-second timeout to avoid blocking sends
  * - File parts for non-image types (PDFs) are handled separately from image_url parts
  * - Modality detection is intentionally conservative (text-only output)
@@ -29,6 +31,8 @@
  */
 
 import { parseFileHashes } from '~/db/files-util';
+import { captureChatMediaScope } from '~/utils/chat/media-scope';
+import { fetchBoundedBlob } from '~/utils/fetch-bounded-blob';
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 
 /**
@@ -136,26 +140,23 @@ export class AttachmentHydrationError extends Error {
     }
 }
 
-// Caches on global scope to avoid repeated blob -> base64 conversions.
-type GlobalCaches = {
-    __or3ImageDataUrlCache?: Map<string, string>;
-    __or3ImageHydrateInflight?: Map<string, Promise<string | null>>;
+// Bytes are shared only within one admitted build, never across accounts,
+// workspaces or later sends. The returned wire message owns its own data URLs.
+type MediaHydration = {
+    scope: ReturnType<typeof captureChatMediaScope>;
+    signal?: AbortSignal;
+    cache: Map<string, string>;
 };
-const g = globalThis as GlobalCaches;
-if (!g.__or3ImageDataUrlCache) g.__or3ImageDataUrlCache = new Map();
-if (!g.__or3ImageHydrateInflight) g.__or3ImageHydrateInflight = new Map();
-const dataUrlCache: Map<string, string> = g.__or3ImageDataUrlCache;
-const inflight: Map<
-    string,
-    Promise<string | null>
-> = g.__or3ImageHydrateInflight;
-// Simple LRU pruning to prevent unbounded growth
-const MAX_DATA_URL_CACHE = 64;
-function pruneCache(map: Map<string, string>, limit = MAX_DATA_URL_CACHE) {
-    while (map.size > limit) {
-        const oldestKey = map.keys().next().value;
+function cacheDataUrl(media: MediaHydration, key: string, value: string): void {
+    media.scope.assertCurrent();
+    media.cache.delete(key);
+    media.cache.set(key, value);
+    let bytes = [...media.cache.values()].reduce((size, item) => size + item.length * 2, 0);
+    while (media.cache.size > 64 || bytes > 32 * 1024 * 1024) {
+        const oldestKey = media.cache.keys().next().value;
         if (oldestKey === undefined) break;
-        map.delete(oldestKey);
+        bytes -= media.cache.get(oldestKey)!.length * 2;
+        media.cache.delete(oldestKey);
     }
 }
 
@@ -170,9 +171,6 @@ function getFilesMod(): Promise<typeof import('~/db/files')> {
     return filesModPromise;
 }
 
-// Remote / blob URL hydration cache shares same map (keyed by original ref string)
-// We intentionally do not distinguish hash vs URL; collisions are unlikely and harmless
-// because a content hash would never start with http/blob.
 function dataUrlMime(value: string): string {
     return /^data:([^;,]+)/iu.exec(value)?.[1]?.trim().toLowerCase() ?? '';
 }
@@ -191,44 +189,37 @@ async function isImageCandidate(hash: string, inline: ReadonlyMap<string, unknow
     return meta?.kind === 'image';
 }
 
-async function remoteRefToDataUrl(ref: string): Promise<string | null> {
-    if (ref.startsWith('data:')) {
-        return isSupportedRasterDataUrl(ref) ? ref : null;
-    }
+async function remoteRefToDataUrl(ref: string, media: MediaHydration): Promise<string | null> {
+    media.scope.assertCurrent();
+    if (ref.startsWith('data:')) return isSupportedRasterDataUrl(ref) ? ref : null;
     if (!/^https?:|^blob:/.test(ref)) return null;
-    if (dataUrlCache.has(ref)) return dataUrlCache.get(ref)!;
-    if (inflight.has(ref)) return inflight.get(ref)!;
-    const p = (async () => {
-        try {
-            const ctrl = new AbortController();
-            const t = setTimeout(() => ctrl.abort(), 8000); // 8s safety timeout
-            const resp = await fetch(ref, { signal: ctrl.signal });
-            clearTimeout(t);
-            if (!resp.ok) throw new Error('fetch-failed:' + resp.status);
-            const blob = await resp.blob();
-            // Basic guardrail: cap at ~5MB to avoid huge token usage
-            if (blob.size > 5 * 1024 * 1024) return null;
-            const dataUrl = await blobToDataUrl(blob);
-            if (!isSupportedRasterDataUrl(dataUrl)) return null;
-            dataUrlCache.set(ref, dataUrl);
-            pruneCache(dataUrlCache);
-            return dataUrl;
-        } catch {
-            return null;
-        } finally {
-            inflight.delete(ref);
-        }
-    })();
-    inflight.set(ref, p);
-    return p;
+    const cached = media.cache.get(ref);
+    if (cached) return cached;
+    try {
+        const blob = await fetchBoundedBlob(ref, { maxBytes: 5 * 1024 * 1024, timeoutMs: 8000, signal: media.signal });
+        media.scope.assertCurrent();
+        const dataUrl = await blobToDataUrl(blob, media.signal);
+        media.scope.assertCurrent();
+        if (!isSupportedRasterDataUrl(dataUrl)) return null;
+        cacheDataUrl(media, ref, dataUrl);
+        return dataUrl;
+    } catch {
+        media.scope.assertCurrent();
+        return null;
+    }
 }
 
-async function blobToDataUrl(blob: Blob): Promise<string> {
+async function blobToDataUrl(blob: Blob, signal?: AbortSignal): Promise<string> {
+    signal?.throwIfAborted();
     return new Promise((resolve, reject) => {
         const fr = new FileReader();
-        fr.onerror = () => reject(fr.error ?? new Error('FileReader error'));
-        fr.onload = () => resolve(fr.result as string);
+        const abort = () => { fr.abort(); reject(signal?.reason ?? new DOMException('Media conversion cancelled.', 'AbortError')); };
+        const cleanup = () => signal?.removeEventListener('abort', abort);
+        fr.onerror = () => { cleanup(); reject(fr.error ?? new Error('FileReader error')); };
+        fr.onload = () => { cleanup(); resolve(fr.result as string); };
+        signal?.addEventListener('abort', abort, { once: true });
         fr.readAsDataURL(blob);
+        if (signal?.aborted) abort();
     });
 }
 
@@ -267,33 +258,32 @@ async function binaryToDataUrl(
     );
 }
 
-async function hydrateHashToDataUrl(hash: string): Promise<string | null> {
-    if (dataUrlCache.has(hash)) return dataUrlCache.get(hash)!;
-    if (inflight.has(hash)) return inflight.get(hash)!;
-    const p = (async () => {
-        try {
-            const { getFileBlob } = await getFilesMod();
-            const blob = await getFileBlob(hash);
-            if (!blob) throw new Error('blob-missing');
-            const dataUrl = await blobToDataUrl(blob);
-            dataUrlCache.set(hash, dataUrl);
-            pruneCache(dataUrlCache);
-            return dataUrl;
-        } catch {
-            return null;
-        } finally {
-            inflight.delete(hash);
-        }
-    })();
-    inflight.set(hash, p);
-    return p;
+async function hydrateHashToDataUrl(hash: string, media: MediaHydration): Promise<string | null> {
+    media.scope.assertCurrent();
+    const { getFileBlob, getFileMeta } = await getFilesMod();
+    const meta = await getFileMeta(hash, media.scope.db);
+    media.scope.assertCurrent();
+    if (!meta || meta.deleted) return null;
+    const cached = media.cache.get(hash);
+    if (cached) return cached;
+    const blob = await getFileBlob(hash, media.scope.db);
+    media.scope.assertCurrent();
+    if (!blob) return null;
+    const dataUrl = await blobToDataUrl(blob, media.signal);
+    media.scope.assertCurrent();
+    const current = await getFileMeta(hash, media.scope.db);
+    media.scope.assertCurrent();
+    if (!current || current.deleted) return null;
+    cacheDataUrl(media, hash, dataUrl);
+    return dataUrl;
 }
 
 async function hydrateFileData(
     value: unknown,
     mediaType: string,
     filename: string,
-    messageIndex: number
+    messageIndex: number,
+    media: MediaHydration
 ): Promise<string> {
     if (isBinaryAttachmentData(value)) {
         try {
@@ -332,7 +322,7 @@ async function hydrateFileData(
     if (/^https?:/i.test(ref)) return ref;
 
     if (/^blob:/i.test(ref)) {
-        const hydrated = await remoteRefToDataUrl(ref);
+        const hydrated = await remoteRefToDataUrl(ref, media);
         if (hydrated && hasUsableDataUrl(hydrated)) return hydrated;
         throw new AttachmentHydrationError({
             filename,
@@ -341,11 +331,9 @@ async function hydrateFileData(
         });
     }
 
-    // Keep the shared hash cache and local-store path used by historical
-    // messages. A cached value may remain usable even while IndexedDB is
-    // temporarily unavailable.
+    // Local hashes require current live workspace metadata, including cache hits.
     try {
-        const hydrated = await hydrateHashToDataUrl(ref);
+        const hydrated = await hydrateHashToDataUrl(ref, media);
         if (hydrated && hasUsableDataUrl(hydrated)) {
             const dataUrlMime = /^data:([^;,]+)[;,]/i.exec(hydrated)?.[1];
             const normalizedMime =
@@ -360,7 +348,7 @@ async function hydrateFileData(
                 : hydrated;
         }
         // Retain the prior remote-ref fallback for custom reference schemes.
-        const remote = await remoteRefToDataUrl(ref);
+        const remote = await remoteRefToDataUrl(ref, media);
         if (remote && hasUsableDataUrl(remote)) return remote;
     } catch {
         // Convert all local-store/fetch failures into one caller-facing typed
@@ -400,6 +388,7 @@ export interface BuildOptions {
      * become a short text note instead of parts the provider would reject.
      */
     acceptsImageInput?: boolean;
+    signal?: AbortSignal;
     debug?: boolean; // verbose logging
 }
 
@@ -564,11 +553,14 @@ export async function buildOpenRouterMessages(
     messages: ChatMessageLike[],
     opts: BuildOptions = {}
 ): Promise<ORMessage[]> {
+    const media: MediaHydration = { scope: captureChatMediaScope(undefined, opts.signal), signal: opts.signal, cache: new Map() };
+    media.scope.assertCurrent();
     const acceptsImages = opts.acceptsImageInput !== false;
     // A text-only model gets a note for every omitted image, not just the
     // newest ones a vision model would receive.
     const { selected, inlineImageCandidates } = await selectOpenRouterImageCandidates(messages,
         acceptsImages ? opts : { ...opts, maxImageInputs: Number.POSITIVE_INFINITY });
+    media.scope.assertCurrent();
 
     // Group selected hashes by message index for convenient inclusion
     const byMessageIndex = new Map<number, BuildImageCandidate[]>();
@@ -583,12 +575,19 @@ export async function buildOpenRouterMessages(
     for (let i = 0; i < messages.length; i++) {
         const m = messages[i];
         if (!m) continue;
+        const toolText = async (text: string) => {
+            if (m.role !== 'tool' || !parseToolResultArtifact(text)) return text;
+            media.scope.assertCurrent();
+            const result = await readToolResultStorage(text, id => media.scope.db.kv.get(id));
+            media.scope.assertCurrent();
+            return projectToolResult(result).model;
+        };
         const parts: ORContentPart[] = [];
         let hasTextPart = false;
         if (Array.isArray(m.content)) {
             for (const part of m.content) {
                 if (part.type === 'text') {
-                    parts.push({ type: 'text', text: part.text || '' });
+                    parts.push({ type: 'text', text: await toolText(part.text || '') });
                     hasTextPart = true;
                     continue;
                 }
@@ -606,7 +605,8 @@ export async function buildOpenRouterMessages(
                         part.data,
                         mediaType,
                         filename,
-                        i
+                        i,
+                        media
                     );
                     if (
                         isPdf &&
@@ -637,7 +637,7 @@ export async function buildOpenRouterMessages(
                 }
             }
         } else if (typeof m.content === 'string') {
-            parts.push({ type: 'text', text: m.content });
+            parts.push({ type: 'text', text: await toolText(m.content) });
             hasTextPart = true;
         }
         if (!hasTextPart) {
@@ -702,7 +702,7 @@ export async function buildOpenRouterMessages(
                 /^https?:/i.test(img.hash) &&
                 /(\.png|\.jpe?g|\.gif|\.webp|\.avif|\?)/i.test(img.hash)
             ) {
-                const remote = await remoteRefToDataUrl(img.hash);
+                const remote = await remoteRefToDataUrl(img.hash, media);
                 if (!remote || !isSupportedRasterDataUrl(remote)) {
                     throw new AttachmentHydrationError({
                         messageIndex: i,
@@ -721,9 +721,11 @@ export async function buildOpenRouterMessages(
             if (looksLocal) {
                 try {
                     const { getFileMeta } = await getFilesMod();
-                    const meta = await getFileMeta(img.hash).catch(() => null);
+                    const meta = await getFileMeta(img.hash, media.scope.db);
+                    media.scope.assertCurrent();
+                    if (!meta || meta.deleted) throw new AttachmentHydrationError({ messageIndex: i, reason: 'unavailable' });
                     const metaMime =
-                        typeof meta?.mime_type === 'string'
+                        typeof meta.mime_type === 'string'
                             ? meta.mime_type
                             : typeof (meta as { mime?: string } | null)?.mime ===
                               'string'
@@ -733,15 +735,16 @@ export async function buildOpenRouterMessages(
                             ? (meta as { mimeType?: string }).mimeType
                             : null;
                     if (
-                        meta &&
                         (meta.kind !== 'image' ||
                             !metaMime ||
                             !isSupportedRasterMimeType(metaMime))
                     ) {
                         knownNonImage = true;
                     }
-                } catch {
-                    // A metadata lookup failure is handled by hydration below.
+                } catch (error) {
+                    media.scope.assertCurrent();
+                    if (error instanceof AttachmentHydrationError) throw error;
+                    throw new AttachmentHydrationError({ messageIndex: i, reason: 'unavailable' });
                 }
             }
             if (knownNonImage) {
@@ -753,8 +756,8 @@ export async function buildOpenRouterMessages(
                 continue;
             }
             // At this point either it's declared an image or remote unknown -> attempt hydration
-            let dataUrl = await hydrateHashToDataUrl(img.hash);
-            if (!dataUrl) dataUrl = await remoteRefToDataUrl(img.hash);
+            let dataUrl = await hydrateHashToDataUrl(img.hash, media);
+            if (!dataUrl) dataUrl = await remoteRefToDataUrl(img.hash, media);
             if (dataUrl && isSupportedRasterDataUrl(dataUrl)) {
                 if (!hasUsableDataUrl(dataUrl)) {
                     throw new AttachmentHydrationError({
@@ -794,5 +797,6 @@ export async function buildOpenRouterMessages(
         // Debug logging suppressed (done)
     }
 
+    media.scope.assertCurrent();
     return orMessages;
 }

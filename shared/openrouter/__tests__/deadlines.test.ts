@@ -11,6 +11,20 @@ afterEach(() => {
 });
 
 describe('OpenRouter upstream deadlines', () => {
+    it('cancels an upstream body on abort while the watchdog has a full prefetched queue', async () => {
+        const controller = new AbortController();
+        let pulls = 0; let cancelled = false;
+        const source = new ReadableStream<Uint8Array>({
+            pull(stream) { pulls++; stream.enqueue(new Uint8Array([1])); },
+            cancel() { cancelled = true; },
+        }, { highWaterMark: 0 });
+        const wrapped = withIdleWatchdog(source, { signal: controller.signal });
+        await vi.waitFor(() => expect(pulls).toBe(1));
+        controller.abort();
+        expect(cancelled).toBe(true);
+        await expect(wrapped.getReader().read()).rejects.toMatchObject({ name: 'AbortError' });
+    });
+
     it('terminates a request whose headers never resolve', async () => {
         vi.useFakeTimers();
         vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})));

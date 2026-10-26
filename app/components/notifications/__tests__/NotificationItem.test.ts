@@ -90,6 +90,22 @@ describe('NotificationItem', () => {
         }
     });
 
+    it('does not navigate a workspace-scoped completion after its workspace is replaced', async () => {
+        const previous = getActiveWorkspaceId(); const api = getGlobalMultiPaneApi();
+        const workspace = `notification-guard-${crypto.randomUUID()}`;
+        setActiveWorkspaceDb(workspace);
+        const select = vi.fn(); const mark = vi.fn(async () => {});
+        setGlobalMultiPaneApi({ activePaneIndex: ref(0), updatePane: vi.fn(), setPaneThread: select } as unknown as Parameters<typeof setGlobalMultiPaneApi>[0]);
+        const notification = baseNotification();
+        notification.actions = [{ id: 'open', label: 'Open chat', kind: 'navigate', target: { threadId: 'private-thread' }, data: { workspaceId: 'origin-workspace' } }];
+        const wrapper = mount(NotificationItem, { props: { notification, onMarkRead: mark }, global: { stubs: { UButton: UButtonStub, UIcon: UIconStub } } });
+        try {
+            await wrapper.find('button').trigger('click');
+            expect(select).not.toHaveBeenCalled(); expect(pushMock).not.toHaveBeenCalled();
+            expect(mark).not.toHaveBeenCalled();
+        } finally { wrapper.unmount(); setGlobalMultiPaneApi(api); setActiveWorkspaceDb(previous); evictWorkspaceDb(workspace); await Dexie.delete(`or3-db-${workspace}`); }
+    });
+
     it('marks read once when clicking the item with a navigate action', async () => {
         const onMarkRead = vi.fn().mockResolvedValue(undefined);
         const wrapper = mount(NotificationItem, {

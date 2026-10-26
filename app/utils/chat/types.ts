@@ -78,6 +78,8 @@ export interface SendMessageParams {
     historyOverride?: ChatMessage[];
     /** Native Retry's local turn IDs, excluded from a fresh validated recursive projection. */
     retryExcludedMessageIds?: readonly string[];
+    /** Revisions atomically superseded with the admitted replacement user row. */
+    retryReplacement?: readonly import('~/db/messages').MessageRevision[];
     /** Runs after the new user row is durable, before response generation. */
     onUserPersisted?: (userMessageId: string) => void | Promise<void>;
 }

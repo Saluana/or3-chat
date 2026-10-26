@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mount, flushPromises } from '@vue/test-utils';
+import Dexie from 'dexie';
+import { getDb, setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
+import { prepareToolResultStorage } from '~~/shared/chat/tool-result-artifact';
 import ToolCallIndicator from '../ToolCallIndicator.vue';
 
 vi.mock('~/composables/useThemeResolver', () => ({
@@ -20,6 +23,48 @@ const global = {
 };
 
 describe('ToolCallIndicator', () => {
+    it.each(['current', 'switched', 'incomplete', 'corrupt'] as const)('downloads retained tool output only with a current owner and complete verified bytes (%s)', async (state) => {
+        const workspace = `tool-download-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(workspace);
+        await db.open();
+        const output = 'Complete retained output\n'.repeat(1500);
+        const stored = await prepareToolResultStorage(output, { threadId: 'thread', parentAssistantId: 'assistant', callId: 'call' });
+        await db.kv.bulkPut(stored.rows);
+        const create = vi.fn((_blob: Blob) => 'blob:tool-result');
+        const revoke = vi.fn();
+        vi.stubGlobal('URL', class extends URL { static override createObjectURL = create; static override revokeObjectURL = revoke; });
+        const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+            expect(this.download).toBe('tool-result.txt');
+            expect(this.href).toBe('blob:tool-result');
+        });
+        const wrapper = mount(ToolCallIndicator, { props: { toolCalls: [
+            { id: 'call', name: 'echo', status: 'complete', result: stored.result },
+        ] }, global });
+        try {
+            if (state === 'switched') setActiveWorkspaceDb(null);
+            if (state === 'incomplete') await db.kv.delete(stored.rows[0]!.id);
+            if (state === 'corrupt') await db.kv.update(stored.rows[0]!.id, { value: 'Corrupted output' });
+            const download = wrapper.findAll('button').find(button => button.text() === 'Download full result');
+            expect(download).toBeDefined();
+            await download!.trigger('click');
+            if (state === 'current') {
+                await vi.waitFor(() => expect(click).toHaveBeenCalledOnce());
+                const blob = create.mock.calls[0]![0] as Blob;
+                const text = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsText(blob);
+                });
+                expect(text).toBe(output);
+            } else {
+                await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true));
+                expect(create).not.toHaveBeenCalled(); expect(click).not.toHaveBeenCalled();
+            }
+            await flushPromises();
+        } finally {
+            wrapper.unmount(); vi.restoreAllMocks(); vi.unstubAllGlobals();
+            if (getDb() === db) setActiveWorkspaceDb(null);
+            evictWorkspaceDb(workspace); await Dexie.delete(db.name);
+        }
+    });
     it.each([
         ['workspace_create_document', 'Workspace create document'],
         ['workspace_update_project', 'Workspace update project'],

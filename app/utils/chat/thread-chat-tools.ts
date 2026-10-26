@@ -1,3 +1,4 @@
+import { resolveThreadProjection } from './compaction/history';
 import {
     getActiveWorkspaceId,
     getDb,
@@ -7,7 +8,7 @@ import {
 import { useCommandPalette } from '~/composables/search/useCommandPalette';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import type { ToolDefinition, ToolExecutionContext } from '~/utils/chat/types';
-import { appendMessageRows, prepareMessageAppend, messagesByThread } from '~/db/messages';
+import { appendMessageRows, prepareMessageAppend } from '~/db/messages';
 import { getThread } from '~/db/threads';
 import { normalizeMessageContent } from '~/core/search/command-palette/normalize';
 
@@ -171,11 +172,10 @@ async function readThread(
     const db = getDb();
     if (db.name !== originDbName) throw new Error('The workspace changed while reading this chat.');
     const cap = Math.min(Math.max(1, limit ?? MAX_READ_MESSAGES), MAX_READ_MESSAGES);
-    const rows = (await messagesByThread(threadId, db)) as
-        Array<{ role: string; content?: unknown; data?: unknown; deleted?: boolean }> | undefined;
+    const { messages: rows } = await resolveThreadProjection(threadId, db);
     assertChatWorkspace(context);
     if (getDb().name !== originDbName) throw new Error('The workspace changed while reading this chat.');
-    const visible = (rows ?? [])
+    const visible = rows
         .filter((message) => !message.deleted && READABLE_ROLES.has(message.role));
     const recent = visible.slice(-cap);
     let used = 0;

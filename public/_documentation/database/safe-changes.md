@@ -34,11 +34,13 @@ The caller supplies a real guard for the admitted workspace/session. Do not re-r
 
 ## Transactions and hooks
 
-Read/prepare data before entering a write transaction. Dexie transactions should not contain unrelated network requests or long UI waits. Use existing batch/entity helpers when available; their transaction rules are more specific than a generic example.
+Read/prepare data and run arbitrary plugin hooks before entering a write transaction; run completion hooks after commit. Re-read and validate current rows under the write lock, so asynchronous preparation cannot authorize a stale edit, deletion or ordering plan. Dexie transactions should not contain unrelated network requests or long UI waits. Use existing batch/entity helpers when available; their transaction rules are more specific than a generic example.
 
 Internal writes that participate in sync must include capture tables in the same transaction. `getWriteTxTableNames(db, primary, options)` from `~/db/util` includes both `pending_ops` and `tombstones` when present. Generic saves, patches, and hook filters can change `deleted` to `true`, so deletion history belongs in their transaction too. An explicit `includeTombstones: false` is only appropriate when the entire operation cannot delete a row. Additional related tables belong in `include` or the primary list. Adding the tables alone does not validate a row or supply entity hooks/revision semantics.
 
-Do not suppress remote-apply guards, overwrite outbox operation IDs, reset revision clocks, or sync derived fields. See [sync internals](/documentation/cloud/sync-layer). Sparse ordering is intentional; use message move/insert helpers rather than renumbering an entire thread after every edit.
+Do not suppress remote-apply guards, overwrite outbox operation IDs, reset revision clocks, or sync derived fields. See [sync internals](/documentation/cloud/sync-layer). Append checks that its parent thread is live inside the write transaction. Index normalization preserves the same index/order_key/id order as history reads. Sparse ordering is intentional; use message move/insert helpers rather than renumbering an entire thread after every edit.
+
+Completed tool output above the inline JSON budget uses immutable chunks in the existing workspace KV table. Foreground insertion writes those chunks and the canonical tool message in one messages/threads/KV/outbox transaction. Message move/copy rehomes referenced chunks into the destination thread in that same atomic scope and checks the source revision before committing. Hard thread deletion removes its `chat.tool-result:<encoded-thread>:` namespace atomically; retained descendant branches still prevent hard deletion. Do not delete these chunks independently of retained chat history.
 
 ## Errors must affect the outcome
 

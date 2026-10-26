@@ -1,0 +1,430 @@
+diff --git a/src/runtime/__tests__/sqlite-background-jobs.test.ts b/src/runtime/__tests__/sqlite-background-jobs.test.ts
+index 221558e..2f02355 100644
+--- a/src/runtime/__tests__/sqlite-background-jobs.test.ts
++++ b/src/runtime/__tests__/sqlite-background-jobs.test.ts
+@@ -88,6 +88,19 @@ describe('SQLite durable request usage', () => {
+         await rm(directory, { recursive: true, force: true });
+     });
+ 
++    it('retains the live worker fence until Stop saves its buffered terminal snapshot', async () => {
++        const id = await provider.createJob({ ...params, execution });
++        await provider.claimJob(id, 'worker', Date.now(), Date.now() + 30_000);
++        expect(await provider.abortJob(id, params.userId)).toBe(true);
++        expect(await provider.checkJobAborted(id)).toBe(true);
++        expect((await provider.getJob(id, params.userId))?.status).toBe('streaming');
++        expect(await provider.getPendingHistoryJobs(10)).toEqual([]);
++        await expect(provider.saveTerminalSnapshot(id, { status: 'complete', content: 'late', reasoning: '', completedAt: Date.now() }, 'worker')).rejects.toMatchObject({ name: 'AbortError' });
++        expect(await provider.saveTerminalSnapshot(id, { status: 'aborted', content: 'accepted text', reasoning: 'accepted reason', completedAt: Date.now() }, 'worker')).toBe(true);
++        await reopen();
++        expect(await provider.getJob(id, params.userId)).toMatchObject({ status: 'aborted', content: 'accepted text', reasoning: 'accepted reason', historyPhase: 'finalization_pending' });
++    });
++
+     it.each(['complete', 'error', 'aborted'] as const)(
+         'reopens the last measured request after %s without summing snapshots', async (status) => {
+             const id = await provider.createJob(params);
+@@ -496,6 +509,13 @@ describe('SQLite background jobs', () => {
+             )
+         ).resolves.toBeNull();
+ 
++        const running: string[] = [];
++        for (let index = 0; index < 5; index++) {
++            const id = await provider.createJob({ userId: 'user-1', threadId: 'other', messageId: `other-${index}`, model: 'test-model',
++                execution: { ...execution, clientToolCall: undefined } });
++            expect(await provider.claimJob(id, `active-${index}`, Date.now(), Date.now() + 30_000)).not.toBeNull();
++            running.push(id);
++        }
+         const settled = {
+             ...execution,
+             pendingToolCalls: undefined,
+@@ -511,6 +531,9 @@ describe('SQLite background jobs', () => {
+                 [{ id: 'call-1', name: 'client_tool', status: 'complete' }]
+             )
+         ).resolves.toBe(true);
++        expect(await provider.claimJob(jobId, 'too-early', Date.now(), Date.now() + 30_000)).toBeNull();
++        expect(await provider.claimNextJob('too-early', Date.now(), Date.now() + 30_000)).toBeNull();
++        await provider.completeJob(running[0]!, 'done', 'active-0');
+         const resumed = await provider.claimJob(
+             jobId,
+             'worker',
+diff --git a/src/runtime/__tests__/sqlite-sync-gateway-adapter.test.ts b/src/runtime/__tests__/sqlite-sync-gateway-adapter.test.ts
+index 4c98722..66a2417 100644
+--- a/src/runtime/__tests__/sqlite-sync-gateway-adapter.test.ts
++++ b/src/runtime/__tests__/sqlite-sync-gateway-adapter.test.ts
+@@ -345,6 +345,44 @@ describe('SqliteSyncGatewayAdapter', () => {
+             await rm(directory, { recursive: true, force: true });
+         });
+ 
++        it.each(['x', '"'])('retains immutable completed tool chunks with idempotent contiguous sync versions (%s)', async character => {
++            const history = admission(); await adapter.admitChatGeneration(actor, history);
++            const rows = Array.from({ length: 8 }, (_, index) => ({ id: `tool-result:${'a'.repeat(64)}:${index}`,
++                name: `chat.tool-result:${history.threadId}:${'a'.repeat(64)}:${index}`, value: character.repeat(32 * 1024),
++                clock: 1, deleted: false as const, created_at: 100, updated_at: 100 }));
++            await adapter.retainChatToolResult(actor, { admission: history, rows });
++            const after = getRawDb().prepare('SELECT value FROM server_version_counter WHERE workspace_id = ?').get(WORKSPACE_ID) as { value: number };
++            await adapter.retainChatToolResult(actor, { admission: history, rows });
++            expect(getRawDb().prepare('SELECT value FROM server_version_counter WHERE workspace_id = ?').get(WORKSPACE_ID)).toEqual(after);
++            await reopen();
++            const pulled = await adapter.pull(makeSessionEvent(actor.userId), { scope: { workspaceId: WORKSPACE_ID }, cursor: 0, limit: 100 });
++            const parts = pulled.changes.filter(change => change.tableName === 'kv');
++            expect(parts).toHaveLength(8);
++            expect(parts.map(part => part.serverVersion)).toEqual(Array.from({ length: 8 }, (_, index) => after.value - 7 + index));
++            expect(parts.map(part => (part.payload as { value: string }).value).join('')).toBe(character.repeat(256 * 1024));
++            await expect(adapter.retainChatToolResult(actor, { admission: history, rows: [{ ...rows[0]!, value: 'different effect output' }] })).rejects.toThrow(/Conflicting/);
++            await expect(adapter.retainChatToolResult({ ...actor, userId: 'other-user' }, { admission: history, rows })).rejects.toThrow(/Forbidden/i);
++            getRawDb().prepare('DELETE FROM s_kv WHERE workspace_id = ? AND id = ?').run(WORKSPACE_ID, rows[0]!.id);
++            getRawDb().prepare("INSERT INTO tombstones (id, workspace_id, table_name, pk, deleted_at, clock, server_version) VALUES (?, ?, 'kv', ?, 100, 2, ?)")
++                .run('deleted-artifact', WORKSPACE_ID, rows[0]!.id, after.value);
++            await expect(adapter.retainChatToolResult(actor, { admission: history, rows })).rejects.toThrow(/was deleted/);
++            expect(getRawDb().prepare('SELECT 1 FROM s_kv WHERE workspace_id = ? AND id = ?').get(WORKSPACE_ID, rows[0]!.id)).toBeUndefined();
++
++        });
++
++        it('retains the admission order key when terminal finalization changes the message HLC', async () => {
++            const history = admission();
++            history.assistantMessage.hlc = '000000001:001:admission';
++            await adapter.admitChatGeneration(actor, history);
++            const admitted = await readCanonical();
++            expect(admitted.order_key).toBe('000000001:001:admission');
++            await adapter.finalizeChatGeneration(actor, { admission: history, snapshot: snapshot() });
++            await reopen();
++            const completed = await readCanonical();
++            expect(completed.hlc).not.toBe(admitted.hlc);
++            expect(completed.order_key).toBe(admitted.order_key);
++        });
++
+         it.each(['complete', 'error', 'aborted'] as const)('reconciles real persisted %s jobs through host history and canonical pull/snapshot', async (status) => {
+             let jobs = new SqliteBackgroundJobProvider();
+             const history = admission();
+diff --git a/src/runtime/server/background-jobs/sqlite-provider.ts b/src/runtime/server/background-jobs/sqlite-provider.ts
+index e0b8de4..e25a222 100644
+--- a/src/runtime/server/background-jobs/sqlite-provider.ts
++++ b/src/runtime/server/background-jobs/sqlite-provider.ts
+@@ -211,6 +211,20 @@ const INSERT_JOB_IF_CAPACITY = `INSERT INTO background_jobs (
+   ON CONFLICT(idempotency_key) DO NOTHING
+   RETURNING id`;
+ 
++function stopJobStatement(jobId: string, now: number): { sql: string; values: unknown[] } {
++    const pending = `(kind IS NOT 'workflow' AND execution_json IS NOT NULL
++        AND json_extract(execution_json, '$.clientToolCall') IS NULL
++        AND lease_owner IS NOT NULL AND lease_expires_at > ?)`;
++    return { sql: `UPDATE background_jobs SET
++            execution_json = CASE WHEN ${pending} THEN json_set(execution_json, '$.cancellationRequestedAt', ?) ELSE execution_json END,
++            status = CASE WHEN ${pending} THEN 'streaming' ELSE 'aborted' END,
++            completed_at = CASE WHEN ${pending} THEN completed_at ELSE ? END,
++            history_phase = CASE WHEN ${pending} THEN history_phase
++                WHEN generation_id IS NOT NULL AND COALESCE(history_phase, 'ready') = 'ready' THEN 'finalization_pending' ELSE history_phase END,
++            last_activity_at = ?
++            WHERE id = ? AND status = 'streaming'`, values: [now, now, now, now, now, now, now, jobId] };
++}
++
+ export class SqliteBackgroundJobProvider implements BackgroundJobProvider {
+     readonly name = 'sqlite';
+ 
+@@ -359,15 +373,7 @@ export class SqliteBackgroundJobProvider implements BackgroundJobProvider {
+              VALUES (?, ?, ?)
+              ON CONFLICT(user_id, admission_id)
+              DO UPDATE SET expires_at = excluded.expires_at`;
+-        const abortJob = `UPDATE background_jobs SET status = 'aborted',
+-                completed_at = ?, last_activity_at = ?, error = ?,
+-                lease_owner = NULL, lease_expires_at = NULL,
+-                history_phase = CASE
+-                    WHEN generation_id IS NOT NULL
+-                      AND COALESCE(history_phase, 'ready') = 'ready'
+-                    THEN 'finalization_pending'
+-                    ELSE history_phase END
+-             WHERE id = ? AND status = 'streaming'`;
++
+ 
+         if (!isD1Driver()) {
+             const raw = getRawDb();
+@@ -388,14 +394,8 @@ export class SqliteBackgroundJobProvider implements BackgroundJobProvider {
+                         return { aborted: false, pending: true };
+                     }
+                     if (job.status === 'streaming') {
+-                        const changes = raw
+-                            .prepare(abortJob)
+-                            .run(
+-                                now,
+-                                now,
+-                                'Cancelled by user',
+-                                job.id
+-                            ).changes;
++                        const statement = stopJobStatement(job.id, now);
++                        const changes = raw.prepare(statement.sql).run(...statement.values).changes;
+                         return {
+                             aborted: changes > 0,
+                             jobId: job.id,
+@@ -424,13 +424,8 @@ export class SqliteBackgroundJobProvider implements BackgroundJobProvider {
+             return { aborted: false, pending: true };
+         }
+         if (job.status === 'streaming') {
+-            const changes = await run(
+-                abortJob,
+-                now,
+-                now,
+-                'Cancelled by user',
+-                job.id
+-            );
++            const statement = stopJobStatement(job.id, now);
++            const changes = await run(statement.sql, ...statement.values);
+             return {
+                 aborted: changes > 0,
+                 jobId: job.id,
+@@ -531,22 +526,8 @@ export class SqliteBackgroundJobProvider implements BackgroundJobProvider {
+ 
+     async abortJob(jobId: string, userId: string): Promise<boolean> {
+         const now = Date.now();
+-        return (
+-            (await run(
+-                `UPDATE background_jobs SET status = 'aborted', completed_at = ?,
+-                last_activity_at = ?, lease_owner = NULL, lease_expires_at = NULL,
+-                history_phase = CASE
+-                    WHEN generation_id IS NOT NULL
+-                      AND COALESCE(history_phase, 'ready') = 'ready'
+-                    THEN 'finalization_pending'
+-                    ELSE history_phase END
+-             WHERE id = ? AND user_id = ? AND status = 'streaming'`,
+-                now,
+-                now,
+-                jobId,
+-                userId
+-            )) > 0
+-        );
++        const statement = stopJobStatement(jobId, now);
++        return (await run(statement.sql + ' AND user_id = ?', ...statement.values, userId)) > 0;
+     }
+ 
+     getAbortController(): undefined {
+@@ -554,11 +535,9 @@ export class SqliteBackgroundJobProvider implements BackgroundJobProvider {
+     }
+ 
+     async checkJobAborted(jobId: string): Promise<boolean> {
+-        const row = await one<{ status: BackgroundJob['status'] }>(
+-            'SELECT status FROM background_jobs WHERE id = ?',
+-            jobId
+-        );
+-        return row?.status === 'aborted';
++        const row = await one<{ status: string; cancelled?: number }>(
++            "SELECT status, json_extract(execution_json, '$.cancellationRequestedAt') AS cancelled FROM background_jobs WHERE id = ?", jobId);
++        return row?.status === 'aborted' || !!row?.cancelled;
+     }
+ 
+     async claimJob(
+@@ -570,34 +549,43 @@ export class SqliteBackgroundJobProvider implements BackgroundJobProvider {
+         // Recovery must reproduce the memory/Convex contract: a reclaimed job
+         // resets text/iteration progress to its checkpoint before new deltas
+         // append. Otherwise the restarted model appends onto pre-crash output.
++        const config = getJobConfig();
+         const row = await one<JobRow>(
+             `UPDATE background_jobs SET
+                 lease_owner = ?,
+                 lease_expires_at = ?,
+                 last_activity_at = ?,
+-                content = CASE WHEN attempts > 0
++                content = CASE WHEN attempts > 0 AND json_extract(execution_json, '$.cancellationRequestedAt') IS NULL
+                     THEN COALESCE(json_extract(execution_json, '$.contentBase'), '')
+                     ELSE content END,
+-                reasoning = CASE WHEN attempts > 0
++                reasoning = CASE WHEN attempts > 0 AND json_extract(execution_json, '$.cancellationRequestedAt') IS NULL
+                     THEN COALESCE(json_extract(execution_json, '$.reasoningBase'), '')
+                     ELSE reasoning END,
+-                usage_json = CASE WHEN attempts > 0
++                usage_json = CASE WHEN attempts > 0 AND json_extract(execution_json, '$.cancellationRequestedAt') IS NULL
+                     THEN CASE WHEN json_type(execution_json, '$.normalizedToolState.requestUsage') = 'object'
+                         THEN json_extract(execution_json, '$.normalizedToolState.requestUsage')
+                         ELSE NULL END
+                     ELSE usage_json END,
+-                chunks_received = CASE WHEN attempts > 0 THEN 0 ELSE chunks_received END,
++                chunks_received = CASE WHEN attempts > 0 AND json_extract(execution_json, '$.cancellationRequestedAt') IS NULL THEN 0 ELSE chunks_received END,
+                 attempts = attempts + 1
+              WHERE id = ? AND status = 'streaming' AND execution_json IS NOT NULL
+                AND json_extract(execution_json, '$.clientToolCall') IS NULL
+                AND COALESCE(history_phase, 'ready') = 'ready'
+                AND (lease_owner IS NULL OR lease_expires_at <= ?)
++               AND (SELECT COUNT(*) FROM background_jobs active
++                    WHERE active.status = 'streaming' AND json_extract(active.execution_json, '$.clientToolCall') IS NULL
++                      AND (active.kind = 'workflow' OR (active.lease_owner IS NOT NULL AND active.lease_expires_at > ?))) < ?
++               AND (SELECT COUNT(*) FROM background_jobs active
++                    WHERE active.status = 'streaming' AND active.user_id = background_jobs.user_id
++                      AND json_extract(active.execution_json, '$.clientToolCall') IS NULL
++                      AND (active.kind = 'workflow' OR (active.lease_owner IS NOT NULL AND active.lease_expires_at > ?))) < ?
+              RETURNING *`,
+             leaseOwner,
+             leaseExpiresAt,
+             now,
+             jobId,
+-            now
++            now,
++            now, config.maxConcurrentJobs, now, config.maxConcurrentJobsPerUser
+         );
+         return row ? toJob(row) : null;
+     }
+@@ -607,23 +595,24 @@ export class SqliteBackgroundJobProvider implements BackgroundJobProvider {
+         now: number,
+         leaseExpiresAt: number
+     ): Promise<BackgroundJob | null> {
++        const config = getJobConfig();
+         const row = await one<JobRow>(
+             `UPDATE background_jobs SET
+                 lease_owner = ?,
+                 lease_expires_at = ?,
+                 last_activity_at = ?,
+-                content = CASE WHEN attempts > 0
++                content = CASE WHEN attempts > 0 AND json_extract(execution_json, '$.cancellationRequestedAt') IS NULL
+                     THEN COALESCE(json_extract(execution_json, '$.contentBase'), '')
+                     ELSE content END,
+-                reasoning = CASE WHEN attempts > 0
++                reasoning = CASE WHEN attempts > 0 AND json_extract(execution_json, '$.cancellationRequestedAt') IS NULL
+                     THEN COALESCE(json_extract(execution_json, '$.reasoningBase'), '')
+                     ELSE reasoning END,
+-                usage_json = CASE WHEN attempts > 0
++                usage_json = CASE WHEN attempts > 0 AND json_extract(execution_json, '$.cancellationRequestedAt') IS NULL
+                     THEN CASE WHEN json_type(execution_json, '$.normalizedToolState.requestUsage') = 'object'
+                         THEN json_extract(execution_json, '$.normalizedToolState.requestUsage')
+                         ELSE NULL END
+                     ELSE usage_json END,
+-                chunks_received = CASE WHEN attempts > 0 THEN 0 ELSE chunks_received END,
++                chunks_received = CASE WHEN attempts > 0 AND json_extract(execution_json, '$.cancellationRequestedAt') IS NULL THEN 0 ELSE chunks_received END,
+                 attempts = attempts + 1
+              WHERE id = (
+                 SELECT id FROM background_jobs
+@@ -631,12 +620,20 @@ export class SqliteBackgroundJobProvider implements BackgroundJobProvider {
+                   AND json_extract(execution_json, '$.clientToolCall') IS NULL
+                   AND COALESCE(history_phase, 'ready') = 'ready'
+                   AND (lease_owner IS NULL OR lease_expires_at <= ?)
++               AND (SELECT COUNT(*) FROM background_jobs active
++                    WHERE active.status = 'streaming' AND json_extract(active.execution_json, '$.clientToolCall') IS NULL
++                      AND (active.kind = 'workflow' OR (active.lease_owner IS NOT NULL AND active.lease_expires_at > ?))) < ?
++               AND (SELECT COUNT(*) FROM background_jobs active
++                    WHERE active.status = 'streaming' AND active.user_id = background_jobs.user_id
++                      AND json_extract(active.execution_json, '$.clientToolCall') IS NULL
++                      AND (active.kind = 'workflow' OR (active.lease_owner IS NOT NULL AND active.lease_expires_at > ?))) < ?
+                 ORDER BY started_at ASC LIMIT 1
+              ) RETURNING *`,
+             leaseOwner,
+             leaseExpiresAt,
+             now,
+-            now
++            now,
++            now, config.maxConcurrentJobs, now, config.maxConcurrentJobsPerUser
+         );
+         return row ? toJob(row) : null;
+     }
+@@ -661,23 +658,13 @@ export class SqliteBackgroundJobProvider implements BackgroundJobProvider {
+         );
+     }
+ 
+-    async updateJobExecution(
+-        jobId: string,
+-        execution: BackgroundJobExecution,
+-        leaseOwner: string
+-    ): Promise<boolean> {
+-        return (
+-            (await run(
+-                `UPDATE background_jobs SET execution_json = ?, last_activity_at = ?
+-             WHERE id = ? AND status = 'streaming' AND lease_owner = ?
+-               AND lease_expires_at > ?`,
+-                json(execution),
+-                Date.now(),
+-                jobId,
+-                leaseOwner,
+-                Date.now()
+-            )) > 0
+-        );
++    async updateJobExecution(jobId: string, execution: BackgroundJobExecution, leaseOwner: string): Promise<boolean> {
++        const changes = await run(`UPDATE background_jobs SET execution_json = ?, last_activity_at = ?
++            WHERE id = ? AND status = 'streaming' AND lease_owner = ? AND lease_expires_at > ?
++            AND json_extract(execution_json, '$.cancellationRequestedAt') IS NULL`,
++            json(execution), Date.now(), jobId, leaseOwner, Date.now());
++        if (!changes && await this.checkJobAborted(jobId)) throw Object.assign(new Error('Job stopped by user'), { name: 'AbortError' });
++        return changes > 0;
+     }
+ 
+     async claimClientToolCall(
+@@ -766,16 +753,18 @@ export class SqliteBackgroundJobProvider implements BackgroundJobProvider {
+         } else {
+             where += ' AND lease_owner IS NULL';
+         }
+-        return (
+-            (await run(
++        if (snapshot.status !== 'aborted') where += " AND json_extract(execution_json, '$.cancellationRequestedAt') IS NULL";
++        const changed = await run(
+                 `UPDATE background_jobs SET status = ?, content = ?, reasoning = ?,
+                     tool_calls_json = ?, usage_json = COALESCE(?, usage_json), error = ?, completed_at = ?,
+                     history_phase = 'finalization_pending',
+                     last_activity_at = ?, lease_owner = NULL, lease_expires_at = NULL
+                  WHERE ${where}`,
+                 ...values
+-            )) > 0
+-        );
++            );
++        if (!changed && snapshot.status !== 'aborted' && await this.checkJobAborted(jobId))
++            throw Object.assign(new Error('Job stopped by user'), { name: 'AbortError' });
++        return changed > 0;
+     }
+ 
+     async setHistoryPhase(
+diff --git a/src/runtime/server/sync/sqlite-sync-gateway-adapter.ts b/src/runtime/server/sync/sqlite-sync-gateway-adapter.ts
+index 9876b0b..17f313a 100644
+--- a/src/runtime/server/sync/sqlite-sync-gateway-adapter.ts
++++ b/src/runtime/server/sync/sqlite-sync-gateway-adapter.ts
+@@ -1022,7 +1022,9 @@ export class SqliteSyncGatewayAdapter implements SyncGatewayAdapter {
+                 if (!sanitized) {
+                     throw new Error('Invalid background history payload');
+                 }
+-                const payload = { ...sanitized, hlc, op_id: opId };
++                const payload = { ...sanitized, hlc, op_id: opId,
++                    ...(entry.table === 'messages' && !sanitized.order_key ? { order_key: hlc } : {}),
++                };
+                 const payloadJson = JSON.stringify(payload);
+                 if (new TextEncoder().encode(payloadJson).byteLength > MAX_SYNC_PAYLOAD_BYTES) {
+                     throw new Error('Invalid background history payload size');
+@@ -1225,6 +1227,48 @@ export class SqliteSyncGatewayAdapter implements SyncGatewayAdapter {
+         }).immediate();
+     }
+ 
++    async retainChatToolResult(actor: CanonicalHistoryActor, input: { admission: ChatGenerationAdmissionEnvelope; rows: Array<{ id: string; name: string; value: string; clock: number; created_at: number; updated_at: number; deleted: false }> }): Promise<void> {
++        const admission = parseChatGenerationAdmissionEnvelope(input.admission);
++        if (actor.workspaceId !== admission.workspaceId || input.rows.length > 32) throw new Error('Invalid tool-result scope');
++        const raw = getRawDb();
++        raw.transaction(() => {
++            this.assertCanonicalActor(actor);
++            const parent = raw.prepare('SELECT data_json, deleted FROM s_messages WHERE workspace_id = ? AND id = ?')
++                .get(actor.workspaceId, admission.messageId) as { data_json: string; deleted: number } | undefined;
++            const thread = raw.prepare('SELECT deleted FROM s_threads WHERE workspace_id = ? AND id = ?')
++                .get(actor.workspaceId, admission.threadId) as { deleted: number } | undefined;
++            const message = parent ? JSON.parse(parent.data_json) : null;
++            if (!thread || thread.deleted || !parent || parent.deleted || message.thread_id !== admission.threadId
++                || message.data?.generation_id !== admission.generationId || message.clock !== admission.assistantMessage.clock)
++                throw new Error('Tool-result generation was superseded');
++            const prefix = `chat.tool-result:${encodeURIComponent(admission.threadId)}:`;
++            const pending = input.rows.filter(row => {
++                if (!/^tool-result:[a-f0-9]{64}:\d+$/.test(row.id) || typeof row.name !== 'string' || row.name !== prefix + row.id.slice('tool-result:'.length)
++                    || typeof row.value !== 'string' || new TextEncoder().encode(JSON.stringify(row)).length > 96 * 1024)
++                    throw new Error('Invalid tool-result artifact');
++                const old = raw.prepare('SELECT data_json FROM s_kv WHERE workspace_id = ? AND id = ?').get(actor.workspaceId, row.id) as { data_json: string } | undefined;
++                if (raw.prepare("SELECT 1 FROM tombstones WHERE workspace_id = ? AND table_name = 'kv' AND pk = ?").get(actor.workspaceId, row.id)) throw new Error('Tool-result artifact was deleted');
++                if (!old) return true;
++                const value = JSON.parse(old.data_json);
++                if (value.deleted || value.value !== row.value || value.name !== row.name) throw new Error('Conflicting tool-result replay');
++                return false;
++            });
++            if (!pending.length) return;
++            const base = (raw.prepare('SELECT value FROM server_version_counter WHERE workspace_id = ?').get(actor.workspaceId) as { value: number } | undefined)?.value ?? 0;
++            const hlc = `${Date.now().toString(36).padStart(9, '0')}:000:background`;
++            const now = nowEpoch();
++            pending.forEach((row, index) => {
++                const opId = uid(); const payload = { id: row.id, name: row.name, value: row.value, created_at: now, updated_at: now, clock: 1, deleted: false, hlc, op_id: opId }; const json = JSON.stringify(payload);
++                raw.prepare(`INSERT INTO s_kv (id, workspace_id, data_json, clock, hlc, device_id, op_id, deleted, created_at, updated_at)
++                    VALUES (?, ?, ?, 1, ?, ?, ?, 0, ?, ?)`).run(row.id, actor.workspaceId, json, hlc, backgroundHistoryDeviceId(admission.generationId), opId, now, now);
++                raw.prepare(`INSERT INTO change_log (id, workspace_id, server_version, table_name, pk, op, payload_json, clock, hlc, device_id, op_id, created_at)
++                    VALUES (?, ?, ?, 'kv', ?, 'put', ?, 1, ?, ?, ?, ?)`).run(uid(), actor.workspaceId, base + index + 1, row.id, json, hlc, backgroundHistoryDeviceId(admission.generationId), opId, now);
++            });
++            raw.prepare(`INSERT INTO server_version_counter (workspace_id, value) VALUES (?, ?) ON CONFLICT(workspace_id) DO UPDATE SET value = excluded.value`)
++                .run(actor.workspaceId, base + pending.length);
++        }).immediate();
++    }
++
+     async reserveUploadIntent(
+         event: H3Event,
+         input: UploadIntentReservationRequest

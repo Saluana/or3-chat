@@ -57,6 +57,7 @@ export function createPaneActivationCoordinator() {
  * It deliberately does not own messages or document content.
  */
 export function useWorkspaceTabHost(multiPane: UseMultiPaneApi): WorkspaceTabHost {
+    const pendingChatIntents = new Map<string, symbol>();
     function getPaneIndex(paneId: string): number {
         return multiPane.getPaneIndexById(paneId);
     }
@@ -70,18 +71,30 @@ export function useWorkspaceTabHost(multiPane: UseMultiPaneApi): WorkspaceTabHos
         if (index < 0 || !activation.isCurrent()) return;
 
         if (resource.kind === 'chat') {
-            // Publish the target before thread-selection filters yield. This
-            // prevents the PageShell reconciliation watcher from mistaking a
-            // document → chat transition for a new blank chat.
-            multiPane.updatePane(index, {
-                mode: 'chat',
-                documentId: undefined,
-                pendingThreadId: resource.threadId ?? '',
-                messages: [],
-            });
-            await multiPane.setPaneThread(index, resource.threadId ?? '');
-            if (!activation.isCurrent()) return;
-            multiPane.updatePane(index, { pendingThreadId: undefined });
+            // Publish intent for shell reconciliation while retaining the
+            // outgoing document/history until selection and loading succeed.
+            const intent = Symbol();
+            pendingChatIntents.set(paneId, intent);
+            const clearIntent = () => {
+                if (pendingChatIntents.get(paneId) !== intent) return;
+                pendingChatIntents.delete(paneId);
+                // Closing a neighboring split can change this pane's index
+                // while selection awaits. Cleanup still belongs to its ID.
+                const currentIndex = getPaneIndex(paneId);
+                if (currentIndex >= 0) multiPane.updatePane(currentIndex, { pendingThreadId: undefined });
+            };
+            multiPane.updatePane(index, { pendingThreadId: resource.threadId ?? '' });
+            activation.signal.addEventListener('abort', clearIntent, { once: true });
+            try {
+                const selected = await multiPane.setPaneThread(index, resource.threadId ?? '', {
+                    isCurrent: activation.isCurrent,
+                });
+                if (!activation.isCurrent()) return;
+                if (!selected) throw new Error('Thread selection was rejected.');
+            } finally {
+                activation.signal.removeEventListener('abort', clearIntent);
+                clearIntent();
+            }
             return;
         }
 

@@ -1,3 +1,6 @@
+import { retainBackgroundToolResult } from './history';
+import { getSyncGatewayAdapter } from '../../sync/gateway/registry';
+import { getChatJobExecution } from './types';
 import { serializeError, normalizeError, presentError, parseRetryAfter } from '~~/shared/errors';
 import { OpenRouterStreamError, normalizeProviderResponseError } from '~~/shared/openrouter/errors';
 import { attachRequestUsage, captureUsagePrefix, type UsagePrefix } from '~~/shared/chat/request-usage';
@@ -421,6 +424,11 @@ export async function startBackgroundStream(
     const hints = params.body._toolRuntime && typeof params.body._toolRuntime === 'object'
         ? params.body._toolRuntime as Record<string, unknown> : {};
     const definitions = Array.isArray(params.body.tools) ? params.body.tools as ToolDefinition[] : [];
+    // Refuse before admission; the tool runner would otherwise fail every accepted job.
+    if (definitions.length > 0 && !getSyncGatewayAdapter(syncProviderId)?.retainChatToolResult) {
+        const error = new Error('Background tools require a sync provider with durable tool-result artifact support. Update the provider.');
+        error.name = 'BackgroundHistoryUnsupportedError'; throw error;
+    }
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Request tool definitions have not yet passed runtime validation.
     if (definitions.some((tool) => HISTORY_TOOL_NAMES.some((name) => tool.function?.name === name) && hints[tool.function.name] !== 'client')) {
         const context = canonicalHistoryContext({ subject: params.userId, workspaceId: params.workspaceId,
@@ -882,7 +890,7 @@ export async function consumeBackgroundStream(params: {
         normalizedState = failNormalizedStream(normalizedState, err);
         clearFlushTimer();
         try {
-            if (pendingChunk) await flushPending();
+            if (pendingChunk || pendingReasoning) await flushPending();
             await flushInFlight;
         } catch {
             /* terminal handling below remains authoritative */
@@ -893,12 +901,15 @@ export async function consumeBackgroundStream(params: {
                 .catch(() => null);
             // A user abort is terminal. A lease-loss abort must bubble so a
             // new worker can resume without publishing a false aborted state.
-            if (latest?.status !== 'aborted') throw err;
+            if (latest?.status !== 'aborted' && !getChatJobExecution(latest ?? {})?.cancellationRequestedAt) throw err;
             logBgStream('server-consume-background-aborted', {
                 jobId: params.jobId,
                 chunks,
                 contentLength: fullContent.length,
             });
+            await persistTerminalGenerationSnapshot(params.provider, params.jobId, {
+                status: 'aborted', content: fullContent, reasoning: fullReasoning, usage: requestUsage, completedAt: Date.now(),
+            }, params.context.leaseOwner);
             emitJobStatus(params.jobId, 'aborted', {
                 attempt,
                 content: fullContent,
@@ -1025,6 +1036,11 @@ export async function consumeBackgroundStreamWithTools(params: {
     streamedFieldMode?: StreamedFieldMode;
     contextPolicy?: ContextRequestPolicy;
 }): Promise<void> {
+    const historyAdmission = params.context.execution?.history;
+    const historyJob = historyAdmission ? await params.provider.getJob(params.jobId, params.context.userId) : null;
+    const resultAdapter = historyJob?.syncProviderId ? getSyncGatewayAdapter(historyJob.syncProviderId) : null;
+    if (historyAdmission && !resultAdapter?.retainChatToolResult)
+        throw new Error('Background tools require a sync provider with durable tool-result artifact support. Update the provider.');
     const contentBase = params.context.execution?.contentBase ?? '';
     const reasoningBase = params.context.execution?.reasoningBase ?? '';
     let fullContent = contentBase;
@@ -1316,6 +1332,7 @@ export async function consumeBackgroundStreamWithTools(params: {
             }
 
             const projectedResult = projectToolResult(toolResultText);
+            if (historyJob) projectedResult.durable = await retainBackgroundToolResult(historyJob, projectedResult.durable, toolCall.id);
             logBackgroundEvent('info', 'background.tools.call.completed', {
                 jobId: params.jobId,
                 toolCallId: toolCall.id,
@@ -1734,12 +1751,16 @@ export async function consumeBackgroundStreamWithTools(params: {
             const latest = await params.provider
                 .getJob(params.jobId, params.context.userId)
                 .catch(() => null);
-            if (latest?.status !== 'aborted') throw err;
+            if (latest?.status !== 'aborted' && !getChatJobExecution(latest ?? {})?.cancellationRequestedAt) throw err;
             logBgStream('server-consume-tools-aborted', {
                 jobId: params.jobId,
                 chunks,
                 contentLength: fullContent.length,
             });
+            await persistTerminalGenerationSnapshot(params.provider, params.jobId, {
+                status: 'aborted', content: fullContent, reasoning: fullReasoning, usage: requestUsage,
+                toolCalls: Array.from(toolStates.values()), completedAt: Date.now(),
+            }, params.context.leaseOwner);
             emitJobStatus(params.jobId, 'aborted', {
                 attempt,
                 content: fullContent,

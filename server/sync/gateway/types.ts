@@ -226,6 +226,12 @@ export interface SyncGatewayAdapter {
         }
     ): Promise<FinalizeChatGenerationResult>;
 
+    /** Retain completed tool output in canonical workspace KV before settling its receipt. */
+    retainChatToolResult?(
+        actor: CanonicalHistoryActor,
+        input: { admission: ChatGenerationAdmissionEnvelope; rows: import('~~/shared/chat/tool-result-artifact').ToolResultArtifactRow[] },
+    ): Promise<void>;
+
     /**
      * Pull changes from server since cursor.
      *

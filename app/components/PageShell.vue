@@ -1377,6 +1377,7 @@ const workspaceTabsReady = ref(false);
 let applyingInitialPaneToken: number | null = null;
 
 function resourceForPane(pane: PaneState) {
+    if (pane.pendingThreadId !== undefined) return { kind: 'chat' as const, threadId: pane.pendingThreadId || null };
     if (pane.mode === 'chat') {
         return {
             kind: 'chat' as const,

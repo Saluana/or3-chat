@@ -1,6 +1,7 @@
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 import type { Transaction } from 'dexie';
 import type { Or3DB, SnapshotStageRow } from '~/db/client';
+import type { Message } from '~/db/schema';
 import type { PendingOp, SnapshotItem, SnapshotResponse, SyncScope } from '~~/shared/sync/types';
 import { compareSyncRevision } from '~~/shared/sync/revision';
 import { getHookBridge, getLocalOnlyKvNames } from './hook-bridge';
@@ -184,6 +185,8 @@ export class SnapshotStager {
         ])];
         const transactionTables = [
             ...tableNames.map((name) => this.db.table(name)),
+            // Foreground rows need a live parent check when restored below.
+            ...(tableNames.includes('messages') ? [this.db.threads] : []),
             this.db.sync_state,
             this.db.snapshot_staging,
             ...QUARANTINE_SUPPORT_TABLES.map((name) => this.db.table(name)),
@@ -208,6 +211,19 @@ export class SnapshotStager {
                 (tableName) => tableNames.includes(tableName),
                 deviceId
             );
+            // Streaming assistants intentionally have no sync operation. Their
+            // local progress and lease must survive the same atomic replacement
+            // as the outbox, including expired leases recoverable after reload.
+            const foregroundRows: Message[] = tableNames.includes('messages')
+                ? await this.db.messages.filter((row: Message) => {
+                    const data = row.data as Record<string, unknown> | null;
+                    return row.role === 'assistant' && row.pending === true && !row.deleted
+                        && typeof data?.generation_lease_id === 'string'
+                        && typeof data.background_job_id !== 'string'
+                        && typeof data.superseded_by !== 'string'
+                        && data.generation_state !== 'superseded';
+                }).toArray()
+                : [];
             const fileRefCounts = new Map<string, number>();
             for (const op of pendingOps) {
                 if (
@@ -305,6 +321,20 @@ export class SnapshotStager {
             for (const op of pendingOps) {
                 if (!shouldContinue()) abortSnapshotApply();
                 await applyPendingOp(tx, op, fileRefCounts.get(op.pk));
+            }
+            for (const row of foregroundRows) {
+                if (!shouldContinue()) abortSnapshotApply();
+                const parent = await this.db.threads.get(row.thread_id);
+                if (!parent || parent.deleted || await this.db.tombstones.get(`threads:${row.thread_id}`)) continue;
+                const canonical = await this.db.messages.get(row.id);
+                const tombstone = await this.db.tombstones.get(`messages:${row.id}`);
+                const localRevision = revisionOf(row)!;
+                // Preserve the existing clock/HLC LWW contract; a newer
+                // canonical reply or deletion still supersedes local work.
+                if (canonical && compareSyncRevision(localRevision, revisionOf(canonical)!) <= 0) continue;
+                if (tombstone && compareSyncRevision(localRevision, revisionOf(tombstone)!) <= 0) continue;
+                await tx.table('messages').put(row);
+                if (tombstone) await tx.table('tombstones').delete(`messages:${row.id}`);
             }
             if (!shouldContinue()) abortSnapshotApply();
             await tx.table('sync_state').put({

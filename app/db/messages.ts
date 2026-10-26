@@ -14,6 +14,7 @@
  * - Server-side synchronization
  */
 import Dexie from 'dexie';
+import { parseToolResultArtifact, prepareToolResultStorage, readToolResultStorage, type ToolResultArtifactRow } from '~~/shared/chat/tool-result-artifact';
 import {
     jsonCardValue,
     assertCardStateLimits,
@@ -525,42 +526,17 @@ export function messageByStream(streamId: string) {
  * - Does not remove attachments or files.
  */
 export async function softDeleteMessage(id: string): Promise<void> {
-    const hooks = useHooks();
-    const db = getDb();
-    await db.transaction(
-        'rw',
-        getWriteTxTableNames(db, 'messages', { includeTombstones: true }),
-        async () => {
-        const m = await dbTry(() => db.messages.get(id), {
-            op: 'read',
-            entity: 'messages',
-            action: 'get',
-        });
-        if (!m) return;
-        if (m.deleted) return;
-        await hooks.doAction('db.messages.delete:action:soft:before', {
-            entity: toMessageEntity(m),
-            id: m.id,
-            tableName: 'messages',
-        });
-        await dbTry(
-            () =>
-                db.messages.put({
-                    ...m,
-                    deleted: true,
-                    updated_at: nowSec(),
-                    clock: nextClock(m.clock),
-                    hlc: generateHLC(),
-                }),
-            { op: 'write', entity: 'messages', action: 'softDelete' }
-        );
-        await hooks.doAction('db.messages.delete:action:soft:after', {
-            entity: toMessageEntity(m),
-            id: m.id,
-            tableName: 'messages',
-        });
-        }
-    );
+    const hooks = useHooks(); const db = getDb();
+    const source = await db.messages.get(id);
+    if (!source || source.deleted) return;
+    await hooks.doAction('db.messages.delete:action:soft:before', { entity: toMessageEntity(source), id, tableName: 'messages' });
+    const deleted = await db.transaction('rw', getWriteTxTableNames(db, 'messages', { includeTombstones: true }), async () => {
+        const current = await db.messages.get(id);
+        if (!current || current.deleted) return;
+        await db.messages.put({ ...current, deleted: true, updated_at: nowSec(), clock: nextClock(current.clock), hlc: generateHLC() });
+        return current;
+    });
+    if (deleted) await hooks.doAction('db.messages.delete:action:soft:after', { entity: toMessageEntity(deleted), id, tableName: 'messages' });
 }
 
 /**
@@ -577,35 +553,17 @@ export async function softDeleteMessage(id: string): Promise<void> {
  * - Does not update thread metadata.
  */
 export async function hardDeleteMessage(id: string): Promise<void> {
-    const hooks = useHooks();
-    const db = getDb();
-    await db.transaction(
-        'rw',
-        getWriteTxTableNames(db, 'messages', { includeTombstones: true }),
-        async () => {
-        const existing = await dbTry(() => db.messages.get(id), {
-            op: 'read',
-            entity: 'messages',
-            action: 'get',
-        });
-        if (!existing) return;
-
-        await hooks.doAction('db.messages.delete:action:hard:before', {
-            entity: toMessageEntity(existing),
-            id,
-            tableName: 'messages',
-        });
-        await dbTry(() => db.messages.delete(id), {
-            op: 'write',
-            entity: 'messages',
-            action: 'hardDelete',
-        });
-        await hooks.doAction('db.messages.delete:action:hard:after', {
-            entity: toMessageEntity(existing),
-            id,
-            tableName: 'messages',
-        });
+    const hooks = useHooks(); const db = getDb();
+    const source = await db.messages.get(id);
+    if (!source) return;
+    await hooks.doAction('db.messages.delete:action:hard:before', { entity: toMessageEntity(source), id, tableName: 'messages' });
+    const deleted = await db.transaction('rw', getWriteTxTableNames(db, 'messages', { includeTombstones: true }), async () => {
+        const current = await db.messages.get(id);
+        if (!current) return;
+        await db.messages.delete(id);
+        return current;
     });
+    if (deleted) await hooks.doAction('db.messages.delete:action:hard:after', { entity: toMessageEntity(deleted), id, tableName: 'messages' });
 }
 
 /**
@@ -629,17 +587,48 @@ export async function appendMessage(input: MessageCreate): Promise<Message> {
 /**
  * Append a message in an explicitly captured workspace database.
  */
+export type MessageRevision = Pick<Message, 'id' | 'clock' | 'hlc'>;
+
 export async function appendMessageToDb(
     db: Or3DB,
-    input: MessageCreate
+    input: MessageCreate,
+    options: { replace?: readonly MessageRevision[] } = {},
 ): Promise<Message> {
     const prepared = await prepareMessageAppend(input);
+    const hooks = useHooks();
+    const replacements: { expected: MessageRevision; row: Message }[] = [];
+    for (const expected of options.replace ?? []) {
+        const old = await db.messages.get(expected.id);
+        if (!old || old.deleted || old.thread_id !== prepared.value.thread_id
+            || old.clock !== expected.clock || old.hlc !== expected.hlc)
+            throw new Error('Retry target changed; reload the conversation.');
+        const data = { ...dataRecord(old.data), superseded_by: prepared.value.id, generation_state: 'superseded' };
+        const filtered = await hooks.applyFilters('db.messages.upsert:filter:input', { ...old, data });
+        const row = parseOrThrow(MessageSchema, { ...filtered, id: old.id, thread_id: old.thread_id,
+            data: { ...dataRecord(filtered.data), superseded_by: prepared.value.id, generation_state: 'superseded' },
+            updated_at: nowSec(), clock: nextClock(old.clock), hlc: generateHLC() });
+        await hooks.doAction('db.messages.upsert:action:before', { entity: toMessageEntity(row), tableName: 'messages' });
+        replacements.push({ expected, row });
+    }
     const message = await db.transaction(
-        'rw',
-        getWriteTxTableNames(db, 'messages', { include: ['threads'] }),
-        () => appendMessageRows(db, prepared.value)
+        'rw', getWriteTxTableNames(db, 'messages', { include: ['threads'] }), async () => {
+            // Validate the complete selected revision before any writes. All old
+            // rows and the admitted replacement share one outbox transaction.
+            for (const { expected } of replacements) {
+                const current = await db.messages.get(expected.id);
+                if (!current || current.deleted || current.thread_id !== prepared.value.thread_id
+                    || current.clock !== expected.clock || current.hlc !== expected.hlc)
+                    throw new Error('Retry target changed; reload the conversation.');
+            }
+            for (const { row } of replacements) await db.messages.put(row);
+            return appendMessageRows(db, prepared.value);
+        },
     );
     await prepared.afterCommit(message);
+    for (const { row } of replacements) {
+        try { await hooks.doAction('db.messages.upsert:action:after', { entity: toMessageEntity(row), tableName: 'messages' }); }
+        catch (error) { console.warn('[messages] Retry committed; notification failed', error); }
+    }
     return message;
 }
 
@@ -668,6 +657,8 @@ export async function appendMessageRows(db: Or3DB, input: MessageCreate): Promis
     if (!transaction || transaction.db !== db || transaction.mode !== 'readwrite')
         throw new Error('Message append requires its captured write transaction.');
     const value = parseOrThrow(MessageCreateSchema, input);
+    const t = await db.threads.get(value.thread_id);
+    if (!t || t.deleted) throw new Error('Cannot append to a missing or deleted thread.');
     // If index not set, compute next sparse index in thread
     if (value.index === undefined) {
         const last = await db.messages
@@ -684,17 +675,57 @@ export async function appendMessageRows(db: Or3DB, input: MessageCreate): Promis
         clock: nextClock(value.clock),
     });
     await db.messages.put(finalized);
-    const t = await db.threads.get(value.thread_id);
-    if (t) {
-        const now = nowSec();
-        await db.threads.put({
-            ...t,
-            last_message_at: now,
-            updated_at: now,
-            clock: nextClock(t.clock),
-        });
-    }
+    const now = nowSec();
+    await db.threads.put({
+        ...t,
+        last_message_at: now,
+        updated_at: now,
+        clock: nextClock(t.clock),
+    });
     return finalized;
+}
+
+/** Prepare dependent bytes outside the transaction, then fence the source revision. */
+async function prepareTransferredToolResults(db: Or3DB, source: Message, threadId: string) {
+    const rows: ToolResultArtifactRow[] = [];
+    if (source.thread_id === threadId) return { data: source.data, rows, changed: false };
+    const data = { ...dataRecord(source.data) };
+    const parentAssistantId = typeof data.parent_assistant_id === 'string' ? data.parent_assistant_id : source.id;
+    const replacements = new Map<string, string>();
+    const rehome = async (value: unknown, callId: string): Promise<unknown> => {
+        if (typeof value !== 'string' || !parseToolResultArtifact(value)) return value;
+        const existing = replacements.get(value);
+        if (existing !== undefined) return existing;
+        const output = await readToolResultStorage(value, id => db.kv.get(id));
+        const storage = await prepareToolResultStorage(output, { threadId, parentAssistantId, callId });
+        rows.push(...storage.rows);
+        replacements.set(value, storage.result);
+        return storage.result;
+    };
+    if (source.role === 'tool') data.content = await rehome(data.content,
+        typeof data.tool_call_id === 'string' ? data.tool_call_id : source.id);
+    if (Array.isArray(data.tool_calls)) {
+        data.tool_calls = await Promise.all(data.tool_calls.map(async value => {
+            if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+            const call = dataRecord(value);
+            const id = typeof call.id === 'string' ? call.id : source.id;
+            const transcript = dataRecord(call.transcript);
+            return { ...call,
+                ...('result' in call ? { result: await rehome(call.result, id) } : {}),
+                ...('result' in transcript ? { transcript: { ...transcript, result: await rehome(transcript.result, id) } } : {}),
+            };
+        }));
+    }
+    const changed = replacements.size > 0;
+    return { data: changed ? data : source.data, rows, changed };
+}
+
+function assertTransferSource(current: Message, source: Message): void {
+    // Even an initially inline result may become an artifact during preparation.
+    // Never commit fresh data with dependencies from an older source snapshot.
+    if (current.clock !== source.clock || current.hlc !== source.hlc
+        || current.thread_id !== source.thread_id || !jsonEqual(current.data, source.data))
+        throw new Error('Message changed while preparing transfer; retry.');
 }
 
 /**
@@ -716,23 +747,30 @@ export async function moveMessage(
 ): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction(
+    const source = await db.messages.get(messageId);
+    if (!source || source.deleted) return;
+    await hooks.doAction('db.messages.move:action:before', { message: source, toThreadId });
+    const preparedSource = await db.messages.get(messageId);
+    if (!preparedSource || preparedSource.deleted) return;
+    const transfer = await prepareTransferredToolResults(db, preparedSource, toThreadId);
+    const changed = await db.transaction(
         'rw',
-        getWriteTxTableNames(db, 'messages', { include: ['threads'] }),
+        getWriteTxTableNames(db, 'messages', { include: ['threads', 'kv'] }),
         async () => {
         const m = await db.messages.get(messageId);
-        if (!m) return;
-        await hooks.doAction('db.messages.move:action:before', {
-            message: m,
-            toThreadId,
-        });
+        if (!m || m.deleted) return;
+        assertTransferSource(m, preparedSource);
+        const parent = await db.threads.get(toThreadId);
+        if (!parent || parent.deleted) throw new Error('Destination thread unavailable.');
         const last = await db.messages
             .where('[thread_id+index]')
             .between([toThreadId, Dexie.minKey], [toThreadId, Dexie.maxKey])
             .last();
         const nextIdx = last ? last.index + 1000 : 1000;
+        if (transfer.rows.length) await db.kv.bulkPut(transfer.rows);
         await db.messages.put({
             ...m,
+            ...(transfer.changed ? { data: transfer.data } : {}),
             thread_id: toThreadId,
             index: nextIdx,
             updated_at: nowSec(),
@@ -748,11 +786,9 @@ export async function moveMessage(
                 updated_at: now,
                 clock: nextClock(t.clock),
             });
-        await hooks.doAction('db.messages.move:action:after', {
-            messageId,
-            toThreadId,
-        });
+        return true;
     });
+    if (changed) await hooks.doAction('db.messages.move:action:after', { messageId, toThreadId });
 }
 
 /**
@@ -767,7 +803,7 @@ export async function moveMessage(
  * - No-op if the source message does not exist.
  *
  * Non-Goals:
- * - Does not copy related entities beyond the message row.
+ * - Does not copy other transcript rows. Referenced tool-result bytes are retained.
  */
 export async function copyMessage(
     messageId: string,
@@ -775,23 +811,30 @@ export async function copyMessage(
 ): Promise<void> {
     const hooks = useHooks();
     const db = getDb();
-    await db.transaction(
+    const source = await db.messages.get(messageId);
+    if (!source || source.deleted) return;
+    await hooks.doAction('db.messages.copy:action:before', { message: source, toThreadId });
+    const preparedSource = await db.messages.get(messageId);
+    if (!preparedSource || preparedSource.deleted) return;
+    const transfer = await prepareTransferredToolResults(db, preparedSource, toThreadId);
+    const changed = await db.transaction(
         'rw',
-        getWriteTxTableNames(db, 'messages', { include: ['threads'] }),
+        getWriteTxTableNames(db, 'messages', { include: ['threads', 'kv'] }),
         async () => {
         const m = await db.messages.get(messageId);
-        if (!m) return;
-        await hooks.doAction('db.messages.copy:action:before', {
-            message: m,
-            toThreadId,
-        });
+        if (!m || m.deleted) return;
+        assertTransferSource(m, preparedSource);
+        const parent = await db.threads.get(toThreadId);
+        if (!parent || parent.deleted) throw new Error('Destination thread unavailable.');
         const last = await db.messages
             .where('[thread_id+index]')
             .between([toThreadId, Dexie.minKey], [toThreadId, Dexie.maxKey])
             .last();
         const nextIdx = last ? last.index + 1000 : 1000;
+        if (transfer.rows.length) await db.kv.bulkPut(transfer.rows);
         await db.messages.put({
             ...m,
+            ...(transfer.changed ? { data: transfer.data } : {}),
             id: newId(),
             thread_id: toThreadId,
             index: nextIdx,
@@ -809,11 +852,9 @@ export async function copyMessage(
                 updated_at: now,
                 clock: nextClock(t.clock),
             });
-        await hooks.doAction('db.messages.copy:action:after', {
-            from: messageId,
-            toThreadId,
-        });
+        return true;
     });
+    if (changed) await hooks.doAction('db.messages.copy:action:after', { from: messageId, toThreadId });
 }
 
 /**
@@ -836,78 +877,43 @@ export async function insertMessageAfter(
 ): Promise<Message> {
     const hooks = useHooks();
     const db = getDb();
-    return db.transaction(
-        'rw',
-        getWriteTxTableNames(db, 'messages', { include: ['threads'] }),
-        async () => {
-        const after = await db.messages.get(afterMessageId);
-        if (!after) throw new Error('after message not found');
-        const next = await db.messages
-            .where('[thread_id+index]')
-            .between(
-                [after.thread_id, after.index],
-                [after.thread_id, Dexie.maxKey],
-                false,
-                true
-            )
-            .first();
-        let newIndex: number;
-        if (!next) {
-            newIndex = after.index + 1000;
-        } else if (next.index - after.index > 1) {
-            newIndex = after.index + Math.floor((next.index - after.index) / 2);
-        } else {
-            // No gap, normalize thread then place after
-            await normalizeThreadIndexes(after.thread_id);
-            const normalizedAfter = await db.messages.get(afterMessageId);
-            if (!normalizedAfter) throw new Error('after message disappeared');
-            const normalizedNext = await db.messages
-                .where('[thread_id+index]')
-                .between(
-                    [normalizedAfter.thread_id, normalizedAfter.index],
-                    [normalizedAfter.thread_id, Dexie.maxKey],
-                    false,
-                    true
-                )
-                .first();
-            newIndex = normalizedNext
-                ? normalizedAfter.index +
-                    Math.floor((normalizedNext.index - normalizedAfter.index) / 2)
-                : normalizedAfter.index + 1000;
-        }
-        // Handle file_hashes array serialization
-        const processedInput = { ...input };
-        if (hasFileHashesArray(processedInput)) {
-            (processedInput as { file_hashes: string | string[] }).file_hashes =
-                serializeFileHashes(processedInput.file_hashes);
-        }
-        const value = parseOrThrow(MessageCreateSchema, {
-            ...processedInput,
-            index: newIndex,
-            thread_id: after.thread_id,
-        });
-        await hooks.doAction('db.messages.insertAfter:action:before', {
-            after,
-            value,
-        });
-        const finalized = parseOrThrow(MessageSchema, {
-            ...value,
-            clock: nextClock(value.clock),
-        });
-        await db.messages.put(finalized);
-        const t = await db.threads.get(after.thread_id);
-        if (t) {
+    const after = await db.messages.get(afterMessageId);
+    if (!after || after.deleted) throw new Error('after message not found');
+    const rows = (await db.messages.where('thread_id').equals(after.thread_id).toArray()).sort(compareMessageOrder);
+    const position = rows.findIndex(row => row.id === afterMessageId);
+    const next = rows[position + 1];
+    const normalize = !!next && next.index - after.index <= 1;
+    const orderIdentity = (values: Message[]) => JSON.stringify(values.map(row => [row.id, row.index, row.order_key, row.deleted]));
+    const expectedOrder = orderIdentity(rows);
+    const newIndex = normalize ? 1000 + position * 1000 + 500
+        : next ? after.index + Math.floor((next.index - after.index) / 2) : after.index + 1000;
+    const processedInput = { ...input };
+    if (hasFileHashesArray(processedInput)) {
+        (processedInput as { file_hashes: string | string[] }).file_hashes = serializeFileHashes(processedInput.file_hashes);
+    }
+    const value = parseOrThrow(MessageCreateSchema, { ...processedInput, index: newIndex, thread_id: after.thread_id });
+    // Plugin actions may await network/timers; no IndexedDB transaction is open.
+    if (normalize) await hooks.doAction('db.messages.normalize:action:before', { threadId: after.thread_id, start: 1000, step: 1000 });
+    await hooks.doAction('db.messages.insertAfter:action:before', { after, value });
+    const finalized = await db.transaction(
+        'rw', getWriteTxTableNames(db, 'messages', { include: ['threads'] }), async () => {
+            const currentRows = (await db.messages.where('thread_id').equals(after.thread_id).toArray()).sort(compareMessageOrder);
+            const parent = await db.threads.get(after.thread_id);
+            if (!parent || parent.deleted) throw new Error('Cannot insert into a missing or deleted thread.');
+            // A preparation action may itself change ordering. Do not commit a
+            // stale insertion plan or normalize a different set of rows.
+            if (orderIdentity(currentRows) !== expectedOrder) throw new Error('Message order changed during insertion; retry.');
+            if (normalize) await normalizeThreadIndexRows(db, after.thread_id);
+            const result = parseOrThrow(MessageSchema, { ...value, thread_id: after.thread_id, index: newIndex, clock: nextClock(value.clock) });
+            await db.messages.put(result);
             const now = nowSec();
-            await db.threads.put({
-                ...t,
-                last_message_at: now,
-                updated_at: now,
-                clock: nextClock(t.clock),
-            });
-        }
-        await hooks.doAction('db.messages.insertAfter:action:after', finalized);
-        return finalized;
-    });
+            await db.threads.put({ ...parent, last_message_at: now, updated_at: now, clock: nextClock(parent.clock) });
+            return result;
+        },
+    );
+    if (normalize) await hooks.doAction('db.messages.normalize:action:after', { threadId: after.thread_id });
+    await hooks.doAction('db.messages.insertAfter:action:after', finalized);
+    return finalized;
 }
 
 /**
@@ -923,44 +929,18 @@ export async function insertMessageAfter(
  * Non-Goals:
  * - Does not update thread metadata.
  */
-export async function normalizeThreadIndexes(
-    threadId: string,
-    start = 1000,
-    step = 1000
-): Promise<void> {
-    const hooks = useHooks();
-    const db = getDb();
-    await db.transaction('rw', getWriteTxTableNames(db, 'messages'), async () => {
-        await hooks.doAction('db.messages.normalize:action:before', {
-            threadId,
-            start,
-            step,
-        });
-        const msgs = await db.messages
-            .where('[thread_id+index]')
-            .between([threadId, Dexie.minKey], [threadId, Dexie.maxKey])
-            .toArray();
-        msgs.sort((a, b) => a.index - b.index);
-        let idx = start;
-        const updates: Message[] = [];
-        for (const m of msgs) {
-            if (m.index !== idx) {
-                updates.push({
-                    ...m,
-                    index: idx,
-                    updated_at: nowSec(),
-                    clock: nextClock(m.clock),
-                });
-            }
-            idx += step;
-        }
-        if (updates.length > 0) {
-            await db.messages.bulkPut(updates);
-        }
-        await hooks.doAction('db.messages.normalize:action:after', {
-            threadId,
-        });
-    });
+export async function normalizeThreadIndexes(threadId: string, start = 1000, step = 1000): Promise<void> {
+    const hooks = useHooks(); const db = getDb();
+    await hooks.doAction('db.messages.normalize:action:before', { threadId, start, step });
+    await db.transaction('rw', getWriteTxTableNames(db, 'messages'), () => normalizeThreadIndexRows(db, threadId, start, step));
+    await hooks.doAction('db.messages.normalize:action:after', { threadId });
+}
+
+async function normalizeThreadIndexRows(db: Or3DB, threadId: string, start = 1000, step = 1000): Promise<void> {
+    const rows = (await db.messages.where('thread_id').equals(threadId).toArray()).sort(compareMessageOrder);
+    const updates = rows.flatMap((row, index) => row.index === start + index * step ? [] : [{ ...row,
+        index: start + index * step, updated_at: nowSec(), clock: nextClock(row.clock) }]);
+    if (updates.length) await db.messages.bulkPut(updates);
 }
 
 /** Merge one nested data entry using the same preparation and atomic write path. */

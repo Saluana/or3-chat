@@ -145,6 +145,7 @@ export async function buildSystemPromptMessage(
  * Parameters for building OpenRouter-compatible messages for send.
  */
 export type BuildOpenRouterMessagesParams = {
+    signal?: AbortSignal;
     effectiveMessages: ChatMessage[];
     assistantHashes: string[];
     prevAssistantId?: string | null;
@@ -340,6 +341,7 @@ export async function buildOpenRouterMessagesForSend(
             maxImageInputs,
             imageInclusionPolicy,
             acceptsImageInput,
+            signal: params.signal,
             debug: false,
         }
     );

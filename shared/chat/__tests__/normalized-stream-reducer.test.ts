@@ -7,7 +7,7 @@ import {
     reduceNormalizedStreamEvent,
     settleNormalizedTool,
 } from '../normalized-stream-reducer';
-import { OutputLimitExceededError } from '../tool-limits';
+import { MAX_CANONICAL_MESSAGE_OUTPUT_BYTES, OutputLimitExceededError } from '../tool-limits';
 import { attachRequestUsage, captureUsagePrefix } from '../request-usage';
 
 const toolEvent = {
@@ -203,6 +203,13 @@ describe('normalized stream reducer', () => {
         // The accepted prefix is preserved; the offending event is not applied.
         expect(state.cumulativeText).toBe('ok');
         expect(state.outputBytes).toBe(2);
+    });
+
+    it.each(['text', 'reasoning'] as const)('budgets JSON escaping before accepting %s control characters', (type) => {
+        let state = createNormalizedStreamState({ outputLimitBytes: MAX_CANONICAL_MESSAGE_OUTPUT_BYTES });
+        state = reduceNormalizedStreamEvent(state, { type, text: 'accepted' });
+        expect(() => reduceNormalizedStreamEvent(state, { type, text: '\0'.repeat(50_000) })).toThrow(OutputLimitExceededError);
+        expect(type === 'text' ? state.cumulativeText : state.reasoningText).toBe('accepted');
     });
 
     it('counts tool metadata against the canonical message budget', () => {

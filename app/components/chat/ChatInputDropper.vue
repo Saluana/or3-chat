@@ -630,6 +630,12 @@ async function initializeEditor(replaceExisting = false) {
                     'aria-label': 'Message input',
                     role: 'textbox',
                 },
+                // ProseMirror ignores preventDefault on paste; returning true is
+                // what keeps an attached paste out of the existing document.
+                handlePaste: (_view, event) => {
+                    void handlePaste(event);
+                    return event.defaultPrevented;
+                },
             },
             onUpdate: ({ editor: ed }) => {
                 composerRevision++;
@@ -638,9 +644,6 @@ async function initializeEditor(replaceExisting = false) {
                 promptText.value = nextText;
                 if (!restoringDraft.value) scheduleDraftCapture(props.tabId);
                 autoResize();
-            },
-            onPaste: (event) => {
-                handlePaste(event, editor.value);
             },
             content: '',
         });

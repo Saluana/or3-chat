@@ -31,13 +31,14 @@ import { ChatContextAdmissionError, contextAdmissionFailureReason, type ContextR
 
 import type { Ref } from 'vue';
 import type { Message } from '~/db';
-import { compareMessageOrder } from '~/db/messages';
+import { compareMessageOrder, patchMessageInDb } from '~/db/messages';
 import type { ChatMessage, ContentPart } from '~/utils/chat/types';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { getDb } from '~/db/client';
 import { newId } from '~/db/util';
 import { parseHashes } from '~/utils/files/attachments';
 import { createOrRefFile } from '~/db/files';
+import { captureChatMediaScope } from '~/utils/chat/media-scope';
 import {
     shouldKeepAssistantMessage,
     getChatModalities,
@@ -60,7 +61,8 @@ import {
     buildOpenRouterMessagesForSend,
 } from './messageBuild';
 import { createStreamWriteCoalescer } from './streamWriteCoalescer';
-import { utf8Bytes } from '~~/shared/chat/tool-limits';
+import { MAX_CANONICAL_MESSAGE_OUTPUT_BYTES, utf8Bytes } from '~~/shared/chat/tool-limits';
+import { createNormalizedStreamState, reduceNormalizedStreamEvent } from '~~/shared/chat/normalized-stream-reducer';
 import {
     CONTINUATION_PREFIX,
     CONTINUE_TAIL_CHARS,
@@ -231,6 +233,7 @@ export async function continueMessageImpl(
     // continuation in the wrong chat.
     const request = ctx.request;
     const originDb = request.originDb;
+    const imageOwner = captureChatMediaScope(originDb, undefined, 'write');
     const originThreadId = request.threadId!;
     const ownsThread = () => !request.cancelled && request.ownsView();
     let activeCurrent: UiChatMessage | null = null;
@@ -250,7 +253,7 @@ export async function continueMessageImpl(
         const target = (await originDb.messages.get(messageId)) as StoredMessage | undefined;
         if (!ownsThread()) return;
         if (
-            !target ||
+            !target || target.deleted || target.pending ||
             target.thread_id !== originThreadId ||
             target.role !== 'assistant'
         ) {
@@ -392,6 +395,7 @@ export async function continueMessageImpl(
         });
 
         let orMessages = await buildOpenRouterMessagesForSend({
+            signal: continuationAbortController.signal,
             effectiveMessages: sanitizedEffectiveMessages,
             assistantHashes: [],
             // Continue reuses the target assistant's own file hashes in context;
@@ -438,7 +442,7 @@ export async function continueMessageImpl(
         const projectContext = initialProjectId ? await buildProjectContext(captureProjectOperation(continuationAbortController.signal, originThreadId), originThreadId,
             retrievalQuery, resolvedPolicy.model.architecture?.input_modalities?.includes('image') === true, initialProjectId) : null;
         if (projectContext) {
-            const projectMessages = await buildOpenRouterMessagesForSend({ effectiveMessages: projectContext.messages, assistantHashes: [], contextHashes: [], fileHashes: [], maxImageInputs: 5, imageInclusionPolicy: 'all' });
+            const projectMessages = await buildOpenRouterMessagesForSend({ signal: continuationAbortController.signal, effectiveMessages: projectContext.messages, assistantHashes: [], contextHashes: [], fileHashes: [], maxImageInputs: 5, imageInclusionPolicy: 'all' });
             orMessages = [...orMessages.slice(0, -1), ...projectMessages, ...orMessages.slice(-1)];
         }
         const contextPolicy = { ...resolvedPolicy, measuredUsage: target.data && typeof target.data === 'object'
@@ -460,16 +464,62 @@ export async function continueMessageImpl(
             modalities, contextPolicy, signal: continuationAbortController.signal });
         if (!ownsThread()) return;
 
-        ctx.streamAcc.reset();
         const newStreamId = newId();
+        const existingReasoning = normalizedTarget.reasoningText;
+        const existingHashes = target.file_hashes ? parseHashes(target.file_hashes) : [];
+        const priorGenerationId =
+            target.data && typeof target.data === 'object' &&
+            typeof (target.data as Record<string, unknown>).generation_id === 'string'
+                ? (target.data as Record<string, unknown>).generation_id as string
+                : undefined;
+        const backgroundAdmissionId = useBackground ? newId() : undefined;
+        const claimed = await patchMessageInDb(originDb, messageId, {
+            pending: true,
+            stream_id: newStreamId,
+            error: null,
+            data: {
+                error: null,
+                generation_state: 'streaming',
+                generation_id: newStreamId,
+                request_id: backgroundAdmissionId ?? newStreamId,
+                generation_mode: useBackground ? 'background' : 'foreground',
+                background_job_id: undefined,
+                background_job_status: undefined,
+                background_job_error: undefined,
+                background_admission_id: backgroundAdmissionId,
+                background_history_version: useBackground ? 1 : undefined,
+                ...(useBackground ? {} : createForegroundGenerationLease(newStreamId)),
+            },
+        }, null, latest => Boolean(latest && !latest.deleted && !latest.pending
+            && latest.thread_id === originThreadId && latest.role === 'assistant'
+            && latest.clock === target.clock && latest.hlc === target.hlc
+            && (latest.data as Record<string, unknown> | null)?.generation_state !== 'superseded'
+            && typeof (latest.data as Record<string, unknown> | null)?.superseded_by !== 'string'), undefined, {
+                tables: ['threads'],
+                async assertCurrent() {
+                    imageOwner.assertCurrent();
+                    if (!ownsThread()) throw new ContinuationOwnershipLost();
+                    const parent = await originDb.threads.get(originThreadId);
+                    if (!parent || parent.deleted) throw new ContinuationOwnershipLost();
+                },
+            });
+        if (!claimed) throw new ContinuationOwnershipLost();
+
+        // A rejected claim owns neither persistence nor presentation. In
+        // particular, legacy replies may have no generation ID for the terminal
+        // writer to fence; publish ownership only after the CAS succeeds.
+        targetMarkedPending = true;
+        target.pending = true;
+        target.stream_id = newStreamId;
+        target.error = null;
+        const assistantFileHashes = existingHashes.slice();
+        request.streamId = newStreamId;
+        request.assistantMessageId = messageId;
+        request.assistantRecord = target;
+        ctx.streamAcc.reset();
         ctx.streamId.value = newStreamId;
         request.phase.value = 'streaming';
         ctx.aborted.value = false;
-        request.abortController = continuationAbortController;
-        ctx.abortController.value = continuationAbortController;
-
-        const existingReasoning = normalizedTarget.reasoningText;
-        const existingHashes = target.file_hashes ? parseHashes(target.file_hashes) : [];
         let existingUiIndex = ctx.messages.value.findIndex((m) => m.id === target.id);
         let existingUi: UiChatMessage | null = null;
         if (existingUiIndex >= 0) {
@@ -497,8 +547,6 @@ export async function continueMessageImpl(
         ctx.tailAssistant.value = current;
         activeCurrent = current;
         request.message = current;
-        request.assistantMessageId = messageId;
-        request.assistantRecord = target;
 
         if (ctx.streamAcc.hydrate) {
             ctx.streamAcc.hydrate({
@@ -514,54 +562,14 @@ export async function continueMessageImpl(
             }
         }
 
-        const assistantFileHashes = existingHashes.slice();
-        const persistAssistant = makeAssistantPersister(
-            originDb,
-            target,
-            assistantFileHashes,
-            newStreamId
-        );
+        const persistAssistant = makeAssistantPersister(originDb, target, assistantFileHashes, newStreamId);
         request.persistAssistant = persistAssistant;
-        request.streamId = newStreamId;
 
-        // Durable generation identity must precede the first continuation byte,
-        // so reload can distinguish an active continuation from a stale row.
-        // Stale background job identity is cleared atomically: otherwise the
-        // old job ID makes foreground recovery skip this row and the new
-        // generation cannot be reconciled.
-        targetMarkedPending = true;
-        target.pending = true;
-        target.stream_id = newStreamId;
-        target.error = null;
-        const priorGenerationId =
-            target.data && typeof target.data === 'object' &&
-            typeof (target.data as Record<string, unknown>).generation_id === 'string'
-                ? (target.data as Record<string, unknown>).generation_id as string
-                : undefined;
-        const backgroundAdmissionId = useBackground ? newId() : undefined;
         if (useBackground && backgroundAdmissionId) {
             request.backgroundAdmissionId = backgroundAdmissionId;
             backgroundAdmissionStarted = true;
             ctx.beginBackgroundAdmission?.(backgroundAdmissionId, messageId);
         }
-        await updateMessageRecord(originDb, messageId, {
-            pending: true,
-            stream_id: newStreamId,
-            error: null,
-            data: {
-                error: null,
-                generation_state: 'streaming',
-                generation_id: newStreamId,
-                request_id: backgroundAdmissionId ?? newStreamId,
-                generation_mode: useBackground ? 'background' : 'foreground',
-                background_job_id: undefined,
-                background_job_status: undefined,
-                background_job_error: undefined,
-                background_admission_id: backgroundAdmissionId,
-                background_history_version: useBackground ? 1 : undefined,
-                ...(useBackground ? {} : createForegroundGenerationLease(newStreamId)),
-            },
-        });
 
         if (useBackground) {
             const admittedAssistant = await originDb.messages.get(messageId);
@@ -683,6 +691,16 @@ export async function continueMessageImpl(
             signal: ctx.abortController.value.signal,
         });
 
+        // Retain all existing metadata/tool receipts in the budget. Text and
+        // reasoning are seeded separately so only accepted deltas reach UI/DB.
+        const metadataBytes = utf8Bytes(JSON.stringify({ ...target, content: '',
+            data: { ...target.data, content: '', reasoning_text: '' } }));
+        let outputBudget = createNormalizedStreamState({
+            outputLimitBytes: Math.max(0, MAX_CANONICAL_MESSAGE_OUTPUT_BYTES - metadataBytes),
+        });
+        outputBudget = reduceNormalizedStreamEvent(outputBudget, { type: 'text', text: existingText });
+        outputBudget = reduceNormalizedStreamEvent(outputBudget, { type: 'reasoning', text: existingReasoning ?? '' });
+
         const continuationNormalizer = createContinuationDeltaNormalizer(
             existingText,
             CONTINUATION_PREFIX
@@ -709,6 +727,7 @@ export async function continueMessageImpl(
 
         const appendTextDelta = (delta: string) => {
             if (!delta) return;
+            outputBudget = reduceNormalizedStreamEvent(outputBudget, { type: 'text', text: delta });
             ctx.streamAcc.append(delta, { kind: 'text' });
             current.text += delta;
             writeCoalescer.markDirty(utf8Bytes(delta));
@@ -722,6 +741,7 @@ export async function continueMessageImpl(
                     const measured = readMeasuredRequestUsage(ev.usage, ev.requestUsage);
                     if (measured) { requestUsage = { ...measured, iteration: 1, totals: addUsageTotals(priorUsageTotals, ev.usage) }; writeCoalescer.markDirty(); }
                 } else if (ev.type === 'reasoning') {
+                    outputBudget = reduceNormalizedStreamEvent(outputBudget, ev);
                     if (current.reasoning_text === null) current.reasoning_text = ev.text;
                     else current.reasoning_text += ev.text;
                     ctx.streamAcc.append(ev.text, { kind: 'reasoning' });
@@ -731,36 +751,28 @@ export async function continueMessageImpl(
                     appendTextDelta(continuationNormalizer.push(ev.text));
                 } else if (ev.type === 'image') {
                     if (current.pending) current.pending = false;
-                    // Store image first, then use hash placeholder (not Base64)
                     if (assistantFileHashes.length < 6) {
-                        let blob: Blob | null = null;
-                        if (ev.url.startsWith('data:image/')) blob = dataUrlToBlob(ev.url);
-                        else if (/^https?:/.test(ev.url)) {
-                            blob = await fetchImageBlob(ev.url);
-                        }
-                        if (blob) {
-                            try {
-                                const meta = await createOrRefFile(blob, 'gen-image');
-                                assistantFileHashes.push(meta.hash);
-                                const placeholder = `![file-hash:${meta.hash}](${TRANSPARENT_PIXEL_GIF_DATA_URI})`;
-                                const already = current.text.includes(placeholder);
-                                if (!already) {
-                                    current.text += (current.text ? '\n\n' : '') + placeholder;
-                                }
-                                current.file_hashes = assistantFileHashes;
-                                writeCoalescer.markDirty(placeholder.length);
-                            } catch {
-                                /* intentionally empty */
-                            }
-                        } else {
-                            // Fallback: couldn't convert to blob, use URL directly
-                            const placeholder = `![generated image](${ev.url})`;
-                            const already = current.text.includes(placeholder);
-                            if (!already) {
-                                current.text += (current.text ? '\n\n' : '') + placeholder;
-                                writeCoalescer.markDirty(placeholder.length);
-                            }
-                        }
+                        imageOwner.assertCurrent();
+                        continuationAbortController.signal.throwIfAborted();
+                        const blob = ev.url.startsWith('data:image/') ? dataUrlToBlob(ev.url)
+                            : /^https?:/.test(ev.url) ? await fetchImageBlob(ev.url, continuationAbortController.signal) : null;
+                        if (!ownsThread()) throw new ContinuationOwnershipLost();
+                        continuationAbortController.signal.throwIfAborted();
+                        imageOwner.assertCurrent();
+                        if (!blob) throw new Error('The generated image could not be saved.');
+                        const meta = await createOrRefFile(blob, 'gen-image', { assertCurrent() {
+                            if (!ownsThread()) throw new ContinuationOwnershipLost();
+                            continuationAbortController!.signal.throwIfAborted();
+                            imageOwner.assertCurrent();
+                        } });
+                        if (!ownsThread()) throw new ContinuationOwnershipLost();
+                        continuationAbortController.signal.throwIfAborted();
+                        imageOwner.assertCurrent();
+                        assistantFileHashes.push(meta.hash);
+                        const placeholder = `![file-hash:${meta.hash}](${TRANSPARENT_PIXEL_GIF_DATA_URI})`;
+                        if (!current.text.includes(placeholder)) appendTextDelta((current.text ? '\n\n' : '') + placeholder);
+                        current.file_hashes = assistantFileHashes;
+                        writeCoalescer.markDirty(placeholder.length);
                     }
                 }
 

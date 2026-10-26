@@ -6,6 +6,12 @@ import { setHookEngine } from '~/core/hooks/useHooks';
 import { testUuid } from './sync-test-utils';
 import type { PendingOp } from '~~/shared/sync/types';
 import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
+import { createHookEngine } from '~/core/hooks/hooks';
+import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
+import { makeAssistantPersister } from '~/utils/chat/useAi-internal/persistence';
+import { getHookBridge } from '../hook-bridge';
+import { ThreadSchema } from '~/db/schema';
+import type { StoredMessage } from '~/utils/chat/useAi-internal/types';
 
 const databases: Or3DB[] = [];
 
@@ -78,6 +84,71 @@ afterEach(async () => {
 });
 
 describe('applySnapshotChain', () => {
+    it.each(['absent', 'older', 'expired lease'] as const)('preserves unqueued foreground progress through replacement (%s) and can finalize it', async canonical => {
+        setHookEngine(createTypedHookEngine(createHookEngine()));
+        const db = createDb(); await db.open();
+        const thread = ThreadSchema.parse({ id: 'thread-1', title: 'Chat', created_at: 1, updated_at: 1, clock: 1 });
+        await db.threads.put(thread);
+        const bridge = getHookBridge(db); bridge.start();
+        const pending: StoredMessage = { id: 'foreground', thread_id: thread.id, role: 'assistant',
+            index: 3, order_key: '3:0:local', pending: true, deleted: false,
+            created_at: 1, updated_at: 3, clock: 3, hlc: '3:0:local',
+            data: { content: 'saved partial', reasoning_text: 'private reasoning',
+                generation_id: 'request', generation_lease_id: 'request',
+                generation_heartbeat_at: canonical === 'expired lease' ? 1 : Date.now() } };
+        await db.messages.put(pending);
+        expect(await db.pending_ops.count()).toBe(0);
+        const items: SnapshotResponse['items'] = [];
+        if (canonical === 'older') items.push({ kind: 'row', tableName: 'messages', pk: pending.id,
+            payload: { ...pending, pending: false, data: { content: 'previous completed turn' }, clock: 1, hlc: '1:0:remote' },
+            revision: { clock: 1, hlc: '1:0:remote', opId: testUuid('previous-turn') } });
+        items.push({ kind: 'row', tableName: 'threads', pk: thread.id, payload: thread,
+            revision: { clock: 1, hlc: '1:0:remote', opId: testUuid('thread') } });
+        await applySnapshotChain(db, [{ workspaceId: 'workspace-1', snapshotId: 'foreground-snapshot',
+            highWatermark: 12, nextPageToken: null, items }], { workspaceId: 'workspace-1' }, 'device-1',
+            () => true, ['messages', 'threads']);
+        expect(await db.messages.get(pending.id)).toEqual(pending);
+        expect(await db.pending_ops.count()).toBe(0);
+        const persist = makeAssistantPersister(db, pending, [], 'request');
+        await persist({ content: 'saved partial and more' });
+        expect((await db.messages.get(pending.id))?.data).toMatchObject({ content: 'saved partial and more' });
+        await persist({ content: 'saved partial and more', finalize: true });
+        expect(await db.messages.get(pending.id)).toMatchObject({ pending: false, data: { content: 'saved partial and more' } });
+        expect(await db.pending_ops.toArray()).toEqual([expect.objectContaining({ tableName: 'messages', pk: pending.id })]);
+        expect(await db.sync_state.get('sync_state:workspace-1:default')).toMatchObject({ cursor: 12 });
+        bridge.stop();
+    });
+
+    it.each(['newer reply', 'message tombstone', 'thread tombstone', 'missing thread', 'background', 'superseded'] as const)(
+        'does not restore local foreground rows over %s', async scenario => {
+            const db = createDb(); await db.open();
+            const thread = ThreadSchema.parse({ id: 'thread-1', created_at: 1, updated_at: 1, clock: 1 });
+            await db.threads.put(thread);
+            const local: StoredMessage = { id: 'foreground', thread_id: thread.id, role: 'assistant',
+                index: 3, pending: true, deleted: false, created_at: 1, updated_at: 3, clock: 3, hlc: '3:0:local',
+                data: { content: 'local partial', generation_lease_id: 'request',
+                    ...(scenario === 'background' ? { background_job_id: 'job' } : {}),
+                    ...(scenario === 'superseded' ? { generation_state: 'superseded' } : {}) } };
+            await db.messages.put(local);
+            const items: SnapshotResponse['items'] = [];
+            const revision = { clock: 4, hlc: '4:0:remote', opId: testUuid('canonical-newer') };
+            if (scenario === 'newer reply') items.push({ kind: 'row', tableName: 'messages', pk: local.id,
+                payload: { ...local, clock: 4, hlc: revision.hlc, pending: false, data: { content: 'new canonical reply' } }, revision });
+            if (scenario === 'message tombstone') items.push({ kind: 'tombstone', tableName: 'messages', pk: local.id,
+                serverDeletedAt: 4, revision });
+            if (scenario === 'thread tombstone') items.push({ kind: 'tombstone', tableName: 'threads', pk: thread.id,
+                serverDeletedAt: 4, revision });
+            else if (scenario !== 'missing thread') items.push({ kind: 'row', tableName: 'threads', pk: thread.id, payload: thread,
+                revision: { clock: 1, hlc: '1:0:remote', opId: testUuid('thread') } });
+            await applySnapshotChain(db, [{ workspaceId: 'workspace-1', snapshotId: 'canonical', highWatermark: 12,
+                nextPageToken: null, items }], { workspaceId: 'workspace-1' }, 'device-1', () => true, ['messages', 'threads']);
+            if (scenario === 'newer reply') expect(await db.messages.get(local.id)).toMatchObject({ pending: false, data: { content: 'new canonical reply' } });
+            else expect(await db.messages.get(local.id)).toBeUndefined();
+            if (scenario.endsWith('tombstone')) expect(await db.tombstones.count()).toBe(1);
+            expect(await db.pending_ops.count()).toBe(0);
+        }
+    );
+
     it('installs every page and persists the replay watermark atomically', async () => {
         const db = createDb();
         await db.open();

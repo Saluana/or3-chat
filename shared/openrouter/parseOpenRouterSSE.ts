@@ -380,11 +380,12 @@ export async function* parseOpenRouterSSE(
 
             const finalContent = choice.message?.content;
             if (Array.isArray(finalContent)) {
+                const alreadyStreamed = textStreamedByChoice.get(choiceIndex);
                 finalContent.forEach((part, index) => {
                     if (
                         part.type === 'text' &&
                         part.text &&
-                        !textStreamedByChoice.get(choiceIndex)
+                        !alreadyStreamed
                     ) {
                         stageText(part.text);
                     }

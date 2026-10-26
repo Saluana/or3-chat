@@ -12,7 +12,7 @@ const activation = {
 describe('useWorkspaceTabHost', () => {
     it('maps stable pane IDs to existing chat, document, and app pane APIs', async () => {
         const updatePane = vi.fn();
-        const setPaneThread = vi.fn(async () => undefined);
+        const setPaneThread = vi.fn(async () => true);
         const setPaneApp = vi.fn(async () => undefined);
         const api = {
             panes: ref([{ id: 'pane-a' }]),
@@ -32,7 +32,7 @@ describe('useWorkspaceTabHost', () => {
             { kind: 'chat', threadId: 'chat-a' },
             activation
         );
-        expect(setPaneThread).toHaveBeenCalledWith(0, 'chat-a');
+        expect(setPaneThread).toHaveBeenCalledWith(0, 'chat-a', { isCurrent: activation.isCurrent });
 
         await host.bindResourceToPane(
             'pane-a',
@@ -57,7 +57,7 @@ describe('useWorkspaceTabHost', () => {
     it('looks up the current pane index after a pane to its left closes', async () => {
         const panes = ref([{ id: 'pane-a' }, { id: 'pane-b' }]);
         const updatePane = vi.fn();
-        const setPaneThread = vi.fn(async () => undefined);
+        const setPaneThread = vi.fn(async () => true);
         const api = {
             panes,
             activePaneId: ref('pane-b'),
@@ -79,7 +79,7 @@ describe('useWorkspaceTabHost', () => {
             { ...activation, paneId: 'pane-b' }
         );
 
-        expect(setPaneThread).toHaveBeenCalledWith(0, 'chat-b');
+        expect(setPaneThread).toHaveBeenCalledWith(0, 'chat-b', { isCurrent: activation.isCurrent });
     });
 
     it('publishes the target chat while replacing a document', async () => {
@@ -95,11 +95,13 @@ describe('useWorkspaceTabHost', () => {
             Object.assign(pane, updates);
         });
         const setPaneThread = vi.fn(async () => {
-            expect(pane.mode).toBe('chat');
+            expect(pane.mode).toBe('doc');
             expect((pane as { pendingThreadId?: string }).pendingThreadId).toBe(
                 'chat-a'
             );
             pane.threadId = 'chat-a';
+            pane.mode = 'chat';
+            return true;
         });
         const api = {
             panes,
@@ -121,10 +123,7 @@ describe('useWorkspaceTabHost', () => {
         );
 
         expect(updatePane).toHaveBeenCalledWith(0, {
-            mode: 'chat',
-            documentId: undefined,
             pendingThreadId: 'chat-a',
-            messages: [],
         });
         expect(pane.threadId).toBe('chat-a');
         expect((pane as { pendingThreadId?: string }).pendingThreadId).toBeUndefined();

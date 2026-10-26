@@ -1,3 +1,4 @@
+import { prepareToolResultStorage } from '~~/shared/chat/tool-result-artifact';
 import type { BackgroundJob, BackgroundJobProvider } from "./types";
 import { getChatJobExecution } from './types';
 import { getSyncGatewayAdapter } from "../../sync/gateway/registry";
@@ -139,4 +140,15 @@ export async function reconcilePendingBackgroundHistory(
     if (result !== "unchanged") settled += 1;
   }
   return settled;
+}
+
+/** Retain complete effect output before replacing it with its bounded reference. */
+export async function retainBackgroundToolResult(job: BackgroundJob, result: string, callId: string): Promise<string> {
+  const storage = await prepareToolResultStorage(result, { threadId: job.threadId, parentAssistantId: job.messageId, callId });
+  if (!storage.rows.length) return result;
+  const admission = getChatJobExecution(job)?.history;
+  const adapter = historyAdapterFor(job);
+  if (!admission || !adapter?.retainChatToolResult) throw new Error('Durable tool-result storage unavailable. Update the sync provider.');
+  await adapter.retainChatToolResult({ userId: job.userId, workspaceId: admission.workspaceId }, { admission, rows: storage.rows });
+  return storage.result;
 }

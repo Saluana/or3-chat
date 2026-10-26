@@ -15,7 +15,7 @@ the newly focused database. Saved Chat settings can disable any tool.
 | Tool | Behavior |
 | --- | --- |
 | `search_threads` | Searches the existing workspace chat index by title or message text. Returns up to 10 matches and excludes the current chat. |
-| `read_thread` | Reads up to 40 recent, non-deleted user/assistant messages. Each message is capped at 4,000 characters and the transcript at 18,000; system, tool, and deleted messages are omitted. The result is read-only. |
+| `read_thread` | Reads up to 40 recent, non-deleted user/assistant messages from canonical branch history, including inherited reference messages and excluding superseded retries. Each message is capped at 4,000 characters and the transcript at 18,000; system, tool, and deleted messages are omitted. The result is read-only. |
 | `send_message_to_thread` | Appends a message to another existing thread in the active workspace. It records a user turn by default, or an assistant note when `role: "assistant"` is supplied. It does not start a model reply and cannot target the current chat. |
 
 The write rechecks the originating database immediately before saving and
@@ -106,3 +106,15 @@ for the full eligibility rules.
 Definitions and handlers live in `app/utils/chat/thread-chat-tools.ts` and
 `app/utils/documents/document-chat-tools.ts`. The editor's proposal contract
 and snapshot behavior are described in [Documents](/documentation/database/documents).
+
+## Large completed results
+
+Accepted tool results retain their full output up to the existing 256 KiB raw
+result limit. Results above 16 KiB of JSON-escaped text are stored in immutable
+workspace KV chunks, with a bounded reference in the tool transcript. Expanding
+the tool activity exposes **Download full result**. The download checks the
+originating workspace/account and verifies all chunks against SHA-256; missing
+sync pages or corrupt bytes produce a visible error rather than a partial file.
+Reloaded model history resolves the same reference before the normal model
+projection and context-budget check. The model projection may still omit output
+above its own limit; that does not remove the retained full result.

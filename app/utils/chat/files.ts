@@ -4,6 +4,9 @@
  * Purpose:
  * Small helpers for file and MIME handling used by chat features.
  */
+import { fetchBoundedBlob } from '~/utils/fetch-bounded-blob';
+
+const MAX_GENERATED_IMAGE_BYTES = 20 * 1024 * 1024;
 /**
  * `dataUrlToBlob`
  *
@@ -18,6 +21,9 @@ export function dataUrlToBlob(dataUrl: string): Blob | null {
         if (!m) return null;
         const mime: string = m[1] as string;
         const b64: string = m[2] as string;
+        if (b64.length > Math.ceil(MAX_GENERATED_IMAGE_BYTES / 3) * 4) {
+            throw new Error('Generated image exceeds the size limit.');
+        }
         const bin = atob(b64);
         const arr = new Uint8Array(bin.length);
         for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
@@ -61,15 +67,9 @@ export function inferMimeFromUrl(u: string, provided?: string) {
  * `fetchImageBlob`
  *
  * Purpose:
- * Fetches an image URL and returns it as a Blob. Swallows network errors and
- * returns null so callers can fall back gracefully.
+ * Fetches an image with a 20 MiB cap and an eight-second body deadline.
+ * Cancellation, download and storage failures must reach request finalization.
  */
-export async function fetchImageBlob(url: string): Promise<Blob | null> {
-    try {
-        const resp = await fetch(url);
-        if (!resp.ok) return null;
-        return await resp.blob();
-    } catch {
-        return null;
-    }
+export async function fetchImageBlob(url: string, signal?: AbortSignal): Promise<Blob | null> {
+    return fetchBoundedBlob(url, { maxBytes: MAX_GENERATED_IMAGE_BYTES, timeoutMs: 8000, signal });
 }

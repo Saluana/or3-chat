@@ -5,7 +5,7 @@ import { kv } from '~/db';
 import { getWorkspaceGeneration } from '~/db/client';
 import { defineAsyncComponent, defineComponent, nextTick, reactive, ref, toRaw, type Component } from 'vue';
 import ChatContainer from '../ChatContainer.vue';
-import type { ChatRequestState } from '~/utils/chat/types';
+import type { ChatRequestState, SendResult } from '~/utils/chat/types';
 
 // ChatContainer rendering coverage uses the real scroller so the revision
 // contract is exercised end to end. `tests/setup.ts` mocks `or3-scroll` for
@@ -265,6 +265,54 @@ describe('ChatContainer', () => {
             },
         });
     }
+
+    it.each(['persisted', 'streaming'] as const)('keeps composer acceptance pending at %s and returns a later refusal', async phase => {
+        const instance = makeChatInstance();
+        let finish!: (result: SendResult) => void;
+        const terminal = new Promise<SendResult>(resolve => { finish = resolve; });
+        Object.assign(instance, { send: () => { instance.requestState.value = { status: 'admitted', requestId: 'send' }; return terminal; } });
+        const wrapper = mountChatInstance(instance); await flushPromises();
+        let accepted = false;
+        let acceptance!: Promise<SendResult>;
+        wrapper.findComponent(LazyChatInputDropper).vm.$emit('send', {
+            text: 'Keep this draft', images: [], attachments: [], largeTexts: [], model: 'model', settings: {},
+            modelVariant: 'off', thinkingEnabled: false,
+            registerResult: (_terminal: Promise<SendResult>, pending: Promise<SendResult>) => {
+                acceptance = pending; void pending.then(() => { accepted = true; });
+            },
+        });
+        instance.requestState.value = phase === 'persisted'
+            ? { status: 'persisted', requestId: 'send', userMessageId: 'saved' }
+            : { status: 'streaming', requestId: 'send', userMessageId: 'saved', assistantMessageId: 'assistant' };
+        try {
+            await flushPromises(); expect(accepted).toBe(false);
+            const refusal: SendResult = { status: 'failed', requestId: 'send', userMessageId: 'saved',
+                reason: phase === 'persisted' ? 'context_full' : 'model_metadata_unavailable', error: 'Request was refused' };
+            finish(refusal); expect(await acceptance).toEqual(refusal);
+        } finally { finish({ status: 'rejected', reason: 'unavailable' }); }
+    });
+
+    it('accepts the matching provider receipt before terminal completion', async () => {
+        const instance = makeChatInstance();
+        let finish!: (result: SendResult) => void;
+        const terminal = new Promise<SendResult>(resolve => { finish = resolve; });
+        Object.assign(instance, { send: () => { instance.requestState.value = { status: 'admitted', requestId: 'send' }; return terminal; } });
+        const wrapper = mountChatInstance(instance); await flushPromises();
+        let accepted = false; let acceptance!: Promise<SendResult>;
+        wrapper.findComponent(LazyChatInputDropper).vm.$emit('send', {
+            text: 'Send', images: [], attachments: [], largeTexts: [], model: 'model', settings: {},
+            modelVariant: 'off', thinkingEnabled: false,
+            registerResult: (_terminal: Promise<SendResult>, pending: Promise<SendResult>) => {
+                acceptance = pending; void pending.then(() => { accepted = true; });
+            },
+        });
+        try {
+            instance.requestState.value = { status: 'streaming', requestId: 'other', userMessageId: 'other-user', assistantMessageId: 'other-assistant', providerAccepted: true };
+            await flushPromises(); expect(accepted).toBe(false);
+            instance.requestState.value = { status: 'streaming', requestId: 'send', userMessageId: 'saved', assistantMessageId: 'assistant', providerAccepted: true };
+            await expect(acceptance).resolves.toMatchObject({ status: 'accepted', userMessageId: 'saved', assistantMessageId: 'assistant' });
+        } finally { finish({ status: 'complete', requestId: 'send', userMessageId: 'saved', assistantMessageId: 'assistant' }); }
+    });
 
     it('routes a compaction link through its originating container and scrolls the exact anchor only after history is loaded', async () => {
         const instance = makeChatInstance(); instance.threadId.value = 'child';

@@ -111,6 +111,7 @@ const DEFAULT_TIMEOUT_MS = 10000;
 export interface ToolRegistryState {
     tools: Map<string, RegisteredTool>;
     storageHydrated: boolean;
+    pendingEnabledStates?: Record<string, boolean>;
     persistDebounceTimer: NodeJS.Timeout | null;
 }
 
@@ -183,13 +184,15 @@ function persistEnabledStates() {
         clearTimeout(registryState.persistDebounceTimer);
     }
 
+    // Capture before unregistering, and retain preferences for tools that are
+    // temporarily absent. A replacement can hydrate before this debounce fires.
+    const states = { ...loadEnabledStates(), ...registryState.pendingEnabledStates };
+    for (const [name, tool] of registryState.tools) states[name] = tool.enabled.value;
+    registryState.pendingEnabledStates = states;
     registryState.persistDebounceTimer = setTimeout(() => {
         try {
-            const states: Record<string, boolean> = {};
-            for (const [name, tool] of registryState.tools) {
-                states[name] = tool.enabled.value;
-            }
-            localStorage.setItem(TOOL_STORAGE_KEY, JSON.stringify(states));
+            localStorage.setItem(TOOL_STORAGE_KEY, JSON.stringify(registryState.pendingEnabledStates));
+            registryState.pendingEnabledStates = undefined;
         } catch (e) {
             console.warn('[tool-registry] failed to persist enabled states', e);
         }
@@ -292,7 +295,7 @@ export function useToolRegistry() {
         }
 
         // Determine initial enabled state
-        const persistedStates = loadEnabledStates();
+        const persistedStates = { ...loadEnabledStates(), ...registryState.pendingEnabledStates };
         const initialEnabled: boolean =
             opts.enabled ??
             persistedStates[name] ??
@@ -323,6 +326,7 @@ export function useToolRegistry() {
             dispose: () => {
                 const current = registryState.tools.get(name);
                 if (!current || current._owner !== owner) return false;
+                persistEnabledStates();
                 current._stopWatcher();
                 registryState.tools.delete(name);
                 if (useV2Surface()) toolV2Kernel.registry.removeOwner(owner);
@@ -348,6 +352,7 @@ export function useToolRegistry() {
      * Unregister a tool by name.
      */
     function unregisterTool(name: string): void {
+        persistEnabledStates();
         registryState.tools.get(name)?._stopWatcher();
         registryState.tools.delete(name);
         if (useV2Surface()) toolV2Kernel.registry.unregisterLegacy(name);
