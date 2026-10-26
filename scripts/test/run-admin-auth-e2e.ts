@@ -67,6 +67,8 @@ async function run(): Promise<number> {
                     OR3_ADMIN_PASSWORD: password,
                     OR3_ADMIN_E2E_USERNAME: username,
                     OR3_ADMIN_E2E_PASSWORD: password,
+                    // This disposable profile does not persist personal model credentials.
+                    NUXT_SECRETS_PROVIDER: '',
                     PW_PORT: String(port),
                 },
             }
