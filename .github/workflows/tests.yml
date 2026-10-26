@@ -150,7 +150,10 @@ jobs:
           fi
 
       - name: Install Chromium for deterministic chat tool tests
-        run: bunx playwright install --with-deps chromium
+        # The runner image already has Chromium's libraries. --with-deps adds
+        # optional fonts from the Ubuntu mirror, which can stall this job past
+        # its timeout; these behavioral suites do not depend on those fonts.
+        run: bunx playwright install chromium
       - name: Verify chat tool lifecycle and recovery
         id: chat_tools
         run: bun run test:e2e:chat-tools
