@@ -50,7 +50,7 @@ See [API and types](/documentation/hooks/reference) for engine semantics, lifecy
 | `ui.pane.open:action:after`     | action | `[payload: UiPaneActivePayload]`                             | —                       |
 | `ui.pane.close:action:before`   | action | `[payload: UiPaneActivePayload]`                             | —                       |
 | `ui.pane.close:action:after`    | action | `[payload: UiPaneActivePayload]`                             | —                       |
-| `ui.pane.thread:filter:select`  | filter | `[requestedId: string, pane: PaneState, previousId: string]` | `string \| '' \| false` |
+| `ui.pane.thread:filter:select`  | filter | `[requestedId: string \| false, pane: PaneState, previousId: string]` | `string \| '' \| false` |
 | `ui.pane.thread:action:changed` | action | `[payload: UiPaneThreadChangedPayload]`                      | —                       |
 | `ui.pane.doc:filter:select`     | filter | `[requestedId: string, pane: PaneState, previousId: string]` | `string \| '' \| false` |
 | `ui.pane.doc:action:changed`    | action | `[payload: UiPaneDocChangedPayload]`                         | —                       |

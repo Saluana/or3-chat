@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "328361d8259ffebf654b4ee1bb0414d59a349e620024c67f48ae7a8f388c9f45",
+      "apiSha256": "ab6794a42fba94540fd67fb161b566357376d553435f3f8089ddaf602c7710dd",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -7268,7 +7268,7 @@
               "source": "app/composables/core/useMultiPane.ts",
               "line": 78,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface UseMultiPaneApi {\n    panes: Ref<PaneState[]>;\n    activePaneIndex: Ref<number>;\n    activePaneId: ComputedRef<string | null>;\n    canAddPane: ComputedRef<boolean>;\n    newWindowTooltip: ComputedRef<string>;\n    addPane: () => string | null;\n    closePane: (index: number) => Promise<void> | void;\n    swapAdjacentPanes: (leftIndex: number) => void;\n    setActive: (index: number) => void;\n    focusPrev: (current: number) => void;\n    focusNext: (current: number) => void;\n    setPaneThread: (index: number, threadId: string) => Promise<void>;\n    loadMessagesFor: (id: string) => Promise<MultiPaneMessage[]>;\n    ensureAtLeastOne: () => void;\n    newPaneForApp: (\n        appId: string,\n        opts?: { initialRecordId?: string }\n    ) => Promise<void>;\n    setPaneApp: (\n        index: number,\n        appId: string,\n        opts?: { recordId?: string }\n    ) => Promise<void>;\n    updatePane: (index: number, updates: Partial<PaneState>) => void;\n    getPaneIndexById: (paneId: string) => number;\n    getPaneById: (paneId: string) => PaneState | undefined;\n    getPaneWidth: (index: number) => string;\n    handleResize: (\n        paneIndex: number,\n        deltaX: number,\n        persist?: boolean\n    ) => void;\n    persistPaneWidths: () => void;\n    recalculateWidthsForContainer: (newContainerWidth: number) => void;\n    paneWidths: Ref<number[]>;\n}"
+              "text": "export interface UseMultiPaneApi {\n    panes: Ref<PaneState[]>;\n    activePaneIndex: Ref<number>;\n    activePaneId: ComputedRef<string | null>;\n    canAddPane: ComputedRef<boolean>;\n    newWindowTooltip: ComputedRef<string>;\n    addPane: () => string | null;\n    closePane: (index: number) => Promise<void> | void;\n    swapAdjacentPanes: (leftIndex: number) => void;\n    setActive: (index: number) => void;\n    focusPrev: (current: number) => void;\n    focusNext: (current: number) => void;\n    setPaneThread: (index: number, threadId: string, options?: { isCurrent?: () => boolean }) => Promise<boolean>;\n    loadMessagesFor: (id: string) => Promise<MultiPaneMessage[]>;\n    ensureAtLeastOne: () => void;\n    newPaneForApp: (\n        appId: string,\n        opts?: { initialRecordId?: string }\n    ) => Promise<void>;\n    setPaneApp: (\n        index: number,\n        appId: string,\n        opts?: { recordId?: string }\n    ) => Promise<void>;\n    updatePane: (index: number, updates: Partial<PaneState>) => void;\n    getPaneIndexById: (paneId: string) => number;\n    getPaneById: (paneId: string) => PaneState | undefined;\n    getPaneWidth: (index: number) => string;\n    handleResize: (\n        paneIndex: number,\n        deltaX: number,\n        persist?: boolean\n    ) => void;\n    persistPaneWidths: () => void;\n    recalculateWidthsForContainer: (newContainerWidth: number) => void;\n    paneWidths: Ref<number[]>;\n}"
             }
           ]
         },
@@ -10155,7 +10155,7 @@
     },
     {
       "source": "app/core/hooks/hook-types.ts",
-      "apiSha256": "dc8d9c85e54c63fe3bea8dca463ef61dac74c2544cca277fad7d7a4442e4e455",
+      "apiSha256": "8315986f1a1fcb453b7b03aa68e99a75e712a76e67c0ec8754ee8d49b179a99f",
       "runtime": "client",
       "publicPaths": [
         "~/core/hooks/hook-types"
@@ -10512,7 +10512,7 @@
               "source": "app/core/hooks/hook-types.ts",
               "line": 486,
               "syntaxKind": "TypeAliasDeclaration",
-              "text": "export type CoreHookPayloadMap = {\n    'ui.chat.tool-card:action:mounted': [\n        {\n            pluginId: string | null;\n            tool: string;\n            callId: string;\n            runtime: 'page' | 'frame';\n        },\n    ];\n    'ui.chat.tool-card:action:failed': [\n        {\n            pluginId: string | null;\n            tool: string;\n            callId: string;\n            runtime: 'page' | 'frame';\n            code?: string;\n        },\n    ];\n    // AI/Chat Actions\n    'ai.chat.send:action:before': [AiSendBeforePayload];\n    'ai.chat.send:action:after': [AiSendAfterPayload];\n    'ai.chat.stream:action:delta': [string, AiStreamDeltaPayload];\n    'ai.chat.stream:action:reasoning': [string, AiStreamReasoningPayload];\n    'ai.chat.stream:action:complete': [AiStreamCompletePayload];\n    'ai.chat.stream:action:error': [AiStreamErrorPayload];\n    'ai.chat.retry:action:before': [AiRetryBeforePayload];\n    'ai.chat.retry:action:after': [AiRetryAfterPayload];\n    'ai.document.edit:filter:request': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:before': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:after': [DocumentAiEditResultPayload];\n    'ai.document.edit:action:error': [DocumentAiEditResultPayload];\n\n    // Pane Actions (now use named payloads)\n    'ui.pane.active:action': [UiPaneActivePayload];\n    'ui.pane.blur:action': [UiPaneBlurPayload];\n    'ui.pane.switch:action': [UiPaneSwitchPayload];\n    'ui.pane.open:action:after': [UiPaneActivePayload];\n    'ui.pane.close:action:before': [UiPaneActivePayload];\n    'ui.pane.close:action:after': [UiPaneActivePayload];\n    'ui.pane.thread:action:changed': [UiPaneThreadChangedPayload];\n    'ui.pane.doc:action:changed': [UiPaneDocChangedPayload];\n    'ui.pane.doc:action:saved': [UiPaneDocChangedPayload];\n    'ui.pane.msg:action:sent': [UiPaneMsgSentPayload];\n    'ui.pane.msg:action:received': [UiPaneMsgReceivedPayload];\n\n    // Sidebar Actions\n    'ui.sidebar.select:action:before': [UiSidebarSelectPayload];\n    'ui.sidebar.select:action:after': [UiSidebarSelectPayload];\n    'ui.chat.new:action:after': [UiChatNewPayload];\n\n    // App Actions\n    'app.init:action:after': [AppInitPayload];\n\n    // Chat Filters\n    'ui.chat.message:filter:outgoing': [string];\n    'ui.chat.message:filter:incoming': [string, string | undefined];\n    'ai.chat.model:filter:select': [string];\n    'ai.chat.messages:filter:input': [ChatMessage[]];\n\n    // Pane Filters\n    'ui.pane.thread:filter:select': [string, PaneState, string];\n    'ui.pane.doc:filter:select': [string, PaneState, string];\n\n    // Files Filters\n    'files.attach:filter:input': [FilesAttachInputPayload | false];\n\n    // Small, well-known DB-specialized hooks kept explicit\n    'db.messages.files.validate:filter:hashes': [string[]];\n    'db.files.refchange:action:after': [\n        { before: FileEntity; after: FileEntity; delta: number }\n    ];\n    'db.threads.getSystemPrompt:filter:output': [string | null];\n\n    // Editor Lifecycle (Examples/Plugins)\n    'editor.created:action:after': [{ editor: unknown }];\n    'editor.updated:action:after': [{ editor: unknown }];\n    'editor:request-extensions': [void];\n\n    // UI/Chat Extensions\n    'ui.chat.editor:filter:extensions': [unknown[]];\n    'ui.chat.editor:action:before_send': [Record<string, unknown>]; // editor JSON\n    'ai.chat.send:filter:prepare': [ChatSendPreparation];\n    'ai.chat.send:filter:commit': [ChatSendCommit];\n    'ai.chat.messages:filter:before_send': [\n        { messages: OpenRouterMessage[] } | { messages: OpenRouterMessage[] }[]\n    ];\n\n    // Branching lifecycle\n    'branch.fork:filter:options': [BranchForkOptions];\n    'branch.fork:action:before': [BranchForkBeforePayload];\n    'branch.fork:action:after': [ThreadEntity];\n    'branch.retry:filter:options': [RetryBranchParams];\n    'branch.retry:action:before': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.retry:action:after': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            newThreadId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.context:filter:messages': [\n        MessageEntity[],\n        string /* threadId */,\n        BranchMode\n    ];\n    'branch.context:action:after': [BranchContextAfterPayload];\n\n    // Documents helpers\n    'db.documents.title:filter': [\n        string,\n        {\n            phase: 'create' | 'update';\n            id: string;\n            rawTitle?: string | null;\n            existing?: DocumentEntity;\n        }\n    ];\n\n    // Workflow Actions\n    'workflow.execution:action:state_update': [\n        { messageId: string; state: unknown }\n    ];\n    'workflow.execution:action:complete': [\n        { messageId: string; workflowId: string; finalOutput?: string }\n    ];\n\n    // Auth hooks\n    'auth.access:filter:decision': [\n        AccessDecision,\n        { session: SessionContext | null }\n    ];\n    'auth.user:action:created': [{ userId: string; provider: string }];\n    'auth.workspace:action:created': [{ workspaceId: string; userId: string }];\n\n    // Storage hooks\n    'workspace.files:action:before': [PluginFileLifecycle];\n    'workspace.files:action:after': [PluginFileLifecycle];\n    'workspace.files:filter:policy': [boolean, PluginFileLifecycle];\n    'storage.files.upload:action:before': [StorageFileUploadBeforePayload];\n    'storage.files.upload:action:after': [StorageFileUploadAfterPayload];\n    'storage.files.download:action:before': [StorageFileDownloadBeforePayload];\n    'storage.files.download:action:after': [StorageFileDownloadAfterPayload];\n    'storage.files.url:filter:options': [StorageFileUrlOptionsPayload];\n    'storage.files.upload:filter:policy': [\n        StorageFileUploadPolicyPayload | false,\n    ];\n    'storage.files.gc:action:run': [StorageFileGcPayload];\n    'storage:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Sync hooks\n    'sync.op:action:captured': [{ op: SyncPendingOpPayload }];\n    'sync.push:action:before': [{ scope: SyncScopePayload; count: number }];\n    'sync.push:action:after': [\n        { scope: SyncScopePayload; successCount: number; failCount: number }\n    ];\n    'sync.bootstrap:action:start': [{ scope: SyncScopePayload }];\n    'sync.bootstrap:action:progress': [\n        {\n            scope: SyncScopePayload;\n            cursor: number;\n            pulledCount: number;\n            hasMore: boolean;\n        }\n    ];\n    'sync.bootstrap:action:complete': [\n        { scope: SyncScopePayload; cursor: number; totalPulled: number; elapsedMs?: number }\n    ];\n    'sync.pull:action:received': [\n        { scope: SyncScopePayload; changeCount: number }\n    ];\n    'sync.pull:action:applied': [\n        {\n            scope: SyncScopePayload;\n            applied: number;\n            skipped: number;\n            conflicts: number;\n        }\n    ];\n    'sync.pull:action:error': [{ scope: SyncScopePayload; error: string }];\n    'sync.pull:action:after': [\n        { scope: SyncScopePayload; count: number; cursor: number }\n    ];\n    'sync.subscription:action:statusChange': [\n        {\n            scope: SyncScopePayload;\n            previousStatus: string;\n            status: string;\n        }\n    ];\n    'sync.conflict:action:detected': [\n        {\n            tableName: string;\n            pk: string;\n            local: unknown;\n            remote: unknown;\n            winner: 'local' | 'remote';\n        }\n    ];\n    'sync.error:action': [{ op: SyncPendingOpPayload; error: unknown; permanent?: boolean }];\n    'sync.retry:action': [{ op: SyncPendingOpPayload; attempt: number }];\n    'sync.queue:action:full': [{ pendingCount: number; maxSize: number }];\n    'sync.rescan:action:starting': [{ scope: SyncScopePayload }];\n    'sync.rescan:action:progress': [\n        { scope: SyncScopePayload; progress: number },\n    ];\n    'sync.rescan:action:completed': [{ scope: SyncScopePayload }];\n    'sync.stats:action': [\n        { pendingCount: number; cursor: number; lastSyncAt: number }\n    ];\n    'sync:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Notification hooks\n    'notify:action:push': [NotificationCreatePayload];\n    'notify:action:read': [{ id: string; readAt: number }];\n    'notify:action:clicked': [{ notification: NotificationEntity; action?: NotificationAction }];\n    'notify:action:cleared': [{ count: number }];\n    'notify:filter:before_store': [NotificationCreatePayload | false, { source: string }];\n};"
+              "text": "export type CoreHookPayloadMap = {\n    'ui.chat.tool-card:action:mounted': [\n        {\n            pluginId: string | null;\n            tool: string;\n            callId: string;\n            runtime: 'page' | 'frame';\n        },\n    ];\n    'ui.chat.tool-card:action:failed': [\n        {\n            pluginId: string | null;\n            tool: string;\n            callId: string;\n            runtime: 'page' | 'frame';\n            code?: string;\n        },\n    ];\n    // AI/Chat Actions\n    'ai.chat.send:action:before': [AiSendBeforePayload];\n    'ai.chat.send:action:after': [AiSendAfterPayload];\n    'ai.chat.stream:action:delta': [string, AiStreamDeltaPayload];\n    'ai.chat.stream:action:reasoning': [string, AiStreamReasoningPayload];\n    'ai.chat.stream:action:complete': [AiStreamCompletePayload];\n    'ai.chat.stream:action:error': [AiStreamErrorPayload];\n    'ai.chat.retry:action:before': [AiRetryBeforePayload];\n    'ai.chat.retry:action:after': [AiRetryAfterPayload];\n    'ai.document.edit:filter:request': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:before': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:after': [DocumentAiEditResultPayload];\n    'ai.document.edit:action:error': [DocumentAiEditResultPayload];\n\n    // Pane Actions (now use named payloads)\n    'ui.pane.active:action': [UiPaneActivePayload];\n    'ui.pane.blur:action': [UiPaneBlurPayload];\n    'ui.pane.switch:action': [UiPaneSwitchPayload];\n    'ui.pane.open:action:after': [UiPaneActivePayload];\n    'ui.pane.close:action:before': [UiPaneActivePayload];\n    'ui.pane.close:action:after': [UiPaneActivePayload];\n    'ui.pane.thread:action:changed': [UiPaneThreadChangedPayload];\n    'ui.pane.doc:action:changed': [UiPaneDocChangedPayload];\n    'ui.pane.doc:action:saved': [UiPaneDocChangedPayload];\n    'ui.pane.msg:action:sent': [UiPaneMsgSentPayload];\n    'ui.pane.msg:action:received': [UiPaneMsgReceivedPayload];\n\n    // Sidebar Actions\n    'ui.sidebar.select:action:before': [UiSidebarSelectPayload];\n    'ui.sidebar.select:action:after': [UiSidebarSelectPayload];\n    'ui.chat.new:action:after': [UiChatNewPayload];\n\n    // App Actions\n    'app.init:action:after': [AppInitPayload];\n\n    // Chat Filters\n    'ui.chat.message:filter:outgoing': [string];\n    'ui.chat.message:filter:incoming': [string, string | undefined];\n    'ai.chat.model:filter:select': [string];\n    'ai.chat.messages:filter:input': [ChatMessage[]];\n\n    // Pane Filters\n    'ui.pane.thread:filter:select': [string | false, PaneState, string];\n    'ui.pane.doc:filter:select': [string, PaneState, string];\n\n    // Files Filters\n    'files.attach:filter:input': [FilesAttachInputPayload | false];\n\n    // Small, well-known DB-specialized hooks kept explicit\n    'db.messages.files.validate:filter:hashes': [string[]];\n    'db.files.refchange:action:after': [\n        { before: FileEntity; after: FileEntity; delta: number }\n    ];\n    'db.threads.getSystemPrompt:filter:output': [string | null];\n\n    // Editor Lifecycle (Examples/Plugins)\n    'editor.created:action:after': [{ editor: unknown }];\n    'editor.updated:action:after': [{ editor: unknown }];\n    'editor:request-extensions': [void];\n\n    // UI/Chat Extensions\n    'ui.chat.editor:filter:extensions': [unknown[]];\n    'ui.chat.editor:action:before_send': [Record<string, unknown>]; // editor JSON\n    'ai.chat.send:filter:prepare': [ChatSendPreparation];\n    'ai.chat.send:filter:commit': [ChatSendCommit];\n    'ai.chat.messages:filter:before_send': [\n        { messages: OpenRouterMessage[] } | { messages: OpenRouterMessage[] }[]\n    ];\n\n    // Branching lifecycle\n    'branch.fork:filter:options': [BranchForkOptions];\n    'branch.fork:action:before': [BranchForkBeforePayload];\n    'branch.fork:action:after': [ThreadEntity];\n    'branch.retry:filter:options': [RetryBranchParams];\n    'branch.retry:action:before': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.retry:action:after': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            newThreadId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.context:filter:messages': [\n        MessageEntity[],\n        string /* threadId */,\n        BranchMode\n    ];\n    'branch.context:action:after': [BranchContextAfterPayload];\n\n    // Documents helpers\n    'db.documents.title:filter': [\n        string,\n        {\n            phase: 'create' | 'update';\n            id: string;\n            rawTitle?: string | null;\n            existing?: DocumentEntity;\n        }\n    ];\n\n    // Workflow Actions\n    'workflow.execution:action:state_update': [\n        { messageId: string; state: unknown }\n    ];\n    'workflow.execution:action:complete': [\n        { messageId: string; workflowId: string; finalOutput?: string }\n    ];\n\n    // Auth hooks\n    'auth.access:filter:decision': [\n        AccessDecision,\n        { session: SessionContext | null }\n    ];\n    'auth.user:action:created': [{ userId: string; provider: string }];\n    'auth.workspace:action:created': [{ workspaceId: string; userId: string }];\n\n    // Storage hooks\n    'workspace.files:action:before': [PluginFileLifecycle];\n    'workspace.files:action:after': [PluginFileLifecycle];\n    'workspace.files:filter:policy': [boolean, PluginFileLifecycle];\n    'storage.files.upload:action:before': [StorageFileUploadBeforePayload];\n    'storage.files.upload:action:after': [StorageFileUploadAfterPayload];\n    'storage.files.download:action:before': [StorageFileDownloadBeforePayload];\n    'storage.files.download:action:after': [StorageFileDownloadAfterPayload];\n    'storage.files.url:filter:options': [StorageFileUrlOptionsPayload];\n    'storage.files.upload:filter:policy': [\n        StorageFileUploadPolicyPayload | false,\n    ];\n    'storage.files.gc:action:run': [StorageFileGcPayload];\n    'storage:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Sync hooks\n    'sync.op:action:captured': [{ op: SyncPendingOpPayload }];\n    'sync.push:action:before': [{ scope: SyncScopePayload; count: number }];\n    'sync.push:action:after': [\n        { scope: SyncScopePayload; successCount: number; failCount: number }\n    ];\n    'sync.bootstrap:action:start': [{ scope: SyncScopePayload }];\n    'sync.bootstrap:action:progress': [\n        {\n            scope: SyncScopePayload;\n            cursor: number;\n            pulledCount: number;\n            hasMore: boolean;\n        }\n    ];\n    'sync.bootstrap:action:complete': [\n        { scope: SyncScopePayload; cursor: number; totalPulled: number; elapsedMs?: number }\n    ];\n    'sync.pull:action:received': [\n        { scope: SyncScopePayload; changeCount: number }\n    ];\n    'sync.pull:action:applied': [\n        {\n            scope: SyncScopePayload;\n            applied: number;\n            skipped: number;\n            conflicts: number;\n        }\n    ];\n    'sync.pull:action:error': [{ scope: SyncScopePayload; error: string }];\n    'sync.pull:action:after': [\n        { scope: SyncScopePayload; count: number; cursor: number }\n    ];\n    'sync.subscription:action:statusChange': [\n        {\n            scope: SyncScopePayload;\n            previousStatus: string;\n            status: string;\n        }\n    ];\n    'sync.conflict:action:detected': [\n        {\n            tableName: string;\n            pk: string;\n            local: unknown;\n            remote: unknown;\n            winner: 'local' | 'remote';\n        }\n    ];\n    'sync.error:action': [{ op: SyncPendingOpPayload; error: unknown; permanent?: boolean }];\n    'sync.retry:action': [{ op: SyncPendingOpPayload; attempt: number }];\n    'sync.queue:action:full': [{ pendingCount: number; maxSize: number }];\n    'sync.rescan:action:starting': [{ scope: SyncScopePayload }];\n    'sync.rescan:action:progress': [\n        { scope: SyncScopePayload; progress: number },\n    ];\n    'sync.rescan:action:completed': [{ scope: SyncScopePayload }];\n    'sync.stats:action': [\n        { pendingCount: number; cursor: number; lastSyncAt: number }\n    ];\n    'sync:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Notification hooks\n    'notify:action:push': [NotificationCreatePayload];\n    'notify:action:read': [{ id: string; readAt: number }];\n    'notify:action:clicked': [{ notification: NotificationEntity; action?: NotificationAction }];\n    'notify:action:cleared': [{ count: number }];\n    'notify:filter:before_store': [NotificationCreatePayload | false, { source: string }];\n};"
             }
           ]
         },
@@ -11790,7 +11790,7 @@
     },
     {
       "source": "app/utils/chat/tool-registry.ts",
-      "apiSha256": "c3e88c4c10512fb4055129b129494ee4331b95f4c7b9a31942ed0dd1aabb99cd",
+      "apiSha256": "3ee61ce655bfe70237a1360f6ab77cc1da01a6be991d6713ab0d4af2236bb6ba",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tool-registry"
@@ -11911,7 +11911,7 @@
               "source": "app/utils/chat/tool-registry.ts",
               "line": 111,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface ToolRegistryState {\n    tools: Map<string, RegisteredTool>;\n    storageHydrated: boolean;\n    persistDebounceTimer: NodeJS.Timeout | null;\n}"
+              "text": "export interface ToolRegistryState {\n    tools: Map<string, RegisteredTool>;\n    storageHydrated: boolean;\n    pendingEnabledStates?: Record<string, boolean>;\n    persistDebounceTimer: NodeJS.Timeout | null;\n}"
             }
           ]
         },
@@ -11940,7 +11940,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/utils/chat/tool-registry.ts",
-                "line": 250,
+                "line": 253,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useToolRegistry();"
               }
@@ -11949,7 +11949,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 250,
+              "line": 253,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useToolRegistry();"
             }
@@ -11959,7 +11959,7 @@
     },
     {
       "source": "app/utils/chat/tools-public.ts",
-      "apiSha256": "a3a2c926023607404fcc1d07e87a54d4330145d20d1269c456d984433465241e",
+      "apiSha256": "51ad5815710e5b7654cf8cc8c10f9ce678a01e502b37624a9aa0d73fec847438",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tools-public"
@@ -12032,7 +12032,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 127,
+              "line": 129,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolCall {\n    id: string;\n    type: 'function';\n    function: {\n        name: string;\n        arguments: string; // JSON string, parsed by consumer\n    };\n}"
             }
@@ -12046,7 +12046,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 170,
+              "line": 172,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolDefinition {\n    type: 'function';\n    function: {\n        name: string;\n        description: string;\n        parameters: import('~~/shared/chat/tool-schema').JsonSchemaObject;\n    };\n    ui?: {\n        label?: string;\n        icon?: string;\n        descriptionHint?: string;\n        defaultEnabled?: boolean;\n        category?: string;\n    };\n    runtime?: ToolRuntime;\n}"
             }
@@ -12060,7 +12060,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 139,
+              "line": 141,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolExecutionContext {\n    /** Recheck captured registry/project authority inside a host mutation transaction. */\n    assertToolAuthorized?: () => Promise<void>;\n    projectId?: string | null;\n    subject: string | null;\n    workspaceId: string | null;\n    threadId: string | null;\n    messageId: string | null;\n    callId: string;\n    requestId: string;\n    abortSignal: AbortSignal;\n}"
             }
@@ -12088,7 +12088,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 136,
+              "line": 138,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolRuntime = 'hybrid' | 'client' | 'server';"
             }
@@ -12119,7 +12119,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/utils/chat/tool-registry.ts",
-                "line": 250,
+                "line": 253,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useToolRegistry();"
               }
@@ -12128,7 +12128,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 250,
+              "line": 253,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useToolRegistry();"
             }

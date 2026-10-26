@@ -11,6 +11,7 @@ import { useModelStore } from '~/composables/chat/useModelStore';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import type { ChatMessage } from '~/utils/chat/types';
 import type { ToolCallInfo } from '~/utils/chat/uiMessages';
+import { parseToolResultArtifact, readToolResultStorage } from '~~/shared/chat/tool-result-artifact';
 
 const scenario = String(useRoute().query.scenario ?? 'normal');
 const ready = ref(false), threadId = ref(''), history = ref<ChatMessage[]>([]);
@@ -63,7 +64,14 @@ async function readSnapshot() {
     const executions = (await originDb.kv.get(ledgerKey))?.value ?? [];
     const foreignResults = (await originDb.messages.where('thread_id').equals(otherThread).toArray()).filter(row => row.role === 'tool').length
         + (foreignDb ? (await foreignDb.messages.toArray()).filter(row => row.role === 'tool').length : 0);
-    return { rows, executions, foreignResults };
+    // Large results are stored as artifact references; report the full length they resolve to.
+    const resolvedLengths: Record<string, number> = {};
+    for (const row of rows) {
+        const content = row.role === 'tool' ? row.data?.content : undefined;
+        if (typeof content === 'string' && parseToolResultArtifact(content))
+            resolvedLengths[row.id] = (await readToolResultStorage(content, id => originDb.kv.get(id)).catch(() => '')).length;
+    }
+    return { rows, executions, foreignResults, resolvedLengths };
 }
 onMounted(async () => {
     setActiveWorkspaceDb(null);
@@ -132,7 +140,7 @@ onMounted(async () => {
         originDb.messages.hook('creating', failWrite);
         handles.push({ dispose: () => originDb.messages.hook('creating').unsubscribe(failWrite) });
     }
-    subscription = liveQuery(readSnapshot).subscribe(({ rows, executions, foreignResults }) => {
+    subscription = liveQuery(readSnapshot).subscribe(({ rows, executions, foreignResults, resolvedLengths }) => {
         for (const entry of executions as { callId: string; startedAt: number; endedAt?: number }[])
             timings.set(entry.callId, { startedAt: entry.startedAt, endedAt: entry.endedAt });
         for (const row of rows) for (const call of (row.data?.tool_calls ?? []) as ToolCallInfo[])
@@ -140,7 +148,7 @@ onMounted(async () => {
         calls.value = rows.flatMap(row => (row.data?.tool_calls ?? []) as ToolCallInfo[]);
         const results = rows.filter(row => row.role === 'tool').map(row => ({
             callId: row.data?.tool_call_id, status: row.data?.tool_status, content: row.data?.content,
-            threadId: row.thread_id, generationId: rows.find(parent => parent.id === row.data?.parent_assistant_id)?.data?.generation_id,
+            resolvedLength: resolvedLengths[row.id], threadId: row.thread_id, generationId: rows.find(parent => parent.id === row.data?.parent_assistant_id)?.data?.generation_id,
         }));
         snapshot.value = JSON.stringify({ threadId: originThread, executions, results, calls: calls.value, foreignResults });
         updateInspector();
