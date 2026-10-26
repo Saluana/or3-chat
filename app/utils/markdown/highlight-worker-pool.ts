@@ -55,13 +55,15 @@ export function createHighlightWorkerPool(createWorker: () => Worker) {
                 const instance = createWorker();
                 worker = instance;
                 instance.onmessage = (event: MessageEvent<HighlightResponse>) => {
-                    if (worker !== instance || event.data?.id !== active?.input.id) return;
+                    // A late or malformed message can arrive after the task settled.
+                    const finished = active as Task | undefined;
+                    const data = event.data as HighlightResponse | null | undefined;
+                    if (worker !== instance || !finished || data?.id !== finished.input.id) return;
                     clearTimeout(timeout);
                     timeout = undefined;
-                    const finished = active;
                     active = undefined;
-                    if ('html' in event.data && typeof event.data.html === 'string') finished?.resolve(event.data.html);
-                    else finished?.reject(unavailable());
+                    if ('html' in data && typeof data.html === 'string') finished.resolve(data.html);
+                    else finished.reject(unavailable());
                     pump();
                 };
                 const fail = () => { if (worker === instance) reset(true); };

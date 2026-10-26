@@ -657,6 +657,7 @@ export async function restoreMany(hashes: string[]): Promise<string[]> {
                 ...meta,
                 deleted: false,
                 updated_at: nowSec(),
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Older stored rows can lack a clock.
                 clock: nextClock(Math.max(meta.clock ?? 0, tombstone?.clock ?? 0)),
             } as FileMeta);
             restored.push(unique[i]!);

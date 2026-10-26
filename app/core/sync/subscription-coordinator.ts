@@ -12,7 +12,8 @@ export async function startCoordinatedSubscription(
     key: string,
     subscription: SubscriptionLifecycle
 ): Promise<() => Promise<void>> {
-    const locks = navigator.locks;
+    // Web Locks are missing in older browsers and insecure contexts.
+    const locks = navigator.locks as LockManager | undefined;
     if (!locks) {
         await subscription.start();
         return () => subscription.stop();

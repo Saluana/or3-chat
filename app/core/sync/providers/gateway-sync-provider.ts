@@ -546,6 +546,7 @@ export function createGatewaySyncProvider(
                 } finally {
                     running = false;
                 }
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- dispose() can run while the poll is awaited.
                 if (!active) return;
                 // Add random jitter (0-500ms) to prevent thundering herd
                 const jitter = Math.floor(Math.random() * 500);

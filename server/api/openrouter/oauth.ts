@@ -23,6 +23,7 @@ export default defineEventHandler(async event => {
         if (getHeader(event, 'x-or3-account') !== JSON.stringify([session.provider, session.user.id]))
             throw createError({ statusCode: 409, statusMessage: 'The signed-in account changed. Refresh before trying again.' });
         requireCan(session, 'workspace.write', { kind: 'workspace', id: session.workspace.id });
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Partial runtime configs can omit secrets.
         if (!useRuntimeConfig().secrets?.provider) throw createError({ statusCode: 503, statusMessage: 'OpenRouter credential storage unavailable.' });
         if (!await checkRateLimit(`openrouter-oauth:${session.user.id}`, { max: 10, window: 60 })) throw createError({ statusCode: 429 });
         // The origin has just passed the proxy-aware same-origin guard. Never accept a callback URL from the body.

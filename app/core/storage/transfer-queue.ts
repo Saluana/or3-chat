@@ -567,7 +567,7 @@ export class FileTransferQueue {
                 await cleanupFileCache(context.db, context.workspaceId, this.provider, settings);
             })().catch(() => {}); // Cache maintenance cannot fail a committed transfer.
         } catch (error) {
-            if ((error as Error)?.name === 'LeaseLostError' || (controller.signal.reason as Error)?.name === 'LeaseLostError') return;
+            if ((error as Error | undefined)?.name === 'LeaseLostError' || (controller.signal.reason as Error | undefined)?.name === 'LeaseLostError') return;
             if (this.isDatabaseClosedError(error)) {
                 await this.requeueTransferAfterDatabaseClose(transfer, context);
                 return;
@@ -620,7 +620,7 @@ export class FileTransferQueue {
             // and its retry budget. A later attempt obtains a fresh presigned URL.
             const deferred = (typeof navigator !== 'undefined' && navigator.onLine === false) ||
                 metadata.status === 429 || metadata.status === 408 || (metadata.status !== undefined && metadata.status >= 500) ||
-                error instanceof TypeError || (error as Error)?.name === 'TimeoutError' || (error as Error)?.name === 'NetworkError';
+                error instanceof TypeError || (error as Error | undefined)?.name === 'TimeoutError' || (error as Error | undefined)?.name === 'NetworkError';
             const attempts = transfer.attempts + (deferred ? 0 : 1);
             const message = presentError(metadata).message;
 
@@ -1277,7 +1277,7 @@ export class FileTransferQueue {
             await this.updateTransfer(id, patch, db, claimToken);
             return true;
         } catch (error) {
-            if ((error as Error)?.name === 'LeaseLostError') return false;
+            if ((error as Error | undefined)?.name === 'LeaseLostError') return false;
             if (!this.isDatabaseClosedError(error)) {
                 throw error;
             }
