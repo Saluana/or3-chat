@@ -139,7 +139,8 @@ export async function qualifyCompactionHistory(current: string) {
     await db.chat_request_recoveries.bulkPut([familyRoot, 'qualification-family-match', 'qualification-family-newest'].map(recovery));
     let descendantError = ''; try { await hardDeleteThread(familyRoot); } catch (error) { descendantError = (error as { code?: string }).code ?? String(error); }
     const deniedRecoveryRetained = Boolean(await db.chat_request_recoveries.get(familyRoot));
-    // Hook-created descendants must roll back both the child and deletion.
+    // Before hooks run outside the delete transaction: the hook's child is its
+    // own committed write, and it still blocks deleting the root.
     const hookedRoot = 'qualification-hooked-root'; await db.threads.put(thread(hookedRoot));
     const hooks = useHooks(); const createChild = async (payload: { id: string }) => {
         if (payload.id === hookedRoot) await db.threads.put(thread('qualification-hooked-child', { parent_thread_id: hookedRoot }));
@@ -147,7 +148,7 @@ export async function qualifyCompactionHistory(current: string) {
     hooks.addAction('db.threads.delete:action:hard:before', createChild);
     let hookError = ''; try { await hardDeleteThread(hookedRoot); } catch (error) { hookError = (error as { code?: string }).code ?? String(error); }
     finally { hooks.removeAction('db.threads.delete:action:hard:before', createChild); }
-    const hookRollback = Boolean(await db.threads.get(hookedRoot)) && !await db.threads.get('qualification-hooked-child');
+    const hookBlockedDeletion = Boolean(await db.threads.get(hookedRoot)) && Boolean(await db.threads.get('qualification-hooked-child'));
     await softDeleteThread(familyRoot);
     const softRecoveryCleared = !await db.chat_request_recoveries.get(familyRoot);
     const preferenceRetained = (await getKvByName(preference, db))?.value === 'true';
@@ -200,7 +201,7 @@ export async function qualifyCompactionHistory(current: string) {
         changed, deleted, replacement, first, repeated, emptyPartial, kindResults, second, tampered, differentQuery, currentWriteContinuation, ancestorWriteContinuation,
         expandedPages, canceled: Boolean(canceledExecution.error) && !canceledExecution.result, missingSummary, missingCaptured, missingAnchor,
         switched, crossConnectionContinuation, filtered, filteredMembers, latest, damaged, mixed, projectMixed, pinnedMixed,
-        projectDocumentId: projectDocument.id, descendantError, hookError, hookRollback,
+        projectDocumentId: projectDocument.id, descendantError, hookError, hookBlockedDeletion,
         deniedRecoveryRetained, softRecoveryCleared, childRecoveriesCleared, lastMemberPreferenceRetained,
         preferenceRetained, retiredPreference, survivingContext, scale: { threads: 10_000, families: 500, expandedMembers: 200, memberPageSize: 50, timings, p95: timings.at(-1),
             memberTimings, memberP95: Math.max(...memberTimings), messageReads } };

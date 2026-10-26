@@ -1546,7 +1546,7 @@ test('compaction history and families use production scope and deletion policies
     expect(result.projectMixed.items.filter((item: { type: string }) => item.type === 'document').map((item: { id: string }) => item.id)).toEqual([result.projectDocumentId]);
     expect(result.pinnedMixed.items.some((item: { type: string }) => item.type === 'document')).toBe(false);
     expect(result.descendantError).toBe('thread_has_descendants'); expect(result.hookError).toBe('thread_has_descendants');
-    expect(result.hookRollback).toBe(true); expect(result.preferenceRetained).toBe(true); expect(result.retiredPreference).toBe(true);
+    expect(result.hookBlockedDeletion).toBe(true); expect(result.preferenceRetained).toBe(true); expect(result.retiredPreference).toBe(true);
     expect(result.deniedRecoveryRetained).toBe(true); expect(result.softRecoveryCleared).toBe(true);
     expect(result.childRecoveriesCleared).toBe(true); expect(result.lastMemberPreferenceRetained).toBe(true);
     expect(JSON.stringify(result.survivingContext)).toContain('## Objective');

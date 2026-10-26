@@ -266,7 +266,7 @@ describe('ChatContainer', () => {
         });
     }
 
-    it.each(['persisted', 'streaming'] as const)('keeps composer acceptance pending at %s and returns a later refusal', async phase => {
+    it.each(['persisted', 'streaming'] as const)('accepts the matching turn once it is %s without waiting for the provider', async phase => {
         const instance = makeChatInstance();
         let finish!: (result: SendResult) => void;
         const terminal = new Promise<SendResult>(resolve => { finish = resolve; });
@@ -281,15 +281,18 @@ describe('ChatContainer', () => {
                 acceptance = pending; void pending.then(() => { accepted = true; });
             },
         });
-        instance.requestState.value = phase === 'persisted'
-            ? { status: 'persisted', requestId: 'send', userMessageId: 'saved' }
-            : { status: 'streaming', requestId: 'send', userMessageId: 'saved', assistantMessageId: 'assistant' };
         try {
+            instance.requestState.value = { status: 'persisted', requestId: 'other', userMessageId: 'other-user' };
             await flushPromises(); expect(accepted).toBe(false);
-            const refusal: SendResult = { status: 'failed', requestId: 'send', userMessageId: 'saved',
-                reason: phase === 'persisted' ? 'context_full' : 'model_metadata_unavailable', error: 'Request was refused' };
-            finish(refusal); expect(await acceptance).toEqual(refusal);
-        } finally { finish({ status: 'rejected', reason: 'unavailable' }); }
+            instance.requestState.value = phase === 'persisted'
+                ? { status: 'persisted', requestId: 'send', userMessageId: 'saved' }
+                : { status: 'streaming', requestId: 'send', userMessageId: 'saved', assistantMessageId: 'assistant' };
+            // A later refusal is recovered by Retry on the saved turn, not by restoring the draft.
+            await expect(acceptance).resolves.toEqual({ status: 'accepted', requestId: 'send', userMessageId: 'saved',
+                ...(phase === 'streaming' ? { assistantMessageId: 'assistant' } : {}) });
+        } finally {
+            finish({ status: 'failed', requestId: 'send', userMessageId: 'saved', reason: 'context_full', error: 'Request was refused' });
+        }
     });
 
     it('accepts the matching provider receipt before terminal completion', async () => {
