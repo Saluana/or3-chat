@@ -7,6 +7,7 @@ const setHeaderMock = vi.fn();
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
     readBody: readBodyMock,
+    getHeader: () => undefined,
     setResponseHeader: setResponseHeaderMock,
     setHeader: setHeaderMock,
     createError: (input: { statusCode: number; statusMessage?: string }) =>
@@ -76,7 +77,7 @@ describe('POST /api/sync/snapshot', () => {
         getActiveSyncGatewayAdapterMock.mockReset().mockReturnValue({ snapshot: snapshotMock });
     });
 
-    it('validates, authorizes, bounds, and dispatches snapshot pages', async () => {
+    it('validates, authorizes, and dispatches snapshot pages', async () => {
         const handler = (await import('../snapshot.post')).default as
             (input: H3Event) => Promise<unknown>;
 

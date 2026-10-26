@@ -1,3 +1,4 @@
+import { getSyncStateId } from './cursor-manager';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 import type { Transaction } from 'dexie';
 import type { Or3DB, SnapshotStageRow } from '~/db/client';
@@ -13,10 +14,6 @@ function abortSnapshotApply(): never {
     const error = new Error('Snapshot apply was cancelled');
     error.name = 'AbortError';
     throw error;
-}
-
-function syncStateId(scope: SyncScope): string {
-    return `sync_state:${scope.workspaceId}:${scope.projectId ?? 'default'}`;
 }
 
 function revisionOf(value: unknown): { clock: number; hlc: string; opId: string } | null {
@@ -228,6 +225,8 @@ export class SnapshotStager {
                     await tx.table('kv').toCollection()
                         .filter((row: { name?: string }) => !localOnlyKv.has(row.name ?? ''))
                         .delete();
+                } else if (tableName === 'notifications' && this.scope.principalId) {
+                    await tx.table(tableName).filter(row => row.user_id === this.scope.principalId).delete();
                 } else {
                     await tx.table(tableName).clear();
                 }
@@ -237,6 +236,8 @@ export class SnapshotStager {
                 await tx.table('tombstones').toCollection()
                     .filter((row: { tableName?: string; pk?: string }) =>
                         replaced.has(row.tableName ?? '') &&
+                        // Other accounts may still need their notification deletion watermarks.
+                        !(row.tableName === 'notifications' && this.scope.principalId) &&
                         !(row.tableName === 'kv' && localOnlyKv.has((row.pk ?? '').replace(/^kv:/, '')))
                     )
                     .delete();
@@ -308,7 +309,7 @@ export class SnapshotStager {
             }
             if (!shouldContinue()) abortSnapshotApply();
             await tx.table('sync_state').put({
-                id: syncStateId(this.scope),
+                id: getSyncStateId(this.scope),
                 cursor: this.highWatermark,
                 lastSyncAt: Date.now(),
                 deviceId,

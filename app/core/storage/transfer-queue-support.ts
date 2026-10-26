@@ -27,6 +27,7 @@ export type TransferWaiter = {
     resolve: () => void;
     reject: (error: Error) => void;
     timeout: ReturnType<typeof setTimeout>;
+    unsubscribe?: () => void;
 };
 
 export type TransferExecutionContext = {

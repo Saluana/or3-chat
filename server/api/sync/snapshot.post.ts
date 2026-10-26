@@ -7,13 +7,14 @@ import { requireWorkspaceItemCapability } from "../../utils/sync/workspace-item-
  * Fresh clients atomically install the full page chain before replaying changes
  * strictly after its high-watermark.
  */
-import { defineEventHandler, readBody, createError, setResponseHeader } from 'h3';
+import { defineEventHandler, createError, setResponseHeader } from 'h3';
 import {
     SnapshotRequestSchema,
     SnapshotResponseSchema,
     getSnapshotResponseContractError,
 } from '~~/shared/sync/schemas';
 import { resolveSessionContext } from '../../auth/session';
+import { readLimitedJsonBody } from '../../utils/security/limited-json-body';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isSyncEnabled } from '../../utils/sync/is-sync-enabled';
@@ -36,7 +37,7 @@ export default defineEventHandler(async (event) => {
     }
 
     setNoCacheHeaders(event);
-    const request = SnapshotRequestSchema.safeParse(await readBody(event));
+    const request = SnapshotRequestSchema.safeParse(await readLimitedJsonBody(event, 8 * 1024));
     if (!request.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid snapshot request' });
     }

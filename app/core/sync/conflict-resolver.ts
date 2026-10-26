@@ -197,6 +197,11 @@ export class ConflictResolver {
         }
 
         if (local.deleted) {
+            if (compareSyncRevision(stamp, rowRevision(local)) > 0) {
+                const remotePayload = change.payload as { deleted_at?: number } | undefined;
+                await table.update(pk, { clock: stamp.clock, hlc: stamp.hlc, op_id: stamp.opId,
+                    deleted_at: remotePayload?.deleted_at ?? local.deleted_at ?? nowSec() });
+            }
             await this.writeTombstone(tx, tableName, pk, stamp, change.serverVersion, existingTombstone);
             // Already deleted
             return { applied: false, skipped: true, isConflict: false };

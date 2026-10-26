@@ -16,6 +16,9 @@ import { FULL_HISTORY_PULL_RETENTION } from '~~/shared/sync/types';
 import { _resetCursorManagers } from '../cursor-manager';
 import { _resetHookBridge } from '../hook-bridge';
 import { SubscriptionManager } from '../subscription-manager';
+import { OutboxManager } from '../outbox-manager';
+import { getSyncCircuitBreaker, _resetSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
+import { getCursorManager } from '../cursor-manager';
 import { testUuid } from './sync-test-utils';
 
 const hookState = vi.hoisted(() => ({
@@ -226,6 +229,7 @@ describe('expired-cursor snapshot recovery', () => {
 
     beforeEach(async () => {
         hookState.doAction.mockClear();
+        _resetSyncCircuitBreaker();
         _resetCursorManagers();
         _resetHookBridge();
         db = new Or3DB(`snapshot-recovery-${crypto.randomUUID()}`);
@@ -235,6 +239,8 @@ describe('expired-cursor snapshot recovery', () => {
 
     afterEach(async () => {
         await manager?.stop();
+        vi.restoreAllMocks();
+        _resetSyncCircuitBreaker();
         _resetCursorManagers();
         _resetHookBridge();
         db.close();
@@ -323,4 +329,102 @@ describe('expired-cursor snapshot recovery', () => {
             )
         ).toEqual([localPut, localDelete]);
     });
+    // Contract: snapshot replacement cannot erase an acknowledged local write;
+    // replay is authoritative even while the local echo cache still contains it.
+    it('replays an ACKed local write committed while an older snapshot was in flight', async () => {
+        const provider = new ExpiredCursorSnapshotProvider();
+        const originalSnapshot = provider.snapshot.bind(provider);
+        const op = pendingPut('canonical', 'acknowledged during snapshot', 60);
+        Object.assign(provider, { push: vi.fn(async () => ({
+            results: [{ opId: op.stamp.opId, success: true, applied: true, serverVersion: 51 }],
+            serverVersion: 51,
+        })) });
+        const outbox = new OutboxManager(db, provider, scope);
+        vi.spyOn(provider, 'snapshot').mockImplementation(async request => {
+            const page = await originalSnapshot(request);
+            await db.messages.put(op.payload as any);
+            await db.pending_ops.put(op);
+            await outbox.flush();
+            expect(await db.pending_ops.count()).toBe(0);
+            return page;
+        });
+        vi.spyOn(provider, 'pull').mockResolvedValueOnce({
+            ...FULL_HISTORY_PULL_RETENTION, changes: [], nextCursor: 7, hasMore: false,
+            oldestRetainedVersion: 40, requiresSnapshot: true,
+        }).mockResolvedValue({
+            ...FULL_HISTORY_PULL_RETENTION,
+            changes: [{ serverVersion: 51, tableName: 'messages', pk: op.pk,
+                op: 'put', payload: op.payload, stamp: op.stamp }],
+            nextCursor: 51, hasMore: false,
+        });
+        await db.sync_state.put({ id: 'sync_state:workspace-expired-snapshot:default',
+            cursor: 7, lastSyncAt: Date.now() - 25 * 60 * 60 * 1000, deviceId: 'local' });
+        manager = new SubscriptionManager(db, provider, scope, { tables: ['messages'] });
+        await manager.start();
+        expect(await db.messages.get('canonical')).toMatchObject({ data: { content: 'acknowledged during snapshot' }, clock: 60 });
+        expect(await getCursorManager(db, scope).getCursor()).toBe(51);
+    });
+
+    it('lets the owner of a half-open probe complete snapshot recovery', async () => {
+        const provider = new ExpiredCursorSnapshotProvider();
+        const breaker = getSyncCircuitBreaker(`${scope.workspaceId}:${provider.id}`);
+        for (let i = 0; i < 5; i++) breaker.recordFailure();
+        const now = Date.now();
+        vi.spyOn(Date, 'now').mockReturnValue(now + 30_001);
+        manager = new SubscriptionManager(db, provider, scope, { tables: ['messages'] });
+        await manager.start();
+        expect(manager.getStatus()).toBe('connected');
+        expect(await db.messages.get('canonical')).toBeDefined();
+        expect(breaker.getState()).toBe('closed');
+    });
+
+    it('keeps principal-filtered feed coverage independent in a shared workspace database', async () => {
+        const alice = { ...scope, principalId: 'alice' };
+        const bob = { ...scope, principalId: 'bob' };
+        await getCursorManager(db, alice).setCursor(100);
+        expect(await getCursorManager(db, bob).getCursor()).toBe(0);
+        await getCursorManager(db, bob).setCursor(20);
+        expect(await getCursorManager(db, alice).getCursor()).toBe(100);
+        expect(await getCursorManager(db, bob).getCursor()).toBe(20);
+    });
+
+    it('recovers automatically after more than twenty failed reconnects', async () => {
+        const provider = new ExpiredCursorSnapshotProvider();
+        Object.assign(provider, { snapshot: undefined });
+        let attempts = 0;
+        vi.spyOn(provider, 'pull').mockImplementation(async () => {
+            getSyncCircuitBreaker(`${scope.workspaceId}:${provider.id}`).reset();
+            if (++attempts <= 25) throw new Error('temporary outage');
+            return { ...FULL_HISTORY_PULL_RETENTION, changes: [messageChange(1, 'recovered', 'after outage')], nextCursor: 1, hasMore: false };
+        });
+        manager = new SubscriptionManager(db, provider, scope, { tables: ['messages'], reconnectDelays: [1] });
+        await manager.start();
+        await vi.waitFor(() => expect(manager?.getStatus()).toBe('connected'), { timeout: 1500, interval: 5 });
+        expect(await db.messages.get('recovered')).toBeDefined();
+    });
+
+    it('replaces only the current principal notifications during expired-cursor recovery', async () => {
+        const bobScope = { ...scope, principalId: 'bob' };
+        const notification = (id: string, user_id: string) => ({ id, user_id,
+            type: 'system.info', title: id, deleted: false, created_at: 1, updated_at: 1, clock: 1 });
+        await db.notifications.bulkPut([notification('alice-local', 'alice'), notification('bob-stale', 'bob')]);
+        await getCursorManager(db, bobScope).setCursor(7);
+        const provider = new ExpiredCursorSnapshotProvider();
+        vi.spyOn(provider, 'pull').mockResolvedValueOnce({ ...FULL_HISTORY_PULL_RETENTION,
+            changes: [], nextCursor: 7, hasMore: false, oldestRetainedVersion: 40, requiresSnapshot: true,
+        }).mockResolvedValue({ ...FULL_HISTORY_PULL_RETENTION, changes: [], nextCursor: 50, hasMore: false });
+        vi.spyOn(provider, 'snapshot').mockResolvedValue({ workspaceId: scope.workspaceId,
+            snapshotId: 'bob-at-50', highWatermark: 50, nextPageToken: null,
+            items: [{ kind: 'row', tableName: 'notifications', pk: 'bob-current',
+                payload: notification('bob-current', 'bob'), revision: { clock: 1, hlc: '1:0:server', opId: testUuid('bob-current') } }],
+        });
+        manager = new SubscriptionManager(db, provider, bobScope, { tables: ['notifications'] });
+        await manager.start();
+        expect(manager.getStatus()).toBe('connected');
+        expect(await db.notifications.get('alice-local')).toMatchObject({ user_id: 'alice' });
+        expect(await db.notifications.get('bob-stale')).toBeUndefined();
+        expect(await db.notifications.get('bob-current')).toMatchObject({ user_id: 'bob' });
+        expect(await getCursorManager(db, bobScope).getCursor()).toBe(50);
+    });
+
 });
