@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
 import type { PluginGrantReviewSnapshot } from '~~/shared/plugins/grant-review';
 import {
@@ -242,7 +242,11 @@ async function expectFailure(
 describe('POST /api/plugins/isolation/capability', () => {
     let record: HostActivationRecord;
 
+    afterEach(() => vi.unstubAllEnvs());
+
     beforeEach(() => {
+        // Credential absence must not depend on a developer's configured key.
+        vi.stubEnv('OPENROUTER_API_KEY', '');
         mutationMock.mockReset();
         requireSessionMock.mockReset();
         requireCanMock.mockReset();

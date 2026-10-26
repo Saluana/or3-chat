@@ -1,6 +1,6 @@
 import { normalizeError, presentError, parseRetryAfter, errorDiagnostics } from '~~/shared/errors';
 /** Persistent, workspace-scoped upload and download execution queue. */
-import Dexie from 'dexie';
+import Dexie, { liveQuery } from 'dexie';
 import { getDb, getWorkspaceDb } from '~/db/client';
 import type { Or3DB } from '~/db/client';
 import { nowSec, nextClock, getWriteTxTableNames } from '~/db/util';
@@ -26,6 +26,7 @@ import type { ObjectStorageProvider } from './types';
 import { cacheDownloadedFile, cleanupFileCache, markUploadedFileCached, touchFileCache } from './file-cache';
 import { isCloudFileStorageEnabled, loadFilePolicy } from './file-policy';
 import type { FilePolicy } from '~~/shared/storage/file-policy';
+import { withStorageDeadline } from './storage-request';
 import {
     DEFAULT_BACKOFF_BASE_MS,
     DEFAULT_BACKOFF_MAX_MS,
@@ -66,6 +67,10 @@ function createAbortError(): Error {
     return error;
 }
 
+function leaseLostError(): Error {
+    return Object.assign(new Error('Transfer lease lost'), { name: 'LeaseLostError' });
+}
+
 /** Persistent transfer executor. Call `setWorkspaceId` before processing. */
 export class FileTransferQueue {
     private concurrency: number;
@@ -88,6 +93,17 @@ export class FileTransferQueue {
     private completedDownloads = new Map<string, Blob>();
     private directUploads = 0;
     private leaseRenewals = new Map<string, ReturnType<typeof setInterval>>();
+    private claimTokens = new Map<string, string>();
+    private recoveryCursor: string | undefined;
+    private recoveryComplete = false;
+    private processing = false;
+    private processAgain = false;
+    private readonly onOnline = () => this.scheduleProcessQueue(0);
+    private readonly onOffline = () => this.pauseRunning();
+    private readonly activity = globalThis as {
+        addEventListener?: (type: string, callback: () => void) => void;
+        removeEventListener?: (type: string, callback: () => void) => void;
+    };
 
     constructor(
         private db: Or3DB,
@@ -102,15 +118,21 @@ export class FileTransferQueue {
         this.maxDownloadBytes = config.maxDownloadBytes ?? DEFAULT_MAX_DOWNLOAD_BYTES;
         this.dbResolver = config.dbResolver;
         this.workspaceDbResolver = config.workspaceDbResolver ?? getWorkspaceDb;
+        this.activity.addEventListener?.('online', this.onOnline);
+        this.activity.addEventListener?.('offline', this.onOffline);
     }
 
     setWorkspaceId(workspaceId: string | null) {
         const previousWorkspaceId = this.workspaceId;
         this.workspaceId = workspaceId;
+        if (previousWorkspaceId !== workspaceId) {
+            this.recoveryCursor = undefined;
+            this.recoveryComplete = false;
+        }
 
         // Cancel in-flight transfers for the old workspace when switching
         if (previousWorkspaceId && workspaceId !== previousWorkspaceId) {
-            this.cancelRunningForWorkspaceSwitch();
+            this.pauseRunning();
             if (this.processQueueTimeout) {
                 clearTimeout(this.processQueueTimeout);
                 this.processQueueTimeout = null;
@@ -142,8 +164,8 @@ export class FileTransferQueue {
         this.running.add(transfer.id);
         this.directUploads++;
         try {
-            const storageId = await this.doUpload(transfer, controller.signal,
-                { ...context, dbName: context.db.name }, { meta, blob });
+            const storageId = await withStorageDeadline(signal => this.doUpload(transfer, signal,
+                { ...context, dbName: context.db.name }, { meta, blob }), controller.signal, 300_000);
             this.assertBoundContext(context);
             assertCurrent();
             if (isCloudFileStorageEnabled()) await markUploadedFileCached(context.db, context.workspaceId, this.provider.id, meta.hash).catch(() => {});
@@ -153,6 +175,7 @@ export class FileTransferQueue {
             this.running.delete(transfer.id);
             this.requeueOnAbort.delete(transfer.id);
             this.directUploads--;
+            this.scheduleProcessQueue(0);
         }
     }
 
@@ -172,7 +195,7 @@ export class FileTransferQueue {
         }
     }
 
-    private cancelRunningForWorkspaceSwitch(): void {
+    private pauseRunning(): void {
         for (const id of this.running) {
             const controller = this.abortControllers.get(id);
             if (!controller || controller.signal.aborted) continue;
@@ -184,12 +207,14 @@ export class FileTransferQueue {
     /** Idempotently release every resource owned by this queue instance. */
     dispose(): void {
         this.workspaceId = null;
-        this.cancelAllRunning();
+        this.pauseRunning();
         if (this.processQueueTimeout) clearTimeout(this.processQueueTimeout);
         this.processQueueTimeout = null;
         this.processQueueAt = null;
         for (const timer of this.leaseRenewals.values()) clearInterval(timer);
         this.leaseRenewals.clear();
+        this.activity.removeEventListener?.('online', this.onOnline);
+        this.activity.removeEventListener?.('offline', this.onOffline);
         for (const [id] of this.waiters) {
             this.rejectWaiters(id, 'Transfer queue disposed');
         }
@@ -208,93 +233,86 @@ export class FileTransferQueue {
         const db = boundContext?.db ?? (this.rebindDb(), this.db);
         if (boundContext) this.assertBoundContext(boundContext);
 
-        const existing = await this.findExistingTransfer(hash, direction, db);
-        if (boundContext) this.assertBoundContext(boundContext);
-        if (existing) {
-            // Prior 404 / pre-commit races park here; re-queue so later success can proceed.
-            if (
-                existing.state === 'remote_missing' ||
-                existing.state === 'pending_upload'
-            ) {
-                await this.retryRecoverable(existing.id, db, boundContext);
-                if (boundContext) this.assertBoundContext(boundContext);
-                const retried = await db.file_transfers.get(existing.id);
-                if (boundContext) this.assertBoundContext(boundContext);
-                return retried ?? existing;
+        const transfer = await db.transaction('rw', db.file_transfers, async () => {
+            const existing = await this.findExistingTransfer(hash, direction, db);
+            if (boundContext) this.assertBoundContext(boundContext);
+            if (existing) {
+                // Prior 404 / pre-commit races park here; re-queue so later success can proceed.
+                if (
+                    existing.state === 'remote_missing' ||
+                    existing.state === 'pending_upload'
+                ) {
+                    await this.retryRecoverable(existing.id, db, boundContext);
+                    if (boundContext) this.assertBoundContext(boundContext);
+                    const retried = await db.file_transfers.get(existing.id);
+                    if (boundContext) this.assertBoundContext(boundContext);
+                    return retried ?? existing;
+                }
+                if (existing.state !== 'failed') {
+                    return existing;
+                }
             }
-            if (existing.state !== 'failed') {
-                this.scheduleProcessQueue(0);
-                return existing;
-            }
-        }
 
-        const now = nowSec();
-        const transfer: FileTransfer = {
-            id: createRuntimeUuid(),
-            hash,
-            workspace_id: workspaceId,
-            direction,
-            bytes_total: 0,
-            bytes_done: 0,
-            state: 'queued',
-            attempts: 0,
-            retry_at: 0,
-            created_at: now,
-            updated_at: now,
-        };
+            const now = nowSec();
+            const created: FileTransfer = {
+                id: createRuntimeUuid(),
+                hash,
+                workspace_id: workspaceId,
+                direction,
+                bytes_total: 0,
+                bytes_done: 0,
+                state: 'queued',
+                attempts: 0,
+                retry_at: 0,
+                created_at: now,
+                updated_at: now,
+            };
 
-        if (boundContext) this.assertBoundContext(boundContext);
-        await db.file_transfers.put(transfer);
-        if (boundContext) this.assertBoundContext(boundContext);
-        this.scheduleProcessQueue(0);
+            if (boundContext) this.assertBoundContext(boundContext);
+            await db.file_transfers.put(created);
+            if (boundContext) this.assertBoundContext(boundContext);
+            return created;
+        });
+        const tx = Dexie.currentTransaction as typeof Dexie.currentTransaction | undefined;
+        if (tx?.db === db) tx.on('complete', () => this.scheduleProcessQueue(0));
+        else this.scheduleProcessQueue(0);
         return transfer;
     }
 
     async waitForTransfer(id: string, timeoutMs = 60_000, db = this.db): Promise<void> {
-        // Register waiter first to avoid race condition where transfer
-        // completes between state check and Promise creation
-        const waiterPromise = new Promise<void>((resolve, reject) => {
+        const current = await db.file_transfers.get(id);
+        if (!current) throw new Error('Transfer not found');
+        if (current.state === 'done') return;
+        if (current.state === 'failed') throw Object.assign(new Error(current.last_error || 'Transfer failed'), current.last_error_details);
+        if (current.state === 'pending_upload' || current.state === 'remote_missing')
+            throw recoverableTransferError(current.state, current.last_error || 'Transfer requires reconciliation');
+        return new Promise<void>((resolve, reject) => {
+            const waiter: TransferWaiter = {
+                resolve, reject,
+                timeout: setTimeout(() => {
+                    this.removeWaiter(id, waiter);
+                    reject(new Error('Transfer timeout'));
+                }, timeoutMs),
+            };
             const waiters = this.waiters.get(id) ?? [];
-            const waiter = {} as TransferWaiter;
-            waiter.resolve = resolve;
-            waiter.reject = reject;
-            waiter.timeout = setTimeout(() => {
-                this.removeWaiter(id, waiter);
-                reject(new Error('Transfer timeout'));
-            }, timeoutMs);
             waiters.push(waiter);
             this.waiters.set(id, waiters);
+            // Observe the persisted row, including writes committed by another tab.
+            const subscription = liveQuery(() => db.file_transfers.get(id)).subscribe({
+                next: transfer => {
+                    if (!transfer) this.rejectWaiters(id, new Error('Transfer not found'));
+                    else if (transfer.state === 'done') this.resolveWaiters(id);
+                    else if (transfer.state === 'failed' || transfer.state === 'pending_upload' || transfer.state === 'remote_missing') {
+                        const message = transfer.last_error || 'Transfer failed';
+                        this.rejectWaiters(id, transfer.state === 'failed'
+                            ? Object.assign(new Error(message), transfer.last_error_details)
+                            : recoverableTransferError(transfer.state, message));
+                    }
+                },
+                error: error => this.rejectWaiters(id, error),
+            });
+            waiter.unsubscribe = () => subscription.unsubscribe();
         });
-
-        // Suppress unhandled rejection if the race is lost or we throw early
-        waiterPromise.catch(() => {});
-
-        // Check current state - if already done/failed, resolve immediately
-        const transfer = await db.file_transfers.get(id);
-        if (!transfer) {
-            this.resolveWaiters(id); // Clean up the just-added waiter
-            throw new Error('Transfer not found');
-        }
-        if (transfer.state === 'done') {
-            this.resolveWaiters(id);
-            return;
-        }
-        if (
-            transfer.state === 'failed' ||
-            transfer.state === 'pending_upload' ||
-            transfer.state === 'remote_missing'
-        ) {
-            const errorMsg = transfer.last_error || 'Transfer failed';
-            const parkedError =
-                transfer.state === 'pending_upload' ||
-                transfer.state === 'remote_missing'
-                    ? recoverableTransferError(transfer.state, errorMsg)
-                    : Object.assign(new Error(errorMsg), transfer.last_error_details);
-            this.rejectWaiters(id, parkedError);
-            throw parkedError;
-        }
-
-        return waiterPromise;
     }
 
     /** Explicitly retry a transfer after upload/reconciliation state changes. */
@@ -312,11 +330,11 @@ export class FileTransferQueue {
             return false;
         }
         if (boundContext) this.assertBoundContext(boundContext);
-        await this.updateTransfer(id, {
-            state: 'queued',
-            retry_at: 0,
-            last_error: undefined,
-        }, db);
+        await db.transaction('rw', db.file_transfers, async () => {
+            const current = await db.file_transfers.get(id);
+            if (!current || (current.state !== 'pending_upload' && current.state !== 'remote_missing')) return;
+            await db.file_transfers.update(id, { state: 'queued', retry_at: 0, last_error: undefined, updated_at: nowSec() });
+        });
         if (boundContext) this.assertBoundContext(boundContext);
         this.scheduleProcessQueue(0);
         return true;
@@ -331,7 +349,11 @@ export class FileTransferQueue {
         const capturedContext = workspaceId ? { workspaceId, db } : undefined;
         const existing = await db.file_blobs.get(hash);
         if (capturedContext) this.assertBoundContext(capturedContext);
-        if (existing?.blob) { await touchFileCache(db, hash); return existing.blob; }
+        if (existing?.blob) {
+            await touchFileCache(db, hash);
+            if (capturedContext) this.assertBoundContext(capturedContext);
+            return existing.blob;
+        }
         if (!workspaceId) return undefined;
         if (capturedContext) this.assertBoundContext(capturedContext);
         const transfer = await this.enqueue(hash, 'download', {
@@ -362,7 +384,21 @@ export class FileTransferQueue {
         if (transient) return transient;
         const row = await db.file_blobs.get(hash);
         if (capturedContext) this.assertBoundContext(capturedContext);
-        return row?.blob;
+        if (row?.blob) return row.blob;
+        // Cache admission may deliberately reject this file. The executing tab's
+        // transient bytes are not shared, so retrieve and verify bytes for this caller.
+        const controller = new AbortController();
+        const localTransfer = { ...transfer, id: createRuntimeUuid(), lease_token: undefined };
+        this.abortControllers.set(localTransfer.id, controller);
+        this.running.add(localTransfer.id);
+        try {
+            return await withStorageDeadline(signal => this.doDownload(localTransfer, signal,
+                { workspaceId, dbName: db.name, db }), controller.signal, 300_000);
+        } finally {
+            this.abortControllers.delete(localTransfer.id);
+            this.running.delete(localTransfer.id);
+            this.scheduleProcessQueue(0);
+        }
     }
 
     private assertBoundContext(context: BoundQueueContext): void {
@@ -381,7 +417,8 @@ export class FileTransferQueue {
                 .where('[hash+direction]')
                 .equals([hash, direction])
                 .toArray();
-            return existing.find((transfer) => transfer.state !== 'done');
+            return existing.find(transfer => transfer.workspace_id === this.workspaceId && transfer.state !== 'done' && transfer.state !== 'failed')
+                ?? existing.find(transfer => transfer.workspace_id === this.workspaceId && transfer.state === 'failed');
         } catch (error) {
             if (!this.isDatabaseClosedError(error)) {
                 throw error;
@@ -392,9 +429,33 @@ export class FileTransferQueue {
         }
     }
 
+    /** Repair pre-atomic-intake originals in bounded startup pages. */
+    private async recoverOrphanUploads(context: TransferExecutionContext): Promise<void> {
+        if (this.recoveryComplete || !isCloudFileStorageEnabled()) return;
+        const rows = this.recoveryCursor
+            ? await context.db.file_meta.where(':id').above(this.recoveryCursor).limit(50).toArray()
+            : await context.db.file_meta.orderBy(':id').limit(50).toArray();
+        for (const meta of rows) {
+            if (meta.deleted || meta.storage_id) continue;
+            await context.db.transaction('rw', context.db.file_meta, context.db.file_blobs, context.db.file_transfers, async () => {
+                const current = await context.db.file_meta.get(meta.hash);
+                const original = await context.db.file_blobs.get(meta.hash);
+                if (!current || current.deleted || current.storage_id || !original || original.cache_accessed_at) return;
+                if ((await context.db.file_transfers.where('[hash+direction]').equals([meta.hash, 'upload']).toArray())
+                    .some(row => row.workspace_id === context.workspaceId && row.state !== 'done')) return;
+                await this.enqueue(meta.hash, 'upload', context);
+            });
+        }
+        this.recoveryCursor = rows.at(-1)?.hash;
+        this.recoveryComplete = rows.length < 50;
+        if (!this.recoveryComplete) this.scheduleProcessQueue(0);
+    }
+
     private async processQueue(): Promise<void> {
-        if (!this.workspaceId) return;
+        if (!this.workspaceId || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+        if (this.processing) { this.processAgain = true; return; }
         if (this.running.size >= this.concurrency) return;
+        this.processing = true;
 
         try {
             await this.cleanupOldTransfers();
@@ -404,6 +465,7 @@ export class FileTransferQueue {
                 db: this.db,
             };
 
+            await this.recoverOrphanUploads(context);
             const available = this.concurrency - this.running.size;
             const candidates = await this.claimQueuedTransfers(context, available);
 
@@ -413,6 +475,12 @@ export class FileTransferQueue {
             }
 
             for (const transfer of candidates) {
+                if (this.workspaceId !== context.workspaceId || this.db !== context.db) {
+                    await this.safeUpdateTransfer(transfer.id, { state: 'queued', retry_at: 0,
+                        lease_owner: undefined, lease_token: undefined, lease_expires_at: undefined }, context.db, transfer.lease_token);
+                    this.claimTokens.delete(transfer.id);
+                    continue;
+                }
                 this.running.add(transfer.id);
                 void this.processTransfer(transfer, context).finally(() => {
                     this.running.delete(transfer.id);
@@ -425,6 +493,12 @@ export class FileTransferQueue {
             }
             this.rebindDb();
             this.scheduleProcessQueue(50);
+        } finally {
+            this.processing = false;
+            if (this.processAgain) {
+                this.processAgain = false;
+                this.scheduleProcessQueue(0);
+            }
         }
     }
 
@@ -439,28 +513,36 @@ export class FileTransferQueue {
         const controller = new AbortController();
         this.abortControllers.set(transfer.id, controller);
 
-        const markedRunning = await this.safeUpdateTransfer(transfer.id, {
-            state: 'running',
-            lease_owner: this.workerId,
-            lease_expires_at: Date.now() + this.leaseDurationMs,
-            last_attempt_at: Date.now(),
-        }, context.db);
-        if (!markedRunning) {
-            return;
-        }
-        this.startLeaseRenewal(transfer.id, context.db);
+        const claimed = await context.db.transaction('rw', context.db.file_transfers, async () => {
+            const current = await context.db.file_transfers.get(transfer.id);
+            if (!current) return;
+            if (current.state === 'queued' && (current.retry_at ?? 0) <= Date.now()) {
+                const next = this.claim(current);
+                await context.db.file_transfers.put(next);
+                return next;
+            }
+            if (current.state === 'running' && current.lease_owner === this.workerId &&
+                current.lease_token && current.lease_token === transfer.lease_token &&
+                (current.lease_expires_at ?? 0) > Date.now()) return current;
+        });
+        if (!claimed) { this.abortControllers.delete(transfer.id); return; }
+        transfer = claimed;
+        this.claimTokens.set(transfer.id, transfer.lease_token!);
+        this.startLeaseRenewal(transfer.id, context.db, transfer.lease_token!);
         // One fresh policy read per operation, shared by admission and maintenance.
         // Start it alongside I/O; policy failure cannot fail verified file bytes.
         const policy = isCloudFileStorageEnabled()
-            ? loadFilePolicy(context.workspaceId).catch(() => null) : undefined;
+            ? loadFilePolicy(context.workspaceId, controller.signal).catch(() => null) : undefined;
 
         try {
-            if (transfer.direction === 'upload') {
-                await this.doUpload(transfer, controller.signal, context);
-            } else {
-                const blob = await this.doDownload(transfer, controller.signal, context, policy);
-                this.completedDownloads.set(transfer.id, blob);
-            }
+            await withStorageDeadline(async signal => {
+                if (transfer.direction === 'upload') {
+                    await this.doUpload(transfer, signal, context);
+                } else {
+                    const blob = await this.doDownload(transfer, signal, context, policy);
+                    this.completedDownloads.set(transfer.id, blob);
+                }
+            }, controller.signal, 300_000);
 
             const latest = await context.db.file_transfers.get(transfer.id);
             const markedDone = await this.safeUpdateTransfer(transfer.id, {
@@ -469,7 +551,8 @@ export class FileTransferQueue {
                 retry_at: 0,
                 lease_owner: undefined,
                 lease_expires_at: undefined,
-            }, context.db);
+                lease_token: undefined,
+            }, context.db, transfer.lease_token);
             if (!markedDone) {
                 return;
             }
@@ -484,6 +567,7 @@ export class FileTransferQueue {
                 await cleanupFileCache(context.db, context.workspaceId, this.provider, settings);
             })().catch(() => {}); // Cache maintenance cannot fail a committed transfer.
         } catch (error) {
+            if ((error as Error)?.name === 'LeaseLostError' || (controller.signal.reason as Error)?.name === 'LeaseLostError') return;
             if (this.isDatabaseClosedError(error)) {
                 await this.requeueTransferAfterDatabaseClose(transfer, context);
                 return;
@@ -500,14 +584,16 @@ export class FileTransferQueue {
                         last_error: undefined,
                         lease_owner: undefined,
                         lease_expires_at: undefined,
-                    }, context.db);
+                        lease_token: undefined,
+                    }, context.db, transfer.lease_token);
                     return;
                 }
-                await this.safeUpdateTransfer(transfer.id, {
+                const settled = await this.safeUpdateTransfer(transfer.id, {
                     state: 'failed',
                     last_error: 'Transfer cancelled',
-                }, context.db);
-                this.rejectWaiters(transfer.id, 'Transfer cancelled');
+                    lease_owner: undefined, lease_expires_at: undefined, lease_token: undefined,
+                }, context.db, transfer.lease_token);
+                if (settled) this.rejectWaiters(transfer.id, 'Transfer cancelled');
                 return;
             }
 
@@ -520,18 +606,21 @@ export class FileTransferQueue {
                 const parkedError = isRecoverableTransferError(error)
                     ? error
                     : recoverableTransferError(recoverableState, message);
-                await this.safeUpdateTransfer(transfer.id, {
+                const settled = await this.safeUpdateTransfer(transfer.id, {
                     state: recoverableState,
                     last_error: message,
-                }, context.db);
-                this.rejectWaiters(transfer.id, parkedError);
+                    lease_owner: undefined, lease_expires_at: undefined, lease_token: undefined,
+                }, context.db, transfer.lease_token);
+                if (settled) this.rejectWaiters(transfer.id, parkedError);
                 return;
             }
 
             const metadata = normalizeError(error, { source: 'storage', code: 'ERR_STORAGE_PROVIDER_ERROR' });
             // Server maintenance/rate-limit deferrals retain the durable transfer
             // and its retry budget. A later attempt obtains a fresh presigned URL.
-            const deferred = metadata.status === 429 || (metadata.status === 503 && metadata.retryAfterMs !== undefined);
+            const deferred = (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+                metadata.status === 429 || metadata.status === 408 || (metadata.status !== undefined && metadata.status >= 500) ||
+                error instanceof TypeError || (error as Error)?.name === 'TimeoutError' || (error as Error)?.name === 'NetworkError';
             const attempts = transfer.attempts + (deferred ? 0 : 1);
             const message = presentError(metadata).message;
 
@@ -551,7 +640,8 @@ export class FileTransferQueue {
                 retry_at: failed ? 0 : Date.now() + delay,
                 lease_owner: undefined,
                 lease_expires_at: undefined,
-            }, context.db);
+                lease_token: undefined,
+            }, context.db, transfer.lease_token);
             if (!updated) {
                 return;
             }
@@ -571,6 +661,7 @@ export class FileTransferQueue {
             this.requeueOnAbort.delete(transfer.id);
             this.stopLeaseRenewal(transfer.id);
             this.abortControllers.delete(transfer.id);
+            if (this.claimTokens.get(transfer.id) === transfer.lease_token) this.claimTokens.delete(transfer.id);
         }
     }
 
@@ -585,7 +676,7 @@ export class FileTransferQueue {
                 .where('[state+workspace_id+lease_expires_at]')
                 .between(
                     ['running', context.workspaceId, Dexie.minKey],
-                    ['running', context.workspaceId, now]
+                    ['running', context.workspaceId, now], true, true
                 )
                 .limit(limit)
                 .toArray();
@@ -593,7 +684,7 @@ export class FileTransferQueue {
                 .where('[state+workspace_id+retry_at]')
                 .between(
                     ['queued', context.workspaceId, Dexie.minKey],
-                    ['queued', context.workspaceId, now]
+                    ['queued', context.workspaceId, now], true, true
                 )
                 .limit(limit)
                 .toArray();
@@ -607,16 +698,9 @@ export class FileTransferQueue {
                 const abandoned =
                     current.state === 'running' && (current.lease_expires_at ?? 0) <= now;
                 if (!queuedAndDue && !abandoned) continue;
-                const next: FileTransfer = {
-                    ...current,
-                    state: 'running',
-                    lease_owner: this.workerId,
-                    lease_expires_at: now + this.leaseDurationMs,
-                    last_attempt_at: now,
-                    retry_at: 0,
-                    updated_at: nowSec(),
-                };
+                const next = this.claim(current);
                 await context.db.file_transfers.put(next);
+                this.claimTokens.set(next.id, next.lease_token!);
                 claimed.push(next);
             }
             return claimed;
@@ -625,25 +709,37 @@ export class FileTransferQueue {
 
     private async scheduleNextPersistedRetry(context: TransferExecutionContext): Promise<void> {
         const now = Date.now();
-        const future = await context.db.file_transfers
+        const [future, leases] = await Promise.all([context.db.file_transfers
             .where('[state+workspace_id+retry_at]')
             .between(
-                ['queued', context.workspaceId, now + 1],
+                ['queued', context.workspaceId, now],
                 ['queued', context.workspaceId, Dexie.maxKey]
             )
             .limit(1)
-            .toArray();
-        const retryAt = future[0]?.retry_at;
-        if (typeof retryAt === 'number') {
-            this.scheduleProcessQueue(Math.max(0, retryAt - now));
+            .toArray(), context.db.file_transfers
+            .where('[state+workspace_id+lease_expires_at]')
+            .between(['running', context.workspaceId, now], ['running', context.workspaceId, Dexie.maxKey])
+            .limit(1).toArray()]);
+        const next = Math.min(future[0]?.retry_at ?? Infinity, leases[0]?.lease_expires_at ?? Infinity);
+        if (Number.isFinite(next)) {
+            this.scheduleProcessQueue(Math.max(0, next - now));
         }
     }
 
-    private startLeaseRenewal(id: string, db: Or3DB): void {
+    private claim(current: FileTransfer): FileTransfer {
+        return { ...current, state: 'running', lease_owner: this.workerId,
+            lease_token: createRuntimeUuid(), lease_expires_at: Date.now() + this.leaseDurationMs,
+            last_attempt_at: Date.now(), retry_at: 0, updated_at: nowSec() };
+    }
+
+    private startLeaseRenewal(id: string, db: Or3DB, token: string): void {
         this.stopLeaseRenewal(id);
         const intervalMs = Math.max(250, Math.floor(this.leaseDurationMs / 3));
         const timer = setInterval(() => {
-            void this.renewLease(id, db);
+            void this.renewLease(id, db, token).catch(() => {
+                this.abortControllers.get(id)?.abort(leaseLostError());
+                this.stopLeaseRenewal(id);
+            });
         }, intervalMs);
         this.leaseRenewals.set(id, timer);
     }
@@ -654,15 +750,17 @@ export class FileTransferQueue {
         this.leaseRenewals.delete(id);
     }
 
-    private async renewLease(id: string, db: Or3DB): Promise<boolean> {
+    private async renewLease(id: string, db: Or3DB, token = this.claimTokens.get(id)): Promise<boolean> {
         return db.transaction('rw', db.file_transfers, async () => {
             const current = await db.file_transfers.get(id);
             if (
                 !current ||
                 current.state !== 'running' ||
-                current.lease_owner !== this.workerId
+                current.lease_owner !== this.workerId || !token || current.lease_token !== token ||
+                (current.lease_expires_at ?? 0) <= Date.now()
             ) {
                 this.stopLeaseRenewal(id);
+                if (this.claimTokens.get(id) === token) this.abortControllers.get(id)?.abort(leaseLostError());
                 return false;
             }
             await db.file_transfers.update(id, {
@@ -674,6 +772,7 @@ export class FileTransferQueue {
     }
 
     private scheduleProcessQueue(delayMs: number): void {
+        if (!this.workspaceId) return;
         const targetAt = Date.now() + delayMs;
         if (this.processQueueTimeout) {
             if (this.processQueueAt !== null && this.processQueueAt <= targetAt) {
@@ -709,6 +808,7 @@ export class FileTransferQueue {
         source?: { meta: FileMeta; blob: Blob }
     ): Promise<string> {
         const meta = source?.meta ?? await context.db.file_meta.get(transfer.hash);
+        const initialRow = source ? await context.db.file_meta.get(transfer.hash) : meta;
         const blobRow = source ? { blob: source.blob } : await context.db.file_blobs.get(transfer.hash);
         if (!meta || !blobRow?.blob) {
             throw err(
@@ -750,7 +850,7 @@ export class FileTransferQueue {
         await this.updateTransfer(transfer.id, {
             bytes_total: meta.size_bytes,
             bytes_done: 0,
-        }, context.db);
+        }, context.db, transfer.lease_token);
 
         const presign = await this.provider.getPresignedUploadUrl({
             workspaceId: transfer.workspace_id,
@@ -759,7 +859,9 @@ export class FileTransferQueue {
             sizeBytes: meta.size_bytes,
             expiresInMs: urlOptions.expiry_ms,
             disposition: urlOptions.disposition,
+            signal,
         });
+        await this.assertTransferActive(transfer, context.db, signal);
 
         // Convex storage requires Content-Type header set to the file's MIME type
         // See: https://docs.convex.dev/file-storage/upload-files#calling-the-upload-apis-from-a-web-page
@@ -774,6 +876,7 @@ export class FileTransferQueue {
             body: blobRow.blob,
             signal,
         });
+        await this.assertTransferActive(transfer, context.db, signal);
 
         if (!uploadResponse.ok) {
             // 413 Content Too Large - file exceeds storage provider's size limit
@@ -819,6 +922,12 @@ export class FileTransferQueue {
         }
 
         if (this.provider.commitUpload) {
+            await this.assertTransferActive(transfer, context.db, signal);
+            const current = await context.db.file_meta.get(meta.hash);
+            if ((initialRow && !current) || (current?.deleted && initialRow?.deleted !== true)) {
+                throw createAbortError();
+            }
+            await this.assertTransferActive(transfer, context.db, signal);
             await this.provider.commitUpload({
                 workspaceId: transfer.workspace_id,
                 hash: meta.hash,
@@ -826,10 +935,12 @@ export class FileTransferQueue {
                 intentId: presign.intentId,
                 meta: toCommitMeta(meta),
                 storageProviderId: this.provider.id,
+                signal,
             });
         }
 
-        await this.persistUploadMetadata(meta, storageId, context.db);
+        await this.assertTransferActive(transfer, context.db, signal);
+        if (!source) await this.persistUploadMetadata(meta, storageId, context.db, transfer, signal);
 
         await hooks.doAction('storage.files.upload:action:after', {
             hash: meta.hash,
@@ -878,7 +989,9 @@ export class FileTransferQueue {
             mimeType: meta.mime_type,
             expiresInMs: urlOptions.expiry_ms,
             disposition: urlOptions.disposition,
+            signal,
         });
+        await this.assertTransferActive(transfer, context.db, signal);
 
         const response = await fetch(presign.url, {
             method: presign.method ?? 'GET',
@@ -948,12 +1061,13 @@ export class FileTransferQueue {
             context.db,
             isCloudFileStorageEnabled() ? Math.max(this.maxDownloadBytes, meta.size_bytes) : this.maxDownloadBytes,
             blobMime,
-            signal
+            signal,
+            transfer.lease_token,
         );
         await this.updateTransfer(transfer.id, {
             bytes_total: bytesTotal,
             bytes_done: bytesTotal,
-        }, context.db);
+        }, context.db, transfer.lease_token);
 
         const parsed = parseHash(meta.hash);
         if (!parsed) {
@@ -965,6 +1079,7 @@ export class FileTransferQueue {
         }
 
         const computedHex = await computeHashHex(blob, parsed.algorithm);
+        await this.assertTransferActive(transfer, context.db, signal);
         if (computedHex !== parsed.hex) {
             throw err(
                 'ERR_STORAGE_DOWNLOAD_FAILED',
@@ -975,12 +1090,19 @@ export class FileTransferQueue {
 
         if (isCloudFileStorageEnabled()) {
             try {
-                const settings = await (policy ?? loadFilePolicy(context.workspaceId));
+                const settings = await (policy ?? loadFilePolicy(context.workspaceId, signal));
                 this.assertBoundContext(context);
-                if (settings) await cacheDownloadedFile(context.db, context.workspaceId, this.provider.id, meta.hash, meta.storage_id, blob, settings);
-            } catch { /* The verified download is usable even when cache admission fails. */ }
+                if (settings) await cacheDownloadedFile(context.db, context.workspaceId, this.provider.id, meta.hash, meta.storage_id, blob, settings,
+                    () => this.assertTransferActive(transfer, context.db, signal));
+            } catch {
+                await this.assertTransferActive(transfer, context.db, signal);
+                // The verified download is usable even when cache admission fails.
+            }
         } else {
-            await context.db.file_blobs.put({ hash: meta.hash, blob });
+            await context.db.transaction('rw', context.db.file_blobs, context.db.file_transfers, async () => {
+                await this.assertTransferActive(transfer, context.db, signal);
+                await context.db.file_blobs.put({ hash: meta.hash, blob });
+            });
         }
 
         await hooks.doAction('storage.files.download:action:after', {
@@ -997,7 +1119,8 @@ export class FileTransferQueue {
         db: Or3DB = this.db,
         maxBytes = this.maxDownloadBytes,
         mimeType = response.headers.get('content-type') ?? '',
-        signal?: AbortSignal
+        signal?: AbortSignal,
+        claimToken?: string,
     ): Promise<{ blob: Blob; bytesTotal: number }> {
         if (signal?.aborted) {
             await response.body?.cancel();
@@ -1051,7 +1174,7 @@ export class FileTransferQueue {
                     await this.updateTransfer(transferId, {
                         bytes_done: received,
                         bytes_total: contentLength || received,
-                    }, db);
+                    }, db, claimToken);
                     controller.close();
                     return;
                 }
@@ -1072,7 +1195,7 @@ export class FileTransferQueue {
                     await this.updateTransfer(transferId, {
                         bytes_done: received,
                         bytes_total: contentLength || received,
-                    }, db);
+                    }, db, claimToken);
                     lastUpdate = now;
                 }
 
@@ -1094,44 +1217,67 @@ export class FileTransferQueue {
     private async persistUploadMetadata(
         meta: FileMeta,
         storageId: string,
-        db: Or3DB = this.db
+        db: Or3DB,
+        transfer: FileTransfer,
+        signal: AbortSignal,
     ): Promise<void> {
         await db.transaction(
             'rw',
-            getWriteTxTableNames(db, 'file_meta'),
+            getWriteTxTableNames(db, 'file_meta', { include: ['file_transfers'] }),
             async () => {
-            const existing = await db.file_meta.get(meta.hash);
-            if (!existing) return;
-            await db.file_meta.put({
-                ...existing,
-                storage_id: storageId,
-                storage_provider_id: this.provider.id,
-                updated_at: nowSec(),
-                clock: nextClock(existing.clock),
+                await this.assertTransferActive(transfer, db, signal);
+                const existing = await db.file_meta.get(meta.hash);
+                if (!existing || existing.deleted) return;
+                await db.file_meta.put({
+                    ...existing,
+                    storage_id: storageId,
+                    storage_provider_id: this.provider.id,
+                    updated_at: nowSec(),
+                    clock: nextClock(existing.clock),
+                });
             });
-        });
     }
 
     private async updateTransfer(
         id: string,
         patch: Partial<FileTransfer>,
-        db: Or3DB = this.db
+        db: Or3DB = this.db,
+        claimToken?: string,
     ): Promise<void> {
-        await db.file_transfers.update(id, {
-            ...patch,
-            updated_at: nowSec(),
+        // Direct uploads/downloads have no durable row to mutate.
+        if (!claimToken) return;
+        await db.transaction('rw', db.file_transfers, async () => {
+            await this.assertClaim(id, claimToken, db);
+            await db.file_transfers.update(id, {
+                ...patch,
+                updated_at: nowSec(),
+            });
         });
+    }
+
+    private async assertClaim(id: string, token: string, db: Or3DB): Promise<void> {
+        const row = await db.file_transfers.get(id);
+        if (!row || row.state !== 'running' || row.lease_owner !== this.workerId ||
+            row.lease_token !== token || (row.lease_expires_at ?? 0) <= Date.now()) throw leaseLostError();
+    }
+
+    private async assertTransferActive(transfer: FileTransfer, db: Or3DB, signal: AbortSignal): Promise<void> {
+        signal.throwIfAborted();
+        if (transfer.lease_token) await this.assertClaim(transfer.id, transfer.lease_token, db);
+        signal.throwIfAborted();
     }
 
     private async safeUpdateTransfer(
         id: string,
         patch: Partial<FileTransfer>,
-        db: Or3DB = this.db
+        db: Or3DB = this.db,
+        claimToken?: string,
     ): Promise<boolean> {
         try {
-            await this.updateTransfer(id, patch, db);
+            await this.updateTransfer(id, patch, db, claimToken);
             return true;
         } catch (error) {
+            if ((error as Error)?.name === 'LeaseLostError') return false;
             if (!this.isDatabaseClosedError(error)) {
                 throw error;
             }
@@ -1170,13 +1316,14 @@ export class FileTransferQueue {
         context: TransferExecutionContext
     ): Promise<void> {
         const recoveryDb = this.workspaceDbResolver(context.workspaceId);
-        await this.updateTransfer(transfer.id, {
+        await this.safeUpdateTransfer(transfer.id, {
             state: 'queued',
             retry_at: 0,
             last_error: undefined,
             lease_owner: undefined,
             lease_expires_at: undefined,
-        }, recoveryDb);
+            lease_token: undefined,
+        }, recoveryDb, transfer.lease_token);
         if (this.workspaceId === context.workspaceId) {
             this.db = recoveryDb;
         } else {
@@ -1197,6 +1344,7 @@ export class FileTransferQueue {
         if (!waiters) return;
         waiters.forEach((waiter) => {
             clearTimeout(waiter.timeout);
+            waiter.unsubscribe?.();
             waiter.resolve();
         });
         this.waiters.delete(id);
@@ -1209,6 +1357,7 @@ export class FileTransferQueue {
             error instanceof Error ? error : new Error(String(error));
         waiters.forEach((waiter) => {
             clearTimeout(waiter.timeout);
+            waiter.unsubscribe?.();
             waiter.reject(rejection);
         });
         this.waiters.delete(id);
@@ -1217,6 +1366,7 @@ export class FileTransferQueue {
     private removeWaiter(id: string, waiter: TransferWaiter): void {
         const waiters = this.waiters.get(id);
         if (!waiters) return;
+        waiter.unsubscribe?.();
         const remaining = waiters.filter((candidate) => candidate !== waiter);
         if (remaining.length) this.waiters.set(id, remaining);
         else this.waiters.delete(id);

@@ -1,3 +1,4 @@
+import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { errorDiagnostics, presentError, type ErrorMetadata } from '~~/shared/errors';
 /**
  * @module app/core/sync/outbox-manager
@@ -20,7 +21,7 @@ import { errorDiagnostics, presentError, type ErrorMetadata } from '~~/shared/er
  * Constraints:
  * - Maximum batch size: 50 ops per push (configurable)
  * - Capacity warning at 500 pending ops
- * - Retry delays: [250ms, 1s, 3s, 5s] (4 attempts, then permanent failure)
+ * - Retry delays: [250ms, 1s, 3s, 5s], then capped retries until recovery
  * - Circuit breaker prevents flush attempts when the provider is down
  * - Payloads are re-sanitized before each push for safety
  *
@@ -32,13 +33,13 @@ import type { Or3DB, SyncQuarantineRow } from '~/db/client';
 import type { SyncProvider, SyncScope, PendingOp, PushWinner } from '~~/shared/sync/types';
 import { useHooks } from '~/core/hooks/useHooks';
 import { nowSec } from '~/db/util';
-import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
+import { sanitizePayloadForSync, SyncPayloadTooLargeError } from '~~/shared/sync/sanitize';
 import {
     MAX_SYNC_PUSH_BATCH_BYTES,
     syncJsonByteLength,
 } from '~~/shared/sync/schemas';
 import { markRecentOpId, unmarkRecentOpId } from './recent-op-cache';
-import { getHookBridge } from './hook-bridge';
+import { getHookBridge, SYNCED_TABLES } from './hook-bridge';
 import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 import { compareSyncRevision } from '~~/shared/sync/revision';
 import { normalizeSyncPayload } from './sync-payload-normalizer';
@@ -64,6 +65,11 @@ const DEFAULT_MAX_BATCH_SIZE = 50;
 /** Max pending ops before emitting capacity warning */
 const MAX_PENDING_OPS = 500;
 
+// A request ends before its durable claim expires. If a tab is suspended, the
+// next tab can reclaim it and every late settlement is conditional on the token.
+const PUSH_TIMEOUT_MS = 30_000;
+const CLAIM_DURATION_MS = 60_000;
+
 type EligibleStatus = 'pending' | 'retry_wait';
 
 function getReadyAt(op: PendingOp): number {
@@ -84,9 +90,18 @@ function compareSchedulingKey(a: PendingOp, b: PendingOp): number {
     return a.id.localeCompare(b.id);
 }
 
-function stripReadyAt(op: PendingOp): Omit<PendingOp, 'readyAt'> {
-    const { readyAt: _omitted, ...rest } = op;
+function stripReadyAt(op: PendingOp): Omit<PendingOp, 'readyAt' | 'claimId' | 'claimExpiresAt'> {
+    const { readyAt: _omitted, claimId: _claim, claimExpiresAt: _expiry, ...rest } = op;
     return rest;
+}
+
+function hasComparableRevision(op: PendingOp): boolean {
+    return !!op.stamp && typeof op.stamp.clock === 'number' && Number.isFinite(op.stamp.clock)
+        && typeof op.stamp.hlc === 'string' && !!op.stamp.hlc
+        && typeof op.stamp.opId === 'string' && !!op.stamp.opId
+        && typeof op.tableName === 'string' && (SYNCED_TABLES as readonly string[]).includes(op.tableName)
+        && (op.operation === 'put' || op.operation === 'delete')
+        && typeof op.pk === 'string' && !!op.pk;
 }
 
 type LocalRevision = { clock: number; hlc: string; opId: string };
@@ -223,6 +238,7 @@ export class OutboxManager {
 
     private flushTimeout: ReturnType<typeof setTimeout> | null = null;
     private flushOwner: symbol | null = null;
+    private pushAbortController: AbortController | null = null;
     private isRunning = false;
     private needsSyncingRecovery = true;
     private providerRateLimitedUntil = 0;
@@ -268,6 +284,7 @@ export class OutboxManager {
     stop(): void {
         this.lifecycleGeneration++;
         this.isRunning = false;
+        this.pushAbortController?.abort(new Error('Sync push stopped'));
         if (this.flushTimeout) {
             clearTimeout(this.flushTimeout);
             this.flushTimeout = null;
@@ -321,27 +338,21 @@ export class OutboxManager {
 
         const owner = Symbol('outbox-flush');
         this.flushOwner = owner;
+        const controller = new AbortController();
+        this.pushAbortController = controller;
+        const deadline = setTimeout(() => controller.abort(new Error('Sync push timed out')), PUSH_TIMEOUT_MS);
+        let claimed: PendingOp[] = [];
         try {
             const hooks = useHooks();
 
-            // Crash recovery: reset stale in-flight ops once when the loop starts.
-            // Recovered rows are immediately eligible with no positive
-            // scheduling time (readyAt 0). Stamping them with `now` would sort
-            // them after every fresh pending row and let a sustained pending
-            // backlog postpone them on every flush; same-status FIFO via
-            // (readyAt, createdAt, id) is the fair position.
+            // A startup in another tab must not steal an active push. Recovery
+            // runs on every heartbeat so an abandoned lease also recovers when
+            // this manager was already open at the time of the crash.
+            await this.recoverAbandonedOps();
+            if (generation !== this.lifecycleGeneration) return false;
             if (this.needsSyncingRecovery) {
-                await this.db.pending_ops
-                    .where('status')
-                    .equals('syncing')
-                    .modify({ status: 'pending', nextAttemptAt: undefined });
-                if (generation !== this.lifecycleGeneration) return false;
-                await this.db.pending_ops
-                    .where('status')
-                    .equals('in_flight')
-                    .modify({ status: 'pending', nextAttemptAt: undefined });
-                if (generation !== this.lifecycleGeneration) return false;
-                // Startup is the one place that sees quarantine growth from earlier sessions.
+                await this.db.pending_ops.where('status').equals('failed_retryable')
+                    .modify({ status: 'retry_wait', nextAttemptAt: undefined, failureKind: undefined, failedAt: undefined });
                 await pruneResolvedQuarantineBestEffort(this.db);
                 if (generation !== this.lifecycleGeneration) return false;
                 this.needsSyncingRecovery = false;
@@ -381,29 +392,23 @@ export class OutboxManager {
                 });
             }
 
-            // Coalesce within the selected eligible set only. Deferred and
-            // unselected rows stay intact; only selected losers are removed.
-            const coalesced = this.coalesceOps(pendingOps);
-
-            // Mark dropped ops for deletion
-            const coalescedIds = new Set(coalesced.map((op) => op.id));
-            const dropped = pendingOps.filter((op) => !coalescedIds.has(op.id));
-            if (dropped.length) {
-                await this.db.pending_ops.bulkDelete(dropped.map((op) => op.id));
-            }
+            // Reject malformed persisted revisions before comparison. Preserve
+            // the original and local content through the existing quarantine
+            // transaction rather than letting one row jam every selected key.
+            const malformed = pendingOps.filter((op) => !hasComparableRevision(op));
+            if (malformed.length) await quarantineCorruptOps(this.db, 'manual', malformed);
             if (generation !== this.lifecycleGeneration) return false;
 
-            if (!coalesced.length) return false;
-
-            // coalesceOps() sorts by creation time, which would undo the fair
-            // selection order. Restore fairness before packing so count/byte
-            // limits share capacity between statuses.
-            const dueOps = this.restoreFairOrder(coalesced);
-
-            const batch = this.packDueOps(dueOps);
+            // Selection is optimistic, ownership is not: re-read, coalesce and
+            // claim in one IndexedDB write transaction shared by every tab.
+            const batch = await this.claimBatch(pendingOps.filter(hasComparableRevision));
+            claimed = batch;
             if (!batch.length) return false;
 
-            if (!circuitBreaker.beginProbe()) return false;
+            if (!circuitBreaker.beginProbe()) {
+                await this.releaseBatchForDeferredRetry(batch, 0);
+                return false;
+            }
             // Consume the turn only when a batch actually starts a push
             // attempt. Empty or gated flushes preserve it. The last packed
             // operation decides so single-op and byte-limited batches do not
@@ -442,8 +447,58 @@ export class OutboxManager {
                 if (!probeSettled) circuitBreaker.recordFailure();
             }
         } finally {
+            clearTimeout(deadline);
+            if (generation !== this.lifecycleGeneration && claimed.length) {
+                await this.releaseBatchForDeferredRetry(claimed, 0);
+            }
+            if (this.pushAbortController === controller) this.pushAbortController = null;
             if (this.flushOwner === owner) this.flushOwner = null;
         }
+    }
+
+    private async recoverAbandonedOps(): Promise<void> {
+        await this.db.transaction('rw', ['pending_ops'], async () => {
+            for (const status of ['syncing', 'in_flight'] as const) {
+                const rows = await this.db.pending_ops.where('status').equals(status).toArray();
+                for (const op of rows) {
+                    if (op.claimId && (op.claimExpiresAt ?? 0) > Date.now()) continue;
+                    await this.db.pending_ops.put({ ...op, status: 'pending', nextAttemptAt: undefined,
+                        claimId: undefined, claimExpiresAt: undefined });
+                }
+            }
+        });
+    }
+
+    private async claimBatch(selected: PendingOp[]): Promise<PendingOp[]> {
+        return this.db.transaction('rw', ['pending_ops'], async () => {
+            const current = (await Promise.all(selected.map((op) => this.db.pending_ops.get(op.id))))
+                .filter((op): op is PendingOp => !!op && (op.status === 'pending' || op.status === 'retry_wait')
+                    && getReadyAt(op) <= Date.now() && hasComparableRevision(op));
+            const winners = this.coalesceOps(current);
+            const winnerIds = new Set(winners.map((op) => op.id));
+            const dropped = current.filter((op) => !winnerIds.has(op.id));
+            if (dropped.length) await this.db.pending_ops.bulkDelete(dropped.map((op) => op.id));
+            const claimId = createRuntimeUuid();
+            const batch = this.packDueOps(this.restoreFairOrder(winners)).map((op) => ({
+                ...op, claimId, claimExpiresAt: Date.now() + CLAIM_DURATION_MS,
+            }));
+            await this.db.pending_ops.bulkPut(batch.map((op) => ({ ...op, status: 'in_flight' as const })));
+            return batch;
+        });
+    }
+
+    private async ownsClaim(op: PendingOp): Promise<boolean> {
+        const current = await this.db.pending_ops.get(op.id);
+        return !!current && current.status === 'in_flight' && !!op.claimId
+            && current.claimId === op.claimId && (current.claimExpiresAt ?? 0) > Date.now();
+    }
+
+    private async updateClaimedOp(op: PendingOp, update: PendingOp): Promise<boolean> {
+        return this.db.transaction('rw', ['pending_ops'], async () => {
+            if (!await this.ownsClaim(op)) return false;
+            await this.db.pending_ops.put({ ...update, claimId: undefined, claimExpiresAt: undefined });
+            return true;
+        });
     }
 
     /**
@@ -568,26 +623,39 @@ export class OutboxManager {
             return { successCount: 0, failCount: 0, deferred: false };
         }
 
-        await this.db.pending_ops.bulkPut(
-            batch.map((op) => ({ ...op, status: 'in_flight' as const }))
-        );
-        if (generation !== this.lifecycleGeneration) {
-            return { successCount: 0, failCount: 0, deferred: false };
+        const valid: PendingOp[] = [];
+        const sanitizedBatch: PendingOp[] = [];
+        let localFailCount = 0;
+        for (const op of batch) {
+            try {
+                sanitizedBatch.push({ ...stripReadyAt(op),
+                    payload: sanitizePayloadForSync(op.tableName, op.payload, op.operation) });
+                valid.push(op);
+            } catch (error) {
+                await this.handleFailedOp(op, error instanceof Error ? error.message : String(error),
+                    error instanceof SyncPayloadTooLargeError ? error.code : 'VALIDATION_ERROR',
+                    errorDiagnostics(error, { source: 'sync' }));
+                localFailCount += 1;
+            }
         }
+        batch = valid;
+        if (!batch.length) return { successCount: 0, failCount: localFailCount, deferred: false };
 
         try {
-            const sanitizedBatch = batch.map((op) => ({
-                ...stripReadyAt(op),
-                payload: sanitizePayloadForSync(op.tableName, op.payload, op.operation),
-            }));
-
             for (const op of batch) {
                 markRecentOpId(op.stamp.opId);
             }
 
-            const result = await this.provider.push({
-                scope: this.scope,
-                ops: sanitizedBatch,
+            const signal = this.pushAbortController?.signal;
+            // Race the provider with cancellation as third-party direct providers
+            // may not yet honor the optional AbortSignal themselves.
+            const result = await new Promise<Awaited<ReturnType<SyncProvider['push']>>>((resolve, reject) => {
+                const aborted = () => reject(signal?.reason ?? new Error('Sync push aborted'));
+                if (signal?.aborted) { aborted(); return; }
+                signal?.addEventListener('abort', aborted, { once: true });
+                this.provider.push({ scope: this.scope, ops: sanitizedBatch }, { signal })
+                    .then(resolve, reject)
+                    .finally(() => signal?.removeEventListener('abort', aborted));
             });
             if (generation !== this.lifecycleGeneration) {
                 return { successCount: 0, failCount: 0, deferred: false };
@@ -596,7 +664,7 @@ export class OutboxManager {
 
             const resultsById = new Map(result.results.map((res) => [res.opId, res]));
             let successCount = 0;
-            let failCount = 0;
+            let failCount = localFailCount;
 
             for (const op of batch) {
                 const res = resultsById.get(op.stamp.opId);
@@ -627,21 +695,15 @@ export class OutboxManager {
                         failCount += 1;
                         continue;
                     }
-                    await this.applyRemoteWinner(op, winner);
-                    unmarkRecentOpId(op.stamp.opId);
-                    await this.db.pending_ops.put({ ...op, status: 'applied' });
-                    await this.db.pending_ops.delete(op.id);
-                    successCount += 1;
+                    if (await this.acknowledgeOp(op, winner)) {
+                        unmarkRecentOpId(op.stamp.opId);
+                        successCount += 1;
+                    }
                     continue;
                 }
 
                 if (res.success) {
-                    if (op.operation === 'delete') {
-                        await this.markTombstoneSynced(op, res.serverVersion);
-                    }
-                    await this.db.pending_ops.put({ ...op, status: 'applied' });
-                    await this.db.pending_ops.delete(op.id);
-                    successCount += 1;
+                    if (await this.acknowledgeOp(op, undefined, res.serverVersion)) successCount += 1;
                 } else {
                     await this.handleFailedOp(op, res.error, res.errorCode);
                     failCount += 1;
@@ -700,7 +762,7 @@ export class OutboxManager {
                 );
                 return {
                     successCount: left.successCount + right.successCount,
-                    failCount: left.failCount + right.failCount,
+                    failCount: localFailCount + left.failCount + right.failCount,
                     deferred: left.deferred || right.deferred,
                 };
             }
@@ -728,7 +790,7 @@ export class OutboxManager {
             }
 
             const message = error instanceof Error ? error.message : String(error);
-            let failCount = 0;
+            let failCount = localFailCount;
             for (const op of batch) {
                 await this.handleFailedOp(op, message, undefined, errorDiagnostics(error, { source: 'sync' }));
                 failCount += 1;
@@ -746,6 +808,16 @@ export class OutboxManager {
     private isWholeRequestClientError(error: unknown): boolean {
         const status = httpStatusOf(error);
         return status === 400 || status === 413;
+    }
+
+    private async acknowledgeOp(op: PendingOp, winner?: PushWinner, serverVersion?: number): Promise<boolean> {
+        return this.db.transaction('rw', Array.from(new Set(['pending_ops', 'tombstones', op.tableName])), async () => {
+            if (!await this.ownsClaim(op)) return false;
+            if (winner) await this.applyRemoteWinner(op, winner);
+            else if (op.operation === 'delete') await this.markTombstoneSynced(op, serverVersion);
+            await this.db.pending_ops.delete(op.id);
+            return true;
+        });
     }
 
     private async applyRemoteWinner(op: PendingOp, winner: PushWinner): Promise<void> {
@@ -767,22 +839,21 @@ export class OutboxManager {
                     if (compareSyncRevision(winnerRev, materializedRevisionFromRow(local)) <= 0) {
                         return;
                     }
-                } else {
-                    const tombstone: unknown = await tx.table('tombstones').get(`${op.tableName}:${op.pk}`);
-                    const tombRev = tombstoneRevisionFromRow(tombstone);
-                    if (
-                        tombRev &&
-                        tombstoneBlocksRevision(
-                            {
-                                clock: tombRev.clock,
-                                hlc: tombRev.hlc || undefined,
-                                opId: tombRev.opId || undefined,
-                            },
-                            winnerRev
-                        )
-                    ) {
-                        return;
-                    }
+                }
+                const tombstone: unknown = await tx.table('tombstones').get(`${op.tableName}:${op.pk}`);
+                const tombRev = tombstoneRevisionFromRow(tombstone);
+                if (
+                    tombRev &&
+                    tombstoneBlocksRevision(
+                        {
+                            clock: tombRev.clock,
+                            hlc: tombRev.hlc || undefined,
+                            opId: tombRev.opId || undefined,
+                        },
+                        winnerRev
+                    )
+                ) {
+                    return;
                 }
                 const normalized = normalizeSyncPayload(op.tableName, op.pk, winner.payload, winnerRev);
                 if (!normalized.isValid) {
@@ -862,37 +933,34 @@ export class OutboxManager {
                 status: 'retry_wait' as const,
                 nextAttemptAt,
             };
-            await this.db.pending_ops.put(updatedOp);
+            if (!await this.updateClaimedOp(op, updatedOp)) return;
             await hooks.doAction('sync.retry:action', { op: updatedOp, attempt: op.attempts });
             return;
         }
 
-        const attempts = op.attempts + 1;
-        const maxAttempts = this.config.retryDelays.length;
+        const attempts = Math.min(op.attempts + 1, Number.MAX_SAFE_INTEGER);
 
         // Check for permanent failures that should not be retried
         const isPermanent = this.isPermanentFailure(errorCode, error);
 
-        if (isPermanent || attempts >= maxAttempts) {
-            // Max retries reached or permanent failure - mark as failed
+        if (isPermanent) {
+            // Permanent content/admission failures remain visible until explicitly resolved
             const updatedOp = {
                 ...op,
-                status: isPermanent ? 'failed_permanent' as const : 'failed_retryable' as const,
+                status: 'failed_permanent' as const,
                 attempts,
                 lastError: details ? presentError(details).message : error,
                 lastErrorDetails: details,
                 lastErrorCode: errorCode as PendingOp['lastErrorCode'],
-                failureKind: isPermanent
-                    ? 'permanent' as const
-                    : 'retry_exhausted' as const,
+                failureKind: 'permanent' as const,
                 failedAt: Date.now(),
             };
-            await this.db.pending_ops.put(updatedOp);
+            if (!await this.updateClaimedOp(op, updatedOp)) return;
             
             // Log detailed info for debugging
-            const payloadSize = op.payload ? JSON.stringify(op.payload).length : 0;
+            const payloadSize = op.payload ? syncJsonByteLength(op.payload) : 0;
             console.error(
-                '[OutboxManager] Op failed' + (isPermanent ? ' (permanent)' : ' after max retries') + ':',
+                '[OutboxManager] Op failed (permanent):',
                 {
                     opId: op.stamp.opId,
                     table: op.tableName,
@@ -906,14 +974,18 @@ export class OutboxManager {
             await hooks.doAction('sync.error:action', { op: updatedOp, error: details ?? error, permanent: isPermanent });
         } else {
             // Schedule retry
-            const delay = this.config.retryDelays[attempts - 1] ?? 0;
+            const delay = this.config.retryDelays[Math.min(attempts - 1, this.config.retryDelays.length - 1)]
+                ?? DEFAULT_RETRY_DELAYS[DEFAULT_RETRY_DELAYS.length - 1]!;
             const updatedOp = {
                 ...op,
                 status: 'retry_wait' as const,
                 attempts,
+                lastError: details ? presentError(details).message : error,
+                lastErrorDetails: details,
+                lastErrorCode: errorCode as PendingOp['lastErrorCode'],
                 nextAttemptAt: Date.now() + delay,
             };
-            await this.db.pending_ops.put(updatedOp);
+            if (!await this.updateClaimedOp(op, updatedOp)) return;
             console.warn('[OutboxManager] Op will retry:', op.stamp.opId, 'attempt', attempts);
             await hooks.doAction('sync.retry:action', { op: updatedOp, attempt: attempts });
         }
@@ -1009,55 +1081,53 @@ export class OutboxManager {
 
     private async releaseBatchForDeferredRetry(batch: PendingOp[], retryAfterMs: number): Promise<void> {
         const nextAttemptAt = Date.now() + retryAfterMs;
-        await this.db.pending_ops.bulkPut(
-            batch.map((op) => ({
-                ...op,
-                status: 'retry_wait' as const,
-                nextAttemptAt,
-            }))
-        );
+        for (const op of batch) {
+            await this.updateClaimedOp(op, { ...op, status: 'retry_wait', nextAttemptAt });
+        }
     }
 
     private async markTombstoneSynced(op: PendingOp, serverVersion?: number): Promise<void> {
-        const id = `${op.tableName}:${op.pk}`;
-        const existing = await this.db.tombstones.get(id);
-        const syncedAt = nowSec();
+        await this.db.transaction('rw', ['tombstones'], async () => {
+            const id = `${op.tableName}:${op.pk}`;
+            const existing = await this.db.tombstones.get(id);
+            const syncedAt = nowSec();
 
-        if (!existing) {
-            await this.db.tombstones.put({
-                id,
-                tableName: op.tableName,
-                pk: op.pk,
-                deletedAt: syncedAt,
-                clock: op.stamp.clock,
-                hlc: op.stamp.hlc,
-                opId: op.stamp.opId,
-                serverVersion,
-                syncedAt,
-            });
-            return;
-        }
+            if (!existing) {
+                await this.db.tombstones.put({
+                    id,
+                    tableName: op.tableName,
+                    pk: op.pk,
+                    deletedAt: syncedAt,
+                    clock: op.stamp.clock,
+                    hlc: op.stamp.hlc,
+                    opId: op.stamp.opId,
+                    serverVersion,
+                    syncedAt,
+                });
+                return;
+            }
 
-        const shouldAdvance = existing.clock < op.stamp.clock || (
-            existing.clock === op.stamp.clock && (
-                !existing.hlc ||
-                !existing.opId ||
-                compareSyncRevision(op.stamp, {
-                    clock: existing.clock,
-                    hlc: existing.hlc,
-                    opId: existing.opId,
-                }) >= 0
-            )
-        );
-        if (shouldAdvance) {
-            await this.db.tombstones.update(id, {
-                clock: op.stamp.clock,
-                hlc: op.stamp.hlc,
-                opId: op.stamp.opId,
-                serverVersion: serverVersion ?? existing.serverVersion,
-                syncedAt,
-            });
-        }
+            const shouldAdvance = existing.clock < op.stamp.clock || (
+                existing.clock === op.stamp.clock && (
+                    !existing.hlc ||
+                    !existing.opId ||
+                    compareSyncRevision(op.stamp, {
+                        clock: existing.clock,
+                        hlc: existing.hlc,
+                        opId: existing.opId,
+                    }) >= 0
+                )
+            );
+            if (shouldAdvance) {
+                await this.db.tombstones.update(id, {
+                    clock: op.stamp.clock,
+                    hlc: op.stamp.hlc,
+                    opId: op.stamp.opId,
+                    serverVersion: serverVersion ?? existing.serverVersion,
+                    syncedAt,
+                });
+            }
+        });
     }
 
     /**

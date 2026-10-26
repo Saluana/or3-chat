@@ -9,7 +9,8 @@ export const subscriptionManagerInstances = new Map<string, SubscriptionManager>
  * Get scope key for instance lookup
  */
 export function getScopeKey(scope: SyncScope): string {
-    return `${scope.workspaceId}:${scope.projectId ?? 'default'}`;
+    const principal = scope.principalId ? `:principal:${encodeURIComponent(scope.principalId)}` : '';
+    return `${scope.workspaceId}:${scope.projectId ?? 'default'}${principal}`;
 }
 
 /** Return the manager currently owned by a sync scope. */

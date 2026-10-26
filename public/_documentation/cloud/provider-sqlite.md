@@ -214,3 +214,10 @@ change-log version and client cursor protocol remain unchanged.
 Migrations 027–028 are forward-only. Keep a pre-upgrade database backup;
 rolling back the provider requires restoring that snapshot because the old
 adapter expects the previous device-cursor unique key.
+
+
+### Sync admission and notification recovery
+
+Notification deletes retain the authenticated owner in the canonical change payload so peers receive them before their cursor advances. Operation fingerprints exclude this server-authored owner field on notification deletes, preserving exact retry receipts across older payload forms without weakening canonical owner authorization.
+
+Both native SQLite and D1 check Files/Trash writer capability against canonical existing records. D1 performs this check inside the write batch before mutation: an old writer cannot erase file membership or Trash metadata by omitting it from a replacement. HTTP 426 leaves sibling rows, change logs and workspace versions unchanged.

@@ -6,11 +6,6 @@ vi.mock('../../utils/errors', () => ({
     err: vi.fn((_code: string, _message: string, meta: any) => meta),
 }));
 
-vi.mock('../../core/sync/cursor-manager', () => ({
-    cleanupCursorManager: vi.fn(),
-    getCursorManager: vi.fn(() => ({})),
-}));
-
 type TableRecord = Record<string, any>;
 
 const dbState = vi.hoisted(() => {

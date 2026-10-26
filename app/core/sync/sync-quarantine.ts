@@ -83,10 +83,10 @@ function rowRevision(row: Record<string, unknown>): SyncRevision | null {
 }
 
 /**
- * Empty when the op can be pushed and replayed. This is the same predicate the
- * snapshot/rescan replay applies, so "intact" means "will not abort a replay".
+ * Empty when the op has usable identity/revision and a valid payload. Push
+ * diagnosis also checks wire size; local replay can preserve larger content.
  */
-export function diagnoseOp(op: unknown): string[] {
+export function diagnoseOp(op: unknown, enforceWireLimit = true): string[] {
     if (!isRecord(op)) return ['operation is not an object'];
     const problems: string[] = [];
     if (typeof op.id !== 'string' || !op.id) problems.push('missing outbox id');
@@ -108,6 +108,7 @@ export function diagnoseOp(op: unknown): string[] {
         if (missing.length) problems.push(`message payload missing ${missing.join(', ')}`);
     }
     try {
+        if (enforceWireLimit) sanitizePayloadForSync(tableName, op.payload, 'put');
         const normalized = normalizeSyncPayload(tableName, op.pk as string, op.payload, parsedStamp.data);
         if (!normalized.isValid) problems.push(`payload failed validation: ${normalized.errors?.join('; ') ?? 'unknown'}`);
     } catch (error) {
@@ -306,7 +307,9 @@ export async function collectReplayableOps(
     const replayable: PendingOp[] = [];
     for (const op of await readOps(tx, REPLAY_STATUSES)) {
         if (!includesTable(op.tableName)) continue;
-        const diagnostics = diagnoseOp(op);
+        // Wire size is not a local-storage validity rule. A valid oversized
+        // edit must survive table replacement with its full durable intent.
+        const diagnostics = diagnoseOp(op, false);
         if (!diagnostics.length) {
             replayable.push(op);
             continue;
@@ -320,18 +323,19 @@ export async function collectReplayableOps(
 /** Quarantine and rebuild every corrupt queued op. Each op is its own atomic unit. */
 export async function quarantineCorruptOps(
     db: Or3DB,
-    source: SyncQuarantineRow['source'] = 'manual'
+    source: SyncQuarantineRow['source'] = 'manual',
+    selected?: PendingOp[]
 ): Promise<QuarantineSummary> {
     const bridge = getHookBridge(db);
     const scopeTables = [...QUARANTINE_SUPPORT_TABLES, ...SYNCED_TABLES].map((name) => db.table(name));
-    const candidates = await db.transaction('r', db.pending_ops, (tx) => readOps(tx, SCAN_STATUSES));
+    const candidates = selected ?? await db.transaction('r', db.pending_ops, (tx) => readOps(tx, SCAN_STATUSES));
     const summary: QuarantineSummary = { quarantined: 0, repaired: 0 };
     for (const candidate of candidates) {
         await db.transaction('rw', scopeTables, async (tx) => {
             bridge.markSyncTransaction(tx);
             // Re-read: the row may have been resolved or completed since the scan.
             const current = await tx.table('pending_ops').get(candidate.id) as PendingOp | undefined;
-            if (!current) return;
+            if (!current || !SCAN_STATUSES.includes(current.status as (typeof SCAN_STATUSES)[number])) return;
             const diagnostics = diagnoseOp(current);
             if (!diagnostics.length) return;
             const repaired = await quarantineOpInTx(tx, current, diagnostics, source, bridge.getDeviceId());

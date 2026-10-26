@@ -674,7 +674,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 9,
-                    "summary": "SQLite auth/sync, maintenance controls, durable limits, bounded user-bound sync and Trash archive snapshots with eviction-safe paging, contiguous D1 admission versions, atomic quota reservations and exact commit retries, short signup codes, and D1 support limits. Verified commit receipts own quota accounting; device acknowledgements are scoped by workspace, user and device."
+                    "summary": "SQLite auth/sync, owner-bound notification deletion, atomic native/D1 Files and Trash capability admission, bounded snapshots, exact commit retries, quotas, maintenance controls and D1 support limits."
                 },
                 {
                     "name": "provider-fs.md",
@@ -701,7 +701,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 12,
-                    "summary": "Convex setup, synchronized title sources, background message ordering and admission recovery, authenticated downloads and server-only Trash backups with advancing native revisions, durable plugin connections, fail-closed limits and restart drain accounting, retained metadata, and atomic signup invitations with short codes. Host-controlled enrollment and receipt-bound native object ownership prevent direct-token enrollment and cross-workspace storage aliases."
+                    "summary": "Convex setup, strict canonical sync admission, truthful winner/replay receipts, legacy snapshot recovery, account-scoped cursors, bounded retention, and explicit file restoration after deletion."
                 },
                 {
                     "name": "provider-s3.md",
@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Sync authorization, content-free notifications, polling recovery, and graceful notification closure during managed restart. Snapshot replacement retains local foreground progress and live-parent ownership; serialized workspace/account transitions preserve active database capture during route pauses. Immutable tool-result KV chunks use atomic capture, contiguous provider versions and verified reads."
+                    "summary": "Durable snapshot replay, principal-scoped feed coverage, fenced multi-tab outboxes, indefinite outage recovery, request cancellation, bounded gateway bodies, real Chromium crash verification, foreground progress across snapshot replacement, active-database capture during route pauses, and immutable tool-result KV chunks."
                 },
                 {
                     "name": "storage-layer.md",
@@ -782,7 +782,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 20,
-                    "summary": "Configure upload and retained storage quotas, offline intake with verified workspace settings, indexed browser cache budgeting, verified redundancy proofs, bounded thumbnail loading, authorized transfers and retained-original backup reads."
+                    "summary": "Hash-addressed Cloud files with atomic upload staging, offline and crash recovery, fenced cross-tab transfers, cancellation deadlines, and bounded browser caching."
                 },
                 {
                     "name": "plugin-access-gating.md",

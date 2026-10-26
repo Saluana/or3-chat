@@ -32,6 +32,7 @@ vi.mock('../subscription-manager', () => ({
         start: async () => { state.starts.push(scope.workspaceId); }, stop: async () => {},
     }),
     cleanupSubscriptionManager: vi.fn(), cleanupSubscriptionManagersByWorkspace: vi.fn(),
+    getScopeKey: (scope: { workspaceId: string; principalId?: string }) => `${scope.workspaceId}:${scope.principalId ?? ''}`,
 }));
 vi.mock('../outbox-manager', () => ({ OutboxManager: class {
     start() {} stop() {}
@@ -40,7 +41,7 @@ vi.mock('../outbox-manager', () => ({ OutboxManager: class {
 afterEach(() => { vi.unstubAllGlobals(); setHookEngine(null); });
 
 describe('sync lifecycle with real local write capture', () => {
-    it.each(['route', 'workspace', 'account', 'account only'] as const)('reconciles the latest %s request after teardown and captures intervening writes', async transition => {
+    it.each(['route', 'workspace', 'account', 'account only', 'authorization only'] as const)('reconciles the latest %s request after teardown and captures intervening writes', async transition => {
         setHookEngine(createTypedHookEngine(createHookEngine()));
         const a = crypto.randomUUID(); const b = crypto.randomUUID();
         const db = getWorkspaceDb(a); const other = getWorkspaceDb(b);
@@ -63,6 +64,7 @@ describe('sync lifecycle with real local write capture', () => {
             await vi.waitFor(() => expect(control.isRunning()).toBe(true));
             state.dispose = async () => { disposing = true; await gate; };
             if (transition === 'account only') session.value = { session: { authenticated: true, user: { id: 'user-B' } } };
+            else if (transition === 'authorization only') session.value = { session: { authenticated: true, user: { id: 'user-A' }, authorizationRevision: 1 } };
             else route.value = { path: '/admin' };
             await nextTick(); await vi.waitFor(() => expect(disposing).toBe(true));
             // A route pause must not remove atomic write capture from the live DB.

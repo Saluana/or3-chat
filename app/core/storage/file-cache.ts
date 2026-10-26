@@ -59,12 +59,13 @@ function cacheRow(hash: string, blob: Blob, workspaceId: string, providerId: str
 
 /** No cross-tab lock means no cache admission. Originals are still protected. */
 export async function cacheDownloadedFile(db: Or3DB, workspaceId: string, providerId: string,
-    hash: string, storageId: string, blob: Blob, policy: FilePolicy): Promise<void> {
+    hash: string, storageId: string, blob: Blob, policy: FilePolicy, assertCurrent?: () => Promise<void>): Promise<void> {
     const locks = (navigator as Partial<Navigator>).locks;
     if (!policy.maxCachedFileBytes || blob.size > policy.maxCachedFileBytes || !locks) return;
     await locks.request('or3-file-cache', async () => {
         if (await originCacheBytes() + blob.size > policy.maxCacheBytes) return;
         await db.transaction('rw', db.file_blobs, db.file_transfers, async () => {
+            await assertCurrent?.();
             // Never replace protected originals with an evictable cache classification.
             if (await db.file_blobs.get(hash)) return;
             if (await hasUnfinishedUpload(db, hash)) return;

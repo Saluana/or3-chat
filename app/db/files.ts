@@ -250,7 +250,7 @@ export async function createOrRefFile(
             : undefined;
     if (markId && hasPerf) performance.mark(`${markId}:start`);
     const cloud = isCloudFileStorageEnabled();
-    const queue = cloud ? (await import('~/core/storage/transfer-queue')).getStorageTransferQueue() : null;
+    const queue = cloud || import.meta.client ? (await import('~/core/storage/transfer-queue')).getStorageTransferQueue() : null;
     const workspaceId = queue?.getWorkspaceId();
     if (cloud && (!queue || !workspaceId)) throw new Error('Cloud storage is not ready. Please retry.');
     const policy = cloud && workspaceId ? await loadFilePolicy(workspaceId) : null;
@@ -294,10 +294,12 @@ export async function createOrRefFile(
         // The supplied bytes have already been hashed. Metadata may have arrived
         // through sync before its original; preserve the original atomically with intake.
         const changed = await db.transaction('rw',
-            getWriteTxTableNames(db, 'file_meta', { include: ['file_blobs'] }), async () => {
+            getWriteTxTableNames(db, 'file_meta', { include: ['file_blobs', 'file_transfers'] }), async () => {
                 assertCurrentDb();
                 if (!direct && !(await db.file_blobs.get(hash))) await db.file_blobs.put({ hash, blob: file });
                 const incremented = await changeFileRefRows(hash, 1, db);
+                if (incremented && !incremented.row.storage_id && !direct && queue && workspaceId)
+                    await queue.enqueue(hash, 'upload', { db, workspaceId });
                 assertCurrentDb();
                 return incremented;
             });
@@ -313,11 +315,6 @@ export async function createOrRefFile(
                 });
             }
             if (markId && hasPerf) finalizePerf(markId, 'ref', file.size);
-            if (!incremented.storage_id) {
-                assertCurrentDb();
-                await enqueueUpload(hash, db);
-                assertCurrentDb();
-            }
             return incremented;
         }
     }
@@ -382,7 +379,7 @@ export async function createOrRefFile(
     assertCurrentDb();
     await db.transaction(
         'rw',
-        getWriteTxTableNames(db, 'file_meta', { include: ['file_blobs'] }),
+        getWriteTxTableNames(db, 'file_meta', { include: ['file_blobs', 'file_transfers'] }),
         async () => {
         // The initial lookup happens before image metadata/filter work. Recheck
         // under the write transaction so concurrent identical files increment
@@ -395,6 +392,8 @@ export async function createOrRefFile(
             const changed = (await changeFileRefRows(hash, 1, db))!;
             referenceChanges.push(changed.notification);
             storedMeta = changed.row;
+            if (!storedMeta.storage_id && !direct && queue && workspaceId)
+                await queue.enqueue(hash, 'upload', { db, workspaceId });
             assertCurrentDb();
             return;
         }
@@ -404,6 +403,8 @@ export async function createOrRefFile(
             db.file_meta.put(mergedMeta),
             ...(!direct ? [db.file_blobs.put({ hash: mergedMeta.hash, blob: file })] : []),
         ]);
+        if (!mergedMeta.storage_id && !direct && queue && workspaceId)
+            await queue.enqueue(mergedMeta.hash, 'upload', { db, workspaceId });
         storedMeta = mergedMeta;
         createdNew = true;
         actionPayload = {
@@ -429,11 +430,6 @@ export async function createOrRefFile(
     }
     if (markId && hasPerf) {
         finalizePerf(markId, wasCreated() ? 'create' : 'ref', file.size);
-    }
-    if (!finalMeta.storage_id) {
-        assertCurrentDb();
-        await enqueueUpload(finalMeta.hash, db);
-        assertCurrentDb();
     }
     return finalMeta;
 }
@@ -656,11 +652,12 @@ export async function restoreMany(hashes: string[]): Promise<string[]> {
             await Dexie.waitFor(
                 hooks.doAction('db.files.restore:action:before', toFileEntity(meta))
             );
+            const tombstone = await db.tombstones.get(`file_meta:${meta.hash}`);
             updates.push({
                 ...meta,
                 deleted: false,
                 updated_at: nowSec(),
-                clock: nextClock(meta.clock),
+                clock: nextClock(Math.max(meta.clock ?? 0, tombstone?.clock ?? 0)),
             } as FileMeta);
             restored.push(unique[i]!);
         }
@@ -774,26 +771,6 @@ export function fileDeleteError(message: string, cause?: unknown) {
  * - Does not validate file existence outside the transaction.
  */
 export { changeRefCount };
-
-async function enqueueUpload(hash: string, db = getDb()): Promise<void> {
-    if (!import.meta.client) return;
-    try {
-        const { getStorageTransferQueue } = await import(
-            '~/core/storage/transfer-queue'
-        );
-        if (getDb() !== db) throw new Error('workspace changed while enqueueing upload');
-        const queue = getStorageTransferQueue();
-        if (!queue) return;
-        const workspaceId = queue.getWorkspaceId();
-        if (!workspaceId) return;
-        await queue.enqueue(hash, 'upload', { db, workspaceId });
-    } catch (error) {
-        reportError(error, {
-            silent: true,
-            tags: { domain: 'storage', stage: 'enqueue-upload' },
-        });
-    }
-}
 
 // Lightweight image dimension extraction with timeout to prevent hung operations
 const IMAGE_SIZE_TIMEOUT_MS = 5000; // 5s timeout

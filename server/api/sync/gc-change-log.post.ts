@@ -9,10 +9,11 @@
  * - Ensures consistency (doesn't remove ops needed by active clients, ideally, though this is heuristic based).
  */
 import { requireCloudMutation } from '../../utils/security/cloud-mutation';
-import { defineEventHandler, readBody, createError } from 'h3';
+import { defineEventHandler, createError } from 'h3';
 import { z } from 'zod';
 import { SyncScopeSchema } from '~~/shared/sync/schemas';
 import { resolveSessionContext } from '../../auth/session';
+import { readLimitedJsonBody } from '../../utils/security/limited-json-body';
 import { requireCan } from '../../auth/can';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isSyncEnabled } from '../../utils/sync/is-sync-enabled';
@@ -51,7 +52,7 @@ export default defineEventHandler(async (event) => {
 
     requireCloudMutation(event);
 
-    const body: unknown = await readBody(event);
+    const body: unknown = await readLimitedJsonBody(event, 8 * 1024);
     const parsed = GcRequestSchema.safeParse(body);
     if (!parsed.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid GC request' });

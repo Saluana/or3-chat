@@ -686,6 +686,17 @@ const workspaceTabs = useWorkspaceTabs({
     isMobile,
     workspaceId: () => (process.client ? getActiveWorkspaceId() : null),
     profileId: () => resolvedProfile.value.id,
+    canReuseActiveBlank(tabId) {
+        const paneId = [...workspaceTabs.state.value.paneBindings.entries()]
+            .find(([, boundTabId]) => boundTabId === tabId)?.[0];
+        // Capture before checking: typing may still be inside the draft debounce.
+        if (paneId) paneComponentRefs.get(paneId)?.captureDraft?.();
+        if (!workspaceTabDrafts.isLoaded(tabId)) return false;
+        const draft = workspaceTabDrafts.read(tabId);
+        return !draft || (!draft.text.trim() && !draft.attachments.length &&
+            !draft.attachmentRefs?.length && !draft.missingAttachments?.length &&
+            !draft.largeTextBlocks.length);
+    },
     async captureOutgoing(tabId, paneId) {
         const tab = workspaceTabs.state.value.tabs.find((entry) => entry.id === tabId);
         if (!tab) return;

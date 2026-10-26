@@ -274,6 +274,21 @@ describe('ConflictResolver', () => {
         expect(stored?.deleted_at).toBe(777);
     });
 
+    it('advances an already-deleted materialized row to the newer deletion revision', async () => {
+        // A subsequent restore must start above the latest accepted delete.
+        const table = createMemoryTable<MessageRow>('id', [{ id: 'm1', clock: 2,
+            deleted: true, hlc: '0000000000002:0000:node', op_id: 'older-delete' }]);
+        const tombstones = createMemoryTable<any>('id');
+        const resolver = new ConflictResolver(createMockDb({ messages: table, tombstones }) as any);
+        const change = buildChange({ pk: 'm1', op: 'delete', clock: 9,
+            hlc: '0000000000009:0000:node', opId: 'newer-delete' });
+
+        await resolver.applyChanges([change]);
+
+        expect(await table.get('m1')).toMatchObject({ deleted: true, clock: 9,
+            hlc: change.stamp.hlc, op_id: 'newer-delete' });
+    });
+
     it('uses HLC tie-breaker and emits conflict hook', async () => {
         const table = createMemoryTable<MessageRow>('id', [
             { id: 'm1', clock: 2, hlc: '0000000000002:0001:node' },

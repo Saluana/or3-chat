@@ -38,6 +38,7 @@ import type {
     PushBatch,
     PushResult,
     SyncSubscribeOptions,
+    SyncRequestOptions,
 } from '~~/shared/sync/types';
 import {
     PullResponseSchema,
@@ -202,7 +203,7 @@ function sanitizeErrorText(text: string, maxLength: number = 200): string {
     return cleaned.slice(0, maxLength);
 }
 
-async function requestJson<T>(
+async function requestJsonRaw<T>(
     path: string,
     body: unknown,
     baseUrl: string,
@@ -299,10 +300,45 @@ export function createGatewaySyncProvider(
         pollIntervalMs,
         config.maxRetryAfterMs ?? DEFAULT_MAX_RETRY_AFTER_MS
     );
+    // Every control request owns its lifetime, including response-body reads.
+    const requests = new Set<AbortController>();
+    const requestJson = async <T>(path: string, body: unknown, url: string,
+        options: Parameters<typeof requestJsonRaw<T>>[3] = {}): Promise<T> => {
+        const controller = new AbortController();
+        requests.add(controller);
+        let timedOut = false;
+        let rejectAbort!: (error: Error) => void;
+        const cancelled = new Promise<never>((_resolve, reject) => { rejectAbort = reject; });
+        const onAbort = () => rejectAbort(new DOMException(
+            timedOut ? 'Sync request timed out' : 'Sync request cancelled',
+            timedOut ? 'TimeoutError' : 'AbortError'
+        ));
+        controller.signal.addEventListener('abort', onAbort, { once: true });
+        const forwardAbort = () => controller.abort();
+        options.signal?.addEventListener('abort', forwardAbort, { once: true });
+        const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 30_000);
+        if (options.signal?.aborted) controller.abort();
+        // principalId partitions local cursors only. Authentication owns server visibility.
+        let wireBody = body;
+        if (body && typeof body === 'object' && 'scope' in body) {
+            const { principalId: _principal, ...scope } = (body as { scope: SyncScope }).scope;
+            wireBody = { ...body, scope };
+        }
+        try {
+            if (controller.signal.aborted) return await cancelled;
+            return await Promise.race([requestJsonRaw<T>(path, wireBody, url,
+                { ...options, signal: controller.signal }), cancelled]);
+        } finally {
+            clearTimeout(timer);
+            options.signal?.removeEventListener('abort', forwardAbort);
+            controller.signal.removeEventListener('abort', onAbort);
+            requests.delete(controller);
+        }
+    };
     const subscriptions = new Set<() => void>();
     const pullRetries = new Map<string, { failures: number; notBefore: number; status: number }>();
     const retryFor = (scope: SyncScope) => {
-        const key = JSON.stringify([scope.workspaceId, scope.projectId ?? null]);
+        const key = JSON.stringify([scope.workspaceId, scope.projectId ?? null, scope.principalId ?? null]);
         let state = pullRetries.get(key);
         if (!state) {
             if (pullRetries.size >= 50) pullRetries.delete(pullRetries.keys().next().value!);
@@ -547,20 +583,20 @@ export function createGatewaySyncProvider(
             return unsubscribe;
         },
 
-        async pull(request: PullRequest): Promise<PullResponse> {
-            const response = await requestPull(request);
+        async pull(request: PullRequest, options?: SyncRequestOptions): Promise<PullResponse> {
+            const response = await requestPull(request, options?.signal);
             const retry = retryFor(request.scope);
             retry.failures = 0;
             retry.notBefore = 0;
             return response;
         },
 
-        async snapshot(request: SnapshotRequest): Promise<SnapshotResponse> {
+        async snapshot(request: SnapshotRequest, options?: SyncRequestOptions): Promise<SnapshotResponse> {
             const response = await requestJson<SnapshotResponse>(
                 '/api/sync/snapshot',
                 { ...request, workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
                 baseUrl,
-                { schema: SnapshotResponseSchema }
+                { signal: options?.signal, schema: SnapshotResponseSchema }
             );
             assertGatewayResponseContract(
                 '/api/sync/snapshot',
@@ -569,12 +605,12 @@ export function createGatewaySyncProvider(
             return response;
         },
 
-        async push(batch: PushBatch): Promise<PushResult> {
+        async push(batch: PushBatch, options?: SyncRequestOptions): Promise<PushResult> {
             const response = await requestJson<PushResult>(
                 '/api/sync/push',
                 { ...batch, workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
                 baseUrl,
-                { schema: PushResultSchema }
+                { signal: options?.signal, schema: PushResultSchema }
             );
             assertGatewayResponseContract(
                 '/api/sync/push',
@@ -583,12 +619,12 @@ export function createGatewaySyncProvider(
             return response;
         },
 
-        async updateCursor(scope: SyncScope, deviceId: string, version: number): Promise<void> {
+        async updateCursor(scope: SyncScope, deviceId: string, version: number, options?: SyncRequestOptions): Promise<void> {
             await requestJson(
                 '/api/sync/update-cursor',
                 { scope, deviceId, version },
                 baseUrl,
-                { allowEmpty: true }
+                { allowEmpty: true, signal: options?.signal }
             );
         },
 
@@ -611,6 +647,7 @@ export function createGatewaySyncProvider(
         },
 
         async dispose(): Promise<void> {
+            requests.forEach(controller => controller.abort());
             subscriptions.forEach((cleanup) => cleanup());
             subscriptions.clear();
             pullRetries.clear();

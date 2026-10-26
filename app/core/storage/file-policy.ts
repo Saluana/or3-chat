@@ -1,5 +1,6 @@
 import { useRuntimeConfig } from '#imports';
 import { FilePolicySchema, type FilePolicy } from '~~/shared/storage/file-policy';
+import { withStorageDeadline } from './storage-request';
 
 const verifiedPolicies = new Map<string, FilePolicy>();
 
@@ -18,7 +19,7 @@ export function isCloudWorkspaceBackupEnabled(): boolean {
     } catch { return false; }
 }
 
-export async function loadFilePolicy(workspaceId: string): Promise<FilePolicy> {
+export async function loadFilePolicy(workspaceId: string, signal?: AbortSignal): Promise<FilePolicy> {
     // Local intake can proceed offline after this workspace's settings were
     // verified. Uploads still pass the server's current policy on reconnect.
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -26,9 +27,11 @@ export async function loadFilePolicy(workspaceId: string): Promise<FilePolicy> {
         if (policy) return policy;
         throw new Error('Connect once to load this workspace’s file storage settings.');
     }
-    const response = await fetch(`/api/storage/policy?workspaceId=${encodeURIComponent(workspaceId)}`, { cache: 'no-store' });
-    if (!response.ok) throw new Error('File storage settings are unavailable. Please retry.');
-    const policy = FilePolicySchema.parse(await response.json());
+    const policy = await withStorageDeadline(async requestSignal => {
+        const response = await fetch(`/api/storage/policy?workspaceId=${encodeURIComponent(workspaceId)}`, { cache: 'no-store', signal: requestSignal });
+        if (!response.ok) throw new Error('File storage settings are unavailable. Please retry.');
+        return FilePolicySchema.parse(await response.json());
+    }, signal);
     verifiedPolicies.set(workspaceId, policy);
     return policy;
 }
