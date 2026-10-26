@@ -1,5 +1,4 @@
 import { retainBackgroundToolResult } from './history';
-import { getSyncGatewayAdapter } from '../../sync/gateway/registry';
 import { getChatJobExecution } from './types';
 import { serializeError, normalizeError, presentError, parseRetryAfter } from '~~/shared/errors';
 import { OpenRouterStreamError, normalizeProviderResponseError } from '~~/shared/openrouter/errors';
@@ -414,11 +413,6 @@ export async function startBackgroundStream(
     const hints = params.body._toolRuntime && typeof params.body._toolRuntime === 'object'
         ? params.body._toolRuntime as Record<string, unknown> : {};
     const definitions = Array.isArray(params.body.tools) ? params.body.tools as ToolDefinition[] : [];
-    // Refuse before admission; the tool runner would otherwise fail every accepted job.
-    if (definitions.length > 0 && !getSyncGatewayAdapter(syncProviderId)?.retainChatToolResult) {
-        const error = new Error('Background tools require a sync provider with durable tool-result artifact support. Update the provider.');
-        error.name = 'BackgroundHistoryUnsupportedError'; throw error;
-    }
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Request tool definitions have not yet passed runtime validation.
     if (definitions.some((tool) => HISTORY_TOOL_NAMES.some((name) => tool.function?.name === name) && hints[tool.function.name] !== 'client')) {
         const context = canonicalHistoryContext({ subject: params.userId, workspaceId: params.workspaceId,
@@ -957,9 +951,6 @@ export async function consumeBackgroundStreamWithTools(params: {
 }): Promise<void> {
     const historyAdmission = params.context.execution?.history;
     const historyJob = historyAdmission ? await params.provider.getJob(params.jobId, params.context.userId) : null;
-    const resultAdapter = historyJob?.syncProviderId ? getSyncGatewayAdapter(historyJob.syncProviderId) : null;
-    if (historyAdmission && !resultAdapter?.retainChatToolResult)
-        throw new Error('Background tools require a sync provider with durable tool-result artifact support. Update the provider.');
     const contentBase = params.context.execution?.contentBase ?? '';
     const reasoningBase = params.context.execution?.reasoningBase ?? '';
     let fullContent = contentBase;

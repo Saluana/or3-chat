@@ -523,8 +523,9 @@ Server maintenance may briefly defer gateway operations. Keep the existing outbo
 Large tool results use the existing workspace KV wire schema with the
 `chat.tool-result:<encoded-thread>:` name prefix and content-addressed row IDs.
 Each chunk stays below the sync row limit after JSON escaping. Foreground writes
-use normal atomic outbox capture; background providers authorize the admitted
-generation and atomically allocate contiguous versions for new chunks. Replay
+use normal atomic outbox capture; background providers that implement
+`retainChatToolResult` authorize the admitted generation and atomically allocate
+contiguous versions for new chunks (older providers keep results inline). Replay
 must preserve the existing bytes and must never resurrect a retained tombstone.
 The tool message carries a versioned reference with a SHA-256 checksum. Readers
 reject incomplete sync or corrupted content and can retry after synchronization.

@@ -948,19 +948,22 @@ describe('background usage through terminal history', () => {
         return { job: reloaded, snapshot: delivered[0]! };
     }
 
-    it('refuses background tools before dispatch when durable result storage is unavailable', async () => {
+    it('keeps large background tool results inline when the provider cannot retain chunks', async () => {
+        const output = 'x'.repeat(20 * 1024);
         const { jobId, context } = await admitted(true);
-        const effect = vi.fn(() => 'effect result');
-        registerServerTool(toolDef, effect, { override: true });
+        registerServerTool(toolDef, () => output, { override: true });
         registerSyncGatewayAdapter({ id: 'usage-boundary', create: () => ({
             capabilities: { backgroundGenerationHistory: 'v1', canonicalChatHistory: 'v1' },
             readChatHistory: async () => ({ status: 'ok', project_ownership: 'resolved', thread: { id: 'thread', clock: 1, project_id: null } }),
             admitChatGeneration: async () => ({ status: 'admitted', replayed: false, serverVersion: 1 }),
             finalizeChatGeneration: finalize,
         }) as unknown as SyncGatewayAdapter });
-        const fetch = vi.fn(async () => response(100, true)); vi.stubGlobal('fetch', fetch);
-        await expect(executeBackgroundJob(jobId, context, memoryJobProvider)).rejects.toThrow(/durable tool-result artifact support/);
-        expect(fetch).not.toHaveBeenCalled(); expect(effect).not.toHaveBeenCalled();
+        let requests = 0;
+        vi.stubGlobal('fetch', vi.fn(async () => ++requests === 1 ? response(100, true) : response(100)));
+        await executeBackgroundJob(jobId, context, memoryJobProvider);
+        const { snapshot } = await terminal(jobId);
+        expect((snapshot.toolCalls![0] as { result: string }).result).toBe(output);
+        expect(artifacts.size).toBe(0);
     });
 
     // OpenRouter reserves credit for max_tokens; a small balance refuses the

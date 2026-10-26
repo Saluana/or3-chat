@@ -148,7 +148,8 @@ export async function retainBackgroundToolResult(job: BackgroundJob, result: str
   if (!storage.rows.length) return result;
   const admission = getChatJobExecution(job)?.history;
   const adapter = historyAdapterFor(job);
-  if (!admission || !adapter?.retainChatToolResult) throw new Error('Durable tool-result storage unavailable. Update the sync provider.');
+  // Providers released before chunk retention keep the complete result inline, as before.
+  if (!admission || !adapter?.retainChatToolResult) return result;
   await adapter.retainChatToolResult({ userId: job.userId, workspaceId: admission.workspaceId }, { admission, rows: storage.rows });
   return storage.result;
 }

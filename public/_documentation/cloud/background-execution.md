@@ -49,17 +49,17 @@ provider lacks the durable claim/settle bridge, that turn uses the foreground
 tool loop. The server also rejects an unsupported browser-tool admission before
 creating a job or contacting the model.
 
-Background tool execution additionally requires the selected sync gateway's
-`retainChatToolResult(actor, { admission, rows })` method before model dispatch.
+Tool results larger than 16 KiB (JSON-escaped) are retained through the selected
+sync gateway's optional `retainChatToolResult(actor, { admission, rows })` method.
 The provider authorizes the current workspace writer and live admitted generation,
 then commits immutable workspace KV chunks and contiguous change-log versions in
 one transaction. Identical replays allocate no versions; conflicting or deleted
 artifacts fail closed. The terminal tool receipt contains a bounded reference.
-Older providers must be updated before background tools can run; the installed
-package version alone does not prove that its deployed backend has this method.
-Without it, admission refuses a tool-enabled background request with
-`background_history_unsupported` before creating a job, and the client runs
-later sends in the foreground for the rest of the session.
+Providers without this method keep the complete result inline in the tool
+receipt, as earlier releases did; a result that then exceeds the canonical
+message limit fails that history delivery. Update the provider to store large
+results as chunks; the installed package version alone does not prove that its
+deployed backend has this method.
 
 ## Chat Background Streaming Flow
 
