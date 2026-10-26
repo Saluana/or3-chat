@@ -331,17 +331,20 @@ if (import.meta.main) {
     // Projects/Files add a 758 KB extraction worker and their UI. The 0.1.80
     // same-host comparison also removes 260 KB of duplicate KaTeX. Account for
     // that measured feature cost without relaxing preload, chunk or PWA budgets.
+    // The off-main-thread code highlighter adds a 188 KB worker plus its own
+    // 668 KB copy of the 16 lazy Shiki grammars: Vite bundles workers
+    // separately, and the main thread still owns the plugin highlighter.
+    // Totals below are re-measured for that cost; startup caps are unchanged.
     const limits = {
         totalJavascriptRawBytes: positiveNumber(
             process.env.OR3_PERF_MAX_TOTAL_JS_BYTES,
-            // Order-preserving startup grouping measured 13,475,387 raw bytes.
-            // It cuts /chat preload requests 198 -> 55 and gzip 971 -> 874 KB;
-            // keep the 4.2 MB total gzip and all existing byte/chunk caps below.
-            13_480_000
+            // Measured 13,858,208 raw bytes with the highlight worker.
+            13_900_000
         ),
         totalJavascriptGzipBytes: positiveNumber(
             process.env.OR3_PERF_MAX_TOTAL_JS_GZIP_BYTES,
-            4_200_000
+            // Measured 4,426,179 gzip bytes with the highlight worker.
+            4_440_000
         ),
         largestJavascriptRawBytes: positiveNumber(
             process.env.OR3_PERF_MAX_CHUNK_JS_BYTES,
@@ -365,7 +368,8 @@ if (import.meta.main) {
         ),
         precacheRawBytes: positiveNumber(
             process.env.OR3_PERF_MAX_PRECACHE_BYTES,
-            18_400_000
+            // Measured 19,413,616 bytes; the worker grammar copy is precached.
+            19_450_000
         ),
         rootModulepreloadFiles: positiveNumber(
             process.env.OR3_PERF_MAX_ROOT_MODULEPRELOAD_FILES,
