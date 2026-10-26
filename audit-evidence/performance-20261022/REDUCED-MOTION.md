@@ -63,8 +63,8 @@ Frame-audit runs intentionally read computed style and geometry and are not
 included in the table's trace-only comparison.
 
 Aggregated transition counts and frame samples are retained in
-[theme-motion-baseline.json](theme-motion-baseline.json) and
-[theme-motion-results.json](theme-motion-results.json). Full exploratory event
+[theme-motion-baseline.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/theme-motion-baseline.json) and
+[theme-motion-results.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/theme-motion-results.json). Full exploratory event
 logs remain under `/tmp/theme-motion-*.json`; the committed receipts aggregate
 them by event type/property and retain representative targets.
 

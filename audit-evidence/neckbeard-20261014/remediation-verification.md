@@ -52,7 +52,7 @@ Finding 11 is supplied by published `or3-provider-sqlite@0.0.18` and
 `or3-provider-convex@0.0.18`. Both immutable tag workflows passed. Each npm
 tarball was independently downloaded and its SHA-512 integrity compared with
 the exact CI-qualified archive. Commits, workflow URLs, integrity and shasums
-are recorded in [provider-releases.json](provider-releases.json). SQLite's
+are recorded in [provider-releases.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/neckbeard-20261014/provider-releases.json). SQLite's
 initial registry propagation check timed out; only that verification job was
 retried after the exact endpoint became available. Nothing was republished.
 

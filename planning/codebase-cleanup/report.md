@@ -208,8 +208,8 @@ setPluginAccessPolicy, and getModelVariantDescription.
   stale `.opencode/` tree, the v1 retro-agent prompts in `.github/`, and the personal
   `or3-chat.code-workspace`.
 - `repomix.*.config.json` (7 files): no script runs them, and their include lists are stale.
-- Kept on purpose: `tests/manual/notification-tests.ts` (cited by planning),
-  `scripts/compaction/capture-presentation.ts` (recent, so ask its author),
+- The old notification console recipe has since been retired in favor of the service, composable, and component suites.
+- Kept on purpose: `scripts/compaction/capture-presentation.ts` (recent, so ask its author),
   `tests/plugin-runtime/evidence/containment-probe-*.json` (rewritten by the spec), and
   `examples/plugins/weather-card` (blocked on planning task 6.5).
 

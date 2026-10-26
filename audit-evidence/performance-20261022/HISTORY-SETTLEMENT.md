@@ -91,7 +91,7 @@ All 13 retained baseline/diagnostic/control runs preserve exact saved replies,
 the left anchor and scrollTop, right bottom distance zero, and normal end-marker
 navigation. Completed heading, code, and math nodes stay connected with zero
 recorded mutations. Receipts are in
-[history-settlement-baseline.json](history-settlement-baseline.json).
+[history-settlement-baseline.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/history-settlement-baseline.json).
 
 The rebuilt source, without interception, repeats the rich diagnostic's 56
 settled-message updates and zero unchanged-field active-message updates. The
@@ -109,7 +109,7 @@ after-only qualification, not matched speedup evidence.
 
 All seven rebuilt-source runs pass the same saved-text, anchor, navigation,
 bottom-distance, and retained-rich-node checks. Final receipts are in
-[history-settlement-results.json](history-settlement-results.json).
+[history-settlement-results.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/history-settlement-results.json).
 
 ## Regression and final qualification
 

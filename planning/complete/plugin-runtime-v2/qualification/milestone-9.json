@@ -8,12 +8,12 @@
         "scripts/plugin-runtime/codemod-v1-private-imports.ts",
         "scripts/plugin-runtime/qualify-milestone-9.ts",
         "packages/plugin-sdk/templates/minimal-v2/or3.manifest.json",
-        "planning/plugin-runtime-v2/v1-support-and-migration.md",
-        "planning/plugin-runtime-v2/trust-model-and-safe-mode.md",
-        "planning/plugin-runtime-v2/qualification/promotion-checklist.md",
-        "planning/plugin-runtime-v2/qualification/rollback-drill-milestone-9.md",
-        "public/_documentation/plugins/runtime-v2-overview.md",
-        "app/composables/plugins/__tests__/manager-canary-rollback.test.ts",
+        "planning/complete/plugin-runtime-v2/v1-support-and-migration.md",
+        "planning/complete/plugin-runtime-v2/trust-model-and-safe-mode.md",
+        "planning/complete/plugin-runtime-v2/qualification/promotion-checklist.md",
+        "planning/complete/plugin-runtime-v2/qualification/rollback-drill-milestone-9.md",
+        "public/_documentation/plugins/runtime-and-security.md",
+        "tests/unit/resolve-config.test.ts",
         "app/composables/plugins/__tests__/bundled-v1-manager-runtime.test.ts",
         "public/_documentation/docmap.json"
     ],
@@ -59,7 +59,7 @@
                     "x",
                     "vitest",
                     "run",
-                    "app/composables/plugins/__tests__/manager-canary-rollback.test.ts",
+                    "tests/unit/resolve-config.test.ts",
                     "app/composables/plugins/__tests__/bundled-v1-manager-runtime.test.ts"
                 ]
             ]
@@ -77,7 +77,7 @@
             "Use safe-mode (OR3_DISABLE_NON_CORE_PLUGINS=true + restart) if non-core plugins must be blocked immediately.",
             "Package pointer rollback uses server promotion preflight; it never claims incompatible migrated state was restored."
         ],
-        "drill": "See rollback-drill-milestone-9.md. The automated manager rollback test restores the V1 import/register authority path with the startup flag false."
+        "drill": "Configuration tests verify the false startup manager flag, and manager runtime tests verify captured canary selection and lifecycle cleanup. These checks do not claim a complete flag-off bootstrap import/register trace."
     },
     "releaseReport": {
         "flags": {
@@ -88,7 +88,7 @@
             "promotionStatus": "manager-promoted; hook/surfaces/module-loader/isolation independently evaluated and deferred"
         },
         "corpusVersions": {
-            "compatibilityLedger": "planning/plugin-runtime-v2/compatibility-ledger.json",
+            "compatibilityLedger": "planning/complete/plugin-runtime-v2/compatibility-ledger.json",
             "externalV1": "tests/plugin-runtime/external-v1",
             "v1Examples": "tests/plugin-runtime/v1-examples",
             "v2Conformance": "tests/plugin-runtime/v2-conformance",
@@ -100,14 +100,13 @@
         ],
         "faultTests": [
             "server/admin/plugins/__tests__/package-promotion.test.ts",
-            "server/admin/plugins/__tests__/package-promotion-e2e.test.ts",
-            "shared/plugins/isolation/__tests__",
-            "server/admin/plugins/isolation/__tests__"
+            "server/admin/plugins/__tests__/package-lifecycle.test.ts",
+            "shared/plugins/isolation/__tests__"
         ],
         "rollbackDrills": [
-            "planning/plugin-runtime-v2/qualification/rollback-drill-milestone-9.md",
-            "planning/plugin-runtime-v2/qualification/manager-canary-rollback.md",
-            "planning/plugin-runtime-v2/qualification/shadow-rollback.md"
+            "planning/complete/plugin-runtime-v2/qualification/rollback-drill-milestone-9.md",
+            "planning/complete/plugin-runtime-v2/qualification/manager-canary-rollback.md",
+            "planning/complete/plugin-runtime-v2/qualification/shadow-rollback.md"
         ],
         "knownLifecycleLimitations": [
             "trusted-host grants are not a sandbox",

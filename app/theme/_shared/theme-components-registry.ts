@@ -202,13 +202,3 @@ export function createThemeComponentMap(
 
     return componentMap;
 }
-
-export function invalidateThemeComponentCache(themeDirName: string): void {
-    const themeCachePrefix = `${themeDirName}:`;
-
-    for (const key of [...asyncChunkCache.keys()]) {
-        if (key.startsWith(themeCachePrefix)) {
-            asyncChunkCache.delete(key);
-        }
-    }
-}

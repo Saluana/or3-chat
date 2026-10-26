@@ -26,16 +26,6 @@ import {
     registerJobViewer,
 } from '../../../utils/background-jobs/viewers';
 
-function logBgStream(
-    _stage: string,
-    _details?: Record<string, unknown>
-): void {}
-
-function warnBgStream(
-    _stage: string,
-    _details?: Record<string, unknown>
-): void {}
-
 type StreamEventPayload = {
     event: 'snapshot' | 'delta' | 'status';
     status: {
@@ -172,7 +162,7 @@ export default defineEventHandler(async (event) => {
     const jobId = getRouterParam(event, 'id');
 
     if (!jobId) {
-        warnBgStream('jobs-stream-missing-job-id', {});
+
         setResponseStatus(event, 400);
         return { error: 'Missing job ID' };
     }
@@ -188,9 +178,7 @@ export default defineEventHandler(async (event) => {
     }
 
     if (!userId) {
-        warnBgStream('jobs-stream-auth-required', {
-            jobId,
-        });
+
         setResponseStatus(event, 401);
         return { error: 'Authentication required' };
     }
@@ -199,10 +187,7 @@ export default defineEventHandler(async (event) => {
     const initialJob = await provider.getJob(jobId, userId);
 
     if (!initialJob) {
-        warnBgStream('jobs-stream-job-not-found', {
-            jobId,
-            userId,
-        });
+
         setResponseStatus(event, 404);
         return { error: 'Job not found or unauthorized' };
     }
@@ -224,14 +209,6 @@ export default defineEventHandler(async (event) => {
         typeof offset === 'number' && Number.isFinite(offset) && offset >= 0
             ? Math.min(offset, initialJob.content.length)
             : 0;
-    logBgStream('jobs-stream-request', {
-        jobId,
-        userId,
-        initialStatus: initialJob.status,
-        initialContentLength: initialJob.content.length,
-        requestedOffset: offset,
-        effectiveOffset: initialOffset,
-    });
 
     setHeader(event, 'Content-Type', 'text/event-stream');
     setHeader(event, 'Cache-Control', 'no-cache, no-transform');
@@ -259,32 +236,22 @@ export default defineEventHandler(async (event) => {
                     ? attemptParam
                     : initialJob.attempts ?? 0;
             const disposeViewer = registerJobViewer(jobId);
-            logBgStream('jobs-stream-viewer-registered', {
-                jobId,
-                userId,
-                initialStatus: initialJob.status,
-            });
+
             let disposeLive: (() => void) | null = null;
             let disposeReconciler: (() => void) | null = null;
             let keepAlive: ReturnType<typeof setInterval> | null = null;
             const isClosed = () => closed;
             let clearPendingUpdates = () => {};
-            let terminalCloseReason: string | null = null;
+            let terminalPending = false;
             let suppressTerminalWrite = false;
             let suppressedTerminal: StreamEventPayload['status'] | null = null;
             let suppressedTerminalBytes = 0;
 
-            const closeStream = (reason: string) => {
+            const closeStream = () => {
                 if (isClosed()) return;
                 closed = true;
                 clearPendingUpdates();
-                logBgStream('jobs-stream-close', {
-                    jobId,
-                    userId,
-                    reason,
-                    lastStatus,
-                    lastContentLength,
-                });
+
                 try {
                     controller.close();
                 } catch {
@@ -304,10 +271,10 @@ export default defineEventHandler(async (event) => {
                 }
                 disposeViewer();
             };
-            cancelActiveStream = () => closeStream('consumer_cancel');
+            cancelActiveStream = () => closeStream();
 
             event.node.req.on('close', () => {
-                closeStream('client_disconnect');
+                closeStream();
             });
 
             const write = (payload: StreamEventPayload) => {
@@ -329,7 +296,7 @@ export default defineEventHandler(async (event) => {
                     suppressedTerminal = payload.status;
                     suppressedTerminalBytes = encoder.encode(JSON.stringify(payload.status)).byteLength;
                     if (!hasSseQueueCapacity(MAX_SSE_VIEWER_QUEUE_BYTES - pendingBytes, suppressedTerminalBytes)) {
-                        closeStream('terminal_authorization_queue_full');
+                        closeStream();
                         return;
                     }
                     lastMeasuredUsage = payload.status.usage;
@@ -338,41 +305,14 @@ export default defineEventHandler(async (event) => {
                 }
                 suppressedTerminal = null;
                 suppressedTerminalBytes = 0;
-                const deltaLength =
-                    typeof payload.status.content_delta === 'string'
-                        ? payload.status.content_delta.length
-                        : 0;
-                const shouldLogWrite =
-                    payload.event !== 'delta' ||
-                    payload.status.status !== 'streaming' ||
-                    deltaLength >= 256;
-                if (shouldLogWrite) {
-                    logBgStream('jobs-stream-write', {
-                        jobId,
-                        userId,
-                        event: payload.event,
-                        status: payload.status.status,
-                        contentLengthHint:
-                            typeof payload.status.content_length === 'number'
-                                ? payload.status.content_length
-                                : null,
-                        deltaLength,
-                        includesContent:
-                            typeof payload.status.content === 'string',
-                    });
-                }
+
                 const encoded = encoder.encode(
                     `data: ${JSON.stringify(payload)}\n\n`
                 );
                 const available = controller.desiredSize;
                 if (!hasSseQueueCapacity(available, encoded.byteLength)) {
-                    warnBgStream('jobs-stream-slow-consumer', {
-                        jobId,
-                        userId,
-                        resumeOffset: lastContentLength,
-                        eventBytes: encoded.byteLength,
-                    });
-                    closeStream(`slow_consumer_offset_${lastContentLength}`);
+
+                    closeStream();
                     return;
                 }
                 controller.enqueue(encoded);
@@ -419,9 +359,9 @@ export default defineEventHandler(async (event) => {
                 )
                     return;
                 const sameAttempt = liveEvent.attempt === undefined || liveEvent.attempt === lastAttempt;
-                if (terminalCloseReason && sameAttempt &&
+                if (terminalPending && sameAttempt &&
                     (liveEvent.type === 'delta' || liveEvent.status === 'streaming')) return;
-                if (!sameAttempt) terminalCloseReason = null;
+                if (!sameAttempt) terminalPending = false;
                 const liveUsage = readRequestUsage(liveEvent.usage);
                 const retainedUsage = sameAttempt &&
                     !(liveEvent.type === 'status' && liveEvent.content_reset)
@@ -434,25 +374,7 @@ export default defineEventHandler(async (event) => {
                         ? liveUsage
                         : retainedUsage,
                 };
-                const deltaLength =
-                    liveEvent.type === 'delta'
-                        ? liveEvent.content_delta.length
-                        : 0;
-                const shouldLogLiveEvent =
-                    liveEvent.type !== 'delta' || deltaLength >= 256;
-                if (shouldLogLiveEvent) {
-                    logBgStream('jobs-stream-live-event', {
-                        jobId,
-                        userId,
-                        type: liveEvent.type,
-                        status:
-                            liveEvent.type === 'status'
-                                ? liveEvent.status
-                                : 'streaming',
-                        contentLength: liveEvent.content_length,
-                        deltaLength,
-                    });
-                }
+
                 if (liveEvent.type === 'delta') {
                     const reasoningDelta =
                         typeof liveEvent.reasoning_delta === 'string'
@@ -611,7 +533,7 @@ export default defineEventHandler(async (event) => {
                     ),
                 });
                 if (liveEvent.status !== 'streaming') {
-                    terminalCloseReason = 'live_terminal_status';
+                    terminalPending = true;
                 }
             };
 
@@ -625,23 +547,16 @@ export default defineEventHandler(async (event) => {
                     // Close the SSE viewer so the client falls back to
                     // polling and retries; never fabricate a terminal
                     // `error` job status here.
-                    warnBgStream('jobs-stream-reconcile-error', {
-                        jobId,
-                        userId,
-                        error: pollError.message || 'Stream error',
-                    });
-                    closeStream('reconcile_error');
+
+                    closeStream();
                     return;
                 }
                 if (!job) {
                     // Same rule: a missing snapshot may be a transient
                     // provider/read failure. Let the client polling path
                     // decide with bounded retries and reconciliation.
-                    warnBgStream('jobs-stream-reconcile-job-missing', {
-                        jobId,
-                        userId,
-                    });
-                    closeStream('reconcile_job_missing');
+
+                    closeStream();
                     return;
                 }
 
@@ -650,8 +565,8 @@ export default defineEventHandler(async (event) => {
                 // A terminal live update can beat the durable provider write.
                 // Draining queued terminal metadata must not reopen that attempt
                 // with an older streaming reconciliation snapshot.
-                if (terminalCloseReason && !attemptChanged && job.status === 'streaming') return;
-                if (attemptChanged) terminalCloseReason = null;
+                if (terminalPending && !attemptChanged && job.status === 'streaming') return;
+                if (attemptChanged) terminalPending = false;
                 const canonicalUsage = readRequestUsage(job.usage);
                 if (!attemptChanged && lastMeasuredUsage &&
                     (!canonicalUsage || canonicalUsage.iteration < lastMeasuredUsage.iteration)) {
@@ -668,26 +583,6 @@ export default defineEventHandler(async (event) => {
                     lastWorkflowVersion,
                     job.workflow_state
                 );
-                const deltaLength = hasNewContent
-                    ? job.content.length - lastContentLength
-                    : 0;
-                const shouldLogPollTick =
-                    statusChanged ||
-                    attemptChanged ||
-                    job.status !== 'streaming' ||
-                    deltaLength >= 256;
-                if (shouldLogPollTick) {
-                    logBgStream('jobs-stream-poll-tick', {
-                        jobId,
-                        userId,
-                        polledStatus: job.status,
-                        polledContentLength: job.content.length,
-                        hasNewContent,
-                        attemptChanged,
-                        statusChanged,
-                        deltaLength,
-                    });
-                }
 
                 if (job.status !== 'streaming') {
                     // Always publish the canonical terminal snapshot, even when
@@ -701,7 +596,7 @@ export default defineEventHandler(async (event) => {
                     });
                     lastStatus = job.status;
                     lastAttempt = job.attempts ?? 0;
-                    terminalCloseReason = 'reconcile_terminal_status';
+                    terminalPending = true;
                     return;
                 }
                 if (attemptChanged) {
@@ -839,9 +734,9 @@ export default defineEventHandler(async (event) => {
                     }
                     // Later terminal snapshots may carry the final usage after
                     // identical text. Authorize every queued batch before closing.
-                    if (terminalCloseReason && !isClosed()) closeStream(terminalCloseReason);
+                    if (terminalPending && !isClosed()) closeStream();
                 } catch {
-                    closeStream('stream_access_denied');
+                    closeStream();
                 } finally {
                     draining = false;
                 }
@@ -921,7 +816,7 @@ export default defineEventHandler(async (event) => {
                         next.bytes
                     )
                 ) {
-                    closeStream('live_authorization_queue_full');
+                    closeStream();
                     return;
                 }
                 pending.push(next);
@@ -1002,7 +897,6 @@ export default defineEventHandler(async (event) => {
                 const available = controller.desiredSize;
                 if (!hasSseQueueCapacity(available, ping.byteLength)) {
                     closeStream(
-                        `slow_consumer_offset_${lastContentLength}`
                     );
                     return;
                 }
@@ -1035,7 +929,7 @@ export default defineEventHandler(async (event) => {
                         job.execution?.workspaceId !==
                         initialJob.execution?.workspaceId
                     ) {
-                        closeStream('reconcile_workspace_changed');
+                        closeStream();
                         return;
                     }
                     enqueueUpdate({

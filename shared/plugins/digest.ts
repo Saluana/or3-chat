@@ -21,7 +21,7 @@
  */
 
 import type { Sha256 } from './runtime-descriptor';
-import { sha256Bytes, sha256Hex } from '../runtime-crypto';
+import { sha256Hex } from '../runtime-crypto';
 export { sha256Hex };
 
 export type HashInput = string | ArrayBuffer | ArrayBufferView;
@@ -36,33 +36,6 @@ export function parseSha256(value: string): Sha256 | null {
         return `sha256-${trimmed}` as Sha256;
     }
     return null;
-}
-
-const BASE64_ALPHABET =
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-
-function toBase64(bytes: Uint8Array): string {
-    let out = '';
-    for (let index = 0; index < bytes.length; index += 3) {
-        const first = bytes[index] ?? 0;
-        const second = bytes[index + 1];
-        const third = bytes[index + 2];
-        out += BASE64_ALPHABET[first >> 2];
-        out += BASE64_ALPHABET[((first & 0x03) << 4) | ((second ?? 0) >> 4)];
-        out += second === undefined ? '=' : BASE64_ALPHABET[((second & 0x0f) << 2) | ((third ?? 0) >> 6)];
-        out += third === undefined ? '=' : BASE64_ALPHABET[third & 0x3f];
-    }
-    return out;
-}
-
-/**
- * CSP script hash for the input bytes.
- *
- * CSP requires the base64 encoding of the digest (`'sha256-<base64>'`), not the
- * hex identity used elsewhere.
- */
-export async function sha256CspHash(input: HashInput): Promise<string> {
-    return `sha256-${toBase64(await sha256Bytes(input))}`;
 }
 
 /** `sha256-<hex>` identity for the input bytes. */

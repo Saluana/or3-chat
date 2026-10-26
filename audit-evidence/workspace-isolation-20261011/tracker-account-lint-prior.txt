@@ -1,7 +1,0 @@
-Source checkpoint: cab3a81daa7fc2bac764606e6e3184b460ff95ee
-Command: git show prior-head:app/utils/chat/useAi-internal/backgroundJobs.ts | bun x eslint --stdin --stdin-filename app/utils/chat/useAi-internal/backgroundJobs.ts --format=json
-Exit status: 0
-228:13 @typescript-eslint/no-unnecessary-condition Unnecessary conditional, value is always falsy.
-228:28 @typescript-eslint/no-unnecessary-condition Unnecessary conditional, value is always falsy.
-233:58 @typescript-eslint/no-unnecessary-condition Unnecessary conditional, expected left-hand side of `??` operator to be possibly null or undefined.
-320:21 @typescript-eslint/no-unnecessary-condition Unnecessary conditional, value is always falsy.

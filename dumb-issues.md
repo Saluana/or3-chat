@@ -38,7 +38,7 @@ Branch: `codex/neckbeard-findings`; base: `68bed3fb55703375fd1e28fc436ea7fbb92b0
 - [x] **25** [P2] Attachment writes can land in a different workspace after a hook awaits
 - [x] **26** [P3] Public deep health returns administrative diagnostic details
 
-All **26 findings are addressed in code** as of 2026-10-15. The findings below preserve the original review baseline and its source locations. Current validation and repeatable commands are in [the remediation receipt](audit-evidence/neckbeard-20261014/remediation-verification.md); fixed-behavior observations are in [remediation-results.jsonl](audit-evidence/neckbeard-20261014/remediation-results.jsonl).
+All **26 findings are addressed in code** as of 2026-10-15. The findings below preserve the original review baseline and its source locations. Current validation and repeatable commands are in [the remediation receipt](audit-evidence/neckbeard-20261014/remediation-verification.md); fixed-behavior observations are in [remediation-results.jsonl](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/neckbeard-20261014/remediation-results.jsonl).
 
 - **01, 02, 11–14:** guarded bounded webhook mutations, durable membership checks and revocation cleanup, atomic provider quotas, bounded response streaming, deferred rate limits, and caught background errors with batch settlement.
 - **03, 15, 16:** shared device-only KV policy at admission and incremental application, atomic monotonic cursors, and invalid payloads aborting the batch.
@@ -49,11 +49,11 @@ All **26 findings are addressed in code** as of 2026-10-15. The findings below p
 
 **Verification:** OR3 Chat **52 files / 526 tests passed**, full Nuxt typecheck and changed-TypeScript lint passed, and all three audit scripts passed. SQLite provider **8 tests**, build, standalone typecheck and changed-source lint passed. Convex provider quota regression, template pack, build and standalone typecheck passed. Final diffs were inspected.
 
-**Published providers for 11:** `or3-provider-sqlite@0.0.18` and `or3-provider-convex@0.0.18` are published and pinned. Both tag workflows passed, and downloaded npm tarballs match the exact CI-qualified archives. [Release receipts](audit-evidence/neckbeard-20261014/provider-releases.json) record commits and integrity. Convex users must deploy the matching backend templates. Older providers still fail closed with HTTP 503. Final qualification uses published packages without source aliases; no production deployment or application release was performed.
+**Published providers for 11:** `or3-provider-sqlite@0.0.18` and `or3-provider-convex@0.0.18` are published and pinned. Both tag workflows passed, and downloaded npm tarballs match the exact CI-qualified archives. [Release receipts](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/neckbeard-20261014/provider-releases.json) record commits and integrity. Convex users must deploy the matching backend templates. Older providers still fail closed with HTTP 503. Final qualification uses published packages without source aliases; no production deployment or application release was performed.
 
 ## Evidence and verification
 
-The three scripts in [audit-evidence/neckbeard-20261014](audit-evidence/neckbeard-20261014/) import production modules and use disposable IndexedDB, SQLite, temporary files, in-process H3 requests, and injected responses. They do not access a live deployment or use real credentials. Observations are recorded in [results.jsonl](audit-evidence/neckbeard-20261014/results.jsonl). They support 19 findings; the remaining seven are source-traced. Some probes demonstrate a failing primitive rather than a complete browser/deployment exploit; those limits are stated below.
+The three scripts in [audit-evidence/neckbeard-20261014](audit-evidence/neckbeard-20261014/) import production modules and use disposable IndexedDB, SQLite, temporary files, in-process H3 requests, and injected responses. They do not access a live deployment or use real credentials. Observations are recorded in [results.jsonl](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/neckbeard-20261014/results.jsonl). They support 19 findings; the remaining seven are source-traced. Some probes demonstrate a failing primitive rather than a complete browser/deployment exploit; those limits are stated below.
 
 Run from `or3-chat` with the existing dependencies installed:
 
@@ -63,7 +63,7 @@ bunx vite-node --config vitest.config.ts audit-evidence/neckbeard-20261014/webho
 bunx vite-node --config vitest.config.ts audit-evidence/neckbeard-20261014/client-and-storage.ts
 ```
 
-Original review-only validation: **7 files, 61 tests passed**, covering conflict resolution, cursors, HLC, admin throttling, webhook routes, dispatcher, and event bridge. The exact command and output are in [verification.txt](audit-evidence/neckbeard-20261014/verification.txt). Passing these tests does not cover the failure cases below. No full build, browser E2E, production load test, or deployment lifecycle test was run for this review-only change.
+Original review-only validation: **7 files, 61 tests passed**, covering conflict resolution, cursors, HLC, admin throttling, webhook routes, dispatcher, and event bridge. The exact command and output are in [verification.txt](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/neckbeard-20261014/verification.txt). Passing these tests does not cover the failure cases below. No full build, browser E2E, production load test, or deployment lifecycle test was run for this review-only change.
 
 ## 01 — [P1] Webhook creation accepts a hostile origin's plain HTML form
 

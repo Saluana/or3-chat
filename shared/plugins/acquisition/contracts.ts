@@ -242,18 +242,6 @@ export function acquisitionStageIndex(stage: PluginAcquisitionStage): number {
 }
 
 /**
- * Whether an operation at `from` may advance to `to`. Equal or later stages are
- * allowed (a resumed run re-enters the stage it recorded), earlier ones are not:
- * a recorded `verified` must never fall back to `downloaded` on a retry.
- */
-export function canAdvanceAcquisitionStage(
-    from: PluginAcquisitionStage,
-    to: PluginAcquisitionStage
-): boolean {
-    return acquisitionStageIndex(to) >= acquisitionStageIndex(from);
-}
-
-/**
  * The stage work must resume from. A download that was interrupted resumes at
  * `reserved` (the artifact is re-fetched or continued into staging); everything
  * later resumes at its own recorded stage.
@@ -263,17 +251,6 @@ export function resumeStageFor(operation: PluginAcquisitionOperation): PluginAcq
         return 'reserved';
     }
     return operation.stage;
-}
-
-/** Whether an interrupted download may continue from the staged bytes. */
-export function shouldResumeDownload(operation: PluginAcquisitionOperation): boolean {
-    return (
-        operation.stage === 'downloaded' &&
-        operation.downloadedBytes > 0 &&
-        operation.stagingObject !== null &&
-        operation.downloadUrlExpiresAt !== null &&
-        operation.downloadUrlExpiresAt > Date.now()
-    );
 }
 
 export interface AcquisitionStatusView {

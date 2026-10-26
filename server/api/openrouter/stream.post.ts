@@ -62,23 +62,12 @@ import { resolveServerContextPolicy, admitServerProviderBody, contextAdmissionRe
 import { ChatContextAdmissionError, captureContextEnvelope } from '~~/shared/chat/context-budget';
 import { normalizeProviderResponseError } from '~~/shared/openrouter/errors';
 import { sendWithAffordableReply } from '~~/shared/openrouter/credit-retry';
-import { sensitiveValueMetadata } from '~~/shared/logging/sensitive-metadata';
 import {
     fetchWithResponseDeadline,
     OpenRouterTimeoutError,
     readResponseTextWithIdleDeadline,
     withIdleWatchdog,
 } from '~~/shared/openrouter/deadlines';
-
-function logBgStream(
-    _stage: string,
-    _details?: Record<string, unknown>
-): void {}
-
-function warnBgStream(
-    _stage: string,
-    _details?: Record<string, unknown>
-): void {}
 
 function getOptionalBodyString(
     body: Record<string, unknown>,
@@ -124,10 +113,6 @@ export default defineEventHandler(async (event) => {
             return { error: toolValidation.error };
         }
     }
-    logBgStream('api-stream-request', {
-        backgroundRequested,
-        backgroundAvailable: isBackgroundStreamingAvailable(),
-    });
 
     // Req 1, 4: Select API key. Prefer caller-owned credentials when allowed.
     const config = useRuntimeConfig(event);
@@ -237,9 +222,7 @@ export default defineEventHandler(async (event) => {
     // If background mode is requested and enabled, start a background job
     // and return immediately with the job ID.
     if (backgroundRequested && isBackgroundStreamingAvailable()) {
-        logBgStream('api-stream-background-path', {
-            requested: backgroundRequested,
-        });
+
         // Resolve user ID for authorization
         let userId: string | null = null;
         let workspaceId: string | null = null;
@@ -257,19 +240,12 @@ export default defineEventHandler(async (event) => {
                         hasWorkspace: Boolean(session.workspace?.id),
                     });
                 }
-                warnBgStream('api-stream-background-session-missing', {
-                    authenticated: session.authenticated,
-                    hasUser: Boolean(session.user?.id),
-                    hasWorkspace: Boolean(session.workspace?.id),
-                });
+
             }
         }
 
         if (!userId || !workspaceId) {
-            warnBgStream('api-stream-background-auth-required', {
-                hasUserId: Boolean(userId),
-                hasWorkspaceId: Boolean(workspaceId),
-            });
+
             setResponseStatus(event, 401);
             return { error: 'Authentication required for background streaming' };
         }
@@ -281,9 +257,7 @@ export default defineEventHandler(async (event) => {
 
         const validation = validateBackgroundParams(body);
         if (!validation.valid) {
-            warnBgStream('api-stream-background-validation-failed', {
-                error: validation.error || 'unknown',
-            });
+
             setResponseStatus(event, 400);
             return { error: validation.error };
         }
@@ -299,12 +273,7 @@ export default defineEventHandler(async (event) => {
             const prepared = await admitServerProviderBody(withoutOr3RequestMetadata(body), contextPolicy);
             body = { ...body, ...prepared };
             if (contextPolicy) body._context = captureContextEnvelope(contextPolicy);
-            logBgStream('api-stream-background-start-attempt', {
-                userId,
-                workspaceId,
-                threadId: validation.threadId!,
-                messageId: validation.messageId!,
-            });
+
             const result = await startBackgroundStream({
                 body,
                 contextPolicy,
@@ -315,14 +284,6 @@ export default defineEventHandler(async (event) => {
                 threadId: validation.threadId!,
                 messageId: validation.messageId!,
                 referer: `${proto}://${host}`,
-            });
-            logBgStream('api-stream-background-start-success', {
-                jobId: result.jobId,
-                status: result.status,
-                userId,
-                workspaceId,
-                threadId: validation.threadId!,
-                messageId: validation.messageId!,
             });
 
             return result;
@@ -335,13 +296,7 @@ export default defineEventHandler(async (event) => {
                 setResponseStatus(event, 502);
                 return publicErrorEnvelope(err);
             }
-            warnBgStream('api-stream-background-start-failed', {
-                userId,
-                workspaceId,
-                threadId: validation.threadId!,
-                messageId: validation.messageId!,
-                error: err instanceof Error ? err.message : String(err),
-            });
+
             if (isAdmissionCancelledError(err)) {
                 // The client cancelled before the job ID returned. This is a
                 // deliberate Stop, not a server failure.
@@ -388,7 +343,7 @@ export default defineEventHandler(async (event) => {
         // client would retry admission and the foreground requests would bypass
         // background admission deduplication. Return a structured, non-retryable
         // capability error instead.
-        warnBgStream('api-stream-background-requested-but-unavailable', {});
+
         setResponseStatus(event, 503);
         return {
             error: 'Background streaming is not enabled on this server',
@@ -429,7 +384,7 @@ export default defineEventHandler(async (event) => {
     const onClientClose = () => {
         // Registered below only when this captured response supplies once().
         if (res!.writableFinished) return;
-        logBgStream('api-stream-foreground-client-closed', {});
+
         ac.abort();
     };
     if (typeof res?.once === 'function') {
@@ -481,30 +436,21 @@ export default defineEventHandler(async (event) => {
             }, { signal: ac.signal });
             ({ response: upstream, errorText: upstreamErrorText } = await sendWithAffordableReply(requestUpstream, providerBody,
                 { defaultAllowance: !!policy && policy.requestedCompletionTokens == null, signal: ac.signal }));
-            logBgStream('api-stream-foreground-upstream-response', {
-                ok: upstream.ok,
-                status: upstream.status,
-                hasBody: Boolean(upstream.body),
-            });
+
         } catch (e: unknown) {
             // Handle abort or network error
             if (e instanceof Error && e.name === 'AbortError') {
                 // Client disconnected
-                logBgStream('api-stream-foreground-upstream-aborted', {});
+
                 return;
             }
             if (e instanceof OpenRouterTimeoutError) {
-                warnBgStream('api-stream-foreground-upstream-timeout', {
-                    phase: e.phase,
-                    timeoutMs: e.timeoutMs,
-                });
+
                 setResponseStatus(event, 504);
                 return e.message;
             }
             // Other network error
-            warnBgStream('api-stream-foreground-upstream-network-failed', {
-                error: e instanceof Error ? e.message : String(e),
-            });
+
             setResponseStatus(event, 502);
             return publicErrorEnvelope({ status: 502, source: 'provider', retryable: true });
         }
@@ -519,11 +465,7 @@ export default defineEventHandler(async (event) => {
             } catch {
                 respText = '<error-reading-body>';
             }
-            warnBgStream('api-stream-foreground-upstream-non-ok', {
-                status: upstream.status,
-                hasBody: Boolean(upstream.body),
-                responseMetadata: sensitiveValueMetadata(respText),
-            });
+
             setResponseStatus(event, upstream.status);
             const retryAfterMs = parseRetryAfter(upstream.headers.get('retry-after'));
             if (retryAfterMs !== undefined) setHeader(event, 'Retry-After', Math.ceil(retryAfterMs / 1000));
@@ -565,9 +507,7 @@ export default defineEventHandler(async (event) => {
 
         // Just pipe the upstream SSE directly to client - no need to parse and re-encode
         // The client will parse it with the shared parser
-        logBgStream('api-stream-foreground-pipe-start', {
-            status: upstream.status,
-        });
+
         const session = await getSession();
         const workspaceId =
             session?.authenticated && session.workspace?.id ? session.workspace.id : null;
@@ -583,14 +523,6 @@ export default defineEventHandler(async (event) => {
             threadId,
             messageId,
             modelId,
-            onError(error) {
-                warnBgStream('api-stream-foreground-hook-monitor-failed', {
-                    workspaceId,
-                    error: error instanceof Error ? error.message : String(error),
-                    threadId,
-                    messageId,
-                });
-            },
         });
 
         try {

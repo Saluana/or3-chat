@@ -43,7 +43,7 @@ with reuse. A further diagnostic sampled the scroller's exposed state: both
 observed pulses occurred while it reported bottom. The browsing pane's control
 remained at opacity 1 throughout. These are computed-style rAF observations,
 not a complete painted-frame capture. Original receipts are retained in
-[projection-scroll-control-baseline.json](projection-scroll-control-baseline.json).
+[projection-scroll-control-baseline.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/projection-scroll-control-baseline.json).
 
 After both repairs, three diagnostics record zero visible frames and zero style
 writes on the following pane's control across 126 / 123 / 126 sampled frames.
@@ -116,9 +116,9 @@ normal-speed rich after-only control records p95 and maximum 16.8 ms with no
 long tasks. These results do not establish stutter-free rich streaming.
 All 19 baseline/final runs pass the saved-text and scroll-integrity
 checks; completed rich nodes remain connected with zero recorded mutations.
-Final receipts are in [projection-results.json](projection-results.json).
+Final receipts are in [projection-results.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/projection-results.json).
 The earlier projection-only qualification is retained separately in
-[projection-reuse-results.json](projection-reuse-results.json); its timing
+[projection-reuse-results.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/projection-reuse-results.json); its timing
 samples are not mixed into the final table.
 
 ## Regression and reproduction
@@ -162,7 +162,7 @@ computed control opacity, style writes, and exposed bottom-state observations.
 Omit both diagnostic flags for timing runs and use `cpuRate:1` for normal speed.
 The runner owns its browser, resets throttling,
 blocks external requests, and enforces a 90-second watchdog. Baseline receipts
-are in [projection-baseline.json](projection-baseline.json).
+are in [projection-baseline.json](https://github.com/Saluana/or3-chat/blob/8e8557404d91eb6057a1d8d49faf9f7de6f34230/audit-evidence/performance-20261022/projection-baseline.json).
 
 This section does not qualify every painted frame, background transports,
 physical devices, generated-image streaming, or tool-heavy stream performance.
