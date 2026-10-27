@@ -51,6 +51,9 @@ export const DEFAULT_STORAGE_ALLOWED_MIME_TYPES = [
     'application/pdf',
     'text/plain',
     'text/markdown',
+    // Project knowledge accepts these; without them their originals never upload.
+    'text/csv',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ] as const;
 export const DEFAULT_STORAGE_GC_RETENTION_SECONDS = 30 * 24 * 3600; // 30 days
 export const DEFAULT_STORAGE_GC_COOLDOWN_MS = 60_000; // 1 minute

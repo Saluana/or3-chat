@@ -494,7 +494,7 @@ bunx convex env set OR3_ADMIN_JWT_SECRET=<your-admin-jwt-secret>
 #### `storage.allowedMimeTypes`
 
 - Type: `string[]`
-- Default: `['image/jpeg','image/png','image/gif','image/webp','application/pdf','text/plain','text/markdown']`
+- Default: `['image/jpeg','image/png','image/gif','image/webp','application/pdf','text/plain','text/markdown','text/csv','application/vnd.openxmlformats-officedocument.wordprocessingml.document']`
 - Env: `OR3_STORAGE_ALLOWED_MIME_TYPES` (comma-separated)
 - Purpose: Upload MIME allowlist enforced by storage presign endpoint.
 
