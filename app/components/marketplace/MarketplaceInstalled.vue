@@ -20,7 +20,7 @@ import {
 import { pluginLifecycleView } from '~/composables/plugins/plugin-lifecycle-view';
 import { openInstalledPluginPane } from '~/composables/plugins/portable-pane';
 import { useTrustedV2Activations } from '~/composables/plugins/trusted-v2-manager';
-import { requestWorkspacePluginReconcile } from '~/composables/plugins/bundled-v1-manager-runtime';
+import { requestWorkspacePluginReconcile } from '~/composables/plugins/workspace-plugin-coordinator';
 
 
 const toast = useToast();

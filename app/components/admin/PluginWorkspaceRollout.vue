@@ -5,7 +5,7 @@ import { onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from '#imports';
 import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
 import { parseErrorMessage } from '~/utils/admin/parse-error';
-import { requestWorkspacePluginReconcile } from '~/composables/plugins/bundled-v1-manager-runtime';
+import { requestWorkspacePluginReconcile } from '~/composables/plugins/workspace-plugin-coordinator';
 
 const props = defineProps<{ pluginId: string; version: string | null }>();
 type Workspace = { id: string; name: string; ownerEmail?: string };

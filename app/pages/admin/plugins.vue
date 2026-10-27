@@ -464,7 +464,7 @@ import { useAdminSession } from '~/composables/admin/useAdminData';
 import { useExtensionManagement } from '~/composables/admin/useExtensionManagement';
 import { useConfirmDialog } from '~/composables/admin/useConfirmDialog';
 import { parseErrorMessage } from '~/utils/admin/parse-error';
-import { requestWorkspacePluginReconcile } from '~/composables/plugins/bundled-v1-manager-runtime';
+import { requestWorkspacePluginReconcile } from '~/composables/plugins/workspace-plugin-coordinator';
 import {
     createDefaultAccessEditor,
     deserializeAccessEditor,

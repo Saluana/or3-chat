@@ -17,9 +17,6 @@ import {
     TRUSTED_HOST_GRANTS,
 } from './trusted-host-context';
 
-export { WORKSPACE_PLUGIN_RECONCILE_EVENT, requestWorkspacePluginReconcile } from './workspace-plugin-coordinator';
-export type { WorkspacePluginReconcileReason, WorkspacePluginReconcileEventDetail } from './workspace-plugin-coordinator';
-
 export function parseWorkspacePluginModule(
     mod: unknown,
     pluginId: string

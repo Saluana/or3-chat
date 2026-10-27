@@ -23,7 +23,7 @@
  */
 
 import { computed, ref } from 'vue';
-import { requestWorkspacePluginReconcile } from '~/composables/plugins/bundled-v1-manager-runtime';
+import { requestWorkspacePluginReconcile } from '~/composables/plugins/workspace-plugin-coordinator';
 import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import type { EffectiveAuthority } from '~~/shared/plugins/authority/effective-authority';
 import { acquisitionRequestError } from '~~/shared/plugins/acquisition/failure-presentation';

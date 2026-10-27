@@ -3,7 +3,7 @@ import { describePluginGrant } from '~~/shared/plugins/grant-description';
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
 import { useDevelopmentCanary } from '~/composables/admin/useDevelopmentCanary';
-import { requestWorkspacePluginReconcile } from '~/composables/plugins/bundled-v1-manager-runtime';
+import { requestWorkspacePluginReconcile } from '~/composables/plugins/workspace-plugin-coordinator';
 import { openPortablePane } from '~/composables/plugins/portable-pane';
 import {
     ensurePortableClientActivation, getPortableActivation, getPortableClientSource,
