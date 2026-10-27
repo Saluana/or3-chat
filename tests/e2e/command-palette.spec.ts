@@ -82,10 +82,12 @@ test('fits the mobile viewport without horizontal overflow', async ({ page }) =>
     expect(box).not.toBeNull();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.width).toBeLessThanOrEqual(390);
-    const scrollWidth = await palette(page).evaluate(
-        (element) => element.scrollWidth
+    // scrollWidth is in CSS px, which the theme's interface zoom scales, so
+    // compare the palette with itself rather than with the viewport.
+    const { scrollWidth, clientWidth } = await palette(page).evaluate(
+        (element) => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth })
     );
-    expect(scrollWidth).toBeLessThanOrEqual(390);
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
 });
 
 test('typing a new query cannot execute a stale result with Enter', async ({ page }, info) => {

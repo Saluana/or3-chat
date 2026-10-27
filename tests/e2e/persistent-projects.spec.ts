@@ -404,8 +404,10 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     const toolsBounds = (await projects
         .getByRole('region', { name: 'Project tools', exact: true })
         .boundingBox())!;
+    // The theme's interface scale applies as body zoom; the 20px inset is CSS px.
+    const zoom = await page.evaluate(() => Number(getComputedStyle(document.body).zoom) || 1);
     expect(toolsBounds.x + toolsBounds.width).toBeLessThanOrEqual(
-        sidebarBounds.x + sidebarBounds.width - 20,
+        sidebarBounds.x + sidebarBounds.width - 20 * zoom,
     );
     const createHelp = page.getByText(
         'Make a new document from a title and optional text.',
@@ -1007,7 +1009,7 @@ test('persistent projects retain settings, extract files, preserve failed replac
         mimeType: 'text/plain',
         buffer: Buffer.alloc(20 * 1024 * 1024 + 1, 'a'),
     });
-    await expect(page.getByRole('alert')).toContainText(/too large/i);
+    await expect(page.getByRole('alert')).toContainText('exceeds the upload size limit');
     await expect(
         page.locator('article').filter({ hasText: 'oversized.txt' }),
     ).toHaveCount(0);
