@@ -84,5 +84,7 @@ export default defineEventHandler(async event => {
             hasTransactionCookie: Boolean(cookie),
         });
     }
-    return sendRedirect(event, `/openrouter-callback?connection=${connected ? 'connected' : 'failed'}`, 302);
+    // Only a storage fault needs an administrator; a cancelled, stale or refused attempt just restarts.
+    const outcome = connected ? 'connected' : stage === 'credential-storage' ? 'failed' : 'incomplete';
+    return sendRedirect(event, `/openrouter-callback?connection=${outcome}`, 302);
 });

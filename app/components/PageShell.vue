@@ -1709,6 +1709,9 @@ function redirectNotFound(kind: 'chat' | 'doc') {
     hasSyncedInitial.value = true;
     if (kind === 'chat') router.replace('/chat');
     else router.replace('/docs');
+    // Signed out of Cloud (including an expired session's reload), the record
+    // belongs to an account that is not loaded here, not a missing one.
+    if (runtimeConfig.public.ssrAuthEnabled === true && emptySession.value?.session?.authenticated !== true) return;
     toast.add({
         title: 'Not found',
         description:

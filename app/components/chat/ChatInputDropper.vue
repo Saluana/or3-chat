@@ -20,7 +20,6 @@
                 Remove and attach those files again.
             </p>
             <div v-if="sendBlock" role="status" aria-live="polite" class="space-y-2 text-xs">
-                <p v-if="sendBlock.reason === 'context_full'">Context full — compact to continue</p>
                 <p>{{ sendBlock.error || 'Edit the request or choose a larger model.' }}</p>
                 <div class="flex flex-wrap gap-2">
                     <UButton v-if="sendBlock.reason !== 'unsupported_input'" size="xs" variant="soft" color="neutral" @click.stop="settingsPopoverOpen = true">Chat memory</UButton>

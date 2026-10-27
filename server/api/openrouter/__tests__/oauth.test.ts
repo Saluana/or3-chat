@@ -49,7 +49,7 @@ it.each(['account', 'state', 'cookie'])('refuses an OAuth %s mismatch before exc
     const attempt = await start();
     if (mismatch === 'account') fixture.userId = 'account-b';
     const response = await request(new Request(`http://localhost/api/openrouter/oauth?code=one-use-code&state=${mismatch === 'state' ? 'foreign' : attempt.state}`, { headers: { host: 'localhost', cookie: mismatch === 'cookie' ? '' : attempt.cookie } }));
-    expect(response.headers.get('location')).toBe('/openrouter-callback?connection=failed');
+    expect(response.headers.get('location')).toBe('/openrouter-callback?connection=incomplete');
     expect(fixture.fetch).not.toHaveBeenCalled(); expect(fixture.saved).not.toHaveBeenCalled();
 });
 it('does not claim connection success when vault persistence fails', async () => {

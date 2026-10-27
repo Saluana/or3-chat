@@ -2312,12 +2312,17 @@ export function useChat(
         let contextOmission: Awaited<ReturnType<typeof confirmLossyRequest>>['omission'] | undefined;
         let reviewedLossyMessages: string | undefined;
         if (sendMessagesParams.inspectLossyRequest || sendMessagesParams.lossyConfirmation) {
-            const { prepareLossyRequest, confirmLossyRequest } = await import('~/utils/chat/lossy-request');
+            const { prepareLossyRequest, confirmLossyRequest, LossyRequestUnavailableError } = await import('~/utils/chat/lossy-request');
             if (!ownsPreparation()) return { status: 'aborted', requestId, reason: 'aborted' };
             if (prepared.delegation) return { status: 'rejected', requestId, reason: 'unavailable',
                 error: 'Delegated requests cannot omit native history. Edit the request or compact the conversation.' };
-            if (sendMessagesParams.inspectLossyRequest) lossyPreview = await prepareLossyRequest(providerPreparation, lossyScope);
-            else {
+            if (sendMessagesParams.inspectLossyRequest) {
+                try { lossyPreview = await prepareLossyRequest(providerPreparation, lossyScope); }
+                catch (error) {
+                    if (!(error instanceof LossyRequestUnavailableError)) throw error;
+                    return { status: 'rejected', requestId, reason: 'context_full', error: error.message };
+                }
+            } else {
                 const confirmed = await confirmLossyRequest(sendMessagesParams.lossyConfirmation!, providerPreparation, lossyScope);
                 orMessages = confirmed.messages as OpenRouterMessage[]; contextOmission = confirmed.omission;
                 reviewedLossyMessages = JSON.stringify(orMessages);

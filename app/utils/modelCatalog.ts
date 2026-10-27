@@ -589,14 +589,10 @@ export function formatPerMillion(raw: unknown, currency = 'USD'): string {
 /** 200000 → "200K", 1000000 → "1M", 32768 → "32.8K". */
 export function formatTokenCount(n: number): string {
     if (!n || n <= 0) return '—';
-    if (n >= 1_000_000) {
-        const v = n / 1_000_000;
-        return `${Number.isInteger(v) ? v : v.toFixed(1)}M`;
-    }
-    if (n >= 1_000) {
-        const v = n / 1_000;
-        return `${Number.isInteger(v) ? v : v.toFixed(1)}K`;
-    }
+    // 1,048,576 rounds to 1.0; show it as 1M like a round 1,000,000.
+    const short = (v: number) => v.toFixed(1).replace(/\.0$/, '');
+    if (n >= 1_000_000) return `${short(n / 1_000_000)}M`;
+    if (n >= 1_000) return `${short(n / 1_000)}K`;
     return `${n}`;
 }
 

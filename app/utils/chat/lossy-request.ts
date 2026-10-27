@@ -19,6 +19,11 @@ function policyKey(params: OpenRouterStreamParams) {
     return JSON.stringify(policy);
 }
 
+/** An inspection outcome to show beside the composer, not an internal failure. */
+export class LossyRequestUnavailableError extends Error {
+    override readonly name = 'LossyRequestUnavailableError';
+}
+
 /** Explicit inspection only. Normal sends never enter this omission path. */
 export async function prepareLossyRequest(params: OpenRouterStreamParams, scope: Scope): Promise<LossyRequestPreview> {
     const body = buildOpenRouterRequestBody(params); const latestUser = body.messages.findLastIndex((row) => row.role === 'user');
@@ -72,7 +77,7 @@ export async function prepareLossyRequest(params: OpenRouterStreamParams, scope:
             if (!admission.ok) throw new ChatContextAdmissionError(admission);
             const omitted = body.messages.flatMap((row, position) => selected.has(position) ? [] : [{ position, role: row.role,
                 excerpt: Array.from(typeof row.content === 'string' ? row.content : JSON.stringify(row.content)).slice(0, 200).join('') }]);
-            if (!omitted.length) throw new Error('This request fits without omissions. Send the full request.');
+            if (!omitted.length) throw new LossyRequestUnavailableError('This request fits without omissions. Send the full request.');
             const [originalDigest, candidateDigest, protectedDigest] = await Promise.all([digest(body), digest(messages),
                 digest(groups.filter((group) => group.protected).flatMap((group) => group.positions.map((position) => body.messages[position])))]);
             const preview = Object.freeze({ input_tokens: estimate.input_tokens,
@@ -88,7 +93,7 @@ export async function prepareLossyRequest(params: OpenRouterStreamParams, scope:
         } catch (error) {
             if (!(error instanceof ChatContextAdmissionError) || error.code !== 'context_full') throw error;
             const next = groups.find((group, index) => !group.protected && retained.includes(envelopes[index]!));
-            if (!next) throw new Error('The protected prompt, summary and latest user message do not fit. Edit the request or choose a larger model.');
+            if (!next) throw new LossyRequestUnavailableError('The protected prompt, summary and latest user message do not fit. Edit the request or choose a larger model.');
             const nextEnvelope = envelopes[groups.indexOf(next)]!;
             budget -= await countTokensApprox(nextEnvelope.content);
             retained = await trimOrMessagesByTokenBudget(envelopes, Math.max(0, budget), countTokensApprox);

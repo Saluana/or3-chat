@@ -114,7 +114,10 @@
                 </UButton>
             </div>
             <div v-if="showKeyDetails" id="chat-welcome-key-details" class="welcome-card-key-details">
-                <p>
+                <p v-if="cloudMode">
+                    Your key is stored encrypted on this {{ siteName }} server for your account and used only for your AI requests to OpenRouter.
+                </p>
+                <p v-else>
                     Your key is saved in this browser and sent with AI requests to OpenRouter, directly or through this {{ siteName }} server.
                 </p>
                 <a
@@ -154,6 +157,7 @@ const siteName = computed(
     () => runtimeConfig.public?.branding?.appName ?? 'OR3'
 );
 const welcomeDescription = 'Connect OpenRouter to start chatting.';
+const cloudMode = runtimeConfig.public.ssrAuthEnabled === true;
 
 const titleId = 'chat-welcome-title';
 const descriptionId = 'chat-welcome-description';
@@ -217,8 +221,11 @@ function onCardKeydown(event: KeyboardEvent): void {
     focusable[next]?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
 }
 
-function onConnect(): void {
-    void startLogin();
+async function onConnect(): Promise<void> {
+    await startLogin();
+    // The loading state blurs the button; a failed start must not leave focus
+    // on the page behind this modal card, where Escape and Tab stop working.
+    if (!isLoggingIn.value && document.activeElement === document.body) focusPrimaryCta();
 }
 
 function onDismiss(): void {

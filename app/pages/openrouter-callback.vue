@@ -189,7 +189,9 @@ onMounted(async () => {
             await router.replace('/');
         } catch {
             loading.value = false; ready.value = true;
-            errorMessage.value = 'The connection could not be saved. Start the connection again or contact the administrator.';
+            errorMessage.value = route.query.connection === 'incomplete'
+                ? 'No key was saved. Start the connection again.'
+                : 'The connection could not be saved. Start the connection again or contact the administrator.';
         }
         return;
     }
