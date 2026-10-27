@@ -52,6 +52,7 @@
                 >
                     <LazyPromptsPromptEditor
                         :prompt-id="editingPromptId"
+                        :select-title="editingPromptId === createdPromptId"
                         @back="stopEditing"
                         @saved="handleEditorSaved"
                     />
@@ -1126,9 +1127,11 @@ async function ensurePromptEditorLoaded(): Promise<void> {
     await promptEditorLoadPromise;
 }
 
+const createdPromptId = ref<string | null>(null);
 async function createNewPrompt(): Promise<void> {
     try {
         const prompt = await createPrompt();
+        createdPromptId.value = prompt.id;
         prompts.value.unshift(prompt);
         selectedPromptId.value = prompt.id;
         await startEditing(prompt.id);

@@ -1065,7 +1065,7 @@ function dismissDraftRestoreNotice(): void {
     draftRestoreNoticeId = undefined;
 }
 
-async function restoreDraft(tabId = props.tabId): Promise<void> {
+async function restoreDraft(tabId = props.tabId, retry = false): Promise<void> {
     const revision = ++draftRestoreRevision;
     draftRestoreFailed = false;
     if (!tabId) {
@@ -1080,7 +1080,8 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
     // Keep any earlier warning until this attempt settles, and give each failure
     // its own id: a removed toast id is deleted after its close animation, which
     // would also drop a same-id warning re-added in that window.
-    const noticeId = `draft-restore-failed:${encodeURIComponent(scope.key)}:${encodeURIComponent(tabId)}:${revision}`;
+    const noticePrefix = `draft-restore-failed:${encodeURIComponent(scope.key)}:${encodeURIComponent(tabId)}:`;
+    const noticeId = `${noticePrefix}${revision}`;
     let keptTypedText = false;
     try {
         let draft: WorkspaceChatTabDraft | undefined;
@@ -1141,20 +1142,25 @@ async function restoreDraft(tabId = props.tabId): Promise<void> {
         draftScope = scope;
         keptTypedText = draftEditRevision !== revisionBeforeLoad;
         draftRestoreFailed = !keptTypedText;
-        dismissDraftRestoreNotice();
-        draftRestoreNoticeId = noticeId;
-        toast.add({
-            id: noticeId,
-            title: 'Draft could not be restored',
-            description: 'Your saved draft could not be read. Retry to restore it.',
-            color: 'warning',
-            duration: 0,
-            actions: [{ label: 'Retry restore', onClick: () => {
-                if (!componentDisposed && props.tabId === tabId && tabDrafts.scope().key === scope.key) {
-                    void restoreDraft(tabId);
-                }
-            } }],
-        });
+        // Automatic attempts keep this tab's open warning; swapping it would stack
+        // two copies while the old one animates out. A Retry click closes its own
+        // toast, so a failed retry shows a fresh one.
+        if (retry || !draftRestoreNoticeId?.startsWith(noticePrefix)) {
+            dismissDraftRestoreNotice();
+            draftRestoreNoticeId = noticeId;
+            toast.add({
+                id: noticeId,
+                title: 'Draft could not be restored',
+                description: 'Your saved draft could not be read. Retry to restore it.',
+                color: 'warning',
+                duration: 0,
+                actions: [{ label: 'Retry restore', onClick: () => {
+                    if (!componentDisposed && props.tabId === tabId && tabDrafts.scope().key === scope.key) {
+                        void restoreDraft(tabId, true);
+                    }
+                } }],
+            });
+        }
     } finally {
         // A newer restore owns the flag; only the latest one may release it.
         if (revision === draftRestoreRevision) draftContentLoading = false;

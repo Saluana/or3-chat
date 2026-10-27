@@ -672,6 +672,9 @@ const emit = defineEmits<{
 
 const warningIcon = useIcon('ui.warning');
 const copyIcon = useIcon('chat.message.copy');
+const copiedIcon = useIcon('ui.check');
+const copied = ref(false);
+let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 const retryIcon = useIcon('chat.message.retry');
 const usageIcon = useIcon('chat.message.usage');
 const continueIcon = useIcon('chat.message.continue');
@@ -745,6 +748,7 @@ const copyButtonProps = computed(() => ({
     size: 'sm' as const,
     class: 'text-black dark:text-white/95 flex items-center justify-center',
     ...copyButtonOverrides.value,
+    ...(copied.value ? { icon: copiedIcon.value } : {}),
 }));
 
 const retryButtonProps = computed(() => ({
@@ -1124,7 +1128,7 @@ function resumeInlineHydration() {
     lastHydrateCheck = Date.now();
     rafHydrate.resume();
 }
-onBeforeUnmount(() => clearTimeout(hydrateTimer));
+onBeforeUnmount(() => { clearTimeout(hydrateTimer); clearTimeout(copiedTimer); });
 
 watch(
     [
@@ -1159,12 +1163,10 @@ const { copy: copyToClipboard } = useClipboard({ legacy: true });
 function copyMessage() {
     copyToClipboard(props.message.text || '')
         .then(() => {
-            toast.add({
-                title: 'Message copied',
-                description:
-                    'The message content has been copied to your clipboard.',
-                duration: 2000,
-            });
+            // Confirm on the button itself; only a failure needs a toast.
+            copied.value = true;
+            clearTimeout(copiedTimer);
+            copiedTimer = setTimeout(() => { copied.value = false; }, 1500);
         })
         .catch(() => {
             toast.add({

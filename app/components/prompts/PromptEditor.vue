@@ -12,6 +12,7 @@
                 aria-label="Back to list"
             />
             <UInput
+                ref="titleInput"
                 v-model="titleDraft"
                 v-bind="promptTitleInputProps"
                 aria-label="Prompt title"
@@ -142,12 +143,14 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import { buildThemeOverrideProps } from '~/composables/ui/themeOverrideProps';
 
-const props = defineProps<{ promptId: string }>();
+// selectTitle: a just-created prompt's fallback title is selected, so typing names it.
+const props = defineProps<{ promptId: string; selectTitle?: boolean }>();
 const emit = defineEmits<{
     (e: 'back'): void;
     (e: 'saved', prompt: PromptRecord): void;
 }>();
 
+const titleInput = ref<{ $el?: HTMLElement } | null>(null);
 const record = ref<PromptRecord | null>(null);
 const loading = ref(true);
 const titleDraft = ref('');
@@ -314,15 +317,25 @@ watch(
     { immediate: true }
 );
 
+async function selectNewTitle() {
+    if (!props.selectTitle || !record.value) return;
+    await nextTick();
+    const input = titleInput.value?.$el?.querySelector('input');
+    input?.focus();
+    input?.select();
+}
+
 onMounted(async () => {
     await ensureEditor(defaultContent);
     await load(props.promptId);
+    await selectNewTitle();
 });
 
 watch(
     () => props.promptId,
     async (id) => {
         await load(id);
+        await selectNewTitle();
     }
 );
 
