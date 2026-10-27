@@ -232,6 +232,8 @@ const sourceMenuOpen = ref(false);
 const briefEditing = ref(false);
 const inlineBriefEditor = ref<HTMLTextAreaElement | null>(null);
 const creatingMemory = ref(false);
+const newMemoryInput = ref<HTMLTextAreaElement | null>(null);
+const sourceForm = ref<HTMLFormElement | null>(null);
 const editingMemory = ref<{
     record: NonNullable<
         Awaited<ReturnType<typeof readProjectWorkspace>>
@@ -689,9 +691,19 @@ function goBack() {
         void setActivePage('sidebar-home');
     }
 }
+let focusChosenSource = false;
 function chooseSource(kind: 'note' | 'document' | 'file') {
     sourceInput.value = kind;
+    focusChosenSource = true;
     sourceMenuOpen.value = false;
+}
+// Closing the menu would return focus to "Add source"; move it into the chosen form.
+function focusSourceForm(event: Event) {
+    const field = focusChosenSource ? sourceForm.value?.querySelector<HTMLElement>('input, select, textarea') : null;
+    focusChosenSource = false;
+    if (!field) return;
+    event.preventDefault();
+    field.focus();
 }
 function currentRevision(source: ProjectRecord<ProjectSource>) {
     return (
@@ -707,6 +719,11 @@ function cancelBriefEdit() {
     dirty.value =
         JSON.stringify(settings.value) !== JSON.stringify(state.value.settings);
     if (!dirty.value) editRevision.value = revisionOf(state.value.settingsRow);
+}
+async function startMemory() {
+    creatingMemory.value = true;
+    await nextTick();
+    newMemoryInput.value?.focus();
 }
 async function editInlineBrief() {
     if (!state.value || busy.value) return;
@@ -1335,6 +1352,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                                 align: 'start',
                                 side: 'bottom',
                                 sideOffset: 6,
+                                onCloseAutoFocus: focusSourceForm,
                             }"
                         >
                             <UButton
@@ -1413,6 +1431,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                         </UPopover>
                         <form
                             v-if="sourceInput === 'note'"
+                            ref="sourceForm"
                             class="project-editor space-y-3"
                             @submit.prevent="run(addNote)"
                         >
@@ -1469,6 +1488,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                         </form>
                         <form
                             v-if="sourceInput === 'document'"
+                            ref="sourceForm"
                             class="project-editor space-y-3"
                             @submit.prevent="run(addSelectedDocument)"
                         >
@@ -1520,6 +1540,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                         </form>
                         <form
                             v-if="sourceInput === 'file'"
+                            ref="sourceForm"
                             class="project-editor space-y-3"
                             @submit.prevent="run(addSelectedFile)"
                         >
@@ -1898,7 +1919,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                                         identifier: 'sidebar.project-content.action',
                                         context: 'sidebar',
                                     }"
-                                    @click="creatingMemory = true"
+                                    @click="startMemory"
                                 />
                             </div>
                             <form
@@ -1915,6 +1936,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                                         identifier: 'sidebar.project-content.field',
                                         context: 'sidebar',
                                     }"
+                                    ref="newMemoryInput"
                                     v-model="memory"
                                     class="project-input"
                                     rows="4"

@@ -92,8 +92,8 @@
     >
         <template #default>
             <p class="text-sm opacity-70">
-                {{ targetLabel('This project') }} will be removed from the sidebar.
-                Its data is soft-deleted and can be recovered.
+                {{ targetLabel('This project') }} and its settings, memories and knowledge sources will be deleted.
+                Its chats, documents and files stay in your workspace.
             </p>
         </template>
         <template #footer>
