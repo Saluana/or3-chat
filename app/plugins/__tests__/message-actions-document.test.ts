@@ -127,12 +127,7 @@ describe('Create document message action', () => {
             threadId: '',
             messages: [],
         });
-        expect(mocks.addToast).toHaveBeenCalledWith(
-            expect.objectContaining({
-                title: 'Document created',
-                description: 'Opened in the current pane.',
-            })
-        );
+        expect(mocks.addToast).not.toHaveBeenCalled();
     });
     it('opens before title inference settles and retains the original document content', async () => {
         mocks.generateTitle.mockReturnValue(new Promise(() => {}));

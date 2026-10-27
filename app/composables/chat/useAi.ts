@@ -1982,7 +1982,8 @@ export function useChat(
         // Reuse the already filtered native payload, never request/delegation hooks.
         if (requestScope.threadId && !sendMessagesParams.historyOverride) {
             const recovery = await requestScope.originDb.chat_request_recoveries.get(requestScope.threadId);
-            if (recovery && recovery.input_fingerprint === await recoveryInputFingerprint(content, sendMessagesParams)) {
+            if (recovery && recovery.input_fingerprint === await recoveryInputFingerprint(content, sendMessagesParams)
+                && !await discardStaleRecovery(requestScope.originDb, recovery)) {
                 // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- A durable checkpoint can be written by a newer client.
                 if (recovery.version !== 1)
                     return { status: 'rejected', requestId, reason: 'unavailable', error: 'This saved attempt uses an unsupported recovery version. Update the app or edit the draft to prepare a new request.' };
@@ -2849,6 +2850,22 @@ export function useChat(
         return terminalResult;
     }
 
+    /**
+     * A checkpoint is written before inference and cleared when its request
+     * settles here. A reload or crash mid-generation leaves it behind while its
+     * turn fails another way; that turn must use ordinary retry and sending.
+     */
+    async function discardStaleRecovery(db: ReturnType<typeof getDb>, checkpoint: NativeRecoveryCheckpoint): Promise<boolean> {
+        const saved = await db.messages.get(checkpoint.assistant_message_id);
+        if (saved && !saved.deleted && (saved.pending || (saved.error === 'context_full'
+            && (saved.data as Record<string, unknown> | null)?.request_id === checkpoint.request_id))) return false;
+        await db.transaction('rw', db.chat_request_recoveries, async () => {
+            const current = await db.chat_request_recoveries.get(checkpoint.thread_id);
+            if (current?.request_id === checkpoint.request_id) await db.chat_request_recoveries.delete(checkpoint.thread_id);
+        });
+        return true;
+    }
+
     async function recoverNativeTurn(requestScope: ChatRequestScope, checkpoint: NativeRecoveryCheckpoint, params: SendMessageParams): Promise<SendResult> {
         const requestId = requestScope.requestId; const db = requestScope.originDb; const generation = getWorkspaceGeneration();
         const signal = requestScope.abortController!.signal;
@@ -3675,7 +3692,8 @@ export function useChat(
                 if (checkpoint.version !== 1)
                     return { status: 'rejected' as const, reason: 'unavailable' as const,
                         error: 'This saved attempt uses an unsupported recovery version. Update the app or edit the draft to prepare a new request.' };
-                return sendMessage({ ...checkpoint.input, model: modelOverride || checkpoint.input.model });
+                if (!await discardStaleRecovery(db, checkpoint))
+                    return sendMessage({ ...checkpoint.input, model: modelOverride || checkpoint.input.model });
             }
         }
         const { retryMessageImpl } = await import('~/utils/chat/useAi-internal/retry');

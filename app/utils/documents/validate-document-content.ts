@@ -5,6 +5,10 @@ import type { Or3DB } from '~/db/client';
 import { collectDocumentFileHashes } from './document-content';
 import { isAllowedDocumentHref } from './document-href';
 
+// tiptap-markdown records list spacing as `tight`. Documents made from chat
+// replies carry it; the editor has no such attribute and drops it on parse.
+const MARKDOWN_LIST_ATTRS = new Set(['bulletList:tight', 'orderedList:tight']);
+
 /** Validate the real schema and attributes before allowing native content to persist. */
 export function parseNativeDocumentContent(schema: Schema, value: unknown): TipTapDocument {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Expected native document content.');
@@ -16,7 +20,8 @@ export function parseNativeDocumentContent(schema: Schema, value: unknown): TipT
         const nodeType = schema.nodes[node.type];
         if (!nodeType) throw new Error(`Unsupported document node: ${node.type}`);
         for (const key of Object.keys(node.attrs ?? {})) {
-            if (!(key in (nodeType.spec.attrs ?? {}))) throw new Error(`Unsupported ${node.type} attribute: ${key}`);
+            if (!(key in (nodeType.spec.attrs ?? {})) && !MARKDOWN_LIST_ATTRS.has(`${node.type}:${key}`))
+                throw new Error(`Unsupported ${node.type} attribute: ${key}`);
         }
         for (const mark of node.marks ?? []) {
             const markType = schema.marks[mark.type];

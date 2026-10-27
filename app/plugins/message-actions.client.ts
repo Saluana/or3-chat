@@ -1,5 +1,6 @@
 import { documentHeading } from '~~/shared/titles/title';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
+import { getWorkspaceResourceNavigationApi } from '~/utils/workspaceResourceNavigation';
 import { useToast } from '#imports';
 import { createDocument, type CreateDocumentInput } from '~/db/documents';
 import { registerMessageAction } from '~/composables/chat/useMessageActions';
@@ -98,49 +99,33 @@ export default defineNuxtPlugin(() => {
         if (getWorkspaceGeneration() !== workspaceGeneration) return;
         if (import.meta.dev) console.debug('Created document record', doc);
 
-        // Attempt to open in a new pane (if capacity) else reuse active pane
-        const mp = getGlobalMultiPaneApi();
-        let openedInNewPane = false;
+        // Beside the chat when a pane is free, else in the workspace's tabs. Both
+        // reuse a tab already showing this document, so repeating the action
+        // returns to it instead of stacking duplicate tabs or panes.
+        const navigation = getWorkspaceResourceNavigationApi();
+        const resource = { kind: 'document' as const, documentId: doc.id };
+        let opened = false;
         try {
-            if (mp) {
-                const panesBeforeAdd = mp.panes?.value?.length ?? 0;
-                const couldAdd =
-                    !isMobile.value && mp.canAddPane?.value === true;
-                if (couldAdd && typeof mp.addPane === 'function') {
-                    mp.addPane(); // sets new pane active
-                    openedInNewPane =
-                        (mp.panes?.value?.length ?? 0) > panesBeforeAdd;
-                }
-                const panes = mp.panes?.value;
-
-                const activeIndex = mp.activePaneIndex?.value ?? 0;
-
-                if (Array.isArray(panes)) {
-                    const pane = panes[activeIndex];
-                    if (pane) {
-                        pane.mode = 'doc';
-                        pane.documentId = doc.id;
-                        // Reset chat-related fields when switching
-                        pane.threadId = '';
-                        pane.messages = [];
-                    }
-                }
+            if (navigation && !isMobile.value && navigation.canOpenInNewPane())
+                opened = (await navigation.openResource(resource, 'new-pane')).status !== 'failed';
+            if (!opened && navigation?.canOpenInNewTab())
+                opened = (await navigation.openResource(resource, 'new-tab', { reuseExisting: true })).status !== 'failed';
+            const mp = opened ? null : getGlobalMultiPaneApi();
+            const pane = mp?.panes?.value?.[mp.activePaneIndex?.value ?? 0];
+            if (pane) {
+                pane.mode = 'doc';
+                pane.documentId = doc.id;
+                // Reset chat-related fields when switching
+                pane.threadId = '';
+                pane.messages = [];
             }
         } catch (e) {
-            // non-fatal; fallback is just created doc without auto-open
+            // non-fatal; the saved document stays available from Documents
             console.warn('Open document in pane failed', e);
         }
 
         if (!heading) void import('~/utils/titles/generate')
             .then(({ generateAutomaticTitle }) => generateAutomaticTitle(originDb, { type: 'document', id: doc.id, content: markdownSource }))
             .catch(() => { /* The document is already saved and open. */ });
-
-        useToast().add({
-            title: 'Document created',
-            description: `Opened in ${
-                openedInNewPane ? 'a new' : 'the current'
-            } pane.`,
-            duration: 2600,
-        });
     }
 });
