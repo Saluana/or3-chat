@@ -39,7 +39,8 @@ export default defineConfig({
     ? undefined
     : {
         // Local journey fixtures must not inherit personal Cloud/vault settings.
-        command: `bun run dev -- ${isProductionJourneyHarness ? '--or3-offline ' : ''}--host 127.0.0.1 --port ${port}`,
+        // Cloud harnesses that reuse the fixture enable SSR auth explicitly.
+        command: `bun run dev -- ${isProductionJourneyHarness && process.env.SSR_AUTH_ENABLED !== 'true' ? '--or3-offline ' : ''}--host 127.0.0.1 --port ${port}`,
         url: baseURL,
         timeout: 120 * 1000,
         reuseExistingServer: !process.env.CI,

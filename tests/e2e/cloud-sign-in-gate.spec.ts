@@ -311,7 +311,7 @@ test('instance admin controls load without a Chat account or selected workspace'
     await historyLoaded;
     await expect(page.getByRole('heading', { name: 'Registration', exact: true })).toBeVisible();
     await expect(page).toHaveURL(/\/admin\/registration\?tab=invitations$/);
-    await expect(page.getByText('Each recipient gets their own private workspace.', { exact: true })).toBeVisible();
+    await expect(page.getByText('Invite someone to create a new account. Each recipient gets their own private workspace.', { exact: true })).toBeVisible();
     const email = 'admin-ui-'+crypto.randomUUID()+'@example.test';
     await page.getByLabel('Recipient email', {exact:true}).fill(email);
     await expect(page.getByLabel('Recipient email', {exact:true})).toHaveValue(email);
@@ -325,8 +325,10 @@ test('instance admin controls load without a Chat account or selected workspace'
     expect(new URL(visibleLink).searchParams.get('invite')).toBe((await shortCode.inputValue()).replace('-', ''));
     await saveEvidence(info, 'short-invitation', { body: await page.screenshot({ mask: [shortCode, page.getByLabel(/Invite link/)] }), contentType: 'image/png' });
     expect(new URL(visibleLink).origin).toBe(origin);
-    await page.getByRole('listitem').filter({hasText:email}).getByRole('button',{name:'Revoke',exact:true}).click();
-    await expect(page.getByRole('listitem').filter({hasText:email})).toContainText('revoked');
+    const invitation = page.getByRole('tabpanel', { name: 'Invitations', exact: true }).getByRole('listitem').filter({hasText:email});
+    await invitation.getByRole('button',{name:'Revoke',exact:true}).click();
+    await page.getByRole('dialog', { name: 'Revoke invitation', exact: true }).getByRole('button', { name: 'Revoke', exact: true }).click();
+    await expect(invitation).toContainText('Revoked');
     // Clear the one-time token before saving the redacted UI evidence.
     await page.reload();
     await saveEvidence(info, 'instance-admin-without-workspace', { body: await page.screenshot(), contentType: 'image/png' });
@@ -694,11 +696,11 @@ test('ordinary sign-in finishes credential-first signup with a replacement invit
         await expect(registrationForm).toBeVisible({ timeout: 30_000 });
         await registrationForm.getByRole('textbox', { name: 'Invite code (from your invite link)', exact: true }).fill(replacement.token);
         await registrationForm.getByRole('button', { name: 'Sign in', exact: true }).click();
-        const signIn = page.getByRole('dialog', { name: 'Sign In', exact: true });
+        const signIn = page.getByRole('dialog', { name: 'Welcome back', exact: true });
         await expect(signIn).toBeVisible();
         await signIn.getByRole('textbox', { name: 'Email', exact: true }).fill(email);
         await signIn.getByLabel('Password', { exact: true }).fill(password);
-        await signIn.getByRole('button', { name: 'Sign In', exact: true }).click();
+        await signIn.getByRole('button', { name: 'Sign in', exact: true }).click();
         await expect.poll(async () => {
             const response = await page.request.get('/api/auth/session');
             return response.ok() ? (await response.json()).session?.role : null;
@@ -999,8 +1001,9 @@ test('admin experience settings save and apply with validation and browser theme
     await expect(page.getByText('Changes saved', { exact: true }).first()).toBeVisible();
     await openComposer(page);
     await page.getByRole('button', { name: 'New', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'New chat', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'New document', exact: true })).toHaveCount(0);
+    const createMenu = page.locator('#rail-create-menu');
+    await expect(createMenu.getByRole('button', { name: 'New chat', exact: true })).toBeVisible();
+    await expect(createMenu.getByRole('button', { name: 'New document', exact: true })).toHaveCount(0);
     await page.goto('/admin/features');
     await expect(documents).not.toBeChecked();
     await documents.click();

@@ -86,6 +86,8 @@ try {
             OPENROUTER_API_KEY: '',
             OR3_OPENROUTER_API_KEY: '',
             NUXT_OPENROUTER_API_KEY: '',
+            // A personal .env vault is not part of this disposable profile.
+            NUXT_SECRETS_PROVIDER: '',
             OR3_SIGN_IN_GATE_E2E_HARNESS: 'true',
             OR3_SITE_SETTINGS_RESTART_E2E: String(siteSettings),
             OR3_DEV_HTTPS_PORT: String(httpsPort),
