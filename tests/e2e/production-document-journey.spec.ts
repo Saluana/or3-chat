@@ -529,6 +529,8 @@ test.describe('local document recovery faults', () => {
             }).catch(() => {}); // The deliberately interrupted fetch may already be gone.
         });
         try {
+            // The panel is lazy-loaded; dev has no service worker to serve its chunk offline.
+            await expect(prompt).toBeVisible();
             await context.setOffline(true);
             await expect(page.locator('.offline-message')).toContainText("You're offline");
             await page.locator('input[accept="image/*,application/pdf"]').setInputFiles(intakePng);
