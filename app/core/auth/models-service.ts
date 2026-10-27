@@ -24,6 +24,7 @@
  */
 
 import { hydrateUserApiKeyFromKv, useUserApiKey } from './useUserApiKey';
+import { getCachedSessionPayload } from '~/composables/auth/useSessionContext';
 import { fetchOpenRouterCatalog } from '~~/shared/openrouter/sdk-v1-compat';
 import { normalizeSDKError } from '~~/shared/openrouter/errors';
 import { DEFAULT_HEADERS } from '~~/shared/openrouter/request-options';
@@ -134,6 +135,10 @@ export async function fetchModelCatalog(opts?: {
     const key = apiKey.value;
     try {
         if (runtimeConfig.public?.ssrAuthEnabled === true) {
+            // The Cloud route needs an account. A loaded signed-out session keeps the cache.
+            const payload = getCachedSessionPayload();
+            if (payload && payload.session?.authenticated !== true)
+                return { ...(loadCache() ?? { data: [], fetchedAt: null }), source: 'openrouter-cache' };
             const response = await fetch('/api/openrouter/models', { method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error', headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' }, body: '{}' });
             if (!response.ok) throw new Error('OpenRouter model catalog unavailable.');
             const data = openRouterModelListSchema.parse(await response.json());

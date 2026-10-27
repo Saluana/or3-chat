@@ -20,7 +20,10 @@ export async function generateTitle(event: H3Event, input: TitleRequest, model: 
         signal: AbortSignal.timeout(TITLE_TIMEOUT_MS),
         headers: { ...DEFAULT_HEADERS, 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({ model, stream: false, max_tokens: 48, reasoning: { effort: 'none' },
-            messages: [{ role: 'system', content: titlePrompt(input.type) }, { role: 'user', content: input.content }] }),
+            // Delimit the source and restate the task after it: a bare request such as
+            // "write 60 lines" is otherwise carried out and truncated at max_tokens.
+            messages: [{ role: 'system', content: titlePrompt(input.type) },
+                { role: 'user', content: `<source>\n${input.content}\n</source>\n\nTitle for the source above:` }] }),
     });
     if (!response.ok) throw new Error('Title provider unavailable.');
     const result = await response.json() as { choices?: { message?: { content?: unknown }; finish_reason?: string }[] };
