@@ -301,6 +301,9 @@ const urlValidationMessage = computed(() => {
         if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
             return 'Only HTTP and HTTPS URLs are supported.';
         }
+        if (parsed.username || parsed.password) {
+            return 'Remove the username and password from the URL.';
+        }
         return null;
     } catch {
         return 'Enter a valid URL.';
@@ -397,8 +400,10 @@ function validateForm(): string | null {
 }
 
 async function submit() {
-    formError.value = validateForm();
-    if (formError.value) {
+    const invalid = validateForm();
+    // The URL field already shows its own message beneath the input.
+    formError.value = invalid === urlValidationMessage.value ? null : invalid;
+    if (invalid) {
         return;
     }
 
@@ -444,12 +449,9 @@ async function submit() {
             credentials: 'include',
         });
 
+        // The revealed signing secret confirms creation in place.
         revealedSecret.value = response.signing_secret;
         emit('saved', response.webhook);
-        toast.add({
-            title: props.admin ? 'Admin webhook created' : 'Webhook created',
-            color: 'success',
-        });
     } catch (error: unknown) {
         formError.value = getMessage(error, 'Unable to save webhook');
     } finally {

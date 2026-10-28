@@ -1,5 +1,6 @@
 import { webhookHasCurrentAccess } from './membership';
 import { randomUUID } from 'node:crypto';
+import { fetch as undiciFetch } from 'undici';
 import { decryptSecret } from './crypto';
 import { buildWebhookPayload } from './payload';
 import { checkWebhookRateLimit } from './rate-limit';
@@ -195,7 +196,9 @@ export function createWebhookDispatcher(
     );
     const fetchImpl: DispatchingFetch =
         config.fetchImpl ??
-        ((input, init) => fetch(input, init as RequestInit & { dispatcher?: unknown }));
+        // The SSRF agent comes from the installed undici package. Node's global
+        // fetch bundles its own undici and rejects that agent ("fetch failed").
+        ((input, init) => undiciFetch(input, init as never) as unknown as Promise<Response>);
     const agent = createSsrfSafeAgent({
         blockPrivateIps: config.blockPrivateIps,
     });
