@@ -498,6 +498,37 @@ test.describe('local document recovery faults', () => {
         await expect(body).toContainText('Quota retry recovery marker', { timeout: 30_000 });
     });
 
+    test('document AI prompt sends on Enter, adds a line on Shift+Enter, and lets the slash menu take Enter', async ({ page }) => {
+        const prompt = page.getByRole('textbox', { name: 'Document AI prompt' });
+        const keyURL = recoveryScripts.get(page)?.find(url => /\/useUserApiKey\.ts(?:\?|$)/.test(url));
+        expect(keyURL).toBeTruthy();
+        await page.evaluate(async keyURL => {
+            const { useUserApiKey } = await import(keyURL!);
+            useUserApiKey().setKey('synthetic-document-ai-enter-key');
+        }, keyURL);
+        let requests = 0;
+        await page.route('**/api/openrouter/stream', async route => {
+            requests++;
+            await route.fulfill({ status: 200, contentType: 'text/event-stream',
+                body: `data: ${JSON.stringify({ choices: [{ delta: { content: 'Finished.' }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n` });
+        });
+        await expect(prompt).toBeVisible();
+        await prompt.click();
+        await page.keyboard.type('/');
+        const menu = page.locator('.tippy-box, [data-document-ai-slash-menu], [role="listbox"]').first();
+        await expect(menu).toBeVisible();
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(600);
+        expect(requests, 'Enter in the slash menu picks an action instead of sending').toBe(0);
+        await prompt.fill('First line');
+        await page.keyboard.press('Shift+Enter');
+        await page.keyboard.type('Second line');
+        await page.waitForTimeout(400);
+        expect(requests, 'Shift+Enter adds a line instead of sending').toBe(0);
+        await page.keyboard.press('Enter');
+        await expect.poll(() => requests).toBe(1);
+    });
+
     test('document AI keeps an interrupted prompt, retries online, and accepts existing edits offline', async ({ context, page }, info) => {
         const body = page.getByRole('textbox', { name: 'Document body' });
         const prompt = page.getByRole('textbox', { name: 'Document AI prompt' });

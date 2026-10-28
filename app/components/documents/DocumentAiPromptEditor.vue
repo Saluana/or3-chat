@@ -109,13 +109,14 @@ onMounted(() => {
         Placeholder.configure({ placeholder: () => props.placeholder }),
         Extension.create({
             name: 'documentAiSubmit',
+            // Declared before the slash and mention menus so they take Enter
+            // first; Shift+Enter still adds a line.
             addKeyboardShortcuts() {
-                return {
-                    'Mod-Enter': () => {
-                        emit('submit');
-                        return true;
-                    },
+                const submit = () => {
+                    emit('submit');
+                    return true;
                 };
+                return { Enter: submit, 'Mod-Enter': submit };
             },
         }),
         DocumentAiSlashCommand.configure({
