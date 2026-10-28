@@ -3,7 +3,7 @@ import { useRuntimeConfig } from '#imports';
 import { getDb } from '~/db/client';
 import { getCachedSessionContext, useSessionContext } from '~/composables/auth/useSessionContext';
 import { isCloudWorkspaceBackupEnabled } from '~/core/storage/file-policy';
-import { CLOUD_BACKUP_MAGIC, peekCloudBackup } from '~~/shared/storage/workspace-archive';
+import { CLOUD_BACKUP_MAGIC, CloudBackupError, peekCloudBackup } from '~~/shared/storage/workspace-archive';
 import { STATIC_FILE_CEILING } from '~~/shared/storage/file-policy';
 import { reportError, err, asAppError, type AppError, type ErrorCode } from '~/utils/errors';
 import { useHooks } from '~/core/hooks/useHooks';
@@ -234,7 +234,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         const exportDb = getDb();
         const exportSubject = cloud ? getCachedSessionContext()?.user?.id : null;
         const assertCloudOrigin = () => {
-            if (cloud && (getDb() !== exportDb || getCachedSessionContext()?.user?.id !== exportSubject)) throw new Error('Account or workspace changed while preparing backup.');
+            if (cloud && (getDb() !== exportDb || getCachedSessionContext()?.user?.id !== exportSubject)) throw new CloudBackupError('Account or workspace changed while preparing backup.');
         };
         const exportStartedAt = Date.now();
         let exportTelemetry: {
@@ -405,12 +405,14 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                     }
                 );
             } else {
-                state.error.value = asAppError(e);
+                state.error.value = backupError(e);
                 state.currentStep.value = 'error';
+                // The Backup page shows this failure beside its control.
                 reportError(state.error.value, {
                     code: 'ERR_DB_READ_FAILED',
                     message: 'Failed to export workspace.',
                     tags: { domain: 'db', action: 'export' },
+                    toast: false,
                 });
                 await hooks.doAction('workspace.backup.export:action:error', {
                     ...exportTelemetry,
@@ -435,6 +437,8 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         }
         state.currentStep.value = 'peeking';
         state.error.value = null;
+        state.backupMeta.value = null;
+        state.backupFormat.value = null;
 
         const fileWithName = file as Blob & { name?: string };
         const fileName =
@@ -450,8 +454,8 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
 
         try {
             const format = await detectFormat(file);
-            if (cloud && format !== 'cloud') throw new Error('Cloud restore requires a complete .or3cloud backup. Local JSON/JSONL backups are for local-only recovery.');
-            if (!cloud && format === 'cloud') throw new Error('Restore this backup on a Cloud installation.');
+            if (cloud && format !== 'cloud') throw new CloudBackupError(notCloudBackupMessage(format));
+            if (!cloud && format === 'cloud') throw new CloudBackupError('Restore this backup on a Cloud installation.');
             let metadata!: ImportMetadata;
             let resolvedFormat!: 'stream' | 'dexie' | 'cloud';
 
@@ -493,12 +497,13 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 durationMs: Date.now() - peekStartedAt,
             });
         } catch (e) {
-            state.error.value = asAppError(e);
+            state.error.value = backupError(e);
             state.currentStep.value = 'error';
             reportError(state.error.value, {
                 code: 'ERR_VALIDATION',
                 message: 'Invalid backup file.',
                 tags: { domain: 'db', action: 'peek' },
+                toast: false,
             });
             await hooks.doAction('workspace.backup.peek:action:error', {
                 ...peekTelemetryBase,
@@ -540,7 +545,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         try {
             // Inspect the selected bytes again; metadata from another file grants no authority.
             const format = await detectFormat(file);
-            if (cloud && format !== 'cloud') throw new Error('Cloud restore requires a complete .or3cloud backup. Local replacement would conflict with Cloud sync.');
+            if (cloud && format !== 'cloud') throw new CloudBackupError(notCloudBackupMessage(format));
 
             importTelemetry = { ...baseImportTelemetry, format };
 
@@ -550,7 +555,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
             );
 
             if (format === 'cloud') {
-                if (!cloud || !session) throw new Error('Cloud restore requires an authenticated Cloud installation.');
+                if (!cloud || !session) throw new CloudBackupError('Cloud restore requires an authenticated Cloud installation.');
                 const { restoreCloudWorkspace } = await import('~/utils/cloud-workspace-backup');
                 await restoreCloudWorkspace(file, session, value => { state.progress.value = value; });
             } else if (format === 'stream') {
@@ -630,7 +635,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
 
             await hooks.doAction('workspace:reloaded');
         } catch (e) {
-            const error = asAppError(e);
+            const error = backupError(e);
             state.error.value = error;
             state.currentStep.value = 'error';
             
@@ -662,6 +667,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 code: errorCode,
                 message: 'Failed to import workspace.',
                 tags: { domain: 'db', action: 'import' },
+                toast: false,
             });
             await hooks.doAction('workspace.backup.import:action:error', {
                 ...importTelemetry,
@@ -680,6 +686,17 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         importWorkspace,
         reset,
     };
+}
+
+/** Keep user-facing backup messages; other failures use the generic copy. */
+function backupError(e: unknown): AppError {
+    return asAppError(e, e instanceof CloudBackupError ? { code: 'ERR_VALIDATION', message: e.message } : {});
+}
+
+function notCloudBackupMessage(format: 'stream' | 'dexie' | 'unknown') {
+    return format === 'unknown'
+        ? 'This file is not an OR3 Cloud backup.'
+        : 'Cloud restore requires a .or3cloud backup. Local JSON/JSONL backups are for local-only recovery.';
 }
 
 async function detectFormat(file: Blob) {

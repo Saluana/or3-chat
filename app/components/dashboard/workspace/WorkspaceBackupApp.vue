@@ -102,9 +102,6 @@
                 >
                     Import workspace
                 </h3>
-                <span class="text-xs opacity-70 tabular-nums">
-                    {{ importStatusText }}
-                </span>
             </div>
             <p class="supporting-text">
                 {{ cloud ? 'Validate a .or3cloud archive, then restore into a new workspace. Your current workspace is kept. Leave this page open until restoration finishes.' : 'Validate a backup file, choose an import mode, and restore your data. Append adds records; replace clears current tables inside the restore transaction.' }}
@@ -230,6 +227,7 @@
                                 </p>
                             </div>
                             <UBadge
+                                v-if="backupMeta.tables.length"
                                 icon="i-ph-database-duotone"
                                 :class="[
                                     'theme-badge',
@@ -241,6 +239,7 @@
                             </UBadge>
                         </div>
                         <div
+                            v-if="backupMeta.tables.length"
                             class="theme-meta-table"
                             role="list"
                             aria-label="Tables included in backup"
@@ -592,13 +591,14 @@ const importStatusText = computed(() => {
     if (peeking.value) return 'Validating backup metadata…';
     if (lastImportStatus.value === 'done' && lastImportAt.value)
         return `Last import ${formatDate(lastImportAt.value)}`;
-    if (lastImportStatus.value === 'error')
-        return importError.value?.message || 'Import failed';
+    // The error alert above the button carries the details.
+    if (lastImportStatus.value === 'error') return 'Import failed';
     return 'Awaiting backup';
 });
 
 const importWarning = computed(() => {
-    if (cloud) return 'Restore creates a fresh Cloud workspace. Existing workspace data is preserved.';
+    // The Cloud import description already states that restores create a new workspace.
+    if (cloud) return '';
     if (importMode.value === 'replace')
         return 'Replace mode clears all existing workspace data before importing.';
     if (importMode.value === 'append' && !overwriteValues.value)
@@ -799,6 +799,9 @@ async function onFilePicked(event: Event) {
     pendingAction.value = 'peek';
     selectedFile.value = file;
     peekError.value = null;
+    // A previous file's import failure does not describe this one.
+    importError.value = null;
+    if (lastImportStatus.value === 'error') lastImportStatus.value = 'idle';
     announce(`Selected backup file ${file.name}. Validating…`);
     await peekBackup(file);
     if (pendingAction.value === 'peek' && !peeking.value) {

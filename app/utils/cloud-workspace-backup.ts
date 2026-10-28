@@ -8,7 +8,7 @@ import { getStorageTransferQueue } from '~/core/storage/transfer-queue';
 import { getActiveStorageProvider } from '~/core/storage/provider-registry';
 import { FileMetaSchema, type FileMeta } from '~/db/schema';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
-import { ARCHIVE_TABLES, createCloudBackupStreamCheck, readCloudBackupRows, scanCloudBackup } from '~~/shared/storage/workspace-archive';
+import { ARCHIVE_TABLES, CloudBackupError, createCloudBackupStreamCheck, readCloudBackupRows, scanCloudBackup } from '~~/shared/storage/workspace-archive';
 import type { PendingOp } from '~~/shared/sync/types';
 import { normalizeError } from '~~/shared/errors';
 import { loadFilePolicy } from '~/core/storage/file-policy';
@@ -34,13 +34,19 @@ function captureOrigin() {
     const workspaceId = session?.workspace?.id;
     const subject = session?.user?.id;
     const db = getDb();
-    if (!session?.authenticated || !workspaceId || !subject || getActiveWorkspaceId() !== workspaceId) throw new Error('Cloud workspace is not ready.');
+    if (!session?.authenticated || !workspaceId || !subject || getActiveWorkspaceId() !== workspaceId) throw new CloudBackupError('Cloud workspace is not ready.');
     return { workspaceId, subject, db, assertCurrent() {
         const current = getCachedSessionContext();
         if (!current?.authenticated || current.user?.id !== subject || current.workspace?.id !== workspaceId || getDb() !== db || getActiveWorkspaceId() !== workspaceId) {
-            throw new Error('Account or workspace changed during backup. Please retry.');
+            throw new CloudBackupError('Account or workspace changed during backup. Please retry.');
         }
     } };
+}
+
+function writeFailed(cause: unknown): never {
+    // A cancelled download stays a cancellation, not a failure.
+    if ((cause as { name?: unknown } | null)?.name === 'AbortError') throw cause;
+    throw new CloudBackupError('The backup file could not be saved. Delete the incomplete file, check free disk space, and export again.', { cause });
 }
 
 /** Only canonical, fully uploaded data can be represented by a Cloud snapshot. */
@@ -57,12 +63,12 @@ export async function exportCloudWorkspace(writer: BackupWriter): Promise<void> 
                 origin.db.file_transfers.filter(transfer => transfer.direction === 'upload' && transfer.state !== 'done').count(),
             ]);
             if (!ops && !uploads && !getStorageTransferQueue()?.hasDirectUploads()) break;
-            if (Date.now() >= deadline) throw new Error('Backup is waiting for sync or uploads. Resolve unfinished transfers and retry; local originals have been kept.');
+            if (Date.now() >= deadline) throw new CloudBackupError('Backup is waiting for sync or uploads. Resolve unfinished transfers and retry; local originals have been kept.');
             await new Promise(resolve => setTimeout(resolve, 250));
         }
         origin.assertCurrent();
         const response = await fetch(`/api/workspaces/backup?workspaceId=${encodeURIComponent(origin.workspaceId)}`, { cache: 'no-store' });
-        if (!response.ok || !response.body) throw new Error('Cloud backup could not start. Check sync and storage availability.');
+        if (!response.ok || !response.body) throw new CloudBackupError('Cloud backup could not start. Check sync and storage availability.');
         reader = response.body.getReader();
         for (;;) {
             origin.assertCurrent();
@@ -70,10 +76,10 @@ export async function exportCloudWorkspace(writer: BackupWriter): Promise<void> 
             origin.assertCurrent();
             if (done) break;
             check.write(value);
-            await writer.write(value.slice());
+            await writer.write(value.slice()).catch(writeFailed);
         }
         check.finish();
-        await writer.close();
+        await writer.close().catch(writeFailed);
     } catch (error) { await writer.abort(error).catch(() => {}); throw error; }
     finally { await reader?.cancel().catch(() => {}); }
 }
@@ -96,7 +102,7 @@ export async function restoreCloudWorkspace(file: Blob, session: ReturnType<type
     });
     origin.assertCurrent();
     const largestFile = originals.reduce((largest, original) => Math.max(largest, original.body.size), 0);
-    if (largestFile > 1024 * 1024 * 1024) throw new Error('A backup original exceeds the supported 1 GiB Cloud upload limit. No workspace was created.');
+    if (largestFile > 1024 * 1024 * 1024) throw new CloudBackupError('A backup original exceeds the supported 1 GiB Cloud upload limit. No workspace was created.');
     const api = createGatewayWorkspaceApi();
     const name = `${meta.workspaceName.slice(0, 75)} (restored)`;
     const target = await api.create({ name: `${name} — incomplete`, description: 'Restoring a Cloud workspace backup.' });
@@ -108,14 +114,14 @@ export async function restoreCloudWorkspace(file: Blob, session: ReturnType<type
         await session.refresh();
         const deadline = Date.now() + 10_000;
         while (getActiveWorkspaceId() !== target.id || (originals.length > 0 && getStorageTransferQueue()?.getWorkspaceId() !== target.id)) {
-            if (Date.now() >= deadline) throw new Error('Restored workspace is not ready.');
+            if (Date.now() >= deadline) throw new CloudBackupError('Restored workspace is not ready.');
             await new Promise(resolve => setTimeout(resolve, 50));
         }
         const destination = captureOrigin();
-        if (destination.subject !== origin.subject || destination.workspaceId !== target.id) throw new Error('Account changed during restore.');
+        if (destination.subject !== origin.subject || destination.workspaceId !== target.id) throw new CloudBackupError('Account changed during restore.');
         const queue = getStorageTransferQueue();
         const provider = getActiveStorageProvider();
-        if (originals.length > 0 && (!queue || !provider?.commitUpload)) throw new Error('Verified Cloud uploads are unavailable.');
+        if (originals.length > 0 && (!queue || !provider?.commitUpload)) throw new CloudBackupError('Verified Cloud uploads are unavailable.');
         const policy = originals.length ? await loadFilePolicy(target.id) : null;
         destination.assertCurrent();
         if (policy && largestFile > policy.maxUploadBytes) {
@@ -154,13 +160,13 @@ export async function restoreCloudWorkspace(file: Blob, session: ReturnType<type
             destination.assertCurrent();
             const result = await retryRateLimit(() => sync.push({ scope: { workspaceId: target.id }, ops }), destination.assertCurrent);
             destination.assertCurrent();
-            if (result.results.some(item => !item.success || item.applied !== true)) throw new Error('Some restored records were not applied. The incomplete workspace and backup were kept.');
+            if (result.results.some(item => !item.success || item.applied !== true)) throw new CloudBackupError('Some restored records were not applied.');
             completed += ops.filter(op => op.operation === 'put').length; ops = []; bytes = 0;
             onProgress(Math.round(completed / (originals.length + rowCount || 1) * 100));
         };
         const enqueue = async (op: PendingOp) => {
             const size = new TextEncoder().encode(JSON.stringify(op)).length;
-            if (size > 256 * 1024) throw new Error('A restored record exceeds the sync record limit.');
+            if (size > 256 * 1024) throw new CloudBackupError('A restored record exceeds the sync record limit.');
             if (ops.length >= 50 || bytes + size > 1024 * 1024) await flush();
             ops.push(op); bytes += size;
         };
@@ -196,6 +202,7 @@ export async function restoreCloudWorkspace(file: Blob, session: ReturnType<type
         if (switched && current?.user?.id === origin.subject && current.workspace?.id === target.id) {
             await api.setActive({ id: origin.workspaceId }).then(() => session.refresh()).catch(() => {});
         }
-        throw new Error(`Restore did not finish. Your source and backup are safe; workspace "${name} — incomplete" was kept. ${error instanceof Error ? error.message : ''}`, { cause: error });
+        const reason = error instanceof CloudBackupError ? ` ${error.message}` : '';
+        throw new CloudBackupError(`Restore did not finish. Your source and backup are safe; workspace "${name} — incomplete" was kept.${reason}`, { cause: error });
     }
 }

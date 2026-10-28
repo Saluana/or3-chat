@@ -20,6 +20,12 @@ export type CloudBackupMeta = z.infer<typeof MetaSchema>;
 export type CloudBackupFrame = { header: CloudBackupHeader; body: Blob; row?: Record<string, unknown> };
 export const encodeCloudHeader = (header: CloudBackupHeader): Uint8Array => new TextEncoder().encode(JSON.stringify(HeaderSchema.parse(header)) + '\n');
 
+/** A backup or restore failure whose message is written for users and safe to display. */
+export class CloudBackupError extends Error {
+    override name = 'CloudBackupError';
+}
+const DAMAGED_BACKUP = 'This backup is damaged or incomplete.';
+
 /** Check frame boundaries/counts on download; restore also verifies checksums. */
 export function createCloudBackupStreamCheck() {
     const buffer = new Uint8Array(16 * 1024);
@@ -69,14 +75,26 @@ export function createCloudBackupStreamCheck() {
 async function headerAt(file: Blob, offset: number) {
     const bytes = new Uint8Array(await file.slice(offset, offset + 16 * 1024).arrayBuffer());
     const end = bytes.indexOf(10);
-    if (end < 0) throw new Error('Backup header is missing or too large.');
+    if (end < 0) throw new CloudBackupError(DAMAGED_BACKUP);
     const line = bytes.subarray(0, end + 1);
-    return { header: HeaderSchema.parse(JSON.parse(new TextDecoder().decode(line))), bytes: line };
+    let value: unknown;
+    try { value = JSON.parse(new TextDecoder().decode(line)); }
+    catch { throw new CloudBackupError(DAMAGED_BACKUP); }
+    const header = HeaderSchema.safeParse(value);
+    if (header.success) return { header: header.data, bytes: line };
+    const version = (value as { type?: unknown; version?: unknown } | null)?.type === 'meta' ? (value as { version?: unknown }).version : undefined;
+    if (typeof version === 'number' && version > 1) throw new CloudBackupError('This backup was made by a newer version of OR3. Update OR3, then restore it.');
+    throw new CloudBackupError(DAMAGED_BACKUP);
+}
+function parseRow(table: typeof ARCHIVE_TABLES[number], text: string): Record<string, unknown> {
+    try { return TABLE_PAYLOAD_SCHEMAS[table]!.parse(JSON.parse(text)) as Record<string, unknown>; }
+    catch { throw new CloudBackupError('This backup contains an invalid record.'); }
 }
 export async function peekCloudBackup(file: Blob): Promise<CloudBackupMeta> {
-    if (await file.slice(0, CLOUD_BACKUP_MAGIC.length).text() !== CLOUD_BACKUP_MAGIC) throw new Error('Unsupported Cloud backup.');
+    if (await file.slice(0, CLOUD_BACKUP_MAGIC.length).text() !== CLOUD_BACKUP_MAGIC) throw new CloudBackupError('This file is not an OR3 Cloud backup.');
     const { header } = await headerAt(file, CLOUD_BACKUP_MAGIC.length);
-    return MetaSchema.parse(header);
+    if (header.type !== 'meta') throw new CloudBackupError(DAMAGED_BACKUP);
+    return header;
 }
 
 /** Re-read bounded records from an already validated, immutable backup File. */
@@ -86,13 +104,12 @@ export async function* readCloudBackupRows(file: Blob): AsyncGenerator<{ table: 
     while (offset < file.size) {
         const { header, bytes } = await headerAt(file, offset);
         offset += bytes.length;
-        if (offset + header.size > file.size) throw new Error('Backup is truncated.');
-        if (header.type === 'row') yield { table: header.table,
-            row: TABLE_PAYLOAD_SCHEMAS[header.table]!.parse(JSON.parse(await file.slice(offset, offset + header.size).text())) as Record<string, unknown> };
+        if (offset + header.size > file.size) throw new CloudBackupError(DAMAGED_BACKUP);
+        if (header.type === 'row') yield { table: header.table, row: parseRow(header.table, await file.slice(offset, offset + header.size).text()) };
         if (header.type === 'end') return;
         offset += header.size;
     }
-    throw new Error('Backup is incomplete.');
+    throw new CloudBackupError(DAMAGED_BACKUP);
 }
 
 /** Binary frames reference File slices. Only bounded records/chunks enter memory. */
@@ -110,11 +127,11 @@ export async function scanCloudBackup(file: Blob, visit?: (frame: CloudBackupFra
         offset += bytes.length;
         if (header.type === 'end') {
             if (offset !== file.size || header.rows !== rows || header.files !== files ||
-                header.sha256 !== bytesToHex(digest.digest())) throw new Error('Backup checksum, counts, or terminal marker is invalid.');
+                header.sha256 !== bytesToHex(digest.digest())) throw new CloudBackupError('This backup failed its checksum. It may be damaged.');
             sawEnd = true;
             break;
         }
-        if (offset + header.size > file.size) throw new Error('Backup is truncated.');
+        if (offset + header.size > file.size) throw new CloudBackupError(DAMAGED_BACKUP);
         digest.update(bytes);
         const body = file.slice(offset, offset + header.size);
         let fileDigest: ReturnType<typeof sha256.create> | undefined;
@@ -137,36 +154,37 @@ export async function scanCloudBackup(file: Blob, visit?: (frame: CloudBackupFra
         }
         let row: Record<string, unknown> | undefined;
         if (header.type === 'meta') {
-            if (sawMeta || rows || files) throw new Error('Unexpected backup metadata.');
+            if (sawMeta || rows || files) throw new CloudBackupError(DAMAGED_BACKUP);
             sawMeta = true;
-        } else if (!sawMeta) throw new Error('Backup metadata is missing.');
+        } else if (!sawMeta) throw new CloudBackupError(DAMAGED_BACKUP);
         else if (header.type === 'row') {
-            row = TABLE_PAYLOAD_SCHEMAS[header.table]!.parse(JSON.parse(await body.text())) as Record<string, unknown>;
+            row = parseRow(header.table, await body.text());
             const key = header.table === 'file_meta' ? row.hash : row.id;
-            if (typeof key !== 'string' || keys.has(`${header.table}:${key}`)) throw new Error('Duplicate or invalid backup record.');
+            if (typeof key !== 'string' || keys.has(`${header.table}:${key}`)) throw new CloudBackupError('This backup contains a duplicate or invalid record.');
             keys.add(`${header.table}:${key}`);
-            if (isLocalOnlyKvChange(header.table, key, row)) throw new Error('Cloud backups cannot contain device credentials or transport settings.');
+            if (isLocalOnlyKvChange(header.table, key, row)) throw new CloudBackupError('Cloud backups cannot contain device credentials or transport settings.');
             if (header.table === 'file_meta') {
-                hashSchema.parse(key);
+                if (!hashSchema.safeParse(key).success) throw new CloudBackupError('This backup contains an invalid record.');
                 originals.set(key, Number(row.size_bytes));
             }
             if ((header.table === 'posts' || header.table === 'messages') && typeof row.file_hashes === 'string') {
-                const hashes: unknown = JSON.parse(row.file_hashes);
-                if (!Array.isArray(hashes) || hashes.some(hash => typeof hash !== 'string')) throw new Error('Invalid attachment references.');
+                let hashes: unknown;
+                try { hashes = JSON.parse(row.file_hashes); } catch { hashes = null; }
+                if (!Array.isArray(hashes) || hashes.some(hash => typeof hash !== 'string')) throw new CloudBackupError('This backup contains an invalid record.');
                 for (const hash of hashes as string[]) references.add(hash);
             }
             rows++;
         } else {
-            if (seenFiles.has(header.hash) || originals.get(header.hash) !== header.size) throw new Error('Missing, duplicate, or mismatched original file.');
+            if (seenFiles.has(header.hash) || originals.get(header.hash) !== header.size) throw new CloudBackupError('An original file in this backup is missing, duplicated, or the wrong size.');
             const actual = fileDigest ? `sha256:${bytesToHex(fileDigest.digest())}` : `md5:${md5!.end()}`;
-            if (actual !== header.hash) throw new Error('Original file checksum mismatch.');
+            if (actual !== header.hash) throw new CloudBackupError('An original file in this backup failed its checksum.');
             seenFiles.add(header.hash); files++;
         }
         await visit?.({ header, body, row });
         offset += header.size;
     }
     if (!sawEnd || originals.size !== seenFiles.size || [...references].some(hash => !seenFiles.has(hash))) {
-        throw new Error('Backup is incomplete or an original file is missing.');
+        throw new CloudBackupError('This backup is incomplete or missing an original file.');
     }
     return meta;
 }
