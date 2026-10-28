@@ -23,7 +23,7 @@ vi.mock('~/composables/auth/useSessionContext', async () => {
 const fetchMock = vi.fn();
 const openPageMock = vi.fn<(pluginId: string) => Promise<boolean>>(async () => true);
 const reconcileMock = vi.fn();
-vi.mock('~/composables/plugins/bundled-v1-manager-runtime', () => ({ requestWorkspacePluginReconcile: (...args: unknown[]) => reconcileMock(...args) }));
+vi.mock('~/composables/plugins/workspace-plugin-coordinator', () => ({ requestWorkspacePluginReconcile: (...args: unknown[]) => reconcileMock(...args) }));
 const sourceMock = vi.fn(() => ({}));
 vi.mock('~/composables/plugins/portable-pane', () => ({openInstalledPluginPane: (pluginId: string) => openPageMock(pluginId)}));
 const { activationsState, trustedActivationsState } = vi.hoisted(() => ({

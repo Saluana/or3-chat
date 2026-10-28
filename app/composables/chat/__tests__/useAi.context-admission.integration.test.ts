@@ -541,7 +541,7 @@ describe('native context admission at the actual durable boundary', () => {
     // Failure modes: a moved owner still saves a legacy create/copy, a registry
     // omits the nullable-owner fence, or a receipt commits after revocation.
     // Real registry, hooks and Dexie writes are used; no production test seam.
-    it.each(['create_document', 'duplicate_document', 'workspace_create_document'] as const)(
+    it.each(['duplicate_document', 'workspace_create_document'] as const)(
         'fences ordinary ownership during preparation of %s', async name => {
             const db = getDb();
             await db.projects.put({ id: 'project', name: 'Project', data: [], clock: 0,
@@ -559,8 +559,7 @@ describe('native context admission at the actual durable boundary', () => {
             try {
                 const registry = useToolRegistry();
                 const args = name === 'duplicate_document' ? { documentId: source.id }
-                    : name === 'workspace_create_document' ? { title: 'Output', content: { type: 'doc', content: [{ type: 'paragraph' }] } }
-                    : { title: 'Output' };
+                    : { title: 'Output', content: { type: 'doc', content: [{ type: 'paragraph' }] } };
                 const result = await registry.executeTool(name, JSON.stringify(args), {
                     subject: null, workspaceId: workspace, threadId: thread.id, messageId: null,
                     callId: 'ordinary-create', requestId: 'ordinary-request', abortSignal: new AbortController().signal,

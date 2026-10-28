@@ -14,7 +14,7 @@ vi.mock('~/composables/auth/useSessionContext', () => ({
 // The signal itself is guarded by `import.meta.client`, which is not set in the
 // test runtime; the contract under test is that every successful mutation asks
 // for a reconcile, so the request function is the seam.
-vi.mock('~/composables/plugins/bundled-v1-manager-runtime', () => ({
+vi.mock('~/composables/plugins/workspace-plugin-coordinator', () => ({
     requestWorkspacePluginReconcile: reconcileMock,
     WORKSPACE_PLUGIN_RECONCILE_EVENT: 'or3:workspace-plugin-reconcile',
 }));
