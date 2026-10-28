@@ -451,7 +451,6 @@ async function selectWorkspace(workspace: WorkspaceSummary) {
         }));
         workspaces.value = cachedWorkspaces.value;
         await saveCache(cachedWorkspaces.value);
-        toast.add({ title: 'Workspace updated', description: 'Switching workspace…' });
         // Full reload ensures clean Dexie DB binding and sync engine restart
         reloadNuxtApp({ ttl: 500 });
     } catch (error) {

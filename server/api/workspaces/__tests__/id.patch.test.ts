@@ -32,6 +32,14 @@ vi.mock('../_helpers', () => ({
 vi.mock('../../../auth/can', () => ({
     requireCan: (...args: unknown[]) => requireCanMock(...args),
 }));
+const invalidateSharedSessionCacheForIdentityMock = vi.fn();
+vi.mock('../../../auth/session', () => ({
+    invalidateSharedSessionCacheForIdentity: (...args: unknown[]) =>
+        invalidateSharedSessionCacheForIdentityMock(...args),
+}));
+vi.mock('#imports', () => ({
+    useRuntimeConfig: () => ({ sync: { provider: 'test-sync' }, public: { sync: { provider: 'test-sync' } } }),
+}));
 
 function makeEvent(): H3Event {
     return { context: {} } as H3Event;
@@ -41,8 +49,11 @@ describe('PATCH /api/workspaces/:id', () => {
     beforeEach(() => {
         readBodyMock.mockReset();
         getRouterParamMock.mockReset().mockReturnValue('ws-2');
+        invalidateSharedSessionCacheForIdentityMock.mockReset();
         requireWorkspaceSessionMock.mockReset().mockResolvedValue({
             authenticated: true,
+            provider: 'basic-auth',
+            providerUserId: 'provider-user-1',
             user: { id: 'user-1' },
             workspace: { id: 'ws-1' },
             role: 'owner',
@@ -96,6 +107,11 @@ describe('PATCH /api/workspaces/:id', () => {
             workspaceId: 'ws-2',
             name: 'Name',
             description: 'Desc',
+        });
+        expect(invalidateSharedSessionCacheForIdentityMock).toHaveBeenCalledWith({
+            provider: 'basic-auth',
+            providerUserId: 'provider-user-1',
+            storeId: 'test-sync',
         });
     });
 

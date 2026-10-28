@@ -107,7 +107,11 @@ function recordFromMessage(
 ): BackgroundChatActivityRecord | undefined {
     const data = dataRecord(message);
     if (!data) return undefined;
-    const jobId = data?.background_job_id;
+    // The job id is browser-only metadata; the server's canonical row replaces
+    // it when the run finishes, leaving the synced admission id.
+    const jobId = typeof data.background_job_id === 'string'
+        ? data.background_job_id
+        : data.background_admission_id;
     const status = data?.background_job_status;
     if (typeof jobId !== 'string' || !isBackgroundStatus(status)) {
         return undefined;
@@ -193,10 +197,10 @@ async function recentBackgroundRecords(): Promise<
     }
     for (const tracker of backgroundJobTrackers.values()) {
         if (tracker.originDbName && tracker.originDbName !== db.name) continue;
-        records.set(
-            tracker.jobId,
-            recordFromTracker(tracker, records.get(tracker.jobId))
-        );
+        const fromMessage = records.get(tracker.jobId)
+            ?? [...records.values()].find((record) => record.messageId === tracker.messageId);
+        if (fromMessage) records.delete(fromMessage.jobId);
+        records.set(tracker.jobId, recordFromTracker(tracker, fromMessage));
     }
     return [...records.values()];
 }

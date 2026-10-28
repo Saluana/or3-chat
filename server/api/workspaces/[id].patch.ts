@@ -12,6 +12,8 @@ import {
     resolveWorkspaceStore,
 } from './_helpers';
 import { requireCan } from '../../auth/can';
+import { invalidateSharedSessionCacheForIdentity } from '../../auth/session';
+import { useRuntimeConfig } from '#imports';
 
 type UpdateWorkspaceBody = {
     name?: string;
@@ -67,6 +69,17 @@ export default defineEventHandler(async (event) => {
         workspaceId,
         name,
         description: description || null,
+    });
+
+    // Session context carries the workspace name; a renamed restore must not
+    // keep showing its "incomplete" name until the cache expires.
+    invalidateSharedSessionCacheForIdentity({
+        provider: session.provider,
+        providerUserId: session.providerUserId,
+        storeId:
+            (useRuntimeConfig(event).sync as { provider?: string } | undefined)?.provider ||
+            (useRuntimeConfig(event).public as { sync?: { provider?: string } }).sync?.provider ||
+            'convex',
     });
 
     return { ok: true };
