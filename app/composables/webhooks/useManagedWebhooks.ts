@@ -42,18 +42,14 @@ export async function useManagedWebhooks(options: UseManagedWebhooksOptions) {
     const testingId = ref<string | null>(null);
     const testResult = ref<ManagedWebhookTestResult | null>(null);
 
-    const {
-        data,
-        pending,
-        error,
-        refresh,
-    } = await useFetch<{ webhooks: ManagedWebhook[] }>(options.endpoint, {
+    // Start both requests before awaiting either: the Nuxt instance is lost
+    // after the first await, so a later useFetch would fail during SSR.
+    const webhookRequest = useFetch<{ webhooks: ManagedWebhook[] }>(options.endpoint, {
         credentials: 'include',
         default: () => ({ webhooks: [] }),
     });
-
-    const workspaceFetch = options.workspaceOptions
-        ? await useFetch<{ items: Array<{ id: string; name: string }> }>(
+    const workspaceRequest = options.workspaceOptions
+        ? useFetch<{ items: Array<{ id: string; name: string }> }>(
               options.workspaceOptions.endpoint,
               {
                   credentials: 'include',
@@ -62,6 +58,8 @@ export async function useManagedWebhooks(options: UseManagedWebhooksOptions) {
               }
           )
         : null;
+    const { data, pending, error, refresh } = await webhookRequest;
+    const workspaceFetch = workspaceRequest ? await workspaceRequest : null;
 
     const webhooks = computed(() => data.value.webhooks);
     const workspaceOptions = computed<ManagedWorkspaceOption[]>(() => {

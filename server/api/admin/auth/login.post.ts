@@ -14,7 +14,7 @@
  * - Delays response on failure implicitly via bcrypt duration
  * - Explicit rate limit: 5 attempts / 15 mins per IP+User
  */
-import { defineEventHandler, createError } from 'h3';
+import { defineEventHandler, createError, setResponseHeader } from 'h3';
 import {
     credentialsFileExists,
     readAdminCredentials,
@@ -82,6 +82,7 @@ export default defineEventHandler(async (event) => {
     const rateLimit = checkRateLimit(clientIp, username);
 
     if (!rateLimit.allowed) {
+        setResponseHeader(event, 'Retry-After', Math.max(1, Math.ceil((rateLimit.resetAt - Date.now()) / 1000)));
         throw createError({
             statusCode: 429,
             statusMessage: 'Too many login attempts. Please try again later.',

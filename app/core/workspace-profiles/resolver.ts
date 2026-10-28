@@ -187,12 +187,9 @@ function resolveIds(options: {
   const availableIds = options.available.map((item) => item.id);
   const available = new Set(availableIds);
   const hidden = new Set<string>();
-  for (const [index, id] of (options.hidden ?? []).entries()) {
-    if (!available.has(id)) {
-      pushUnknown(options, id, `${options.path}.hidden.${index}`);
-      continue;
-    }
-    hidden.add(id);
+  // Hiding something that is not installed is a no-op, so it is not reported.
+  for (const id of options.hidden ?? []) {
+    if (available.has(id)) hidden.add(id);
   }
 
   const output: string[] = [];

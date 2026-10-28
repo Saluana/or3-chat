@@ -65,6 +65,9 @@ describe('admin authentication HTTP security', () => {
         const responses = await Promise.all(Array.from({ length: 8 }, () => post('login', { username: 'admin', password: 'wrong' })));
         expect(responses.filter(r => r.status === 401)).toHaveLength(5);
         expect(responses.filter(r => r.status === 429)).toHaveLength(3);
+        const locked = await post('login', { username: 'admin', password: 'wrong' });
+        expect(locked.status).toBe(429);
+        expect(Number(locked.headers.get('retry-after'))).toBeGreaterThan(0);
     });
     it('bounds password work when usernames rotate', async () => {
         const responses = await Promise.all(Array.from({ length: 22 }, (_, n) => post('login', { username: `unknown-${n}`, password: 'wrong' })));

@@ -95,6 +95,10 @@ describe("resolveWorkspaceProfile", () => {
         "pane-limit-clamped",
       ]),
     );
+    // Hiding something that is not installed is a no-op, not a warning.
+    expect(result.diagnostics.map((item) => item.id)).not.toContain(
+      "missing-hidden",
+    );
     expect(Object.isFrozen(result)).toBe(true);
     expect(Object.isFrozen(result.navigation.items)).toBe(true);
     expect(Object.isFrozen(result.diagnostics)).toBe(true);
