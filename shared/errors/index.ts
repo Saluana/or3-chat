@@ -369,7 +369,7 @@ const copy: Record<ErrorCode, [string, string]> = {
     ],
     ERR_BAD_REQUEST: [
         'Request could not be accepted',
-        'Check your input and the selected model, then try again.',
+        'Check your input, then try again.',
     ],
     ERR_VALIDATION: [
         'Check your input',

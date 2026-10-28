@@ -104,7 +104,7 @@ export async function restoreCloudWorkspace(file: Blob, session: ReturnType<type
     const largestFile = originals.reduce((largest, original) => Math.max(largest, original.body.size), 0);
     if (largestFile > 1024 * 1024 * 1024) throw new CloudBackupError('A backup original exceeds the supported 1 GiB Cloud upload limit. No workspace was created.');
     const api = createGatewayWorkspaceApi();
-    const name = `${meta.workspaceName.slice(0, 75)} (restored)`;
+    const name = `${meta.workspaceName.replace(/(?: \(restored\))+$/, '').slice(0, 75)} (restored)`;
     const target = await api.create({ name: `${name} — incomplete`, description: 'Restoring a Cloud workspace backup.' });
     origin.assertCurrent();
     let switched = false;

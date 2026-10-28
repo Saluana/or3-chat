@@ -30,7 +30,7 @@
         <template #default>
             <p class="text-sm opacity-70">
                 <template v-if="threadHasDescendants">
-                    {{ targetLabel('This chat') }} has branches. Move it to Trash to preserve their original links.
+                    {{ targetLabel('This chat') }} has branches. It will be removed from your chats, and its branches keep their link to the original conversation.
                 </template>
                 <template v-else>
                     {{ targetLabel('This chat') }} and its messages will be permanently deleted.
@@ -46,7 +46,7 @@
                 Cancel
             </UButton>
             <UButton v-if="threadHasDescendants" color="error" size="modal" @click="emit('softDeleteThread')">
-                Move to Trash
+                Delete
             </UButton>
             <UButton v-else color="error" size="modal" @click="emit('deleteThread')">
                 Delete
@@ -57,7 +57,7 @@
     <AppModal
         v-bind="deleteDocumentModalProps"
         :open="showDeleteDocumentModal"
-        :title="documentTrashEnabled ? 'Trash document' : 'Delete document'"
+        title="Delete document"
         @update:open="emit('update:showDeleteDocumentModal', $event)"
     >
         <template #default>
@@ -79,7 +79,7 @@
                 Cancel
             </UButton>
             <UButton color="error" size="modal" @click="emit('deleteDocument')">
-                {{ documentTrashEnabled ? 'Trash' : 'Delete' }}
+                Delete
             </UButton>
         </template>
     </AppModal>

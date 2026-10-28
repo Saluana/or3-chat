@@ -189,6 +189,8 @@ export async function processProjectSource(
               }
             : await extract(blob, meta.name, scope.signal);
     scope.assertCurrent('write');
+    if (result.ok && !result.text.trim())
+        result = { ok: false, error: 'This file has no readable text.' };
     let textHash: string | undefined;
     try {
         if (result.ok) {
