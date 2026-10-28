@@ -61,7 +61,7 @@
                     <!-- Keep the same themed line box while TipTap initializes. -->
                     <div v-else class="chat-input-editor prosemirror-host" aria-hidden="true">
                         <div class="tiptap ProseMirror">
-                            <p class="is-editor-empty" :data-placeholder="signInRequired ? SIGN_IN_PROMPT : 'Write something…'"><br /></p>
+                            <p class="is-editor-empty" :data-placeholder="composerPlaceholder"><br /></p>
                         </div>
                     </div>
                 </div>
@@ -222,6 +222,7 @@
                         @click="handleSendClick"
                         :disabled="
                             loading ||
+                            viewOnly ||
                             (!promptText.trim() &&
                                 uploadedImages.length === 0 &&
                                 largeTextBlocks.length === 0)
@@ -443,6 +444,7 @@ import ChatComposerShell from '~/components/chat/ChatComposerShell.vue';
 import ChatProjectChoice from '~/components/projects/ChatProjectChoice.vue';
 import { useChatModelSelection } from '~/composables/chat/useChatModelSelection';
 import { SIGN_IN_PROMPT, useSignInGate } from '~/composables/auth/useSignInGate';
+import { VIEW_ONLY_NOTICE, useViewOnlyAccess } from '~/composables/auth/useViewOnlyAccess';
 import { useChatProjectOwner } from '~/composables/projects/useChatProjectOwner';
 import { useChatAttachmentDisplay } from '~/composables/chat/useChatAttachmentDisplay';
 import { useChatInputTheme } from '~/composables/chat/useChatInputTheme';
@@ -539,6 +541,9 @@ const toast = useToast();
 const { apiKey, connected } = useUserApiKey();
 const { startLogin } = useOpenRouterAuth();
 const { signInRequired, promptSignIn } = useSignInGate();
+const viewOnly = useViewOnlyAccess();
+const composerPlaceholder = computed(() =>
+    viewOnly.value ? VIEW_ONLY_NOTICE : signInRequired.value ? SIGN_IN_PROMPT : 'Write something…');
 const hooks = useHooks();
 const openRouterAvailability = computed(() =>
     resolveOpenRouterKeyAvailability(runtimeConfig.public?.openRouter)
@@ -579,9 +584,9 @@ async function initializeEditor(replaceExisting = false) {
         let extensions: Array<Extension | Node> = [
             enterToSend,
             Placeholder.configure({
-                // Use a placeholder:
-                placeholder: () =>
-                    signInRequired.value ? SIGN_IN_PROMPT : 'Write something…',
+                // A view-only composer is read-only but still explains why.
+                showOnlyWhenEditable: false,
+                placeholder: () => composerPlaceholder.value,
             }),
             StarterKit.configure({
                 // The composer sends plain text. Keep pasted URLs editable
@@ -624,6 +629,7 @@ async function initializeEditor(replaceExisting = false) {
 
         const nextEditor = new Editor({
             extensions,
+            editable: !viewOnly.value,
             editorProps: {
                 attributes: {
                     'aria-label': 'Message input',
@@ -813,9 +819,11 @@ const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const editor = ref<Editor | null>(null);
 // The placeholder callback only runs on editor transactions; nudge one when
 // the session resolves so an empty composer updates without a keystroke.
-watch(signInRequired, () => {
+watch([signInRequired, viewOnly], () => {
     const current = editor.value;
-    if (current && !current.isDestroyed) current.commands.setMeta('signInGate', true);
+    if (!current || current.isDestroyed) return;
+    current.setEditable(!viewOnly.value, false);
+    current.commands.setMeta('signInGate', true);
 });
 
 const composerActionContext = (): ComposerActionContext => ({
@@ -1303,6 +1311,7 @@ async function handleSend(decision: { inspectLossyRequest?: boolean; lossyConfir
 }
 const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfirmation?: import('~/utils/chat/lossy-request').LossyRequestPreview }): Promise<SendResult> => {
     if (props.loading) return { status: 'rejected', reason: 'busy' };
+    if (viewOnly.value) return { status: 'rejected', reason: 'unavailable' };
     // Account first: a signed-out visitor cannot use any key, so never ask for one.
     if (signInRequired.value) {
         promptSignIn();

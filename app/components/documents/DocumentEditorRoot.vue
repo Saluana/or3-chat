@@ -331,6 +331,7 @@ import { MAX_SYNC_PAYLOAD_BYTES, sanitizePayloadForSync } from '~~/shared/sync/s
 import { Editor, EditorContent, type JSONContent } from '@tiptap/vue-3';
 import { Selection } from '@tiptap/pm/state';
 import { BubbleMenu } from '@tiptap/vue-3/menus';
+import { VIEW_ONLY_NOTICE, useViewOnlyAccess } from '~/composables/auth/useViewOnlyAccess';
 import ToolbarButton from './ToolbarButton.vue';
 import DocumentInspector from './DocumentInspector.vue';
 import DocumentTableToolbar from './DocumentTableToolbar.vue';
@@ -494,8 +495,10 @@ let loadGeneration = 0;
 const documentLoaded = ref(false);
 const loadingDocument = ref(true);
 const availability = ref<'loading' | 'active' | 'trashed' | 'unavailable'>('loading');
-const itemReadOnly = computed(() => availability.value !== 'active' || !!loadError.value);
+const viewOnly = useViewOnlyAccess();
+const itemReadOnly = computed(() => viewOnly.value || availability.value !== 'active' || !!loadError.value);
 const availabilityMessage = computed(() => {
+    if (viewOnly.value) return VIEW_ONLY_NOTICE;
     if (availability.value === 'trashed') return 'This document is read-only. Restore it from Files Trash to edit it.';
     if ((state.value.status === 'error' || loadError.value) && !documentLoaded.value) return 'This document could not be read. Its original content has been preserved. Download the original or try again.';
     return 'This document is unavailable in this workspace.';

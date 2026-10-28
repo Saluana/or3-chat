@@ -55,6 +55,8 @@ The selected sync backend implements `AuthWorkspaceStore` for internal users and
 | editor | Read/write workspace data |
 | viewer | Read workspace data |
 
+For a viewer, the chat composer and document editors are read-only and say so, because the server refuses their writes. This is a convenience; the server still enforces the role.
+
 Server handlers use `can()` or `requireCan()` for resource authorization. Authentication alone is insufficient: membership, resource ownership, capability policy, and optional constraints can deny a request. The [capability matrix](/documentation/cloud/capability-matrix) lists operation-specific requirements.
 
 Entitlements are separate plan/feature flags resolved by a registered backend resolver and cached per request. With no resolver, entitlements are empty; a plugin policy requiring `paid` will deny access. [Plugin access policy](/documentation/cloud/plugin-access-gating) controls feature availability, while server permissions protect the underlying data. Hiding a button is not server authorization.

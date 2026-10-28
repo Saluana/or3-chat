@@ -32,6 +32,7 @@ import {
   needsInitialPaneApplication,
   type WorkspaceProfilePreferenceStore,
 } from "~/core/workspace-profiles/selection";
+import { isViewOnlyMember } from "~/composables/auth/useViewOnlyAccess";
 import { getKvByName, setKvByName } from "~/db/kv";
 import {
   getActiveWorkspaceId,
@@ -298,7 +299,8 @@ export async function acknowledgeInitialPanes(token: number): Promise<void> {
   ) {
     return;
   }
-  await markInitialPanesApplied(profilePreferenceStore());
+  // A viewer's write is refused by the server and would retry indefinitely.
+  if (!isViewOnlyMember()) await markInitialPanesApplied(profilePreferenceStore());
   if (state.initialPaneRequest.value?.token === token) {
     state.initialPaneRequest.value = null;
   }
