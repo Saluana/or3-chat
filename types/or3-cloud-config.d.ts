@@ -137,8 +137,9 @@ export interface Or3CloudConfig {
         /**
          * Permit authenticated workspace writers to upload MIME types outside
          * the configured allowlist. The server still enforces auth, size,
-         * quota, hash, and safe download policy.
-         * @default false
+         * quota, hash, and safe download policy. Set to false to restrict
+         * uploads to `allowedMimeTypes`.
+         * @default true
          * @env OR3_STORAGE_ALLOW_ANY_FILE_TYPE
          */
         allowAnyFileType?: boolean;

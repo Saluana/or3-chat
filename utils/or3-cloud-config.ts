@@ -68,7 +68,7 @@ const DEFAULT_OR3_CLOUD_CONFIG: Or3CloudConfig = {
         enabled: false,
         provider: DEFAULT_STORAGE_PROVIDER_ID,
         allowedMimeTypes: [...DEFAULT_STORAGE_ALLOWED_MIME_TYPES],
-        allowAnyFileType: false,
+        allowAnyFileType: true,
         workspaceQuotaBytes: undefined,
         gcRetentionSeconds: DEFAULT_STORAGE_GC_RETENTION_SECONDS,
         gcCooldownMs: DEFAULT_STORAGE_GC_COOLDOWN_MS,

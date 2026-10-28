@@ -29,7 +29,7 @@ try {
             OR3_SQLITE_DB_PATH: join(directory, 'sync.sqlite'), OR3_SQLITE_DRIVER: 'better-sqlite3',
             OR3_STORAGE_ENABLED: 'true', OR3_CLOUD_STORAGE_ENABLED: 'true', OR3_STORAGE_PROVIDER: 'fs', NUXT_PUBLIC_STORAGE_PROVIDER: 'fs',
             OR3_STORAGE_FS_ROOT: join(directory, 'files'), OR3_STORAGE_FS_TOKEN_SECRET: crypto.randomUUID() + crypto.randomUUID(),
-            OR3_MAX_CLOUD_FILE_SIZE_BYTES: String(64 * 1024 * 1024), OR3_STORAGE_ALLOW_ANY_FILE_TYPE: 'true',
+            OR3_MAX_CLOUD_FILE_SIZE_BYTES: String(64 * 1024 * 1024),
             OR3_BACKGROUND_STREAMING_ENABLED: 'false',
             // File-backup qualification does not store account model credentials.
             NUXT_SECRETS_PROVIDER: '',

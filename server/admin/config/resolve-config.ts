@@ -304,7 +304,7 @@ export function buildOr3CloudConfigFromEnv(
                 : undefined,
             allowAnyFileType: readEnvBoolean(
                 env.OR3_STORAGE_ALLOW_ANY_FILE_TYPE,
-                false,
+                true,
             ),
             workspaceQuotaBytes: envNum(env.OR3_STORAGE_WORKSPACE_QUOTA_BYTES),
             gcRetentionSeconds: envNum(env.OR3_STORAGE_GC_RETENTION_SECONDS),

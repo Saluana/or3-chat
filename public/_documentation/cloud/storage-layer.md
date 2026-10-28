@@ -281,8 +281,9 @@ For backend-specific credentials, persistence, URL lifetime, and limitations, us
 
 ## Security & Validation
 
-*   **MIME Types**: Uploads use the built-in image/PDF/text allowlist unless an
-    administrator explicitly enables `storage.allowAnyFileType`.
+*   **MIME Types**: Any type is accepted by default and stored as an inert
+    generic file. An administrator can set `storage.allowAnyFileType` to
+    `false` to restrict uploads to the image/PDF/text allowlist.
 *   **Generic files**: Generic and active-content files download as
     `application/octet-stream` attachments with `nosniff`; only supported raster
     images and PDFs retain inline serving.

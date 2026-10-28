@@ -496,14 +496,14 @@ bunx convex env set OR3_ADMIN_JWT_SECRET=<your-admin-jwt-secret>
 - Type: `string[]`
 - Default: `['image/jpeg','image/png','image/gif','image/webp','application/pdf','text/plain','text/markdown','text/csv','application/vnd.openxmlformats-officedocument.wordprocessingml.document']`
 - Env: `OR3_STORAGE_ALLOWED_MIME_TYPES` (comma-separated)
-- Purpose: Upload MIME allowlist enforced by storage presign endpoint.
+- Purpose: Upload MIME allowlist enforced by the storage presign endpoint when `storage.allowAnyFileType` is `false`.
 
 #### `storage.allowAnyFileType`
 
 - Type: `boolean`
-- Default: `false`
+- Default: `true`
 - Env: `OR3_STORAGE_ALLOW_ANY_FILE_TYPE`
-- Purpose: Explicitly allows authenticated workspace writers to upload MIME types outside the configured allowlist. Size, quota, hash, and safe download policy still apply. Updated gateway clients advertise the typed file-kind `v1` capability; older clients receive HTTP 426 with update guidance before a generic file is admitted or returned.
+- Purpose: Allows authenticated workspace writers to upload MIME types outside the configured allowlist, so Cloud can store any file. Set `false` to restrict uploads to `storage.allowedMimeTypes`. Size, quota, hash, and safe download policy still apply. Updated gateway clients advertise the typed file-kind `v1` capability; older clients receive HTTP 426 with update guidance before a generic file is admitted or returned.
 
 #### `storage.workspaceQuotaBytes`
 

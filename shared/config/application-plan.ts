@@ -305,7 +305,7 @@ export function buildApplicationPlan(input: {
             provider: or3CloudConfig.storage.provider,
             allowedMimeTypes:
                 or3CloudConfig.storage.allowedMimeTypes ?? undefined,
-            allowAnyFileType: or3CloudConfig.storage.allowAnyFileType ?? false,
+            allowAnyFileType: or3CloudConfig.storage.allowAnyFileType ?? true,
             workspaceQuotaBytes:
                 or3CloudConfig.storage.workspaceQuotaBytes !== undefined
                     ? String(or3CloudConfig.storage.workspaceQuotaBytes)
@@ -415,7 +415,7 @@ export function buildApplicationPlan(input: {
                 enabled: effectiveStorageEnabled,
                 provider: or3CloudConfig.storage.provider,
                 allowAnyFileType:
-                    or3CloudConfig.storage.allowAnyFileType ?? false,
+                    or3CloudConfig.storage.allowAnyFileType ?? true,
             },
             sync: {
                 enabled: effectiveSyncEnabled,
