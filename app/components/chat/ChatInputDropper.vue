@@ -405,7 +405,7 @@ import {
 } from 'vue';
 import { isMentionSourceEnabled, useOr3Config } from '~/composables/useOr3Config';
 import { useSystemPromptsModal } from '~/composables/chat/useSystemPromptsModal';
-import { usePanePendingPrompt } from '~/composables/core/usePanePrompt';
+import { clearPanePendingPrompt, getPanePendingPrompt, setPanePendingPrompt, usePanePendingPrompt } from '~/composables/core/usePanePrompt';
 import { resolveOpenRouterKeyAvailability } from '~/core/auth/openRouterKeyAvailability';
 import { guardPendingAttachmentSend } from '~/composables/chat/pendingAttachmentGuard';
 import { Editor, EditorContent } from '@tiptap/vue-3';
@@ -1029,6 +1029,7 @@ function captureDraft(tabId = props.tabId): void {
         attachmentRefs: saved?.attachmentRefs,
         largeTextBlocks: largeTextBlocks.value,
         composer: {
+            pendingPromptId: getPanePendingPrompt(tabId),
             model: selectedModel.value,
             modelVariant: modelVariant.value,
             thinkingEnabled: thinkingEnabled.value,
@@ -1084,6 +1085,7 @@ async function restoreDraft(tabId = props.tabId, retry = false): Promise<void> {
     restoringDraft.value = true;
     // The editor stays editable while saved content loads; anything typed meanwhile wins.
     const revisionBeforeLoad = draftEditRevision;
+    const promptBeforeLoad = getPanePendingPrompt(tabId);
     const scope = tabDrafts.scope();
     // Keep any earlier warning until this attempt settles, and give each failure
     // its own id: a removed toast id is deleted after its close animation, which
@@ -1121,6 +1123,12 @@ async function restoreDraft(tabId = props.tabId, retry = false): Promise<void> {
             }
         }
         if (draft?.composer) {
+            // An existing thread owns its own prompt. Do not replace a selection
+            // made while this tab's saved draft was loading.
+            if (!props.threadId && typeof draft.composer.pendingPromptId === 'string'
+                && getPanePendingPrompt(tabId) == null) {
+                setPanePendingPrompt(tabId, draft.composer.pendingPromptId);
+            }
             // Migrate legacy drafts that stored the web-search toggle.
             restoreDraftModel(draft.composer.model, sanitizeModelVariant(
                 draft.composer.modelVariant ??
@@ -1177,7 +1185,9 @@ async function restoreDraft(tabId = props.tabId, retry = false): Promise<void> {
             restoringDraft.value = false;
             autoResize();
             // Capture was paused while loading; what the user typed must still reach the store.
-            if (keptTypedText) scheduleDraftCapture(tabId);
+            if (keptTypedText || (!props.threadId && getPanePendingPrompt(tabId) !== promptBeforeLoad)) {
+                scheduleDraftCapture(tabId);
+            }
         }
     }
 }
@@ -1194,6 +1204,8 @@ watch(
 watch(draftAccountId, () => {
     clearDraftCaptureTimer();
     captureDraft(props.tabId);
+    // The in-memory selection belongs to the outgoing account, just like its draft.
+    if (props.tabId) clearPanePendingPrompt(props.tabId);
     void restoreDraft(props.tabId);
 });
 
@@ -1201,7 +1213,7 @@ watch([attachments, largeTextBlocks], () => scheduleDraftCapture(props.tabId), {
     deep: true,
 });
 watch(
-    [selectedModel, modelVariant, thinkingEnabled, reasoningEffort, imageSettings],
+    [selectedModel, modelVariant, thinkingEnabled, reasoningEffort, imageSettings, stagedPromptId],
     () => scheduleDraftCapture(props.tabId),
     { deep: true }
 );

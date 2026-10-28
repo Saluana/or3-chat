@@ -124,6 +124,21 @@ describe('pluginDevEnvironment', () => {
         expect(pluginDevEnvironment(root, firstPlugin).OR3_ADMIN_PASSWORD).toBe(env.OR3_ADMIN_PASSWORD);
     });
 
+    it('preserves the watched profile secret-store choice across launches', async () => {
+        const root = await mkdtemp(join(tmpdir(), 'or3-dev-plugin-'));
+        temporaries.push(root);
+        const plugin = join(root, 'plugin');
+        await mkdir(plugin);
+        const first = pluginDevEnvironment(root, plugin);
+        const envFile = first.DOTENV_CONFIG_PATH!;
+        expect(await readFile(envFile, 'utf8')).toBe('');
+        const explicitChoice = 'NUXT_SECRETS_PROVIDER=\n';
+        await writeFile(envFile, explicitChoice);
+        const restarted = pluginDevEnvironment(root, plugin);
+        expect(restarted.DOTENV_CONFIG_PATH).toBe(envFile);
+        expect(await readFile(envFile, 'utf8')).toBe(explicitChoice);
+    });
+
     it('rejects watched profile overrides before the host starts', async () => {
         const root = await mkdtemp(join(tmpdir(), 'or3-dev-plugin-'));
         temporaries.push(root);

@@ -16,13 +16,13 @@ import { documentsOverrides, documentsStyles } from './styles/documents';
 import { paletteOverrides, paletteCssSelectors } from './styles/palette';
 
 const lightModeBackground = new URL(
-    './assets/lightmode-cyberpunk-bg.png',
+    './assets/lightmode-cyberpunk-bg.webp',
     import.meta.url
 ).href;
-const cyberpunkBackground = new URL('./assets/cyberpunk.png', import.meta.url)
+const cyberpunkBackground = new URL('./assets/cyberpunk.webp', import.meta.url)
     .href;
 const cyberpunkSidebarBackground = new URL(
-    './assets/cybersb2.png',
+    './assets/cybersb2.webp',
     import.meta.url
 ).href;
 

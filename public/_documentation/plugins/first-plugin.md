@@ -25,8 +25,12 @@ bun run dev:plugin --create /absolute/path/to/greeting --id my-tools.greeting
 ```
 
 The command packs the local SDK, installs a portable starter, and starts a
-separate loopback host with its own data. Open the printed URL, sign in with
-the printed local credentials, and review the starter's requested permissions.
+separate loopback host with its own data. On first launch, choose a secret-store
+option in the terminal; this choice is saved in the plugin's isolated profile
+for later launches. Automatic setup creates a vault in the plugin profile;
+existing profiles retain their previously configured vault without migration. See [Runtime and security](/documentation/plugins/runtime-and-security#local-development-admission).
+Open the printed URL, sign in with the printed local credentials, and review
+the starter's requested permissions.
 Use the printed port: the watcher chooses another port if its default is busy.
 
 You should see the starter's greeting in a plugin surface. Later sessions start

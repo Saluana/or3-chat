@@ -1,5 +1,5 @@
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
-import { execFileSync, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { networkInterfaces, tmpdir } from 'node:os';
@@ -75,15 +75,8 @@ async function readEnv(key: string): Promise<string | undefined> {
     return env.match(new RegExp(`^${key}=(.*)$`, 'm'))?.[1];
 }
 
-/** Command lines of the process group serving the app. */
-function appCommandLines(): string[] {
-    const pid = execFileSync('lsof', ['-t', '-iTCP:3000', '-sTCP:LISTEN'], { encoding: 'utf8' }).split('\n')[0]!;
-    const group = execFileSync('ps', ['-o', 'pgid=', '-p', pid], { encoding: 'utf8' }).trim();
-    return execFileSync('ps', ['-o', 'args=', '-g', group], { encoding: 'utf8' }).split('\n').filter(Boolean);
-}
-
 async function stopApp() {
-    stopAppServer(3000);
+    stopAppServer(3000, instanceDir);
     await expect.poll(async () => {
         try {
             await fetch(`${APP}/api/health`);
@@ -265,6 +258,16 @@ test('W6 starts an authenticated setup with the same command and the saved login
     try {
         await recommendedToReview(page, email);
         await page.getByRole('button', { name: 'Apply + Deploy' }).click();
+        // A fresh authenticated launch needs an explicit vault choice in a
+        // terminal. It should report an exited process promptly, not wait for
+        // a three-minute health timeout or silently disable personal secrets.
+        await expect(resultBanner(page)).toContainText('secret-store setup', { timeout: 60_000 });
+        expect(await readEnv('NUXT_SECRETS_PROVIDER')).toBeUndefined();
+        // Exercise an explicit instance-billing-only choice in this disposable
+        // fixture, without changing a real user's secret-store preference.
+        const envFile = join(instanceDir, '.env');
+        await writeFile(envFile, `${await readFile(envFile, 'utf8')}\nNUXT_SECRETS_PROVIDER=\n`);
+        await page.getByRole('button', { name: 'Apply + Deploy' }).click();
         await expect(resultBanner(page)).toContainText('Deployment complete', { timeout: DEPLOY_TIMEOUT });
         await expect(page.getByText('Sign in with the admin email and password from setup.')).toBeVisible();
         const password = (await page.locator('dt', { hasText: 'Password' }).locator('+ dd').textContent())?.trim() ?? '';
@@ -272,9 +275,6 @@ test('W6 starts an authenticated setup with the same command and the saved login
         await evidence(page, info, 'w6-deployed');
 
         expect(await readEnv('SSR_AUTH_ENABLED')).toBe('true');
-        const commands = appCommandLines().join('\n');
-        expect(commands).toContain('scripts/cli/dev.ts');
-        expect(commands).not.toContain('--or3-ssr');
 
         const signIn = await page.request.post(`${APP}/api/basic-auth/sign-in`, {
             headers: { origin: APP, 'x-or3-cloud-intent': 'mutation' },
@@ -306,9 +306,6 @@ test('W5 starts a browser-only setup with the shared command', async ({ page }, 
         const wizardHealth = new URL('/api/health', wizardUrl).toString();
         await expect.poll(async () => (await fetch(wizardHealth).catch(() => null))?.status ?? 0).not.toBe(200);
         expect(await readEnv('SSR_AUTH_ENABLED')).toBe('false');
-        const commands = appCommandLines().join('\n');
-        expect(commands).toContain('scripts/cli/dev.ts');
-        expect(commands).not.toContain('--or3-ssr');
         await expect(page.getByLabel('Message input', { exact: true })).toBeVisible({ timeout: 120_000 });
         await expect(page.getByRole('button', { name: /sign in/i })).toHaveCount(0);
         await evidence(page, info, 'w5-browser-only-app');

@@ -82,6 +82,8 @@ const clientToolDispatches = new Map<
 >();
 const clientToolRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const clientToolRetryAttempts = new Map<string, number>();
+const clientToolClaimDeferredUntil = new Map<string, number>();
+const CLIENT_TOOL_CLAIM_CONFLICT_DELAY_MS = 3_000;
 const CLIENT_TOOL_JOURNAL_PREFIX = 'or3:bg-client-tool:';
 const CLIENT_TOOL_JOURNAL_TTL_MS = 24 * 60 * 60 * 1000;
 let lastClientToolJournalPruneAt = 0;
@@ -139,6 +141,9 @@ function clearClientToolRetriesForJob(jobId: string): void {
     }
     for (const key of clientToolRetryAttempts.keys()) {
         if (key.startsWith(`${jobId}:`)) clientToolRetryAttempts.delete(key);
+    }
+    for (const key of clientToolClaimDeferredUntil.keys()) {
+        if (key.startsWith(`${jobId}:`)) clientToolClaimDeferredUntil.delete(key);
     }
 }
 
@@ -209,6 +214,7 @@ async function executePendingClientTool(
 ): Promise<void> {
     const dispatchKey = `${tracker.jobId}:${callId}`;
     if (clientToolDispatches.has(dispatchKey)) return;
+    if ((clientToolClaimDeferredUntil.get(dispatchKey) ?? 0) > Date.now()) return;
     if (Date.now() - lastClientToolJournalPruneAt > 60 * 60 * 1000) {
         pruneClientToolJournals();
         lastClientToolJournalPruneAt = Date.now();
@@ -223,7 +229,13 @@ async function executePendingClientTool(
     const canDispatch = (): boolean => tracker.active && !abortController.signal.aborted;
     const dispatch = (async () => {
         const returned = await claimBackgroundClientTool(tracker.jobId, callId);
-        if (!returned) return;
+        if (!returned) {
+            // Another tab may hold the lease. Status updates can arrive every
+            // 250ms, so defer conflicting claims while leaving recovery active.
+            if (canDispatch()) clientToolClaimDeferredUntil.set(dispatchKey, Date.now() + CLIENT_TOOL_CLAIM_CONFLICT_DELAY_MS);
+            return;
+        }
+        clientToolClaimDeferredUntil.delete(dispatchKey);
         const claim = structuredClone(returned) as Omit<typeof returned, 'call' | 'context'> & Partial<Pick<typeof returned, 'call' | 'context'>>;
         if (!claim.call || !claim.context || claim.call.id !== callId || claim.call.name !== toolName ||
             claim.context.workspaceId !== tracker.workspaceId || claim.context.threadId !== tracker.threadId ||
@@ -395,6 +407,7 @@ function dispatchPendingClientTools(
             if (timer) clearTimeout(timer);
             clientToolRetryTimers.delete(key);
             clientToolRetryAttempts.delete(key);
+            clientToolClaimDeferredUntil.delete(key);
             clearClientToolJournal(clientToolJournalKey(tracker.jobId, call.id));
         }
     }

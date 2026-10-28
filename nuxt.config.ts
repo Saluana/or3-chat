@@ -18,6 +18,10 @@ import { resolveDevProviderModule } from './shared/dev/local-providers';
 import { resolveLocalPackageAliases } from './shared/dev/local-packages';
 import { hostEsmFacadeImportMapScript } from './shared/plugins/host-esm-facade';
 import blankSolarIcons from './app/theme/blank/icon-collection';
+import materialIcons from './app/theme/_shared/material-icon-collection';
+import { DEFAULT_ICONS } from './app/config/icon-tokens';
+import cyberpunkIcons from './app/theme/cyberpunk/icons.config';
+import blankIcons from './app/theme/blank/icons.config';
 
 const env = { ...process.env };
 
@@ -266,7 +270,8 @@ export default defineNuxtConfig({
         },
     },
     devtools: {
-        enabled: process.env.NODE_ENV !== 'production',
+        // The DevTools overlay intercepts pointer input in small E2E viewports.
+        enabled: process.env.NODE_ENV !== 'production' && process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS !== 'true',
         // Vite Inspect retains resolution and transform history across HMR.
         // Keep the DevTools UI available without the unbounded inspector state.
         viteInspect: false,
@@ -302,21 +307,33 @@ export default defineNuxtConfig({
     icon: {
         serverBundle: {
             // Only bundle the iconify collections we actually use
-            // (pixelarticons = retro theme tokens, tabler/lucide/carbon = inline
-            // prefixes, simple-icons = provider brand logos). Blank's Solar
-            // subset is registered as a custom collection below.
+            // (pixelarticons and pixel = retro theme tokens, tabler/lucide/carbon = inline
+            // prefixes, heroicons = admin controls, simple-icons = provider brand logos).
+            // Blank's Solar subset is registered as a custom collection below.
             collections: [
                 'pixelarticons',
+                'pixel',
                 'lucide',
                 'carbon',
+                'heroicons',
                 'tabler',
                 'simple-icons',
             ],
         },
-        customCollections: [blankSolarIcons],
+        customCollections: [blankSolarIcons, materialIcons],
         clientBundle: {
             // Custom icons must also work in static builds without an icon API.
             includeCustomCollections: true,
+            // Theme tokens are resolved at runtime and cannot be discovered by
+            // Nuxt Icon's source scan. Bundle the selected glyphs for static and
+            // offline use; custom collections are already included above.
+            icons: [...new Set([
+                ...Object.values(DEFAULT_ICONS),
+                ...Object.values(cyberpunkIcons),
+                ...Object.values(blankIcons),
+            ].filter((icon): icon is string => typeof icon === 'string').map((icon) => icon.startsWith('i-')
+                ? icon.slice(2).replace(/^([^:-]+)-/, '$1:')
+                : icon).filter((icon) => !icon.startsWith('blank-solar:') && !icon.startsWith('or3-material:')))],
         },
     },
     // Nuxt UI registers this module as a dependency. Keep its resolver local so
@@ -716,6 +733,22 @@ export default defineNuxtConfig({
                 '@openrouter/sdk/lib/http.js',
                 '@openrouter/sdk/sdk/models.js',
                 '@orama/orama',
+                '@shikijs/langs/bash',
+                '@shikijs/langs/css',
+                '@shikijs/langs/diff',
+                '@shikijs/langs/go',
+                '@shikijs/langs/html',
+                '@shikijs/langs/javascript',
+                '@shikijs/langs/json',
+                '@shikijs/langs/jsx',
+                '@shikijs/langs/markdown',
+                '@shikijs/langs/python',
+                '@shikijs/langs/rust',
+                '@shikijs/langs/shellscript',
+                '@shikijs/langs/tsx',
+                '@shikijs/langs/typescript',
+                '@shikijs/langs/vue',
+                '@shikijs/langs/yaml',
                 '@tiptap/core',
                 '@tiptap/extension-list',
                 '@tiptap/extension-mention',
@@ -734,13 +767,18 @@ export default defineNuxtConfig({
                 'ajv',
                 'ajv/dist/2020.js',
                 'dexie',
+                'dexie-export-import',
                 'gpt-tokenizer',
                 'lru-cache',
                 'mammoth',
+                ...(localPackageAliases.length ? [] : ['or3-scroll']),
                 'pdfjs-dist',
                 'reka-ui',
+                'semver',
                 'spark-md5',
                 'streamdown-vue',
+                'streamdown-vue/shiki',
+                'streamsaver',
                 'tiptap-markdown',
                 'zod',
             ],
@@ -856,6 +894,7 @@ export default defineNuxtConfig({
                                     // are requested in sequence during activation.
                                     // Keep them together without pulling replacement
                                     // components or stylesheet/font assets into it.
+                                    debugName: 'theme-assets',
                                     name: (id: string) => {
                                         const match = id.replaceAll('\\', '/').match(
                                             /\/app\/theme\/([^/]+)\/(?:theme\.ts|icons\.config\.ts|app\.config\.ts)$/,

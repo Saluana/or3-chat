@@ -1123,6 +1123,15 @@ function buildPaneProps(
     pane: PaneState,
     paneIndex: number
 ): Record<string, any> {
+    // The fallback needs the mode even while a custom app is still registering.
+    if (
+        (pane.mode === 'doc' && !documentsEnabled.value) ||
+        (pane.mode !== 'chat' && pane.mode !== 'doc' &&
+            !listPaneApps.value.some((entry) => entry.id === pane.mode && entry.component))
+    ) {
+        return { mode: pane.mode };
+    }
+
     // Built-in: chat
     if (pane.mode === 'chat') {
         return {

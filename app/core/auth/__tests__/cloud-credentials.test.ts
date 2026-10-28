@@ -63,6 +63,12 @@ it('keeps a verified server save successful when retained storage is unavailable
     await auth.refreshOpenRouterConnection();
     expect(fixture.retained).toHaveLength(0);
 });
+it('preserves legacy credentials and suppresses migration when personal storage is disabled', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ connected: false, persisted: false, available: false }))));
+    await expect(auth.refreshOpenRouterConnection()).rejects.toThrow('credential storage is unavailable');
+    expect(fixture.rows).toHaveLength(1);
+    expect(auth.useUserApiKey().connected.value).toBe(false);
+});
 it('does not hydrate Cloud keys and exposes only connection metadata', async () => {
     await auth.hydrateUserApiKeyFromKv();
     expect(memory.value.openrouterKey).toBeNull(); expect(auth.useUserApiKey().apiKey.value).toBeNull();

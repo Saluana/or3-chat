@@ -105,6 +105,10 @@ test(`browser reconnect reconciles ${interruption} client journal without repeat
     await page.close();
     const reconnected = await context.newPage();
     const exceptions: string[] = [];
+    let claimRequests = 0;
+    reconnected.on('request', request => {
+        if (request.url().endsWith('/client-tool/claim')) claimRequests++;
+    });
     reconnected.on('pageerror', error => exceptions.push(error.message));
     await reconnected.goto(url + '&mode=recovered');
     // The production server's 30s claim lease must expire before a new claim.
@@ -113,6 +117,7 @@ test(`browser reconnect reconciles ${interruption} client journal without repeat
     await expect(reconnected.locator('[data-cloud-counter]')).toHaveText('1');
     const saved = await status(reconnected.request, job.jobId);
     expect(saved.tool_calls[0]).toMatchObject({ id: job.callId, status: interruption === 'running' ? 'error' : 'complete' });
+    expect(claimRequests, 'claim retries should stay bounded while the previous lease expires').toBeLessThanOrEqual(15);
     if (interruption === 'running') expect(saved.tool_calls[0].error).toContain('outcome is unknown');
     else expect(saved.tool_calls[0].result).toBe('one durable browser write');
     expect(exceptions).toEqual([]);

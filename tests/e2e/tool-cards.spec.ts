@@ -11,7 +11,7 @@ const sse = (delta: unknown, finish: string | null = null) =>
 async function scripted(page: Page) {
   await page.route("**openrouter.ai/**", async (route) => {
     if (!route.request().url().includes("/chat/completions")) {
-      await route.fulfill({ json: { data: [] } });
+      await route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } });
       return;
     }
     const body = route.request().postDataJSON();

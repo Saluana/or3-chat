@@ -43,7 +43,10 @@ export default defineConfig({
         command: `bun run dev -- ${isProductionJourneyHarness && process.env.SSR_AUTH_ENABLED !== 'true' ? '--or3-offline ' : ''}--host 127.0.0.1 --port ${port}`,
         url: baseURL,
         timeout: 120 * 1000,
-        reuseExistingServer: !process.env.CI,
+        // Tests must exercise the checkout and configuration they started,
+        // not an unrelated process that happens to occupy this port.
+        // Deliberate externally managed servers use PW_SKIP_WEB_SERVER instead.
+        reuseExistingServer: false,
         // Let the dev supervisor stop its detached Nuxt child before exiting.
         // Killing only the supervisor leaves inherited output pipes open.
         gracefulShutdown: { signal: 'SIGTERM' as const, timeout: 30_000 },

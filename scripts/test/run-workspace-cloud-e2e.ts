@@ -59,7 +59,13 @@ try {
         // disposable servers lets one optimizer invalidate another's chunks.
         if (name === '.cache' || name === '.vite') continue;
         const provider = providers.find(pkg => pkg.name === name);
-        if (provider) await cp(provider.path, join(root, 'node_modules', name), { recursive: true, dereference: true });
+        if (provider) await cp(provider.path, join(root, 'node_modules', name), {
+            recursive: true,
+            dereference: true,
+            // Source checkout dependencies and Git metadata are not provider artifacts.
+            // They may also contain dangling links or live sockets.
+            filter: path => !development || !['node_modules', '.git'].some(name => path === join(provider.path, name)),
+        });
         else await symlink(join(sourceRoot, 'node_modules', name), join(root, 'node_modules', name));
     }
     const probe = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response('port probe') });

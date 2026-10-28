@@ -335,13 +335,16 @@ test('dashboard restart replaces boots and activates saved registration', async 
     await page.getByRole('button', { name: 'Restart now', exact: true }).click();
     await page.getByRole('button', { name: 'Apply and restart', exact: true }).click();
     await expect.poll(async () => {
-        try { return (await context.request.get('/api/admin/registration', { timeout: 4000 })).json(); } catch { return null; }
+        try { return await (await context.request.get('/api/admin/registration', { timeout: 4000 })).json(); } catch { return null; }
     }, { timeout: 150000, intervals: [1000, 1500] }).toMatchObject({ currentMode: 'disabled', savedMode: 'disabled', restartRequired: false });
     boots.push((await status()).bootId);
     await writeFile(join(process.env.OR3_RESTART_E2E_OUTPUT!, 'boots.json'), JSON.stringify({ boots, origin, hmrConnections, verified: true }, null, 2));
     await page.screenshot({ path: join(process.env.OR3_RESTART_E2E_OUTPUT!, 'recovered.png') });
     if (process.env.OR3_RESTART_E2E_MODE === '--failure') {
         await secondTab.close(); await advancedTab.close();
+        // The registration page may still be completing its post-restart reload.
+        // Use a fresh observer so that reload cannot abort presentation navigation.
+        const page = await context.newPage();
         const healthy = await status();
         let posts = 0;
         page.on('request', request => { if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/admin/system/restart') posts++; });

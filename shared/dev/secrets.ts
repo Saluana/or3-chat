@@ -17,6 +17,7 @@ const fields = ['SOCKET_PATH', 'TOKEN_FILE', 'NAMESPACE', 'VAULT_ID', 'SERVICE_U
 type Settings = Record<typeof fields[number] | 'PROVIDER', string>;
 type Mode = 'auto' | 'manual' | 'disable';
 type Owner = { env: NodeJS.ProcessEnv; close: () => Promise<void> };
+type SetupOptions = { envFile?: string; mode?: Mode; signal?: AbortSignal; custodyRoot?: string };
 const noop = async () => {};
 const setupRequired = 'Secrets setup required. After updating, run bun install. Run bun run setup:secrets in a terminal (automatic local vault, manual attachment, or explicit instance-billing-only mode).';
 
@@ -86,11 +87,19 @@ async function recoverStaleSocket(socketPath: string): Promise<void> {
     console.log('Recovered stale local vault socket; vault data and keys preserved.');
 }
 
+// Existing profiles may already refer to the checkout-owned automatic vault.
+// Keep its original lifecycle and lock; never silently migrate its custody.
+async function custodyRoot(projectRoot: string, env: NodeJS.ProcessEnv, options: SetupOptions): Promise<string> {
+    const root = await realpath(projectRoot);
+    if (!options.custodyRoot || env.NUXT_SECRETS_TOKEN_FILE === join(root, '.or3/secrets/service.token')) return root;
+    return realpath(options.custodyRoot);
+}
+
 /** Source launch boundary. Never runs during Nuxt builds or from a web request. */
 export async function prepareSourceSecrets(
     projectRoot: string,
     environment: NodeJS.ProcessEnv,
-    options: { envFile?: string; mode?: Mode; signal?: AbortSignal } = {},
+    options: SetupOptions = {},
 ): Promise<Owner> {
     try {
         options.signal?.throwIfAborted();
@@ -98,7 +107,7 @@ export async function prepareSourceSecrets(
         if ((!options.mode && selected !== 'or3-secrets') || options.mode === 'manual' || options.mode === 'disable'
             || (!options.mode && fields.some(field => !environment[prefix + field]))
             || process.getuid?.() === undefined) return await prepareSourceSecretsLocked(projectRoot, environment, options);
-        const root = await realpath(projectRoot);
+        const root = await custodyRoot(projectRoot, environment, options);
         const socketDirectory = join(await realpath(tmpdir()), `or3-vault-${process.getuid()}-${createHash('sha256').update(root).digest('hex').slice(0, 16)}`);
         await privateDirectory(socketDirectory);
         // Reuse the process-owned repository lock: a live owner is never displaced
@@ -107,7 +116,7 @@ export async function prepareSourceSecrets(
         const acquire = (signal?: AbortSignal) => lock.acquire('launcher', { requireDeadOwner: true, signal });
         const lease = await acquire(options.signal);
         try {
-            const owner = await prepareSourceSecretsLocked(root, environment, options);
+            const owner = await prepareSourceSecretsLocked(projectRoot, environment, options);
             if (owner.close === noop) return owner;
             let closing: Promise<void> | undefined;
             return { env: owner.env, close: () => closing ??= (async () => {
@@ -126,7 +135,7 @@ export async function prepareSourceSecrets(
 async function prepareSourceSecretsLocked(
     projectRoot: string,
     environment: NodeJS.ProcessEnv,
-    options: { envFile?: string; mode?: Mode; signal?: AbortSignal },
+    options: SetupOptions,
 ): Promise<Owner> {
     options.signal?.throwIfAborted();
     const env = { ...environment };
@@ -178,7 +187,8 @@ async function prepareSourceSecretsLocked(
         } finally { prompt.close(); }
     }
 
-    const directory = join(root, '.or3/secrets');
+    const vaultRoot = await custodyRoot(root, environment, options);
+    const directory = join(vaultRoot, '.or3/secrets');
     const stateFile = join(directory, 'launch.json');
     let state: Settings | undefined;
     const existingState = mode === 'auto' || (!mode && config.TOKEN_FILE === join(directory, 'service.token'))
@@ -201,14 +211,14 @@ async function prepareSourceSecretsLocked(
             // Check the provider's qualified runtime before creating the custody lock directory.
             await execute('bun', ['--no-env-file', join(dirname(clientEntry), 'cli.js'), 'init', '--help'],
                 { env: { PATH: env.PATH, HOME: env.HOME }, timeout: 10_000, maxBuffer: 64 * 1024 });
-            await mkdir(join(root, '.or3'), { mode: 0o700 }).catch(error => { if (error.code !== 'EEXIST') throw error; });
+            await mkdir(join(vaultRoot, '.or3'), { mode: 0o700 }).catch(error => { if (error.code !== 'EEXIST') throw error; });
             // Exclusive creation is the initialization lock. An incomplete directory is never reset.
             try { await mkdir(directory, { mode: 0o700 }); }
             catch (error) {
                 if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new Error('Local vault custody already exists but is incomplete. Preserve .or3/secrets; restore its matching configuration/key instead of regenerating it.');
                 throw error;
             }
-            const socketDir = join(await realpath(tmpdir()), `or3-vault-${process.getuid!()}-${createHash('sha256').update(root).digest('hex').slice(0, 16)}`);
+            const socketDir = join(await realpath(tmpdir()), `or3-vault-${process.getuid!()}-${createHash('sha256').update(vaultRoot).digest('hex').slice(0, 16)}`);
             await privateDirectory(socketDir);
             const result = await execute('bun', ['--no-env-file', join(dirname(clientEntry), 'cli.js'), 'init',
                 '--vault-dir', join(directory, 'vault'), '--key-file', join(directory, 'master.key'), '--operator-file', join(directory, 'operator.token')],

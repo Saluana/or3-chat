@@ -186,13 +186,12 @@ describe('marketplace mutations reconcile the plugin runtime', () => {
             'manifest-revision-change',
             'manifest-revision-change',
         ]);
-        expect(fetchMock).toHaveBeenCalledWith('/api/admin/plugins/workspace-enable', expect.objectContaining({
-            body: expect.objectContaining({ expectedWorkspaceId: 'ws-1' }),
-        }));
+        const calls = fetchMock.mock.calls as [string, { body: Record<string, unknown> }][];
+        expect(calls.find(([url]) => url === '/api/admin/plugins/workspace-enable')?.[1].body).toMatchObject({ expectedWorkspaceId: 'ws-1' });
         expect(fetchMock).toHaveBeenCalledWith('/api/admin/plugins/packages/sample.plugin/uninstall', expect.objectContaining({
             body: { expectedPackageDigest: 'sha256-test' },
         }));
-        const rollbackRequest = fetchMock.mock.calls.find(([url]) => url === '/api/admin/plugins/packages/sample.plugin/rollback');
+        const rollbackRequest = calls.find(([url]) => url === '/api/admin/plugins/packages/sample.plugin/rollback');
         expect(rollbackRequest?.[1].body).not.toHaveProperty('expectedWorkspaceId');
     });
 

@@ -16,7 +16,7 @@ if (!key)
 const fixtures = JSON.parse(await readFile(
     new URL('./fixtures.json', import.meta.url), 'utf8',
 )) as Array<{ id: string; expected: 'fact' | 'decision' | 'uncertain'; state: MemoryClassificationState }>;
-const models = ['typesafe/jev-1.13', 'perplexity/pplx-decider-v1.1-27b'];
+const models = [MEMORY_CLASSIFIER_MODEL];
 const reports = [];
 for (const model of models) {
     const cases = [];
@@ -93,7 +93,7 @@ for (const fixture of [
 }
 const automaticCapture = { model: MEMORY_CLASSIFIER_MODEL,
     passed: automaticCases.every((row) => row.passed), cases: automaticCases };
-const path = new URL('./evaluation-results.json', import.meta.url);
+const path = new URL('./evaluation-current-results.json', import.meta.url);
 await writeFile(
     path,
     JSON.stringify(
@@ -105,7 +105,7 @@ await writeFile(
 console.log(JSON.stringify(reports.map(({ cases, ...report }) => report)));
 console.log(JSON.stringify(automaticCapture));
 console.log(
-    'Saved text-free receipt to planning/project-memory-classification/evaluation-results.json',
+    'Saved text-free receipt to planning/project-memory-classification/evaluation-current-results.json',
 );
 if (
     !reports.every(

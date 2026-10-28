@@ -289,6 +289,9 @@ async function requestBody(
 function installDeterministicFetch(): void {
     const originalFetch = globalThis.fetch.bind(globalThis);
     globalThis.fetch = async (input, init) => {
+        if (requestUrl(input).endsWith('/api/openrouter/title')) {
+            return Response.json({ title: 'Scripted conversation' });
+        }
         if (requestUrl(input).includes('/api/__or3-e2e/models')) {
             return Response.json({ data: plainModelJourney ? [plainModel] : [], links: { next: null }, total_count: plainModelJourney ? 1 : 0 });
         }

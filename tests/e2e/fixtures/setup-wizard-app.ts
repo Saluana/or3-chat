@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, readdir, rm, stat, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, resolve } from 'node:path';
@@ -51,33 +52,69 @@ export async function createDisposableInstance(sourceDir: string): Promise<strin
 }
 
 /**
- * Stops the OR3 server the wizard started on `port`. The wizard launches it
- * detached in its own process group, so signal the whole group.
+ * Stop only a process group belonging to the disposable wizard instance.
+ * The port is not ownership: another program may have acquired it after the
+ * preflight check or after the wizard's app stopped.
  */
-export function stopAppServer(port: number): void {
-    let pids: string[];
-    try {
-        pids = execFileSync('lsof', ['-t', `-iTCP:${port}`, '-sTCP:LISTEN'], { encoding: 'utf8' })
-            .split('\n')
-            .filter(Boolean);
-    } catch {
-        return; // nothing is listening
+export function stopAppServer(port: number, instanceDir: string): void {
+    const instance = realpathSync(instanceDir);
+    const temp = realpathSync(tmpdir());
+    if (dirname(instance) !== temp || !/^or3-wizard-instance-[a-zA-Z0-9]{6}$/.test(basename(instance))) {
+        throw new Error('Refusing to stop an app without a disposable wizard instance.');
     }
-    for (const pid of pids) {
-        let group = Number(pid);
-        try {
-            group = Number(execFileSync('ps', ['-o', 'pgid=', '-p', pid], { encoding: 'utf8' }).trim()) || group;
-        } catch {
-            // Fall back to the listener itself.
+
+    let listeners: number[];
+    try {
+        listeners = execFileSync('lsof', ['-t', `-iTCP:${port}`, '-sTCP:LISTEN'], {
+            encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+        }).split('\n').filter(Boolean).map(Number);
+    } catch (error) {
+        const failure = error as { status?: number; stderr?: string | Buffer };
+        if (failure.status === 1 && !String(failure.stderr ?? '').trim()) return;
+        throw new Error(`Cannot identify listeners on port ${port}; refusing cleanup.`, { cause: error });
+    }
+    if (listeners.some(pid => !Number.isSafeInteger(pid) || pid <= 0)) {
+        throw new Error(`Cannot identify listeners on port ${port}; refusing cleanup.`);
+    }
+
+    const processes = execFileSync('ps', ['-A', '-o', 'pid=,pgid='], { encoding: 'utf8' })
+        .split('\n').map(line => line.trim().split(/\s+/).map(Number))
+        .filter(([pid, group]) => Number.isSafeInteger(pid) && pid! > 0 && Number.isSafeInteger(group) && group! > 0)
+        .map(([pid, group]) => ({ pid: pid!, group: group! }));
+    const ownGroup = processes.find(entry => entry.pid === process.pid)?.group;
+    const groups = new Set<number>();
+    for (const pid of listeners) {
+        const group = processes.find(process => process.pid === pid)?.group;
+        if (!group || !ownGroup || group === ownGroup) {
+            throw new Error(`Cannot establish listener ownership on port ${port}; refusing cleanup.`);
         }
-        try {
-            process.kill(-group, 'SIGTERM');
-        } catch {
+        groups.add(group);
+    }
+    for (const group of groups) {
+        const members = processes.filter(process => process.group === group);
+        for (const member of members) {
+            let cwd: string;
             try {
-                process.kill(Number(pid), 'SIGTERM');
-            } catch {
-                // Already gone.
+                const output = execFileSync('lsof', ['-a', '-p', String(member.pid), '-d', 'cwd', '-Fn'], {
+                    encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+                });
+                const path = output.split('\n').find(line => line.startsWith('n'))?.slice(1);
+                if (!path) throw new Error('No working directory returned.');
+                cwd = realpathSync(path);
+            } catch (error) {
+                throw new Error(`Cannot establish process ownership on port ${port}; refusing cleanup.`, { cause: error });
             }
+            if (cwd !== instance) {
+                throw new Error(`Listener on port ${port} is not owned by the disposable wizard instance; refusing cleanup.`);
+            }
+        }
+    }
+    // All groups are checked before signalling any of them. Never fall back to
+    // signalling a listener whose process group could not be verified.
+    for (const group of groups) {
+        try { process.kill(-group, 'SIGTERM'); }
+        catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
         }
     }
 }

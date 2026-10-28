@@ -92,8 +92,9 @@
     >
         <template #default>
             <p class="text-sm opacity-70">
-                {{ targetLabel('This project') }} and its settings, memories and knowledge sources will be deleted.
-                Its chats, documents and files stay in your workspace.
+                {{ targetLabel('This project') }} cannot be restored from Trash. Its settings,
+                brief, memory, and knowledge links are removed; chats are detached,
+                and documents and files remain.
             </p>
         </template>
         <template #footer>

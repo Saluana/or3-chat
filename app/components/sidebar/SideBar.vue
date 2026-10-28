@@ -153,6 +153,7 @@
 
 <script setup lang="ts">
 import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { useSignInGate } from '~/composables/auth/useSignInGate';
 import {
     onMounted,
     onUnmounted,
@@ -211,6 +212,16 @@ import { isMobile } from '~/state/global';
 
 const iconEdit = useIcon('ui.edit');
 const { data: workspaceSession } = useSessionContext();
+const { promptSignIn } = useSignInGate();
+const runtimeConfig = useRuntimeConfig();
+function requireCreationSignIn(): boolean {
+    if (runtimeConfig.public.ssrAuthEnabled === true && workspaceSession.value !== null
+        && workspaceSession.value.session?.authenticated !== true) {
+        promptSignIn();
+        return true;
+    }
+    return false;
+}
 const documentTrashEnabled = computed(() => !useRuntimeConfig().public.ssrAuthEnabled
     || (workspaceSession.value?.appAccessAllowed === true && workspaceSession.value.workspaceItemCapability === 'v1'));
 const iconFolder = useIcon('sidebar.folder');
@@ -354,7 +365,7 @@ import {
 } from '@vueuse/core';
 
 // Inject header height at setup level
-const topHeaderHeightInjected = inject<Ref<number>>('topHeaderHeight');
+const topHeaderHeightInjected = inject<Ref<number> | undefined>('topHeaderHeight', undefined);
 
 // Debounce resize recomputation
 const recomputeListHeight = useDebounceFn(() => {
@@ -742,7 +753,6 @@ async function softDeleteThread() {
 async function deleteProject() {
     if (!deleteProjectId.value) return;
     try {
-        // Use soft delete so project is recoverable like existing handler
         await deleteProjectCrud(deleteProjectId.value);
     } catch (e) {
         console.error('delete project failed', e);
@@ -947,6 +957,7 @@ const createProjectModalProps = createSidebarModalProps(
 );
 
 function openCreateProject() {
+    if (requireCreationSignIn()) return;
     showCreateProjectModal.value = true;
     createProjectState.value = { name: '', description: '' };
     createProjectErrors.value = {};
@@ -957,6 +968,10 @@ function closeCreateProject() {
 
 async function submitCreateProject() {
     if (!showCreateProjectModal.value || creatingProject.value) return;
+    if (requireCreationSignIn()) {
+        closeCreateProject();
+        return;
+    }
     const name = createProjectState.value.name.trim();
     if (!name) {
         createProjectErrors.value.name = 'Title required';
@@ -1105,7 +1120,7 @@ async function submitAddToProject() {
 
 // New documents start as "Untitled"; the editor focuses the title for naming.
 function createDocument() {
-    if (documentsEnabled.value) emit('newDocument');
+    if (documentsEnabled.value && !requireCreationSignIn()) emit('newDocument');
 }
 
 // Expose focusSearchInput to parent components

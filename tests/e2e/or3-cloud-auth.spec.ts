@@ -50,6 +50,14 @@ test.describe('OR3 Cloud Auth Integration', () => {
         await page.goto('/');
         await page.waitForLoadState('networkidle');
 
+        if (isolatedAdminHarnessReady) {
+            const refresh = await page.request.post('/api/basic-auth/refresh?silent=1', {
+                headers: { origin: new URL(page.url()).origin },
+            });
+            expect(refresh.status()).toBe(200);
+            expect(await refresh.json()).toEqual({ ok: false });
+        }
+
         await expect(
             page.getByRole('button', { name: /sign in|login/i })
         ).toBeVisible();
@@ -250,6 +258,16 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
             name: 'cloud-proof.txt', kind: 'file', file_kind_capability: 'v1',
         } });
         expect(committed.ok(), await committed.text()).toBe(true);
+        if (storageProvider === 'convex') {
+            // Convex storage emits a server-authored file change at commit,
+            // before the browser's metadata push. It must be a complete record.
+            const committedPull = await page.request.post('/api/sync/pull', { headers,
+                data: { scope: { workspaceId }, cursor: 0, limit: 100, fileKindCapability: 'v1', workspaceItemCapability: 'v1' } });
+            expect(committedPull.ok(), await committedPull.text()).toBe(true);
+            const committedChanges = (await committedPull.json()).changes as Array<{ tableName: string; pk: string; payload?: Record<string, unknown> }>;
+            const uploadedFile = committedChanges.find(change => change.tableName === 'file_meta' && change.pk === hash);
+            expect(uploadedFile?.payload).toEqual(expect.objectContaining({ hash, created_at: expect.any(Number), updated_at: expect.any(Number), deleted: false }));
+        }
         const postId = 'workspace-cloud-proof';
         const metadata = { version: 1, trashed_at: null, text: { coverage: 'full', indexed_bytes: bytes.length } };
         const catalog = { id: postId, title: 'Authenticated cloud proof', post_type: 'or3:file', content: bytes.toString(),

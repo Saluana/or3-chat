@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { Blob as NodeBlob } from 'node:buffer';
 
 const writer = {
     write: vi.fn(() => Promise.resolve()),
@@ -41,14 +42,12 @@ vi.mock('~/utils/workspace-backup-stream', async () => {
         ...actual,
         streamWorkspaceExportToWritable,
         streamWorkspaceExport: vi.fn(),
-        detectWorkspaceBackupFormat: vi.fn(),
         importWorkspaceStream: vi.fn(),
-        peekWorkspaceBackupMetadata: vi.fn(),
     };
 });
 
 vi.mock('~/db/client', () => {
-    const mockDb = {} as any;
+    const mockDb = { name: 'test-workspace', verno: 1 } as any;
     return {
         db: mockDb,
         getDb: () => mockDb,
@@ -83,6 +82,49 @@ describe('useWorkspaceBackup stream export', () => {
         const backup = useWorkspaceBackup();
         expect(backup.state.importMode.value).toBe('append');
         expect(backup.state.overwriteValues.value).toBe(false);
+    });
+    it('discards validated metadata when a replacement file is invalid', async () => {
+        const { useWorkspaceBackup } = await import('../core/useWorkspaceBackup');
+        const backup = useWorkspaceBackup();
+        const header = {
+            type: 'meta', format: 'or3-backup-stream', version: 1,
+            databaseName: 'test-workspace', databaseVersion: 1,
+            createdAt: '2026-01-01T00:00:00.000Z', tables: [],
+        };
+        const valid = new NodeBlob([JSON.stringify(header), '\n']) as unknown as Blob;
+        const invalid = new NodeBlob(['not a backup']) as unknown as Blob;
+
+        await backup.peekBackup(valid);
+        expect(backup.state.currentStep.value).toBe('confirm');
+        expect(backup.state.backupMeta.value?.databaseName).toBe('test-workspace');
+        await backup.peekBackup(invalid);
+        expect(backup.state.currentStep.value).toBe('error');
+        expect(backup.state.backupMeta.value).toBeNull();
+        expect(backup.state.backupFormat.value).toBeNull();
+    });
+    it('ignores an older validation that finishes after a newer selection', async () => {
+        const { useWorkspaceBackup } = await import('../core/useWorkspaceBackup');
+        const backup = useWorkspaceBackup();
+        const header = { type: 'meta', format: 'or3-backup-stream', version: 1,
+            databaseName: 'test-workspace', databaseVersion: 1,
+            createdAt: '2026-01-01T00:00:00.000Z', tables: [] };
+        const valid = new NodeBlob([JSON.stringify(header), '\n']);
+        const slice = valid.slice.bind(valid);
+        let release!: () => void;
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        let first = true;
+        Object.defineProperty(valid, 'slice', { value: (...args: Parameters<typeof slice>) => {
+            const part = slice(...args);
+            if (!first) return part;
+            first = false;
+            return { text: async () => { await gate; return part.text(); } };
+        } });
+        const earlier = backup.peekBackup(valid as unknown as Blob);
+        await backup.peekBackup(new NodeBlob(['not a backup']) as unknown as Blob);
+        release();
+        await earlier;
+        expect(backup.state.currentStep.value).toBe('error');
+        expect(backup.state.backupMeta.value).toBeNull();
     });
     beforeEach(() => {
         vi.clearAllMocks();

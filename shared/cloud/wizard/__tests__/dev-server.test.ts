@@ -15,6 +15,16 @@ describe('wizard dev-server helpers', () => {
         expect(outcome).toBe('timed out');
         expect(aborted).toBe(true);
     });
+    it('stops a pending readiness request when the launched process exits', async () => {
+        let aborted = false;
+        vi.stubGlobal('fetch', (_url: string, options: RequestInit) => new Promise((_resolve, reject) => options.signal?.addEventListener('abort', () => { aborted = true; reject(new Error('aborted')); })));
+        const controller = new AbortController();
+        const result = waitForHttpReady('http://localhost/api/health', 1_000, controller.signal);
+        controller.abort(new Error('process exited'));
+        const outcome = await Promise.race([result.catch(error => error.message), new Promise(resolve => setTimeout(() => resolve('hung'), 200))]);
+        expect(outcome).toBe('process exited');
+        expect(aborted).toBe(true);
+    });
     it('rejects invalid ports', async () => {
         await expect(isPortAvailable(0)).resolves.toBe(false);
         await expect(isPortAvailable(65_536)).resolves.toBe(false);

@@ -67,11 +67,11 @@ test('optional waitlist: admission, admin controls, sign-in and invite registrat
 
         // A signed-in workspace owner still cannot read the deployment-wide email list.
         await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-        const signIn = page.getByRole('dialog', { name: 'Sign In', exact: true });
+        const signIn = page.getByRole('dialog', { name: 'Welcome back', exact: true });
         await expect(signIn).toBeVisible();
         await signIn.getByRole('textbox', { name: 'Email', exact: true }).fill(process.env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL!);
         await signIn.getByLabel('Password', { exact: true }).fill(process.env.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD!);
-        await signIn.getByRole('button', { name: 'Sign In', exact: true }).click();
+        await signIn.getByRole('button', { name: 'Sign in', exact: true }).click();
         await expect(page).not.toHaveURL(/\/welcome/);
         const chat = (await (await page.request.get('/api/auth/session')).json()).session;
         expect(chat.authenticated).toBe(true);
@@ -88,7 +88,7 @@ test('optional waitlist: admission, admin controls, sign-in and invite registrat
             try {
                 const tab = await visitor.newPage();
                 await tab.goto(nested ? `/welcome?next=${encodeURIComponent(`/?invite=${token}`)}` : `/welcome?invite=${encodeURIComponent(token)}`);
-                const register = tab.getByRole('dialog', { name: 'Create Account', exact: true });
+                const register = tab.getByRole('dialog', { name: 'Create your account', exact: true });
                 await expect(register).toBeVisible({ timeout: 30_000 });
                 await register.getByRole('textbox', { name: 'Email', exact: true }).fill(invitee);
                 await register.getByLabel('Password', { exact: true }).fill('DisposableWaitlistInvite!123');

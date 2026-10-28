@@ -14,7 +14,7 @@ for (const theme of themes) test(`UI audit: ${theme} phone model selection works
         architecture: { modality: 'text->text', input_modalities: ['text'], output_modalities: ['text'] },
         supported_parameters: [], pricing: { prompt: '0', completion: '0' },
     }], links: { next: null }, total_count: 1 } }));
-    await openResponsiveChat(page, theme, 'light');
+    await openResponsiveChat(page, theme, 'light', true, false);
     const settings = page.getByRole('button', { name: 'Settings', exact: true });
     await settings.click();
     await page.getByRole('button', { name: 'Current model', exact: true }).click();
@@ -103,7 +103,13 @@ async function openResponsiveChat(
     theme: ThemeName,
     mode: ColorMode,
     dismissWelcome = true,
+    mockCatalog = true,
 ): Promise<void> {
+    // The journey harness uses a synthetic base with no real models endpoint.
+    // Tests exercising catalog contents install their own route instead.
+    if (mockCatalog) await page.route('**/api/__or3-e2e/models*', route => route.fulfill({
+        json: { data: [], links: { next: null }, total_count: 0 },
+    }));
     // Layout checks must never invoke an instance's configured AI provider.
     await page.route(/(?:openrouter\.ai\/|\/api\/openrouter\/)/, async (route) => {
         if (route.request().method() === 'POST') await route.abort('blockedbyclient');
@@ -241,10 +247,11 @@ async function expectDashboardGuttersAligned(page: Page): Promise<void> {
     await expect.poll(() => dialog.evaluate(element => {
         const title = element.querySelector<HTMLElement>('[data-slot="title"]')!;
         const titleLeft = title.getBoundingClientRect().left;
+        const zoom = Number.parseFloat(getComputedStyle(document.body).zoom) || 1;
         return ['#dashboard-page-header', '.dashboard-page-frame'].every(selector => {
             const target = element.querySelector<HTMLElement>(selector)!;
             const contentLeft = target.getBoundingClientRect().left +
-                Number.parseFloat(getComputedStyle(target).paddingLeft);
+                Number.parseFloat(getComputedStyle(target).paddingLeft) * zoom;
             return Math.abs(contentLeft - titleLeft) <= 1;
         });
     })).toBe(true);
@@ -763,7 +770,8 @@ async function expectWorkspaceTabTextFits(
 ): Promise<void> {
     const tab = page.locator('.workspace-tab').first();
     const title = tab.locator('.workspace-tab-title');
-    await expect(tab).toHaveCSS('height', expectedHeight);
+    await expect.poll(async () => parseFloat(await tab.evaluate(element => getComputedStyle(element).height)))
+        .toBeCloseTo(parseFloat(expectedHeight), 1);
     await expect(title).toHaveCSS('line-height', expectedLineHeight);
 
     const bounds = await tab.evaluate((element) => {
@@ -793,8 +801,8 @@ test.describe('chat responsive layout', () => {
         test.skip(process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS !== 'true', 'Requires the gated provider UI fixture');
         await openResponsiveChat(page, 'blank', mode);
         await page.goto('/__or3-mobile-auth-test');
-        const dialog = page.getByRole('dialog', { name: 'Sign In', exact: true });
-        const signIn = dialog.getByRole('button', { name: 'Sign In', exact: true });
+        const dialog = page.getByRole('dialog', { name: 'Welcome back', exact: true });
+        const signIn = dialog.getByRole('button', { name: 'Sign in', exact: true });
         const email = dialog.getByLabel('Email', { exact: true });
         const password = dialog.getByLabel('Password', { exact: true });
         await expect(email).toBeVisible();
@@ -806,7 +814,7 @@ test.describe('chat responsive layout', () => {
                 const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
                 while (walker.nextNode()) {
                     const node = walker.currentNode;
-                    if (node.textContent?.trim() !== 'Sign In') continue;
+                    if (node.textContent?.trim() !== 'Sign in') continue;
                     const range = document.createRange();
                     range.selectNodeContents(node);
                     return range.getBoundingClientRect().height <= parseFloat(getComputedStyle(button).lineHeight) + 1;
@@ -816,7 +824,7 @@ test.describe('chat responsive layout', () => {
             await expect.poll(async () =>
                 (await dialog.getByRole('button', { name: 'Close', exact: true }).boundingBox())?.height ?? 0
             ).toBeGreaterThanOrEqual(44);
-            await expectDialogFits(page, 'Sign In');
+            await expectDialogFits(page, 'Welcome back');
             await captureChat(page, info, `sign-in-${mode}-${width}`);
         }
         await email.focus();
@@ -882,7 +890,7 @@ test.describe('chat responsive layout', () => {
         });
         await setVisualFrame(360, 74);
         await expect.poll(fitsVisualFrame).toBe(true);
-        await expect(page.locator('#page-container')).toHaveCSS('height', '360px');
+        await expect.poll(() => page.locator('#page-container').evaluate(el => el.getBoundingClientRect().height)).toBeCloseTo(360, 0);
         await captureChat(page, info, 'safari-keyboard-visible-frame');
         await setVisualFrame(360, 110);
         await expect.poll(fitsVisualFrame).toBe(true);
@@ -900,7 +908,7 @@ test.describe('chat responsive layout', () => {
         await expect(editor).toContainText('Safari keyboard draft');
         // Pinch zoom must retain normal layout and permit viewport panning.
         await setVisualFrame(422, 100, 2);
-        await expect(page.locator('#page-container')).toHaveCSS('height', '844px');
+        await expect.poll(() => page.locator('#page-container').evaluate(el => el.getBoundingClientRect().height)).toBeCloseTo(844, 0);
     });
 
     for (const theme of themes) {
@@ -962,14 +970,19 @@ test.describe('chat responsive layout', () => {
                         const x = bounds.left + bounds.width / 2;
                         const y = bounds.top + bounds.height / 2;
                         const disabled = (element as HTMLButtonElement).disabled;
-                        return { paintedWidth: bounds.width, paintedHeight: bounds.height, disabled,
+                        return { paintedWidth: bounds.width, paintedHeight: bounds.height,
+                            logicalWidth: element.offsetWidth, logicalHeight: element.offsetHeight,
+                            zoom: Number.parseFloat(getComputedStyle(element).getPropertyValue('--app-ui-zoom')) || 1,
+                            disabled,
                             // Check the compact painted controls, whose corners
                             // are clipped by their round shape.
                             extentsHitButton: [[-15, 0], [15, 0], [0, -15], [0, 15]].every(([dx, dy]) =>
                                 element.contains(document.elementFromPoint(x + dx!, y + dy!))) };
                     });
-                    // Icon-only controls stay square; the size follows the theme scale.
+                    // Controls remain square and their painted size follows the active scale.
                     expect(Math.abs(touch.paintedWidth - touch.paintedHeight)).toBeLessThan(1);
+                    expect(touch.paintedWidth).toBeCloseTo(touch.logicalWidth * touch.zoom, 1);
+                    expect(touch.paintedHeight).toBeCloseTo(touch.logicalHeight * touch.zoom, 1);
                     if (!touch.disabled) {
                         expect(touch.extentsHitButton).toBe(true);
                         await button.focus();
@@ -1180,9 +1193,10 @@ for (const theme of themes) {
                         ).toBe('100ms');
 
                         await page.getByRole('tab', { name: 'Theme' }).focus();
-                        await expect(
-                            page.getByRole('tab', { name: 'Theme' })
-                        ).toHaveCSS('outline-width', '4px');
+                        await expect.poll(() => page.getByRole('tab', { name: 'Theme' }).evaluate(element => {
+                            const zoom = parseFloat(getComputedStyle(document.body).zoom) || 1;
+                            return Math.abs(parseFloat(getComputedStyle(element).outlineWidth) * zoom - 4 * zoom);
+                        })).toBeLessThan(1);
                         await expect(
                             page.getByRole('tab', { name: 'Theme' })
                         ).toHaveCSS('transition-duration', '0s');
@@ -1265,7 +1279,7 @@ for (const initialTheme of ['blank', 'cyberpunk'] as const) {
     test(`theme icons survive hydration and switches from ${initialTheme}`, async ({ page }, info) => {
         await openResponsiveChat(page, initialTheme, 'light');
         const expected = {
-            blank: { send: 'tabler:arrow-up', toggle: 'tabler:layout-sidebar-left-collapse' },
+            blank: { send: 'blank-solar:arrow-up-linear', toggle: 'blank-solar:panel-left-close-linear' },
             retro: { send: 'pixelarticons:arrow-up', toggle: 'pixelarticons:arrow-bar-left' },
             cyberpunk: { send: 'carbon:send-alt', toggle: 'carbon:side-panel-close' },
         };
@@ -1300,6 +1314,50 @@ for (const initialTheme of ['blank', 'cyberpunk'] as const) {
 }
 
 
+for (const theme of ['retro', 'cyberpunk'] as const) {
+    test(`${theme} theme icons work without an icon service`, async ({ page }) => {
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await page.route('**/api/_nuxt_icon/**', route => route.abort());
+        await page.route('**/api.iconify.design/**', route => route.abort());
+        await openResponsiveChat(page, theme, 'light');
+        for (const name of ['Send message', 'Collapse sidebar']) {
+            const icon = page.getByRole('button', { name, exact: true }).locator('.iconify');
+            await expect(icon).toBeVisible();
+            await expect.poll(() => icon.evaluate(element => {
+                const style = getComputedStyle(element);
+                return style.maskImage !== 'none' || style.backgroundImage !== 'none' || Boolean(element.querySelector('svg'));
+            })).toBe(true);
+        }
+    });
+}
+
+test('Retro documentation help fullscreen icons work without an icon service', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    // Static/offline builds cannot rely on either icon endpoint.
+    await page.route('**/api/_nuxt_icon/material-symbols*', route => route.abort());
+    await page.route('**/api/_nuxt_icon/or3-material*', route => route.abort());
+    await page.route('**/api.iconify.design/**', route => route.abort());
+    await openResponsiveChat(page, 'retro', 'light');
+    await page.goto('/documentation/start/overview');
+    await expect(async () => {
+        if (!await page.getByRole('button', { name: 'Close help chat', exact: true }).isVisible()) {
+            await page.getByRole('button', { name: 'Open help chat', exact: true }).click();
+        }
+        await expect(page.getByRole('button', { name: 'Close help chat', exact: true })).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 30_000 });
+    const expectIcon = async (name: string) => {
+        const icon = page.getByRole('button', { name, exact: true }).locator('.iconify');
+        await expect(icon).toBeVisible();
+        await expect.poll(() => icon.evaluate(element => {
+            const style = getComputedStyle(element);
+            return style.maskImage !== 'none' || style.backgroundImage !== 'none';
+        })).toBe(true);
+    };
+    await expectIcon('Enter fullscreen');
+    await page.getByRole('button', { name: 'Enter fullscreen', exact: true }).click();
+    await expectIcon('Exit fullscreen');
+});
+
 // Primary production boundary for empty-state eligibility, appearance and actions.
 for (const mode of modes) test('empty chat: Blank ' + mode + ' cards fit continuously resized panes', async ({ page }, info) => {
     test.setTimeout(120_000);
@@ -1309,25 +1367,31 @@ for (const mode of modes) test('empty chat: Blank ' + mode + ' cards fit continu
     const frames: unknown[] = [];
     const inspect = async (name: string, screenshot = false) => {
         await expectComposerFits(page);
-        await expect.poll(() => panes.evaluateAll(elements => elements.every(pane => {
+        await expect.poll(() => panes.evaluateAll(elements => elements.flatMap((pane, paneIndex) => {
             const bounds = pane.getBoundingClientRect();
             const cards = [...pane.querySelectorAll<HTMLElement>('.chat-empty-action')];
             const composer = pane.querySelector('.chat-input-main')!.getBoundingClientRect();
             const wrapper = pane.querySelector('.chat-input-wrapper')!;
-            if (cards.length !== 3 || wrapper.scrollHeight > wrapper.clientHeight + 1) return false;
-            return cards.every((card, i) => {
+            // Card constraints are CSS pixels; rectangles include the app's zoom.
+            const scale = bounds.width / pane.clientWidth;
+            const violations: string[] = [];
+            if (cards.length !== 3 || wrapper.scrollHeight > wrapper.clientHeight + 1) violations.push(`pane ${paneIndex}: card count or wrapper scroll`);
+            cards.forEach((card, i) => {
                 const r = card.getBoundingClientRect();
                 const copy = card.querySelector('.chat-empty-action-copy')!.getBoundingClientRect();
                 const previous = cards[i - 1]?.getBoundingClientRect();
-                const rows = bounds.width < 900 && bounds.height > 420;
-                return r.height >= 44 && r.left >= bounds.left && r.right <= bounds.right &&
-                    r.top >= bounds.top && r.bottom <= composer.top - 6 &&
-                    copy.top >= r.top + 6 && copy.bottom <= r.bottom - 6 &&
-                    copy.left >= r.left + 6 && copy.right <= r.right - 6 &&
-                    (!rows || (r.height <= 110 && (!previous ||
-                        (Math.abs(r.x - previous.x) < 1 && r.y >= previous.bottom))));
+                const rows = pane.clientWidth < 900 && pane.clientHeight > 420;
+                if (!(r.height >= 44 * scale - 0.5 && r.left >= bounds.left && r.right <= bounds.right &&
+                    r.top >= bounds.top && r.bottom <= composer.top - 6 * scale &&
+                    copy.top >= r.top + 6 * scale && copy.bottom <= r.bottom - 6 * scale &&
+                    copy.left >= r.left + 6 * scale && copy.right <= r.right - 6 * scale &&
+                    (!rows || (r.height <= 110 * scale + 0.5 && (!previous ||
+                        (Math.abs(r.x - previous.x) < 1 && r.y >= previous.bottom)))))) {
+                    violations.push(JSON.stringify({ paneIndex, i, rows, paneWidth: pane.clientWidth, paneHeight: pane.clientHeight, card: r.toJSON(), copy: copy.toJSON(), composer: composer.toJSON(), bounds: bounds.toJSON(), previous: previous?.toJSON() }));
+                }
             });
-        })), name + ': readable cards stay inside their pane, above the composer, without excess height or scrolling').toBe(true);
+            return violations;
+        })), name + ': readable cards stay inside their pane, above the composer, without excess height or scrolling').toEqual([]);
         frames.push({ name, panes: await panes.evaluateAll(elements => elements.map(pane => ({
             width: pane.clientWidth, height: pane.clientHeight,
             cards: [...pane.querySelectorAll('.chat-empty-action')].map(card => card.getBoundingClientRect().toJSON()),
@@ -1519,6 +1583,10 @@ test('empty chat: split pane actions target the clicked pane and cancel preserve
 
 
 test('empty chat: theme changes and the first send preserve composer ownership', async ({ page }, info) => {
+    await page.route('**/api/__or3-e2e/chat/completions', route => route.fulfill({
+        contentType: 'text/event-stream',
+        body: `data: ${JSON.stringify({ choices: [{ delta: { content: 'Synthetic reply' }, finish_reason: null }] })}\n\ndata: [DONE]\n\n`,
+    }));
     await openResponsiveChat(page, 'blank', 'light');
     await page.goto('/__or3-chat-journey-test?workspace=1');
     await expect(page.getByTestId('production-chat-journey')).toBeVisible();
@@ -1532,6 +1600,7 @@ test('empty chat: theme changes and the first send preserve composer ownership',
     await expect(input).toHaveText('First message from the illustrated pane');
     await page.getByRole('button', { name: 'Send message', exact: true }).click();
     await expect(page.locator('.cm-text-user').getByText('First message from the illustrated pane', { exact: true })).toBeVisible();
+    await expect(page.getByText('Synthetic reply', { exact: true })).toBeVisible();
     await expect(page.locator('.chat-empty-state')).toHaveCount(0);
     await expect(page.locator('.chat-empty-background')).toHaveCount(0);
     await expect(input).toBeVisible();

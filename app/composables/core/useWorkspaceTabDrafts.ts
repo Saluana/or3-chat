@@ -141,7 +141,8 @@ function toPersisted(draft: WorkspaceChatTabDraft): PersistedWorkspaceTabDraft |
         ...(draft.attachmentRefs ?? []),
         ...(draft.missingAttachments ?? []),
     ];
-    if (!draft.text.trim() && !attachments.length && !draft.largeTextBlocks.length) return null;
+    if (!draft.text.trim() && !attachments.length && !draft.largeTextBlocks.length
+        && typeof draft.composer?.pendingPromptId !== 'string') return null;
     const serialized = JSON.stringify({
         version: 1,
         text: draft.text,

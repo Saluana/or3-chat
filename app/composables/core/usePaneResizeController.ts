@@ -87,7 +87,13 @@ export function usePaneResizeController(options: {
 
     function onPaneResizeMove(event: PointerEvent): void {
         if (paneIndex === null || pointerId !== event.pointerId) return;
-        pendingDelta += event.clientX - previousX;
+        // Pointer coordinates are in viewport pixels, while pane widths are
+        // measured in the container's CSS units and can inherit interface zoom.
+        const container = paneContainerRef.value;
+        const scale = container?.clientWidth
+            ? container.getBoundingClientRect().width / container.clientWidth
+            : 1;
+        pendingDelta += (event.clientX - previousX) / (scale > 0 ? scale : 1);
         previousX = event.clientX;
         if (pendingFrame !== null) return;
         pendingFrame = requestAnimationFrame(() => {

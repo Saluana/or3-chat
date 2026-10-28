@@ -24,7 +24,10 @@ async function credentialRequest(operation: string, key?: string) {
         body: JSON.stringify({ operation, ...(key === undefined ? {} : { key }) }),
     });
     if (!response.ok) throw new Error(response.status === 409 ? 'The server connection changed. Refresh and try again.' : 'OpenRouter credential storage is unavailable. Try again or contact the administrator.');
-    const result = await response.json() as { connected?: unknown; persisted?: unknown };
+    const result = await response.json() as { connected?: unknown; persisted?: unknown; available?: unknown };
+    // Treat an explicit instance-only status as unavailable to the passive
+    // migration flow; never discard or offer a legacy key without a vault.
+    if (result.available === false) throw new Error('OpenRouter credential storage is unavailable. Try again or contact the administrator.');
     if (typeof result.connected !== 'boolean' || typeof result.persisted !== 'boolean') throw new Error('Invalid connection response.');
     if (owner !== currentKeyOwner() || generation !== kvHydrationGeneration) throw new Error('The connection or signed-in account changed.');
     if (operation !== 'status') ++kvHydrationGeneration;

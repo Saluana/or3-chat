@@ -222,6 +222,7 @@ export function normalizeError(
             classificationStatus >= 500
         )
             code = source === 'provider' ? 'ERR_PROVIDER' : 'ERR_SERVER';
+        else if (e.name === 'QuotaExceededError') code = 'ERR_DB_QUOTA_EXCEEDED';
         else if (e.name === 'AbortError') code = 'ERR_ABORTED';
         else if (
             e.name === 'TypeError' &&

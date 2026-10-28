@@ -19,6 +19,7 @@ interface ScaleRun {
         longTasks: number[];
     };
     queries: Array<{ ids: string[]; fallback: boolean }>;
+    unicodeQuery: { ids: string[]; durationMs: number };
     fixture: { threads: number; messages: number };
 }
 interface ScaleProbe {
@@ -81,6 +82,9 @@ for (const threads of [1000, 10000]) {
                             : `thread-${String(threads - 1).padStart(6, '0')}`
                     );
                 }
+                expect(run.unicodeQuery.ids).toContain(
+                    `thread-${String(threads - 1).padStart(6, '0')}`
+                );
                 // A responsive-source budget; not a claim about end-to-end INP.
                 expect(run.source.maxHeartbeatGapMs).toBeLessThanOrEqual(
                     Number(process.env.OR3_SCALE_MAX_GAP_MS || 150)

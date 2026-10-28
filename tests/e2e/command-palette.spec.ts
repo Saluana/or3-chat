@@ -82,8 +82,8 @@ test('fits the mobile viewport without horizontal overflow', async ({ page }) =>
     expect(box).not.toBeNull();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.width).toBeLessThanOrEqual(390);
-    // scrollWidth is in CSS px, which the theme's interface zoom scales, so
-    // compare the palette with itself rather than with the viewport.
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+    // Scroll dimensions are unscaled CSS pixels; compare them in the same coordinate system.
     const { scrollWidth, clientWidth } = await palette(page).evaluate(
         (element) => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth })
     );

@@ -556,7 +556,7 @@ async function deleteSingle(meta: FileMeta | null) {
         }
         return outcome.removed.length > 0;
     }
-    const confirmMessage = `Delete "${name}"? This cannot be undone.`;
+    const confirmMessage = `Move "${name}" to Trash? You can restore it from Image trash.`;
     const outcome = await executeDelete(
         [meta.hash],
         confirmMessage,
@@ -591,9 +591,9 @@ async function deleteSelected() {
         }
         return outcome.removed.length > 0;
     }
-    const confirmMessage = `Delete ${count} image${
+    const confirmMessage = `Move ${count} image${
         count === 1 ? '' : 's'
-    }? This cannot be undone.`;
+    } to Trash? You can restore them from Image trash.`;
     const outcome = await executeDelete(
         hashes,
         confirmMessage,
@@ -872,7 +872,6 @@ const searchInputProps = computed(() => {
                 </button>
 
                 <div class="image-library-summary">
-                    <span class="text-xs opacity-65">Stored locally</span>
                     <strong>{{ formatCount(counts.all) }} {{ counts.all === 1 ? 'image' : 'images' }}</strong>
                 </div>
             </aside>
@@ -1033,12 +1032,12 @@ const searchInputProps = computed(() => {
                         :name="useIcon('dashboard.images').value"
                         class="h-8 w-8"
                     />
-                    <strong>{{ searchQuery ? 'No images found' : 'No images yet' }}</strong>
+                    <strong>{{ searchQuery ? 'No images found' : trashMode ? 'Trash is empty' : 'No images yet' }}</strong>
                     <span>
                         {{
                             searchQuery
                                 ? 'Try another search or library view.'
-                                : 'Add an image to get started.'
+                                : trashMode ? 'Deleted images will appear here.' : 'Add an image to get started.'
                         }}
                     </span>
                 </div>

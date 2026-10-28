@@ -85,8 +85,13 @@ export function pluginDevEnvironment(projectRoot = process.cwd(), pluginRoot?: s
     mkdirSync(join(profileRoot, 'storage'), { recursive: true });
     mkdirSync(join(profileRoot, 'admin'), { recursive: true, mode: 0o700 });
     if (pluginRoot) {
-        // Both dotenv/config and Nuxt CLI must read this file, never the checkout's .env.
-        writeFileSync(join(profileRoot, 'empty.env'), '');
+        // Both dotenv/config and Nuxt CLI read the profile file, never the checkout's .env.
+        // Secret-store setup writes its explicit choice here; preserve it on restart.
+        try {
+            writeFileSync(join(profileRoot, 'empty.env'), '', { flag: 'wx', mode: 0o600 });
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+        }
         const forbidden: Array<[string, string]> = [
             ['OR3_AUTH_PROVIDER', 'basic-auth'], ['AUTH_PROVIDER', 'basic-auth'],
             ['OR3_SYNC_PROVIDER', 'sqlite'], ['NUXT_PUBLIC_STORAGE_PROVIDER', 'fs'],

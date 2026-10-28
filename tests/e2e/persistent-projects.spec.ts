@@ -9,7 +9,7 @@ test.skip(
 // Keep project journeys deterministic and prevent paid auxiliary inference.
 test.beforeEach(async ({ page }) => {
     await page.route('https://openrouter.ai/api/alpha/decisions', route => route.fulfill({
-        json: { model: 'perplexity/pplx-decider-v1.1-27b',
+        json: { model: 'perplexity/pplx-decider-v1.2',
             answers: { memory_kind: { type: 'choice', choice: 'uncertain', probabilities: { fact: 0.01, decision: 0.01, uncertain: 0.98 } } },
             usage: { input_tokens: 20, output_tokens: 0 } },
     }));
@@ -1547,6 +1547,9 @@ test('project review fixes keep drafts and expose management for every project',
     await projects.getByRole('button', { name: 'Project actions for Reviewed project' }).click();
     await page.getByRole('button', { name: 'Delete project', exact: true }).click();
     const deletion = page.getByRole('dialog', { name: 'Delete project', exact: true });
+    await expect(deletion).toContainText('cannot be restored from Trash');
+    await expect(deletion).toContainText('chats are detached');
+    await expect(deletion).toContainText('documents and files remain');
     await deletion.getByRole('button', { name: /delete/i }).click();
     await expect(deletion).not.toBeVisible();
     await openAllProjects(page);

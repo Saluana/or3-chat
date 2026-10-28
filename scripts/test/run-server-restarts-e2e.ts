@@ -54,6 +54,8 @@ const settings: Record<string, string> = {
     OR3_DEV_RESTART_STATE_DIR: join(data, 'lifecycle'),
     OR3_RESTART_E2E: 'true', OR3_RESTART_CLOSE_EVIDENCE: join(data, 'lifecycle-close.jsonl'),
     OR3_RESTART_HISTORY_EVIDENCE: join(output, 'history-recovery.jsonl'),
+    // The disposable restart profile does not persist personal model keys.
+    NUXT_SECRETS_PROVIDER: '',
     ...(httpsPort ? { OR3_DEV_HTTPS_CERT: join(data, 'dev.crt'), OR3_DEV_HTTPS_KEY: join(data, 'dev.key'), OR3_DEV_HTTPS_PORT: String(httpsPort), OR3_TRUST_PROXY: 'true' } : {}),
 };
 const modelRequests: Array<{ toolResults: number }> = [];
@@ -120,7 +122,9 @@ try {
         const original = before as typeof after;
         if (after.image !== original.image || after.volume !== original.volume || afterChecksum !== beforeChecksum || !after.readOnly || after.grace !== 25) code = 1;
     }
-    const closed = (managed ? await managed.closeEvidence() : await readFile(settings.OR3_RESTART_CLOSE_EVIDENCE!, 'utf8'))
+    const closeEvidence = await (managed ? managed.closeEvidence() : readFile(settings.OR3_RESTART_CLOSE_EVIDENCE!, 'utf8'))
+        .catch(error => { if (code === 0) throw error; return ''; });
+    const closed = closeEvidence
         .trim().split('\n').filter(Boolean).map(line => JSON.parse(line) as { bootId: string; pid: number; closedAt: string });
     await writeFile(join(output, 'runtime-close.json'), JSON.stringify(closed, null, 2));
     if (code === 0) {

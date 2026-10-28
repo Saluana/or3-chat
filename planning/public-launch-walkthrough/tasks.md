@@ -186,6 +186,8 @@ There are 311 individual cases grouped into 32 work batches. Run the included se
   - [ ] **12.8** Test Off/Ask first/On, always-approval tools, unavailable tools, and repository restrictions. Project policy narrows workspace authority and cannot enable server-owned execution without project support.
   - [ ] **12.9** Delete and restore a project using supported controls. Underlying chats/documents/files remain preserved as documented; old async work cannot recreate deleted policy or bind to another project.
 
+  **Current finding:** the local candidate has no project restore control in Trash. Project deletion detaches chats and removes project settings and links, so this recovery case remains open; see the worktree walkthrough evidence for the corrected warning and its limits.
+
 ## 13. Add knowledge, memory, and continuity
 
 - [ ] **13.0 Qualify project context quality and preservation (2–4 h).** Requirements: R6, R7, R9. Components: C2, C3, C4. Done when required context is included or visibly blocks, optional context is bounded, and evidence remains scoped.
