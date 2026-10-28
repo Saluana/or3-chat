@@ -15,7 +15,7 @@ import { getRequestURL, getMethod } from 'h3';
 import { emitWebhookSystemHook } from '../utils/webhooks/runtime';
 
 interface ErrorLogEntry {
-    level: 'error';
+    level: 'error' | 'info';
     message: string;
     status: number;
     method: string;
@@ -51,8 +51,10 @@ export default defineNitroPlugin((nitro) => {
         const method = getMethod(event);
         const status = getErrorStatus(error);
 
+        // Refused requests (401, 403, 404, 429, ...) are expected traffic, not
+        // server faults; keep error level for failures worth an operator's eyes.
         const logEntry: ErrorLogEntry = {
-            level: 'error',
+            level: status >= 500 ? 'error' : 'info',
             message: presentError(error).message,
             status,
             method,
@@ -60,10 +62,8 @@ export default defineNitroPlugin((nitro) => {
             timestamp: new Date().toISOString(),
         };
 
-
-
         // Log as structured JSON
-        console.error(JSON.stringify(logEntry));
+        (status >= 500 ? console.error : console.info)(JSON.stringify(logEntry));
 
         if (status >= 500 && path.startsWith('/api/sync')) {
             void emitWebhookSystemHook('sync:action:error', {

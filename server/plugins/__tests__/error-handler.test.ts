@@ -1,5 +1,5 @@
 /* @vitest-environment node */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const emitWebhookSystemHookMock = vi.hoisted(() => vi.fn());
 
@@ -14,9 +14,15 @@ vi.mock('nitropack/runtime', () => ({
 type CapturedErrorHandler = (error: unknown, context: { event: unknown }) => void;
 
 describe('error-handler webhook emission', () => {
+    let errorSpy: ReturnType<typeof vi.spyOn>;
+    let infoSpy: ReturnType<typeof vi.spyOn>;
+
     beforeEach(() => {
         emitWebhookSystemHookMock.mockReset().mockResolvedValue(undefined);
+        errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
     });
+    afterEach(() => vi.restoreAllMocks());
 
     it('does not emit sync/storage webhook errors for handled 4xx responses', async () => {
         const plugin = (await import('../error-handler')).default as (
@@ -63,6 +69,8 @@ describe('error-handler webhook emission', () => {
         );
 
         expect(emitWebhookSystemHookMock).not.toHaveBeenCalled();
+        expect(errorSpy).not.toHaveBeenCalled();
+        expect(JSON.parse(infoSpy.mock.calls[0]![0] as string)).toMatchObject({ level: 'info', status: 403 });
     });
 
     it('emits sync webhook errors for 5xx responses', async () => {
@@ -109,6 +117,7 @@ describe('error-handler webhook emission', () => {
             }
         );
 
+        expect(JSON.parse(errorSpy.mock.calls[0]![0] as string)).toMatchObject({ level: 'error', status: 500 });
         expect(emitWebhookSystemHookMock).toHaveBeenCalledWith(
             'sync:action:error',
             expect.objectContaining({
