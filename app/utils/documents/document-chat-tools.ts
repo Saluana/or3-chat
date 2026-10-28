@@ -3,8 +3,6 @@ import { useToolRegistry } from '~/utils/chat/tool-registry';
 import type { ToolDefinition, ToolExecutionContext } from '~/utils/chat/types';
 import { DOCUMENT_AI_AGENT_TOOLS } from './document-ai-tool-definitions';
 
-const MAX_DOCUMENT_CONTENT_CHARS = 50_000;
-
 function assertChatWorkspace(context: ToolExecutionContext): void {
     if (
         context.abortSignal.aborted
@@ -23,30 +21,6 @@ function available(context: { workspaceId: string | null; threadId: string | nul
         && context.workspaceId === (getActiveWorkspaceId() ?? 'local'),
     );
 }
-
-const createDocumentDefinition: ToolDefinition = {
-    type: 'function',
-    function: {
-        name: 'create_document',
-        description: 'Create a new document in the current workspace. Supply a title and optional body text. The new document is saved but not opened automatically.',
-        parameters: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-                title: { type: 'string', minLength: 1, maxLength: 200 },
-                content: { type: 'string', maxLength: MAX_DOCUMENT_CONTENT_CHARS, description: 'Optional document body. Simple Markdown formatting is supported.' },
-            },
-        },
-    },
-    ui: {
-        label: 'Create document',
-        descriptionHint: 'Make a new document from a title and optional text.',
-        category: 'Document',
-        icon: 'i-lucide-file-plus-2',
-        defaultEnabled: true,
-    },
-    runtime: 'client',
-};
 
 const duplicateDocumentDefinition: ToolDefinition = {
     type: 'function',
@@ -170,11 +144,6 @@ async function loadExecution(context: ToolExecutionContext) {
 export function registerDocumentChatTools(): () => void {
     const registry = useToolRegistry();
     const handles = [
-        registry.registerTool(createDocumentDefinition, async ({ title, content }, context) =>
-            (await loadExecution(context)).createChatDocument(
-                typeof title === 'string' ? title : undefined,
-                typeof content === 'string' ? content : undefined, context,
-            ), { runtime: 'client', available }),
         registry.registerTool(duplicateDocumentDefinition, async ({ documentId, tabId, title }, context) =>
             (await loadExecution(context)).duplicateChatDocument(
                 String(documentId), typeof tabId === 'string' ? tabId : undefined,

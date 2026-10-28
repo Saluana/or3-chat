@@ -799,15 +799,8 @@ describe('chat document tools', () => {
             requestId: 'request-a',
             abortSignal: new AbortController().signal,
         };
-        const createTool = registry.getTool('create_document')!;
-        const created = await registry.executeTool(
-            'create_document',
-            JSON.stringify({ title: 'Release plan', content: '# Milestones\n\nShip it.' }),
-            context,
-            { definition: createTool.definition },
-        );
-        expect(created.error).toBeUndefined();
-        const originalId = JSON.parse(created.result!).documentId as string;
+        const originalId = 'doc-release';
+        await getDb().posts.put({ id: originalId, title: 'Release plan', postType: 'doc', content: '{"type":"doc","content":[{"type":"heading","attrs":{"level":1},"content":[{"type":"text","text":"Milestones"}]}]}', created_at: 1, updated_at: 1, clock: 0, deleted: false });
         const original = await getDocumentInDb(getDb(), originalId);
         expect(original).toMatchObject({ title: 'Release plan', deleted: false });
         expect(JSON.stringify(original?.content)).toContain('Milestones');
@@ -839,14 +832,9 @@ describe('chat document tools', () => {
             requestId: 'request-a',
             abortSignal: new AbortController().signal,
         };
-        const createTool = registry.getTool('create_document')!;
         const duplicateTool = registry.getTool('duplicate_document')!;
-        const created = await registry.executeTool(
-            'create_document', JSON.stringify({ title: 'Original' }), context,
-            { definition: createTool.definition },
-        );
-        const originalId = JSON.parse(created.result!).documentId as string;
-        await getDb().posts.update(originalId, { deleted: true });
+        const originalId = 'doc-original';
+        await getDb().posts.put({ id: originalId, title: 'Original', postType: 'doc', content: '{"type":"doc","content":[]}', created_at: 1, updated_at: 1, clock: 0, deleted: true });
         const rejected = await registry.executeTool(
             'duplicate_document', JSON.stringify({ documentId: originalId }), context,
             { definition: duplicateTool.definition },
@@ -855,9 +843,9 @@ describe('chat document tools', () => {
         expect(await getDb().posts.count()).toBe(1);
 
         const wrongWorkspace = await registry.executeTool(
-            'create_document', JSON.stringify({ title: 'Wrong workspace' }),
+            'duplicate_document', JSON.stringify({ documentId: originalId }),
             { ...context, workspaceId: 'workspace-b' },
-            { definition: createTool.definition },
+            { definition: duplicateTool.definition },
         );
         expect(wrongWorkspace.error).toMatch(/unavailable|workspace/i);
         expect(await getDb().posts.count()).toBe(1);

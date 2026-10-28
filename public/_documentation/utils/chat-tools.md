@@ -23,8 +23,10 @@ refuses a missing or deleted target thread.
 
 ## Document and open-tab tools
 
-Chat also registers four workspace tools: `search_documents`,
-`get_open_pane_context`, `create_document`, and `duplicate_document`.
+Chat also registers three workspace tools: `search_documents`,
+`get_open_pane_context`, and `duplicate_document`. New documents come from
+the single `workspace_create_document` tool, so one "Create documents" switch
+controls document creation.
 
 - `search_documents` uses the existing document index and returns document
   IDs plus matching open tab IDs.
@@ -35,9 +37,7 @@ Chat also registers four workspace tools: `search_documents`,
   references. An inactive document or chat returns bounded saved content and
   is read-only. Other chat messages are limited to the latest 30 non-deleted
   rows before per-message truncation.
-- `create_document` saves a new document from an optional title and optional
-  Markdown text without opening it; the host supplies a default title when
-  omitted. `duplicate_document` saves the active source editor
+- `duplicate_document` saves the active source editor
   first when necessary, then copies content and formatting under a new ID. A
   deleted/missing source is refused; use `tabId` when the same document is open
   in multiple panes.

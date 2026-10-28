@@ -64,24 +64,6 @@ async function saveChatDocument(input: CreateDocumentInput, context: ToolExecuti
     return prepared.row;
 }
 
-export async function createChatDocument(
-    title: string | undefined,
-    content: string | undefined,
-    context: ToolExecutionContext,
-): Promise<string> {
-    assertChatWorkspace(context);
-    const db = getDb();
-    const generation = getWorkspaceGeneration();
-    let documentContent: CreateDocumentInput['content'];
-    if (content?.trim()) {
-        const { markdownToTipTapDoc } = await import('~/utils/chat/markdownToTipTapDoc');
-        documentContent = markdownToTipTapDoc(content) as CreateDocumentInput['content'];
-    }
-    assertWriteOrigin(context, db, generation);
-    const created = await saveChatDocument({ title, content: documentContent }, context);
-    return JSON.stringify({ documentId: created.id, title: created.title });
-}
-
 export async function duplicateChatDocument(
     documentId: string,
     tabId: string | undefined,
