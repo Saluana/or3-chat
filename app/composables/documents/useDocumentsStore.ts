@@ -1,5 +1,4 @@
 import { reactive } from 'vue';
-import { useNuxtApp } from '#app';
 import { useDebounceFn } from '@vueuse/core';
 import {
     createDocumentInDb,
@@ -8,7 +7,6 @@ import {
     type Document,
 } from '~/db/documents';
 import { reportError } from '~/utils/errors';
-import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import { getDb, type Or3DB } from '~/db/client';
 
 import type { TipTapDocument } from '~/types/database';
@@ -45,6 +43,13 @@ const pendingSaves = new Set<DocState>();
 // DB names identify the same local workspace across handle replacement.
 const retainedDocuments = new Map<string, Map<string, DocState>>();
 const saveDatabases = new WeakMap<DocState, Or3DB>();
+const saveListeners = new Set<(db: Or3DB, id: string) => void>();
+
+/** Subscribe to completed local document writes. Returns an unsubscribe handle. */
+export function subscribeDocumentSaves(listener: (db: Or3DB, id: string) => void): () => void {
+    saveListeners.add(listener);
+    return () => { saveListeners.delete(listener); };
+}
 
 function retainDocument(db: Or3DB, id: string, st: DocState) {
     let pending = retainedDocuments.get(db.name);
@@ -101,8 +106,7 @@ function scheduleSave(id: string, db: Or3DB) {
  * Persist staged title or content updates to storage.
  *
  * Behavior:
- * Coalesces pending changes, updates the record, and emits pane-level
- * save hooks when appropriate.
+ * Coalesces pending changes, updates the record, and reports successful writes.
  *
  * Constraints:
  * - No-op when there is nothing staged
@@ -190,32 +194,11 @@ async function flushInDb(db: Or3DB, id: string) {
             if (st.pendingTitle === undefined && st.pendingContent === undefined) {
                 forgetRetainedDocument(db, id, st);
             }
-            // Emit pane-scoped saved hook for any panes displaying this doc.
-            try {
-                if (saveSucceeded && db === getDb() && typeof window !== 'undefined') {
-                    const nuxt = useNuxtApp();
-                    interface NuxtWithHooks { $hooks?: { doAction: (name: string, payload: unknown) => void } }
-                    const hooks = (nuxt as NuxtWithHooks).$hooks;
-                    const mpApi = getGlobalMultiPaneApi();
-                    const panes = mpApi?.panes.value ?? [];
-                    if (hooks && panes.length) {
-                        panes.forEach((p, paneIndex: number) => {
-                            if (p.mode === 'doc' && p.documentId === id) {
-                                hooks.doAction(
-                                    'ui.pane.doc:action:saved',
-                                    {
-                                        pane: p,
-                                        oldDocumentId: id,
-                                        newDocumentId: id,
-                                        paneIndex,
-                                        meta: { reason: 'docStoreFlush' },
-                                    }
-                                );
-                            }
-                        });
-                    }
+            if (saveSucceeded) {
+                for (const listener of saveListeners) {
+                    try { listener(db, id); } catch { /* Notification must not affect persistence. */ }
                 }
-            } catch { /* Silently ignore hook errors */ }
+            }
         }
     })();
 

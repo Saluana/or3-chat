@@ -10,7 +10,7 @@ Portable plugin authors should use [the SDK](/documentation/plugins/plugin-sdk) 
 | --- | --- | --- |
 | Chat admission, streaming, retry, and cancellation | `app/composables/chat/useAi.ts` exports useChat; `app/utils/chat/useAi-internal/` contains request and persistence helpers. | [Chat lifecycle](/documentation/architecture/chat-lifecycle) |
 | Model selection, capabilities, and credentials | `app/composables/chat/useChatModelSelection.ts`, `app/core/auth/`, `app/utils/modelCatalog.ts` | [OpenRouter](/documentation/auth/overview) |
-| Document loading, staged edits, and autosave | `app/composables/documents/useDocumentsStore.ts`, `useDocumentEditorSessions.ts`, `app/db/documents.ts` | [Documents](/documentation/database/documents) |
+| Document loading, staged edits, and autosave | `app/composables/documents/useDocumentsStore.ts`, `useDocumentEditorSessions.ts`, `app/db/documents.ts`; `app/composables/core/useDocumentSaveHooks.ts` bridges completed saves to workspace pane hooks. | [Documents](/documentation/database/documents) |
 | Document AI proposals and chat/editor tools | `app/composables/documents/useDocumentAiAgent.ts`, `app/utils/documents/document-chat-tools.ts` | [Document tools](/documentation/utils/chat-tools) |
 | Tab session, pane bindings, and drafts | `app/composables/core/useWorkspaceTabs.ts`, `useWorkspaceTabHost.ts`, `useWorkspaceTabDrafts.ts`, `useMultiPane.ts` | [Chat lifecycle](/documentation/architecture/chat-lifecycle#tabs-and-drafts) |
 | Workspace switching and session identity | `app/composables/workspace/`, `app/composables/auth/useSessionContext.ts` | [Cloud accounts](/documentation/cloud/auth-system) and [database safety](/documentation/database/safe-changes) |
