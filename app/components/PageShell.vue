@@ -2150,7 +2150,7 @@ async function openSystemPromptsFromPalette(options: {
             activePane?.mode === 'chat'
                 ? activePane.threadId || undefined
                 : undefined,
-        paneId: activePane?.mode === 'chat' ? activePane.id : undefined,
+        paneId: activePane?.mode === 'chat' ? tabIdForPane(activePane.id) : undefined,
     });
 }
 

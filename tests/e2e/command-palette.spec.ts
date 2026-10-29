@@ -339,3 +339,24 @@ test('opens only one palette after a missing document redirects to chat', async 
     await query(page).press('Enter');
     await expect(page.getByRole('tab')).toHaveCount(tabsBefore + 1);
 });
+
+test('a palette-selected prompt applies to and survives reload of a blank chat', async ({ page }) => {
+    await openPalette(page);
+    await query(page).fill('new system prompt');
+    await expect(page.getByRole('option', { name: 'New system prompt Create and edit a new system prompt', exact: true })).toBeVisible();
+    await query(page).press('Enter');
+    const promptDialog = page.getByRole('dialog', { name: 'System Prompts' });
+    await promptDialog.getByRole('textbox', { name: 'Prompt title' }).fill('Palette prompt QA');
+    await promptDialog.getByRole('textbox', { name: 'System prompt instructions' }).fill('Respond briefly.');
+    await promptDialog.getByRole('button', { name: 'Back to list' }).click();
+    await promptDialog.getByRole('button', { name: 'Use in chat' }).click();
+    await promptDialog.getByRole('button', { name: 'Close system prompts' }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'System prompt for this chat' })).toContainText('Palette prompt QA');
+    await page.reload();
+    const welcomeDismiss = page.getByRole('button', { name: 'Dismiss welcome', exact: true });
+    await expect(welcomeDismiss.first()).toBeVisible();
+    while (await welcomeDismiss.count()) await welcomeDismiss.last().click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'System prompt for this chat' })).toContainText('Palette prompt QA');
+});
