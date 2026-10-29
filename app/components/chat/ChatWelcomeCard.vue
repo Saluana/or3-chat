@@ -152,6 +152,7 @@ const visibleCardStyle = computed(() => visibleFrame.value.style
     ? { ...visibleFrame.value.style, position: 'fixed' as const, translate: '0 -50%' }
     : undefined);
 
+const toast = useToast();
 const runtimeConfig = useRuntimeConfig();
 const siteName = computed(
     () => runtimeConfig.public?.branding?.appName ?? 'OR3'
@@ -238,7 +239,7 @@ async function onSavePaste(): Promise<void> {
     isSavingPaste.value = true;
     try {
         await persistUserApiKey(pasteValue.value);
-        useToast().add({
+        toast.add({
             title: 'OpenRouter connected',
             description: 'Your API key was saved. You can start chatting now.',
             color: 'primary',
