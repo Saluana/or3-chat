@@ -242,11 +242,10 @@ async function executePendingClientTool(
             claim.context.messageId !== tracker.messageId || !Number.isFinite(claim.claimExpiresAt)) {
             throw new Error('Tool claim does not match the originating request.');
         }
-        const identity = { jobId: tracker.jobId, userId: (tracker as Partial<typeof tracker>).userId ?? '',
-            ...claim.context, call: claim.call };
         // Only documented call fields are identity: the legacy diagnostic digest
         // is not authorization and must not affect the cryptographic binding.
-        const reviewedIdentity = { ...identity, call: { id: claim.call.id, name: claim.call.name,
+        const reviewedIdentity = { jobId: tracker.jobId, userId: (tracker as Partial<typeof tracker>).userId ?? '',
+            ...claim.context, call: { id: claim.call.id, name: claim.call.name,
             arguments: claim.call.arguments, definition: claim.call.definition } };
         const claimDigest = backgroundClientToolDigest(reviewedIdentity);
         if (claim.claimDigest !== claimDigest || backgroundClientToolTokenDigest(claim.claimToken) !== claimDigest)
