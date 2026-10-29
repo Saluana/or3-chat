@@ -136,14 +136,10 @@ export function useChatInputAttachments(
         }
         const validation = validateFile(file);
         if (!validation.ok) {
-            reportError(err(validation.code, validation.message), {
-                toast: true,
-                tags: {
-                    domain: 'files',
-                    stage: 'select',
-                    mime,
-                    size: file.size,
-                },
+            toast.add({
+                title: 'Attachment not accepted',
+                description: validation.message,
+                color: 'warning',
             });
             return;
         }
