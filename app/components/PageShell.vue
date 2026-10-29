@@ -1446,7 +1446,7 @@ watch(
             ].join(':')
         ),
     () => {
-        if (!workspaceTabsReady.value || !workspaceTabsEnabled.value) return;
+        if (!workspaceTabsReady.value || !workspaceTabsEnabled.value || workspaceTabsTransitioning.value) return;
         const currentPaneIds = new Set(panes.value.map((pane) => pane.id));
         for (const paneId of workspaceTabs.state.value.paneBindings.keys()) {
             if (!currentPaneIds.has(paneId)) workspaceTabs.paneClosedExternally(paneId);

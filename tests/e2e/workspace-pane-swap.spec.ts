@@ -103,3 +103,42 @@ test('swaps adjacent panes and keeps blank-theme pane edges visible', async ({
         panes.evaluateAll((elements) => elements.map((element) => element.id))
     ).toEqual([...originalIds].reverse());
 });
+
+test('restores workspace tabs without adding blank tabs when profiles change', async ({ page }) => {
+    await expect(async () => {
+        await page.goto('/chat');
+        await expect(page.getByRole('button', { name: 'New split' })).toBeVisible({ timeout: 10_000 });
+    }).toPass({ timeout: 70_000 });
+    await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click();
+    await page.getByRole('button', { name: 'New split' }).click();
+    await page.getByRole('textbox', { name: 'Message input' }).first().fill('Keep this draft through profile changes');
+    await page.locator('.chat-empty-state').last().getByRole('button', { name: 'Create a document', exact: true }).click();
+    const createDocument = page.getByRole('dialog', { name: 'Create a document' });
+    await createDocument.getByRole('textbox', { name: 'Title', exact: true }).fill('Profile transition document');
+    await createDocument.getByRole('button', { name: 'Create', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Document title' })).toHaveValue('Profile transition document');
+    const tabs = page.locator('.workspace-tab-bar [role="tab"]');
+    await expect(tabs).toHaveCount(3, { timeout: 30_000 });
+    const originalTabs = await tabs.allTextContents();
+
+    await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: /^Settings/ }).click();
+    await page.getByRole('dialog').getByRole('button', { name: /^Workspace Profile/ }).click();
+    const profile = page.getByRole('combobox', { name: 'Profile' });
+    await profile.click();
+    await page.getByRole('option', { name: 'Document Workspace' }).click();
+    await page.getByRole('button', { name: 'Apply profile', exact: true }).click();
+    await expect(profile).toContainText('Document Workspace');
+    await profile.click();
+    await page.getByRole('option', { name: 'Standard OR3' }).click();
+    await page.getByRole('button', { name: 'Apply profile', exact: true }).click();
+    await expect(profile).toContainText('Standard OR3');
+    await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(tabs).toHaveCount(3, { timeout: 30_000 });
+    await expect.poll(() => tabs.allTextContents()).toEqual(originalTabs);
+    await expect(page.getByRole('textbox', { name: 'Message input' }).first()).toContainText('Keep this draft through profile changes');
+    await page.reload();
+    await expect(tabs).toHaveCount(3, { timeout: 30_000 });
+    await expect.poll(() => tabs.allTextContents()).toEqual(originalTabs);
+    await expect(page.getByRole('textbox', { name: 'Message input' }).first()).toContainText('Keep this draft through profile changes');
+});
