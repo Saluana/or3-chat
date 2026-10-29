@@ -35,6 +35,7 @@ import { useRuntimeConfig } from '#imports';
 import type {
     BackgroundJobExecution,
     BackgroundJobProvider,
+    DurableBackgroundJobProvider,
     TerminalGenerationSnapshot,
 } from '../background-jobs/types';
 import {
@@ -46,6 +47,7 @@ import { encryptBackgroundCredential } from './crypto';
 import { getScopedAdmissionKey, hasAdmissionCancelled } from './admission-cancels';
 import { AdmissionCancelledError } from './types';
 import { claimAndRunBackgroundJob } from './lifecycle';
+import { supportsClientToolHandoff, supportsDurableBackgroundJobs } from './capabilities';
 import {
     parseOpenRouterSSE,
     type StreamedFieldMode,
@@ -262,49 +264,23 @@ export function validateBackgroundParams(body: Record<string, unknown>): {
  * Constraints:
  * - Errors in the background loop are captured and recorded on the job.
  */
-/**
- * Persists the terminal generation snapshot and marks history finalization
- * pending. Providers without the atomic snapshot contract fall back to the
- * legacy terminal methods (reasoning persistence is then provider-dependent).
- */
+/** Persist a fenced terminal snapshot before announcing completion. */
 async function persistTerminalGenerationSnapshot(
-    provider: BackgroundJobProvider,
+    provider: DurableBackgroundJobProvider,
     jobId: string,
     snapshot: TerminalGenerationSnapshot,
     leaseOwner?: string
 ): Promise<void> {
-    if (provider.saveTerminalSnapshot) {
-        try {
-            const saved = await provider.saveTerminalSnapshot(jobId, snapshot, leaseOwner);
-            if (saved === false) throw createBackgroundJobLeaseLostError();
-        } catch (error) {
-            if (isBackgroundJobLeaseLost(error)) throw error;
-            logBackgroundEvent('warn', 'background.chat.snapshot.save_failed', {
-                jobId,
-                status: snapshot.status,
-                error: error instanceof Error ? error.message : String(error),
-            });
-            // Publishing a terminal event would otherwise advertise durable
-            // usage/history that this provider explicitly failed to save.
-            throw error;
-        }
-        return;
-    }
-    if (snapshot.status === 'complete') {
-        if (leaseOwner) {
-            await provider.completeJob(jobId, snapshot.content, leaseOwner);
-        } else {
-            await provider.completeJob(jobId, snapshot.content);
-        }
-        return;
-    }
-    if (snapshot.status === 'error') {
-        const message = snapshot.error ?? 'Background stream failed';
-        if (leaseOwner) {
-            await provider.failJob(jobId, message, leaseOwner);
-        } else {
-            await provider.failJob(jobId, message);
-        }
+    try {
+        const saved = await provider.saveTerminalSnapshot(jobId, snapshot, leaseOwner);
+        if (!saved) throw createBackgroundJobLeaseLostError();
+    } catch (error) {
+        if (isBackgroundJobLeaseLost(error)) throw error;
+        logBackgroundEvent('warn', 'background.chat.snapshot.save_failed', {
+            jobId, status: snapshot.status,
+            error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
     }
 }
 
@@ -331,14 +307,7 @@ export async function startBackgroundStream(
     params.body = { ...params.body, ...prepared };
     if (contextPolicy) params.body._context = captureContextEnvelope(contextPolicy);
     const provider = await getJobProvider();
-    if (
-        !provider.claimJob ||
-        !provider.claimNextJob ||
-        !provider.renewJobLease ||
-        !provider.saveTerminalSnapshot ||
-        !provider.setHistoryPhase ||
-        !provider.getPendingHistoryJobs
-    ) {
+    if (!supportsDurableBackgroundJobs(provider)) {
         const error = new Error(
             `Background job provider "${provider.name}" does not support durable canonical recovery`
         );
@@ -350,7 +319,7 @@ export async function startBackgroundStream(
         requestedRuntimes &&
         typeof requestedRuntimes === 'object' &&
         Object.values(requestedRuntimes).includes('client') &&
-        (!provider.claimClientToolCall || !provider.settleClientToolCall || !provider.updateJobExecution)
+        !supportsClientToolHandoff(provider)
     ) {
         const error = new Error(
             `Background job provider "${provider.name}" does not support browser tool handoff`
@@ -546,7 +515,7 @@ export async function consumeBackgroundStream(params: {
     jobId: string;
     stream: ReadableStream<Uint8Array>;
     context: BackgroundStreamParams;
-    provider: BackgroundJobProvider;
+    provider: DurableBackgroundJobProvider;
     shouldNotify?: () => boolean;
     streamedFieldMode?: StreamedFieldMode;
     usagePrefix?: UsagePrefix;
@@ -941,7 +910,7 @@ export async function consumeBackgroundStreamWithTools(params: {
     body: Record<string, unknown>;
     apiKey: string;
     referer: string;
-    provider: BackgroundJobProvider;
+    provider: DurableBackgroundJobProvider;
     context: BackgroundStreamParams;
     toolRuntime?: Record<string, string>;
     shouldNotify?: () => boolean;
@@ -1077,8 +1046,7 @@ export async function consumeBackgroundStreamWithTools(params: {
     ) => {
         if (
             !params.context.execution ||
-            !params.context.leaseOwner ||
-            !params.provider.updateJobExecution
+            !params.context.leaseOwner
         ) return;
         // The checkpoint must never claim a tool is done before its visible
         // state and streamed text are durable in the job record.
@@ -1741,7 +1709,7 @@ export async function consumeBackgroundStreamWithTools(params: {
 export async function executeBackgroundJob(
     jobId: string,
     params: BackgroundStreamParams,
-    provider: BackgroundJobProvider,
+    provider: DurableBackgroundJobProvider,
     abortSignal?: AbortSignal
 ): Promise<void> {
     // Capture before the first asynchronous boundary: provenance and bytes sent

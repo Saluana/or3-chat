@@ -43,6 +43,17 @@ Eligibility on the client requires all of the following:
 Eligible chat turns start as server-side background jobs whenever background
 streaming is enabled. There is no separate start-mode setting.
 
+Background chat admission requires a coherent job-provider capability set:
+`claimJob`, `claimNextJob`, `renewJobLease`, `updateJobExecution`,
+`saveTerminalSnapshot`, `setHistoryPhase`, and `getPendingHistoryJobs`. A
+provider missing any of these is rejected before job creation or model execution;
+recovery workers use the same requirement. Providers must implement fenced
+checkpoint and terminal writes, including for server-side tools.
+
+Polling and SSE project the same current attempt and visible content, reasoning,
+tools, workflow, usage, and terminal state. An attempt change resets the client
+projection; stale live state from an older attempt is ignored.
+
 Server tools run in the background tool loop. For browser-only tools, the client
 checks `/api/jobs/client-tool/capability` before admission. If the selected job
 provider lacks the durable claim/settle bridge, that turn uses the foreground

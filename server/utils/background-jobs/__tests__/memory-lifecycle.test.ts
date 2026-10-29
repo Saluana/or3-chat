@@ -21,6 +21,7 @@ import { registerAuthWorkspaceStore } from '~~/server/auth/store/registry';
 import type { SyncGatewayAdapter } from '~~/server/sync/gateway/types';
 import type { AuthWorkspaceStore } from '~~/server/auth/store/types';
 import { getShutdownRuntime } from '../../shutdown/runtime';
+import { emitJobStatus, getJobLiveState, resetJobViewersForTests } from '../viewers';
 
 
 const config = vi.hoisted(() => ({
@@ -80,6 +81,7 @@ describe('memory background job admission and lifecycle', () => {
     beforeEach(() => {
         clearAllJobs();
         resetBackgroundJobLifecycleForTests();
+        resetJobViewersForTests();
         vi.unstubAllGlobals();
         config.maxConcurrentJobs = 2;
         config.maxConcurrentJobsPerUser = 2;
@@ -907,6 +909,31 @@ describe('memory background job admission and lifecycle', () => {
         });
         expect(await memoryJobProvider.getJob(jobId, 'user-1')).toMatchObject({
             content: 'checkpoint:resumed',
+        });
+    });
+
+    it('publishes checkpointed reasoning when a recovered attempt replaces live progress', async () => {
+        const jobId = await memoryJobProvider.createJob({
+            userId: 'user-1', threadId: 'thread-1', messageId: 'message-1', model: 'test-model',
+            execution: { ...execution('checkpoint:'), reasoningBase: 'saved reasoning' },
+        });
+        const now = Date.now();
+        await memoryJobProvider.claimJob(jobId, 'worker-1', now, now + 10);
+        emitJobStatus(jobId, 'streaming', {
+            content: 'partial', contentLength: 7, reasoning: 'uncheckpointed reasoning',
+            chunksReceived: 1, attempt: 1,
+        });
+        const recovered = (await memoryJobProvider.claimJob(jobId, 'worker-2', now + 11, now + 10_000))!;
+        let observed: ReturnType<typeof getJobLiveState>;
+        const execute = vi.fn(async () => {
+            observed = { ...getJobLiveState(jobId)! };
+        });
+        await runClaimedBackgroundJob(recovered, {
+            provider: memoryJobProvider, encryptionKey: secret, execute, now: () => now + 12,
+        });
+        expect(execute).toHaveBeenCalledOnce();
+        expect(observed!).toMatchObject({
+            attempt: 2, content: 'checkpoint:', reasoning: 'saved reasoning',
         });
     });
 

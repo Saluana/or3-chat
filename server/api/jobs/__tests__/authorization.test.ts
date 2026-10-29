@@ -266,6 +266,36 @@ describe('background job workspace authorization at the HTTP boundary', () => {
         expect(await (await send(new Request(`http://chat.test/api/jobs/${jobId}/status`))).text()).not.toContain('"usage"');
     });
 
+    it('shows the same recovered live attempt in polling and the first SSE snapshot', async () => {
+        membership.role = 'viewer';
+        const jobId = await createRevokedWorkspaceJob();
+        const job = (await memoryJobProvider.getJob(jobId, 'former-member'))!;
+        vi.spyOn(memoryJobProvider, 'getJob').mockResolvedValue({
+            ...job, attempts: 1, usage, reasoning: 'old reasoning', chunksReceived: 12,
+            tool_calls: [{ id: 'old-tool', name: 'tool', status: 'complete', result: 'old' }],
+        });
+        emitJobStatus(jobId, 'streaming', {
+            content: 'new', contentLength: 3, reasoning: 'new reason',
+            reasoningLength: 10, chunksReceived: 1, attempt: 2, content_reset: true,
+        });
+        const statusHandler = (await import('../[id]/status.get')).default;
+        const streamHandler = (await import('../[id]/stream.get')).default;
+        const app = h3.createApp().use(h3.createRouter()
+            .get('/api/jobs/:id/status', statusHandler)
+            .get('/api/jobs/:id/stream', streamHandler));
+        const send = h3.toWebHandler(app);
+        const polling = await (await send(new Request(`http://chat.test/api/jobs/${jobId}/status?attempt=1&offset=25`))).json();
+        const response = await send(new Request(`http://chat.test/api/jobs/${jobId}/stream?attempt=1&offset=25`));
+        const reader = response.body!.getReader();
+        const frame = new TextDecoder().decode((await reader.read()).value);
+        await reader.cancel();
+        const streamed = JSON.parse(frame.split('\n').find((line) => line.startsWith('data: '))!.slice(6)).status;
+        for (const field of ['status', 'attempt', 'content', 'reasoning_text', 'chunksReceived', 'tool_calls', 'usage', 'content_reset']) {
+            expect(streamed[field], field).toEqual(polling[field]);
+        }
+        expect(streamed).toMatchObject({ attempt: 2, content: 'new', reasoning_text: 'new reason', content_reset: true });
+    });
+
     it('blocks usage-only live updates after workspace membership is revoked', async () => {
         membership.role = 'editor';
         const jobId = await createRevokedWorkspaceJob();

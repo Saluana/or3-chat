@@ -1,4 +1,3 @@
-import { projectBackgroundWorkflowState } from '~~/shared/chat/background-workflow-state';
 /**
  * @module server/api/jobs/[id]/status.get
  *
@@ -11,7 +10,7 @@ import { resolveSessionContext } from '../../../auth/session';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 import { getJobLiveState } from '../../../utils/background-jobs/viewers';
 import { shouldResetBackgroundContent } from '../../../utils/background-jobs/recovery';
-import { readRequestUsage } from '../../../../shared/chat/compaction';
+import { projectJobView } from '../../../utils/background-jobs/job-view';
 
 /**
  * GET /api/jobs/:id/status
@@ -79,62 +78,12 @@ export default defineEventHandler(async (event) => {
         : null;
     const attemptParam =
         typeof query.attempt === 'string' ? Number(query.attempt) : null;
-    const canonicalAttempt = job.attempts ?? 0;
-    const liveStateRaw = getJobLiveState(jobId);
-    // Ignore in-memory live state from a superseded execution attempt.
-    const liveState =
-        liveStateRaw &&
-        (typeof liveStateRaw.attempt !== 'number' ||
-            liveStateRaw.attempt >= canonicalAttempt)
-            ? liveStateRaw
-            : null;
-    const currentAttempt = liveState?.attempt ?? canonicalAttempt;
-    const liveAttemptAdvanced = currentAttempt > canonicalAttempt;
+    const view = projectJobView(job, getJobLiveState(jobId));
+    const { attempt: currentAttempt, content: effectiveContent,
+        reasoning_text: effectiveReasoning } = view;
     const attemptChanged = shouldResetBackgroundContent(
-        attemptParam,
-        currentAttempt,
-        offset
+        attemptParam, currentAttempt, offset
     );
-    const effectiveContent =
-        liveState && (liveAttemptAdvanced || liveState.content.length > job.content.length)
-            ? liveState.content
-            : job.content;
-    const jobReasoning = job.reasoning;
-    const effectiveReasoning =
-        liveState && (liveAttemptAdvanced || liveState.reasoning.length > jobReasoning.length)
-            ? liveState.reasoning
-            : jobReasoning;
-    const effectiveChunks =
-        liveState && (liveAttemptAdvanced || liveState.chunksReceived > job.chunksReceived)
-            ? liveState.chunksReceived
-            : job.chunksReceived;
-    const effectiveToolCalls =
-        liveAttemptAdvanced || liveState?.tool_calls !== undefined
-            ? liveState?.tool_calls
-            : job.tool_calls;
-    const effectiveWorkflowState =
-        liveAttemptAdvanced || liveState?.workflow_state !== undefined
-            ? liveState?.workflow_state
-            : job.workflow_state;
-    const liveUsage = readRequestUsage(liveState?.usage);
-    const canonicalUsage =
-        liveAttemptAdvanced
-            ? undefined
-            : readRequestUsage(job.usage);
-    const effectiveUsage = liveUsage &&
-        (!canonicalUsage || liveUsage.iteration >= canonicalUsage.iteration)
-        ? liveUsage
-        : canonicalUsage;
-    const effectiveError =
-        liveAttemptAdvanced || typeof liveState?.error === 'string' ? liveState?.error : job.error;
-    const effectiveCompletedAt =
-        liveAttemptAdvanced || liveState?.completedAt !== undefined
-            ? liveState?.completedAt
-            : job.completedAt;
-    const effectiveStatus =
-        liveState && (liveAttemptAdvanced || liveState.status !== 'streaming')
-            ? liveState.status
-            : job.status;
 
     if (
         typeof offset === 'number' &&
@@ -164,19 +113,7 @@ export default defineEventHandler(async (event) => {
               ? effectiveReasoning.slice(safeReasoningOffset)
               : effectiveReasoning;
         return {
-            id: job.id,
-            status: effectiveStatus,
-            threadId: job.threadId,
-            messageId: job.messageId,
-            model: job.model,
-            chunksReceived: effectiveChunks,
-            attempt: currentAttempt,
-            startedAt: job.startedAt,
-            completedAt: effectiveCompletedAt,
-            error: effectiveError,
-            tool_calls: effectiveToolCalls,
-            workflow_state: projectBackgroundWorkflowState(effectiveStatus, effectiveWorkflowState),
-            usage: effectiveUsage,
+            ...view,
             content_delta: contentDelta,
             content_length: contentLength,
             content_reset: attemptChanged || undefined,
@@ -198,21 +135,7 @@ export default defineEventHandler(async (event) => {
     }
 
     return {
-        id: job.id,
-        status: effectiveStatus,
-        threadId: job.threadId,
-        messageId: job.messageId,
-        model: job.model,
-        chunksReceived: effectiveChunks,
-        attempt: currentAttempt,
-        startedAt: job.startedAt,
-        completedAt: effectiveCompletedAt,
-        error: effectiveError,
-        tool_calls: effectiveToolCalls,
-        workflow_state: projectBackgroundWorkflowState(effectiveStatus, effectiveWorkflowState),
-        usage: effectiveUsage,
-        content: effectiveContent,
-        reasoning_text: effectiveReasoning,
+        ...view,
         reasoning_length: effectiveReasoning.length,
     };
 });

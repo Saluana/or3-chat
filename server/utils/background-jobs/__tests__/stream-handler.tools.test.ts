@@ -3,7 +3,7 @@ import { useRuntimeConfig } from '#imports';
 import { registerAuthWorkspaceStore } from '../../../auth/store/registry';
 import type { AuthWorkspaceStore } from '../../../auth/store/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BackgroundJobProvider, BackgroundJob, JobUpdate } from '../types';
+import type { DurableBackgroundJobProvider, BackgroundJob, JobUpdate } from '../types';
 import {
     consumeBackgroundStream,
     consumeBackgroundStreamWithTools,
@@ -113,13 +113,13 @@ function createProvider(
     initialToolCalls?: BackgroundJob['tool_calls']
 ) {
     const updateJob = vi.fn(async (_jobId: string, _update: JobUpdate) => {});
-    const completeJob = vi.fn(async () => {
+    const completeJob = vi.fn(async (_id?: string, _content?: string, _leaseOwner?: string) => {
         statusRef.status = 'complete';
     });
     const updateJobExecution = vi.fn(async () => true);
-    const failJob = vi.fn(async () => {});
+    const failJob = vi.fn(async (_id?: string, _error?: string, _leaseOwner?: string) => {});
 
-    const provider: BackgroundJobProvider = {
+    const provider: DurableBackgroundJobProvider = {
         name: 'memory',
         async createJob() {
             return 'job-1';
@@ -149,6 +149,22 @@ function createProvider(
             return 0;
         },
         updateJobExecution,
+        async claimJob() { return null; },
+        async claimNextJob() { return null; },
+        async renewJobLease() { return true; },
+        async setHistoryPhase() { return true; },
+        async getPendingHistoryJobs() { return []; },
+        async saveTerminalSnapshot(_id, snapshot, leaseOwner) {
+            if (snapshot.status === 'complete') {
+                if (leaseOwner) await completeJob(_id, snapshot.content, leaseOwner);
+                else await completeJob(_id, snapshot.content);
+            }
+            if (snapshot.status === 'error') {
+                if (leaseOwner) await failJob(_id, snapshot.error, leaseOwner);
+                else await failJob(_id, snapshot.error);
+            }
+            return true;
+        },
     };
 
     return {
