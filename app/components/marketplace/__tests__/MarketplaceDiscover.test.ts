@@ -930,8 +930,9 @@ describe('MarketplaceDiscover', () => {
         await flush();
         await flush();
         expect(wrapper.get('[data-testid="marketplace-preflight-error"]').text()).toContain(
-            'beta check failed'
+            'Try the install check again.'
         );
+        expect(wrapper.get('[data-testid="marketplace-preflight-error"]').text()).not.toContain('beta check failed');
 
         // Alpha's installable answer arrives after Beta failed and must not be
         // shown, offered or consented to under Beta's selection.
