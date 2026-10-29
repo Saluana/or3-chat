@@ -105,6 +105,9 @@ test('swaps adjacent panes and keeps blank-theme pane edges visible', async ({
 });
 
 test('restores workspace tabs without adding blank tabs when profiles change', async ({ page }) => {
+    await page.route('**/api/__or3-e2e/models*', (route) =>
+        route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } })
+    );
     await expect(async () => {
         await page.goto('/chat');
         await expect(page.getByRole('button', { name: 'New split' })).toBeVisible({ timeout: 10_000 });
