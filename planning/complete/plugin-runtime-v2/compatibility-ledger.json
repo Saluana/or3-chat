@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "c0bf8f7b9f6e011ab95907568277b67939933b62b10d6b8b4114ae6219a1adf7",
+      "apiSha256": "5b8c7d39699da7a5b27feafada19593afc958506c88a814506bdc6d758f8e6e3",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -7375,7 +7375,7 @@
               "resolvedReturnType": "UsePaneDocumentsApi",
               "declaration": {
                 "source": "app/composables/documents/usePaneDocuments.ts",
-                "line": 123,
+                "line": 125,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function usePaneDocuments(\n    opts: UsePaneDocumentsOptions\n): UsePaneDocumentsApi;"
               }
@@ -7384,7 +7384,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/usePaneDocuments.ts",
-              "line": 123,
+              "line": 125,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function usePaneDocuments(\n    opts: UsePaneDocumentsOptions\n): UsePaneDocumentsApi;"
             }
