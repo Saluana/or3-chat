@@ -25,51 +25,54 @@ let registered = false;
 const handles: RegistrationHandle[] = [];
 
 /**
- * Register core palette sources and optional core commands once per runtime.
+ * Register core sources once per runtime and bind commands to the active host.
  */
 export function registerCorePaletteSources(options?: {
     commandSpecs?: readonly CoreCommandSpec[];
     commandDeps?: Parameters<typeof createDefaultCoreCommandSpecs>[0];
-}): void {
-    if (registered) return;
-    registered = true;
-
+}): () => void {
     const isFeatureEnabled =
         options?.commandDeps?.isFeatureEnabled ?? (() => true);
 
-    handles.push(registerPaletteSource(createCommandPaletteSource()));
-    handles.push(registerPaletteSource(createChatPaletteSource()));
-    if (isFeatureEnabled('documents')) {
-        handles.push(registerPaletteSource(createDocumentPaletteSource()));
-    }
-    handles.push(registerPaletteSource(createProjectPaletteSource()));
-    handles.push(registerPaletteSource(createFilePaletteSource()));
-    handles.push(registerPaletteSource(createPromptPaletteSource()));
-    if (isFeatureEnabled('dashboard')) {
-        handles.push(registerPaletteSource(createImagePaletteSource()));
-        handles.push(registerPaletteSource(createDashboardPaletteSource()));
-    }
-    if (isFeatureEnabled('workspaceTabs')) {
-        handles.push(registerPaletteSource(createWorkspaceTabPaletteSource()));
-    }
+    if (!registered) {
+        registered = true;
+        handles.push(registerPaletteSource(createCommandPaletteSource()));
+        handles.push(registerPaletteSource(createChatPaletteSource()));
+        if (isFeatureEnabled('documents')) {
+            handles.push(registerPaletteSource(createDocumentPaletteSource()));
+        }
+        handles.push(registerPaletteSource(createProjectPaletteSource()));
+        handles.push(registerPaletteSource(createFilePaletteSource()));
+        handles.push(registerPaletteSource(createPromptPaletteSource()));
+        if (isFeatureEnabled('dashboard')) {
+            handles.push(registerPaletteSource(createImagePaletteSource()));
+            handles.push(registerPaletteSource(createDashboardPaletteSource()));
+        }
+        if (isFeatureEnabled('workspaceTabs')) {
+            handles.push(registerPaletteSource(createWorkspaceTabPaletteSource()));
+        }
 
-    // Materialize any already-registered plugin post-source definitions.
-    for (const definition of listPalettePostSourceDefinitions()) {
-        handles.push(
-            registerPaletteSource(
-                createPluginPostPaletteSource({
-                    definition,
-                    pluginId: definition.pluginId,
-                    pluginGeneration: definition.pluginGeneration,
-                })
-            )
-        );
+        // Materialize any already-registered plugin post-source definitions.
+        for (const definition of listPalettePostSourceDefinitions()) {
+            handles.push(
+                registerPaletteSource(
+                    createPluginPostPaletteSource({
+                        definition,
+                        pluginId: definition.pluginId,
+                        pluginGeneration: definition.pluginGeneration,
+                    })
+                )
+            );
+        }
     }
 
     const specs =
         options?.commandSpecs ??
         createDefaultCoreCommandSpecs(options?.commandDeps ?? {});
-    registerCorePaletteCommands(specs);
+    const commandHandles = registerCorePaletteCommands(specs);
+    return () => {
+        for (const handle of commandHandles) handle.dispose();
+    };
 }
 
 /**

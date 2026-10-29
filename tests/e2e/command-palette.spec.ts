@@ -320,3 +320,22 @@ test.describe('iOS keyboard scrolling', () => {
         await expect(page.getByRole('dialog', { name: 'Navigation', exact: true })).toBeVisible();
     });
 });
+
+test('opens only one palette after a missing document redirects to chat', async ({ page }) => {
+    await page.goto('/docs/launch-qa-missing-document');
+    await expect(page).toHaveURL(/\/chat(?:\?|$)/);
+    const welcomeDismiss = page.getByRole('button', { name: 'Dismiss welcome', exact: true });
+    while (await welcomeDismiss.count()) await welcomeDismiss.last().click();
+    await page.getByRole('button', { name: 'Open command palette' }).click();
+    await expect(palette(page)).toHaveCount(1);
+    await expect(query(page)).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(palette(page)).toHaveCount(0);
+
+    const tabsBefore = await page.getByRole('tab').count();
+    await openPalette(page);
+    await query(page).fill('new chat');
+    await expect(page.getByRole('option', { name: 'New chat Start a new chat thread', exact: true })).toBeVisible();
+    await query(page).press('Enter');
+    await expect(page.getByRole('tab')).toHaveCount(tabsBefore + 1);
+});

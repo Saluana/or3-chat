@@ -2,6 +2,7 @@ import {
     listPaletteCommands,
     registerPaletteCommand,
 } from '../registry';
+import type { RegistrationHandle } from '~~/shared/plugins/registration-handle';
 import {
     projectProfileItems,
     resolvedWorkspaceProfile,
@@ -99,22 +100,26 @@ export interface CoreCommandSpec {
  */
 export function registerCorePaletteCommands(
     specs: readonly CoreCommandSpec[]
-): void {
+): RegistrationHandle[] {
+    const handles: RegistrationHandle[] = [];
     for (const spec of specs) {
         if (spec.enabled === false) continue;
-        registerPaletteCommand(
-            {
-                id: spec.id,
-                label: spec.label,
-                description: spec.description,
-                keywords: spec.keywords,
-                icon: spec.icon,
-                order: spec.order,
-                closeOnSuccess: spec.closeOnSuccess,
-            },
-            spec.handler
+        handles.push(
+            registerPaletteCommand(
+                {
+                    id: spec.id,
+                    label: spec.label,
+                    description: spec.description,
+                    keywords: spec.keywords,
+                    icon: spec.icon,
+                    order: spec.order,
+                    closeOnSuccess: spec.closeOnSuccess,
+                },
+                spec.handler
+            )
         );
     }
+    return handles;
 }
 
 export function createDefaultCoreCommandSpecs(deps: {
