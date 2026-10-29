@@ -188,7 +188,7 @@ export function createDefaultCoreCommandSpecs(deps: {
             description: 'Create a new document',
             icon: 'i-lucide-file-plus',
             order: 20,
-            enabled: enabled('documents'),
+            enabled: enabled('documents') && enabled('workspaceWrite'),
             handler: wrap(deps.newDocument),
         },
         {
@@ -197,6 +197,7 @@ export function createDefaultCoreCommandSpecs(deps: {
             description: 'Create a new project',
             icon: 'i-lucide-folder-plus',
             order: 30,
+            enabled: enabled('workspaceWrite'),
             handler: wrap(deps.newProject),
         },
         {

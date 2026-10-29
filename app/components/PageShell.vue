@@ -53,7 +53,7 @@
                 :mobile="isMobile"
                 @activate="onWorkspaceTabActivate"
                 @close="onWorkspaceTabClose"
-                :can-create-document="documentsEnabled"
+                :can-create-document="documentsEnabled && emptySession?.session?.role !== 'viewer'"
                 :plugin-items="pluginNewTabItems"
                 @new-tab="onWorkspaceNewTab"
                 @create-tab="onWorkspaceCreateTab"
@@ -459,6 +459,7 @@ import { useEmptyChatActions } from '~/composables/chat/useEmptyChatActions';
 import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import type { EmptyChatActionId } from '~/theme/_shared/chat-empty-state';
 import type { SessionPayload } from '~/composables/auth/useSessionContext';
+import { isViewOnlyMember, VIEW_ONLY_NOTICE } from '~/composables/auth/useViewOnlyAccess';
 import { useWorkspaceTabMetadata } from '~/composables/core/useWorkspaceTabMetadata';
 import WorkspaceChrome from '~/components/workspace-tabs/WorkspaceChrome.vue';
 import type { WorkspaceNewTabCreateKind } from '~/components/workspace-tabs/WorkspaceNewTabControl.vue';
@@ -1849,6 +1850,7 @@ const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
 });
 
 async function onNewDocument(initial?: { title?: string }) {
+    if (isViewOnlyMember()) return;
     if (!documentsEnabled.value) {
         toast.add({
             title: 'Documents disabled',
@@ -2238,6 +2240,7 @@ function activatePaletteHost() {
         commandDeps: {
             isFeatureEnabled: (feature) => {
                 if (feature === 'documents') return documentsEnabled.value;
+                if (feature === 'workspaceWrite') return emptySession.value?.session?.role !== 'viewer';
                 if (feature === 'dashboard') return dashboardEnabled.value;
                 if (feature === 'workspaceTabs') return workspaceTabsEnabled.value;
                 return true;
@@ -2250,8 +2253,14 @@ function activatePaletteHost() {
             openAiSettings: () =>
                 openDashboardPage('core:settings', 'ai-settings'),
             newChat: onNewChat,
-            newDocument: () => onNewDocument(),
-            newProject: openNewProjectModal,
+            newDocument: () => {
+                if (isViewOnlyMember()) throw new Error(VIEW_ONLY_NOTICE);
+                return onNewDocument();
+            },
+            newProject: () => {
+                if (isViewOnlyMember()) throw new Error(VIEW_ONLY_NOTICE);
+                return openNewProjectModal();
+            },
             newTab: onWorkspaceNewTab,
             closeTab: () => onWorkspaceTabClose(workspaceTabs.activeTabId.value),
             reopenClosedTab: () => void workspaceTabs.reopenClosedTab(),
@@ -2287,6 +2296,12 @@ function deactivatePaletteHost() {
 onMounted(activatePaletteHost);
 onActivated(activatePaletteHost);
 onDeactivated(deactivatePaletteHost);
+watch(() => emptySession.value?.session?.role, () => {
+    if (!paletteHostActive) return;
+    deactivatePaletteHost();
+    activatePaletteHost();
+    void getPaletteCoordinator()?.refreshSources(['command']);
+});
 
 watch(
     () => [route.query.dashboard, route.query.page, route.query.plugin, route.query.version, route.query.installRequest],

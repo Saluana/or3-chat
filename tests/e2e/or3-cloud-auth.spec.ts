@@ -115,6 +115,57 @@ test.describe('OR3 Cloud Auth Integration', () => {
 });
 
 if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
+    test('workspace cloud profile prevents viewers from creating local documents', async ({ page, browser }, info) => {
+        const origin = new URL(info.project.use.baseURL!).origin;
+        const headers = { origin, 'x-or3-cloud-intent': 'mutation' };
+        const login = await page.request.post('/api/basic-auth/sign-in', { headers, data: {
+            email: process.env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL, password: process.env.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD,
+        } });
+        expect(login.ok()).toBe(true);
+        const created = await page.request.post('/api/workspaces', { headers, data: { name: 'Viewer creation check' } });
+        expect(created.ok(), await created.text()).toBe(true);
+        const workspaceId = (await created.json()).id;
+        const member = await browser.newContext({ baseURL: origin });
+        try {
+            const email = `viewer-creation-${randomUUID()}@example.test`;
+            const registered = await member.request.post('/api/basic-auth/register', { headers, data: {
+                email, password: 'DisposableViewer!123', confirmPassword: 'DisposableViewer!123',
+            } });
+            expect(registered.ok(), await registered.text()).toBe(true);
+            const memberSession = await (await member.request.get('/api/auth/session')).json();
+            expect(memberSession.session.authenticated).toBe(true);
+            const adminHeaders = { origin, 'x-or3-admin-intent': 'admin' };
+            const adminLogin = await page.request.post('/api/admin/auth/login', { headers: adminHeaders, data: {
+                username: process.env.OR3_ADMIN_USERNAME, password: process.env.OR3_ADMIN_PASSWORD,
+            } });
+            expect(adminLogin.ok()).toBe(true);
+            const admitted = await page.request.post('/api/admin/workspace/members/upsert', { headers: adminHeaders, data: {
+                workspaceId, provider: 'basic-auth', emailOrProviderId: memberSession.session.providerUserId, role: 'viewer',
+            } });
+            expect(admitted.ok(), await admitted.text()).toBe(true);
+            const switched = await member.request.post('/api/workspaces/active', { headers, data: { id: workspaceId } });
+            expect(switched.ok(), await switched.text()).toBe(true);
+            const viewer = await member.newPage();
+            await viewer.goto('/chat');
+            await viewer.getByRole('button', { name: 'Dismiss welcome' }).click({ timeout: 5_000 }).catch(() => undefined);
+            await expect(viewer.getByRole('button', { name: 'Create a document', exact: true })).toHaveCount(0);
+            await expect(viewer.getByText('This workspace is view-only.', { exact: true })).toBeVisible();
+            await viewer.getByRole('button', { name: 'New', exact: true }).click();
+            await expect(viewer.getByText('New document', { exact: true })).toHaveCount(0);
+            await expect(viewer.getByText('New project', { exact: true })).toHaveCount(0);
+            await viewer.keyboard.press('Escape');
+            await viewer.getByRole('button', { name: 'Documents', exact: true }).click();
+            await expect(viewer.getByRole('button', { name: 'New document', exact: true })).toHaveCount(0);
+            await expect(viewer.getByRole('button', { name: 'Create a document', exact: true })).toHaveCount(0);
+            await viewer.getByRole('button', { name: 'Open command palette' }).click();
+            await viewer.locator('[data-test="command-palette-input"]').fill('New document');
+            await expect(viewer.getByRole('option', { name: 'New chat Start a new chat thread' })).toBeVisible();
+            await expect(viewer.getByRole('option', { name: 'New document Create a new document' })).toHaveCount(0);
+            await expect(viewer.getByRole('option', { name: 'New project Create a new project' })).toHaveCount(0);
+            await expect(viewer).toHaveURL(/\/chat$/);
+        } finally { await member.close(); }
+    });
+
     for (const flow of ['sign-in', 'registration'] as const) {
         test(`workspace cloud profile reports and retries ${flow} session failures`, async ({ page }, info) => {
             test.setTimeout(90_000);

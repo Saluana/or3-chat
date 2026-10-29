@@ -215,6 +215,7 @@ const { data: workspaceSession } = useSessionContext();
 const { promptSignIn } = useSignInGate();
 const runtimeConfig = useRuntimeConfig();
 function requireCreationSignIn(): boolean {
+    if (workspaceSession.value?.session?.role === 'viewer') return true;
     if (runtimeConfig.public.ssrAuthEnabled === true && workspaceSession.value !== null
         && workspaceSession.value.session?.authenticated !== true) {
         promptSignIn();
