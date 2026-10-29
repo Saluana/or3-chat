@@ -546,6 +546,20 @@ describe('selection-bound detail and preflight', () => {
         expect(preflight.error.value).toContain('different plugin');
     });
 
+    it('explains an unavailable release without displaying raw request details', async () => {
+        fetchMock.mockRejectedValue(Object.assign(new Error('[POST] /api/private: private detail'), { statusCode: 404 }));
+        const preflight = useMarketplacePreflight();
+        await preflight.run('or3.alpha');
+        expect(preflight.error.value).toBe('This release is unavailable or is not approved for this site.');
+        expect(preflight.result.value).toBeNull();
+
+        fetchMock.mockRejectedValue(Object.assign(new Error('[GET] /api/private: private detail'), { statusCode: 500 }));
+        const detail = useMarketplaceDetail();
+        await detail.load('or3.alpha');
+        expect(detail.error.value).not.toContain('private');
+        expect(detail.entry.value).toBeNull();
+    });
+
     it('binds approval to the exact target tuple', () => {
         const target = {
             pluginId: 'p',

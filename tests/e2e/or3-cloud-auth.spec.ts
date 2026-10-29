@@ -115,6 +115,33 @@ test.describe('OR3 Cloud Auth Integration', () => {
 });
 
 if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
+    test('workspace cloud profile explains rejected webhook destinations safely', async ({ page }, info) => {
+        const origin = new URL(info.project.use.baseURL!).origin;
+        const registered = await page.request.post('/api/basic-auth/register', {
+            headers: { origin, 'x-or3-cloud-intent': 'mutation' },
+            data: { email: `webhook-${randomUUID()}@example.test`, password: 'DisposableWebhook!123', confirmPassword: 'DisposableWebhook!123' },
+        });
+        expect(registered.ok()).toBe(true);
+        await page.goto('/chat');
+        await page.getByRole('button', { name: 'Dismiss welcome' }).click({ timeout: 5_000 }).catch(() => undefined);
+        await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
+        await page.getByRole('dialog').getByRole('button', { name: 'Webhooks', exact: true }).click();
+        await page.getByRole('dialog').getByRole('button', { name: 'Create webhook' }).click();
+        const form = page.getByRole('dialog', { name: 'Create Webhook' });
+        await form.getByRole('textbox', { name: 'Target URL' }).fill(`${origin}/disposable`);
+        await form.getByRole('checkbox', { name: /document.created/ }).check();
+        await form.getByRole('button', { name: 'Create Webhook' }).click();
+        await expect(form.getByText('Webhook URLs cannot use private or local addresses.')).toBeVisible();
+        await expect(form.getByText('Unable to save webhook', { exact: true })).toHaveCount(1);
+        await page.route('**/api/webhooks', route => route.fulfill({
+            status: 500, contentType: 'application/json',
+            body: JSON.stringify({ statusCode: 500, statusMessage: 'PRIVATE SERVER DETAIL' }),
+        }));
+        await form.getByRole('button', { name: 'Create Webhook' }).click();
+        await expect(form.getByText('Unable to save webhook', { exact: true })).toHaveCount(1);
+        await expect(form.getByText('PRIVATE SERVER DETAIL')).toHaveCount(0);
+    });
+
     test('workspace cloud profile prevents viewers from creating local documents', async ({ page, browser }, info) => {
         const origin = new URL(info.project.use.baseURL!).origin;
         const headers = { origin, 'x-or3-cloud-intent': 'mutation' };
