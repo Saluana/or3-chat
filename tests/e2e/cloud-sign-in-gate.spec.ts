@@ -73,6 +73,16 @@ for (const [label, viewport] of [
     test.describe(label, () => {
         test.use({ viewport });
 
+        if (label === 'desktop') for (const action of ['Create a project', 'Create a document']) {
+            test(`signed-out sidebar ${action} opens sign-in`, async ({ page }) => {
+                await openComposer(page);
+                await page.getByTestId('sidebar-inner').getByRole('button', { name: action, exact: true }).click();
+                await expect(page.getByRole('dialog', { name: 'Welcome back', exact: true })).toBeVisible();
+                await expect(page.getByRole('dialog', { name: 'New Project', exact: true })).toHaveCount(0);
+                await expect(page).toHaveURL(/\/chat$/);
+            });
+        }
+
         test('signed-out empty chat shows all creation cards and opens sign-in without creating anything', async ({ page, context }, info) => {
             await context.addCookies([{ name: 'or3_active_theme', value: 'blank', domain: '127.0.0.1', path: '/' }]);
             const mutations: string[] = [];

@@ -784,7 +784,7 @@ describe('project memory classification proxy admission', () => {
         getHeaderMock.mockImplementation((event: H3Event, name: string) => event.node.req.headers[name.toLowerCase()]);
         requireCanMock.mockReset();
         resolveSessionContextMock.mockResolvedValue({ authenticated: true, user: { id: 'user-1' }, workspace: { id: 'workspace-1' }, role: 'editor' });
-        vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ model: 'perplexity/pplx-decider-v1.1-27b',
+        vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ model: 'perplexity/pplx-decider-v1.2',
             answers: { memory_kind: { type: 'choice', choice: 'decision', probabilities: { fact: 0.01, decision: 0.98, uncertain: 0.01 } } },
             usage: { input_tokens: 30, output_tokens: 0 } }), { headers: { 'Content-Type': 'application/json' } })));
     });
@@ -794,7 +794,7 @@ describe('project memory classification proxy admission', () => {
         expect(await classify(requestEvent())).toMatchObject({ kind: 'decision' });
         const fetcher = vi.mocked(fetch); const req = fetcher.mock.calls[0]![0] as Request;
         expect(req.url).toBe('https://openrouter.ai/api/alpha/decisions');
-        expect((await req.json()).model).toBe('perplexity/pplx-decider-v1.1-27b');
+        expect((await req.json()).model).toBe('perplexity/pplx-decider-v1.2');
         fetcher.mockRejectedValueOnce(new Error('secret upstream failure'));
         expect(await classify(requestEvent())).toMatchObject({ kind: 'fact' });
     });
@@ -849,7 +849,7 @@ describe('automatic memory proxy', () => {
         readBodyMock.mockResolvedValue({ workspaceId: 'workspace-1', capture: {
             project: { name: 'Atlas', brief: 'Team planning app.' },
             messages: [{ id: 'u', role: 'user', text: 'What is SQLite?', fresh: true }], existing: [] } });
-        const fetcher = vi.fn(async () => new Response(JSON.stringify({ model: 'perplexity/pplx-decider-v1.1-27b',
+        const fetcher = vi.fn(async () => new Response(JSON.stringify({ model: 'perplexity/pplx-decider-v1.2',
             answers: { worth_saving: { type: 'choice', choice: 'skip', probabilities: { save: 0.01, skip: 0.98, uncertain: 0.01 } } } })));
         vi.stubGlobal('fetch', fetcher);
         const event = () => makeEvent({ host: 'chat.test', origin: 'https://chat.test',
@@ -857,7 +857,7 @@ describe('automatic memory proxy', () => {
         expect(await capture(event())).toEqual({ memories: [] });
         expect(fetcher).toHaveBeenCalledTimes(1);
         const dispatched = JSON.parse((fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
-        expect(dispatched.model).toBe('perplexity/pplx-decider-v1.1-27b');
+        expect(dispatched.model).toBe('perplexity/pplx-decider-v1.2');
         expect(dispatched.state.project).toEqual({ name: 'Atlas', brief: 'Team planning app.' });
         requireCanMock.mockImplementation(() => { throw forbidden(403); });
         await expect(capture(event())).rejects.toMatchObject({ statusCode: 403 });
@@ -871,7 +871,7 @@ describe('automatic memory proxy', () => {
 // another session could use; batches leak across users or workspaces.
 describe('automatic memory batch admission', () => {
     let capture: (event: H3Event) => Promise<unknown>;
-    const gateSkip = () => new Response(JSON.stringify({ model: 'perplexity/pplx-decider-v1.1-27b',
+    const gateSkip = () => new Response(JSON.stringify({ model: 'perplexity/pplx-decider-v1.2',
         answers: { worth_saving: { type: 'choice', choice: 'skip', probabilities: { save: 0.01, skip: 0.98, uncertain: 0.01 } } } }));
     const body = (text: string, workspaceId = 'workspace-1') => ({ workspaceId, capture: {
         project: { name: 'Atlas', brief: 'Team planning app.' },

@@ -2,6 +2,7 @@ import {
     listPaletteCommands,
     registerPaletteCommand,
 } from '../registry';
+import type { RegistrationHandle } from '~~/shared/plugins/registration-handle';
 import {
     projectProfileItems,
     resolvedWorkspaceProfile,
@@ -99,22 +100,26 @@ export interface CoreCommandSpec {
  */
 export function registerCorePaletteCommands(
     specs: readonly CoreCommandSpec[]
-): void {
+): RegistrationHandle[] {
+    const handles: RegistrationHandle[] = [];
     for (const spec of specs) {
         if (spec.enabled === false) continue;
-        registerPaletteCommand(
-            {
-                id: spec.id,
-                label: spec.label,
-                description: spec.description,
-                keywords: spec.keywords,
-                icon: spec.icon,
-                order: spec.order,
-                closeOnSuccess: spec.closeOnSuccess,
-            },
-            spec.handler
+        handles.push(
+            registerPaletteCommand(
+                {
+                    id: spec.id,
+                    label: spec.label,
+                    description: spec.description,
+                    keywords: spec.keywords,
+                    icon: spec.icon,
+                    order: spec.order,
+                    closeOnSuccess: spec.closeOnSuccess,
+                },
+                spec.handler
+            )
         );
     }
+    return handles;
 }
 
 export function createDefaultCoreCommandSpecs(deps: {
@@ -183,7 +188,7 @@ export function createDefaultCoreCommandSpecs(deps: {
             description: 'Create a new document',
             icon: 'i-lucide-file-plus',
             order: 20,
-            enabled: enabled('documents'),
+            enabled: enabled('documents') && enabled('workspaceWrite'),
             handler: wrap(deps.newDocument),
         },
         {
@@ -192,6 +197,7 @@ export function createDefaultCoreCommandSpecs(deps: {
             description: 'Create a new project',
             icon: 'i-lucide-folder-plus',
             order: 30,
+            enabled: enabled('workspaceWrite'),
             handler: wrap(deps.newProject),
         },
         {

@@ -13,13 +13,14 @@ import { testRuntimeConfig } from '~~/tests/setup';
 
 const projectId = ref('a');
 const toolCatalog = vi.hoisted(() => ({ tools: [] as unknown[] }));
+const auth = vi.hoisted(() => ({ session: null as any }));
 vi.mock('#imports', async load => ({ ...(await load<Record<string, unknown>>()), useRuntimeConfig: () => testRuntimeConfig.value }));
 vi.mock('~/composables/sidebar/useProjectSidebar', () => ({ useProjectSidebar: () => ({ projectId, returnTo: ref('home') }) }));
 vi.mock('~/composables/sidebar/useActiveSidebarPage', () => ({ useActiveSidebarPage: () => ({ setActivePage: async () => {} }) }));
 vi.mock('~/utils/chat/tool-registry', () => ({ useToolRegistry: () => ({ listTools: shallowRef(toolCatalog.tools) }) }));
 vi.mock('~/composables/chat/useModelStore', () => ({ useModelStore: () => ({ catalog: ref([]), favoriteModels: ref([]) }) }));
 vi.mock('~/composables/search/useCommandPalette', () => ({ getPaletteHostContext: () => null }));
-vi.mock('~/composables/auth/useSessionContext', () => ({ getCachedSessionContext: () => null, getCachedSessionPayload: () => null }));
+vi.mock('~/composables/auth/useSessionContext', () => ({ getCachedSessionContext: () => auth.session, getCachedSessionPayload: () => auth.session ? { session: auth.session } : null }));
 import SidebarProjectsPage from '../SidebarProjectsPage.vue';
 
 // The actual kept-alive page owns navigation cancellation. Store tests cannot
@@ -33,6 +34,7 @@ const visible = ref(true);
 const workers: Array<{ onmessage?: (event: { data: unknown }) => void }> = [];
 beforeEach(async () => {
     toolCatalog.tools = [];
+    auth.session = null;
     ssr = testRuntimeConfig.value.public.ssrAuthEnabled;
     testRuntimeConfig.value.public.ssrAuthEnabled = false;
     vi.stubGlobal('Blob', NodeBlob);
@@ -64,6 +66,28 @@ beforeEach(async () => {
         }),
         UPopover: defineComponent({ template: '<div><slot /><slot name="content" /></div>' }),
     } } });
+});
+
+// A signed-out session can clear the selected project before the kept-alive page unmounts.
+it('clears the project safely during sign-out and reconnects on sign-in', async () => {
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Project A'));
+    const onError = vi.fn();
+    wrapper.vm.$.appContext.config.errorHandler = onError;
+    testRuntimeConfig.value.public.ssrAuthEnabled = true;
+    auth.session = null;
+    projectId.value = '';
+    await nextTick();
+    expect(onError).not.toHaveBeenCalled();
+    expect(wrapper.text()).not.toContain('Project A');
+
+    setActiveWorkspaceDb(null);
+    auth.session = { authenticated: true, user: { id: 'test-user' },
+        workspace: { id: workspaceId }, role: 'owner' };
+    setActiveWorkspaceDb(workspaceId);
+    projectId.value = 'a';
+    await nextTick();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Project A'));
+    expect(onError).not.toHaveBeenCalled();
 });
 
 // A globally enabled server tool still cannot execute in a browser project.

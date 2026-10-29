@@ -110,6 +110,13 @@ Knowledge upload/document/file/attachment icons use
 `sidebar.project.knowledge.upload`, `.document`, `.file` and `.saved-file`;
 memory uses `sidebar.project.memory`. Defaults preserve the previous Lucide icons,
 Retro supplies pixel icons, and Blank supplies Solar Linear icons with heavier strokes.
+Retro uses [Pixel Icon by HackerNoon](https://github.com/hackernoon/pixel-icon-library),
+licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), alongside
+the Pixelarticons collection. The Pixel Icon collection is bundled locally, with
+the Retro glyphs included in the client bundle, so its existing controls can
+render without the external Iconify API or a local icon server. The client bundle
+also includes the dynamically selected built-in theme token glyphs, so Retro,
+Cyberpunk, and Blank controls can render when icon services are unavailable.
 
 ## Generic control recipes
 
@@ -291,6 +298,7 @@ Declare semantic tokens in your definition:
 `app/config/icon-tokens.ts` is the token catalog. Trusted themes can alternatively
 export an `IconMap` from `icons.config.ts`; keep overrides in one place to avoid
 ambiguous maintenance. Adding a new semantic token requires a host source change.
+The default fullscreen controls use a locally bundled subset of [Material Symbols by Google](https://github.com/google/material-design-icons), licensed under [Apache 2.0](https://github.com/google/material-design-icons/blob/master/LICENSE). The `or3-material` subset is available to both server and static clients without replacing the wider Material Symbols collection.
 The collapsed sidebar Files button and Files tabs use `sidebar.page.files`; the retro theme overrides it with `pixelarticons:files`, Blank uses `blank-solar:documents-linear`, and the default is `i-lucide-files`.
 
 The notification bell and its loading placeholder resolve `notification.bell`

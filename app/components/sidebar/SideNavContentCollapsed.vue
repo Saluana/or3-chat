@@ -226,6 +226,7 @@ import {
     resolvedWorkspaceProfile,
 } from '~/core/workspace-profiles/projection';
 import { isMobile } from '~/state/global';
+import { useViewOnlyAccess } from '~/composables/auth/useViewOnlyAccess';
 
 const iconPlus = useIcon('ui.plus');
 const iconNewChat = useIcon('sidebar.new_chat');
@@ -236,6 +237,7 @@ const iconPageDefault = useIcon('sidebar.page.default');
 const iconPageFiles = useIcon('sidebar.page.files');
 const iconDashboard = useIcon('dashboard.home');
 const or3Config = useOr3Config();
+const viewOnly = useViewOnlyAccess();
 const documentsEnabled = computed(() => or3Config.features.documents.enabled);
 const dashboardEnabled = computed(() => or3Config.features.dashboard.enabled);
 
@@ -258,7 +260,7 @@ const createItems = computed(() => [
         accent: 'chats',
         tone: 'bg-[color:var(--md-primary)]/10 text-[color:var(--md-primary)]',
     },
-    ...(documentsEnabled.value
+    ...(documentsEnabled.value && !viewOnly.value
         ? [
               {
                   kind: 'document' as const,
@@ -269,13 +271,13 @@ const createItems = computed(() => [
               },
           ]
         : []),
-    {
+    ...(!viewOnly.value ? [{
         kind: 'project' as const,
         label: 'New project',
         icon: iconNewFolder.value,
         accent: 'projects',
         tone: 'bg-[color:var(--md-secondary)]/15 text-[color:var(--md-on-surface-variant)]',
-    },
+    }] : []),
 ]);
 
 function onCreate(kind: CreateKind) {

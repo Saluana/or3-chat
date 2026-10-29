@@ -10,6 +10,8 @@ export default defineNuxtPlugin((nuxtApp) => {
     const { connected } = useUserApiKey();
     const offered = new Set<string>();
     const refresh = async () => {
+        const policy = useRuntimeConfig().public.openRouter;
+        if (policy.allowUserOverride === false && policy.requireUserKey !== true) return;
         const userId = session.data.value?.session?.authenticated ? session.data.value.session.user?.id : undefined;
         if (!userId) return;
         let legacyKeyAvailable: boolean;

@@ -1,0 +1,569 @@
+{
+  "evaluatedAt": "2026-10-27T20:09:06.030Z",
+  "reports": [
+    {
+      "model": "perplexity/pplx-decider-v1.2",
+      "threshold": 0.9,
+      "clearCasesCorrect": true,
+      "noFalseDecisions": true,
+      "complete": true,
+      "storedKindsCorrect": true,
+      "cases": [
+        {
+          "id": "fact-1",
+          "expected": "fact",
+          "predicted": "fact",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.9763519795100761,
+            "decision": 0.0200138194180273,
+            "uncertain": 0.003634201071896593
+          },
+          "latencyMs": 1326,
+          "cost": 0.0000068
+        },
+        {
+          "id": "fact-2",
+          "expected": "fact",
+          "predicted": "fact",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.9951611863659219,
+            "decision": 0.002652143637491414,
+            "uncertain": 0.002186669996586669
+          },
+          "latencyMs": 272,
+          "cost": 0.00000676
+        },
+        {
+          "id": "fact-3",
+          "expected": "fact",
+          "predicted": "fact",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.9772743256271026,
+            "decision": 0.01531496111790697,
+            "uncertain": 0.0074107132549905445
+          },
+          "latencyMs": 309,
+          "cost": 0.00000676
+        },
+        {
+          "id": "fact-4",
+          "expected": "fact",
+          "predicted": "fact",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.5319931470288274,
+            "decision": 0.4586343131816516,
+            "uncertain": 0.009372539789520977
+          },
+          "latencyMs": 318,
+          "cost": 0.00000682
+        },
+        {
+          "id": "fact-5",
+          "expected": "fact",
+          "predicted": "fact",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.8436371799063332,
+            "decision": 0.14030694979860003,
+            "uncertain": 0.0160558702950667
+          },
+          "latencyMs": 285,
+          "cost": 0.00000678
+        },
+        {
+          "id": "fact-6",
+          "expected": "fact",
+          "predicted": "fact",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.9787983343334834,
+            "decision": 0.013732032191766464,
+            "uncertain": 0.007469633474750222
+          },
+          "latencyMs": 322,
+          "cost": 0.00000684
+        },
+        {
+          "id": "fact-7",
+          "expected": "fact",
+          "predicted": "fact",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.9221695471388413,
+            "decision": 0.0645948064543302,
+            "uncertain": 0.013235646406828692
+          },
+          "latencyMs": 720,
+          "cost": 0.00000672
+        },
+        {
+          "id": "fact-8",
+          "expected": "fact",
+          "predicted": "fact",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.8060614868374351,
+            "decision": 0.1739966517066299,
+            "uncertain": 0.01994186145593506
+          },
+          "latencyMs": 271,
+          "cost": 0.00000676
+        },
+        {
+          "id": "fact-9",
+          "expected": "fact",
+          "predicted": "fact",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.979315427743501,
+            "decision": 0.009608230373646828,
+            "uncertain": 0.011076341882852198
+          },
+          "latencyMs": 519,
+          "cost": 0.00000676
+        },
+        {
+          "id": "fact-10",
+          "expected": "fact",
+          "predicted": "fact",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.8067970932432922,
+            "decision": 0.1826038667244162,
+            "uncertain": 0.010599040032291665
+          },
+          "latencyMs": 302,
+          "cost": 0.00000674
+        },
+        {
+          "id": "fact-11",
+          "expected": "fact",
+          "predicted": "fact",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.7144589645302784,
+            "decision": 0.05023230728212527,
+            "uncertain": 0.2353087281875963
+          },
+          "latencyMs": 656,
+          "cost": 0.0000069
+        },
+        {
+          "id": "fact-12",
+          "expected": "fact",
+          "predicted": "fact",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.9807033947080949,
+            "decision": 0.012357932008719237,
+            "uncertain": 0.006938673283185977
+          },
+          "latencyMs": 299,
+          "cost": 0.00000676
+        },
+        {
+          "id": "decision-1",
+          "expected": "decision",
+          "predicted": "decision",
+          "acceptedDecision": true,
+          "probabilities": {
+            "fact": 0.006168309383062665,
+            "decision": 0.9907714859412096,
+            "uncertain": 0.0030602046757276986
+          },
+          "latencyMs": 506,
+          "cost": 0.00000678
+        },
+        {
+          "id": "decision-2",
+          "expected": "decision",
+          "predicted": "decision",
+          "acceptedDecision": true,
+          "probabilities": {
+            "fact": 0.0015738041936437402,
+            "decision": 0.9927360063468427,
+            "uncertain": 0.005690189459513639
+          },
+          "latencyMs": 256,
+          "cost": 0.00000686
+        },
+        {
+          "id": "decision-3",
+          "expected": "decision",
+          "predicted": "decision",
+          "acceptedDecision": true,
+          "probabilities": {
+            "fact": 0.001370165551288917,
+            "decision": 0.9965947940322999,
+            "uncertain": 0.002035040416411097
+          },
+          "latencyMs": 541,
+          "cost": 0.00000678
+        },
+        {
+          "id": "decision-4",
+          "expected": "decision",
+          "predicted": "decision",
+          "acceptedDecision": true,
+          "probabilities": {
+            "fact": 0.0056909098528725105,
+            "decision": 0.992284268695684,
+            "uncertain": 0.0020248214514435457
+          },
+          "latencyMs": 270,
+          "cost": 0.00000684
+        },
+        {
+          "id": "decision-5",
+          "expected": "decision",
+          "predicted": "decision",
+          "acceptedDecision": true,
+          "probabilities": {
+            "fact": 0.007509721017529228,
+            "decision": 0.989965830317719,
+            "uncertain": 0.0025244486647517566
+          },
+          "latencyMs": 298,
+          "cost": 0.00000684
+        },
+        {
+          "id": "decision-6",
+          "expected": "decision",
+          "predicted": "decision",
+          "acceptedDecision": true,
+          "probabilities": {
+            "fact": 0.0020847844442625214,
+            "decision": 0.9909206948768785,
+            "uncertain": 0.006994520678859091
+          },
+          "latencyMs": 291,
+          "cost": 0.00000686
+        },
+        {
+          "id": "decision-7",
+          "expected": "decision",
+          "predicted": "decision",
+          "acceptedDecision": true,
+          "probabilities": {
+            "fact": 0.0017145785667068375,
+            "decision": 0.9953583143952384,
+            "uncertain": 0.002927107038054741
+          },
+          "latencyMs": 460,
+          "cost": 0.0000068
+        },
+        {
+          "id": "decision-8",
+          "expected": "decision",
+          "predicted": "decision",
+          "acceptedDecision": true,
+          "probabilities": {
+            "fact": 0.008261634179210149,
+            "decision": 0.9534768332697401,
+            "uncertain": 0.03826153255104993
+          },
+          "latencyMs": 355,
+          "cost": 0.00000682
+        },
+        {
+          "id": "decision-9",
+          "expected": "decision",
+          "predicted": "decision",
+          "acceptedDecision": true,
+          "probabilities": {
+            "fact": 0.002355687704842749,
+            "decision": 0.9923246906731185,
+            "uncertain": 0.005319621622038804
+          },
+          "latencyMs": 285,
+          "cost": 0.00000762
+        },
+        {
+          "id": "decision-10",
+          "expected": "decision",
+          "predicted": "decision",
+          "acceptedDecision": true,
+          "probabilities": {
+            "fact": 0.004743775428037665,
+            "decision": 0.9844914219709224,
+            "uncertain": 0.010764802601040114
+          },
+          "latencyMs": 327,
+          "cost": 0.0000071
+        },
+        {
+          "id": "decision-11",
+          "expected": "decision",
+          "predicted": "decision",
+          "acceptedDecision": true,
+          "probabilities": {
+            "fact": 0.0030144393862622286,
+            "decision": 0.9941396529989899,
+            "uncertain": 0.0028459076147479834
+          },
+          "latencyMs": 267,
+          "cost": 0.00000686
+        },
+        {
+          "id": "decision-12",
+          "expected": "decision",
+          "predicted": "decision",
+          "acceptedDecision": true,
+          "probabilities": {
+            "fact": 0.0027989827489177574,
+            "decision": 0.994912534266696,
+            "uncertain": 0.002288482984386253
+          },
+          "latencyMs": 272,
+          "cost": 0.0000068
+        },
+        {
+          "id": "uncertain-1",
+          "expected": "uncertain",
+          "predicted": "uncertain",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.0028488196539255225,
+            "decision": 0.004559119940094893,
+            "uncertain": 0.9925920604059796
+          },
+          "latencyMs": 261,
+          "cost": 0.00000676
+        },
+        {
+          "id": "uncertain-2",
+          "expected": "uncertain",
+          "predicted": "uncertain",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.010146056671289263,
+            "decision": 0.006138396856737746,
+            "uncertain": 0.983715546471973
+          },
+          "latencyMs": 277,
+          "cost": 0.00000674
+        },
+        {
+          "id": "uncertain-3",
+          "expected": "uncertain",
+          "predicted": "uncertain",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.003363566736786866,
+            "decision": 0.011912455980407143,
+            "uncertain": 0.984723977282806
+          },
+          "latencyMs": 310,
+          "cost": 0.00000678
+        },
+        {
+          "id": "uncertain-4",
+          "expected": "uncertain",
+          "predicted": "uncertain",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.004025455644842338,
+            "decision": 0.014888804961126734,
+            "uncertain": 0.981085739394031
+          },
+          "latencyMs": 354,
+          "cost": 0.00000678
+        },
+        {
+          "id": "uncertain-5",
+          "expected": "uncertain",
+          "predicted": "uncertain",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.03736265943923153,
+            "decision": 0.031236700226776454,
+            "uncertain": 0.931400640333992
+          },
+          "latencyMs": 275,
+          "cost": 0.0000068
+        },
+        {
+          "id": "uncertain-6",
+          "expected": "uncertain",
+          "predicted": "uncertain",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.031844173144600287,
+            "decision": 0.008217671453021706,
+            "uncertain": 0.9599381554023779
+          },
+          "latencyMs": 255,
+          "cost": 0.0000068
+        },
+        {
+          "id": "uncertain-7",
+          "expected": "uncertain",
+          "predicted": "uncertain",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.00882503640586923,
+            "decision": 0.034549569455881425,
+            "uncertain": 0.9566253941382493
+          },
+          "latencyMs": 280,
+          "cost": 0.00000676
+        },
+        {
+          "id": "uncertain-8",
+          "expected": "uncertain",
+          "predicted": "uncertain",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.11984217387779522,
+            "decision": 0.007995118176089826,
+            "uncertain": 0.8721627079461151
+          },
+          "latencyMs": 260,
+          "cost": 0.00000676
+        },
+        {
+          "id": "uncertain-9",
+          "expected": "uncertain",
+          "predicted": "uncertain",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.07177713008832273,
+            "decision": 0.020607909401190224,
+            "uncertain": 0.907614960510487
+          },
+          "latencyMs": 272,
+          "cost": 0.00000698
+        },
+        {
+          "id": "uncertain-10",
+          "expected": "uncertain",
+          "predicted": "uncertain",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.06414524167571369,
+            "decision": 0.013255815361181724,
+            "uncertain": 0.9225989429631046
+          },
+          "latencyMs": 261,
+          "cost": 0.00000688
+        },
+        {
+          "id": "uncertain-11",
+          "expected": "uncertain",
+          "predicted": "uncertain",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.0015771824707252401,
+            "decision": 0.0019948200280617227,
+            "uncertain": 0.996427997501213
+          },
+          "latencyMs": 262,
+          "cost": 0.00000694
+        },
+        {
+          "id": "uncertain-12",
+          "expected": "uncertain",
+          "predicted": "uncertain",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.025198175341852196,
+            "decision": 0.0034997231650865297,
+            "uncertain": 0.9713021014930613
+          },
+          "latencyMs": 295,
+          "cost": 0.00000686
+        },
+        {
+          "id": "uncertain-13",
+          "expected": "uncertain",
+          "predicted": "uncertain",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.010576031227092027,
+            "decision": 0.07043882759236415,
+            "uncertain": 0.9189851411805438
+          },
+          "latencyMs": 300,
+          "cost": 0.00000684
+        },
+        {
+          "id": "uncertain-14",
+          "expected": "uncertain",
+          "predicted": "uncertain",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.016387284686718427,
+            "decision": 0.13462674987860992,
+            "uncertain": 0.8489859654346718
+          },
+          "latencyMs": 274,
+          "cost": 0.00000698
+        },
+        {
+          "id": "uncertain-15",
+          "expected": "uncertain",
+          "predicted": "uncertain",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.045788425182702125,
+            "decision": 0.0037022734142623664,
+            "uncertain": 0.9505093014030355
+          },
+          "latencyMs": 263,
+          "cost": 0.00000696
+        },
+        {
+          "id": "uncertain-16",
+          "expected": "uncertain",
+          "predicted": "uncertain",
+          "acceptedDecision": false,
+          "probabilities": {
+            "fact": 0.007730620464407288,
+            "decision": 0.008082882914151362,
+            "uncertain": 0.9841864966214414
+          },
+          "latencyMs": 255,
+          "cost": 0.00000724
+        }
+      ]
+    }
+  ],
+  "automaticCapture": {
+    "model": "perplexity/pplx-decider-v1.2",
+    "passed": true,
+    "cases": [
+      {
+        "id": "adopted-database",
+        "expectedSave": true,
+        "count": 1,
+        "passed": true,
+        "latencyMs": 2706
+      },
+      {
+        "id": "durable-preference",
+        "expectedSave": true,
+        "count": 1,
+        "passed": true,
+        "latencyMs": 1422
+      },
+      {
+        "id": "one-off-question",
+        "expectedSave": false,
+        "count": 0,
+        "passed": true,
+        "latencyMs": 510
+      },
+      {
+        "id": "unapproved-brainstorm",
+        "expectedSave": false,
+        "count": 0,
+        "passed": true,
+        "latencyMs": 304
+      }
+    ]
+  }
+}

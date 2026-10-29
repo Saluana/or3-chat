@@ -667,7 +667,7 @@ html [class~='duration-1000'] {
 	html[data-density] #dashboard-theme-backgrounds-section .background-layout-options button,
 	html[data-density] #dashboard-theme-backgrounds-section .background-color-swatch,
 	html[data-density] #dashboard-theme-backgrounds-section .background-hex-input {
-		min-height: max(44px, var(--app-control-height-medium, 36px));
+		min-height: max(44px, var(--app-control-height-medium, 36px)) !important;
 	}
 }
 

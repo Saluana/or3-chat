@@ -71,6 +71,10 @@ export async function openRouterCredentialOperation(session: SessionContext, bod
         || (input.operation === 'save' || input.operation === 'migrate'
             ? typeof input.key !== 'string' || !/^sk-or-[A-Za-z0-9_-]{9,512}$/.test(input.key.trim())
             : input.key !== undefined)) throw createError({ statusCode: 400, statusMessage: 'Invalid OpenRouter connection request.' });
+    // Explicit instance-only mode has no personal store to query. Distinguish
+    // this from an unexpected vault outage, which must continue to fail closed.
+    if (input.operation === 'status' && useRuntimeConfig().secrets?.provider === '')
+        return { connected: false, persisted: false, available: false };
     const { store, scope, context } = accountStore(session);
     try {
         let meta = await store.inspect({ scope, name: KEY_NAME }, context);

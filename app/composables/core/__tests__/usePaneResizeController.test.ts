@@ -91,4 +91,31 @@ describe('usePaneResizeController', () => {
         expect(controller.isResizing.value).toBe(false);
         expect(persist).toHaveBeenCalledTimes(1);
     });
+
+    it('converts pointer movement to pane units when the interface is zoomed', () => {
+        const scope = effectScope();
+        scopes.push(scope);
+        const resize = vi.fn();
+        const controller = scope.run(() => usePaneResizeController({
+            paneCount: () => 2,
+            paneWidths: ref([400, 400]),
+            isMobile: ref(false),
+            minPaneWidth: 280,
+            recalculateWidths: vi.fn(),
+            resize,
+            persist: vi.fn(),
+        }))!;
+        const container = document.createElement('div');
+        Object.defineProperty(container, 'clientWidth', { value: 1000 });
+        vi.spyOn(container, 'getBoundingClientRect').mockReturnValue({ width: 900 } as DOMRect);
+        controller.paneContainerRef.value = container;
+        controller.onPaneResizeStart({ button: 0, isPrimary: true, pointerId: 1, clientX: 100, currentTarget: container } as unknown as PointerEvent, 0);
+        const move = new Event('pointermove') as PointerEvent;
+        Object.defineProperties(move, { pointerId: { value: 1 }, clientX: { value: 190 } });
+        window.dispatchEvent(move);
+        const up = new Event('pointerup') as PointerEvent;
+        Object.defineProperty(up, 'pointerId', { value: 1 });
+        window.dispatchEvent(up);
+        expect(resize).toHaveBeenCalledWith(0, 100, false);
+    });
 });

@@ -323,6 +323,7 @@ async function runNuxtDev(argv: string[]): Promise<number> {
         controller.signal.throwIfAborted();
         secrets = await prepareSourceSecrets(process.cwd(), nuxtDevEnvironment(), {
             envFile: developmentEnvFile(process.cwd(), argv, inheritedEnvironment),
+            custodyRoot: process.env.OR3_PLUGIN_WATCH_ROOT ? process.env.OR3_PLUGIN_DEV_PROFILE : undefined,
             signal: controller.signal,
         });
         controller.signal.throwIfAborted();

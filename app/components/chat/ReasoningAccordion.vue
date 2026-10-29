@@ -42,7 +42,8 @@
                     ? 'grid-rows-[1fr] mt-2! mb-4! px-3 py-1 opacity-100'
                     : 'grid-rows-[0fr] my-0! p-0 opacity-0 pointer-events-none',
             ]"
-            tabindex="0"
+            :aria-hidden="!expanded"
+            :tabindex="expanded ? 0 : -1"
         >
             <div class="overflow-hidden min-h-0" v-text="content"></div>
         </pre>

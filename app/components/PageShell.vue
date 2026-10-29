@@ -53,7 +53,7 @@
                 :mobile="isMobile"
                 @activate="onWorkspaceTabActivate"
                 @close="onWorkspaceTabClose"
-                :can-create-document="documentsEnabled"
+                :can-create-document="documentsEnabled && emptySession?.session?.role !== 'viewer'"
                 :plugin-items="pluginNewTabItems"
                 @new-tab="onWorkspaceNewTab"
                 @create-tab="onWorkspaceCreateTab"
@@ -443,7 +443,7 @@
             :modal-props="emptyCreateModalProps" :form-field-props="{}" :icon="emptyDocumentIcon" :loading-icon="emptyLoadingIcon"
             @update:open="!$event && emptyCreate.close()" @close="emptyCreate.close" @submit="emptyCreate.submit"
             @update:value="emptyCreate.form.title = $event" />
-        <LazySearchCommandPalette v-if="commandPaletteActivated" />
+        <LazySearchCommandPalette v-if="shellActive && commandPaletteActivated" />
     </resizable-sidebar-layout>
 </template>
 <script setup lang="ts">
@@ -459,6 +459,7 @@ import { useEmptyChatActions } from '~/composables/chat/useEmptyChatActions';
 import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import type { EmptyChatActionId } from '~/theme/_shared/chat-empty-state';
 import type { SessionPayload } from '~/composables/auth/useSessionContext';
+import { isViewOnlyMember, VIEW_ONLY_NOTICE } from '~/composables/auth/useViewOnlyAccess';
 import { useWorkspaceTabMetadata } from '~/composables/core/useWorkspaceTabMetadata';
 import WorkspaceChrome from '~/components/workspace-tabs/WorkspaceChrome.vue';
 import type { WorkspaceNewTabCreateKind } from '~/components/workspace-tabs/WorkspaceNewTabControl.vue';
@@ -499,6 +500,8 @@ import {
     shallowRef,
     markRaw,
     nextTick,
+    onActivated,
+    onDeactivated,
     provide,
     watch,
 } from 'vue';
@@ -1123,6 +1126,15 @@ function buildPaneProps(
     pane: PaneState,
     paneIndex: number
 ): Record<string, any> {
+    // The fallback needs the mode even while a custom app is still registering.
+    if (
+        (pane.mode === 'doc' && !documentsEnabled.value) ||
+        (pane.mode !== 'chat' && pane.mode !== 'doc' &&
+            !listPaneApps.value.some((entry) => entry.id === pane.mode && entry.component))
+    ) {
+        return { mode: pane.mode };
+    }
+
     // Built-in: chat
     if (pane.mode === 'chat') {
         return {
@@ -1437,7 +1449,7 @@ watch(
             ].join(':')
         ),
     () => {
-        if (!workspaceTabsReady.value || !workspaceTabsEnabled.value) return;
+        if (!workspaceTabsReady.value || !workspaceTabsEnabled.value || workspaceTabsTransitioning.value) return;
         const currentPaneIds = new Set(panes.value.map((pane) => pane.id));
         for (const paneId of workspaceTabs.state.value.paneBindings.keys()) {
             if (!currentPaneIds.has(paneId)) workspaceTabs.paneClosedExternally(paneId);
@@ -1838,6 +1850,7 @@ const { newDocumentInActive, selectDocumentInActive } = usePaneDocuments({
 });
 
 async function onNewDocument(initial?: { title?: string }) {
+    if (isViewOnlyMember()) return;
     if (!documentsEnabled.value) {
         toast.add({
             title: 'Documents disabled',
@@ -2091,6 +2104,11 @@ const {
     getCoordinator: getPaletteCoordinator,
 } = useCommandPalette();
 useCommandPaletteShortcut();
+// Kept-alive routes retain their watchers. Only the visible shell may render
+// the shared palette, otherwise a route redirect can open multiple dialogs.
+const shellActive = ref(true);
+onActivated(() => { shellActive.value = true; });
+onDeactivated(() => { shellActive.value = false; });
 const commandPaletteActivated = ref(commandPaletteOpen.value);
 watch(commandPaletteOpen, (open) => {
     if (open) commandPaletteActivated.value = true;
@@ -2108,6 +2126,8 @@ watch(systemPromptsModalOpen, (open) => {
 let disposePaletteHostContext: (() => void) | null = null;
 let disposeWorkspaceTabPaletteProvider: (() => void) | null = null;
 let disposeWorkspaceResourceNavigation: (() => void) | null = null;
+let disposeCorePaletteCommands: (() => void) | null = null;
+let paletteHostActive = false;
 
 watch(
     () =>
@@ -2132,7 +2152,7 @@ async function openSystemPromptsFromPalette(options: {
             activePane?.mode === 'chat'
                 ? activePane.threadId || undefined
                 : undefined,
-        paneId: activePane?.mode === 'chat' ? activePane.id : undefined,
+        paneId: activePane?.mode === 'chat' ? tabIdForPane(activePane.id) : undefined,
     });
 }
 
@@ -2174,7 +2194,9 @@ async function openNewProjectModal() {
     sideNavExpandedRef.value?.openCreateProject?.();
 }
 
-onMounted(() => {
+function activatePaletteHost() {
+    if (paletteHostActive) return;
+    paletteHostActive = true;
     disposeWorkspaceResourceNavigation?.();
     disposeWorkspaceResourceNavigation = setWorkspaceResourceNavigationApi({
         canOpenInNewTab: () => workspaceTabsEnabled.value,
@@ -2214,10 +2236,11 @@ onMounted(() => {
         })
     );
 
-    registerCorePaletteSources({
+    disposeCorePaletteCommands = registerCorePaletteSources({
         commandDeps: {
             isFeatureEnabled: (feature) => {
                 if (feature === 'documents') return documentsEnabled.value;
+                if (feature === 'workspaceWrite') return emptySession.value?.session?.role !== 'viewer';
                 if (feature === 'dashboard') return dashboardEnabled.value;
                 if (feature === 'workspaceTabs') return workspaceTabsEnabled.value;
                 return true;
@@ -2230,8 +2253,14 @@ onMounted(() => {
             openAiSettings: () =>
                 openDashboardPage('core:settings', 'ai-settings'),
             newChat: onNewChat,
-            newDocument: () => onNewDocument(),
-            newProject: openNewProjectModal,
+            newDocument: () => {
+                if (isViewOnlyMember()) throw new Error(VIEW_ONLY_NOTICE);
+                return onNewDocument();
+            },
+            newProject: () => {
+                if (isViewOnlyMember()) throw new Error(VIEW_ONLY_NOTICE);
+                return openNewProjectModal();
+            },
             newTab: onWorkspaceNewTab,
             closeTab: () => onWorkspaceTabClose(workspaceTabs.activeTabId.value),
             reopenClosedTab: () => void workspaceTabs.reopenClosedTab(),
@@ -2249,6 +2278,29 @@ onMounted(() => {
     // A deep link opens its dashboard app once the shell is ready; a later
     // navigation to another link is handled by the watcher below.
     void consumeDashboardDeepLink();
+}
+
+function deactivatePaletteHost() {
+    if (!paletteHostActive) return;
+    paletteHostActive = false;
+    disposeCorePaletteCommands?.();
+    disposeCorePaletteCommands = null;
+    disposePaletteHostContext?.();
+    disposePaletteHostContext = null;
+    disposeWorkspaceResourceNavigation?.();
+    disposeWorkspaceResourceNavigation = null;
+    disposeWorkspaceTabPaletteProvider?.();
+    disposeWorkspaceTabPaletteProvider = null;
+}
+
+onMounted(activatePaletteHost);
+onActivated(activatePaletteHost);
+onDeactivated(deactivatePaletteHost);
+watch(() => emptySession.value?.session?.role, () => {
+    if (!paletteHostActive) return;
+    deactivatePaletteHost();
+    activatePaletteHost();
+    void getPaletteCoordinator()?.refreshSources(['command']);
 });
 
 watch(
@@ -2259,14 +2311,9 @@ watch(
 );
 
 onUnmounted(() => {
-    closeCommandPalette();
+    if (paletteHostActive) closeCommandPalette();
     disposeWorkspaceScopeSubscription();
-    disposePaletteHostContext?.();
-    disposePaletteHostContext = null;
-    disposeWorkspaceResourceNavigation?.();
-    disposeWorkspaceResourceNavigation = null;
-    disposeWorkspaceTabPaletteProvider?.();
-    disposeWorkspaceTabPaletteProvider = null;
+    deactivatePaletteHost();
 });
 
 const getHeaderActionContext = () => ({

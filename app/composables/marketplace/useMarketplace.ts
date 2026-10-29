@@ -29,6 +29,7 @@ import type { EffectiveAuthority } from '~~/shared/plugins/authority/effective-a
 import { acquisitionRequestError } from '~~/shared/plugins/acquisition/failure-presentation';
 import { ACTIVATION_CONFIRMATION_TIMEOUT_MS } from '~~/shared/plugins/lifecycle/lifecycle-view';
 import type { PluginRuntimeManifestResponse } from '~~/shared/plugins/runtime-manifest';
+import { presentError } from '~~/shared/errors';
 
 /**
  * Outcomes the operator has cleared from the detail panel, remembered per
@@ -370,8 +371,9 @@ export function useMarketplaceDetail() {
             if (request !== generation || signal.aborted) {
                 return { superseded: true, entry: null };
             }
-            error.value =
-                caught instanceof Error ? caught.message : 'That plugin could not be loaded.';
+            error.value = presentError(caught, {
+                fallbackMessage: 'That plugin could not be loaded. Try again.',
+            }).message;
             return { superseded: false, entry: null };
         } finally {
             if (request === generation) loading.value = false;
@@ -436,8 +438,12 @@ export function useMarketplacePreflight() {
             return answer;
         } catch (caught) {
             if (request !== generation || signal.aborted) return null;
-            error.value =
-                caught instanceof Error ? caught.message : 'The install check could not run.';
+            const failure = caught as { statusCode?: number; status?: number } | null;
+            error.value = (failure?.statusCode ?? failure?.status) === 404
+                ? 'This release is unavailable or is not approved for this site.'
+                : presentError(caught, {
+                    fallbackMessage: 'Try the install check again.',
+                }).message;
             return null;
         } finally {
             if (request === generation) loading.value = false;

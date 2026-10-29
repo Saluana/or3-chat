@@ -35,12 +35,15 @@ export function useDialogViewport(layout: () => DialogLayout) {
         const fullscreen = kind === 'fullscreen' ||
             ((kind === 'workspace' || kind === 'palette') && visible.width < 640);
         const available = Math.max(1, visible.height - (fullscreen ? 0 : 32));
+        // VisualViewport reports screen pixels, while teleported dialogs
+        // inherit the shell's CSS zoom. Convert to their local CSS units.
+        const localPixels = (value: number) => `calc(${value}px / var(--app-ui-zoom, 1)) !important`;
         const style: CSSProperties = {
-            top: `${fullscreen ? visible.top : kind === 'palette' ? visible.top + 16 : visible.top + visible.height / 2}px !important`,
-            maxHeight: `${available}px !important`,
+            top: localPixels(fullscreen ? visible.top : kind === 'palette' ? visible.top + 16 : visible.top + visible.height / 2),
+            maxHeight: localPixels(available),
         };
         if (fullscreen || kind === 'workspace' || kind === 'palette') {
-            style.height = `${fullscreen ? available : Math.min(kind === 'palette' ? 680 : 800, available)}px !important`;
+            style.height = localPixels(fullscreen ? available : Math.min(kind === 'palette' ? 680 : 800, available));
         }
         if (fullscreen || kind === 'palette') style.translate = 'var(--tw-translate-x, 0) 0 !important';
         return { style, 'data-compact-viewport': visible.height <= 240 ? 'tiny' : visible.height <= 500 ? 'short' : undefined };

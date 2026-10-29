@@ -205,7 +205,10 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         error: ref(null),
     };
 
+    let peekGeneration = 0;
+
     function reset() {
+        peekGeneration++;
         state.isExporting.value = false;
         state.isImporting.value = false;
         state.progress.value = 0;
@@ -426,6 +429,9 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
     }
 
     async function peekBackup(file: Blob): Promise<void> {
+        const generation = ++peekGeneration;
+        state.backupMeta.value = null;
+        state.backupFormat.value = null;
         if (typeof window === 'undefined') {
             state.error.value = err(
                 'ERR_INTERNAL',
@@ -486,6 +492,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 });
             }
 
+            if (generation !== peekGeneration) return;
             state.backupMeta.value = metadata;
             state.backupFormat.value = resolvedFormat;
             state.currentStep.value = 'confirm';
@@ -497,6 +504,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 durationMs: Date.now() - peekStartedAt,
             });
         } catch (e) {
+            if (generation !== peekGeneration) return;
             state.error.value = backupError(e);
             state.currentStep.value = 'error';
             reportError(state.error.value, {

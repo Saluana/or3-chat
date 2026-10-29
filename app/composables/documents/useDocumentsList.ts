@@ -26,6 +26,7 @@ import { useHookEffect } from '../core/useHookEffect';
  * ```
  */
 export function useDocumentsList(limit = 200) {
+    const toast = useToast();
     const docs = ref<Document[]>([]);
     // Start in loading state so SSR + client initial VDOM match (avoids hydration text mismatch)
     const loading = ref(true);
@@ -57,7 +58,7 @@ export function useDocumentsList(limit = 200) {
                 }));
             } catch (e) {
                 error.value = e;
-                useToast().add({
+                toast.add({
                     color: 'error',
                     title: 'Document: list failed',
                 });

@@ -10,7 +10,7 @@ Project Home brings together the brief, links to **Knowledge** and **Memory**, a
 
 The brief appears beneath the project title as a compact two-line preview. Its pencil expands an inline editor on Project Home, prefilled with the saved brief. **Save brief** saves and collapses the editor; **Cancel** or Escape discards the draft. **New chat in [project]** and **New document** sit together below the title. New document creates an untitled OR3 document in this project, adds it to Knowledge with **Use when relevant**, and opens its editor. Documents created by project chat tools use the same Knowledge binding, so they can be read in later turns. The action is hidden when documents are disabled.
 
-Project actions on every list row and the project header offer **Rename Project** and **Delete Project**, including projects outside Home’s five shortcuts. Deletion uses the existing recoverable delete flow.
+Project actions on every list row and the project header offer **Rename Project** and **Delete Project**, including projects outside Home’s five shortcuts. Deleting a project removes its settings, brief, memory, and knowledge links and detaches its chats. The chats, documents, and files remain, but the project cannot be restored from Trash.
 
 Unfinished brief, settings, note, and memory edits remain in this sidebar when you visit another project and return. Drafts stay in memory for the current workspace; switching workspaces or reloading clears them. Save edits before reloading. Clearing and saving a brief leaves it empty. The displayed brief is the same one sent with project chat.
 

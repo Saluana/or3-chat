@@ -73,6 +73,7 @@ import { exchangeOpenRouterCode } from '~/core/auth/openrouter-auth';
 import { persistUserApiKey, refreshOpenRouterConnection } from '~/core/auth/useUserApiKey';
 import { useOpenRouterAuth } from '~/core/auth/useOpenrouter';
 
+const toast = useToast();
 const route = useRoute();
 const router = useRouter();
 const { startLogin } = useOpenRouterAuth();
@@ -320,7 +321,7 @@ onMounted(async () => {
         await new Promise((r) => setTimeout(r, 10));
         loading.value = false;
         ready.value = true;
-        useToast().add({
+        toast.add({
             title: 'OpenRouter connected',
             description: 'Your API key was saved. You can start chatting now.',
             color: 'primary',

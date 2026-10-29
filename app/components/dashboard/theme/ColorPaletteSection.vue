@@ -88,11 +88,13 @@
                         <UColorPicker
                             v-bind="paletteColorPickerProps"
                             :ui="colorPickerUi"
+                            :throttle="50"
                             :disabled="!colorsEnabled"
                             :model-value="activeColorValue || undefined"
                             :aria-label="`${activeColor.label} color picker`"
                             class="palette-editor-picker"
-                            @update:model-value="setActiveColorValue"
+                            @pointerdown.capture="startPickerInteraction"
+                            @update:model-value="updateFromPicker"
                         />
                     </div>
 
@@ -210,7 +212,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, onMounted, ref, watch } from 'vue';
+import { reactive, computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useClipboard, useResizeObserver } from '@vueuse/core';
@@ -647,6 +649,32 @@ function setActiveColorValue(color?: string) {
     localHex[activeColor.value.key] = normalized;
     setColor(activeColor.value, normalized);
 }
+
+// Nuxt UI's picker echoes rounded HSL values after programmatic changes.
+// Accept those updates only while a user is actually dragging the picker.
+let pickerInteracting = false;
+let pickerReleaseTimer: ReturnType<typeof setTimeout> | undefined;
+function startPickerInteraction() {
+    clearTimeout(pickerReleaseTimer);
+    pickerInteracting = true;
+}
+function endPickerInteraction() {
+    if (!pickerInteracting) return;
+    // The picker throttles its final update by 50ms after pointer release.
+    pickerReleaseTimer = setTimeout(() => { pickerInteracting = false; }, 150);
+}
+function updateFromPicker(color?: string) {
+    if (pickerInteracting) setActiveColorValue(color);
+}
+onMounted(() => {
+    window.addEventListener('pointerup', endPickerInteraction);
+    window.addEventListener('pointercancel', endPickerInteraction);
+});
+onUnmounted(() => {
+    clearTimeout(pickerReleaseTimer);
+    window.removeEventListener('pointerup', endPickerInteraction);
+    window.removeEventListener('pointercancel', endPickerInteraction);
+});
 
 function updateActiveHex(event: Event) {
     localHex[activeColor.value.key] = String(

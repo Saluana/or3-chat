@@ -405,7 +405,7 @@ async function waitForFunctionalChat(page: Page): Promise<void> {
     await expect(page.locator('[data-welcome-backdrop]')).toBeHidden();
 }
 
-test('client error recovery remains visible and dismissible after shell sizing', async ({ page }, testInfo) => {
+test('attachment rejection remains visible and chat stays usable after shell sizing', async ({ page }, testInfo) => {
     await page.route(/(?:openrouter\.ai\/|\/api\/openrouter\/)/, (route) =>
         route.request().method() === 'POST'
             ? route.abort('blockedbyclient')
@@ -419,17 +419,13 @@ test('client error recovery remains visible and dismissible after shell sizing',
     await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
     const chooser = await chooserPromise;
     await chooser.setFiles({ name: 'rejected-fixture.zip', mimeType: 'application/zip', buffer: Buffer.from('Disposable unsupported attachment') });
-    await expect(page.getByText('Attachment not accepted', { exact: true }).first()).toBeVisible();
-    await page.getByRole('button', { name: 'Details', exact: true }).first().click();
-    const details = page.getByRole('dialog', { name: 'Error details', exact: true });
-    await expect(details).toBeVisible();
-    await expect(details).toBeInViewport({ ratio: 1 });
-    await expect(details.locator('pre')).toContainText('ERR_FILE_VALIDATION');
+    const notification = page.getByRole('region', { name: 'Notifications (F8)' });
+    await expect(notification.getByText('Attachment not accepted', { exact: true })).toBeVisible();
+    await expect(notification.getByText('Unsupported file type', { exact: true })).toBeVisible();
+    await expect(notification).toBeInViewport({ ratio: 1 });
     await testInfo.attach('client-error-recovery', {
         body: await page.screenshot(), contentType: 'image/png',
     });
-    await details.locator('[data-slot="footer"]').getByRole('button', { name: 'Close', exact: true }).click();
-    await expect(details).toBeHidden();
     await input.fill('Recovered locally');
     await expect(input).toHaveText('Recovered locally');
     const root = await page.locator('#page-container').boundingBox();

@@ -103,11 +103,14 @@ async function putDocumentPostRow(
     db: Or3DB,
     row: Post,
     includeTombstones = false,
-    unchanged?: () => Promise<boolean>
+    unchanged?: () => Promise<boolean>,
+    assertWritable?: () => void,
 ): Promise<boolean> {
     const commit = async () => {
         if (unchanged && !(await unchanged())) return false;
+        assertWritable?.();
         await db.posts.put(row);
+        assertWritable?.();
         return true;
     };
     if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
@@ -320,14 +323,16 @@ export async function createDocument(
  */
 export async function createDocumentInDb(
     db: Or3DB,
-    input: CreateDocumentInput = {}
+    input: CreateDocumentInput = {},
+    assertWritable?: () => void,
 ): Promise<DocumentRecord> {
+    assertWritable?.();
     const prepared = await prepareDocumentCreate(input);
-    await dbTry(
-        () => putDocumentPostRow(db, prepared.row),
-        { op: 'write', entity: 'posts', action: 'createDocument' },
-        { rethrow: true }
-    );
+    const commit = () => putDocumentPostRow(db, prepared.row, false, undefined, assertWritable);
+    // The scoped caller reports its own failure; an access change is not a
+    // database error and must not produce a second, misleading notification.
+    if (assertWritable) await commit();
+    else await dbTry(commit, { op: 'write', entity: 'posts', action: 'createDocument' }, { rethrow: true });
     await prepared.afterCommit();
     return rowToRecord(prepared.row);
 }

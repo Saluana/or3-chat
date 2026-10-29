@@ -264,8 +264,17 @@ export class PaletteSourceIndex {
                         await new Promise<void>(resolve => setTimeout(resolve, 0));
                         assertIndexCurrent();
                     }
+                    // Orama's default tokenizer can omit non-Latin scripts. Keep
+                    // its ranked results, but include literal Unicode matches too.
+                    const literalMatches = /[^\x00-\x7f]/u.test(term)
+                        ? this.fallbackSearch(term, limit, options.accepts)
+                        : [];
+                    const combined = new Map<string, PaletteResult>();
+                    for (const result of [...literalMatches, ...grouped]) {
+                        if (!combined.has(result.key)) combined.set(result.key, result);
+                    }
                     return finish({
-                        results: grouped.slice(0, limit),
+                        results: [...combined.values()].slice(0, limit),
                         usingFallback: false,
                         oramaFailed: false,
                     });

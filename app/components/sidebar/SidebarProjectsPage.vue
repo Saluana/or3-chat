@@ -31,7 +31,8 @@ import {
     projectToolRequiresApproval,
 } from '~/utils/projects/context';
 import { relatedChatsNotice } from '~/utils/projects/related-chats';
-import { useToast } from '#imports';
+import { useRuntimeConfig, useToast } from '#imports';
+import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import {
     addProjectUpload,
     addProjectDocument,
@@ -451,6 +452,20 @@ function connect() {
     subscription?.unsubscribe();
     controller.abort();
     controller = new AbortController();
+    // The selected project can be cleared after sign-out but before this
+    // kept-alive page unmounts. Do not capture an unauthorized workspace.
+    if (useRuntimeConfig().public.ssrAuthEnabled && !getCachedSessionContext()?.authenticated) {
+        state.value = null;
+        projects.value = [];
+        chats.value = [];
+        documents.value = [];
+        files.value = [];
+        allChats.value = [];
+        busy.value = false;
+        error.value = '';
+        releasePreview();
+        return;
+    }
     scope = captureProjectOperation(controller.signal);
     state.value = null;
     busy.value = false;
@@ -636,6 +651,10 @@ onDeactivated(() => {
 onActivated(() => {
     if (active) return;
     active = true;
+    if (useRuntimeConfig().public.ssrAuthEnabled && !getCachedSessionContext()?.authenticated) {
+        connect();
+        return;
+    }
     controller = new AbortController();
     scope = captureProjectOperation(controller.signal);
     busy.value = false;

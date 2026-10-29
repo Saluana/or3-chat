@@ -10,6 +10,7 @@ import {
 import { reportError } from '~/utils/errors';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
 import { getDb, type Or3DB } from '~/db/client';
+import { captureProjectOperation } from '~/utils/projects/operation';
 
 import type { TipTapDocument } from '~/types/database';
 
@@ -367,8 +368,10 @@ export async function newDocument(initial?: {
     content?: TipTapDocument | null;
 }) {
     try {
-        const db = getDb();
-        const rec = await createDocumentInDb(db, initial);
+        const scope = captureProjectOperation();
+        scope.assertCurrent('write');
+        const db = scope.db;
+        const rec = await createDocumentInDb(db, initial, () => scope.assertCurrent('write'));
         const st = ensure(rec.id, db);
         st.record = rec;
         st.status = 'idle';

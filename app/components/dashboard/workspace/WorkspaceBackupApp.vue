@@ -177,7 +177,7 @@
                             </div>
                             <UBadge
                                 v-bind="badgeProps"
-                                icon="i-ph-file-duotone"
+                                :icon="iconFile"
                                 :class="[
                                     'theme-badge',
                                     badgeToneClass(fileBadgeColor),
@@ -227,8 +227,8 @@
                                 </p>
                             </div>
                             <UBadge
-                                v-if="backupMeta.tables.length"
-                                icon="i-ph-database-duotone"
+                                v-if="!cloud && backupMeta.tables.length"
+                                :icon="iconWorkspaces"
                                 :class="[
                                     'theme-badge',
                                     badgeToneClass('primary'),
@@ -239,7 +239,7 @@
                             </UBadge>
                         </div>
                         <div
-                            v-if="backupMeta.tables.length"
+                            v-if="!cloud && backupMeta.tables.length"
                             class="theme-meta-table"
                             role="list"
                             aria-label="Tables included in backup"
@@ -300,7 +300,7 @@
                                     </div>
                                     <UIcon
                                         v-if="importMode === option.value"
-                                        name="i-ph-check-circle-duotone"
+                                        :name="iconCheck"
                                         class="ml-auto text-lg text-[var(--md-primary)]"
                                     />
                                 </div>
@@ -389,6 +389,10 @@ const iconBackup = useIcon('dashboard.backup');
 const iconUpload = useIcon('ui.upload');
 const iconWait = useIcon('ui.wait');
 const iconRestore = useIcon('dashboard.restore');
+const iconFile = useIcon('sidebar.project.knowledge.file');
+const iconWorkspaces = useIcon('dashboard.workspaces');
+const iconCheck = useIcon('ui.check');
+const iconSync = useIcon('ui.sync');
 
 const liveRegion = ref<HTMLElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -614,25 +618,25 @@ const peekErrorMessage = computed(() => peekError.value?.message?.trim() ?? '');
 
 const overwriteDisabled = computed(() => importMode.value !== 'append');
 
-const importModeOptions: Array<{
+const importModeOptions = computed<Array<{
     value: WorkspaceImportMode;
     label: string;
     description: string;
     icon: string;
-}> = [
+}>>(() => [
     {
         value: 'replace',
         label: 'Replace workspace',
         description: 'Clear all local data, then restore from the backup.',
-        icon: 'i-ph-warning-diamond-duotone',
+        icon: iconWarning.value,
     },
     {
         value: 'append',
         label: 'Append & merge',
         description: 'Keep existing records and add new rows from the backup.',
-        icon: 'i-ph-arrows-merge-duotone',
+        icon: iconSync.value,
     },
-];
+]);
 
 const selectedFileSummary = computed(() => {
     if (!selectedFile.value)
@@ -645,6 +649,7 @@ const selectedFileSummary = computed(() => {
 const fileBadgeLabel = computed(() => {
     if (!selectedFile.value) return '';
     if (peeking.value) return 'Validating…';
+    if (peekError.value) return 'Validation failed';
     if (backupMeta.value) return 'Metadata validated';
     return 'Ready to validate';
 });
@@ -652,73 +657,9 @@ const fileBadgeLabel = computed(() => {
 const fileBadgeColor = computed(() => {
     if (!selectedFile.value) return 'neutral' as const;
     if (peeking.value) return 'info' as const;
+    if (peekError.value) return 'error' as const;
     if (backupMeta.value) return 'success' as const;
     return 'primary' as const;
-});
-
-const exportStatusBadge = computed(() => {
-    if (exporting.value) {
-        return {
-            color: 'primary' as const,
-            icon: 'i-ph-cloud-arrow-down-duotone',
-            label: `Streaming… ${state.progress.value}%`,
-        };
-    }
-    if (lastExportStatus.value === 'done') {
-        return {
-            color: 'success' as const,
-            icon: 'i-ph-check-circle-duotone',
-            label: 'Export complete',
-        };
-    }
-    if (lastExportStatus.value === 'error') {
-        return {
-            color: 'error' as const,
-            icon: 'i-ph-x-circle-duotone',
-            label: 'Export failed',
-        };
-    }
-    return {
-        color: 'neutral' as const,
-        icon: 'i-ph-floppy-disk-duotone',
-        label: 'Ready to export',
-    };
-});
-
-const importStatusBadge = computed(() => {
-    if (importing.value) {
-        return {
-            color: 'primary' as const,
-            icon: 'i-ph-cloud-arrow-up-duotone',
-            label: `Importing… ${state.progress.value}%`,
-        };
-    }
-    if (peeking.value) {
-        return {
-            color: 'info' as const,
-            icon: 'i-ph-magnifying-glass-duotone',
-            label: 'Validating backup…',
-        };
-    }
-    if (lastImportStatus.value === 'done') {
-        return {
-            color: 'success' as const,
-            icon: 'i-ph-check-circle-duotone',
-            label: 'Import complete',
-        };
-    }
-    if (lastImportStatus.value === 'error') {
-        return {
-            color: 'error' as const,
-            icon: 'i-ph-x-circle-duotone',
-            label: 'Import failed',
-        };
-    }
-    return {
-        color: 'neutral' as const,
-        icon: 'i-ph-folder-open-duotone',
-        label: 'Awaiting backup',
-    };
 });
 
 const exportStatusFormatter = new Intl.DateTimeFormat(undefined, {
@@ -768,15 +709,8 @@ function clearSelection() {
     selectedFile.value = null;
     peekError.value = null;
     if (!importing.value && !exporting.value) {
-        state.backupMeta.value = null;
-        if (
-            state.currentStep.value !== 'exporting' &&
-            state.currentStep.value !== 'importing'
-        ) {
-            state.currentStep.value = 'idle';
-        }
-        state.error.value = null;
-        state.progress.value = 0;
+        reset();
+        if (pendingAction.value === 'peek') pendingAction.value = null;
     }
 }
 

@@ -210,7 +210,7 @@ function toCompleteWizardAnswers(input: Partial<WizardAnswers>): WizardAnswers {
 function startLocalDevDetached(
     instanceDir: string,
     packageManager: PackageManager
-): void {
+) {
     // The same command the user is told to run; `.env` decides SSR auth.
     // Host and port match the readiness probe below.
     const command = startCommand(packageManager);
@@ -222,6 +222,7 @@ function startLocalDevDetached(
     });
     child.once('error', () => {});
     child.unref();
+    return child;
 }
 
 async function prepareLocalDevRuntime(
@@ -526,17 +527,31 @@ export async function runWizardDeploy(
             instructions =
                 'Port 3000 is already in use. The wizard will not stop unrelated processes; stop the existing service and rerun deployment, or start OR3 manually on a free port.';
         } else {
-            startLocalDevDetached(answers.instanceDir, packageManager);
+            const child = startLocalDevDetached(answers.instanceDir, packageManager);
+            const stopped = new AbortController();
+            const onExit = () => stopped.abort(new Error('Local dev exited before becoming ready.'));
+            const onError = () => stopped.abort(new Error('Local dev could not be started.'));
+            child.once('exit', onExit);
+            child.once('error', onError);
             started = true;
             try {
-                await waitForHttpReady(`${localDevUrl}/api/health`, 180_000);
+                await waitForHttpReady(`${localDevUrl}/api/health`, 180_000, stopped.signal);
                 accessUrl = localDevUrl;
                 instructions =
                     'Local dev started with the updated environment values.';
             } catch (error) {
-                instructions =
-                    'Started local dev in background, but startup did not become reachable within timeout. ' +
-                    `Check logs and run manually if needed: ${normalizeErrorMessage(error)}`;
+                if (stopped.signal.aborted) {
+                    started = false;
+                    instructions =
+                        'Local dev exited before it was ready. Run the start command in a terminal to see the error and complete any required secret-store setup.';
+                } else {
+                    instructions =
+                        'Started local dev in background, but startup did not become reachable within timeout. ' +
+                        `Check logs and run manually if needed: ${normalizeErrorMessage(error)}`;
+                }
+            } finally {
+                child.off('exit', onExit);
+                child.off('error', onError);
             }
         }
 

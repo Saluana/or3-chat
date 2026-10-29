@@ -1364,7 +1364,7 @@ describe('nonblocking project memory classification', () => {
             source_thread_id: 'memory-chat', source_message_id: 'memory-source' });
         const body = await request;
         const finish = (answer: unknown = { type: 'choice', choice: 'decision',
-            probabilities: { fact: 0.01, decision: 0.98, uncertain: 0.01 } }, model = 'perplexity/pplx-decider-v1.1-27b') => reply(new Response(JSON.stringify({
+            probabilities: { fact: 0.01, decision: 0.98, uncertain: 0.01 } }, model = 'perplexity/pplx-decider-v1.2') => reply(new Response(JSON.stringify({
                 model, answers: { memory_kind: answer },
                 usage: { input_tokens: 30, output_tokens: 0, cost: 0.000003 },
             }), { headers: { 'Content-Type': 'application/json' } }));
@@ -1393,7 +1393,7 @@ describe('nonblocking project memory classification', () => {
         await new Promise(resolve => setTimeout(resolve, 50));
         expect(await db.posts.get(saved.row.id)).toEqual(saved.row);
     });
-    it.each(['perplexity/pplx-decider-v1.1-27b', 'perplexity/pplx-decider-v1.1-27b-20260917'])(
+    it.each(['perplexity/pplx-decider-v1.2', 'perplexity/pplx-decider-v1.2-20260917'])(
         'saves immediately, bounds owning-chat context, then accepts resolved model %s', async model => {
         const { saved, body, finish } = await start();
         expect(JSON.parse((await db.posts.get(saved.row.id))!.content).kind).toBe('fact');
@@ -1429,7 +1429,7 @@ describe('nonblocking project memory classification', () => {
             await new Promise(resolve => setTimeout(resolve, 100));
             expect(await db.posts.get(saved.row.id)).toEqual(before);
         });
-    it.each(['attacker/model', 'perplexity/pplx-decider-v1.1-27b-other', 'perplexity/pplx-decider-v1.1-27b-20260917-extra'])(
+    it.each(['attacker/model', 'perplexity/pplx-decider-v1.2-other', 'perplexity/pplx-decider-v1.2-20260917-extra'])(
         'refuses unrelated resolved model %s', async model => {
             const { saved, finish } = await start();
             const before = await db.posts.get(saved.row.id);
@@ -1515,7 +1515,7 @@ describe('automatic project memory capture', () => {
     const reply = (memories = [candidate]) => new Response(JSON.stringify({
         choices: [{ message: { content: JSON.stringify({ memories }) } }],
     }), { status: 200 });
-    const gate = (save = 0.99) => new Response(JSON.stringify({ model: 'perplexity/pplx-decider-v1.1-27b',
+    const gate = (save = 0.99) => new Response(JSON.stringify({ model: 'perplexity/pplx-decider-v1.2',
         answers: { worth_saving: { type: 'choice', choice: 'save',
             probabilities: { save, skip: (1 - save) / 2, uncertain: (1 - save) / 2 } } },
         usage: { cost: 0.00001 } }), { status: 200 });
@@ -1793,7 +1793,7 @@ describe('automatic project memory capture', () => {
         expect((await readProjectWorkspace(db, 'a')).memories).toHaveLength(0);
         await db.kv.clear();
         fetcher.mockReset().mockResolvedValue(new Response(JSON.stringify({
-            model: 'perplexity/pplx-decider-v1.1-27b', answers: { worth_saving: { type: 'choice', choice: 'skip',
+            model: 'perplexity/pplx-decider-v1.2', answers: { worth_saving: { type: 'choice', choice: 'skip',
                 probabilities: { save: 0.01, skip: 0.98, uncertain: 0.01 } } },
         })));
         await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');

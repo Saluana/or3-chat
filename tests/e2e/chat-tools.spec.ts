@@ -8,7 +8,7 @@ const exceptions = new WeakMap<Page, string[]>();
 test.beforeEach(async ({ page }) => {
     exceptions.set(page, []);
     page.on('pageerror', error => exceptions.get(page)!.push(error.message));
-    await page.route(/https?:\/\/(?!127\.0\.0\.1|localhost)/, route => route.fulfill({ json: { data: [] } }));
+    await page.route(/https?:\/\/(?!127\.0\.0\.1|localhost)/, route => route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }));
 });
 
 async function open(page: Page, rounds: FixtureCall[][], scenario = 'normal', firstResponse?: string) {
@@ -17,7 +17,7 @@ async function open(page: Page, rounds: FixtureCall[][], scenario = 'normal', fi
     let round = 0;
     await page.route('**openrouter.ai/**', async route => {
         if (!route.request().url().includes('/chat/completions')) {
-            await route.fulfill({ json: { data: [] } }); return;
+            await route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }); return;
         }
         const body = route.request().postDataJSON();
         captured.push(body);

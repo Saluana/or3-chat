@@ -40,7 +40,7 @@
             {{
               draftProfileId === selectedProfileId
                 ? "Active in this workspace"
-                : "Applying this profile will set"
+                : "Profile preview"
             }}
           </h3>
           <dl class="profile-effect-list">
@@ -228,7 +228,7 @@ const summaryRows = computed(() => {
       hidden: names(resolved.dashboard.hidden, dashboard, "tools"),
     },
     {
-      label: "Opens with",
+      label: "Initial panes",
       value: `${
         names(
           resolved.workspace.initialPanes.map((pane) => pane.id),

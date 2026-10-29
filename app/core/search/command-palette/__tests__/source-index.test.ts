@@ -69,6 +69,21 @@ describe('PaletteSourceIndex', () => {
         } finally { search.mockRestore(); index.dispose(); }
     });
 
+    it('finds non-Latin title and content using the real search index', async () => {
+        vi.doUnmock('~/core/search/orama');
+        const { PaletteSourceIndex } = await import('../source-index');
+        const index = new PaletteSourceIndex('chat');
+        try {
+            await index.replaceAll([
+                { ...resources[0]!, title: 'QA مرحبا', content: '日本語の本文' },
+                { ...resources[1]!, title: 'Other conversation', content: 'unrelated' },
+            ]);
+            expect((await index.search({ term: 'مرحبا' })).results.map(item => item.key)).toContain('chat:1');
+            expect((await index.search({ term: '日本語' })).results.map(item => item.key)).toContain('chat:1');
+            expect((await index.search({ term: 'مرحبا', accepts: item => item.key !== 'chat:1' })).results).toEqual([]);
+        } finally { index.dispose(); }
+    });
+
     it('falls back to substring matching when forced', async () => {
         vi.doMock('~/core/search/orama', () => ({
             createDb: vi.fn(async () => {

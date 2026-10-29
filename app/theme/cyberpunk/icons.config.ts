@@ -1,4 +1,4 @@
-import type { IconMap } from '~/theme/_shared/icon-registry';
+import type { IconMap } from '../_shared/icon-registry';
 
 export default <IconMap>{
     // Shell & Navigation — carbon icons for clean techy feel
@@ -106,7 +106,7 @@ export default <IconMap>{
     'ui.notes': 'carbon:document',
     'ui.notes.multiple': 'carbon:document-multiple-01',
     'ui.chat': 'carbon:chat',
-    'ui.sync': 'carbon:sync',
+    'ui.sync': 'carbon:renew',
     'ui.checkbox.on': 'carbon:checkbox-checked',
     'ui.checkbox.off': 'carbon:checkbox',
     'ui.book': 'carbon:book',
@@ -114,7 +114,7 @@ export default <IconMap>{
     'ui.calendar': 'carbon:calendar',
     'ui.sparkles': 'carbon:watson',
     'ui.drag': 'carbon:draggable',
-    'ui.flame': 'carbon:flame',
+    'ui.flame': 'carbon:fire',
     'ui.leaf': 'carbon:sprout',
     'ui.list.todo': 'carbon:task',
     'ui.list.checks': 'carbon:list',
@@ -127,7 +127,7 @@ export default <IconMap>{
     'dashboard.settings': 'carbon:settings',
     'dashboard.images': 'carbon:image',
     'dashboard.backup': 'carbon:export',
-    'dashboard.restore': 'carbon:import',
+    'dashboard.restore': 'carbon:document-import',
 
     // Admin
     'admin.workspace': 'carbon:building',
@@ -157,7 +157,7 @@ export default <IconMap>{
     'notification.bell': 'carbon:notification',
     'notification.message': 'carbon:email',
     'notification.workflow': 'carbon:flash',
-    'notification.sync': 'carbon:sync',
+    'notification.sync': 'carbon:renew',
     'notification.warning': 'carbon:warning-alt',
     'notification.default': 'carbon:information',
     close: 'carbon:close',

@@ -55,6 +55,14 @@ describe('OpenRouter credential policy', () => {
         fixture.config.openrouterRequireUserKey = false;
         expect(await resolveOpenRouterCredential(event)).toEqual({ apiKey: 'instance-key', source: 'server' });
     });
+    it('reports disabled personal storage without error while refusing mutations and preserving outage failures', async () => {
+        fixture.config.secrets.provider = '';
+        await expect(openRouterCredentialOperation(fixture.session as any, { operation: 'status' })).resolves.toEqual({ connected: false, persisted: false, available: false });
+        await expect(openRouterCredentialOperation(fixture.session as any, { operation: 'save', key: 'sk-or-v1-test-fixture' })).rejects.toMatchObject({ statusCode: 503 });
+        fixture.config.secrets.provider = 'or3-secrets';
+        fixture.inspect.mockRejectedValue(new Error('unavailable'));
+        await expect(openRouterCredentialOperation(fixture.session as any, { operation: 'status' })).rejects.toMatchObject({ statusCode: 503 });
+    });
     it('requires authenticated workspace authority before looking up a credential', async () => {
         fixture.session.authenticated = false;
         await expect(resolveOpenRouterCredential(event)).rejects.toMatchObject({ statusCode: 401 });

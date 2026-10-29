@@ -16,7 +16,7 @@ Open a chat and choose a model in **Settings → Model catalog**. On phones, **S
 
 The input clears once your message is saved, without waiting for the model to respond. If sending is blocked before the message is saved, your draft and attachments stay in the input. If the model fails after saving, retry from the saved conversation.
 
-Choose the system prompt for this chat in **Settings**. While sending, the send control shows progress, then becomes **Stop generation** while the response streams.
+Choose the system prompt for this chat in **Settings**. For an unsent chat, the selection is saved with its draft and restored after reload when browser storage is available. While sending, the send control shows progress, then becomes **Stop generation** while the response streams.
 
 Choose a model with the capabilities your request needs. For an image or file, use the attachment control and select a compatible model. A text-only model cannot be assumed to understand an image. If an attachment cannot be prepared, remove it or reattach the original file and try again.
 

@@ -157,6 +157,7 @@ import { useIcon } from '~/composables/useIcon';
 import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
 import { useSidebarProjectActionButtonProps } from '~/composables/sidebar/useSidebarProjectActionButtonProps';
 
+const toast = useToast();
 const { handlePopoverTriggerKey } = usePopoverKeyboard();
 
 interface ProjectRow {
@@ -298,7 +299,7 @@ async function runExtraAction(action: any, data: { root?: any; child?: any }) {
         await action.handler(data);
     } catch (e: any) {
         try {
-            useToast().add({
+            toast.add({
                 title: 'Action failed',
                 description: e?.message || 'Error running action',
                 color: 'error',

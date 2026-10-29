@@ -36,6 +36,8 @@ export interface PersistedDraftAttachment {
 }
 
 export interface WorkspaceDraftComposerSettings {
+    /** Pre-chat system prompt selection, owned by this draft tab. */
+    pendingPromptId?: string | null;
     model: string;
     modelVariant: OpenRouterModelVariant;
     /** @deprecated Migrated to `modelVariant` (`true` maps to `'online'`). */
