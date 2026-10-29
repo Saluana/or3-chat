@@ -374,31 +374,31 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
             includeHidden: true,
         }),
     ).toHaveCount(0);
-    const createPermission = projects.getByRole('combobox', {
-        name: 'Permission for Create document',
+    const duplicatePermission = projects.getByRole('combobox', {
+        name: 'Permission for Duplicate document',
         exact: true,
     });
     const documentTools = projects.getByRole('button', {
         name: 'Document tools',
         exact: true,
     });
-    await expect(createPermission).not.toBeVisible();
+    await expect(duplicatePermission).not.toBeVisible();
     await documentTools.press('Enter');
-    await expect(createPermission).toBeVisible();
+    await expect(duplicatePermission).toBeVisible();
     const toolSearch = projects.getByRole('textbox', {
         name: 'Search project tools',
         exact: true,
     });
-    await toolSearch.fill('Duplicate');
+    await toolSearch.fill('Find');
     await expect(
         projects.getByRole('combobox', {
-            name: 'Permission for Duplicate document',
+            name: 'Permission for Find documents',
             exact: true,
         }),
     ).toBeVisible();
-    await expect(createPermission).not.toBeVisible();
+    await expect(duplicatePermission).not.toBeVisible();
     await toolSearch.fill('');
-    await expect(createPermission).not.toBeVisible();
+    await expect(duplicatePermission).not.toBeVisible();
     await documentTools.press('Enter');
     const sidebarBounds = (await projects.boundingBox())!;
     const toolsBounds = (await projects
@@ -409,16 +409,16 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     expect(toolsBounds.x + toolsBounds.width).toBeLessThanOrEqual(
         sidebarBounds.x + sidebarBounds.width - 20 * zoom,
     );
-    const createHelp = page.getByText(
-        'Make a new document from a title and optional text.',
+    const duplicateHelp = page.getByText(
+        'Make a separate copy of a document.',
         { exact: true },
     );
-    await expect(createHelp).not.toBeVisible();
-    await createPermission.click();
-    await expect(createHelp).toBeVisible();
+    await expect(duplicateHelp).not.toBeVisible();
+    await duplicatePermission.click();
+    await expect(duplicateHelp).toBeVisible();
     await page.getByRole('option', { name: 'Ask first', exact: true }).click();
     await expect(
-        projects.getByLabel('Allowed repositories for Create document', {
+        projects.getByLabel('Allowed repositories for Duplicate document', {
             exact: true,
         }),
     ).toHaveCount(0);
@@ -439,7 +439,7 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
         projects.getByLabel('Instructions', { exact: true }),
     ).toHaveValue('Sidebar instructions remain editable.');
     await expect(defaultModel).toContainText('Sidebar test model');
-    await expect(createPermission).toContainText('Ask first');
+    await expect(duplicatePermission).toContainText('Ask first');
     await expect(
         projects.getByRole('button', {
             name: 'Save changes',
