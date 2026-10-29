@@ -98,10 +98,6 @@ vi.mock('../client', () => {
     };
 });
 
-vi.mock('../dbTry', () => ({
-    dbTry: async <T>(fn: () => T | Promise<T>) => fn(),
-}));
-
 vi.mock('../../core/hooks/useHooks', () => ({
     useHooks: () => ({
         applyFilters: async (_name: string, value: unknown) => value,

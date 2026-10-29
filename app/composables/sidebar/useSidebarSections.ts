@@ -259,11 +259,9 @@ export interface SidebarFooterActionEntry {
  * - Does not validate component structure
  */
 export function registerSidebarSection(section: SidebarSection) {
-    if (useSectionV2Surface()) {
-        sectionV2Kernel.registry.registerLegacy({ value: section });
-    } else {
-        sectionRegistry.register(section);
-    }
+    return useSectionV2Surface()
+        ? sectionV2Kernel.registry.registerLegacy({ value: section })
+        : sectionRegistry.register(section);
 }
 
 /**

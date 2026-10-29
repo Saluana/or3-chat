@@ -74,8 +74,9 @@ function useV2Surface(): boolean {
 
 /** Register (or replace) a message action. */
 export function registerProjectTreeAction(action: ProjectTreeAction) {
-    if (useV2Surface()) v2Kernel.registry.registerLegacy({ value: action });
-    else registry.register(action);
+    return useV2Surface()
+        ? v2Kernel.registry.registerLegacy({ value: action })
+        : registry.register(action);
 }
 
 /** Unregister an action by id (optional utility). */

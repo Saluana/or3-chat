@@ -5,7 +5,7 @@ export default defineNuxtPlugin(() => {
         console.info('[thread-history-test] registering actions');
 
         // Inspect thread action — shows a console group and a toast
-        registerThreadHistoryAction({
+        const inspectAction = registerThreadHistoryAction({
             id: 'test:inspect-thread',
             icon: 'i-lucide-eye',
             label: 'Inspect Thread',
@@ -48,7 +48,7 @@ export default defineNuxtPlugin(() => {
         });
 
         // Dump thread to console action — lightweight, useful for automation tests
-        registerThreadHistoryAction({
+        const dumpAction = registerThreadHistoryAction({
             id: 'test:dump-thread',
             icon: 'i-lucide-copy',
             label: 'Dump thread',
@@ -90,8 +90,8 @@ export default defineNuxtPlugin(() => {
             // Cast hook key to any to avoid strict HookKeys typing; this is a dev helper plugin.
             (nuxtApp.hook as any)('app:beforeUnmount', () => {
                 try {
-                    unregisterThreadHistoryAction?.('test:inspect-thread');
-                    unregisterThreadHistoryAction?.('test:dump-thread');
+                    inspectAction.dispose();
+                    dumpAction.dispose();
                     console.info(
                         '[thread-history-test] unregistered actions on app:beforeUnmount'
                     );

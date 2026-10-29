@@ -1,10 +1,8 @@
 import {
     registerDocumentHistoryAction,
-    unregisterDocumentHistoryAction,
 } from '~/composables/documents/useDocumentHistoryActions';
 import {
     registerThreadHistoryAction,
-    unregisterThreadHistoryAction,
 } from '~/composables/threads/useThreadHistoryActions';
 import { useToast } from '#imports';
 import { getDb } from '~/db/client';
@@ -21,7 +19,7 @@ export function setupHistoryActionsExample() {
     const toast = useToast();
     const db = getDb();
 
-    registerDocumentHistoryAction({
+    const documentAction = registerDocumentHistoryAction({
         id: 'example:export-doc',
         icon: 'i-carbon-download',
         label: 'Export (Example)',
@@ -54,7 +52,7 @@ export function setupHistoryActionsExample() {
         },
     });
 
-    registerThreadHistoryAction({
+    const threadAction = registerThreadHistoryAction({
         id: 'example:pin-thread',
         icon: 'i-carbon-pin',
         label: 'Pin Thread (Example)',
@@ -104,8 +102,8 @@ export function setupHistoryActionsExample() {
     });
 
     const cleanup = () => {
-        unregisterDocumentHistoryAction('example:export-doc');
-        unregisterThreadHistoryAction('example:pin-thread');
+        documentAction.dispose();
+        threadAction.dispose();
     };
 
     if (import.meta.hot) {

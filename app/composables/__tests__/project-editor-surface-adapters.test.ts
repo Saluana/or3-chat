@@ -66,7 +66,7 @@ function compareProfile<T>(input: {
 }
 
 describe('project tree and editor toolbar adapters', () => {
-    it('matches project-tree void returns, replacement, stored showOn, and ordering', () => {
+    it('matches project-tree handle returns, replacement, stored showOn, and ordering', () => {
         const fixture: DifferentialSurfaceFixture<ProjectTreeAction> = {
             profileId: 'registry.project-tree-actions',
             registrations: [
@@ -98,7 +98,7 @@ describe('project tree and editor toolbar adapters', () => {
             clear: () => clear(listRegisteredProjectTreeActionIds, unregisterProjectTreeAction),
         });
         expect(actual.projectedIds).toEqual(['early', 'a', 'z']);
-        expect(actual.registerReturns.every((value) => value.kind === 'undefined')).toBe(true);
+        expect(actual.registerReturns.every((value) => value.kind === 'registration-handle')).toBe(true);
     });
 
     it('matches editor ordering and hides false or throwing visibility predicates', () => {
@@ -138,6 +138,6 @@ describe('project tree and editor toolbar adapters', () => {
                 clear(listRegisteredEditorToolbarButtonIds, unregisterEditorToolbarButton),
         });
         expect(actual.projectedIds).toEqual(['early', 'a', 'z']);
-        expect(actual.registerReturns.every((value) => value.kind === 'undefined')).toBe(true);
+        expect(actual.registerReturns.every((value) => value.kind === 'registration-handle')).toBe(true);
     });
 });

@@ -134,7 +134,7 @@ describe('footer and history contribution adapters', () => {
             listIds: listRegisteredThreadHistoryActionIds,
             useItems: useThreadHistoryActions,
         },
-    ])('matches $label history void returns, replacement, and ordering', (surface) => {
+    ])('matches $label history handle returns, replacement, and ordering', (surface) => {
         type Action = DocumentHistoryAction | ThreadHistoryAction;
         const fixture: DifferentialSurfaceFixture<Action> = {
             profileId: 'registry.history-actions',
@@ -168,6 +168,6 @@ describe('footer and history contribution adapters', () => {
             clear: () => clear(surface.listIds, surface.unregister),
         });
         expect(actual.projectedIds).toEqual(['early', 'a', 'z']);
-        expect(actual.registerReturns.every((value) => value.kind === 'undefined')).toBe(true);
+        expect(actual.registerReturns.every((value) => value.kind === 'registration-handle')).toBe(true);
     });
 });

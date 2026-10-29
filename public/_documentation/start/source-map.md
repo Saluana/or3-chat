@@ -64,13 +64,13 @@ export default defineNuxtPlugin(() => {
 
 Verify that the action appears once, opens documentation, and does not duplicate after HMR. Retain the returned owner-scoped handle: removing by ID later can remove a newer replacement registration. A component-owned registration also needs unmount cleanup. Access/visibility rules control UI availability; server authorization still belongs to the server's capability checks.
 
-Not every legacy helper returns a handle. Editor toolbar/extension, project-tree,
-and document/thread-history registration helpers currently return void and need
-their matching unregister function with an exclusive ID. Message actions,
-dashboard tiles, inspector panels, and document AI actions expose owned handles.
-Inspect the defining module before choosing cleanup; do not copy one universal
-registration interface or create another global registry. The underlying
-`app/composables/_registry.ts` owns shared sorting and registration semantics.
+Editor toolbar, project-tree, sidebar-section, document/thread-history, message,
+dashboard, inspector, and document AI registrations return owner-scoped handles.
+Their unregister-by-ID helpers remain available for compatibility, but can remove
+a replacement owned by another caller. The older editor node/mark/extension
+registries still use ID-based cleanup; inspect their defining module for their
+current contract. The underlying `app/composables/_registry.ts` owns shared
+sorting and registration semantics.
 
 ## Lifecycle and runtime boundaries
 

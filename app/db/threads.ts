@@ -17,7 +17,7 @@ import { toolResultArtifactPrefix } from '~~/shared/chat/tool-result-artifact';
 import { preservedProjectEntries, projectEntryIdentity } from '~/utils/projects/normalizeProjectData';
 import { useRuntimeConfig } from '#imports';
 import { getDb, type Or3DB } from './client';
-import { dbTry } from './dbTry';
+import { dbTry, dbRequired } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import { resolveRootThreadId } from '../utils/chat/compaction/history';
 import { resolveSidebarFamilyId, pruneRetiredFamilyPreference } from '../utils/sidebar/thread-families';
@@ -123,10 +123,9 @@ export async function createThreadInDb(
         }
         rejectGenericCompactionTransition(value);
         rejectGenericCompactionTransition(value, await db.threads.get(value.id));
-        await dbTry(
+        await dbRequired(
             () => db.threads.put(value),
-            { op: 'write', entity: 'threads', action: 'create' },
-            { rethrow: true }
+            { op: 'write', entity: 'threads', action: 'create' }
         );
         context.assertCurrent?.();
     });
@@ -304,7 +303,7 @@ export async function softDeleteThread(id: string): Promise<void> {
         'rw',
         getWriteTxTableNames(db, 'threads', { include: ['kv', 'chat_request_recoveries'], includeTombstones: true }),
         async () => {
-        const t = await dbTry(() => db.threads.get(id), {
+        const t = await dbRequired(() => db.threads.get(id), {
             op: 'read',
             entity: 'threads',
             action: 'get',
@@ -366,7 +365,7 @@ export async function hardDeleteThread(id: string): Promise<void> {
             includeTombstones: true,
         }),
         async () => {
-        const existing = await dbTry(() => db.threads.get(id), {
+        const existing = await dbRequired(() => db.threads.get(id), {
             op: 'read',
             entity: 'threads',
             action: 'get',
@@ -414,10 +413,9 @@ export async function forkThread(
     const hooks = useHooks();
     const db = getDb();
     const { resolveChatProject, moveChatProjectRows, notifyChatProjectMove } = await import('./project-workspace');
-    const src = await dbTry(
+    const src = await dbRequired(
         () => db.threads.get(sourceThreadId),
-        { op: 'read', entity: 'threads', action: 'get' },
-        { rethrow: true }
+        { op: 'read', entity: 'threads', action: 'get' }
     );
     if (!src || src.deleted) throw new Error('Source thread not found');
     const projectId = await resolveChatProject(db, src.id);
@@ -475,16 +473,15 @@ export async function forkThread(
             const anchor = fork.anchor_message_id ? await db.messages.get(fork.anchor_message_id) : undefined;
             if (!anchor || anchor.deleted || anchor.thread_id !== src.id) throw new Error('Invalid reference anchor.');
         }
-        await dbTry(
+        await dbRequired(
             () => db.threads.put(fork),
-            { op: 'write', entity: 'threads', action: 'fork' },
-            { rethrow: true }
+            { op: 'write', entity: 'threads', action: 'fork' }
         );
         membership = scope ? await moveChatProjectRows(scope, fork.id, projectId) : { projects: [], threads: [] };
 
         if (options.copyMessages) {
             const msgs =
-                (await dbTry(
+                await dbRequired(
                     () =>
                         db.messages
                             .where('thread_id')
@@ -495,24 +492,23 @@ export async function forkThread(
                         entity: 'messages',
                         action: 'forkCopyMessages',
                     }
-                )) || [];
+                );
             const newMessages: Message[] = msgs.map((m) => ({
                 ...m,
                 id: newId(),
                 thread_id: forkId,
                 clock: nextClock(),
             }));
-            await dbTry(
+            await dbRequired(
                 () => db.messages.bulkPut(newMessages),
                 {
                     op: 'write',
                     entity: 'messages',
                     action: 'forkCopyMessages',
-                },
-                { rethrow: true }
+                }
             );
             if (msgs.length > 0) {
-                await dbTry(
+                await dbRequired(
                     () =>
                         db.threads.put({
                             ...fork,
@@ -524,8 +520,7 @@ export async function forkThread(
                         op: 'write',
                         entity: 'threads',
                         action: 'forkUpdateMeta',
-                    },
-                    { rethrow: true }
+                    }
                 );
             }
         }

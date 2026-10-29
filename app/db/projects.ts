@@ -12,7 +12,7 @@
  * - Workspace management or authorization
  */
 import { getDb, getActiveWorkspaceId, type Or3DB } from './client';
-import { dbTry } from './dbTry';
+import { dbTry, dbRequired } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import { parseOrThrow, nowSec, nextClock, getWriteTxTableNames } from './util';
 import { ProjectSchema, type Project } from './schema';
@@ -35,7 +35,7 @@ export async function createProject(input: Project): Promise<Project> {
     const prepared = await prepareProjectWrite(input, 'create');
     const next = prepared.row;
     await db.transaction('rw', getWriteTxTableNames(db, 'projects'), async () => {
-        await dbTry(() => db.projects.put(next), { op: 'write', entity: 'projects', action: 'create' }, { rethrow: true });
+        await dbRequired(() => db.projects.put(next), { op: 'write', entity: 'projects', action: 'create' });
     });
     await prepared.afterCommit(next);
     return next;
@@ -80,7 +80,7 @@ export async function upsertProjectInDb(db: Or3DB, value: Project): Promise<void
     await db.transaction('rw', getWriteTxTableNames(db, 'projects'), async () => {
         const existing = await db.projects.get(prepared.row.id);
         saved = { ...prepared.row, clock: nextClock(existing?.clock ?? prepared.row.clock) };
-        await dbTry(() => db.projects.put(saved), { op: 'write', entity: 'projects', action: 'upsert' }, { rethrow: true });
+        await dbRequired(() => db.projects.put(saved), { op: 'write', entity: 'projects', action: 'upsert' });
     });
     await prepared.afterCommit(saved);
 }

@@ -20,14 +20,14 @@ export default defineNuxtPlugin(() => {
         `,
     };
 
-    registerSidebarSection({
+    const section = registerSidebarSection({
         id: sidebarSectionId,
         component: ExampleSidebarSection,
         placement: 'top',
         order: 240,
     });
 
-    registerSidebarFooterAction({
+    const footer = registerSidebarFooterAction({
         id: sidebarFooterId,
         icon: useIcon('ui.dino').value,
         tooltip: 'Show sample toast',
@@ -42,7 +42,7 @@ export default defineNuxtPlugin(() => {
         },
     });
 
-    registerHeaderAction({
+    const header = registerHeaderAction({
         id: headerActionId,
         icon: useIcon('ui.moon').value,
         tooltip: 'Example header action',
@@ -56,7 +56,7 @@ export default defineNuxtPlugin(() => {
         },
     });
 
-    registerComposerAction({
+    const composer = registerComposerAction({
         id: composerActionId,
         icon: useIcon('ui.edit').value,
         label: 'Insert snippet',
@@ -75,10 +75,10 @@ export default defineNuxtPlugin(() => {
 
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
-            unregisterSidebarSection?.(sidebarSectionId);
-            unregisterSidebarFooterAction?.(sidebarFooterId);
-            unregisterHeaderAction?.(headerActionId);
-            unregisterComposerAction?.(composerActionId);
+            section.dispose();
+            footer.dispose();
+            header.dispose();
+            composer.dispose();
         });
     }
 });

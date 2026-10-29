@@ -948,6 +948,27 @@ describe('background usage through terminal history', () => {
         return { job: reloaded, snapshot: delivered[0]! };
     }
 
+    it('classifies history failures from structured metadata, not their wording', async () => {
+        const { jobId } = await admitted(false);
+        await memoryJobProvider.setHistoryPhase!(jobId, 'finalization_pending', { from: ['ready'] });
+        const job = (await memoryJobProvider.getJob(jobId, 'owner'))!;
+        job.status = 'complete';
+        job.completedAt = Date.now();
+        finalize.mockRejectedValueOnce(new Error('invalid response from temporary upstream outage'));
+        await expect(reconcileBackgroundJobHistory(memoryJobProvider, job)).rejects.toThrow('temporary upstream');
+        finalize.mockImplementationOnce(() => { throw Object.assign(new Error('rejected synchronously'), { code: 'FORBIDDEN' }); });
+        await expect(reconcileBackgroundJobHistory(memoryJobProvider, job)).resolves.toBe('blocked');
+        await memoryJobProvider.setHistoryPhase!(jobId, 'finalization_pending', { from: ['blocked'] });
+        finalize.mockRejectedValueOnce(Object.assign(new Error('request rejected'), { code: 'OVERSIZED' }));
+        await expect(reconcileBackgroundJobHistory(memoryJobProvider, job)).resolves.toBe('blocked');
+        await memoryJobProvider.setHistoryPhase!(jobId, 'finalization_pending', { from: ['blocked'] });
+        finalize.mockRejectedValueOnce(Object.assign(new Error('request rejected'), { status: 403 }));
+        await expect(reconcileBackgroundJobHistory(memoryJobProvider, job)).resolves.toBe('blocked');
+        await memoryJobProvider.setHistoryPhase!(jobId, 'finalization_pending', { from: ['blocked'] });
+        finalize.mockRejectedValueOnce({ data: { code: 'ERR_VALIDATION' } });
+        await expect(reconcileBackgroundJobHistory(memoryJobProvider, job)).resolves.toBe('blocked');
+    });
+
     it('keeps large background tool results inline when the provider cannot retain chunks', async () => {
         const output = 'x'.repeat(20 * 1024);
         const { jobId, context } = await admitted(true);

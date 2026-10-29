@@ -42,21 +42,12 @@
  * ## HMR Safety
  *
  * The registry is stored on `globalThis` and survives Hot Module Replacement.
- * Always unregister actions in cleanup/unmount hooks to prevent duplicates:
+ * Retain the registration handle and dispose it in cleanup/unmount hooks.
+ * The handle only removes its own registration, even if the ID was replaced.
  *
  * ```ts
- * onUnmounted(() => {
- *   unregisterDocumentHistoryAction('my-plugin:export-doc');
- * });
- * ```
- *
- * Or use `useHookEffect` which handles cleanup automatically:
- *
- * ```ts
- * useHookEffect('plugin:init', () => {
- *   registerDocumentHistoryAction({ ... });
- *   return () => unregisterDocumentHistoryAction('my-plugin:export-doc');
- * });
+ * const registration = registerDocumentHistoryAction({ ... });
+ * onUnmounted(() => registration.dispose());
  * ```
  */
 
@@ -119,8 +110,9 @@ function useV2Surface(): boolean {
  * ```
  */
 export function registerDocumentHistoryAction(action: DocumentHistoryAction) {
-    if (useV2Surface()) v2Kernel.registry.registerLegacy({ value: action });
-    else registry.register(action);
+    return useV2Surface()
+        ? v2Kernel.registry.registerLegacy({ value: action })
+        : registry.register(action);
 }
 
 /**

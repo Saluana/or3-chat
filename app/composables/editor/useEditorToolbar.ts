@@ -96,8 +96,9 @@ function useV2Surface(): boolean {
  * - Preventing id collisions across plugins
  */
 export function registerEditorToolbarButton(button: EditorToolbarButton) {
-    if (useV2Surface()) v2Kernel.registry.registerLegacy({ value: button });
-    else registry.register(button);
+    return useV2Surface()
+        ? v2Kernel.registry.registerLegacy({ value: button })
+        : registry.register(button);
 }
 
 /**

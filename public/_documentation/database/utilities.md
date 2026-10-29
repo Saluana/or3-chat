@@ -16,29 +16,22 @@ Import from `~/db/util`:
 
 Entity timestamps generally use seconds. Sync scheduling fields such as `pending_ops.createdAt` and `nextAttemptAt` use milliseconds; do not convert every timestamp using one rule. Revision allocation should stay in the existing entity helpers rather than caller-written read/increment/write sequences.
 
-## dbTry
+## Database failure policies
 
-Import `dbTry` and `DB_QUOTA_GUIDANCE` from `~/db/dbTry`. The wrapper accepts a function, tags, and optional `{ rethrow: boolean }`. Tags include `op: 'read' | 'write'` plus entity/action context.
+Import `dbRequired`, `dbBestEffort`, and `DB_QUOTA_GUIDANCE` from `~/db/dbTry`. Each operation takes a function and tags including `op: 'read' | 'write'` and optional entity/action context.
 
 ```ts
 import { getDb } from '~/db/client';
-import { dbTry } from '~/db/dbTry';
+import { dbRequired } from '~/db/dbTry';
 
 export async function countLocalThreads(): Promise<number> {
   const db = getDb();
-  const count = await dbTry(
-    () => db.threads.count(),
-    { op: 'read', entity: 'threads', action: 'count' },
-    { rethrow: true },
-  );
-  // dbTry's type permits undefined; do not label a missing result as success.
-  if (count === undefined) throw new Error('Count unavailable');
-  return count;
+  return dbRequired(() => db.threads.count(), { op: 'read', entity: 'threads', action: 'count' });
 }
 ```
 
-By default, errors are suppressed and the result is undefined. With `rethrow: true`, the original error is rethrown. Closed-database errors receive no toast, even when rethrown. Quota errors are reported as `ERR_DB_QUOTA_EXCEEDED` with recovery guidance; other errors become `ERR_DB_READ_FAILED` or `ERR_DB_WRITE_FAILED`. Reporting adds `domain: 'db'` and `rw` tags.
+`dbRequired` reports and rethrows the original error; use it for saves and transaction-critical reads. It preserves legitimate undefined results from missing rows. `dbBestEffort` reports and suppresses errors, returning undefined, so use it only when a failed operation can safely be treated as unavailable. The compatibility API `dbTry` continues to suppress by default and accepts `{ rethrow: true }`.
 
-It does not retry, reopen a database, or supply transaction rollback when you swallow an error. Use rethrow where failure must fail a save or abort a transaction. A missing query record and a suppressed failure can both yield undefined, so choose the intended contract explicitly.
+Closed-database errors receive no toast. Quota failures are reported as `ERR_DB_QUOTA_EXCEEDED`; other failures use `ERR_DB_READ_FAILED` or `ERR_DB_WRITE_FAILED`. Reporting adds `domain: 'db'` and `rw` tags. These wrappers do not retry or reopen a database.
 
 See [safe database changes](/documentation/database/safe-changes) for workspace and transaction rules, and [message files](/documentation/database/message-files#hash-serialization-and-limits) for file hash serialization.

@@ -117,16 +117,29 @@ describe('V1 registry family profiles', () => {
         clear(listRegisteredEditorToolbarButtonIds, unregisterEditorToolbarButton);
     });
 
-    it('records handle versus void returns for every family facade', () => {
+    it('returns owner handles for every family facade', () => {
         expectHandle(registerMessageAction({ id: 'return:message', icon: 'i', tooltip: 'm', showOn: 'both', handler: () => {} }));
         expectHandle(registerHeaderAction({ id: 'return:header', icon: 'i', handler: () => {} }));
         expectHandle(registerComposerAction({ id: 'return:composer', icon: 'i', handler: () => {} }));
         expectHandle(registerSidebarFooterAction({ id: 'return:footer', icon: 'i', handler: () => {} }));
 
-        expect(registerDocumentHistoryAction({ id: 'return:document', icon: 'i', label: 'd', handler: () => {} })).toBeUndefined();
-        expect(registerThreadHistoryAction({ id: 'return:thread', icon: 'i', label: 't', handler: () => {} })).toBeUndefined();
-        expect(registerProjectTreeAction({ id: 'return:project', icon: 'i', label: 'p', handler: () => {} })).toBeUndefined();
-        expect(registerEditorToolbarButton({ id: 'return:editor', icon: 'i', onClick: () => {} })).toBeUndefined();
+        expectHandle(registerDocumentHistoryAction({ id: 'return:document', icon: 'i', label: 'd', handler: () => {} }));
+        expectHandle(registerThreadHistoryAction({ id: 'return:thread', icon: 'i', label: 't', handler: () => {} }));
+        expectHandle(registerProjectTreeAction({ id: 'return:project', icon: 'i', label: 'p', handler: () => {} }));
+        expectHandle(registerEditorToolbarButton({ id: 'return:editor', icon: 'i', onClick: () => {} }));
+    });
+
+    it('keeps replacements when an earlier owner disposes', () => {
+        const oldProject = registerProjectTreeAction({ id: 'owned:project', icon: 'i', label: 'old', handler: () => {} });
+        const newProject = registerProjectTreeAction({ id: 'owned:project', icon: 'i', label: 'new', handler: () => {} });
+        const oldEditor = registerEditorToolbarButton({ id: 'owned:editor', icon: 'old', onClick: () => {} });
+        const newEditor = registerEditorToolbarButton({ id: 'owned:editor', icon: 'new', onClick: () => {} });
+        expect(oldProject.dispose()).toBe(false);
+        expect(oldEditor.dispose()).toBe(false);
+        expect(useProjectTreeActions().value[0]?.label).toBe('new');
+        expect(useEditorToolbarButtons(ref({} as never)).value[0]?.icon).toBe('new');
+        expect(newProject.dispose()).toBe(true);
+        expect(newEditor.dispose()).toBe(true);
     });
 
     it('freezes projected copies and uses default order 200 with the frozen family tie rules', () => {

@@ -15,7 +15,7 @@
  * - Server-side storage lifecycle management
  */
 import { getDb } from './client';
-import { dbTry } from './dbTry';
+import { dbTry, dbRequired } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import { parseOrThrow, nowSec, getWriteTxTableNames } from './util';
 import {
@@ -53,10 +53,9 @@ export async function createAttachment(
         tableName: 'attachments',
     });
     const value = parseOrThrow(AttachmentCreateSchema, filtered);
-    await dbTry(
+    await dbRequired(
         () => db.attachments.put(value),
-        { op: 'write', entity: 'attachments', action: 'create' },
-        { rethrow: true }
+        { op: 'write', entity: 'attachments', action: 'create' }
     );
     await hooks.doAction('db.attachments.create:action:after', {
         entity: value,
@@ -90,10 +89,9 @@ export async function upsertAttachment(value: Attachment): Promise<void> {
         tableName: 'attachments',
     });
     const validated = parseOrThrow(AttachmentSchema, filtered);
-    await dbTry(
+    await dbRequired(
         () => db.attachments.put(validated),
-        { op: 'write', entity: 'attachments', action: 'upsert' },
-        { rethrow: true }
+        { op: 'write', entity: 'attachments', action: 'upsert' }
     );
     await hooks.doAction('db.attachments.upsert:action:after', {
         entity: validated,
@@ -118,7 +116,7 @@ export async function softDeleteAttachment(id: string): Promise<void> {
     const db = getDb();
     const hooks = useHooks();
     await db.transaction('rw', db.attachments, async () => {
-        const a = await dbTry(() => db.attachments.get(id), {
+        const a = await dbRequired(() => db.attachments.get(id), {
             op: 'read',
             entity: 'attachments',
             action: 'get',
@@ -162,7 +160,7 @@ export async function hardDeleteAttachment(id: string): Promise<void> {
         'rw',
         getWriteTxTableNames(db, 'attachments', { includePendingOps: false }),
         async () => {
-            const existing = await dbTry(() => db.attachments.get(id), {
+            const existing = await dbRequired(() => db.attachments.get(id), {
                 op: 'read',
                 entity: 'attachments',
                 action: 'get',

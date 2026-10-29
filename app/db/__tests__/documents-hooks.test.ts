@@ -60,11 +60,6 @@ vi.mock('../client', () => {
     };
 });
 
-// Mock dbTry to pass through
-vi.mock('../dbTry', () => ({
-    dbTry: vi.fn(async (fn: () => any) => fn()),
-}));
-
 // Mock util functions
 vi.mock('../util', () => ({
     newId: vi.fn(

@@ -204,6 +204,9 @@ export interface SyncGatewayAdapter {
     readChatHistory?: CanonicalChatReader['readChatHistory'];
 
     /**
+     * History failures should expose a structured code, HTTP status/statusCode,
+     * or explicit retryable flag (see HistoryProviderFailure below). Unknown
+     * errors remain pending for retry; message wording is never classified.
      * Atomically materialize the thread/turn placeholder and record the
      * generation admission receipt. This is called only after HTTP auth and
      * workspace authorization have produced the immutable actor.
@@ -354,4 +357,13 @@ export interface SyncGatewayAdapter {
 
     /** Record a failed maintenance pass with the error message. */
     failMaintenanceRun?(error: string): void;
+}
+
+/** Structured failure metadata accepted from background history adapters. */
+export interface HistoryProviderFailure {
+    code?: 'VALIDATION_ERROR' | 'OVERSIZED' | 'UNAUTHORIZED' | 'FORBIDDEN' | 'CONFLICT' | 'SUPERSEDED' | 'UNSUPPORTED';
+    status?: number;
+    statusCode?: number;
+    retryable?: boolean;
+    retryAfterMs?: number;
 }
