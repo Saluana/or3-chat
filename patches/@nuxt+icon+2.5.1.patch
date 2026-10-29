@@ -1,4 +1,5 @@
 diff --git a/node_modules/@nuxt/icon/dist/runtime/components/shared.js b/node_modules/@nuxt/icon/dist/runtime/components/shared.js
+index f756ff6..b9c81b8 100644
 --- a/node_modules/@nuxt/icon/dist/runtime/components/shared.js
 +++ b/node_modules/@nuxt/icon/dist/runtime/components/shared.js
 @@ -31,13 +31,16 @@ export async function loadIcon(name, timeout) {
@@ -20,3 +21,28 @@ diff --git a/node_modules/@nuxt/icon/dist/runtime/components/shared.js b/node_mo
        return collection ? collection + ":" + resolved.slice(collection.length + 1) : resolved;
      }
      return resolved;
+diff --git a/node_modules/@nuxt/icon/dist/shared/icon.VmJ4USKj.mjs b/node_modules/@nuxt/icon/dist/shared/icon.VmJ4USKj.mjs
+index 13ad7f5..de9a1d7 100644
+--- a/node_modules/@nuxt/icon/dist/shared/icon.VmJ4USKj.mjs
++++ b/node_modules/@nuxt/icon/dist/shared/icon.VmJ4USKj.mjs
+@@ -7,1 +7,2 @@
+ import pm from 'picomatch';
++import { optimize } from 'svgo';
+@@ -465,7 +466,16 @@ function generateClientBundleCode(collections, options = {}) {
+       bundleSizeKb: 0
+     };
+   }
+-  const valuesCompat = JSON.stringify(collections);
++  const optimizedCollections = collections.map((collection) => ({
++    ...collection,
++    icons: Object.fromEntries(Object.entries(collection.icons).map(([name, icon]) => {
++      const svg = optimize(`<svg xmlns="http://www.w3.org/2000/svg">${icon.body}</svg>`, { multipass: true }).data;
++      const wrapper = '<svg xmlns="http://www.w3.org/2000/svg">';
++      if (!svg.startsWith(wrapper) || !svg.endsWith("</svg>")) return [name, icon];
++      return [name, { ...icon, body: svg.slice(wrapper.length, -6) }];
++    }))
++  }));
++  const valuesCompat = JSON.stringify(optimizedCollections);
+   const bundleSizeKb = Buffer.byteLength(valuesCompat, "utf-8") / 1024;
+   if (sizeLimitKb > 0) {
+     if (bundleSizeKb > sizeLimitKb) {

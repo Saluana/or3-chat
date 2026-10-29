@@ -243,6 +243,7 @@
         "eslint": "^9.39.5",
         "fake-indexeddb": "^5.0.2",
         "jsdom": "^25.0.1",
+        "svgo": "4.1.0",
         "tailwindcss": "4.3.3",
         "tsx": "^4.23.15",
         "terser": "5.44.1",
