@@ -1634,3 +1634,26 @@ for (const mode of modes) test('blank modal border follows custom colors in ' + 
     await page.getByRole('button', { name: 'Create a project', exact: true }).first().click();
     await expect(page.getByRole('dialog', { name: 'New Project', exact: true })).toHaveCSS('border-top-color', 'rgb(255, 113, 113)');
 });
+
+test('theme palette preserves exact typed colors while the picker remains interactive', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openResponsiveChat(page, 'blank', 'light');
+    await openThemeStudio(page, false);
+    await selectThemeAndMode(page, 'blank', 'light');
+    const settings = page.getByRole('dialog', { name: 'Theme Settings', exact: true });
+    await settings.getByRole('tab', { name: 'Colors', exact: true }).click();
+    await settings.getByText('Custom colors', { exact: true }).click();
+    await expect(settings.getByRole('checkbox', { name: 'Custom colors' })).toBeChecked();
+    const hex = settings.getByRole('textbox', { name: 'Primary accent hex color' });
+    await hex.fill('#3478f6');
+    await page.waitForTimeout(300);
+    await expect(hex).toHaveValue('#3478f6');
+    await expect(settings.getByRole('spinbutton', { name: 'Primary accent R' })).toHaveValue('52');
+    const picker = settings.locator('.palette-editor-picker [data-slot="selector"]');
+    await picker.click({ position: { x: 80, y: 80 } });
+    await expect(hex).not.toHaveValue('#3478f6');
+    const picked = await hex.inputValue();
+    await settings.getByRole('tab', { name: 'Typography', exact: true }).click();
+    await settings.getByRole('tab', { name: 'Colors', exact: true }).click();
+    await expect(hex).toHaveValue(picked);
+});
