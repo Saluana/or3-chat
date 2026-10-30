@@ -113,10 +113,13 @@ body {
 	touch-action: pan-y;
 }
 
+/* Size real roots, not attribute-less SSR placeholders. Avoid :empty here:
+   WebKit would test it on every div and restyle a div's whole subtree whenever
+   its children change, which stalls scrolling long chats on iOS. */
 html,
 body,
 #__nuxt,
-#__nuxt>div:not(:empty) {
+#__nuxt>div:where([class], [id]) {
 	height: 100%;
 }
 
