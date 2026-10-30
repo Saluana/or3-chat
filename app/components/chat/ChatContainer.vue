@@ -23,7 +23,7 @@
                 :items="allMessages"
                 :item-key="messageKey"
                 :estimate-height="80"
-                :overscan="1200"
+                :overscan="2500"
                 :prefetch-overscan="5500"
                 :content-key="scrollContentKey"
                 :row-content-revision="rowContentRevision"

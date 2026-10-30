@@ -297,13 +297,23 @@
     border-right: 0;
 }
 
-/* Native tables place the header inside tbody. Count only data rows so the
-   first row stays distinct from the header and striping matches chat tables. */
-.or3-prose :deep(tbody > tr:nth-child(even of :not(:has(> th)))) {
+.or3-prose :deep(tbody > tr:nth-child(even)) {
     background: var(--md-surface-container-low);
 }
-.or3-prose :deep(tbody > tr:nth-child(odd of :not(:has(> th)))) {
+.or3-prose :deep(tbody > tr:nth-child(odd)) {
     background: var(--md-surface-container-lowest);
+}
+/* Native tables place the header row first inside tbody. Swap the stripes
+   there so data rows match chat tables and the header stays distinct. Avoid
+   :nth-child(… of :has()): WebKit restyles every message on each list insert. */
+.or3-prose :deep(tbody:has(> tr:first-child > th) > tr:nth-child(even)) {
+    background: var(--md-surface-container-lowest);
+}
+.or3-prose :deep(tbody:has(> tr:first-child > th) > tr:nth-child(odd)) {
+    background: var(--md-surface-container-low);
+}
+.or3-prose :deep(tbody:has(> tr:first-child > th) > tr:first-child) {
+    background: none;
 }
 /* Optional hover highlight */
 .or3-prose :deep(tbody tr:hover) {
