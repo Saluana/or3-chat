@@ -1,12 +1,13 @@
 import { serializeError } from '~~/shared/errors';
 import { randomUUID } from 'node:crypto';
-import type { BackgroundJob, BackgroundJobProvider, JobUpdate } from './types';
+import type { BackgroundJob, BackgroundJobProvider, DurableBackgroundJobProvider, JobUpdate } from './types';
 import { getChatJobExecution } from './types';
 import type { BackgroundStreamParams } from './stream-handler';
 import { decryptBackgroundCredential } from './crypto';
 import { emitJobStatus } from './viewers';
 import { reconcileBackgroundJobHistory } from './history';
 import { getShutdownRuntime } from '../shutdown/runtime';
+import { supportsDurableBackgroundJobs } from './capabilities';
 
 export const BACKGROUND_JOB_LEASE_MS = 30_000;
 const BACKGROUND_JOB_HEARTBEAT_MS = 10_000;
@@ -14,7 +15,7 @@ const BACKGROUND_JOB_HEARTBEAT_MS = 10_000;
 export type BackgroundJobExecutor = (
     jobId: string,
     params: BackgroundStreamParams,
-    provider: BackgroundJobProvider,
+    provider: DurableBackgroundJobProvider,
     abortSignal: AbortSignal
 ) => Promise<void>;
 
@@ -44,12 +45,6 @@ function launchClaimedJob(
     });
 }
 
-function supportsDurableClaims(provider: BackgroundJobProvider): boolean {
-    return Boolean(
-        provider.claimJob && provider.claimNextJob && provider.renewJobLease
-    );
-}
-
 function hasUnsafeInterruptedTool(job: BackgroundJob): boolean {
     if ((job.attempts ?? 0) <= 1) return false;
     const checkpointed = new Set(getChatJobExecution(job)?.checkpointedToolCallIds ?? []);
@@ -76,15 +71,17 @@ export async function runClaimedBackgroundJob(
     job: BackgroundJob,
     dependencies: BackgroundJobLifecycleDependencies
 ): Promise<void> {
+    if (!supportsDurableBackgroundJobs(dependencies.provider)) return;
+    const provider = dependencies.provider;
     const workerId = job.leaseOwner;
-    const renew = dependencies.provider.renewJobLease;
+    const renew = provider.renewJobLease;
     const execution = getChatJobExecution(job);
-    if (!workerId || !renew || !execution) {
+    if (!workerId || !execution) {
         return;
     }
 
     const abortController =
-        dependencies.provider.getAbortController?.(job.id) ??
+        provider.getAbortController?.(job.id) ??
         new AbortController();
     const previous = activeJobs.get(job.id);
     if (previous?.leaseOwner === workerId) return;
@@ -101,7 +98,7 @@ export async function runClaimedBackgroundJob(
             renewing = true;
             void renew
                 .call(
-                    dependencies.provider,
+                    provider,
                     job.id,
                     workerId,
                     now(),
@@ -128,12 +125,12 @@ export async function runClaimedBackgroundJob(
     if (typeof heartbeat.unref === 'function') heartbeat.unref();
 
     try {
-        if (execution.cancellationRequestedAt && dependencies.provider.saveTerminalSnapshot) {
-            const saved = await dependencies.provider.saveTerminalSnapshot(job.id, { status: 'aborted',
+        if (execution.cancellationRequestedAt) {
+            const saved = await provider.saveTerminalSnapshot(job.id, { status: 'aborted',
                 content: job.content, reasoning: job.reasoning, toolCalls: job.tool_calls, usage: job.usage, completedAt: now() }, workerId);
             if (saved) {
-                const stopped = await dependencies.provider.getJob(job.id, job.userId);
-                if (stopped) await reconcileBackgroundJobHistory(dependencies.provider, stopped);
+                const stopped = await provider.getJob(job.id, job.userId);
+                if (stopped) await reconcileBackgroundJobHistory(provider, stopped);
             }
             return;
         }
@@ -143,7 +140,7 @@ export async function runClaimedBackgroundJob(
 
         const cleanup = pendingToolCleanup(job);
         if (cleanup) {
-            await dependencies.provider.updateJob(job.id, {
+            await provider.updateJob(job.id, {
                 ...cleanup,
                 leaseOwner: workerId,
             });
@@ -154,6 +151,8 @@ export async function runClaimedBackgroundJob(
                 content: job.content,
                 usage: job.usage,
                 contentLength: job.content.length,
+                reasoning: job.reasoning,
+                reasoningLength: job.reasoning.length,
                 chunksReceived: job.chunksReceived,
                 tool_calls: cleanup?.tool_calls ?? job.tool_calls,
                 workflow_state: job.workflow_state,
@@ -180,7 +179,7 @@ export async function runClaimedBackgroundJob(
                 leaseOwner: workerId,
                 attempt: job.attempts,
             },
-            dependencies.provider,
+            provider,
             abortController.signal
         );
         const completed = await dependencies.provider
@@ -188,7 +187,7 @@ export async function runClaimedBackgroundJob(
             .catch(() => null);
         if (completed?.historyPhase === 'finalization_pending') {
             await reconcileBackgroundJobHistory(
-                dependencies.provider,
+                provider,
                 completed
             );
         }
@@ -197,12 +196,12 @@ export async function runClaimedBackgroundJob(
             .getJob(job.id, job.userId)
             .catch(() => null);
         if (latest?.status === 'streaming' && getChatJobExecution(latest)?.cancellationRequestedAt
-            && latest.leaseOwner === workerId && dependencies.provider.saveTerminalSnapshot) {
-            const saved = await dependencies.provider.saveTerminalSnapshot(job.id, { status: 'aborted',
+            && latest.leaseOwner === workerId) {
+            const saved = await provider.saveTerminalSnapshot(job.id, { status: 'aborted',
                 content: latest.content, reasoning: latest.reasoning, toolCalls: latest.tool_calls, usage: latest.usage, completedAt: now() }, workerId);
             if (saved) {
-                const stopped = await dependencies.provider.getJob(job.id, job.userId);
-                if (stopped) await reconcileBackgroundJobHistory(dependencies.provider, stopped);
+                const stopped = await provider.getJob(job.id, job.userId);
+                if (stopped) await reconcileBackgroundJobHistory(provider, stopped);
             }
             return;
         }
@@ -214,10 +213,9 @@ export async function runClaimedBackgroundJob(
             const execution = getChatJobExecution(latest);
             const message = serializeError(error, { code: 'ERR_STREAM_FAILURE', source: 'provider', credentialSource: execution?.credentialSource });
             if (
-                execution?.history &&
-                dependencies.provider.saveTerminalSnapshot
+                execution?.history
             ) {
-                const saved = await dependencies.provider.saveTerminalSnapshot(
+                const saved = await provider.saveTerminalSnapshot(
                     job.id,
                     {
                         status: 'error',
@@ -241,19 +239,19 @@ export async function runClaimedBackgroundJob(
                         attempt: latest.attempts ?? 0,
                         chunksReceived: latest.chunksReceived,
                     });
-                    const terminal = await dependencies.provider.getJob(
+                    const terminal = await provider.getJob(
                         job.id,
                         job.userId
                     );
                     if (terminal) {
                         await reconcileBackgroundJobHistory(
-                            dependencies.provider,
+                            provider,
                             terminal
                         );
                     }
                 }
             } else {
-                await dependencies.provider.failJob(job.id, message, workerId);
+                await provider.failJob(job.id, message, workerId);
             }
         }
     } finally {
@@ -269,11 +267,11 @@ export async function claimAndRunBackgroundJob(
     jobId: string,
     dependencies: BackgroundJobLifecycleDependencies
 ): Promise<boolean> {
-    if (!getShutdownRuntime().controller.canStartWork() || !supportsDurableClaims(dependencies.provider)) return false;
+    if (!getShutdownRuntime().controller.canStartWork() || !supportsDurableBackgroundJobs(dependencies.provider)) return false;
     const workerId = `${dependencies.workerId ?? 'worker'}:${randomUUID()}`;
     const now = dependencies.now ?? Date.now;
     const leaseMs = dependencies.leaseMs ?? BACKGROUND_JOB_LEASE_MS;
-    const job = await getShutdownRuntime().controller.track(dependencies.provider.claimJob!(
+    const job = await getShutdownRuntime().controller.track(dependencies.provider.claimJob(
         jobId,
         workerId,
         now(),
@@ -289,13 +287,13 @@ export async function reconcileBackgroundJobs(
     dependencies: BackgroundJobLifecycleDependencies,
     maxClaims = 20
 ): Promise<number> {
-    if (!getShutdownRuntime().controller.canStartWork() || !supportsDurableClaims(dependencies.provider)) return 0;
+    if (!getShutdownRuntime().controller.canStartWork() || !supportsDurableBackgroundJobs(dependencies.provider)) return 0;
     const now = dependencies.now ?? Date.now;
     const leaseMs = dependencies.leaseMs ?? BACKGROUND_JOB_LEASE_MS;
     let claimed = 0;
     while (claimed < maxClaims && getShutdownRuntime().controller.canStartWork()) {
         const workerId = `${dependencies.workerId ?? 'worker'}:${randomUUID()}`;
-        const job = await getShutdownRuntime().controller.track(dependencies.provider.claimNextJob!(
+        const job = await getShutdownRuntime().controller.track(dependencies.provider.claimNextJob(
             workerId,
             now(),
             now() + leaseMs
