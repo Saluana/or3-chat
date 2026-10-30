@@ -1317,6 +1317,7 @@ export type BackgroundClientToolClaim = {
         definition: ToolDefinition;
     };
     context: { workspaceId: string; threadId: string; messageId: string };
+    parentModel?: { model: string; thinking: boolean; reasoningEffort?: string | null };
 };
 
 /** Fresh server check before a browser tool handler; never call in a storage transaction. */

@@ -178,6 +178,7 @@
 </template>
 
 <script setup lang="ts">
+import { delegatedChatController } from '~/utils/chat/delegated-chat-runtime';
 import { provideToolCardFrameBudget } from '~/composables/chat/tool-card-frame-budget';
 import {
     createToolCardChatBridge,
@@ -434,6 +435,15 @@ const chat = shallowRef<ChatInstance>(
         { historyAlreadyLoaded: true }
     ) as ChatInstance
 );
+// The child runner owns its foreground stream independently of any pane.
+// A pane viewing that thread projects the runner until its terminal DB write.
+const delegatedWorkspaceGeneration = ref(getWorkspaceGeneration());
+const stopDelegatedWorkspace = subscribeActiveWorkspaceDb(event => { delegatedWorkspaceGeneration.value = event.generation; });
+onBeforeUnmount(stopDelegatedWorkspace);
+const visibleChat = computed(() => {
+    void delegatedWorkspaceGeneration.value;
+    return delegatedChatController(props.threadId) ?? chat.value;
+});
 // Ensure history + background job reattachment on initial load
 void chat.value?.ensureHistorySynced?.();
 let deferredHistory: {
@@ -539,14 +549,14 @@ watch(
 // messages already normalized to UiChatMessage with .text in useChat composable
 // Filter out tool messages (internal implementation details shown inline in assistant messages)
 const messages = computed<UiChatMessage[]>(
-    () => chat.value?.messages?.value || []
+    () => visibleChat.value?.messages?.value || []
 );
 // Declare before every computed/watch that can run eagerly during setup.
 // Vue evaluates immediate effects synchronously, so this must not sit below
 // `workflowRunning` (which reads it during the first render).
 const workflowStates = reactive(new Map<string, UiWorkflowState>());
 
-const loading = computed(() => chat.value?.loading?.value || false);
+const loading = computed(() => visibleChat.value?.loading?.value || false);
 const retryPending = ref(false);
 const backgroundJobId = computed(() =>
     unwrapRef(chat.value?.backgroundJobId ?? null)
@@ -585,9 +595,9 @@ function unwrapRef<T>(refOrValue: T | Ref<T>): T {
     return isRef(refOrValue) ? refOrValue.value : refOrValue;
 }
 
-const streamId = computed(() => unwrapRef(chat.value?.streamId));
+const streamId = computed(() => unwrapRef(visibleChat.value?.streamId));
 const streamState = computed<StreamState | null>(() => {
-    const state = chat.value?.streamState as
+    const state = visibleChat.value?.streamState as
         | Ref<StreamState | null>
         | StreamState
         | null
@@ -597,7 +607,7 @@ const streamState = computed<StreamState | null>(() => {
 // Stream text + reasoning (from unified stream accumulator)
 // Tail assistant from composable (kept out of history until next user send)
 const tailAssistant = computed<UiChatMessage | null>(() => {
-    const t = chat.value?.tailAssistant as
+    const t = visibleChat.value?.tailAssistant as
         | Ref<UiChatMessage | null>
         | UiChatMessage
         | null
@@ -1410,7 +1420,7 @@ function onStopStream() {
         }
     }
     try {
-        chat.value?.abort?.();
+        visibleChat.value?.abort?.();
     } catch (e) {
         if (import.meta.dev) {
             console.warn('[ChatContainer] abort failed', e);

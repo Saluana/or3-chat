@@ -10,8 +10,9 @@ import { requireSameOriginMutation } from '../../../../utils/security/mutation-g
 import { readLimitedJsonBody } from '../../../../utils/security/limited-json-body';
 import { checkSyncRateLimit, recordSyncRequest } from '../../../../utils/sync/rate-limiter';
 import { enforceRateLimit } from '../../../../utils/rate-limit/enforce';
+import { DELEGATE_CHAT_TOOL } from '~~/shared/chat/delegation';
 
-/** Read-only revalidation before browser execution; never invoked in a Dexie transaction. */
+/** Revalidate browser execution outside Dexie transactions; delegation also refreshes its parked job. */
 export default defineEventHandler(async (event) => {
     setHeader(event, 'Cache-Control', 'no-store, private');
     requireSameOriginMutation(event, { intentHeader: 'x-or3-tool-intent', intentValue: 'validate', requireJson: true });
@@ -40,6 +41,21 @@ export default defineEventHandler(async (event) => {
         !identity || identity.workspaceId !== current.execution?.workspaceId ||
         backgroundClientToolDigest(identity) !== backgroundClientToolTokenDigest(claimToken)) {
         throw createError({ statusCode: 409, statusMessage: 'Tool approval expired or its reviewed payload changed' });
+    }
+    // A live, authorized delegation is still active while the browser awaits its
+    // child. Refresh the parked job's existing inactivity clock, without changing
+    // its content or claim; stopped or worker-owned jobs cannot be updated.
+    if (pending.name === DELEGATE_CHAT_TOOL) {
+        await provider.updateJob(jobId, {});
+        const fresh = await provider.getJob(jobId, userId);
+        const live = fresh ? getChatJobExecution(fresh)?.clientToolCall : undefined;
+        const freshIdentity = fresh ? backgroundJobClientToolIdentity(fresh) : null;
+        if (!fresh || fresh.status !== 'streaming' || live?.callId !== callId || live.claimToken !== claimToken ||
+            !freshIdentity || freshIdentity.workspaceId !== current.execution?.workspaceId ||
+            backgroundClientToolDigest(freshIdentity) !== backgroundClientToolTokenDigest(claimToken) ||
+            (live.claimExpiresAt ?? 0) <= Date.now()) {
+            throw createError({ statusCode: 409, statusMessage: 'Tool approval is no longer active' });
+        }
     }
     return { valid: true };
 });

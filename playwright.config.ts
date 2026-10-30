@@ -8,10 +8,12 @@ const restartSpki = restartHttps && /^[A-Za-z0-9+/]{43}=$/.test(process.env.PW_R
 const baseURL = restartHttps ? `https://127.0.0.1:${restartHttps}` : `http://127.0.0.1:${port}`;
 const isProductionJourneyHarness =
   process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS === 'true';
+const isDelegationLiveHarness = process.env.OR3_DELEGATION_LIVE_E2E === 'true';
 
 export default defineConfig({
   testDir: './tests/e2e',
   testMatch: ['**/*.spec.ts', '**/*.e2e.ts'],
+  testIgnore: isDelegationLiveHarness ? undefined : '**/chat-delegation-live.spec.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -40,7 +42,7 @@ export default defineConfig({
     : {
         // Local journey fixtures must not inherit personal Cloud/vault settings.
         // Cloud harnesses that reuse the fixture enable SSR auth explicitly.
-        command: `bun run dev -- ${isProductionJourneyHarness && process.env.SSR_AUTH_ENABLED !== 'true' ? '--or3-offline ' : ''}--host 127.0.0.1 --port ${port}`,
+        command: `bun run dev -- ${(isDelegationLiveHarness || isProductionJourneyHarness && process.env.SSR_AUTH_ENABLED !== 'true') ? '--or3-offline ' : ''}--host 127.0.0.1 --port ${port}`,
         url: baseURL,
         timeout: 120 * 1000,
         // Tests must exercise the checkout and configuration they started,

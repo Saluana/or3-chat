@@ -380,7 +380,7 @@
                     "category": "Using tools",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Use scoped workspace tools, canonical branch history, source receipts, native review/Undo, file coverage, browser execution limits, and verified full-result downloads."
+                    "summary": "Use scoped workspace tools, delegate tasks to other chats and models, inspect activity, review edits, and download verified full results."
                 },
                 {
                     "name": "chat-tool-reliability.md",
@@ -629,7 +629,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers authorization, shared polling and SSE job views, durable provider capabilities, recovery, tool-result storage, checkpoints, retention and safe dashboard drains."
+                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers authorization, browser delegation, polling and SSE, durable recovery, tool-result storage, retention and safe dashboard drains."
                 },
                 {
                     "name": "notifications.md",

@@ -9,14 +9,17 @@ import type { ToolCallInfo } from '~/utils/chat/uiMessages';
 import type { ToolCardMessage } from '~/utils/chat/tool-card-context';
 import ToolCallIndicator from '../ToolCallIndicator.vue';
 import ToolCardSlot from './ToolCardSlot.vue';
+import DelegationActivity from '../DelegationActivity.vue';
+import { DELEGATE_CHAT_TOOL } from '~~/shared/chat/delegation';
 const props = defineProps<{
     toolCalls: ToolCallInfo[];
     message: ToolCardMessage;
 }>();
 const emit = defineEmits<{ resize: [] }>();
 const blocks = computed(() => {
-    const out: { calls: ToolCallInfo[]; binding?: ToolCardBinding }[] = [];
+    const out: { calls: ToolCallInfo[]; binding?: ToolCardBinding; delegation?: boolean }[] = [];
     for (const call of props.toolCalls) {
+        if (call.name === DELEGATE_CHAT_TOOL) { out.push({ calls: [call], delegation: true }); continue; }
         const binding = resolveToolCard(call.name);
         const ready =
             binding && (binding.renderWhile === 'always' || call.status === 'complete');
@@ -24,7 +27,7 @@ const blocks = computed(() => {
         if (ready) out.push({ calls: [call], binding });
         else {
             const previous = out.at(-1);
-            if (previous && !previous.binding) previous.calls.push(call);
+            if (previous && !previous.binding && !previous.delegation) previous.calls.push(call);
             else out.push({ calls: [call] });
         }
     }
@@ -33,8 +36,9 @@ const blocks = computed(() => {
 </script>
 <template>
     <template v-for="(block, index) in blocks" :key="block.calls[0]?.id ?? index"
-        ><ToolCardSlot
-            v-if="block.binding"
+        ><DelegationActivity v-if="block.delegation" :call="block.calls[0]!" :message-id="message.id" />
+        <ToolCardSlot
+            v-else-if="block.binding"
             :key="toolCardBindingKey(block.binding)"
             :binding="block.binding"
             :call="block.calls[0]!"

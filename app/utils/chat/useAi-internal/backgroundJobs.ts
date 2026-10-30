@@ -1,4 +1,5 @@
 import { backgroundClientToolDigest, backgroundClientToolTokenDigest } from '~~/shared/chat/background-client-tool-claim';
+import { DELEGATE_CHAT_TOOL } from '~~/shared/chat/delegation';
 /**
  * @module app/utils/chat/useAi-internal/backgroundJobs.ts
  *
@@ -303,7 +304,19 @@ async function executePendingClientTool(
             } else {
                 const registry = useToolRegistry();
                 const validation = { failed: false };
-                const execution = await registry.executeTool(
+                let heartbeat: ReturnType<typeof setInterval> | undefined;
+                if (claim.call.name === DELEGATE_CHAT_TOOL) {
+                    heartbeat = setInterval(() => {
+                        void validateBackgroundClientToolClaim({ jobId: tracker.jobId, callId,
+                            claimToken: claim.claimToken, signal: abortController.signal }).catch(() => {
+                            validation.failed = true;
+                            abortController.abort();
+                        });
+                    }, 20_000);
+                }
+                let execution: Awaited<ReturnType<typeof registry.executeTool>>;
+                try {
+                    execution = await registry.executeTool(
                     claim.call.name,
                     claim.call.arguments,
                     {
@@ -314,6 +327,7 @@ async function executePendingClientTool(
                         callId: claim.call.id,
                         requestId: tracker.jobId,
                         abortSignal: abortController.signal,
+                        parentModel: claim.parentModel,
                         assertToolAuthorized: async () => { assertLocalClaim(); },
                     },
                     { definition: claim.call.definition, beforeExecute: async () => {
@@ -327,7 +341,10 @@ async function executePendingClientTool(
                             throw error;
                         }
                     } }
-                );
+                    );
+                } finally {
+                    if (heartbeat) clearInterval(heartbeat);
+                }
                 if (validation.failed) throw new Error('Tool approval could not be revalidated; execution remains unconfirmed.');
                 // Logout may have scrubbed the journal while the handler was
                 // finishing. Never put its result back into signed-out storage.

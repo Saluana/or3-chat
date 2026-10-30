@@ -11,6 +11,7 @@ import type { ToolDefinition, ToolExecutionContext } from '~/utils/chat/types';
 import { appendMessageRows, prepareMessageAppend } from '~/db/messages';
 import { getThread } from '~/db/threads';
 import { normalizeMessageContent } from '~/core/search/command-palette/normalize';
+import { delegateChat, delegationDefinition, delegationTimeoutMs } from './delegation-tool';
 
 const MAX_SEARCH_RESULTS = 10;
 const MAX_READ_MESSAGES = 40;
@@ -270,6 +271,7 @@ async function sendMessageToThread(
 export function registerThreadChatTools(): () => void {
     const registry = useToolRegistry();
     const handles = [
+        registry.registerTool(delegationDefinition, delegateChat, { runtime: 'client', available, timeoutMs: delegationTimeoutMs }),
         registry.registerTool(searchThreadsDefinition, ({ query }, context) =>
             searchThreads(String(query), context), { runtime: 'client', available }),
         registry.registerTool(readThreadDefinition, ({ threadId, limit }, context) =>

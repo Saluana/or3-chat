@@ -149,6 +149,8 @@ export interface ToolExecutionContext {
     callId: string;
     requestId: string;
     abortSignal: AbortSignal;
+    /** Model settings captured from the request that admitted this tool call. */
+    parentModel?: { model: string; thinking: boolean; reasoningEffort?: string | null };
 }
 
 /** Immutable admission decision associated with a provider-visible tool call. */

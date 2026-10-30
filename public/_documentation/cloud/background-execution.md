@@ -60,6 +60,14 @@ provider lacks the durable claim/settle bridge, that turn uses the foreground
 tool loop. The server also rejects an unsupported browser-tool admission before
 creating a job or contacting the model.
 
+`delegate_chat` waits for a child chat in the originating browser, even when
+the parent is a background job. Keep that browser open until the response is
+received. While the authorized browser remains connected, it refreshes the
+parked parent's activity and uses a bounded two-hour delegation wait; normal
+provider limits still apply. Cancellation propagates to the child. An
+interrupted browser execution is not automatically repeated: inspect the saved
+child chat before explicitly retrying.
+
 Tool results larger than 16 KiB (JSON-escaped) are retained through the selected
 sync gateway's optional `retainChatToolResult(actor, { admission, rows })` method.
 The provider authorizes the current workspace writer and live admitted generation,
