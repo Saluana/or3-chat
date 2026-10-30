@@ -44,7 +44,7 @@
         "or3-provider-fs": "0.0.15",
         "or3-provider-s3": "0.0.14",
         "or3-provider-sqlite": "0.0.24",
-        "or3-scroll": "0.1.5",
+        "or3-scroll": "0.1.6",
         "pathe": "2.0.3",
         "pdfjs-dist": "^6.4.299",
         "reka-ui": "2.11.0",
@@ -2323,7 +2323,7 @@
 
     "or3-provider-sqlite": ["or3-provider-sqlite@0.0.24", "", { "dependencies": { "kysely": "^0.28.18" }, "optionalDependencies": { "better-sqlite3": "^13.0.3", "libsql": "^0.5.29" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-VXn0NottGHWCKjrhb3f7IytG5dJEC07X9eLeb3sr3HwoVU8rrwyF09yPqZ1lqjTteUHYSJLw5O2Xkc65rY4UBw=="],
 
-    "or3-scroll": ["or3-scroll@0.1.5", "", { "peerDependencies": { "vue": "^3.3.0" } }, "sha512-zaMoogomojMM1CtUyXkJ9sDd9jPo1pE1L9t+pz0TlOqRsncyUiXJda5lanp4CexnZK7wMz5OQGw1axUjj0MlCA=="],
+    "or3-scroll": ["or3-scroll@0.1.6", "", { "peerDependencies": { "vue": "^3.3.0" } }, "sha512-6ypwWXWTiavfYIimgHajoWi7cQbTpmipsioX4/V+uBcAtDiNZ+j6u2sOy0XjhrZ5XRr0ySzCqhWRLbg906VQug=="],
 
     "orderedmap": ["orderedmap@2.1.1", "", {}, "sha512-TvAWxi0nDe1j/rtMcWcIj94+Ffe6n7zhow33h40SKxmsmozs6dz/e+EajymfoFcHd7sxNn8yHM8839uixMOV6g=="],
 

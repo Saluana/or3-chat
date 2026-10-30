@@ -48,7 +48,7 @@ async function selectModel(query: string, effort: string | undefined, parent: To
     const displayName = (value: string) => value.replace(/^[^:]+:\s*/, '');
     const exactId = models.filter(model => model.id.toLowerCase() === base || model.canonical_slug?.toLowerCase() === base);
     const exactName = models.filter(model => normalize(displayName(model.name || '')) === normalize(base));
-    const matches = exactId.length ? exactId : exactName.length ? exactName : models.filter(model => model.id.toLowerCase().includes(base) || model.name?.toLowerCase().includes(base));
+    const matches = exactId.length ? exactId : exactName.length ? exactName : models.filter(model => model.id.toLowerCase().includes(base) || model.name.toLowerCase().includes(base));
     const byId = new Map<string, (typeof matches)[number]>();
     for (const model of matches) if (!byId.has(model.id)) byId.set(model.id, model);
     const unique = [...byId.values()];

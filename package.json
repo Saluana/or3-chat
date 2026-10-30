@@ -196,7 +196,7 @@
         "or3-provider-fs": "0.0.15",
         "or3-provider-s3": "0.0.14",
         "or3-provider-sqlite": "0.0.24",
-        "or3-scroll": "0.1.5",
+        "or3-scroll": "0.1.6",
         "pathe": "2.0.3",
         "pdfjs-dist": "^6.4.299",
         "reka-ui": "2.11.0",

@@ -136,11 +136,10 @@ async function readQuotaUsage(
     quota: StorageQuota,
     pending: { name: string; value: string | null | undefined }
 ): Promise<{ bytes: number; keys: number }> {
-    const rows =
-        (await dbRequired(
-            () => targetDb.kv.where('name').startsWith(quota.prefix).toArray(),
-            { op: 'read', entity: 'kv', action: 'getQuotaUsage' }
-        )) ?? [];
+    const rows = await dbRequired(
+        () => targetDb.kv.where('name').startsWith(quota.prefix).toArray(),
+        { op: 'read', entity: 'kv', action: 'getQuotaUsage' }
+    );
     let bytes = 0;
     let keys = 0;
     if (quota.maxRetainedKeys !== undefined) {
