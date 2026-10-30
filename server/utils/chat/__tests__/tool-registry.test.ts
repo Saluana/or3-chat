@@ -357,9 +357,22 @@ describe('registered canonical history authorization', () => {
                 _history: { version: 1, kind: 'new-turn', admissionId: 'new-assistant', generationId: 'new-generation', workspaceId: 'workspace', threadId: 'current', messageId: 'new-assistant',
                     thread: { id: 'current', clock: 1 }, userMessage: { id: 'new-user', clock: 1, thread_id: 'current', role: 'user', data: { content: 'Read history' } },
                     assistantMessage: { id: 'new-assistant', clock: 1, thread_id: 'current', role: 'assistant', data: { content: '' } } } } };
-        const create = vi.spyOn(memoryJobProvider, 'createJob');
+        let create = vi.spyOn(memoryJobProvider, 'createJob');
         await expect(startBackgroundStream(params)).rejects.toThrow(); expect(create).not.toHaveBeenCalled(); expect(getJobCount()).toBe(1);
-        adapter.capabilities.canonicalChatHistory = 'v1'; records.delete('summary');
+        adapter.capabilities.canonicalChatHistory = 'v1';
+        const capabilityProvider: { updateJobExecution?: typeof memoryJobProvider.updateJobExecution } = memoryJobProvider;
+        const checkpoint = capabilityProvider.updateJobExecution;
+        capabilityProvider.updateJobExecution = undefined;
+        create.mockRejectedValueOnce(new Error('job creation was reached'));
+        try {
+            await expect(startBackgroundStream(params)).rejects.toMatchObject({ name: 'BackgroundHistoryUnsupportedError' });
+            expect(create).not.toHaveBeenCalled();
+        } finally {
+            capabilityProvider.updateJobExecution = checkpoint;
+            create.mockRestore();
+            create = vi.spyOn(memoryJobProvider, 'createJob');
+        }
+        records.delete('summary');
         await expect(startBackgroundStream(params)).rejects.toMatchObject({ name: 'BackgroundHistoryUnsupportedError' }); expect(create).not.toHaveBeenCalled();
         const fetch = vi.fn(async () => new Response('data: {"choices":[{"delta":{"content":"Done"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } }));
         vi.stubGlobal('fetch', fetch); reads.length = 0;

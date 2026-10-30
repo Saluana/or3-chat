@@ -680,21 +680,12 @@ export declare function useDashboardNavigation(options?: UseDashboardNavigationO
  * ## HMR Safety
  *
  * The registry is stored on `globalThis` and survives Hot Module Replacement.
- * Always unregister actions in cleanup/unmount hooks to prevent duplicates:
+ * Retain the registration handle and dispose it in cleanup/unmount hooks.
+ * The handle only removes its own registration, even if the ID was replaced.
  *
  * ```ts
- * onUnmounted(() => {
- *   unregisterDocumentHistoryAction('my-plugin:export-doc');
- * });
- * ```
- *
- * Or use `useHookEffect` which handles cleanup automatically:
- *
- * ```ts
- * useHookEffect('plugin:init', () => {
- *   registerDocumentHistoryAction({ ... });
- *   return () => unregisterDocumentHistoryAction('my-plugin:export-doc');
- * });
+ * const registration = registerDocumentHistoryAction({ ... });
+ * onUnmounted(() => registration.dispose());
  * ```
  */
 import type { Post } from '~/db';
@@ -729,7 +720,7 @@ export interface DocumentHistoryAction extends HistoryActionRegistryItem<Post> {
  * });
  * ```
  */
-export declare function registerDocumentHistoryAction(action: DocumentHistoryAction): void;
+export declare function registerDocumentHistoryAction(action: DocumentHistoryAction): import("../_registry").RegistrationHandle;
 /**
  * Purpose:
  * Remove a previously registered document history action.
@@ -1422,7 +1413,7 @@ export interface EditorToolbarButton {
  * Non-Goals:
  * - Preventing id collisions across plugins
  */
-export declare function registerEditorToolbarButton(button: EditorToolbarButton): void;
+export declare function registerEditorToolbarButton(button: EditorToolbarButton): import("../_registry").RegistrationHandle;
 /**
  * Unregister a toolbar button by id.
  *
@@ -1490,7 +1481,7 @@ export interface HistoryActionRegistryItem<TDocument> {
     }) => void | Promise<void>;
 }
 export declare function createHistoryActionRegistry<TDocument, TAction extends HistoryActionRegistryItem<TDocument>>(globalKey: string): {
-    register(item: TAction): void;
+    register(item: TAction): import("../_registry").RegistrationHandle;
     unregister(id: string): void;
     useItems(): import("vue").ComputedRef<readonly TAction[]>;
     listIds(): string[];
@@ -1726,7 +1717,7 @@ export interface ProjectTreeAction extends RegistryItem {
     handler: (ctx: ProjectTreeHandlerCtx) => void | Promise<void>;
 }
 /** Register (or replace) a message action. */
-export declare function registerProjectTreeAction(action: ProjectTreeAction): void;
+export declare function registerProjectTreeAction(action: ProjectTreeAction): import("#imports").RegistrationHandle;
 /** Unregister an action by id (optional utility). */
 export declare function unregisterProjectTreeAction(id: string): void;
 /** Accessor for actions applicable to a specific message. */
@@ -3133,7 +3124,7 @@ export interface SidebarFooterActionEntry {
  * Non-Goals:
  * - Does not validate component structure
  */
-export declare function registerSidebarSection(section: SidebarSection): void;
+export declare function registerSidebarSection(section: SidebarSection): import("../_registry").RegistrationHandle;
 /**
  * `unregisterSidebarSection`
  *
@@ -3292,21 +3283,12 @@ export declare function listRegisteredSidebarFooterActionIds(): string[];
  * ## HMR Safety
  *
  * The registry is stored on `globalThis` and survives Hot Module Replacement.
- * Always unregister actions in cleanup/unmount hooks to prevent duplicates:
+ * Retain the registration handle and dispose it in cleanup/unmount hooks.
+ * The handle only removes its own registration, even if the ID was replaced.
  *
  * ```ts
- * onUnmounted(() => {
- *   unregisterThreadHistoryAction('my-plugin:export-thread');
- * });
- * ```
- *
- * Or use `useHookEffect` which handles cleanup automatically:
- *
- * ```ts
- * useHookEffect('plugin:init', () => {
- *   registerThreadHistoryAction({ ... });
- *   return () => unregisterThreadHistoryAction('my-plugin:export-thread');
- * });
+ * const registration = registerThreadHistoryAction({ ... });
+ * onUnmounted(() => registration.dispose());
  * ```
  */
 import type { Thread } from '~/db';
@@ -3323,7 +3305,7 @@ export interface ThreadHistoryAction extends HistoryActionRegistryItem<Thread> {
     }) => Promise<string | undefined>;
 }
 /** Register (or replace) a message action. */
-export declare function registerThreadHistoryAction(action: ThreadHistoryAction): void;
+export declare function registerThreadHistoryAction(action: ThreadHistoryAction): import("../_registry").RegistrationHandle;
 /** Unregister an action by id (optional utility). */
 export declare function unregisterThreadHistoryAction(id: string): void;
 /** Accessor for actions applicable to a specific message. */

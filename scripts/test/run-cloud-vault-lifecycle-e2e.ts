@@ -31,7 +31,10 @@ try {
     const packagePath = join(candidate, 'package.json');
     const manifest = JSON.parse(await readFile(packagePath, 'utf8')); manifest.version = '0.1.91'; await writeFile(packagePath, JSON.stringify(manifest));
     const infoPath = join(candidate, 'src/package-info.ts');
-    await writeFile(infoPath, (await readFile(infoPath, 'utf8')).replace("PACKAGE_VERSION = '0.1.90'", "PACKAGE_VERSION = '0.1.91'"));
+    const info = await readFile(infoPath, 'utf8');
+    const candidateInfo = info.replace(/PACKAGE_VERSION = '[^']+'/, "PACKAGE_VERSION = '0.1.91'");
+    assert.notEqual(candidateInfo, info, 'Candidate CLI version must be rewritten for the lifecycle fixture');
+    await writeFile(infoPath, candidateInfo);
     for (const relative of ['src/commands/recover-restart.ts', 'src/deployment/lease.ts']) {
         const path = join(candidate, relative);
         await writeFile(path, (await readFile(path, 'utf8')).replace("'../../../../shared/server/restarts/controller'", JSON.stringify(join(root, 'shared/server/restarts/controller.ts'))));

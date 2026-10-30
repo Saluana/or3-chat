@@ -126,7 +126,8 @@ describe('fresh authorization of bounded, ordered SSE batches', () => {
     async function attach(
         jobId?: string,
         offset?: number,
-        previousContent = ''
+        previousContent = '',
+        attempt?: number
     ) {
         jobId ??= await memoryJobProvider.createJob({
             userId: 'owner',
@@ -149,7 +150,7 @@ describe('fresh authorization of bounded, ordered SSE batches', () => {
         );
         const opening = send(
             new Request(
-                `http://chat.test/api/jobs/${jobId}/stream${offset === undefined ? '' : `?offset=${offset}`}`
+                `http://chat.test/api/jobs/${jobId}/stream${offset === undefined ? '' : `?offset=${offset}${attempt === undefined ? '' : `&attempt=${attempt}`}`}`
             )
         );
         await vi.advanceTimersByTimeAsync(auth.delay);
@@ -258,6 +259,85 @@ describe('fresh authorization of bounded, ordered SSE batches', () => {
         expect(resumed.frames.at(-1)?.status.usage).toEqual(usage);
         await resumed.reader.cancel();
         await resumed.consumed;
+    });
+
+    it('includes complete terminal reasoning when reconnecting with a content offset', async () => {
+        const jobId = await memoryJobProvider.createJob({
+            userId: 'owner', threadId: 't', messageId: 'm', model: 'test',
+            execution: { workspaceId: 'workspace' } as BackgroundJobExecution,
+        });
+        emitJobStatus(jobId, 'complete', {
+            content: 'answer done', contentLength: 11, reasoning: 'final reasoning',
+            reasoningLength: 15, chunksReceived: 2, attempt: 0,
+        });
+        const stream = await attach(jobId, 6, 'answer', 0);
+        expect(stream.done).toBe(true);
+        expect(stream.frames.at(-1)?.status).toMatchObject({
+            status: 'complete', content: 'answer done', reasoning_text: 'final reasoning',
+        });
+        expect(stream.reasoning).toBe('final reasoning');
+        await stream.reader.cancel();
+        await stream.consumed;
+    });
+
+    it('ignores an older durable terminal after the initial snapshot advances the attempt', async () => {
+        const jobId = await memoryJobProvider.createJob({
+            userId: 'owner', threadId: 't', messageId: 'm', model: 'test',
+            execution: { workspaceId: 'workspace' } as BackgroundJobExecution,
+        });
+        const job = (await memoryJobProvider.getJob(jobId, 'owner'))!;
+        let snapshot: BackgroundJob = {
+            ...job, attempts: 1, status: 'complete', content: 'old terminal answer',
+        };
+        vi.spyOn(memoryJobProvider, 'getJob').mockImplementation(async () => structuredClone(snapshot));
+        emitJobStatus(jobId, 'streaming', {
+            content: 'new', contentLength: 3, chunksReceived: 1, attempt: 2, content_reset: true,
+        });
+        const stream = await attach(jobId, 19, 'old terminal answer', 1);
+        await vi.advanceTimersByTimeAsync(auth.delay * 2);
+        expect(stream.frames[0]?.status).toMatchObject({ attempt: 2, content: 'new', content_reset: true });
+        expect(stream.done).toBe(false);
+        expect(stream.frames.every((frame) => frame.status.attempt === 2)).toBe(true);
+        emitJobDelta(jobId, ' answer', { contentLength: 10, chunksReceived: 2, attempt: 2 });
+        await vi.advanceTimersByTimeAsync(auth.delay * 2);
+        expect(stream.content).toBe('new answer');
+        snapshot = { ...snapshot, attempts: 2, status: 'complete', content: 'new answer' };
+        await vi.advanceTimersByTimeAsync(1200);
+        expect(stream.done).toBe(true);
+        expect(stream.frames.at(-1)?.status).toMatchObject({ attempt: 2, status: 'complete', content: 'new answer' });
+        await stream.reader.cancel();
+        await stream.consumed;
+    });
+
+    it('keeps reconciling when recovery advances while an SSE batch awaits authorization', async () => {
+        const jobId = await memoryJobProvider.createJob({
+            userId: 'owner', threadId: 't', messageId: 'm', model: 'test',
+            execution: { workspaceId: 'workspace' } as BackgroundJobExecution,
+        });
+        const job = (await memoryJobProvider.getJob(jobId, 'owner'))!;
+        let snapshot: BackgroundJob = { ...job, attempts: 1 };
+        vi.spyOn(memoryJobProvider, 'getJob').mockImplementation(async () => structuredClone(snapshot));
+        emitJobStatus(jobId, 'streaming', { content: 'old', contentLength: 3, chunksReceived: 1, attempt: 1 });
+        const stream = await attach(jobId);
+        let release!: () => void;
+        auth.gate = new Promise<void>((resolve) => { release = resolve; });
+        emitJobStatus(jobId, 'streaming', {
+            content: 'new', contentLength: 3, chunksReceived: 1, attempt: 2, content_reset: true,
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        snapshot = { ...snapshot, status: 'complete', content: 'old' };
+        await vi.advanceTimersByTimeAsync(1100);
+        auth.gate = null;
+        release();
+        await vi.advanceTimersByTimeAsync(auth.delay * 2);
+        expect(stream.done).toBe(false);
+        expect(stream.content).toBe('new');
+        snapshot = { ...snapshot, attempts: 2, content: 'new complete' };
+        await vi.advanceTimersByTimeAsync(1200);
+        expect(stream.done).toBe(true);
+        expect(stream.frames.at(-1)?.status).toMatchObject({ attempt: 2, status: 'complete', content: 'new complete' });
+        await stream.reader.cancel();
+        await stream.consumed;
     });
 
     it('delivers canonical usage-only progress and terminal reconciliation', async () => {

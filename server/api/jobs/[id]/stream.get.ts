@@ -1,4 +1,3 @@
-import { projectBackgroundWorkflowState } from '~~/shared/chat/background-workflow-state';
 /**
  * @module server/api/jobs/[id]/stream.get
  *
@@ -15,6 +14,7 @@ import type { BackgroundJob } from '../../../utils/background-jobs/types';
 import { readRequestUsage, type RequestUsage } from '../../../../shared/chat/compaction';
 import { toolCallFingerprint } from '../../../../shared/chat/tool-ledger';
 import { shouldResetBackgroundContent } from '../../../utils/background-jobs/recovery';
+import { projectJobView } from '../../../utils/background-jobs/job-view';
 import { requireJobWorkspaceAccess } from '../../../utils/background-jobs/access';
 import { getJobProvider } from '../../../utils/background-jobs/store';
 import { resolveSessionContext } from '../../../auth/session';
@@ -100,20 +100,15 @@ export function serializeJobStatus(
 ): StreamEventPayload['status'] {
     const includeContent = overrides?.includeContent !== false;
     const contentOverride = overrides?.content;
-    const status: StreamEventPayload['status'] = {
-        id: job.id,
-        status: job.status,
-        threadId: job.threadId,
-        messageId: job.messageId,
-        model: job.model,
-        chunksReceived: job.chunksReceived,
-        attempt: job.attempts ?? 0,
-        startedAt: job.startedAt,
-        completedAt: job.completedAt,
-        error: job.error,
+    const view = projectJobView({
+        ...job,
         tool_calls: overrides?.tool_calls ?? job.tool_calls,
-        workflow_state: projectBackgroundWorkflowState(job.status, overrides?.workflow_state ?? job.workflow_state),
-        usage: readRequestUsage(job.usage),
+        workflow_state: overrides?.workflow_state ?? job.workflow_state,
+    });
+    const status: StreamEventPayload['status'] = {
+        ...view,
+        content: undefined,
+        reasoning_text: undefined,
         content_reset: overrides?.content_reset,
         content_delta: overrides?.content_delta,
         content_length:
@@ -184,15 +179,20 @@ export default defineEventHandler(async (event) => {
     }
 
     const provider = await getJobProvider();
-    const initialJob = await provider.getJob(jobId, userId);
+    const canonicalJob = await provider.getJob(jobId, userId);
 
-    if (!initialJob) {
+    if (!canonicalJob) {
 
         setResponseStatus(event, 404);
         return { error: 'Job not found or unauthorized' };
     }
 
-    await requireJobWorkspaceAccess(event, session, initialJob.execution?.workspaceId, 'workspace.read');
+    await requireJobWorkspaceAccess(event, session, canonicalJob.execution?.workspaceId, 'workspace.read');
+
+    const view = projectJobView(canonicalJob, getJobLiveState(jobId));
+    const initialJob: BackgroundJob = {
+        ...canonicalJob, ...view, attempts: view.attempt, reasoning: view.reasoning_text,
+    };
 
     const query = getQuery(event);
     const offsetParam = typeof query.offset === 'string' ? query.offset : null;
@@ -231,10 +231,9 @@ export default defineEventHandler(async (event) => {
             let lastWorkflowVersion = workflowStateVersionOf(
                 initialJob.workflow_state
             );
-            let lastAttempt =
-                typeof attemptParam === 'number' && Number.isFinite(attemptParam)
-                    ? attemptParam
-                    : initialJob.attempts ?? 0;
+            // The initial snapshot has already established this attempt, even
+            // when the reconnecting client supplied an older one.
+            let lastAttempt = initialJob.attempts ?? 0;
             const disposeViewer = registerJobViewer(jobId);
 
             let disposeLive: (() => void) | null = null;
@@ -321,7 +320,7 @@ export default defineEventHandler(async (event) => {
             };
 
             // Send initial snapshot
-            if (initialOffset === 0) {
+            if (initialOffset === 0 || initialJob.status !== 'streaming') {
                 write({
                     event: 'snapshot',
                     status: serializeJobStatus(initialJob, {
@@ -348,6 +347,12 @@ export default defineEventHandler(async (event) => {
             }
             lastContentLength = initialJob.content.length;
             lastReasoningLength = (initialJob.reasoning).length;
+            // The authorized live state may already have completed while the
+            // durable snapshot still says streaming. This snapshot is terminal.
+            if (canonicalJob.status === 'streaming' && initialJob.status !== 'streaming') {
+                closeStream();
+                return;
+            }
 
             const onLiveEvent: Parameters<typeof registerJobStream>[1] = (
                 liveEvent
@@ -358,6 +363,8 @@ export default defineEventHandler(async (event) => {
                         liveEvent.attempt < lastAttempt)
                 )
                     return;
+                const advancedFromInitial = liveEvent.attempt !== undefined &&
+                    liveEvent.attempt > (initialJob.attempts ?? 0);
                 const sameAttempt = liveEvent.attempt === undefined || liveEvent.attempt === lastAttempt;
                 if (terminalPending && sameAttempt &&
                     (liveEvent.type === 'delta' || liveEvent.status === 'streaming')) return;
@@ -391,7 +398,7 @@ export default defineEventHandler(async (event) => {
                         reasoningDelta.length > 0 &&
                         reasoningLength > lastReasoningLength;
                     const toolCalls = JSON.stringify(
-                        liveEvent.tool_calls ?? initialJob.tool_calls
+                        liveEvent.tool_calls ?? (advancedFromInitial ? undefined : initialJob.tool_calls)
                     );
                     const hasStateChange =
                         toolCalls !== lastToolCalls ||
@@ -433,10 +440,10 @@ export default defineEventHandler(async (event) => {
                                     initialJob.attempts,
                                 tool_calls:
                                     liveEvent.tool_calls ??
-                                    initialJob.tool_calls,
+                                    (advancedFromInitial ? undefined : initialJob.tool_calls),
                                 workflow_state:
                                     liveEvent.workflow_state ??
-                                    initialJob.workflow_state,
+                                    (advancedFromInitial ? undefined : initialJob.workflow_state),
                                 usage: liveEvent.usage,
                             },
                             {
@@ -470,7 +477,7 @@ export default defineEventHandler(async (event) => {
                     return;
                 }
                 lastToolCalls = JSON.stringify(
-                    liveEvent.tool_calls ?? initialJob.tool_calls
+                    liveEvent.tool_calls ?? (advancedFromInitial ? undefined : initialJob.tool_calls)
                 );
                 lastStatus = liveEvent.status;
                 lastContentLength = liveEvent.content_length;
@@ -504,10 +511,10 @@ export default defineEventHandler(async (event) => {
                                 liveEvent.attempt ?? initialJob.attempts,
                             tool_calls:
                                 liveEvent.tool_calls ??
-                                initialJob.tool_calls,
+                                (advancedFromInitial ? undefined : initialJob.tool_calls),
                             workflow_state:
                                 liveEvent.workflow_state ??
-                                initialJob.workflow_state,
+                                (advancedFromInitial ? undefined : initialJob.workflow_state),
                             usage: liveEvent.usage,
                         },
                         {
@@ -515,12 +522,12 @@ export default defineEventHandler(async (event) => {
                             content: liveEvent.content,
                             content_length: liveEvent.content_length,
                             reasoning_text:
-                                liveEvent.reasoning ?? initialJob.reasoning,
+                                liveEvent.reasoning ?? (advancedFromInitial ? '' : initialJob.reasoning),
                             reasoning_length:
                                 liveEvent.reasoning_length ??
                                 (
                                     liveEvent.reasoning ??
-                                    initialJob.reasoning
+                                    (advancedFromInitial ? '' : initialJob.reasoning)
                                 ).length,
                             tool_calls: liveEvent.tool_calls,
                             workflow_state: liveEvent.workflow_state,
@@ -918,7 +925,11 @@ export default defineEventHandler(async (event) => {
                     // Capture the revision read before the snapshot. A concurrent
                     // update can cause an extra refresh, never hide newer output.
                     observedControlRevision = control?.revision;
-                    return job;
+                    // A stale terminal must not stop the shared reconciler,
+                    // including while a newer live event awaits authorization.
+                    const liveAttempt = getJobLiveState(jobId)?.attempt ?? 0;
+                    return job && (job.attempts ?? 0) < Math.max(lastAttempt, liveAttempt)
+                        ? undefined : job;
                 },
                 (job, pollError) => {
                     if (pollError || !job) {
