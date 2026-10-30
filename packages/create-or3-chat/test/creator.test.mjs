@@ -192,7 +192,7 @@ test('generated template has registry-clean first-party dependencies', async () 
     // Generated projects must receive the dependency fix as well as its runner.
     assert.equal(manifest.scripts.postinstall, 'patch-package --error-on-fail && nuxt prepare');
     assert.ok(manifest.devDependencies['patch-package']);
-    await readFile(new URL('patches/or3-scroll+0.1.3.patch', templateUrl));
+    await readFile(new URL('patches/streamdown-vue+1.0.35.patch', templateUrl));
     assert.equal(
         manifest.scripts['generate:static'],
         'tsx scripts/cli/nuxt-task.ts generate-static'
