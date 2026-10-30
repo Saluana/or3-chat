@@ -16,7 +16,7 @@ if (!key)
 const fixtures = JSON.parse(await readFile(
     new URL('./fixtures.json', import.meta.url), 'utf8',
 )) as Array<{ id: string; expected: 'fact' | 'decision' | 'uncertain'; state: MemoryClassificationState }>;
-const models = [MEMORY_CLASSIFIER_MODEL];
+const models = ['typesafe/jev-1.13', MEMORY_CLASSIFIER_MODEL];
 const reports = [];
 for (const model of models) {
     const cases = [];

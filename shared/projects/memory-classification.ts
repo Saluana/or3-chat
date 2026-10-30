@@ -17,7 +17,7 @@ export function memoryInferenceOrigin(baseUrl: unknown): string | null {
     return origin === new URL(DEFAULT_OPENROUTER_BASE_URL).origin ? origin : null;
 }
 
-// Qualified on labeled cases using the real Decisions API; see planning receipts.
+// Qualified on labeled cases using the real Decisions API; see the evaluation script.
 export const MEMORY_CLASSIFIER_MODEL = 'perplexity/pplx-decider-v1.2';
 export const MEMORY_CLASSIFIER_TIMEOUT_MS = 10000;
 export const MEMORY_DECISION_THRESHOLD = 0.9;

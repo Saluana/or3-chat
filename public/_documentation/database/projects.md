@@ -318,12 +318,13 @@ the pinned model passed all 40 labeled examples and four automatic-capture smoke
 The earlier comparison of its predecessor with Jev is recorded below and in the evaluation receipt.
 The fixtures, text-free results and comparison command are under
 `planning/project-memory-classification/`. On October 8, 2026, Jev matched 40/40
-labels and Decider matched 39/40: Decider labeled the current-database/unapproved-migration
+labels and Decider V1.1 matched 39/40: Decider labeled the current-database/unapproved-migration
 case uncertain instead of fact. Both produced the expected stored kind on 40/40 cases,
 accepted all twelve adopted decisions and promoted no unapproved choices. Four live
-Decider automatic-capture smoke cases also passed, including supported extraction and
+Decider V1.1 automatic-capture smoke cases also passed, including supported extraction and
 skipping a question and an unapproved brainstorm. This finite synthetic evaluation does
-not guarantee classification accuracy on every memory.
+not guarantee classification accuracy on every memory. On October 29, 2026, Decider V1.2
+matched all 40 labels and passed the same four automatic-capture cases.
 Canonical model IDs and their dated provider snapshots are accepted; other models are rejected.
 State contains only the saved text and at most six preceding messages from the source's
 owning chat, with a 240 KiB UTF-8 bound. Oversized evidence skips classification rather than losing caveats through clipping. Attachments and other chats are never sent.

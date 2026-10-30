@@ -1393,7 +1393,7 @@ describe('nonblocking project memory classification', () => {
         await new Promise(resolve => setTimeout(resolve, 50));
         expect(await db.posts.get(saved.row.id)).toEqual(saved.row);
     });
-    it.each(['perplexity/pplx-decider-v1.2', 'perplexity/pplx-decider-v1.2-20260917'])(
+    it.each(['perplexity/pplx-decider-v1.2', 'perplexity/pplx-decider-v1.2-20261016'])(
         'saves immediately, bounds owning-chat context, then accepts resolved model %s', async model => {
         const { saved, body, finish } = await start();
         expect(JSON.parse((await db.posts.get(saved.row.id))!.content).kind).toBe('fact');
@@ -1429,7 +1429,7 @@ describe('nonblocking project memory classification', () => {
             await new Promise(resolve => setTimeout(resolve, 100));
             expect(await db.posts.get(saved.row.id)).toEqual(before);
         });
-    it.each(['attacker/model', 'perplexity/pplx-decider-v1.2-other', 'perplexity/pplx-decider-v1.2-20260917-extra'])(
+    it.each(['attacker/model', 'perplexity/pplx-decider-v1.2-other', 'perplexity/pplx-decider-v1.2-20261016-extra'])(
         'refuses unrelated resolved model %s', async model => {
             const { saved, finish } = await start();
             const before = await db.posts.get(saved.row.id);
