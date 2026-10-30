@@ -53,7 +53,8 @@ export interface UsePaneDocumentsApi {
 function reportFlushFailure(
     id: string,
     error: unknown,
-    previousError: unknown
+    previousError: unknown,
+    toast: ReturnType<typeof useToast>
 ) {
     const state = useDocumentState(id);
     console.error('[usePaneDocuments] Failed to flush document:', error);
@@ -61,7 +62,7 @@ function reportFlushFailure(
     // persistence error. Only add feedback when this guard found no new error
     // there (including the store's silent `status: 'error'` result).
     if (state.lastError === previousError) {
-        useToast().add({
+        toast.add({
             color: 'error',
             title: 'Document: save failed',
             description: 'Your changes are still open. Please try saving again.',
@@ -77,19 +78,20 @@ function reportFlushFailure(
  */
 async function flushBeforeNavigation(
     id: string,
-    flushDocument: UsePaneDocumentsOptions['flushDocument']
+    flushDocument: UsePaneDocumentsOptions['flushDocument'],
+    toast: ReturnType<typeof useToast>
 ): Promise<boolean> {
     const previousError = useDocumentState(id).lastError;
     try {
         await flushDocument(id);
     } catch (error) {
-        reportFlushFailure(id, error, previousError);
+        reportFlushFailure(id, error, previousError, toast);
         return false;
     }
 
     const state = useDocumentState(id);
     if (state.status === 'error') {
-        reportFlushFailure(id, state.lastError, previousError);
+        reportFlushFailure(id, state.lastError, previousError, toast);
         return false;
     }
     return true;
@@ -125,6 +127,7 @@ export function usePaneDocuments(
 ): UsePaneDocumentsApi {
     const { panes, activePaneIndex, createNewDoc, flushDocument } = opts;
     const hooks = useHooks();
+    const toast = useToast();
 
     async function newDocumentInActive(initial?: { title?: string }) {
         const pane = panes.value[activePaneIndex.value];
@@ -137,7 +140,7 @@ export function usePaneDocuments(
                 const hadPending =
                     prevState.pendingTitle !== undefined ||
                     prevState.pendingContent !== undefined;
-                if (!(await flushBeforeNavigation(previousDocumentId, flushDocument))) {
+                if (!(await flushBeforeNavigation(previousDocumentId, flushDocument, toast))) {
                     return undefined;
                 }
                 // Emit saved hook if pending changes existed (defensive for test scenarios)
@@ -204,7 +207,7 @@ export function usePaneDocuments(
             const hadPending =
                 prevState.pendingTitle !== undefined ||
                 prevState.pendingContent !== undefined;
-            if (!(await flushBeforeNavigation(previousDocumentId, flushDocument))) {
+            if (!(await flushBeforeNavigation(previousDocumentId, flushDocument, toast))) {
                 return;
             }
             // Emit saved hook if pending changes existed (defensive for test scenarios)

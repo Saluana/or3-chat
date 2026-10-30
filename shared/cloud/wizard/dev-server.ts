@@ -1,4 +1,5 @@
 import { createServer } from 'node:net';
+import { setTimeout as delay } from 'node:timers/promises';
 
 function normalizeErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
@@ -48,17 +49,20 @@ export async function isPortAvailable(
 export async function waitForHttpReady(
     url: string,
     timeoutMs = 45_000,
+    signal?: AbortSignal,
 ): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     let lastError = '';
     while (Date.now() < deadline) {
+        signal?.throwIfAborted();
         try {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), Math.min(5_000, Math.max(1, deadline - Date.now())));
             try {
-                const response = await fetch(url, { redirect: 'manual', signal: controller.signal });
+                const response = await fetch(url, { redirect: 'manual', signal: signal ? AbortSignal.any([controller.signal, signal]) : controller.signal });
                 if (response.status === 200) {
                     const health: unknown = await response.json();
+                    signal?.throwIfAborted();
                     if (health && typeof health === 'object' && 'status' in health && health.status === 'ok' && 'timestamp' in health && typeof health.timestamp === 'string' && Number.isFinite(Date.parse(health.timestamp)) && 'uptime' in health && typeof health.uptime === 'number' && Number.isFinite(health.uptime) && health.uptime >= 0) return;
                     lastError = 'Invalid OR3 health response';
                 } else {
@@ -67,9 +71,15 @@ export async function waitForHttpReady(
                 }
             } finally { clearTimeout(timeout); }
         } catch (error) {
+            signal?.throwIfAborted();
             lastError = normalizeErrorMessage(error);
         }
-        await new Promise((resolve) => setTimeout(resolve, Math.min(300, Math.max(0, deadline - Date.now()))));
+        try {
+            await delay(Math.min(300, Math.max(0, deadline - Date.now())), undefined, { signal });
+        } catch (error) {
+            signal?.throwIfAborted();
+            throw error;
+        }
     }
     throw new Error(
         `Timed out waiting for ${url}${lastError ? ` (${lastError})` : ''}.`,

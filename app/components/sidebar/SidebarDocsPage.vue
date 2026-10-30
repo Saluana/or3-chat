@@ -11,7 +11,7 @@
             >
                 Home
             </UButton>
-            <UTooltip :delay-duration="0" text="New document">
+            <UTooltip v-if="!viewOnly" :delay-duration="0" text="New document">
                 <UButton
                     variant="ghost"
                     color="neutral"
@@ -30,9 +30,9 @@
             :active-ids="activeDocumentIds ?? []"
             type="document"
             empty-message="No documents yet"
-            empty-description="Create a document to keep your work organized."
+            :empty-description="viewOnly ? 'This workspace is view-only.' : 'Create a document to keep your work organized.'"
             empty-icon="lucide:file-text"
-            cta-label="Create a document"
+            :cta-label="viewOnly ? undefined : 'Create a document'"
             @select="onSelect"
             @rename="onRename"
             @delete="onDelete"
@@ -52,6 +52,7 @@ import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 import SidebarTimeGroupedList from './SidebarTimeGroupedList.vue';
 import { useOr3Config } from '~/composables/useOr3Config';
+import { useViewOnlyAccess } from '~/composables/auth/useViewOnlyAccess';
 
 // Component name for KeepAlive matching
 defineOptions({
@@ -74,6 +75,7 @@ const iconBack = useIcon('ui.chevron.left');
 const iconNewDoc = useIcon('sidebar.new_note');
 const { setActivePage } = useActiveSidebarPage();
 const or3Config = useOr3Config();
+const viewOnly = useViewOnlyAccess();
 const documentsEnabled = computed(() => or3Config.features.documents.enabled);
 
 function goBack() {

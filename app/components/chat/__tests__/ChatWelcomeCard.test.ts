@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
-import { nextTick, ref } from 'vue';
+import { getCurrentInstance, nextTick, ref } from 'vue';
 import ChatWelcomeCard from '../ChatWelcomeCard.vue';
 
 const startLogin = vi.fn();
@@ -14,7 +14,10 @@ const runtimeConfig = ref({
 });
 
 vi.mock('#imports', () => ({
-    useToast: () => ({ add: toastAdd }),
+    useToast: () => {
+        if (!getCurrentInstance()) throw new Error('Toast requires component setup');
+        return { add: toastAdd };
+    },
     useRuntimeConfig: () => runtimeConfig.value,
 }));
 
@@ -123,6 +126,22 @@ describe('ChatWelcomeCard a11y', () => {
         await keyDetails.trigger('click');
         expect(wrapper.find('a[href]').exists()).toBe(false);
 
+        wrapper.unmount();
+    });
+
+    it('confirms a saved key without reporting an error', async () => {
+        persistUserApiKey.mockResolvedValue(undefined);
+        const wrapper = mountCard();
+        await flushPromises();
+        await wrapper.get('[aria-controls="chat-welcome-existing-key"]').trigger('click');
+        await wrapper.get('input').setValue('sk-or-test-only');
+        await wrapper.findAll('button').find(button => button.text() === 'Save')!.trigger('click');
+        await flushPromises();
+
+        expect(persistUserApiKey).toHaveBeenCalledWith('sk-or-test-only');
+        expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ title: 'OpenRouter connected' }));
+        expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+        expect((wrapper.get('input').element as HTMLInputElement).value).toBe('');
         wrapper.unmount();
     });
 

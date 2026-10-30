@@ -182,6 +182,7 @@
                             </p>
                             <div class="mt-5 flex flex-col gap-2">
                                 <UButton
+                                    v-if="!viewOnly"
                                     color="neutral"
                                     variant="ghost"
                                     :icon="iconNewProject"
@@ -203,7 +204,7 @@
                                     Start a chat
                                 </UButton>
                                 <UButton
-                                    v-if="documentsEnabled"
+                                    v-if="documentsEnabled && !viewOnly"
                                     color="neutral"
                                     variant="ghost"
                                     :icon="iconNewDocument"
@@ -239,6 +240,7 @@
                         </template>
                         <template v-else #actions>
                             <UButton
+                                v-if="!viewOnly"
                                 size="sm"
                                 variant="ghost"
                                 class="w-full justify-center whitespace-nowrap truncate text-[14px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-on-surface)]/80 hover:bg-[color:var(--md-primary)]/15 backdrop-blur theme-btn"
@@ -257,7 +259,7 @@
                                 Start a new chat
                             </UButton>
                             <UButton
-                                v-if="documentsEnabled"
+                                v-if="documentsEnabled && !viewOnly"
                                 size="sm"
                                 variant="ghost"
                                 class="w-full justify-center whitespace-nowrap truncate text-[14px] leading-tight bg-[color:var(--md-primary)]/10 text-[color:var(--md-on-surface)]/80 hover:bg-[color:var(--md-primary)]/15 backdrop-blur theme-btn"
@@ -368,6 +370,7 @@ import { useOr3Config } from '~/composables/useOr3Config';
 import { resolvedWorkspaceProfile } from '~/core/workspace-profiles/projection';
 import { isMobile } from '~/state/global';
 import { useCommandPalette } from '~/composables/search/useCommandPalette';
+import { useViewOnlyAccess } from '~/composables/auth/useViewOnlyAccess';
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 type SidebarCombinedItem =
@@ -490,6 +493,7 @@ function toggleGroup(groupKey: string) {
 
 // Config and feature flags (must be declared before usePaginatedSidebarItems)
 const or3Config = useOr3Config();
+const viewOnly = useViewOnlyAccess();
 const documentsEnabled = computed(() => or3Config.features.documents.enabled);
 
 // Paginated items
@@ -554,7 +558,9 @@ const showWelcome = computed(
     () => isCompletelyEmpty.value && !sidebarQuery.value
 );
 const welcomeDescription = computed(() =>
-    documentsEnabled.value
+    viewOnly.value
+        ? 'This workspace is view-only.'
+        : documentsEnabled.value
         ? 'Get started by creating a project, starting a chat, or creating a document.'
         : 'Get started by creating a project or starting a chat.'
 );

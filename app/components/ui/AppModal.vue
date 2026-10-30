@@ -106,12 +106,12 @@ const modalUi = computed<ModalProps['ui']>(() => ({
 
 @media (max-width: 767px), (pointer: coarse) {
     .app-modal[role=dialog] button:not([role='switch']) {
-        min-height: 44px !important;
+        min-height: calc(44px / var(--app-ui-zoom, 1)) !important;
     }
     .app-modal [data-slot='close'] {
-        width: 44px !important;
-        height: 44px !important;
-        min-width: 44px !important;
+        width: calc(44px / var(--app-ui-zoom, 1)) !important;
+        height: calc(44px / var(--app-ui-zoom, 1)) !important;
+        min-width: calc(44px / var(--app-ui-zoom, 1)) !important;
         padding: 0 !important;
     }
     .app-modal [data-slot='footer'] button {

@@ -922,6 +922,19 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) {
         await page.setViewportSize({ width: 390, height: 844 });
         await page.goto('/__or3-document-journey-test');
         await expect(page.getByRole('textbox', { name: 'Document body' })).toBeVisible({ timeout: 30_000 });
+        if (theme === 'retro') {
+            await page.route('**/api.iconify.design/**', route => route.abort());
+            await page.getByRole('textbox', { name: 'Document body' }).locator('p').first().dblclick({ position: { x: 20, y: 10 } });
+            const editSelection = page.getByRole('button', { name: 'Edit selection with AI' });
+            await expect(editSelection).toBeVisible();
+            const icon = editSelection.locator('.iconify');
+            await expect(icon).toBeVisible();
+            await expect(icon).toHaveClass(/pixel/);
+            await expect.poll(() => icon.evaluate((element) => {
+                const style = getComputedStyle(element);
+                return style.maskImage !== 'none' || style.backgroundImage !== 'none';
+            })).toBe(true);
+        }
         const settings = page.getByRole('button', { name: 'Document AI settings', exact: true });
         await settings.focus();
         await settings.click();

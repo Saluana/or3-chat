@@ -50,6 +50,14 @@ test.describe('OR3 Cloud Auth Integration', () => {
         await page.goto('/');
         await page.waitForLoadState('networkidle');
 
+        if (isolatedAdminHarnessReady) {
+            const refresh = await page.request.post('/api/basic-auth/refresh?silent=1', {
+                headers: { origin: new URL(page.url()).origin },
+            });
+            expect(refresh.status()).toBe(200);
+            expect(await refresh.json()).toEqual({ ok: false });
+        }
+
         await expect(
             page.getByRole('button', { name: /sign in|login/i })
         ).toBeVisible();
@@ -107,6 +115,84 @@ test.describe('OR3 Cloud Auth Integration', () => {
 });
 
 if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
+    test('workspace cloud profile explains rejected webhook destinations safely', async ({ page }, info) => {
+        const origin = new URL(info.project.use.baseURL!).origin;
+        const registered = await page.request.post('/api/basic-auth/register', {
+            headers: { origin, 'x-or3-cloud-intent': 'mutation' },
+            data: { email: `webhook-${randomUUID()}@example.test`, password: 'DisposableWebhook!123', confirmPassword: 'DisposableWebhook!123' },
+        });
+        expect(registered.ok()).toBe(true);
+        await page.goto('/chat');
+        await page.getByRole('button', { name: 'Dismiss welcome' }).click({ timeout: 5_000 }).catch(() => undefined);
+        await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
+        await page.getByRole('dialog').getByRole('button', { name: 'Webhooks', exact: true }).click();
+        await page.getByRole('dialog').getByRole('button', { name: 'Create webhook' }).click();
+        const form = page.getByRole('dialog', { name: 'Create Webhook' });
+        await form.getByRole('textbox', { name: 'Target URL' }).fill(`${origin}/disposable`);
+        await form.getByRole('checkbox', { name: /document.created/ }).check();
+        await form.getByRole('button', { name: 'Create Webhook' }).click();
+        await expect(form.getByText('Webhook URLs cannot use private or local addresses.')).toBeVisible();
+        await expect(form.getByText('Unable to save webhook', { exact: true })).toHaveCount(1);
+        await page.route('**/api/webhooks', route => route.fulfill({
+            status: 500, contentType: 'application/json',
+            body: JSON.stringify({ statusCode: 500, statusMessage: 'PRIVATE SERVER DETAIL' }),
+        }));
+        await form.getByRole('button', { name: 'Create Webhook' }).click();
+        await expect(form.getByText('Unable to save webhook', { exact: true })).toHaveCount(1);
+        await expect(form.getByText('PRIVATE SERVER DETAIL')).toHaveCount(0);
+    });
+
+    test('workspace cloud profile prevents viewers from creating local documents', async ({ page, browser }, info) => {
+        const origin = new URL(info.project.use.baseURL!).origin;
+        const headers = { origin, 'x-or3-cloud-intent': 'mutation' };
+        const login = await page.request.post('/api/basic-auth/sign-in', { headers, data: {
+            email: process.env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL, password: process.env.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD,
+        } });
+        expect(login.ok()).toBe(true);
+        const created = await page.request.post('/api/workspaces', { headers, data: { name: 'Viewer creation check' } });
+        expect(created.ok(), await created.text()).toBe(true);
+        const workspaceId = (await created.json()).id;
+        const member = await browser.newContext({ baseURL: origin });
+        try {
+            const email = `viewer-creation-${randomUUID()}@example.test`;
+            const registered = await member.request.post('/api/basic-auth/register', { headers, data: {
+                email, password: 'DisposableViewer!123', confirmPassword: 'DisposableViewer!123',
+            } });
+            expect(registered.ok(), await registered.text()).toBe(true);
+            const memberSession = await (await member.request.get('/api/auth/session')).json();
+            expect(memberSession.session.authenticated).toBe(true);
+            const adminHeaders = { origin, 'x-or3-admin-intent': 'admin' };
+            const adminLogin = await page.request.post('/api/admin/auth/login', { headers: adminHeaders, data: {
+                username: process.env.OR3_ADMIN_USERNAME, password: process.env.OR3_ADMIN_PASSWORD,
+            } });
+            expect(adminLogin.ok()).toBe(true);
+            const admitted = await page.request.post('/api/admin/workspace/members/upsert', { headers: adminHeaders, data: {
+                workspaceId, provider: 'basic-auth', emailOrProviderId: memberSession.session.providerUserId, role: 'viewer',
+            } });
+            expect(admitted.ok(), await admitted.text()).toBe(true);
+            const switched = await member.request.post('/api/workspaces/active', { headers, data: { id: workspaceId } });
+            expect(switched.ok(), await switched.text()).toBe(true);
+            const viewer = await member.newPage();
+            await viewer.goto('/chat');
+            await viewer.getByRole('button', { name: 'Dismiss welcome' }).click({ timeout: 5_000 }).catch(() => undefined);
+            await expect(viewer.getByRole('button', { name: 'Create a document', exact: true })).toHaveCount(0);
+            await expect(viewer.getByText('This workspace is view-only.', { exact: true })).toBeVisible();
+            await viewer.getByRole('button', { name: 'New', exact: true }).click();
+            await expect(viewer.getByText('New document', { exact: true })).toHaveCount(0);
+            await expect(viewer.getByText('New project', { exact: true })).toHaveCount(0);
+            await viewer.keyboard.press('Escape');
+            await viewer.getByRole('button', { name: 'Documents', exact: true }).click();
+            await expect(viewer.getByRole('button', { name: 'New document', exact: true })).toHaveCount(0);
+            await expect(viewer.getByRole('button', { name: 'Create a document', exact: true })).toHaveCount(0);
+            await viewer.getByRole('button', { name: 'Open command palette' }).click();
+            await viewer.locator('[data-test="command-palette-input"]').fill('New document');
+            await expect(viewer.getByRole('option', { name: 'New chat Start a new chat thread' })).toBeVisible();
+            await expect(viewer.getByRole('option', { name: 'New document Create a new document' })).toHaveCount(0);
+            await expect(viewer.getByRole('option', { name: 'New project Create a new project' })).toHaveCount(0);
+            await expect(viewer).toHaveURL(/\/chat$/);
+        } finally { await member.close(); }
+    });
+
     for (const flow of ['sign-in', 'registration'] as const) {
         test(`workspace cloud profile reports and retries ${flow} session failures`, async ({ page }, info) => {
             test.setTimeout(90_000);
@@ -250,6 +336,16 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
             name: 'cloud-proof.txt', kind: 'file', file_kind_capability: 'v1',
         } });
         expect(committed.ok(), await committed.text()).toBe(true);
+        if (storageProvider === 'convex') {
+            // Convex storage emits a server-authored file change at commit,
+            // before the browser's metadata push. It must be a complete record.
+            const committedPull = await page.request.post('/api/sync/pull', { headers,
+                data: { scope: { workspaceId }, cursor: 0, limit: 100, fileKindCapability: 'v1', workspaceItemCapability: 'v1' } });
+            expect(committedPull.ok(), await committedPull.text()).toBe(true);
+            const committedChanges = (await committedPull.json()).changes as Array<{ tableName: string; pk: string; payload?: Record<string, unknown> }>;
+            const uploadedFile = committedChanges.find(change => change.tableName === 'file_meta' && change.pk === hash);
+            expect(uploadedFile?.payload).toEqual(expect.objectContaining({ hash, created_at: expect.any(Number), updated_at: expect.any(Number), deleted: false }));
+        }
         const postId = 'workspace-cloud-proof';
         const metadata = { version: 1, trashed_at: null, text: { coverage: 'full', indexed_bytes: bytes.length } };
         const catalog = { id: postId, title: 'Authenticated cloud proof', post_type: 'or3:file', content: bytes.toString(),

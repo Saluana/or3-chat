@@ -227,10 +227,16 @@ configures the watched host and prints local credentials automatically. The
 manual `bun run dev:plugin` path uses its configured local owner credentials.
 
 Admission independently requires a development build, `OR3_PLUGIN_DEVELOPMENT=1`,
-a dedicated `OR3_PLUGIN_DEV_PROFILE` containing all data roots, local providers,
-a direct loopback connection, authenticated owner, and same-origin mutation.
-Production builds reject development admission. Do not share the profile with
-production or normal checkout data.
+a dedicated `OR3_PLUGIN_DEV_PROFILE` for the application data roots, local
+providers, a direct loopback connection, authenticated owner, and same-origin
+mutation. Production builds reject development admission. Do not share the
+profile with production or normal checkout data.
+
+Automatic secret-store setup for a watched plugin creates custody under that
+plugin's profile. Existing profiles continue using their saved vault settings;
+existing settings and data are not automatically moved. Manual attachment and
+instance billing only remain available. See [Cloud credentials and secret
+store](/documentation/cloud/secret-store) for those choices.
 
 Local admission uses labeled development provenance; signed acquisition uses
 registry provenance. Both still check package identity, grants, setup, canary,

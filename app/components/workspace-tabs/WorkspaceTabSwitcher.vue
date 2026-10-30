@@ -663,9 +663,9 @@ function onNewTab(): void {
 <style>
 @layer utilities {
 @media (max-width: 767px), (pointer: coarse) {
-    .workspace-tab-switcher[role=dialog] button { min-height: 44px !important; }
+    .workspace-tab-switcher[role=dialog] button { min-height: calc(44px / var(--app-ui-zoom, 1)) !important; }
     .workspace-tab-switcher[role=dialog] [data-slot=header] button,
-    .workspace-tab-switcher-card > button:last-child { min-width: 44px !important; }
+    .workspace-tab-switcher-card > button:last-child { min-width: calc(44px / var(--app-ui-zoom, 1)) !important; }
 }
 }
 </style>

@@ -477,6 +477,13 @@ export interface BackgroundJobProvider {
     getShutdownBlockerCount?(): Promise<number>;
 }
 
+/** Capabilities required by admitted and recovered chat executions. */
+export type DurableBackgroundJobProvider = BackgroundJobProvider & Required<Pick<
+    BackgroundJobProvider,
+    'claimJob' | 'claimNextJob' | 'renewJobLease' | 'updateJobExecution' |
+    'saveTerminalSnapshot' | 'setHistoryPhase' | 'getPendingHistoryJobs'
+>>;
+
 /**
  * Purpose:
  * Configuration values for background job storage providers.

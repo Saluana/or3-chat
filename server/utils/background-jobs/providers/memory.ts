@@ -19,7 +19,7 @@ import { backgroundJobClientToolIdentity } from '../client-tool-identity';
  */
 
 import type {
-    BackgroundJobProvider,
+    DurableBackgroundJobProvider,
     BackgroundJob,
     BackgroundJobExecution,
     CreateJobParams,
@@ -232,7 +232,7 @@ function claimJobRecord(
  * - Process-local storage only.
  * - Abort controllers are available for in-process streaming cancellation.
  */
-export const memoryJobProvider: BackgroundJobProvider = {
+export const memoryJobProvider: DurableBackgroundJobProvider = {
     name: 'memory',
 
     async createJob(params: CreateJobParams): Promise<string> {

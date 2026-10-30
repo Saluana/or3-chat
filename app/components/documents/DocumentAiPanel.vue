@@ -360,6 +360,7 @@ interface PendingDocumentAiAttachment extends DocumentAiAttachment {
     loading: boolean;
 }
 
+const toast = useToast();
 const MAX_ATTACHMENTS = MAX_DOCUMENT_AI_ATTACHMENTS;
 const props = defineProps<{
     status: string;
@@ -696,7 +697,6 @@ function fileToDataUrl(file: File) {
     });
 }
 async function addAttachment(file: File) {
-    const toast = useToast();
     const validation = validateFile(file);
     if (!validation.ok) {
         toast.add({

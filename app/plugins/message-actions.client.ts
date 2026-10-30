@@ -28,6 +28,7 @@ function titleFromDoc(doc: JSONContent): string {
 }
 
 export default defineNuxtPlugin(() => {
+    const toast = useToast();
     const inFlight = new Map<string, Promise<void>>();
     const action = registerMessageAction({
         id: 'Create document', // unique id
@@ -66,7 +67,7 @@ export default defineNuxtPlugin(() => {
                 'Failed to convert message Markdown:',
                 conversionError
             );
-            useToast().add({
+            toast.add({
                 title: 'Error converting markdown',
                 description:
                     'The document was not created. Please try again.',
@@ -89,7 +90,7 @@ export default defineNuxtPlugin(() => {
                 : await createDocument(input);
         } catch (createErr) {
             console.error('Failed to create document:', createErr);
-            useToast().add({
+            toast.add({
                 title: 'Error creating document',
                 color: 'error',
             });

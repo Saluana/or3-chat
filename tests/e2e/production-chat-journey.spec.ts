@@ -13,9 +13,12 @@ test('disconnected welcome keeps editor history and loads settings on first open
     // The journey harness points OpenRouter at its local `/api/__or3-e2e` base.
     await page.route(/\/(?:api\/v1|api\/__or3-e2e)\/models(?:[?#]|$)/, async route => {
         catalogRequests++;
-        await route.fulfill({ json: { data: [{ id: 'openai/gpt-4o-mini', name: 'GPT-4o mini',
-            context_length: 128000, architecture: { input_modalities: ['text'], output_modalities: ['text'] },
-            supported_parameters: ['tools'], pricing: { prompt: '0', completion: '0' } }] } });
+        await route.fulfill({ json: { data: [{ id: 'openai/gpt-4o-mini', canonical_slug: 'openai/gpt-4o-mini', name: 'GPT-4o mini',
+            created: 1, default_parameters: null, per_request_limits: null, supported_voices: null,
+            links: { details: '/fixture/gpt-4o-mini' },
+            top_provider: { context_length: 128000, max_completion_tokens: 8192, is_moderated: false },
+            context_length: 128000, architecture: { modality: 'text->text', input_modalities: ['text'], output_modalities: ['text'] },
+            supported_parameters: ['tools'], pricing: { prompt: '0', completion: '0' } }], links: { next: null }, total_count: 1 } });
     });
     await page.goto('/chat');
     const input = page.getByRole('textbox', { name: 'Message input' });
@@ -35,6 +38,9 @@ test('disconnected welcome keeps editor history and loads settings on first open
     await info.attach('first-settings-and-editor', {
         path: info.outputPath('first-settings-and-editor.png'), contentType: 'image/png',
     });
+    await page.getByRole('button', { name: 'Model catalog Browse and compare available models.', exact: true }).click();
+    const catalog = page.getByRole('dialog', { name: 'Model catalog', exact: true });
+    await expect(catalog.getByRole('option').filter({ hasText: 'GPT-4o mini' })).toBeVisible();
 });
 const fixturePng = { name: 'composer.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=', 'base64') };
 
@@ -156,6 +162,23 @@ test.describe('chat draft storage recovery faults', () => {
                 count += rows.reduce((sum, row) => sum + row.draft.attachments.length, 0); db.close();
             }
             return count;
+        });
+    }
+
+    for (const text of ['', 'Draft with a selected prompt']) {
+        test(`restores an unsent chat prompt after reload (${text ? 'with text' : 'empty'})`, async ({ page }) => {
+            if (text) await page.getByRole('textbox', { name: 'Message input' }).fill(text);
+            await page.getByRole('button', { name: 'Settings', exact: true }).click();
+            await page.getByRole('button', { name: 'System prompt for this chat', exact: true }).click();
+            await page.getByRole('option', { name: /Disabled Send no system prompt/ }).click();
+            await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
+            await page.reload();
+            const input = page.getByRole('textbox', { name: 'Message input' });
+            await expect(input).toHaveText(text, { timeout: 60_000 });
+            await page.getByRole('button', { name: 'Settings', exact: true }).click();
+            await page.getByRole('button', { name: 'System prompt for this chat', exact: true }).click();
+            await expect(page.getByRole('option', { name: /Disabled Send no system prompt/ }))
+                .toHaveAttribute('aria-selected', 'true');
         });
     }
 
@@ -2583,7 +2606,7 @@ test.describe('production chat journey', () => {
         await input.fill('journey:complete');
         await page.getByRole('button', { name: 'Send message', exact: true }).click();
         const feedback = page.getByText(fault === 'abort' ? 'Could not save locally'
-            : /^(Browser storage full|Could not save locally|Something went wrong)$/).first();
+            : 'Browser storage full').first();
         await expect(feedback).toBeVisible();
         await expect(input).toHaveText('journey:complete');
         await expect(page.locator('.cm-text-user').getByText('journey:complete', { exact: true })).toHaveCount(0);

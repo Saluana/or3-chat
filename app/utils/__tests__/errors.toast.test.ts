@@ -95,6 +95,16 @@ describe('classified error presentation', () => {
         setErrorToastApi({ add: mocks.addToast });
     });
 
+    it('identifies browser quota failures without exposing the underlying exception', () => {
+        const result = reportError(new DOMException('Synthetic private storage detail', 'QuotaExceededError'));
+        expect(result.code).toBe('ERR_DB_QUOTA_EXCEEDED');
+        expect(mocks.addToast.mock.lastCall?.[0]).toMatchObject({
+            title: 'Browser storage full',
+            description: 'Free some browser storage or remove unneeded files, then try again.',
+        });
+        expect(JSON.stringify(mocks.addToast.mock.calls)).not.toContain('Synthetic private storage detail');
+    });
+
     it.each([
         [401, 'ERR_AUTH', 'OpenRouter key rejected', false],
         [402, 'ERR_CREDITS', 'OpenRouter credits needed', false],

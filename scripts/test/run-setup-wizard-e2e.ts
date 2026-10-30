@@ -100,7 +100,7 @@ try {
 } finally {
     wizard.kill('SIGTERM');
     await wizard.exited;
-    stopAppServer(APP_PORT);
+    stopAppServer(APP_PORT, instanceDir);
     await rm(instanceDir, { recursive: true, force: true });
     await rm(timingsFile, { force: true });
 }

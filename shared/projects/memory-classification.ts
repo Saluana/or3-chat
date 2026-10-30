@@ -17,8 +17,8 @@ export function memoryInferenceOrigin(baseUrl: unknown): string | null {
     return origin === new URL(DEFAULT_OPENROUTER_BASE_URL).origin ? origin : null;
 }
 
-// Compared with Jev on labeled cases using the real Decisions API; see planning receipts.
-export const MEMORY_CLASSIFIER_MODEL = 'perplexity/pplx-decider-v1.1-27b';
+// Qualified on labeled cases using the real Decisions API; see planning receipts.
+export const MEMORY_CLASSIFIER_MODEL = 'perplexity/pplx-decider-v1.2';
 export const MEMORY_CLASSIFIER_TIMEOUT_MS = 10000;
 export const MEMORY_DECISION_THRESHOLD = 0.9;
 // Roughly 60K tokens of ordinary English, not an exact tokenizer limit.

@@ -16,7 +16,7 @@
                     v-if="formError"
                     color="error"
                     title="Unable to save webhook"
-                    :description="formError"
+                    :description="formError === 'Unable to save webhook' ? undefined : formError"
                 />
 
                 <!-- Signing secret reveal (post-create) -->
@@ -249,6 +249,24 @@ const formId = useId();
 const toast = useToast();
 const { getMessage } = useApiError();
 
+// Only translate known server validation outcomes; never render response text.
+const webhookUrlErrors: Record<string, string> = {
+    'Webhook URL cannot target a private IP': 'Webhook URLs cannot use private or local addresses.',
+    'Webhook URL could not be resolved': 'The webhook hostname could not be resolved.',
+    'Webhook URL must use HTTPS': 'Use an HTTPS URL for this webhook.',
+    'Invalid webhook URL': 'Enter a valid webhook URL.',
+};
+function webhookSaveError(error: unknown): string {
+    if (error && typeof error === 'object') {
+        const response = error as { statusCode?: unknown; data?: { statusMessage?: unknown } };
+        const status = response.data?.statusMessage;
+        if (response.statusCode === 400 && typeof status === 'string' && Object.hasOwn(webhookUrlErrors, status)) {
+            return webhookUrlErrors[status]!;
+        }
+    }
+    return getMessage(error, 'Unable to save webhook');
+}
+
 const url = ref('');
 const label = ref('');
 const selectedEvents = ref<string[]>([]);
@@ -453,7 +471,7 @@ async function submit() {
         revealedSecret.value = response.signing_secret;
         emit('saved', response.webhook);
     } catch (error: unknown) {
-        formError.value = getMessage(error, 'Unable to save webhook');
+        formError.value = webhookSaveError(error);
     } finally {
         saving.value = false;
     }

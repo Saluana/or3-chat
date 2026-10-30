@@ -70,6 +70,32 @@ try {
     await client.put({ scope, name: 'fixture', value: 'synthetic-source-startup-fixture', expectedRevision: 0 });
     passed.push('automatic setup provisions a real vault and usable scoped service token');
 
+    // A watched profile's automatic vault is separate, persists on restart,
+    // and a previously configured checkout vault remains usable unchanged.
+    const profile = join(root, 'plugin-profile');
+    await mkdir(profile, { mode: 0o700 });
+    const profileEnv = join(profile, '.env');
+    await writeFile(profileEnv, '', { mode: 0o600 });
+    let profileOwner = await prepareSourceSecrets(root, base, { mode: 'auto', envFile: profileEnv, custodyRoot: profile });
+    const profileConfig: NodeJS.ProcessEnv = { ...base, ...parse(await readFile(profileEnv)) };
+    const profileClient = createClient({ socketPath: profileConfig.NUXT_SECRETS_SOCKET_PATH!, tokenFile: profileConfig.NUXT_SECRETS_TOKEN_FILE!, vaultId: profileConfig.NUXT_SECRETS_VAULT_ID!, serviceUid: Number(profileConfig.NUXT_SECRETS_SERVICE_UID) });
+    try {
+        assert.equal(profileConfig.NUXT_SECRETS_TOKEN_FILE, join(profile, '.or3/secrets/service.token'));
+        assert.notEqual(profileConfig.NUXT_SECRETS_SOCKET_PATH, configured.NUXT_SECRETS_SOCKET_PATH);
+        await profileClient.put({ scope, name: 'fixture', value: 'synthetic-profile-secret', expectedRevision: 0 });
+        await profileOwner.close();
+        profileOwner = await prepareSourceSecrets(root, profileConfig, { envFile: profileEnv, custodyRoot: profile });
+        assert.equal((await profileClient.resolve({ scope, selector: { name: 'fixture' } })).value, 'synthetic-profile-secret');
+        assert.equal((await client.resolve({ scope, selector: { name: 'fixture' } })).value, 'synthetic-source-startup-fixture');
+        assert.equal(await hash(), initialHash);
+    } finally { await profileOwner.close(); }
+    const legacy = await prepareSourceSecrets(root, configured, { custodyRoot: profile });
+    try {
+        assert.equal((await client.resolve({ scope, selector: { name: 'fixture' } })).value, 'synthetic-source-startup-fixture');
+        assert.equal(await hash(), initialHash);
+    } finally { await legacy.close(); }
+    passed.push('plugin profiles own their vault across restart; existing checkout vault configuration and data remain usable');
+
     const manual = join(root, 'manual'); await mkdir(manual, { mode: 0o700 });
     await symlink(join(repo, 'node_modules'), join(manual, 'node_modules'));
     await writeFile(join(manual, 'package.json'), '{}');
@@ -84,6 +110,9 @@ try {
     assert.equal(await readFile(join(manual, '.env'), 'utf8'), before);
     passed.push('manual attach validates vault identity and namespace before persisting settings');
 
+    await owner.close(); owner = undefined;
+    owner = await prepareSourceSecrets(root, configured, { custodyRoot: profile });
+    assert.equal((await client.resolve({ scope, selector: { name: 'fixture' } })).value, 'synthetic-source-startup-fixture');
     await owner.close(); owner = undefined;
     owner = await prepareSourceSecrets(root, configured);
     const persisted = await client.resolve({ scope, selector: { name: 'fixture' } });

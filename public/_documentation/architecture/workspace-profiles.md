@@ -33,9 +33,10 @@ primary action; **Reset to Standard OR3** is a separate, lower-emphasis action.
 ## Selection, themes, and lifecycle
 
 Selection lives in workspace-scoped KV and is independent from theme choice.
-Applying a profile preserves workspace data, plugins, and active panes.
-Initial panes open once for a new or explicitly reset layout; ordinary reloads
-restore the existing panes. Reset selects Standard OR3 without deleting user
+Applying a profile preserves workspace data and plugins. Each profile has its
+own saved tab and pane layout: switching profiles restores that profile’s layout,
+and switching back restores the previous layout. Initial panes open once for a
+new or explicitly reset layout; ordinary reloads restore the existing panes. Reset selects Standard OR3 without deleting user
 data.
 
 Built-in and installed-theme selections use the same serialized projection at

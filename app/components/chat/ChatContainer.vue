@@ -1595,6 +1595,17 @@ defineExpose({ captureViewState, restoreViewState, scrollToMessage, compactThrea
     }
 }
 
+/* When the keyboard leaves almost no room, keep the composer reachable. */
+@container app-viewport (height < 140px) {
+    #page-container[data-keyboard-open] .chat-container--empty .chat-empty-state {
+        display: none !important;
+    }
+    #page-container[data-keyboard-open] .chat-container--empty .chat-input-wrapper {
+        padding: 0 !important;
+        gap: 0 !important;
+    }
+}
+
 @media (max-width: 767px), (pointer: coarse) {
     /* The application frame already ends above Safari's keyboard. Collapse
        theme/home-indicator spacing to one small gap while it is visible. */

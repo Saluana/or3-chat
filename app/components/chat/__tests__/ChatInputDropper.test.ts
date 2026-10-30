@@ -13,6 +13,7 @@ import type { AnyExtension } from '@tiptap/core';
 import Mention from '@tiptap/extension-mention';
 import type { SendResult } from '~/utils/chat/types';
 import { useWorkspaceTabDrafts } from '~/composables/core/useWorkspaceTabDrafts';
+import { clearPanePendingPrompt, getPanePendingPrompt, setPanePendingPrompt } from '~/composables/core/usePanePrompt';
 
 const mockEnsureAiSettingsLoaded = vi.fn().mockResolvedValue(undefined);
 vi.mock('~/composables/chat/useAiSettings', () => ({
@@ -54,6 +55,7 @@ vi.mock('@vueuse/core', async () => {
     };
 });
 
+const sessionRevision = ref(0);
 const cloudIntake = vi.hoisted(() => ({ enabled: false, session: null as null | { authenticated: boolean; user: { id: string }; workspace: { id: string }; role: string; authorizationRevision: string; expiresAt: string }, refresh: vi.fn() }));
 // Mock other dependencies
 vi.mock('#imports', () => ({
@@ -82,7 +84,7 @@ vi.mock('#imports', () => ({
 vi.mock('~/composables/auth/useSessionContext', async (importOriginal) => ({
     ...(await importOriginal<typeof import('~/composables/auth/useSessionContext')>()),
     useSessionContext: () => ({ data: ref(null) }),
-    getCachedSessionContext: () => cloudIntake.session,
+    getCachedSessionContext: () => { void sessionRevision.value; return cloudIntake.session; },
     getCachedSessionPayload: () => cloudIntake.session ? { session: cloudIntake.session, appAccessAllowed: true, workspaceItemCapability: 'v1' } : null,
     refreshCachedSessionContext: () => cloudIntake.refresh(),
 }));
@@ -639,6 +641,70 @@ describe('ChatInputDropper', () => {
             wrapper.unmount();
             useWorkspaceTabDrafts().discard('loading-tab');
             process.client = client;
+        }
+    });
+
+    it.each(['new choice', 'existing thread'] as const)('preserves the %s when a saved draft finishes loading', async (scenario) => {
+        const client = process.client; process.client = true;
+        const tabId = `prompt-loading-${scenario}`;
+        const blobRead = deferred<undefined>();
+        const reading = vi.spyOn(getDb().file_blobs, 'get').mockImplementation(() => blobRead.promise as never);
+        const drafts = useWorkspaceTabDrafts();
+        drafts.write(tabId, {
+            version: 1, text: 'saved text', attachments: [], largeTextBlocks: [], updatedAt: Date.now(),
+            attachmentRefs: [{ hash: 'held-blob', name: 'held.png', mime: 'image/png', kind: 'image' }],
+            composer: { pendingPromptId: 'old-prompt', model: '', modelVariant: 'off', thinkingEnabled: false,
+                imageSettings: { quality: 'medium', numResults: 1, size: '1024x1024' } },
+        });
+        const wrapper = mount(ChatInputDropper, {
+            props: { loading: false, tabId, ...(scenario === 'existing thread' ? { threadId: 'saved-thread' } : {}) },
+            global: { mocks: { $theme: createThemeMock() } },
+        });
+        try {
+            await vi.waitFor(() => expect(reading).toHaveBeenCalled());
+            if (scenario === 'new choice') setPanePendingPrompt(tabId, 'new-prompt');
+            blobRead.resolve(undefined);
+            await flushPromises();
+            if (scenario === 'new choice') {
+                expect(getPanePendingPrompt(tabId)).toBe('new-prompt');
+                await vi.waitFor(() => expect(drafts.read(tabId)?.composer?.pendingPromptId).toBe('new-prompt'));
+            } else {
+                expect(getPanePendingPrompt(tabId)).toBeUndefined();
+            }
+        } finally {
+            blobRead.resolve(undefined); reading.mockRestore(); wrapper.unmount();
+            drafts.discard(tabId); clearPanePendingPrompt(tabId); process.client = client;
+        }
+    });
+
+    it('keeps each account’s unsent prompt separate when the same tab changes account', async () => {
+        const previous = process.client; process.client = true;
+        const workspace = `draft-prompt-accounts-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(workspace); await db.open();
+        const tabId = 'same-tab';
+        const session = (id: string) => ({ authenticated: true, user: { id }, workspace: { id: workspace },
+            role: 'owner', authorizationRevision: '1', expiresAt: new Date(Date.now() + 60000).toISOString() });
+        cloudIntake.session = session('account-a'); sessionRevision.value++;
+        const drafts = useWorkspaceTabDrafts();
+        const wrapper = mount(ChatInputDropper, { props: { loading: false, tabId },
+            global: { mocks: { $theme: createThemeMock() } } });
+        try {
+            await vi.waitFor(() => expect(drafts.isLoaded(tabId)).toBe(true));
+            setPanePendingPrompt(tabId, 'account-a-prompt');
+            window.dispatchEvent(new Event('pagehide')); await drafts.flush();
+            cloudIntake.session = session('account-b'); sessionRevision.value++;
+            await vi.waitFor(() => expect(drafts.isLoaded(tabId)).toBe(true));
+            expect(getPanePendingPrompt(tabId)).toBeUndefined();
+            setPanePendingPrompt(tabId, 'account-b-prompt');
+            window.dispatchEvent(new Event('pagehide')); await drafts.flush();
+            cloudIntake.session = session('account-a'); sessionRevision.value++;
+            await vi.waitFor(() => expect(getPanePendingPrompt(tabId)).toBe('account-a-prompt'));
+            cloudIntake.session = session('account-b'); sessionRevision.value++;
+            await vi.waitFor(() => expect(getPanePendingPrompt(tabId)).toBe('account-b-prompt'));
+        } finally {
+            wrapper.unmount(); clearPanePendingPrompt(tabId); cloudIntake.session = null; sessionRevision.value++;
+            await clearDraftFixtures(); setActiveWorkspaceDb(null); evictWorkspaceDb(workspace);
+            await Dexie.delete(db.name); process.client = previous;
         }
     });
 

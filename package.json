@@ -2,7 +2,7 @@
     "name": "or3-chat",
     "type": "module",
     "private": false,
-    "version": "0.1.92",
+    "version": "0.1.93",
     "license": "GPL-3.0",
     "engines": {
         "node": "^24.22.1"
@@ -213,7 +213,10 @@
         "@types/react": "^19.3.0",
         "@types/react-dom": "^19.3.0",
         "@iconify-json/carbon": "^1.2.27",
+        "@iconify-json/heroicons": "^1.2.3",
         "@iconify-json/lucide": "^1.2.134",
+        "@iconify-json/material-symbols": "^1.2.96",
+        "@iconify-json/pixel": "^1.2.2",
         "@iconify-json/pixelarticons": "^1.2.9",
         "@iconify-json/simple-icons": "^1.2.96",
         "@iconify-json/solar": "^1.2.13",
@@ -240,6 +243,7 @@
         "eslint": "^9.39.5",
         "fake-indexeddb": "^5.0.2",
         "jsdom": "^25.0.1",
+        "svgo": "4.1.0",
         "tailwindcss": "4.3.3",
         "tsx": "^4.23.15",
         "terser": "5.44.1",

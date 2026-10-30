@@ -2,7 +2,7 @@
 
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmod, readFile, readdir, lstat, mkdtemp, realpath, rm } from 'node:fs/promises';
+import { chmod, readFile, readdir, lstat, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -58,6 +58,10 @@ async function run(): Promise<number> {
     const port = await freePort();
     let host: ChildProcess | null = null;
     try {
+        // This disposable harness uses no personal secrets or real model billing.
+        // Make the secret-store choice explicitly inside its isolated profile.
+        await mkdir(profile, { recursive: true });
+        await writeFile(join(profile, 'empty.env'), 'NUXT_SECRETS_PROVIDER=\n', { mode: 0o600 });
         host = spawn('bun', ['run', 'dev:plugin', '--create', fixture, '--id', 'or3.live-harness', '--port', String(port)], {
             cwd: projectRoot, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
             env: { ...process.env, CI: '1' },

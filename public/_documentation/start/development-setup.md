@@ -4,6 +4,10 @@ Run `bun run test:e2e:ui-audit` for the focused UI audit browser regressions.
 It starts an isolated local server on port 3131, blocks AI generation, and saves
 repeatable model-selection, touch-control, prompt-editor, and draft-restoration screenshots across
 Blank, Retro, and Cyberpunk in `test-results/ui-audit`.
+Browser suites normally start their own server and fail if their port is
+occupied, so they cannot silently test another checkout. To target a server you
+deliberately manage, set `PW_SKIP_WEB_SERVER=true` and verify that server's
+configuration and `PW_PORT` before running the suite.
 
 Use this path to change OR3 itself or work on a trusted source extension. To run a managed deployment, use [Cloud setup](/documentation/cloud/setup). To build a portable plugin, start with [your first plugin](/documentation/plugins/first-plugin).
 
@@ -334,8 +338,9 @@ A local module request returning **504 Outdated Optimize Dep** means Vite
 invalidated an optimized dependency URL; it does not establish an OpenRouter or
 internet outage. Mobile WebKit may report this as **Importing a module script failed**
 and leave the server-rendered shell visible. The source dev configuration pre-optimizes
-the lazy tool validator, HMAC, and SDK Models/HTTP entry points to avoid invalidating
-in-flight module URLs during the first load. Reload the tab after dependency optimization completes. If it
+the lazy tool validator, HMAC, SDK Models/HTTP, Markdown highlighting, backup,
+marketplace, and installed scroll entry points to avoid invalidating in-flight module
+URLs during the first load. Sibling scroll source remains excluded from prebundling. Reload the tab after dependency optimization completes. If it
 persists, restart the source dev server and reload. Production browser journeys and scroll canaries
 use separate build directories and Vite caches so their config cannot invalidate an active source
 dev server's dependency cache.

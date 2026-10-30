@@ -1,12 +1,28 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { IconRegistry } from '../icon-registry';
 import { DEFAULT_ICONS } from '~/config/icon-tokens';
+import cyberpunkIcons from '../../cyberpunk/icons.config';
+import carbon from '@iconify-json/carbon/icons.json';
+import pixelarticons from '@iconify-json/pixelarticons/icons.json';
 
 describe('IconRegistry', () => {
     let registry: IconRegistry;
 
     beforeEach(() => {
         registry = new IconRegistry(DEFAULT_ICONS);
+    });
+
+    it('uses available bundled Carbon and Pixelarticons glyphs in built-in maps', () => {
+        const collections: Record<string, { icons: Record<string, unknown>; aliases?: Record<string, unknown> }> = {
+            carbon,
+            pixelarticons,
+        };
+        const missing = [...Object.values(DEFAULT_ICONS), ...Object.values(cyberpunkIcons)].filter((value) => {
+            const [prefix, name] = value.split(':');
+            const collection = prefix && collections[prefix];
+            return collection && name && !collection.icons[name] && !collection.aliases?.[name];
+        });
+        expect(missing).toEqual([]);
     });
 
     it('resolves default icons correctly', () => {

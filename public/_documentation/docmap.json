@@ -23,7 +23,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Connect OpenRouter, choose a model through chat settings or desktop favorites, send a message, and understand draft clearing and saved work."
+                    "summary": "Connect OpenRouter, choose a model through chat settings or desktop favorites, send a message, and understand draft and system-prompt recovery and saved work."
                 },
                 {
                     "name": "command-palette.md",
@@ -41,7 +41,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 3,
-                    "summary": "Project navigation and management, preserved editor drafts, canonical briefs, readable project documents with current Knowledge titles, source library, evidence-aware memory, continuity, and tool permissions."
+                    "summary": "Project navigation and deletion, preserved editor drafts, canonical briefs, readable project documents with current Knowledge titles, source library, evidence-aware memory, continuity, and tool permissions."
                 },
                 {
                     "name": "development-setup.md",
@@ -50,7 +50,7 @@
                     "category": "Development",
                     "categoryOrder": 1,
                     "order": 0,
-                    "summary": "Run and verify source builds on Node.js 24.22.1+ (24.x), interactive secret-store setup before authenticated launches, safe stale-vault-socket recovery with serialized launchers and awaited signal cleanup, bounded readiness probes that preserve the launcher, phone development over LAN or Tailscale, bare --host argument handling, native development HTTPS, module-loading and VueUse dependency troubleshooting, isolated browser harnesses, typed audit-runner lint and reviewed plugin compatibility checks, and production loading boundaries for document conversion, Cloud sync, welcome hydration, mobile navigation and composer first paint, theme activation, negotiated HTML compression and parsed stylesheet reuse, responsive artwork and SSR preloads, deferred palette/mention indexing, saved color schemes, bounded sidebar layout with saved geometry before hydration, stable CSS cascade layers, gated plugin and storage startup, on-demand history/SDK execution, and cold-cache PDF/DOCX knowledge extraction."
+                    "summary": "Run and verify source builds on Node.js 24.22.1+ (24.x), interactive secret-store setup before authenticated launches, safe stale-vault-socket recovery with serialized launchers and awaited signal cleanup, bounded readiness probes that preserve the launcher, phone development over LAN or Tailscale, bare --host argument handling, native development HTTPS, module-loading and VueUse dependency troubleshooting, isolated browser harnesses, cold-start dependency prebundling for installed scroll, Markdown, backup and marketplace, typed audit-runner lint and reviewed plugin compatibility checks, and production loading boundaries for document conversion, Cloud sync, welcome hydration, mobile navigation and composer first paint, theme activation, negotiated HTML compression and parsed stylesheet reuse, responsive artwork and SSR preloads, deferred palette/mention indexing, saved color schemes, bounded sidebar layout with saved geometry before hydration, stable CSS cascade layers, gated plugin and storage startup, on-demand history/SDK execution, and cold-cache PDF/DOCX knowledge extraction."
                 },
                 {
                     "name": "plugin-quickstart.md",
@@ -518,7 +518,7 @@
                     "category": "Building themes",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Style components with tokens, theme-aware tab and dashboard icons, Blank's Solar icons with heavier strokes and duotone category badges, sidebar project settings, Knowledge and Memory controls, shared responsive modal headers and customizable frame borders, CSS and scoped theme rules. Shared action-menu typography and density variables, Blank's type, radius and control scale, scale-aware sidebar pointer tracking, and the `html[data-theme]` selector convention. Empty-pane layout remains stable beneath the first-run welcome dialog. Blank keyboard focus uses a consistent inset outline, full-row primary sidebar indicators, and the user focus-width preference without scroll clipping."
+                    "summary": "Style components with tokens, locally bundled built-in theme glyphs and Material Symbols, theme-aware tab and dashboard icons, Blank's Solar icons with heavier strokes and duotone category badges, sidebar project settings, Knowledge and Memory controls, shared responsive modal headers and customizable frame borders, CSS and scoped theme rules. Shared action-menu typography and density variables, Blank's type, radius and control scale, scale-aware sidebar pointer tracking, and the `html[data-theme]` selector convention. Empty-pane layout remains stable beneath the first-run welcome dialog. Blank keyboard focus uses a consistent inset outline, full-row primary sidebar indicators, and the user focus-width preference without scroll clipping."
                 },
                 {
                     "name": "package-install.md",
@@ -629,7 +629,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers authorization, buffered Stop settlement, recovery, resume capacity, durable tool-result provider requirements, coalesced checkpoints, small viewer controls, idle maintenance backoff, retention and safe dashboard drains."
+                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers authorization, shared polling and SSE job views, durable provider capabilities, recovery, tool-result storage, checkpoints, retention and safe dashboard drains."
                 },
                 {
                     "name": "notifications.md",
@@ -800,7 +800,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 22,
-                    "summary": "Advanced source CLI and browser setup with first-launch local-vault/manual-attachment guidance, private atomic persistence, concurrent preset safety, bounded OR3 health verification, provider selection, and deployment."
+                    "summary": "Advanced source CLI and browser setup with first-launch local-vault/manual-attachment guidance, private atomic persistence, concurrent preset safety, bounded OR3 health verification with early exit reporting, provider selection, and deployment."
                 },
                 {
                     "name": "or3-connect.md",
@@ -826,7 +826,7 @@
                     "title": "Cloud credentials and secret store",
                     "category": "Providers",
                     "order": 10,
-                    "summary": "Default single-host vault, authenticated health probes without audit writes, source provisioning and manual attachment, custody-preserving upgrades, account-bound OAuth, billing policy, browser migration, governed plugin AI, and encrypted recovery. Pending operations are fenced by authorization invalidation; device secrets clear before account teardown."
+                    "summary": "Default single-host vault, authenticated health probes without audit writes, source provisioning and manual attachment, watched-plugin automatic vault isolation, legacy custody preservation and instance-only connection status, custody-preserving upgrades, account-bound OAuth, billing policy, browser migration, governed plugin AI, and encrypted recovery. Pending operations are fenced by authorization invalidation; device secrets clear before account teardown."
                 }
             ]
         },
@@ -910,7 +910,7 @@
                     "category": "Building plugins",
                     "categoryOrder": 2,
                     "order": 0,
-                    "summary": "Build a portable greeting app with a form and saved value, then verify reload and disable/re-enable behavior in OR3."
+                    "summary": "Build a portable greeting app with an isolated secret-store choice, then verify saved values and reload and disable/re-enable behavior in OR3."
                 },
                 {
                     "name": "add-features.md",
@@ -973,7 +973,7 @@
                     "category": "Advanced",
                     "categoryOrder": 4,
                     "order": 0,
-                    "summary": "Operator configuration, plugin settings and current-package first-action authorization, installed-package policy restrictions, active document asset containment, batched host access checks, package verification, permission review, containment, budgets, safe mode, and recovery. Server activations and capabilities enforce operator safe mode, runtime loaders and workspace rollout policy."
+                    "summary": "Operator configuration, watched-plugin secret-custody isolation and legacy preservation, plugin settings and current-package first-action authorization, installed-package policy restrictions, active document asset containment, batched host access checks, package verification, permission review, containment, budgets, safe mode, and recovery. Server activations and capabilities enforce operator safe mode, runtime loaders and workspace rollout policy."
                 },
                 {
                     "name": "admin-plugins.md",

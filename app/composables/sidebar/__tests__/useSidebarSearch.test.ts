@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import type { Thread, Project, Post } from '~/db';
-import { buildIndex, createDb } from '~/core/search/orama';
+import { buildIndex, createDb, searchWithIndex } from '~/core/search/orama';
 import { useSidebarSearch } from '../useSidebarSearch';
 
 vi.mock('~/db/client', () => ({
@@ -11,10 +11,10 @@ vi.mock('~/db/client', () => ({
 }));
 
 // Real Orama indexing and search; these wrappers only count the real calls
-// (and, in one case, hold a real build open).
+// (and hold a real build or search open when testing races).
 vi.mock('~/core/search/orama', async (importOriginal) => {
     const actual = await importOriginal<typeof import('~/core/search/orama')>();
-    return { ...actual, createDb: vi.fn(actual.createDb), buildIndex: vi.fn(actual.buildIndex) };
+    return { ...actual, createDb: vi.fn(actual.createDb), buildIndex: vi.fn(actual.buildIndex), searchWithIndex: vi.fn(actual.searchWithIndex) };
 });
 
 // Only workspace lifecycle is isolated.
@@ -24,8 +24,8 @@ vi.mock('~/core/search/orama', async (importOriginal) => {
 // trigger is skipped as busy), and unchanged data must not rebuild.
 // Keep an existing match so substring fallback cannot hide a stale index.
 let wrapper: VueWrapper | undefined;
-beforeEach(() => { vi.mocked(createDb).mockClear(); vi.mocked(buildIndex).mockClear(); });
-afterEach(() => { wrapper?.unmount(); wrapper = undefined; });
+beforeEach(() => { vi.mocked(createDb).mockClear(); vi.mocked(buildIndex).mockClear(); vi.mocked(searchWithIndex).mockClear(); });
+afterEach(() => { wrapper?.unmount(); wrapper = undefined; vi.restoreAllMocks(); });
 function setup() {
     const threads = ref<Thread[]>([
         { id: 'newer', title: 'orchid reference', updated_at: 100 } as Thread,
@@ -42,13 +42,49 @@ function setup() {
 }
 
 describe('sidebar search index invalidation', () => {
+    it('does not warn when an ordinary search has no matches', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const { search } = setup();
+        await search.rebuild();
+        search.query.value = 'unmatched-query';
+        await search.runSearch();
+        expect(search.threadResults.value).toEqual([]);
+        expect(warn).not.toHaveBeenCalled();
+    });
+
+    it.each(['clear', 'replace'] as const)('does not apply a pending result after the query changes (%s)', async (change) => {
+        const real = await vi.importActual<typeof import('~/core/search/orama')>('~/core/search/orama');
+        const { search } = setup();
+        await search.rebuild();
+        let release!: () => void;
+        const held = new Promise<void>(resolve => { release = resolve; });
+        vi.mocked(searchWithIndex).mockImplementationOnce(async (...args) => {
+            await held;
+            return real.searchWithIndex(...args);
+        });
+        search.query.value = 'orchid';
+        const pending = search.runSearch();
+        await vi.waitFor(() => expect(searchWithIndex).toHaveBeenCalled());
+        search.query.value = change === 'clear' ? '' : 'unrelated';
+        if (change === 'clear') await search.runSearch();
+        release();
+        await pending;
+        expect(search.threadResults.value.map(row => row.id)).toEqual(['newer', 'older']);
+        if (change === 'replace') {
+            await search.runSearch();
+            expect(search.threadResults.value.map(row => row.id)).toEqual(['older']);
+        }
+    });
+
     it.each(['create', 'build'] as const)('keeps substring search usable after an index %s failure and recovers on retry', async (stage) => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         const { search } = setup();
         const operation = stage === 'create' ? vi.mocked(createDb) : vi.mocked(buildIndex);
         operation.mockRejectedValueOnce(new Error('Index unavailable'));
         search.query.value = 'orchid';
         await expect(search.runSearch()).resolves.toBeUndefined();
         expect(search.threadResults.value.map(row => row.id)).toEqual(['newer']);
+        expect(warn).toHaveBeenCalled();
         await search.rebuild();
         await search.runSearch();
         expect(search.ready.value).toBe(true);

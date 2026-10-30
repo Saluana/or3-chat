@@ -101,7 +101,7 @@
                     threads.push({
                         ...base,
                         id: tid(index),
-                        title: `Workspace conversation ${index}`,
+                        title: `Workspace conversation ${index}${index === threadCount - 1 ? ' مرحبا' : ''}`,
                         status: 'ready',
                         pinned: false,
                         forked: branch,
@@ -199,6 +199,12 @@
                         fallback: result.usingFallback,
                     });
                 }
+                const unicodeStarted = performance.now();
+                const unicode = await index.search({ term: 'مرحبا', limit: 8 });
+                const unicodeQuery = {
+                    durationMs: performance.now() - unicodeStarted,
+                    ids: unicode.results.map((hit) => hit.recordId),
+                };
                 const sidebar = await measure(() =>
                     readFamilyPage(db, { limit: 50, type: 'all', filter: {} })
                 );
@@ -213,6 +219,7 @@
                     source: load.metrics,
                     index: build.metrics,
                     queries,
+                    unicodeQuery,
                     sidebar: {
                         ...sidebar.metrics,
                         rows: sidebar.value.items.length,

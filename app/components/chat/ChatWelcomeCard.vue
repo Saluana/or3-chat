@@ -152,6 +152,7 @@ const visibleCardStyle = computed(() => visibleFrame.value.style
     ? { ...visibleFrame.value.style, position: 'fixed' as const, translate: '0 -50%' }
     : undefined);
 
+const toast = useToast();
 const runtimeConfig = useRuntimeConfig();
 const siteName = computed(
     () => runtimeConfig.public?.branding?.appName ?? 'OR3'
@@ -238,7 +239,7 @@ async function onSavePaste(): Promise<void> {
     isSavingPaste.value = true;
     try {
         await persistUserApiKey(pasteValue.value);
-        useToast().add({
+        toast.add({
             title: 'OpenRouter connected',
             description: 'Your API key was saved. You can start chatting now.',
             color: 'primary',
@@ -479,8 +480,12 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 767px), (pointer: coarse) {
-    .welcome-card button { min-height: 44px !important; }
-    .welcome-card-dismiss { width: 44px !important; padding: 0 !important; }
+    .welcome-card button { min-height: calc(44px / var(--app-ui-zoom, 1)) !important; }
+    .welcome-card-dismiss {
+        width: calc(44px / var(--app-ui-zoom, 1)) !important;
+        height: calc(44px / var(--app-ui-zoom, 1)) !important;
+        padding: 0 !important;
+    }
     .welcome-card-support {
         /* Keep the small disclosure's touch target without widening the footer. */
         padding-top: calc(var(--welcome-gap) * 1.5);

@@ -166,7 +166,7 @@ There are 311 individual cases grouped into 32 work batches. Run the included se
 - [ ] **11.0 Qualify document AI authority (1–3 h).** Requirements: R5, R9, R11. Components: C2, C4, C6. Done when only explicit, current, authorized acceptance changes document content.
   - [ ] **11.1** Ask for a cursor-local edit, a selected-text edit, and an explicitly broader edit. Proposal scope matches the request and frozen editable context.
   - [ ] **11.2** Apply, discard, and cancel proposals through every exposed review control. Discard/cancel leaves content unchanged; accepted edits save and history reflects the committed result.
-  - [ ] **11.3** Edit the document while a proposal is pending, then attempt Apply. A stale proposal cannot overwrite the new revision; recovery is explained.
+  - [x] **11.3** Edit the document while a proposal is pending, then attempt Apply. A stale proposal cannot overwrite the new revision; recovery is explained.
   - [ ] **11.4** Add document/chat/file references and attachments. References are deduplicated, current-document/self or missing/deleted references are rejected as documented, and reference content grants no write access.
   - [ ] **11.5** Switch document, pane, workspace, or account during preparation/streaming/review. No proposal or status is delivered to the wrong editor.
   - [ ] **11.6** Exercise saved/plugin slash actions. They insert the expected prompt without sending immediately; missing or disabled contributions disappear cleanly.
@@ -185,6 +185,8 @@ There are 311 individual cases grouped into 32 work batches. Run the included se
   - [ ] **12.7** Save model, instructions, and tool permissions; discard unsaved edits. Chat override/reset follows inheritance, and only committed settings affect later turns.
   - [ ] **12.8** Test Off/Ask first/On, always-approval tools, unavailable tools, and repository restrictions. Project policy narrows workspace authority and cannot enable server-owned execution without project support.
   - [ ] **12.9** Delete and restore a project using supported controls. Underlying chats/documents/files remain preserved as documented; old async work cannot recreate deleted policy or bind to another project.
+
+  **Current finding:** the local candidate has no project restore control in Trash. Project deletion detaches chats and removes project settings and links, so this recovery case remains open; see the worktree walkthrough evidence for the corrected warning and its limits.
 
 ## 13. Add knowledge, memory, and continuity
 

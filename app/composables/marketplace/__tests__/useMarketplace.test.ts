@@ -186,13 +186,12 @@ describe('marketplace mutations reconcile the plugin runtime', () => {
             'manifest-revision-change',
             'manifest-revision-change',
         ]);
-        expect(fetchMock).toHaveBeenCalledWith('/api/admin/plugins/workspace-enable', expect.objectContaining({
-            body: expect.objectContaining({ expectedWorkspaceId: 'ws-1' }),
-        }));
+        const calls = fetchMock.mock.calls as [string, { body: Record<string, unknown> }][];
+        expect(calls.find(([url]) => url === '/api/admin/plugins/workspace-enable')?.[1].body).toMatchObject({ expectedWorkspaceId: 'ws-1' });
         expect(fetchMock).toHaveBeenCalledWith('/api/admin/plugins/packages/sample.plugin/uninstall', expect.objectContaining({
             body: { expectedPackageDigest: 'sha256-test' },
         }));
-        const rollbackRequest = fetchMock.mock.calls.find(([url]) => url === '/api/admin/plugins/packages/sample.plugin/rollback');
+        const rollbackRequest = calls.find(([url]) => url === '/api/admin/plugins/packages/sample.plugin/rollback');
         expect(rollbackRequest?.[1].body).not.toHaveProperty('expectedWorkspaceId');
     });
 
@@ -545,6 +544,20 @@ describe('selection-bound detail and preflight', () => {
         await expect(preflight.run('or3.alpha')).resolves.toBeNull();
         expect(preflight.result.value).toBeNull();
         expect(preflight.error.value).toContain('different plugin');
+    });
+
+    it('explains an unavailable release without displaying raw request details', async () => {
+        fetchMock.mockRejectedValue(Object.assign(new Error('[POST] /api/private: private detail'), { statusCode: 404 }));
+        const preflight = useMarketplacePreflight();
+        await preflight.run('or3.alpha');
+        expect(preflight.error.value).toBe('This release is unavailable or is not approved for this site.');
+        expect(preflight.result.value).toBeNull();
+
+        fetchMock.mockRejectedValue(Object.assign(new Error('[GET] /api/private: private detail'), { statusCode: 500 }));
+        const detail = useMarketplaceDetail();
+        await detail.load('or3.alpha');
+        expect(detail.error.value).not.toContain('private');
+        expect(detail.entry.value).toBeNull();
     });
 
     it('binds approval to the exact target tuple', () => {

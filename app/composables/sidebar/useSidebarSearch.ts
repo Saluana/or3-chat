@@ -212,7 +212,7 @@ export function useSidebarSearch(
             if (generation !== getWorkspaceGeneration()) return;
             dbInstance = null;
             ready.value = false;
-            substringFallback(query.value.trim());
+            substringFallback(query.value.trim(), true);
         } finally {
             if (generation === getWorkspaceGeneration()) busy.value = false;
         }
@@ -231,11 +231,11 @@ export function useSidebarSearch(
      * Fallback search using substring matching when Orama search fails or returns no results.
      *
      * Provides basic search functionality without requiring the index.
-     * Warns once when fallback mode is used.
+     * Warns once when an index failure requires fallback.
      *
      * @param raw - The raw search query string.
      */
-    function substringFallback(raw: string) {
+    function substringFallback(raw: string, indexFailed = false) {
         const ql = raw.toLowerCase();
         const threadHits = threads.value.filter((t) =>
             (t.title || '').toLowerCase().includes(ql)
@@ -252,7 +252,7 @@ export function useSidebarSearch(
         threadResults.value = threadHits;
         projectResults.value = projectHits;
         documentResults.value = docHits;
-        if (!warnedFallback) {
+        if (indexFailed && !warnedFallback) {
             console.warn('[useSidebarSearch] fallback substring search used');
             warnedFallback = true;
         }
@@ -266,23 +266,25 @@ export function useSidebarSearch(
      */
     async function runSearch() {
         const generation = getWorkspaceGeneration();
+        const token = ++lastQueryToken;
+        const raw = query.value.trim();
+        const isCurrent = () => generation === getWorkspaceGeneration()
+            && token === lastQueryToken && raw === query.value.trim();
         if (!dbInstance) await ensureIndex();
-        if (generation !== getWorkspaceGeneration()) return;
+        if (!isCurrent()) return;
         if (!dbInstance) {
-            substringFallback(query.value.trim());
+            substringFallback(raw);
             return;
         }
-        const raw = query.value.trim();
         if (!raw) {
             threadResults.value = threads.value;
             projectResults.value = projects.value;
             documentResults.value = documents.value.filter(isDocPost);
             return;
         }
-        const token = ++lastQueryToken;
         try {
             const res = await searchWithIndex(dbInstance, raw, 500);
-            if (token !== lastQueryToken) return; // stale
+            if (!isCurrent()) return;
             const hits = Array.isArray(res.hits) ? res.hits : [];
             const byKind: Record<'thread' | 'project' | 'doc', Set<string>> = {
                 thread: new Set(),
@@ -318,8 +320,8 @@ export function useSidebarSearch(
             );
             // If a project contains matching threads/docs but project name itself didn't match, UI can choose to retain by containment; we leave that logic to integration to keep composable lean.
         } catch {
-            if (generation === getWorkspaceGeneration() && token === lastQueryToken) {
-                substringFallback(raw);
+            if (isCurrent()) {
+                substringFallback(raw, true);
             }
         }
     }
@@ -361,6 +363,7 @@ export function useSidebarSearch(
 
     // Cleanup on component unmount
     onBeforeUnmount(() => {
+        lastQueryToken++;
         cancelDebouncedRebuild();
         while (cleanupFns.length) {
             const stop = cleanupFns.pop();
@@ -371,6 +374,7 @@ export function useSidebarSearch(
     // HMR cleanup: clear timers on module disposal
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
+            lastQueryToken++;
             cancelDebouncedRebuild();
             while (cleanupFns.length) {
                 const stop = cleanupFns.pop();

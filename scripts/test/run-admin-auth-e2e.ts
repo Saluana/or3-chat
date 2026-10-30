@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -59,6 +60,8 @@ async function run(): Promise<number> {
                     OR3_SYNC_PROVIDER: 'sqlite',
                     OR3_SQLITE_DB_PATH: join(dataDir, 'workspace.sqlite'),
                     OR3_BASIC_AUTH_DB_PATH: join(dataDir, 'auth.sqlite'),
+                    OR3_BASIC_AUTH_JWT_SECRET: randomBytes(32).toString('hex'),
+                    OR3_BASIC_AUTH_REFRESH_SECRET: randomBytes(32).toString('hex'),
                     OR3_STORAGE_ENABLED: 'false',
                     OR3_CLOUD_STORAGE_ENABLED: 'false',
                     OR3_ADMIN_AUTH_E2E_HARNESS: 'true',

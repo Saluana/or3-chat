@@ -437,6 +437,20 @@ describe('native context admission at the actual durable boundary', () => {
         expect(await db.posts.count()).toBe(0);
         expect(await db.threads.count()).toBe(0);
     });
+    it.each(['viewer', 'demoted'] as const)('does not create a document when access is %s', async access => {
+        const db = getDb();
+        external.background = true;
+        external.role = access === 'viewer' ? 'viewer' : 'owner';
+        if (access === 'demoted') {
+            useHooks().addFilter('db.documents.create:filter:input', value => {
+                external.role = 'viewer';
+                return value;
+            });
+        }
+        const { newDocument } = await import('~/composables/documents/useDocumentsStore');
+        await expect(newDocument({ title: 'Must not be saved' })).rejects.toThrow(/read-only|access changed/i);
+        expect(await db.posts.count()).toBe(0);
+    });
     it.each(['rename', 'document'] as const)('preserves concurrent membership during project %s preparation', async operation => {
         const db = getDb();
         await db.projects.put({ id: 'project', name: 'Before', data: [], clock: 0,
