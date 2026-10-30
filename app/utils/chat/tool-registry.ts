@@ -82,7 +82,7 @@ export interface RegisteredTool {
     available?: (context: ToolAvailabilityContext) => boolean;
     ownerPluginId?: string;
     workflowPolicy?: WorkflowToolRegistrationPolicy;
-    timeoutMs: number;
+    timeoutMs?: number;
     /** Removes this exact registration; returns false after replacement/disposal. */
     dispose: () => boolean;
     _owner: symbol;
@@ -551,6 +551,8 @@ export function useToolRegistry() {
             requestId: createRuntimeUuid(),
             abortSignal: new AbortController().signal,
         };
+        // Registrations created before a hot reload may not have a timeout.
+        const timeoutMs = tool.timeoutMs ?? DEFAULT_TIMEOUT_MS;
         const execution = await withTimeout(
             (abortSignal) => tool.handler(
                 parsed.value,
@@ -564,7 +566,7 @@ export function useToolRegistry() {
                 }
             ),
             baseContext.abortSignal,
-            tool.timeoutMs
+            timeoutMs
         );
 
         if (!execution.error && context?.threadId) {
@@ -590,7 +592,7 @@ export function useToolRegistry() {
         }
 
         if (execution.timedOut) {
-            const timeoutMsg = `Tool execution timed out after ${tool.timeoutMs}ms.`;
+            const timeoutMsg = `Tool execution timed out after ${timeoutMs}ms.`;
             tool.lastError.value = timeoutMsg;
             return {
                 result: null,
