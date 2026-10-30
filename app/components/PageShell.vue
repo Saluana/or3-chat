@@ -454,6 +454,8 @@ import ResizableSidebarLayout from '~/components/ResizableSidebarLayout.vue';
 import ChatContainer from '~/components/chat/ChatContainer.vue';
 import { useMultiPane, type PaneState } from '~/composables/core/useMultiPane';
 import { useWorkspaceTabHost } from '~/composables/core/useWorkspaceTabHost';
+import { useDocumentSaveHooks } from '~/composables/core/useDocumentSaveHooks';
+import type { WorkspaceTabScrollState } from '~/core/workspace-tabs/types';
 import { useWorkspaceTabs } from '~/composables/core/useWorkspaceTabs';
 import { useEmptyChatActions } from '~/composables/chat/useEmptyChatActions';
 import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
@@ -680,7 +682,15 @@ const {
     paneWidths,
 } = multiPane;
 
-const paneComponentRefs = new Map<string, any>();
+interface MountedPaneView {
+    captureDraft?: () => void;
+    captureViewState?: () => { scroll: WorkspaceTabScrollState };
+    restoreViewState?: (state: { scroll?: WorkspaceTabScrollState }) => Promise<void>;
+    scrollToMessage?: (target: { threadId: string; messageId: string; generation: number }) => void;
+    compactThread?: () => Promise<void>;
+}
+const paneComponentRefs = new Map<string, MountedPaneView>();
+useDocumentSaveHooks(multiPane);
 const workspaceTabDrafts = useWorkspaceTabDrafts();
 const workspaceTabHost = useWorkspaceTabHost(multiPane);
 const workspaceTabs = useWorkspaceTabs({
@@ -1186,7 +1196,7 @@ function tabIdForPane(paneId: string): string {
 }
 
 function setPaneComponentRef(paneId: string, instance: unknown): void {
-    if (instance) paneComponentRefs.set(paneId, instance);
+    if (instance) paneComponentRefs.set(paneId, instance as MountedPaneView);
     else paneComponentRefs.delete(paneId);
 }
 
@@ -2621,7 +2631,7 @@ useEventListener(window, 'or3:compact-thread', async (event: Event) => {
         const destination = panes.value[activePaneIndex.value];
         if (request !== compactionRequestRevision || getWorkspaceGeneration() !== target.generation
             || destination?.mode !== 'chat' || destination.threadId !== target.threadId) return;
-        const instance = paneComponentRefs.get(destination.id) as { compactThread?: () => Promise<void> } | undefined;
+        const instance = paneComponentRefs.get(destination.id);
         if (!instance?.compactThread) throw new Error('Conversation is still opening. Use Compact when it is ready.');
         await instance.compactThread();
         closeSidebarIfMobile();
