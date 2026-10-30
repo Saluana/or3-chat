@@ -12,8 +12,8 @@
   },
   "coverage": {
     "moduleCount": 39,
-    "exportCount": 606,
-    "callableExportCount": 281,
+    "exportCount": 607,
+    "callableExportCount": 282,
     "nuxtAutoImportCount": 309
   },
   "behaviorProfiles": [
@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "832986e8d812034a0122a53f47169b45fc46866f77777801dd122f1605d433dc",
+      "apiSha256": "d9e26de31b49e18a7c616237a249b285fd325c87bca302fe3ee8a2003542ddb7",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2832,7 +2832,7 @@
               "resolvedReturnType": "boolean",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 516,
+                "line": 499,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function __hasPendingDocumentChanges(id: string): boolean;"
               }
@@ -2841,7 +2841,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 516,
+              "line": 499,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function __hasPendingDocumentChanges(id: string): boolean;"
             }
@@ -2858,7 +2858,7 @@
               "resolvedReturnType": "\"idle\" | \"saving\" | \"saved\" | \"error\" | \"loading\" | \"unavailable\" | undefined",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 541,
+                "line": 524,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function __peekDocumentStatus(\n    id: string\n): DocState['status'] | undefined;"
               }
@@ -2867,7 +2867,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 541,
+              "line": 524,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function __peekDocumentStatus(\n    id: string\n): DocState['status'] | undefined;"
             }
@@ -2884,7 +2884,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 335,
+                "line": 318,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function acceptCommittedDocument(record: Document, db: Or3DB): void;"
               }
@@ -2893,7 +2893,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 335,
+              "line": 318,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function acceptCommittedDocument(record: Document, db: Or3DB): void;"
             }
@@ -3698,7 +3698,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 120,
+                "line": 124,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function flush(id: string, db = getDb());"
               }
@@ -3707,7 +3707,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 120,
+              "line": 124,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function flush(id: string, db = getDb());"
             }
@@ -4600,7 +4600,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 250,
+                "line": 233,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function loadDocument(id: string, db = getDb());"
               }
@@ -4609,7 +4609,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 250,
+              "line": 233,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function loadDocument(id: string, db = getDb());"
             }
@@ -4750,7 +4750,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 366,
+                "line": 349,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function newDocument(initial?: {\n    title?: string;\n    content?: TipTapDocument | null;\n});"
               }
@@ -4759,7 +4759,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 366,
+              "line": 349,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function newDocument(initial?: {\n    title?: string;\n    content?: TipTapDocument | null;\n});"
             }
@@ -5034,7 +5034,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 255,
+                "line": 238,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function refreshDocument(id: string, db = getDb());"
               }
@@ -5043,7 +5043,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 255,
+              "line": 238,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function refreshDocument(id: string, db = getDb());"
             }
@@ -5565,7 +5565,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 568,
+                "line": 551,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function releaseDocument(\n    id: string,\n    opts: { flush?: boolean; deleteEntry?: boolean } = {},\n    db = getDb(),\n);"
               }
@@ -5574,7 +5574,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 568,
+              "line": 551,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function releaseDocument(\n    id: string,\n    opts: { flush?: boolean; deleteEntry?: boolean } = {},\n    db = getDb(),\n);"
             }
@@ -5709,7 +5709,7 @@
               "resolvedReturnType": "() => Promise<void>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 615,
+                "line": 598,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function retainDocumentEditor(id: string, db = getDb()): () => Promise<void>;"
               }
@@ -5718,7 +5718,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 615,
+              "line": 598,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function retainDocumentEditor(id: string, db = getDb()): () => Promise<void>;"
             }
@@ -5787,7 +5787,7 @@
               "resolvedReturnType": "Promise<Document>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 289,
+                "line": 272,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function saveDocumentRecoveryCopy(\n    id: string,\n    draft: { title: string; content: TipTapDocument },\n    options: { conflictOwner?: string; isCurrent: () => boolean },\n    db = getDb(),\n): Promise<Document>;"
               }
@@ -5796,7 +5796,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 289,
+              "line": 272,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function saveDocumentRecoveryCopy(\n    id: string,\n    draft: { title: string; content: TipTapDocument },\n    options: { conflictOwner?: string; isCurrent: () => boolean },\n    db = getDb(),\n): Promise<Document>;"
             }
@@ -5853,7 +5853,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 431,
+                "line": 414,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function setDocumentContent(id: string, content: TipTapDocument | null, db = getDb());"
               }
@@ -5862,7 +5862,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 431,
+              "line": 414,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function setDocumentContent(id: string, content: TipTapDocument | null, db = getDb());"
             }
@@ -5879,7 +5879,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 442,
+                "line": 425,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function setDocumentEditorConflict(id: string, key: string, draft: EditorConflictDraft | undefined, db = getDb()): void;"
               }
@@ -5888,7 +5888,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 442,
+              "line": 425,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function setDocumentEditorConflict(id: string, key: string, draft: EditorConflictDraft | undefined, db = getDb()): void;"
             }
@@ -5905,7 +5905,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 403,
+                "line": 386,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function setDocumentTitle(id: string, title: string, db = getDb());"
               }
@@ -5914,7 +5914,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 403,
+              "line": 386,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function setDocumentTitle(id: string, title: string, db = getDb());"
             }
@@ -6121,6 +6121,32 @@
               "line": 162,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function subscribeDashboardRegistry(listener: () => void): () => void;"
+            }
+          ]
+        },
+        {
+          "name": "subscribeDocumentSaves",
+          "kind": "value",
+          "nuxtAutoImport": false,
+          "signatures": [
+            {
+              "signature": "(listener: (db: Or3DB, id: string) => void): () => void",
+              "declaredReturnType": "() => void",
+              "resolvedReturnType": "() => void",
+              "declaration": {
+                "source": "app/composables/documents/useDocumentsStore.ts",
+                "line": 50,
+                "syntaxKind": "FunctionDeclaration",
+                "text": "export function subscribeDocumentSaves(listener: (db: Or3DB, id: string) => void): () => void;"
+              }
+            }
+          ],
+          "declarations": [
+            {
+              "source": "app/composables/documents/useDocumentsStore.ts",
+              "line": 50,
+              "syntaxKind": "FunctionDeclaration",
+              "text": "export function subscribeDocumentSaves(listener: (db: Or3DB, id: string) => void): () => void;"
             }
           ]
         },
@@ -6683,7 +6709,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 495,
+                "line": 478,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAllDocumentsState();"
               }
@@ -6692,7 +6718,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 495,
+              "line": 478,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAllDocumentsState();"
             }
@@ -7035,7 +7061,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 473,
+                "line": 456,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDocumentState(id: string, db = getDb());"
               }
@@ -7044,7 +7070,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 473,
+              "line": 456,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDocumentState(id: string, db = getDb());"
             }
