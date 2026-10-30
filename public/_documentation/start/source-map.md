@@ -4,6 +4,10 @@ Use this map when changing OR3 itself. Individual function signatures and return
 
 Portable plugin authors should use [the SDK](/documentation/plugins/plugin-sdk) and [feature recipes](/documentation/plugins/add-features). Private host imports are source integration details.
 
+## Task context packs
+
+The root `repomix.config.json` provides general context; the `repomix.*.config.json` files select focused areas. Start with the relevant guide, defining types, implementation, caller, safety rules, and behavior tests. Run `bun run check:repomix-paths` after changing a pack or moving its files; it checks every include pattern against tracked files. Historical plans and evidence remain in `planning/` and `docs/history/` for deliberate investigation, outside the default packs.
+
 ## Find the right owner
 
 | Task | Source entry points | Feature guide |

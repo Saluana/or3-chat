@@ -20,9 +20,10 @@
     "app/db/client.ts",
     "app/db/util.ts",
     "app/db/__tests__/clock-increments.test.ts",
-    "planning/complete/db-sync-layer/**",
     "public/_documentation/cloud/sync-layer.md",
-    "docs/history/cloud-production-readiness.md"
+    "AGENTS.md",
+    "public/_documentation/docmap.json",
+    "public/_documentation/start/source-map.md"
   ],
   "ignore": {
     "customPatterns": [

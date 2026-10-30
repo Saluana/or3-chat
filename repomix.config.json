@@ -1,12 +1,19 @@
 {
-    "output": {
-        "style": "markdown",
-        "filePath": "or3-repo.md",
-        "removeComments": true,
-        "showLineNumbers": true,
-        "topFilesLength": 10
-    },
-    "ignore": {
-        "customPatterns": ["**.test.ts", "docs/**", "or3-repo.md","public","planning","scripts","config",".playwright-mcp","extensions","convex",".github", "**.txt",".agent",".codex","app/pages/tests/**"]
-    }
+  "output": {
+    "style": "markdown",
+    "filePath": "or3-repo.md",
+    "removeComments": false,
+    "showLineNumbers": true,
+    "topFilesLength": 10,
+    "headerText": "OR3 general context. For focused work, use a task-specific repomix configuration and start with AGENTS.md, the docmap, and source map. Historical plans and audit evidence remain available in the repository for deliberate investigation."
+  },
+  "ignore": {
+    "customPatterns": [
+      "or3-repo.md",
+      "or3-*-audit.md",
+      "planning/**",
+      "docs/history/**",
+      ".playwright-mcp/**"
+    ]
+  }
 }

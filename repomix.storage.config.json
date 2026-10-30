@@ -22,11 +22,12 @@
     "app/db/message-files.ts",
     "app/db/__tests__/files-*.ts",
     "app/db/__tests__/transfer-lease-migration.test.ts",
-    "planning/complete/db-storage-system/**",
-    "planning/complete/s3-storage-provider/**",
     "public/_documentation/cloud/storage-layer.md",
     "public/_documentation/cloud/provider-fs.md",
-    "public/_documentation/cloud/provider-s3.md"
+    "public/_documentation/cloud/provider-s3.md",
+    "AGENTS.md",
+    "public/_documentation/docmap.json",
+    "public/_documentation/start/source-map.md"
   ],
   "ignore": {
     "customPatterns": [

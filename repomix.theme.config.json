@@ -6,7 +6,7 @@
     "removeComments": false,
     "showLineNumbers": true,
     "topFilesLength": 20,
-    "headerText": "OR3 Theme System — Security / Architecture Audit Pack\n\nScope: ONLY the refined theme engine (define/validate/compile/resolve), built-in + installed theme packages, v-theme runtime plugins, user override/background layers, theme admin install surfaces, compiler/CLI tooling, related docs, and tests.\n\nPrimary surfaces for review:\n1. app/theme/_shared/* — defineTheme, validation, CSS var generation, selector runtime, resolver, manifest/loader, component overrides\n2. app/plugins/00.theme-directive.ts + 90/91/92 theme plugins — bootstrap, SSR/client apply, auto-theme, lazy sync\n3. plugins/vite-theme-compiler.ts + scripts/*theme* — build-time compilation\n4. app/core/theme/* — merged theme apply, backgrounds, user overrides\n5. server/admin/extensions/theme-install-sync.ts + shared extension install/URL fetch — how themes are installed from ZIP/URL\n6. Theme packages: app/theme/{retro,blank} + extensions/themes/cyberpunk (text sources only)\n\nIntentionally excluded: binary theme assets (PNG/JPG/etc), HTTP webhooks, chat feature plugins, Convex, plugin registries unrelated to theming, and the rest of the application.\n\nNote: Theme ZIP/URL install reuses server/admin/extensions/* (same pipeline as plugins). Those install/SSRF files are included here so this pack is self-contained. Duplicate agent-skill theme doc copies under plugin-development/references were omitted; canonical docs live under public/_documentation/themes and docs/."
+    "headerText": "OR3 Theme System — Security / Architecture Audit Pack\n\nScope: ONLY the refined theme engine (define/validate/compile/resolve), built-in + installed theme packages, v-theme runtime plugins, user override/background layers, theme admin install surfaces, compiler/CLI tooling, related docs, and tests.\n\nPrimary surfaces for review:\n1. app/theme/_shared/* — defineTheme, validation, CSS var generation, selector runtime, resolver, manifest/loader, component overrides\n2. app/plugins/00.theme-directive.ts + 90/91 theme plugins and 92.workspace-profile-theme.client.ts — bootstrap, SSR/client apply, auto-theme, workspace profile\n3. plugins/vite-theme-compiler.ts + scripts/*theme* — build-time compilation\n4. app/core/theme/* — merged theme apply, backgrounds, user overrides\n5. server/admin/extensions/theme-install-sync.ts + shared extension install/URL fetch — how themes are installed from ZIP/URL\n6. Theme packages: app/theme/{retro,blank} (text sources only)\n\nIntentionally excluded: binary theme assets (PNG/JPG/etc), HTTP webhooks, chat feature plugins, Convex, plugin registries unrelated to theming, and the rest of the application.\n\nNote: Theme ZIP/URL install reuses server/admin/extensions/* (same pipeline as plugins). Those install/SSRF files are included here so this pack is self-contained. Duplicate agent-skill theme doc copies under plugin-development/references were omitted; canonical docs live under public/_documentation/themes and docs/."
   },
   "include": [
     "app/theme/README.md",
@@ -18,7 +18,6 @@
     "app/plugins/90.theme.client.ts",
     "app/plugins/90.theme.server.ts",
     "app/plugins/91.auto-theme.client.ts",
-    "app/plugins/92.theme-lazy-sync.client.ts",
     "app/plugins/theme-overrides.client.ts",
     "app/plugins/icon-registry.ts",
     "app/plugins/__tests__/theme-runtime.test.ts",
@@ -47,7 +46,6 @@
     "scripts/cli/validate-theme.ts",
     "scripts/cli/switch-theme.ts",
     "scripts/__tests__/theme-compiler.test.ts",
-    "extensions/themes/**",
     "server/admin/extensions/**",
     "server/api/admin/extensions/**",
     "server/api/admin/extensions.get.ts",
@@ -56,10 +54,13 @@
     "types/theme-generated.d.ts",
     "types/theme-plugin.d.ts",
     "public/_documentation/themes/**",
-    "planning/complete/improve-theme/**",
     ".agent/skills/ui-theme/SKILL.md",
     "tests/utils/theme-test-utils.ts",
-    "tests/e2e/phase4-retro-theme.spec.ts"
+    "AGENTS.md",
+    "public/_documentation/docmap.json",
+    "app/plugins/92.workspace-profile-theme.client.ts",
+    "tests/e2e/theme-token-migrations.spec.ts",
+    "public/_documentation/start/source-map.md"
   ],
   "ignore": {
     "customPatterns": [

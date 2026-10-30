@@ -32,13 +32,12 @@
     "app/plugins/__tests__/auth-session-workspace-revision.test.ts",
     "app/plugins/__tests__/workspace-db-logout.test.ts",
     "app/plugins/00-workspace-db.client.ts",
-    "planning/complete/ssr-auth-system/**",
-    "planning/complete/admin-auth-hardening/**",
-    "planning/complete/auth-registration-controls/**",
-    "planning/complete/or3-cloud-lock-page/**",
     "public/_documentation/cloud/auth-system.md",
     "public/_documentation/cloud/provider-basic-auth.md",
-    "public/_documentation/cloud/provider-clerk.md"
+    "public/_documentation/cloud/provider-clerk.md",
+    "AGENTS.md",
+    "public/_documentation/docmap.json",
+    "public/_documentation/start/source-map.md"
   ],
   "ignore": {
     "customPatterns": [
