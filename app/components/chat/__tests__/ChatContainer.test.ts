@@ -976,7 +976,7 @@ describe('ChatContainer', () => {
             ).toBe('settled');
         });
 
-        it('resets rendered rows when the tab changes', async () => {
+        it('resets rendered rows when the tab shows another conversation', async () => {
             const instance = makeStreamingInstance();
             const wrapper = mountChatInstance(instance, { tabId: 'tab-a' });
             await nextTick();
@@ -984,11 +984,17 @@ describe('ChatContainer', () => {
             const scroller = wrapper.findComponent({ name: 'Or3Scroll' });
             expect(scroller.props('contentKey')).toBe('tab-a');
 
+            // Activation rebinds the pane before the incoming history loads;
+            // the outgoing rows must not be reset and rendered again meanwhile.
+            await wrapper.setProps({ tabId: 'tab-b' });
+            expect(scroller.props('contentKey')).toBe('tab-a');
+            expect(rowFor(wrapper, 'stable-1').exists()).toBe(true);
+
             instance.messages.value = [
                 { id: 'thread2-1', role: 'user', text: 'Second thread' },
             ];
             instance.tailAssistant.value = null;
-            await wrapper.setProps({ tabId: 'tab-b' });
+            await wrapper.setProps({ threadId: 'thread-2' });
             await nextTick();
             await nextTick();
 

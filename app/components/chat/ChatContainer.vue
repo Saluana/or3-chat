@@ -23,9 +23,9 @@
                 :items="allMessages"
                 :item-key="messageKey"
                 :estimate-height="80"
-                :overscan="5500"
+                :overscan="1200"
                 :prefetch-overscan="5500"
-                :content-key="props.tabId ?? props.threadId ?? 'new-thread'"
+                :content-key="scrollContentKey"
                 :row-content-revision="rowContentRevision"
                 mutation-mode="append-prepend"
                 :maintain-bottom="!anyEditing"
@@ -452,19 +452,37 @@ let deferredHistory: {
     threadId: string | undefined;
 } | undefined;
 
+// Tab activation rebinds this pane before the incoming history has loaded.
+// Reset the scroller when the shown conversation changes, together with its
+// rows; resetting on the binding alone re-renders the outgoing history.
+const scrollContentKey = ref(props.tabId ?? props.threadId ?? 'new-thread');
+
+// Watch the thread and its history together. A pane replaces both at once when
+// it switches conversations; that loaded history seeds the switch, so the list
+// never empties while the composable reads the same rows again.
 watch(
-    () => props.threadId,
-    async (newId) => {
+    [() => props.threadId, () => props.messageHistory],
+    async ([newId, mh], [oldId, oldHistory]) => {
+        const historyChanged = mh !== oldHistory;
+        if (newId === oldId) {
+            syncMessageHistory(mh);
+            return;
+        }
+        scrollContentKey.value = props.tabId ?? newId ?? 'new-thread';
         deferredHistory = undefined;
         const currentId = chat.value?.threadId?.value;
         // Avoid re-initializing if the composable already set the same id (first-send case)
         if (newId && currentId && newId === currentId) {
+            if (historyChanged) syncMessageHistory(mh);
             return;
         }
         // Rebind in place — never call useChat() outside setup (inject warning).
         try {
             await chat.value?.switchThread?.(newId, {
                 pendingPromptId: pendingPromptId.value || undefined,
+                ...(newId && historyChanged
+                    ? { seedMessages: mh ?? [], historyAlreadyLoaded: true }
+                    : {}),
             });
         } catch (e) {
             if (import.meta.dev) {
@@ -478,43 +496,40 @@ watch(
 );
 
 // Keep composable messages in sync when parent provides an updated messageHistory
-watch(
-    () => props.messageHistory,
-    (mh) => {
-        if (!chat.value) return;
-        // While streaming, don't clobber the in-flight assistant placeholder with stale DB content
-        if (chat.value.loading.value) {
-            const replies = new Map(chat.value.messages.value
-                .filter(message => message.role === 'assistant' && message.pending)
-                .map(message => [message.id, message.stream_id] as const));
-            const request = chat.value.requestState?.value;
-            if (request?.status === 'streaming') {
-                // Foreground replies live outside messages[], and pending is
-                // cleared on the first token rather than at stream completion.
-                replies.set(request.assistantMessageId, chat.value.streamId.value);
-            } else {
-                const tail = chat.value.tailAssistant?.value;
-                if (tail?.stream_id && tail.stream_id === chat.value.streamId.value) {
-                    replies.set(tail.id, tail.stream_id);
-                }
+function syncMessageHistory(mh: ChatMessageType[] | undefined) {
+    if (!chat.value) return;
+    // While streaming, don't clobber the in-flight assistant placeholder with stale DB content
+    if (chat.value.loading.value) {
+        const replies = new Map(chat.value.messages.value
+            .filter(message => message.role === 'assistant' && message.pending)
+            .map(message => [message.id, message.stream_id] as const));
+        const request = chat.value.requestState?.value;
+        if (request?.status === 'streaming') {
+            // Foreground replies live outside messages[], and pending is
+            // cleared on the first token rather than at stream completion.
+            replies.set(request.assistantMessageId, chat.value.streamId.value);
+        } else {
+            const tail = chat.value.tailAssistant?.value;
+            if (tail?.stream_id && tail.stream_id === chat.value.streamId.value) {
+                replies.set(tail.id, tail.stream_id);
             }
-            deferredHistory = {
-                threadId: props.threadId,
-                messages: mh || [],
-                replies,
-            };
-            return;
         }
-        deferredHistory = undefined;
-        // A reload may see admission before the job ID arrives. That view has
-        // no tracker to settle its placeholder; accept the synced terminal row.
-        // A stale snapshot missing an unfinished reply must never erase it.
-        const saved = new Map((mh || []).map((message) => [message.id, message]));
-        if (chat.value.messages.value.some((message) => message.role === 'assistant' && message.pending
-            && saved.get(message.id)?.pending !== false)) return;
-        chat.value.replaceCanonicalHistory?.(mh || []);
+        deferredHistory = {
+            threadId: props.threadId,
+            messages: mh || [],
+            replies,
+        };
+        return;
     }
-);
+    deferredHistory = undefined;
+    // A reload may see admission before the job ID arrives. That view has
+    // no tracker to settle its placeholder; accept the synced terminal row.
+    // A stale snapshot missing an unfinished reply must never erase it.
+    const saved = new Map((mh || []).map((message) => [message.id, message]));
+    if (chat.value.messages.value.some((message) => message.role === 'assistant' && message.pending
+        && saved.get(message.id)?.pending !== false)) return;
+    chat.value.replaceCanonicalHistory?.(mh || []);
+}
 
 watch(() => chat.value.loading.value, loading => {
     if (loading || !deferredHistory) return;
@@ -874,8 +889,8 @@ watch(
     { immediate: true }
 );
 
-// Media prefetch is intentionally separate from row mounting. Keep the proven
-// 5500px render overscan until the browser canary passes at 1200/5500.
+// Media prefetch is intentionally separate from row mounting: rows mount within
+// 1200px of the viewport while media prefetch looks 5500px ahead (canary-gated).
 const mediaPrefetch = createMessageMediaPrefetchController({ concurrency: 4 });
 
 function onPrefetchRange(range: { startIndex: number; endIndex: number }) {

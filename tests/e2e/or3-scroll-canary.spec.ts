@@ -471,6 +471,54 @@ test('resets streamed rows when the thread changes', async ({ page }) => {
         .toContain('post-reset row');
 });
 
+test('mounts only the tail and paints it at the bottom when the thread changes', async ({ page }, info) => {
+    await page.evaluate(() =>
+        (window as typeof window & { __or3ScrollCanary: CanaryApi })
+            .__or3ScrollCanary.setOverscan(1200, 5500)
+    );
+    const result = await page.evaluate(async () => {
+        const mounted: number[] = [];
+        const frames: Array<{ incoming: boolean; bottomDistance: number }> = [];
+        const observer = new MutationObserver((records) => {
+            for (const record of records) for (const node of record.addedNodes) {
+                if (!(node instanceof Element)) continue;
+                const rows = node.matches('.canary-message') ? [node] : [...node.querySelectorAll('.canary-message')];
+                for (const row of rows) {
+                    const key = (row as HTMLElement).dataset.canaryKey ?? '';
+                    if (key.startsWith('canary-thread-b-')) mounted.push(Number(key.slice('canary-thread-b-'.length)));
+                }
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        let sampling = true;
+        const sample = () => {
+            if (!sampling) return;
+            const scroller = document.querySelector<HTMLElement>('.canary-scroll')!;
+            const viewport = scroller.getBoundingClientRect();
+            const incoming = [...scroller.querySelectorAll<HTMLElement>('.canary-message')].some((row) => {
+                const box = row.getBoundingClientRect();
+                return row.dataset.canaryKey?.startsWith('canary-thread-b-')
+                    && box.bottom > viewport.top && box.top < viewport.bottom;
+            });
+            frames.push({ incoming, bottomDistance: scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight });
+            requestAnimationFrame(sample);
+        };
+        requestAnimationFrame(sample);
+        (window as typeof window & { __or3ScrollCanary: CanaryApi }).__or3ScrollCanary.switchThread();
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        sampling = false;
+        observer.disconnect();
+        return { mounted, frames: frames.filter((frame) => frame.incoming) };
+    });
+    await info.attach('thread-change-frames', { contentType: 'application/json', body: JSON.stringify(result) });
+    // The incoming thread opens at its bottom: the head row is never mounted,
+    // and no painted frame shows it anywhere but pinned to the bottom.
+    expect(result.mounted.length).toBeGreaterThan(0);
+    expect(Math.min(...result.mounted)).toBeGreaterThan(50);
+    expect(result.frames.length).toBeGreaterThan(0);
+    for (const frame of result.frames) expect(frame.bottomDistance).toBeLessThanOrEqual(5);
+});
+
 test('preserves the visible keyed anchor through a middle mutation', async ({
     page,
 }) => {

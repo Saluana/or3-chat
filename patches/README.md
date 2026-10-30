@@ -103,3 +103,16 @@ real browser; physical-device latency and sustained work remain open.
 The native card journey checks its top endpoint and persisted state at normal
 and 4× CPU. See `audit-evidence/performance-20261023/WHEEL-OWNER.md` for current
 evidence; `WHEEL-REVERSAL.md` and `CARD-COLD-OPEN.md` retain prior experiments.
+
+A list following its bottom now computes its render window from the bottom
+rather than the current `scrollTop`. Content resets, wholesale replacements and
+mount therefore pin to the bottom and mount the tail rows directly; the scroller
+no longer renders the head of a long conversation at offset 0, then jumps and
+renders the tail a frame later. Rows mounted for new content are measured in a
+bounded pre-paint pass (at most three windows), so the first painted frame has
+measured geometry. Smooth scrolling, active user input and browsing lists keep
+the offset-based window. All scroll canaries pass. With the chat's 1200px render
+overscan, switching between two 300-message chats in a production build mounts
+24 rows instead of 350 and shows no head frame, blank frame or post-paint shift.
+The or3-vsc source carries this and the scheduling, scroll-intent and wheel
+changes above; they are not yet in a published release.

@@ -59,6 +59,37 @@ async function retryDraftRestore(page: Page, text: string): Promise<void> {
     await expect(page.getByText('Draft could not be restored', { exact: true })).toHaveCount(0);
 }
 
+// Chats open at their bottom and mount only rows near the viewport. Scroll to
+// the first message, a compacted chat's summary card, as a reader would.
+// Navigation can still move the list to its own target, so callers retry.
+async function revealFirstMessage(page: Page): Promise<boolean> {
+    const list = page.locator('.chat-message-list').filter({ has: page.locator('[data-msg-id]') }).first();
+    try {
+        await list.evaluate((element) => element.scrollTo({ top: 0 }), undefined, { timeout: 1_000 });
+        await list.locator('.or3-scroll-item[data-index="0"]').waitFor({ state: 'attached', timeout: 1_000 });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+async function compactionSummaryId(page: Page): Promise<string | null> {
+    if (!await revealFirstMessage(page)) return null;
+    const row = page.locator('.or3-scroll-item[data-index="0"] [data-msg-id]')
+        .filter({ has: page.locator('[data-compaction-card]') });
+    return await row.count() ? row.getAttribute('data-msg-id') : null;
+}
+
+// Each attempt scrolls and waits for the first row, so allow navigation on a
+// loaded dev server more time than the default poll budget.
+const COMPACTION_NAVIGATION_TIMEOUT = 15_000;
+
+async function settledCompactionSummaryId(page: Page, timeout = COMPACTION_NAVIGATION_TIMEOUT): Promise<string> {
+    let id: string | null = null;
+    await expect.poll(async () => (id = await compactionSummaryId(page)), { timeout }).not.toBeNull();
+    return id!;
+}
+
 test.describe('chat draft storage recovery faults', () => {
     test.describe.configure({ timeout: 120_000 });
     test.beforeEach(async ({ context, page }) => {
@@ -1172,7 +1203,8 @@ test('compaction chat memory lives under system prompt in settings, with working
     test.setTimeout(120_000);
     await page.route('**openrouter.ai/**', route => route.abort());
     await page.goto(`${chatPage}?compaction=1&presentation=1&native=1`);
-    await expect(page.locator('[data-compaction-card]')).toBeVisible({ timeout: 60_000 });
+    await settledCompactionSummaryId(page, 60_000);
+    await expect(page.locator('[data-compaction-card]')).toBeVisible();
     await expect(page.locator('#chat-input-main [data-context-actions]')).toHaveCount(0);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     const memory = page.getByRole('region', { name: 'Context & compaction', exact: true });
@@ -1184,16 +1216,19 @@ test('compaction chat memory lives under system prompt in settings, with working
     await expect(memory.getByRole('meter', { name: 'Estimated context used' })).toBeVisible();
     const automatic = memory.getByRole('switch', { name: 'Auto-compact when context is high' });
     await expect(automatic).not.toBeChecked(); await automatic.click(); await expect(automatic).toBeChecked();
-    const before = await page.locator('[data-msg-id]').filter({ has: page.locator('[data-compaction-card]') }).getAttribute('data-msg-id');
+    const before = await settledCompactionSummaryId(page);
     await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
     const draft = 'Budget context. '.repeat(12000);
     await page.getByRole('textbox', { name: 'Message input' }).fill(draft);
-    await expect.poll(async () => page.locator('[data-msg-id]').filter({ has: page.locator('[data-compaction-card]') }).getAttribute('data-msg-id'), { timeout: 30_000 }).not.toBe(before);
+    await expect.poll(async () => {
+        const id = await compactionSummaryId(page);
+        return id !== null && id !== before;
+    }, { timeout: 30_000 }).toBe(true);
     await expect(page.getByRole('textbox', { name: 'Message input' })).toHaveText(draft.trim());
     const attempts = await page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]').length);
     // The fixture reopens the same persisted source; re-entering the same draft still exceeds 80%.
     await page.reload();
-    await expect(page.locator('[data-msg-id]').filter({ has: page.locator('[data-compaction-card]') })).toHaveAttribute('data-msg-id', before!);
+    await expect.poll(() => compactionSummaryId(page), { timeout: COMPACTION_NAVIGATION_TIMEOUT }).toBe(before);
     await page.getByRole('textbox', { name: 'Message input' }).fill(draft);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     if (await memory.getByRole('button', { name: /^Context & compaction/ }).getAttribute('aria-expanded') === 'false') await memory.getByRole('button', { name: /^Context & compaction/ }).click();
@@ -1328,7 +1363,8 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.route('**openrouter.ai/**', (route) => route.abort());
     await page.goto(`${chatPage}?compaction=1&presentation=1&native=1`);
-    await expect(page.locator('[data-compaction-card]')).toBeVisible({ timeout: 60_000 });
+    await settledCompactionSummaryId(page, 60_000);
+    await expect(page.locator('[data-compaction-card]')).toBeVisible();
     const root = await page.evaluate(() => localStorage.getItem('or3:e2e:compaction-source'));
     const header = page.locator(`[data-thread-family="${root}"][data-family-kind="group-header"]`);
     const members = page.locator(`[data-thread-family="${root}"][data-family-kind="thread-member"]`);
@@ -1367,7 +1403,7 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     const compact = page.getByRole('region', { name: 'Context & compaction', exact: true })
         .getByRole('button', { name: 'Compact', exact: true });
     const summaryRow = page.locator('[data-msg-id]').filter({ has: page.locator('[data-compaction-card]') });
-    const originalSummaryId = await summaryRow.getAttribute('data-msg-id');
+    const originalSummaryId = await settledCompactionSummaryId(page);
     const selectVariant = async (name: string) => {
         await page.getByRole('button', { name: 'Settings', exact: true }).click();
         await page.getByRole('button', { name: 'Model variant', exact: true }).click();
@@ -1384,7 +1420,7 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(page.getByText('Compacting…', { exact: true })).toHaveCount(0, { timeout: 5000 });
     await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
-    expect(await summaryRow.getAttribute('data-msg-id')).toBe(originalSummaryId);
+    await expect.poll(() => compactionSummaryId(page), { timeout: COMPACTION_NAVIGATION_TIMEOUT }).toBe(originalSummaryId);
     await expect(input).toHaveText('Preserve this unsent native compaction draft.');
     await selectVariant('Floor');
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
@@ -1393,13 +1429,16 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(page.getByText('Compacting…', { exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
-    expect(await summaryRow.getAttribute('data-msg-id')).toBe(originalSummaryId);
+    await expect.poll(() => compactionSummaryId(page), { timeout: COMPACTION_NAVIGATION_TIMEOUT }).toBe(originalSummaryId);
     await expect(input).toHaveText('Preserve this unsent native compaction draft.');
     await page.getByTestId('fixture-hold-summary').uncheck();
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await compact.click();
-    await expect.poll(async () => summaryRow.getAttribute('data-msg-id')).not.toBe(originalSummaryId);
-    const childSummaryId = await summaryRow.getAttribute('data-msg-id');
+    await expect.poll(async () => {
+        const id = await compactionSummaryId(page);
+        return id !== null && id !== originalSummaryId;
+    }, { timeout: COMPACTION_NAVIGATION_TIMEOUT }).toBe(true);
+    const childSummaryId = await settledCompactionSummaryId(page);
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]').at(-1)?.model)).toBe('scripted-compaction-model:floor');
     await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
     await page.locator('.unified-sb-item-active').getByRole('button', { name: /^Actions for / }).last().click();
@@ -1408,7 +1447,7 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await expect(historyCompact).toHaveAttribute('title', /at least two settled/);
     await page.keyboard.press('Escape');
     await page.locator('[data-compaction-card]').getByRole('button', { name: /^View original/ }).click();
-    await expect.poll(async () => summaryRow.getAttribute('data-msg-id')).toBe(originalSummaryId);
+    await expect.poll(() => compactionSummaryId(page), { timeout: COMPACTION_NAVIGATION_TIMEOUT }).toBe(originalSummaryId);
     await expect(input).toHaveText('Preserve this unsent native compaction draft.');
     const originalMember = members.filter({ hasText: 'Original' });
     await originalMember.locator('.unified-sb-item').click();
@@ -1420,15 +1459,17 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     const originalRootDraft = await input.innerText();
     await originalMember.getByRole('button', { name: /^Actions for / }).click();
     await expect(historyCompact).toBeEnabled(); await historyCompact.click();
+    const historySummaryId = await settledCompactionSummaryId(page);
     await expect(summaryRow).toHaveCount(1);
     await expect(page.locator('[data-compaction-card]')).toBeVisible();
     await page.keyboard.press('Escape');
-    const historySummaryId = await summaryRow.getAttribute('data-msg-id');
     await page.locator('[data-compaction-card]').getByRole('button', { name: /^View original/ }).click();
     const reverseCompactions = page.locator(`[data-msg-id="${root}-anchor"]`).getByRole('button', { name: 'Compacted · Launch checklist — compacted', exact: true });
     await expect(reverseCompactions).toHaveCount(2);
     await reverseCompactions.first().click();
-    await expect.poll(async () => summaryRow.getAttribute('data-msg-id')).toBe(historySummaryId);
+    // The link resolves its target before navigating; keep its row mounted.
+    await expect(page.locator(`[data-msg-id="${root}-anchor"]`)).toHaveCount(0);
+    await expect.poll(() => compactionSummaryId(page), { timeout: COMPACTION_NAVIGATION_TIMEOUT }).toBe(historySummaryId);
     const requestsBeforeManualNavigation = await page.evaluate(() => localStorage.getItem('or3:e2e:compaction-requests'));
     await page.evaluate(() => window.dispatchEvent(new CustomEvent('or3:model-selected', { detail: { modelId: 'scripted-no-tools' } })));
     const noToolsCard = page.locator('[data-compaction-card]');
@@ -1455,11 +1496,11 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
         if (reload) await page.reload();
         await expect(header).toBeVisible(); await header.locator('.unified-sb-item').click(); await expect(summaryRow).toHaveCount(0);
         await header.getByRole('button', { name: /^Actions for / }).click(); await page.getByRole('button', { name: 'Go to latest compaction', exact: true }).click();
-        await expect.poll(() => summaryRow.getAttribute('data-msg-id')).toBe(latestSummary);
+        await expect.poll(() => compactionSummaryId(page), { timeout: COMPACTION_NAVIGATION_TIMEOUT }).toBe(latestSummary);
         await search.fill('Launch checklist'); await expect(header).toBeVisible();
         await header.locator('.unified-sb-item').click(); await expect(summaryRow).toHaveCount(0);
         await header.getByRole('button', { name: /^Actions for / }).click(); await page.getByRole('button', { name: 'Go to latest compaction', exact: true }).click();
-        await expect.poll(() => summaryRow.getAttribute('data-msg-id')).toBe(latestSummary); await search.fill('');
+        await expect.poll(() => compactionSummaryId(page), { timeout: COMPACTION_NAVIGATION_TIMEOUT }).toBe(latestSummary); await search.fill('');
     }
     await info.attach('native-composer-compaction-assertions', { contentType: 'application/json', body: JSON.stringify({
         source: process.env.OR3_CONTEXT_SOURCE_SHA, originalSummaryId, childSummaryId, latestSummary, assertions: ['native registry action', 'progress/model/Cancel', 'new child opened', 'short child history action disabled with reason', 'registered history-menu action', 'no-tool model manual navigation without inference', 'latest activity differs from newest compaction under filter/reload', 'draft retained'] }) });

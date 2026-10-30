@@ -4023,6 +4023,9 @@ export function useChat(
             clearConversation({ persistence: 'preserve' });
         }
 
+        // A loaded seed skips the history reload, which is what reattaches
+        // durable generations; reattach them as a new controller does.
+        if (historyLoadedFor.value) await reattachBackgroundJobs();
         await ensureHistorySynced();
     }
 
