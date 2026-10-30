@@ -18,6 +18,7 @@ import { ProjectSettingsSchema, readPersistedProjectRecord } from '~~/shared/pro
 import { useLocalStorage } from '@vueuse/core';
 import { useAiSettings } from './useAiSettings';
 import { useModelStore } from './useModelStore';
+import { delegatedChatModel } from '~/utils/chat/delegated-chat-runtime';
 import {
     getDefaultReasoningEffort,
     getSupportedReasoningEfforts,
@@ -30,6 +31,7 @@ import {
     DEFAULT_MODEL_VARIANT,
     appendModelVariant,
     sanitizeModelVariant,
+    stripModelVariantSuffix,
     type OpenRouterModelVariant,
 } from '~~/shared/openrouter/model-variants';
 
@@ -195,6 +197,17 @@ export function useChatModelSelection(options: {
         }
         applySelection(model ?? selectedModel.value, variant);
     }
+    // A delegated follow-up can change the persisted model while this chat is
+    // already open. Project that admitted selection into its existing composer
+    // without treating it as a new global user preference.
+    watch(() => delegatedChatModel(options.threadId()), model => {
+        if (!model) return;
+        selectionRevision++;
+        modelInherited.value = false;
+        stopPolicySubscription();
+        const base = stripModelVariantSuffix(model);
+        applySelection(base, sanitizeModelVariant(model.slice(base.length + 1)));
+    }, { immediate: true, flush: 'sync' });
     let disposed = false;
     watch(() => options.shouldFetchCatalog?.(), (enabled) => {
         if (enabled && !disposed) void fetchModels().catch(() => undefined);

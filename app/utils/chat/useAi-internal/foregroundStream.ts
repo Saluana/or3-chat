@@ -596,6 +596,11 @@ export async function runForegroundStreamLoop(
                                 callId: toolCall.id,
                                 requestId: ctx.streamId,
                                 abortSignal: ctx.abortSignal,
+                                parentModel: {
+                                    model: ctx.modelId,
+                                    thinking: Boolean(ctx.reasoning),
+                                    reasoningEffort: ctx.reasoning?.effort ?? null,
+                                },
                             },
                             { definition: admittedDefinition }
                         );

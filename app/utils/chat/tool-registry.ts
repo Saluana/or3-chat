@@ -82,6 +82,7 @@ export interface RegisteredTool {
     available?: (context: ToolAvailabilityContext) => boolean;
     ownerPluginId?: string;
     workflowPolicy?: WorkflowToolRegistrationPolicy;
+    timeoutMs?: number;
     /** Removes this exact registration; returns false after replacement/disposal. */
     dispose: () => boolean;
     _owner: symbol;
@@ -97,6 +98,8 @@ export interface RegisterOptions {
     /** Optional origin gate, checked both before advertising and before execution. */
     available?: (context: ToolAvailabilityContext) => boolean;
     workflowPolicy?: WorkflowToolRegistrationPolicy;
+    /** Host-owned long-running tools may opt into a longer bounded timeout. */
+    timeoutMs?: number;
 }
 
 const TOOL_STORAGE_KEY = 'or3.tools.enabled';
@@ -321,6 +324,7 @@ export function useToolRegistry() {
             available: opts.available,
             ownerPluginId: opts.ownerPluginId,
             workflowPolicy: opts.workflowPolicy,
+            timeoutMs: opts.ownerPluginId ? DEFAULT_TIMEOUT_MS : (opts.timeoutMs ?? DEFAULT_TIMEOUT_MS),
             _owner: owner,
             _stopWatcher: () => undefined,
             dispose: () => {
@@ -547,6 +551,8 @@ export function useToolRegistry() {
             requestId: createRuntimeUuid(),
             abortSignal: new AbortController().signal,
         };
+        // Registrations created before a hot reload may not have a timeout.
+        const timeoutMs = tool.timeoutMs ?? DEFAULT_TIMEOUT_MS;
         const execution = await withTimeout(
             (abortSignal) => tool.handler(
                 parsed.value,
@@ -560,7 +566,7 @@ export function useToolRegistry() {
                 }
             ),
             baseContext.abortSignal,
-            DEFAULT_TIMEOUT_MS
+            timeoutMs
         );
 
         if (!execution.error && context?.threadId) {
@@ -586,7 +592,7 @@ export function useToolRegistry() {
         }
 
         if (execution.timedOut) {
-            const timeoutMsg = `Tool execution timed out after ${DEFAULT_TIMEOUT_MS}ms.`;
+            const timeoutMsg = `Tool execution timed out after ${timeoutMs}ms.`;
             tool.lastError.value = timeoutMsg;
             return {
                 result: null,

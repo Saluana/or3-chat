@@ -14,6 +14,7 @@ import {
     recordSyncRequest,
 } from '../../../../utils/sync/rate-limiter';
 import { enforceRateLimit } from '../../../../utils/rate-limit/enforce';
+import { DELEGATE_CHAT_CLAIM_MS, DELEGATE_CHAT_TOOL } from '~~/shared/chat/delegation';
 
 const CLAIM_TTL_MS = 30_000;
 
@@ -71,7 +72,7 @@ export default defineEventHandler(async (event) => {
     if (!identity || identity.call.id !== callId) throw createError({ statusCode: 409, statusMessage: 'Tool call no longer pending' });
     const claimDigest = backgroundClientToolDigest(identity);
     const claimToken = `or3ct1.${claimDigest}.${randomUUID()}`;
-    const claimExpiresAt = Date.now() + CLAIM_TTL_MS;
+    const claimExpiresAt = Date.now() + (identity.call.name === DELEGATE_CHAT_TOOL ? DELEGATE_CHAT_CLAIM_MS : CLAIM_TTL_MS);
     const claimed = await provider.claimClientToolCall(
         jobId,
         userId,
@@ -85,6 +86,9 @@ export default defineEventHandler(async (event) => {
         pending.claimToken !== claimToken || backgroundClientToolDigest(claimedIdentity) !== claimDigest) {
         throw createError({ statusCode: 409, statusMessage: 'Tool call already claimed' });
     }
+    const admittedBody = getChatJobExecution(claimed)?.body;
+    const reasoning = admittedBody?.reasoning && typeof admittedBody.reasoning === 'object'
+        ? admittedBody.reasoning as { effort?: unknown } : undefined;
     return {
         claimToken,
         claimExpiresAt,
@@ -101,5 +105,9 @@ export default defineEventHandler(async (event) => {
             threadId: claimed.threadId,
             messageId: claimed.messageId,
         },
+        ...(pending.name === DELEGATE_CHAT_TOOL && typeof admittedBody?.model === 'string' ? {
+            parentModel: { model: admittedBody.model, thinking: Boolean(reasoning && reasoning.effort !== 'none'),
+                reasoningEffort: typeof reasoning?.effort === 'string' ? reasoning.effort : null },
+        } : {}),
     };
 });

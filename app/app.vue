@@ -7,6 +7,7 @@
         <!-- Register the PWA web manifest on all pages -->
         <VitePwaManifest />
         <ErrorRecovery />
+        <ClientOnly><LazyDelegatedChatHost v-if="delegationActive" /></ClientOnly>
         <FatalErrorBoundary>
             <!-- Use NuxtLayout to avoid warning when layouts/ are present -->
             <NuxtLayout>
@@ -16,6 +17,10 @@
     </UApp>
 </template>
 <script setup lang="ts">
+import { hasDelegatedChatJobs } from '~/utils/chat/delegated-chat-runtime';
+import { defineAsyncComponent } from 'vue';
+const LazyDelegatedChatHost = defineAsyncComponent(() => import('~/components/chat/DelegatedChatHost.vue'));
+const delegationActive = computed(hasDelegatedChatJobs);
 // Apply initial theme class to <html> so CSS variables cascade app-wide
 const nuxtApp = useNuxtApp();
 const runtimeConfig = useRuntimeConfig();

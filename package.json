@@ -41,6 +41,7 @@
         "test:live": "RUN_LIVE_TESTS=1 vitest run --project=live --reporter=dot --silent=passed-only",
         "test:chat-tools": "vitest run shared/openrouter/__tests__/parseOpenRouterSSE.test.ts shared/chat/__tests__/tool-ledger.test.ts app/utils/chat/__tests__/transcript.test.ts app/utils/chat/useAi-internal/__tests__/foregroundStream.test.ts app/utils/chat/useAi-internal/__tests__/persistence.test.ts app/utils/chat/useAi-internal/__tests__/continue-retry.test.ts app/db/__tests__/messages-transactions.test.ts app/composables/chat/__tests__/backgroundJobs.reattach-notify.test.ts server/utils/background-jobs/__tests__/stream-handler.tools.test.ts server/api/jobs/__tests__/authorization.test.ts --reporter=dot --silent=passed-only",
         "test:e2e:chat-tools:cloud": "bun scripts/test/run-chat-tools-cloud-e2e.ts",
+        "test:e2e:chat-delegation:live": "bun scripts/test/run-chat-delegation-live-e2e.ts",
         "test:chat-tools:receipts": "bun scripts/test/check-chat-tools-receipts.ts",
         "test:e2e:chat-tools": "bun run test:chat-tools:receipts && bun scripts/test/run-chat-tools-e2e.ts",
         "test:e2e:scroll": "OR3_SCROLL_TEST_HARNESS=true PW_PORT=3107 bunx playwright test tests/e2e/or3-scroll-canary.spec.ts",

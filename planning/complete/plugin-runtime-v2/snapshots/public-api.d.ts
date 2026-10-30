@@ -4240,6 +4240,7 @@ export interface RegisteredTool {
     available?: (context: ToolAvailabilityContext) => boolean;
     ownerPluginId?: string;
     workflowPolicy?: WorkflowToolRegistrationPolicy;
+    timeoutMs?: number;
     /** Removes this exact registration; returns false after replacement/disposal. */
     dispose: () => boolean;
     _owner: symbol;
@@ -4257,6 +4258,8 @@ export interface RegisterOptions {
     /** Optional origin gate, checked both before advertising and before execution. */
     available?: (context: ToolAvailabilityContext) => boolean;
     workflowPolicy?: WorkflowToolRegistrationPolicy;
+    /** Host-owned long-running tools may opt into a longer bounded timeout. */
+    timeoutMs?: number;
 }
 /**
  * `ToolRegistryState`

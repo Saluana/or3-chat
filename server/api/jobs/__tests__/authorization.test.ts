@@ -194,6 +194,41 @@ describe('background job workspace authorization at the HTTP boundary', () => {
         expect(execution).toEqual(before);
     });
 
+    it('keeps an authorized delegated claim alive past 30 seconds and accepts its result', async () => {
+        const { jobId, execution } = await createBoundToolJob({ tool_calls: [{ id: 'call', name: 'delegate_chat', status: 'pending' }] });
+        execution.clientToolCall!.name = 'delegate_chat';
+        execution.clientToolCall!.definition!.function.name = 'delegate_chat';
+        execution.body.model = 'test/sol';
+        execution.body.reasoning = { effort: 'medium' };
+        const claimed = await postTool(jobId, 'claim', { callId: 'call', deviceId: 'device' });
+        expect(claimed).toMatchObject({ status: 200, body: { parentModel: { model: 'test/sol', thinking: true, reasoningEffort: 'medium' } } });
+        expect(claimed.body.claimExpiresAt - Date.now()).toBeGreaterThan(2 * 60 * 60 * 1000);
+        vi.useFakeTimers({ toFake: ['Date'] });
+        try {
+            vi.setSystemTime(Date.now() + 31_000);
+            expect(await postTool(jobId, 'validate', { callId: 'call', claimToken: claimed.body.claimToken })).toMatchObject({ status: 200 });
+            expect((await memoryJobProvider.getJob(jobId, 'former-member'))!.lastActivityAt).toBe(Date.now());
+            expect(await postTool(jobId, 'result', { callId: 'call', claimToken: claimed.body.claimToken, result: 'Child completed' })).toMatchObject({ status: 200 });
+            const saved = (await memoryJobProvider.getJob(jobId, 'former-member'))!;
+            expect((saved.execution as BackgroundJobExecution).clientToolCall).toBeUndefined();
+            expect(saved.tool_calls?.[0]).toMatchObject({ result: 'Child completed' });
+        } finally { vi.useRealTimers(); }
+    });
+
+    it('does not affirm a delegated claim that changes during the activity update', async () => {
+        const { jobId, execution } = await createBoundToolJob();
+        execution.clientToolCall!.name = 'delegate_chat';
+        execution.clientToolCall!.definition!.function.name = 'delegate_chat';
+        const claimed = await postTool(jobId, 'claim', { callId: 'call', deviceId: 'device' });
+        expect(claimed.status).toBe(200);
+        const original = memoryJobProvider.updateJob.bind(memoryJobProvider);
+        vi.spyOn(memoryJobProvider, 'updateJob').mockImplementation(async (...args) => {
+            execution.clientToolCall!.arguments = '{"changed":true}';
+            await original(...args);
+        });
+        expect((await postTool(jobId, 'validate', { callId: 'call', claimToken: claimed.body.claimToken })).status).toBe(409);
+    });
+
     it('rejects a result for changed actual arguments even when the diagnostic fingerprint is stale', async () => {
         const { jobId, execution, claimToken } = await createBoundToolJob();
         await memoryJobProvider.claimClientToolCall!(jobId, 'former-member', 'call', claimToken, Date.now() + 30_000);

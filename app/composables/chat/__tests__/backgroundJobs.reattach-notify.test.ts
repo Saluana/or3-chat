@@ -29,16 +29,16 @@ const BackgroundJobPollErrorMock = vi.hoisted(
 
 let sessionValue: any = null;
 
-async function makeClientToolClaim() {
+async function makeClientToolClaim(name = 'client_tool', ttl = 30_000) {
     const call = {
-        id: 'call-1', name: 'client_tool', arguments: '{}',
+        id: 'call-1', name, arguments: '{}',
         definition: { type: 'function' as const, runtime: 'client' as const,
-            function: { name: 'client_tool', description: 'Client tool', parameters: { type: 'object' as const, properties: {} } } },
+            function: { name, description: 'Client tool', parameters: { type: 'object' as const, properties: {} } } },
     };
     const context = { workspaceId: 'workspace-1', threadId: 'thread-1', messageId: 'msg-1' };
     const claimDigest = await backgroundClientToolDigest({ jobId: 'job-1', userId: 'user-1', ...context, call });
     return { claimToken: `or3ct1.${claimDigest}.d00d76db-9bd0-49e8-974f-e6096b9c2137`, claimDigest,
-        claimExpiresAt: Date.now() + 30_000, call, context };
+        claimExpiresAt: Date.now() + ttl, call, context };
 }
 
 const dbMock = {
@@ -484,6 +484,65 @@ describe('backgroundJobs reattach + notifications', () => {
         expect(submitBackgroundClientToolResultMock).not.toHaveBeenCalled();
         mod.stopBackgroundJobTracking(tracker);
         mod.backgroundJobTrackers.clear();
+    });
+
+    it('refreshes a waiting delegation and delivers its result after 30 seconds', async () => {
+        sessionValue = { user: { id: 'user-1' } };
+        const claim = { ...await makeClientToolClaim('delegate_chat', 120_000),
+            parentModel: { model: 'test/sol', thinking: true, reasoningEffort: 'medium' } };
+        claimBackgroundClientToolMock.mockResolvedValue(claim);
+        let finish!: (value: unknown) => void;
+        executeToolMock.mockImplementation(async (_name, _args, _context, admission) => {
+            await admission.beforeExecute();
+            return new Promise(resolve => { finish = resolve; });
+        });
+        let streamParams: any;
+        subscribeBackgroundJobStreamMock.mockImplementation((params) => { streamParams = params; return () => {}; });
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1',
+            threadId: 'thread-1', messageId: 'msg-1', workspaceId: 'workspace-1', useSse: true });
+        try {
+            streamParams.onStatus(makeStatus('streaming', { tool_calls: [
+                { id: 'call-1', name: 'delegate_chat', status: 'pending', runtime: 'client', args: '{}' },
+            ] }));
+            await vi.waitFor(() => expect(validateBackgroundClientToolClaimMock).toHaveBeenCalledTimes(1));
+            await vi.advanceTimersByTimeAsync(31_000);
+            expect(validateBackgroundClientToolClaimMock).toHaveBeenCalledTimes(2);
+            expect(submitBackgroundClientToolResultMock).not.toHaveBeenCalled();
+            expect(executeToolMock.mock.calls[0]?.[2]).toMatchObject({ parentModel: claim.parentModel });
+            finish({ result: 'child completed', timedOut: false });
+            await vi.waitFor(() => expect(submitBackgroundClientToolResultMock).toHaveBeenCalledWith(expect.objectContaining({ result: 'child completed' })));
+        } finally { mod.stopBackgroundJobTracking(tracker); mod.backgroundJobTrackers.clear(); vi.useRealTimers(); }
+    });
+
+    it('does not report completion when delegation heartbeat validation is lost', async () => {
+        sessionValue = { user: { id: 'user-1' } };
+        const claim = await makeClientToolClaim('delegate_chat', 120_000);
+        claimBackgroundClientToolMock.mockResolvedValue(claim);
+        validateBackgroundClientToolClaimMock.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('Network unavailable'));
+        let signal: AbortSignal | undefined;
+        executeToolMock.mockImplementation(async (_name, _args, context, admission) => {
+            signal = context.abortSignal;
+            await admission.beforeExecute();
+            return new Promise(resolve => signal!.addEventListener('abort', () => resolve({ error: 'cancelled', timedOut: false }), { once: true }));
+        });
+        let streamParams: any;
+        subscribeBackgroundJobStreamMock.mockImplementation((params) => { streamParams = params; return () => {}; });
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1',
+            threadId: 'thread-1', messageId: 'msg-1', workspaceId: 'workspace-1', useSse: true });
+        try {
+            streamParams.onStatus(makeStatus('streaming', { tool_calls: [
+                { id: 'call-1', name: 'delegate_chat', status: 'pending', runtime: 'client', args: '{}' },
+            ] }));
+            await vi.waitFor(() => expect(validateBackgroundClientToolClaimMock).toHaveBeenCalledTimes(1));
+            await vi.advanceTimersByTimeAsync(20_000);
+            expect(signal?.aborted).toBe(true);
+            expect(submitBackgroundClientToolResultMock).not.toHaveBeenCalled();
+            expect(JSON.parse(localStorage.getItem('or3:bg-client-tool:job-1:call-1')!)).toMatchObject({ state: 'running' });
+        } finally { mod.stopBackgroundJobTracking(tracker); mod.backgroundJobTrackers.clear(); vi.useRealTimers(); }
     });
 
     it('does not restore a late private result after logout scrubbed the journal', async () => {

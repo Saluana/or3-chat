@@ -218,7 +218,7 @@ export function useChat(
     msgs: ChatMessage[] = [],
     initialThreadId?: string,
     pendingPromptId?: string,
-    options: { historyAlreadyLoaded?: boolean } = {}
+    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[] } = {}
 ) {
     // Messages and basic state
     const messages = ref<UiChatMessage[]>(associateUiToolResultMessages(msgs
@@ -2294,14 +2294,14 @@ export function useChat(
         const filterProjectTools = (tools: import('~/utils/chat/types').ToolDefinition[]) => requestScope.projectContext
             ? tools.filter(tool => projectToolEnabled(requestScope.projectContext!.settings, tool.function.name)) : tools;
         const advertisedToolDefs = JSON.parse(JSON.stringify(filterProjectTools(modelSupportsTools ? toolRegistry.getEnabledDefinitions({
-            workspaceId: requestScope.workspaceId, threadId: admissionThreadId }) : []))) as import('~/utils/chat/types').ToolDefinition[];
-        const enabledToolDefs = await placeHistoryTools(advertisedToolDefs, { background: backgroundStreamingAllowed.value,
+            workspaceId: requestScope.workspaceId, threadId: admissionThreadId }).filter(tool => !options.excludedTools?.includes(tool.function.name)) : []))) as import('~/utils/chat/types').ToolDefinition[];
+        const enabledToolDefs = await placeHistoryTools(advertisedToolDefs, { background: !options.forceForeground && backgroundStreamingAllowed.value,
             threadId: preparationThreadId, signal: preparationSignal });
         const foregroundToolDefs = enabledToolDefs.filter((tool) => tool.runtime !== 'server');
         const hasBrowserTools = enabledToolDefs.some((tool) => tool.runtime === 'client');
-        const browserToolBridgeAvailable = !hasBrowserTools || !backgroundStreamingAllowed.value
+        const browserToolBridgeAvailable = options.forceForeground || !hasBrowserTools || !backgroundStreamingAllowed.value
             || await isBackgroundClientToolBridgeAvailable();
-        const allowBackgroundStreaming = !requestScope.projectContext && backgroundStreamingAllowed.value && browserToolBridgeAvailable
+        const allowBackgroundStreaming = !options.forceForeground && !requestScope.projectContext && backgroundStreamingAllowed.value && browserToolBridgeAvailable
             && modalities.length === 1 && modalities[0] === 'text';
         const providerPreparation = { projectContext: requestScope.projectContext, model: modelId, orMessages, modalities, reasoning,
             tools: (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs).length
@@ -2337,7 +2337,7 @@ export function useChat(
         if (!ownsFilterChain() || useAiSettings().settings.value.masterSystemPrompt !== masterPrompt
             || (!preparationThreadId && (pendingPromptIdRef.value || DEFAULT_PROMPT_SELECTION) !== newPromptSelection)
             || JSON.stringify(filterProjectTools(modelSupportsTools ? toolRegistry.getEnabledDefinitions({ workspaceId: requestScope.workspaceId,
-                threadId: admissionThreadId }) : [])) !== JSON.stringify(advertisedToolDefs))
+                threadId: admissionThreadId }).filter(tool => !options.excludedTools?.includes(tool.function.name)) : [])) !== JSON.stringify(advertisedToolDefs))
             return { status: 'rejected', requestId, reason: 'unavailable', error: 'Request configuration changed during preparation. Retry the request.' };
         if (lossyPreview) return { status: 'rejected', requestId, reason: 'context_full', lossyPreview,
             error: 'Review the listed omissions before sending this one request.' };
@@ -2916,14 +2916,15 @@ export function useChat(
         const filterProjectTools = (tools: import('~/utils/chat/types').ToolDefinition[]) => requestScope.projectContext
             ? tools.filter(tool => projectToolEnabled(requestScope.projectContext!.settings, tool.function.name)) : tools;
         const advertisedToolDefs = metadata?.supported_parameters && !metadata.supported_parameters.includes('tools') ? []
-            : filterProjectTools(useToolRegistry().getEnabledDefinitions({ workspaceId: requestScope.workspaceId, threadId: checkpoint.thread_id }));
+            : filterProjectTools(useToolRegistry().getEnabledDefinitions({ workspaceId: requestScope.workspaceId, threadId: checkpoint.thread_id })
+                .filter(tool => !options.excludedTools?.includes(tool.function.name)));
         if (advertisedToolDefs.length !== checkpoint.tools.length || advertisedToolDefs.some((tool, index) => !toolDefinitionEquals(tool, checkpoint.tools[index]!)))
             return unavailable('The saved attempt’s tools changed or this model cannot use them. Restore its tools or edit the draft for a new request.');
-        const enabledToolDefs = await placeHistoryTools(structuredClone(advertisedToolDefs), { background: !projectId && backgroundStreamingAllowed.value, threadId: checkpoint.thread_id, signal });
+        const enabledToolDefs = await placeHistoryTools(structuredClone(advertisedToolDefs), { background: !options.forceForeground && !projectId && backgroundStreamingAllowed.value, threadId: checkpoint.thread_id, signal });
         const foregroundToolDefs = enabledToolDefs.filter((tool) => tool.runtime !== 'server');
         const hasBrowserTools = enabledToolDefs.some((tool) => tool.runtime === 'client');
-        const bridgeReady = !hasBrowserTools || !backgroundStreamingAllowed.value || await isBackgroundClientToolBridgeAvailable();
-        const modalities = getChatModalities(modelId); const allowBackgroundStreaming = !projectId && backgroundStreamingAllowed.value && bridgeReady && modalities.length === 1 && modalities[0] === 'text';
+        const bridgeReady = options.forceForeground || !hasBrowserTools || !backgroundStreamingAllowed.value || await isBackgroundClientToolBridgeAvailable();
+        const modalities = getChatModalities(modelId); const allowBackgroundStreaming = !options.forceForeground && !projectId && backgroundStreamingAllowed.value && bridgeReady && modalities.length === 1 && modalities[0] === 'text';
         const contextPolicy: ContextRequestPolicy = { model: readiness.metadata, source: readiness.source,
             userMaxContextTokens: preference.maxContextTokens, requestedCompletionTokens: params.maxCompletionTokens };
         const orMessages = structuredClone(checkpoint.messages);

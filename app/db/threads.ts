@@ -40,6 +40,9 @@ import type { TypedHookEngine } from '../core/hooks/typed-hooks';
 
 export interface CreateThreadContext {
     assertCurrent?: () => void;
+    assertAuthorized?: () => Promise<void>;
+    validatePrepared?: (thread: Thread) => void;
+    requireAbsent?: boolean;
     hooks?: TypedHookEngine;
     limits?: {
         enabled?: boolean;
@@ -108,12 +111,20 @@ export async function createThreadInDb(
         clock: nextClock(prepared.clock),
         hlc: prepared.hlc ?? generateHLC(),
     });
+    context.validatePrepared?.(value);
     await hooks.doAction('db.threads.create:action:before', {
         entity: value,
         tableName: 'threads',
     });
-    await db.transaction('rw', getWriteTxTableNames(db, value.project_id ? ['threads', 'projects'] : ['threads']), async () => {
+    const tables = context.assertAuthorized
+        ? ['threads', 'projects', 'posts', 'file_meta'] as const
+        : value.project_id ? ['threads', 'projects'] as const : ['threads'] as const;
+    await db.transaction('rw', getWriteTxTableNames(db, [...tables]), async () => {
         context.assertCurrent?.();
+        await context.assertAuthorized?.();
+        context.assertCurrent?.();
+        context.validatePrepared?.(value);
+        if (context.requireAbsent && await db.threads.get(value.id)) throw new Error('The chat already exists.');
         if (value.project_id) {
             const project = await db.projects.get(value.project_id);
             if (!project || project.deleted) throw new Error('Owning project unavailable.');

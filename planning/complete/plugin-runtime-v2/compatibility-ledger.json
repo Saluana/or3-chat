@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "b0accf23a7c13da603643c73eacc6358e1a89efab8c3a89c598266c1a37394af",
+      "apiSha256": "7b16278567598a389b6140d32a65093309867ad9db0c8596d8b35d6558150b29",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -6730,14 +6730,14 @@
           "nuxtAutoImport": false,
           "signatures": [
             {
-              "signature": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);",
+              "signature": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[] } = {}\n);",
               "declaredReturnType": null,
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAi.ts",
                 "line": 217,
                 "syntaxKind": "FunctionDeclaration",
-                "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
+                "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[] } = {}\n);"
               }
             }
           ],
@@ -6746,7 +6746,7 @@
               "source": "app/composables/chat/useAi.ts",
               "line": 217,
               "syntaxKind": "FunctionDeclaration",
-              "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean } = {}\n);"
+              "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[] } = {}\n);"
             }
           ]
         },
@@ -11842,7 +11842,7 @@
     },
     {
       "source": "app/utils/chat/tool-registry.ts",
-      "apiSha256": "3ee61ce655bfe70237a1360f6ab77cc1da01a6be991d6713ab0d4af2236bb6ba",
+      "apiSha256": "89ba5dacaa518ae2ee196273431c11b4abbdde74f8cbd8cbc22137f1e35ff3d6",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tool-registry"
@@ -11907,7 +11907,7 @@
               "source": "app/utils/chat/tool-registry.ts",
               "line": 76,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface RegisteredTool {\n    definition: ExtendedToolDefinition;\n    handler: ContextualToolHandler;\n    enabled: Ref<boolean>;\n    lastError: Ref<string | null>;\n    runtime: ToolRuntime;\n    available?: (context: ToolAvailabilityContext) => boolean;\n    ownerPluginId?: string;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    /** Removes this exact registration; returns false after replacement/disposal. */\n    dispose: () => boolean;\n    _owner: symbol;\n    _stopWatcher: () => void;\n}"
+              "text": "export interface RegisteredTool {\n    definition: ExtendedToolDefinition;\n    handler: ContextualToolHandler;\n    enabled: Ref<boolean>;\n    lastError: Ref<string | null>;\n    runtime: ToolRuntime;\n    available?: (context: ToolAvailabilityContext) => boolean;\n    ownerPluginId?: string;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    timeoutMs?: number;\n    /** Removes this exact registration; returns false after replacement/disposal. */\n    dispose: () => boolean;\n    _owner: symbol;\n    _stopWatcher: () => void;\n}"
             }
           ]
         },
@@ -11919,9 +11919,9 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 92,
+              "line": 93,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface RegisterOptions {\n    ownerPluginId?: string;\n    override?: boolean; // allow replacing an existing tool\n    enabled?: boolean; // explicit initial enabled state\n    runtime?: ToolRuntime;\n    /** Optional origin gate, checked both before advertising and before execution. */\n    available?: (context: ToolAvailabilityContext) => boolean;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n}"
+              "text": "export interface RegisterOptions {\n    ownerPluginId?: string;\n    override?: boolean; // allow replacing an existing tool\n    enabled?: boolean; // explicit initial enabled state\n    runtime?: ToolRuntime;\n    /** Optional origin gate, checked both before advertising and before execution. */\n    available?: (context: ToolAvailabilityContext) => boolean;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    /** Host-owned long-running tools may opt into a longer bounded timeout. */\n    timeoutMs?: number;\n}"
             }
           ]
         },
@@ -11933,7 +11933,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 91,
+              "line": 92,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolAvailabilityContext { workspaceId: string | null; threadId: string | null }"
             }
@@ -11961,7 +11961,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 111,
+              "line": 114,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolRegistryState {\n    tools: Map<string, RegisteredTool>;\n    storageHydrated: boolean;\n    pendingEnabledStates?: Record<string, boolean>;\n    persistDebounceTimer: NodeJS.Timeout | null;\n}"
             }
@@ -11992,7 +11992,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/utils/chat/tool-registry.ts",
-                "line": 253,
+                "line": 256,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useToolRegistry();"
               }
@@ -12001,7 +12001,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 253,
+              "line": 256,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useToolRegistry();"
             }
@@ -12011,7 +12011,7 @@
     },
     {
       "source": "app/utils/chat/tools-public.ts",
-      "apiSha256": "51ad5815710e5b7654cf8cc8c10f9ce678a01e502b37624a9aa0d73fec847438",
+      "apiSha256": "1c044f7343958028d10d089304a65a0a32e48fb576fc037666e67cd1c99c79ed",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tools-public"
@@ -12072,7 +12072,7 @@
               "source": "app/utils/chat/tool-registry.ts",
               "line": 76,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface RegisteredTool {\n    definition: ExtendedToolDefinition;\n    handler: ContextualToolHandler;\n    enabled: Ref<boolean>;\n    lastError: Ref<string | null>;\n    runtime: ToolRuntime;\n    available?: (context: ToolAvailabilityContext) => boolean;\n    ownerPluginId?: string;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    /** Removes this exact registration; returns false after replacement/disposal. */\n    dispose: () => boolean;\n    _owner: symbol;\n    _stopWatcher: () => void;\n}"
+              "text": "export interface RegisteredTool {\n    definition: ExtendedToolDefinition;\n    handler: ContextualToolHandler;\n    enabled: Ref<boolean>;\n    lastError: Ref<string | null>;\n    runtime: ToolRuntime;\n    available?: (context: ToolAvailabilityContext) => boolean;\n    ownerPluginId?: string;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    timeoutMs?: number;\n    /** Removes this exact registration; returns false after replacement/disposal. */\n    dispose: () => boolean;\n    _owner: symbol;\n    _stopWatcher: () => void;\n}"
             }
           ]
         },
@@ -12098,7 +12098,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 172,
+              "line": 174,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolDefinition {\n    type: 'function';\n    function: {\n        name: string;\n        description: string;\n        parameters: import('~~/shared/chat/tool-schema').JsonSchemaObject;\n    };\n    ui?: {\n        label?: string;\n        icon?: string;\n        descriptionHint?: string;\n        defaultEnabled?: boolean;\n        category?: string;\n    };\n    runtime?: ToolRuntime;\n}"
             }
@@ -12114,7 +12114,7 @@
               "source": "app/utils/chat/types.ts",
               "line": 141,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface ToolExecutionContext {\n    /** Recheck captured registry/project authority inside a host mutation transaction. */\n    assertToolAuthorized?: () => Promise<void>;\n    projectId?: string | null;\n    subject: string | null;\n    workspaceId: string | null;\n    threadId: string | null;\n    messageId: string | null;\n    callId: string;\n    requestId: string;\n    abortSignal: AbortSignal;\n}"
+              "text": "export interface ToolExecutionContext {\n    /** Recheck captured registry/project authority inside a host mutation transaction. */\n    assertToolAuthorized?: () => Promise<void>;\n    projectId?: string | null;\n    subject: string | null;\n    workspaceId: string | null;\n    threadId: string | null;\n    messageId: string | null;\n    callId: string;\n    requestId: string;\n    abortSignal: AbortSignal;\n    /** Model settings captured from the request that admitted this tool call. */\n    parentModel?: { model: string; thinking: boolean; reasoningEffort?: string | null };\n}"
             }
           ]
         },
@@ -12171,7 +12171,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/utils/chat/tool-registry.ts",
-                "line": 253,
+                "line": 256,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useToolRegistry();"
               }
@@ -12180,7 +12180,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 253,
+              "line": 256,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useToolRegistry();"
             }

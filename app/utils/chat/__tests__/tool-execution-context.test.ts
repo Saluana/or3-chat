@@ -80,6 +80,27 @@ describe('client tool execution context', () => {
         expect((await getDb().threads.get('thread-1'))?.title).toBe('Ordinary tool origin');
     });
 
+    it('lets a host-owned long-running tool complete after the ordinary timeout', async () => {
+        const registry = useToolRegistry();
+        const definition: ToolDefinition = { type: 'function', function: { name: 'long_host_wait',
+            description: 'Long wait', parameters: { type: 'object', properties: {} } } };
+        names.push(definition.function.name);
+        let release!: () => void;
+        let started!: () => void;
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        const entered = new Promise<void>(resolve => { started = resolve; });
+        registry.registerTool(definition, async () => { started(); await gate; return 'finished'; }, { timeoutMs: 120_000 });
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        const execution = registry.executeTool(definition.function.name, '{}');
+        await entered;
+        let settled = false;
+        void execution.then(() => { settled = true; });
+        await vi.advanceTimersByTimeAsync(31_000);
+        expect(settled).toBe(false);
+        release();
+        await expect(execution).resolves.toMatchObject({ result: 'finished', timedOut: false });
+    });
+
     // Bridge validation can wait for the network after approval. It must run
     // outside write transactions and must not replace local mutation fencing.
     it('validates a bridge admission outside the handler transaction only once', async () => {
