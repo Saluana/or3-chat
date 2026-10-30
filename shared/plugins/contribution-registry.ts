@@ -180,6 +180,7 @@ export class ContributionRegistry<
             isCurrent: () => this.#legacyById.get(id)?.owner === owner,
             remove: () => {
                 this.#legacyById.delete(id);
+                this.#legacyProjectionOrderById.delete(id);
                 this.#recordsByOwner.delete(owner);
                 this.#publishProjection();
             },

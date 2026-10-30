@@ -20,7 +20,7 @@ import {
     assertCardStateLimits,
 } from '~~/shared/chat/tool-card-data';
 import { getDb, type Or3DB } from './client';
-import { dbTry } from './dbTry';
+import { dbTry, dbRequired, dbBestEffort } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import {
     newId,
@@ -128,10 +128,9 @@ export async function createMessageInDb(db: Or3DB, input: MessageCreate): Promis
         tableName: 'messages',
     });
     await db.transaction('rw', getWriteTxTableNames(db, 'messages'), async () => {
-        await dbTry(
+        await dbRequired(
             () => db.messages.put(value),
-            { op: 'write', entity: 'messages', action: 'create' },
-            { rethrow: true }
+            { op: 'write', entity: 'messages', action: 'create' }
         );
     });
     await hooks.doAction('db.messages.create:action:after', {
@@ -179,7 +178,7 @@ export async function upsertMessageInDb(
     const validated = parseOrThrow(MessageSchema, filtered);
     // Best-effort clock for the pre-commit notification; the authoritative
     // bump is recomputed from a fresh read inside the transaction.
-    const previewExisting = await dbTry(
+    const previewExisting = await dbBestEffort(
         () => db.messages.get(validated.id),
         { op: 'read', entity: 'messages', action: 'get' }
     );
@@ -196,7 +195,7 @@ export async function upsertMessageInDb(
         'rw',
         getWriteTxTableNames(db, 'messages'),
         async () => {
-            const existing = await dbTry(
+            const existing = await dbRequired(
                 () => db.messages.get(validated.id),
                 { op: 'read', entity: 'messages', action: 'get' }
             );
@@ -205,10 +204,9 @@ export async function upsertMessageInDb(
                 clock: nextClock(existing?.clock ?? validated.clock),
                 hlc: validated.hlc ?? generateHLC(),
             };
-            await dbTry(
+            await dbRequired(
                 () => db.messages.put(fresh),
-                { op: 'write', entity: 'messages', action: 'upsert' },
-                { rethrow: true }
+                { op: 'write', entity: 'messages', action: 'upsert' }
             );
             return fresh;
         }
@@ -370,7 +368,7 @@ export async function patchMessageInDb(
         getWriteTxTableNames(db, 'messages', { include: commitGuard?.tables }),
         async () => {
             await commitGuard?.assertCurrent();
-            const stored = await dbTry(() => db.messages.get(id), {
+            const stored = await dbRequired(() => db.messages.get(id), {
                 op: 'read',
                 entity: 'messages',
                 action: 'get',
@@ -415,10 +413,9 @@ export async function patchMessageInDb(
                     (base as { hlc?: string }).hlc ??
                     generateHLC(),
             };
-            await dbTry(
+            await dbRequired(
                 () => db.messages.put(fresh),
-                { op: 'write', entity: 'messages', action: 'upsert' },
-                { rethrow: true }
+                { op: 'write', entity: 'messages', action: 'upsert' }
             );
             return fresh;
         },

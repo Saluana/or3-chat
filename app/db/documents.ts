@@ -14,7 +14,7 @@
  * - Server-side document synchronization
  */
 import { getDb, type Or3DB } from './client';
-import { dbTry } from './dbTry';
+import { dbTry, dbRequired } from './dbTry';
 import { newId, nowSec, nextClock, getWriteTxTableNames } from './util';
 import { useHooks } from '../core/hooks/useHooks';
 import type {
@@ -329,10 +329,9 @@ export async function createDocumentInDb(
     assertWritable?.();
     const prepared = await prepareDocumentCreate(input);
     const commit = () => putDocumentPostRow(db, prepared.row, false, undefined, assertWritable);
-    // The scoped caller reports its own failure; an access change is not a
-    // database error and must not produce a second, misleading notification.
+    // Scoped callers report access changes themselves, without a duplicate database notification.
     if (assertWritable) await commit();
-    else await dbTry(commit, { op: 'write', entity: 'posts', action: 'createDocument' }, { rethrow: true });
+    else await dbRequired(commit, { op: 'write', entity: 'posts', action: 'createDocument' });
     await prepared.afterCommit();
     return rowToRecord(prepared.row);
 }
@@ -415,11 +414,11 @@ export async function getDocumentInDb(
     id: string
 ): Promise<DocumentRecord | undefined> {
     const hooks = useHooks();
-    const row = await dbTry(() => db.posts.get(id), {
+    const row = await dbRequired(() => db.posts.get(id), {
         op: 'read',
         entity: 'posts',
         action: 'getDocument',
-    }, { rethrow: true });
+    });
     if (!isDocumentPost(row) || !isVisibleWorkspaceItem(row)) return undefined;
     const baseRow: DocumentRow = {
         id: row.id,
@@ -506,7 +505,7 @@ export async function listDocuments(limit = 100): Promise<DocumentRecord[]> {
  */
 export async function listDocumentFileHashes(): Promise<string[]> {
     const hashes = new Set<string>();
-    await dbTry(
+    await dbRequired(
         async () => {
             await getDb()
                 .posts.orderBy('document_reference_key')
@@ -519,8 +518,7 @@ export async function listDocumentFileHashes(): Promise<string[]> {
                     }
                 });
         },
-        { op: 'read', entity: 'posts', action: 'listDocumentFileHashes' },
-        { rethrow: true }
+        { op: 'read', entity: 'posts', action: 'listDocumentFileHashes' }
     );
     return [...hashes];
 }
@@ -597,11 +595,11 @@ export async function updateDocumentInDb(
     patch: UpdateDocumentPatch,
     expected?: Pick<DocumentRecord, 'title' | 'content'>
 ): Promise<DocumentRecord | undefined> {
-    const existing = await dbTry(() => db.posts.get(id), {
+    const existing = await dbRequired(() => db.posts.get(id), {
         op: 'read',
         entity: 'posts',
         action: 'getDocument',
-    }, { rethrow: true });
+    });
     if (!isDocumentPost(existing)) return undefined;
     if (expected && (existing.title !== expected.title
         || JSON.stringify(rowToRecord(existing).content) !== JSON.stringify(expected.content))) {
@@ -614,15 +612,14 @@ export async function updateDocumentInDb(
     // example sidebar rename) must not overwrite a newer row or recreate a
     // deleted one either. A conflict is returned as `false` rather than thrown
     // so dbTry does not report an expected race as a database failure.
-    const written = await dbTry(
+    const written = await dbRequired(
         () => putDocumentPostRow(
             db,
             prepared.row,
             false,
             async () => JSON.stringify(await db.posts.get(id)) === snapshot
         ),
-        { op: 'write', entity: 'posts', action: 'updateDocument' },
-        { rethrow: true }
+        { op: 'write', entity: 'posts', action: 'updateDocument' }
     );
     if (!written) throw new DocumentConflictError();
     await prepared.afterCommit();
@@ -736,7 +733,7 @@ export async function softDeleteDocument(id: string): Promise<void> {
 /** Soft delete in an explicitly captured workspace database. */
 export async function softDeleteDocumentInDb(db: Or3DB, id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await dbTry(() => db.posts.get(id), {
+    const existing = await dbRequired(() => db.posts.get(id), {
         op: 'read',
         entity: 'posts',
         action: 'getDocument',
@@ -781,15 +778,14 @@ export async function softDeleteDocumentInDb(db: Or3DB, id: string): Promise<voi
     // `updateDocumentInDb`, the check runs inside the write transaction and a
     // conflict is returned rather than thrown so dbTry does not report an
     // expected race as a database failure.
-    const written = await dbTry(
+    const written = await dbRequired(
         () => putDocumentPostRow(
             db,
             postRow,
             true,
             async () => JSON.stringify(await db.posts.get(id)) === snapshot
         ),
-        { op: 'write', entity: 'posts', action: 'softDeleteDocument' },
-        { rethrow: true }
+        { op: 'write', entity: 'posts', action: 'softDeleteDocument' }
     );
     if (!written) {
         throw new DocumentConflictError(
@@ -819,7 +815,7 @@ export async function hardDeleteDocument(id: string): Promise<void> {
 /** Hard delete in an explicitly captured workspace database. */
 export async function hardDeleteDocumentInDb(db: Or3DB, id: string): Promise<void> {
     const hooks = useHooks();
-    const existing = await dbTry(() => db.posts.get(id), {
+    const existing = await dbRequired(() => db.posts.get(id), {
         op: 'read',
         entity: 'posts',
         action: 'getDocument',
@@ -842,10 +838,9 @@ export async function hardDeleteDocumentInDb(db: Or3DB, id: string): Promise<voi
         tableName: DOCUMENT_TABLE,
     };
     await hooks.doAction('db.documents.delete:action:hard:before', payload);
-    await dbTry(
+    await dbRequired(
         () => deleteDocumentPostRow(db, id),
-        { op: 'write', entity: 'posts', action: 'hardDeleteDocument' },
-        { rethrow: true }
+        { op: 'write', entity: 'posts', action: 'hardDeleteDocument' }
     );
     await hooks.doAction('db.documents.delete:action:hard:after', payload);
 }

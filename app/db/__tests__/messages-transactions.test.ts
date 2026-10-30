@@ -41,6 +41,7 @@ import { pluginOk } from '@or3/plugin-sdk';
 import { makeAssistantPersister, startForegroundGenerationHeartbeat } from '~/utils/chat/useAi-internal/persistence';
 import {
     appendMessage,
+    upsertMessage,
     copyMessage,
     insertMessageAfter,
     messagesByThread,
@@ -115,6 +116,18 @@ describe('message transaction and ordering contracts', () => {
             db.close();
             await db.delete();
         }
+    });
+
+    it('aborts an upsert when the authoritative transaction read fails', async () => {
+        const db = testState.db!;
+        const original = makeMessage('read-failure', 'thread', 1, { clock: 8 });
+        await db.messages.put(original);
+        const get = vi.spyOn(db.messages, 'get');
+        get.mockImplementationOnce(() => Promise.resolve(original) as never);
+        get.mockImplementationOnce(() => Promise.reject(new Error('read unavailable')) as never);
+        await expect(upsertMessage({ ...original, clock: 0 })).rejects.toThrow('read unavailable');
+        get.mockRestore();
+        expect((await db.messages.get(original.id))?.clock).toBe(8);
     });
 
     it('finishes admitted card saves on the original thread while rejecting new stale actions', async () => {

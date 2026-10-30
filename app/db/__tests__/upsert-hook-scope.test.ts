@@ -14,10 +14,6 @@ vi.mock('../../core/hooks/useHooks', () => ({
     }),
 }));
 
-vi.mock('../dbTry', () => ({
-    dbTry: async <T>(fn: () => T | Promise<T>) => fn(),
-}));
-
 import { patchMessageInDb, upsertMessageInDb } from '../messages';
 
 function makeDb(existing: any) {

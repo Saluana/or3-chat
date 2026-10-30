@@ -20,7 +20,7 @@ export function createHistoryActionRegistry<TDocument, TAction extends HistoryAc
 
     return {
         register(item: TAction) {
-            registry.register(item);
+            return registry.register(item);
         },
         unregister(id: string) {
             registry.unregister(id);

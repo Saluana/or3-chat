@@ -541,6 +541,16 @@ describe('OutboxManager', () => {
         ).toBe(false);
     });
 
+    it('does not classify an unstructured provider message as a permanent failure', async () => {
+        const pendingOp = createPendingOp({ id: 'unstructured' });
+        const pendingOps = createPendingOpsTable([pendingOp]);
+        const provider = new SpyProvider();
+        provider.push = vi.fn(async () => ({ results: [{ opId: pendingOp.stamp.opId, success: false, error: 'Value is too large' }], serverVersion: 0 }));
+        const outbox = new OutboxManager(createMockDb({ pending_ops: pendingOps }) as any, provider, { workspaceId: 'workspace-1' });
+        await outbox.flush();
+        expect(pendingOps.__rows.get('unstructured')?.status).toBe('retry_wait');
+    });
+
     it('treats payload-too-large errors as permanent failures', async () => {
         const pendingOp = createPendingOp({
             id: 'pending-oversized',
@@ -559,7 +569,8 @@ describe('OutboxManager', () => {
                 {
                     opId: 'op-oversized',
                     success: false,
-                    error: 'Payload too large for messages: exceeds 65536 bytes',
+                    error: 'payload rejected',
+                    errorCode: 'OVERSIZED' as const,
                 },
             ],
             serverVersion: 0,
@@ -887,7 +898,17 @@ describe('OutboxManager', () => {
         expect(pendingOps.__rows.size).toBe(0);
     });
 
-    it('binary-splits a whole-request 413 down to single ops', async () => {
+    it('marks a single operation rejected with HTTP 413 permanent', async () => {
+        const op = createPendingOp({ id: 'single-413' });
+        const pendingOps = createPendingOpsTable([op]);
+        const provider = new SpyProvider();
+        provider.push = vi.fn(async () => { throw Object.assign(new Error('rejected'), { statusCode: 413 }); });
+        const outbox = new OutboxManager(createMockDb({ pending_ops: pendingOps }) as any, provider, { workspaceId: 'workspace-1' });
+        await outbox.flush();
+        expect(pendingOps.__rows.get(op.id)?.status).toBe('failed_permanent');
+    });
+
+    it.each([400, 413, 422])('binary-splits a whole-request %i down to single ops', async (statusCode) => {
         const ops = [0, 1].map((index) =>
             createPendingOp({
                 id: `pending-split-${index}`,
@@ -906,7 +927,7 @@ describe('OutboxManager', () => {
         provider.push = vi.fn(async (batch: PushBatch) => {
             if (batch.ops.length > 1) {
                 const err = new Error('Payload too large') as Error & { statusCode: number };
-                err.statusCode = 413;
+                err.statusCode = statusCode;
                 throw err;
             }
             return {

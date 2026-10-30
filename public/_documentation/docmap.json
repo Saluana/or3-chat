@@ -161,7 +161,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 2,
-                    "summary": "Workspace-safe writes, atomic sync and tombstone scopes, hooks outside transactions, retained tool chunks across message transfers, safe UI errors, deletion, and upgrades."
+                    "summary": "Workspace-safe writes, atomic sync and tombstone scopes, hooks outside transactions, retained tool chunks across message transfers, explicit database failure policies, safe UI errors, deletion, and upgrades."
                 },
                 {
                     "name": "threads.md",
@@ -305,7 +305,7 @@
                     "category": "Internals",
                     "categoryOrder": 3,
                     "order": 2,
-                    "summary": "Zod helpers, IDs, clocks, transaction scopes, and dbTry error contracts."
+                    "summary": "Zod helpers, IDs, clocks, transaction scopes, and required versus best-effort database error contracts."
                 },
                 {
                     "name": "backup.md",
@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Durable snapshot replay, principal-scoped feed coverage, fenced multi-tab outboxes, indefinite outage recovery, request cancellation, bounded gateway bodies, real Chromium crash verification, foreground progress across snapshot replacement, active-database capture during route pauses, and immutable tool-result KV chunks."
+                    "summary": "Durable snapshot replay, principal-scoped feed coverage, fenced multi-tab outboxes, indefinite outage recovery, request cancellation, bounded gateway bodies, real Chromium crash verification, foreground progress across snapshot replacement, active-database capture during route pauses, immutable tool-result KV chunks, and structured provider recovery failures."
                 },
                 {
                     "name": "storage-layer.md",

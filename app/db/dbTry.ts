@@ -139,3 +139,13 @@ export async function dbTry<T>(
         return undefined;
     }
 }
+
+/** Required operations propagate the original failure after reporting it. */
+export function dbRequired<T>(fn: () => Promise<T> | T, tags: DbTryTags): Promise<T> {
+    return dbTry(fn, tags, { rethrow: true }) as Promise<T>;
+}
+
+/** Best-effort operations report failures and return undefined. */
+export function dbBestEffort<T>(fn: () => Promise<T> | T, tags: DbTryTags): Promise<T | undefined> {
+    return dbTry(fn, tags);
+}

@@ -810,7 +810,7 @@ export class OutboxManager {
 
     private isWholeRequestClientError(error: unknown): boolean {
         const status = httpStatusOf(error);
-        return status === 400 || status === 413;
+        return status === 400 || status === 413 || status === 422;
     }
 
     private async acknowledgeOp(op: PendingOp, winner?: PushWinner, serverVersion?: number): Promise<boolean> {
@@ -923,9 +923,9 @@ export class OutboxManager {
         details?: ErrorMetadata
     ): Promise<void> {
         const hooks = useHooks();
-        if (details?.code === 'ERR_RATE_LIMIT' || errorCode === 'RATE_LIMITED' || this.isRateLimitMessage(error)) {
+        if (details?.code === 'ERR_RATE_LIMIT' || errorCode === 'RATE_LIMITED') {
             const rateLimitDelayMs =
-                details?.retryAfterMs ?? this.parseRetryAfterFromMessage(error) ??
+                details?.retryAfterMs ??
                 this.config.retryDelays[0] ??
                 DEFAULT_RETRY_DELAYS[0] ??
                 250;
@@ -944,7 +944,7 @@ export class OutboxManager {
         const attempts = Math.min(op.attempts + 1, Number.MAX_SAFE_INTEGER);
 
         // Check for permanent failures that should not be retried
-        const isPermanent = this.isPermanentFailure(errorCode, error);
+        const isPermanent = this.isPermanentFailure(errorCode, details);
 
         if (isPermanent) {
             // Permanent content/admission failures remain visible until explicitly resolved
@@ -997,59 +997,15 @@ export class OutboxManager {
     /**
      * Check if an error is permanent and should not be retried
      */
-    private isPermanentFailure(errorCode?: string, error?: string): boolean {
-        // Use error code if available (preferred)
-        if (errorCode) {
-            switch (errorCode) {
-                case 'VALIDATION_ERROR':
-                case 'OVERSIZED':
-                case 'UNAUTHORIZED':
-                    return true;
-                case 'CONFLICT':
-                case 'NETWORK_ERROR':
-                case 'RATE_LIMITED':
-                case 'SERVER_ERROR':
-                case 'UNKNOWN':
-                    return false;
-                default:
-                    return false;
-            }
-        }
-
-        // Fallback to string matching for legacy/unstructured errors
-        if (!error) return false;
-
-        // Oversized document - can't be fixed without app changes
-        if (error.includes('Value is too large')) return true;
-        if (error.includes('Payload too large for')) return true;
-        if (error.includes('exceeds 65536 bytes')) return true;
-
-        // Schema validation errors - data doesn't match expected format
-        if (error.includes('does not match the schema')) return true;
-        if (error.includes('does not match validator')) return true;
-        if (error.includes('missing the required field')) return true;
-        if (error.includes('Value does not match validator')) return true;
-
-        // Server-side Zod validation rejection (push.post.ts returns 400 with this prefix)
-        // These are permanent: the payload shape is wrong and retrying won't fix it
-        if (error.includes('Invalid payload for')) return true;
-
-        // Empty payload errors - payload was captured incorrectly (HookBridge bug)
-        // These can't be fixed by retrying; the data is permanently missing
-        if (error.includes('invalid_type') && error.includes('received undefined')) return true;
-
-        return false;
+    private isPermanentFailure(errorCode?: string, details?: ErrorMetadata): boolean {
+        return errorCode === 'VALIDATION_ERROR' || errorCode === 'OVERSIZED' || errorCode === 'UNAUTHORIZED' ||
+            details?.status === 400 || details?.status === 413 || details?.status === 422;
     }
 
     private getDeferredRetryDelayMs(error: unknown): number | null {
         if (!error || typeof error !== 'object') return null;
-        const candidate = error as {
-            status?: unknown;
-            retryAfterMs?: unknown;
-            message?: unknown;
-        };
-
-        const status = typeof candidate.status === 'number' ? candidate.status : null;
+        const candidate = error as { retryAfterMs?: unknown };
+        const status = httpStatusOf(error);
         if (status === null || ![429, 502, 503, 504].includes(status)) return null;
 
         if (
@@ -1060,26 +1016,7 @@ export class OutboxManager {
             return candidate.retryAfterMs;
         }
 
-        if (typeof candidate.message === 'string') {
-            const fromMessage = this.parseRetryAfterFromMessage(candidate.message);
-            if (fromMessage !== null) return fromMessage;
-        }
-
         return this.config.retryDelays[0] ?? DEFAULT_RETRY_DELAYS[0] ?? 250;
-    }
-
-    private parseRetryAfterFromMessage(message?: string): number | null {
-        if (!message) return null;
-        const match = /retry after\s+(\d+(?:\.\d+)?)s/i.exec(message);
-        if (!match) return null;
-        const seconds = Number(match[1]);
-        if (!Number.isFinite(seconds) || seconds <= 0) return null;
-        return Math.ceil(seconds * 1000);
-    }
-
-    private isRateLimitMessage(message?: string): boolean {
-        if (!message) return false;
-        return message.toLowerCase().includes('rate limit');
     }
 
     private async releaseBatchForDeferredRetry(batch: PendingOp[], retryAfterMs: number): Promise<void> {

@@ -103,13 +103,17 @@ describe('ContributionRegistry', () => {
             'second',
         ]);
         contributions.unregisterLegacy('first');
-        contributions.registerLegacy({
+        const current = contributions.registerLegacy({
             value: { id: 'first', order: 200, label: 'new registration' },
         });
         expect(contributions.snapshot(undefined).map((value) => value.id)).toEqual([
             'second',
             'first',
         ]);
+        current.dispose();
+        contributions.registerLegacy({ value: { id: 'third', order: 200, label: 'third' } });
+        contributions.registerLegacy({ value: { id: 'first', order: 200, label: 're-registered' } });
+        expect(contributions.snapshot(undefined).map((value) => value.id)).toEqual(['second', 'third', 'first']);
     });
 
     it('removing an old owner cannot remove the current same-id generation', () => {

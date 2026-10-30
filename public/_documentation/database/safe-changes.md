@@ -44,7 +44,7 @@ Completed tool output above the inline JSON budget uses immutable chunks in the 
 
 ## Errors must affect the outcome
 
-`dbTry` reports errors and **swallows them by default**, returning undefined. An undefined result can mean a suppressed error or a legitimate missing record. When failure must roll back a transaction or fail a save, use `{ rethrow: true }` and let the caller handle it.
+`dbRequired` reports errors and rethrows the original failure; use it for saves and reads that determine a transaction’s outcome. A successful missing-record read can still return undefined. Use `dbBestEffort` only when suppressing a failure is intentional, such as a non-authoritative preview. The compatibility API `dbTry` still swallows by default and supports `{ rethrow: true }`.
 
 A closed-database error is quiet unless rethrow is requested. Quota failures receive storage guidance and are not automatically retryable. Do not clear workspace data as an automatic quota recovery step. Export a backup and let the user choose what to remove.
 

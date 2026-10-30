@@ -14,7 +14,7 @@
  */
 import Dexie from 'dexie';
 import { getDb, type Or3DB } from './client';
-import { dbTry } from './dbTry';
+import { dbTry, dbRequired } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import { parseOrThrow, nowSec, nextClock, getWriteTxTableNames } from './util';
 import { KvCreateSchema, KvSchema, type Kv, type KvCreate } from './schema';
@@ -99,10 +99,9 @@ async function readKvRevisionState(
     targetDb: Or3DB,
     name: string
 ): Promise<{ row: Kv | undefined; clock: number }> {
-    const row = await dbTry(
+    const row = await dbRequired(
         () => targetDb.kv.where('name').equals(name).first(),
-        { op: 'read', entity: 'kv', action: 'getByName' },
-        { rethrow: true }
+        { op: 'read', entity: 'kv', action: 'getByName' }
     );
     let clock = row?.clock ?? 0;
     const hasTombstones = (Array.isArray(targetDb.tables) ? targetDb.tables : []).some(
@@ -110,10 +109,9 @@ async function readKvRevisionState(
     );
     if (hasTombstones) {
         const pk = row?.id ?? `kv:${name}`;
-        const tombstone = await dbTry(
+        const tombstone = await dbRequired(
             () => targetDb.tombstones.get(`kv:${pk}`),
-            { op: 'read', entity: 'kv', action: 'getTombstone' },
-            { rethrow: true }
+            { op: 'read', entity: 'kv', action: 'getTombstone' }
         );
         if (tombstone && tombstone.clock > clock) {
             clock = tombstone.clock;
@@ -139,10 +137,9 @@ async function readQuotaUsage(
     pending: { name: string; value: string | null | undefined }
 ): Promise<{ bytes: number; keys: number }> {
     const rows =
-        (await dbTry(
+        (await dbRequired(
             () => targetDb.kv.where('name').startsWith(quota.prefix).toArray(),
-            { op: 'read', entity: 'kv', action: 'getQuotaUsage' },
-            { rethrow: true }
+            { op: 'read', entity: 'kv', action: 'getQuotaUsage' }
         )) ?? [];
     let bytes = 0;
     let keys = 0;
@@ -207,10 +204,9 @@ export async function createKv(input: KvCreate): Promise<Kv> {
         clock: nextClock(value.clock),
     };
     await db.transaction('rw', getWriteTxTableNames(db, 'kv'), async () => {
-        await dbTry(
+        await dbRequired(
             () => db.kv.put(next),
-            { op: 'write', entity: 'kv', action: 'create' },
-            { rethrow: true }
+            { op: 'write', entity: 'kv', action: 'create' }
         );
     });
     await hooks.doAction('db.kv.create:action:after', {
@@ -247,7 +243,7 @@ export async function upsertKv(value: Kv): Promise<void> {
     });
     await db.transaction('rw', getWriteTxTableNames(db, 'kv'), async () => {
         const validated = parseOrThrow(KvSchema, filtered);
-        const existing = await dbTry(() => db.kv.get(validated.id), {
+        const existing = await dbRequired(() => db.kv.get(validated.id), {
             op: 'read',
             entity: 'kv',
             action: 'get',
@@ -256,10 +252,9 @@ export async function upsertKv(value: Kv): Promise<void> {
             ...validated,
             clock: nextClock(existing?.clock ?? validated.clock),
         };
-        await dbTry(
+        await dbRequired(
             () => db.kv.put(next),
-            { op: 'write', entity: 'kv', action: 'upsert' },
-            { rethrow: true }
+            { op: 'write', entity: 'kv', action: 'upsert' }
         );
         await hooks.doAction('db.kv.upsert:action:after', {
             entity: next,
@@ -289,7 +284,7 @@ export async function hardDeleteKv(id: string): Promise<void> {
         'rw',
         getWriteTxTableNames(db, 'kv', { includeTombstones: true }),
         async () => {
-        const existing = await dbTry(() => db.kv.get(id), {
+        const existing = await dbRequired(() => db.kv.get(id), {
             op: 'read',
             entity: 'kv',
             action: 'get',
@@ -492,10 +487,9 @@ export async function prepareKvByName(
         // cancellation that lands during the quota read must abort the
         // transaction instead of committing a write its authority died for.
         throwIfRevoked(options);
-        await dbTry(
+        await dbRequired(
             () => targetDb.kv.put(transactionEntity),
-            { op: 'write', entity: 'kv', action: 'upsertByName' },
-            { rethrow: true }
+            { op: 'write', entity: 'kv', action: 'upsertByName' }
         );
     }).then(() => committedEntity);
     return {
@@ -543,7 +537,7 @@ export async function hardDeleteKvByName(
     await ensureDbOpen(targetDb);
     throwIfRevoked(guard);
     const hooks = useHooks();
-    const existing = await dbTry(
+    const existing = await dbRequired(
         () => targetDb.kv.where('name').equals(name).first(),
         { op: 'read', entity: 'kv', action: 'getByName' }
     );
@@ -561,10 +555,9 @@ export async function hardDeleteKvByName(
                 tableName: 'kv',
             });
             throwIfRevoked(guard);
-            await dbTry(
+            await dbRequired(
                 () => targetDb.kv.delete(existing.id),
-                { op: 'write', entity: 'kv', action: 'deleteByName' },
-                { rethrow: true }
+                { op: 'write', entity: 'kv', action: 'deleteByName' }
             );
             await hooks.doAction('db.kv.deleteByName:action:hard:after', {
                 entity: existing,
@@ -645,10 +638,9 @@ export async function tombstoneKvByName(
             // a cancellation that lands during the re-read or hook must abort
             // the transaction instead of committing the delete.
             throwIfRevoked(guard);
-            await dbTry(
+            await dbRequired(
                 () => targetDb.kv.put(tombstone),
-                { op: 'write', entity: 'kv', action: 'deleteByName' },
-                { rethrow: true }
+                { op: 'write', entity: 'kv', action: 'deleteByName' }
             );
             await hooks.doAction('db.kv.deleteByName:action:hard:after', {
                 entity: current,

@@ -160,7 +160,7 @@ describe('sidebar sections contribution adapter', () => {
             { id: 'z', placement: 'main', componentIdentity: true },
             { id: 'replace', placement: 'bottom', componentIdentity: true },
         ]);
-        expect(actual.registerReturns.every((value) => value.kind === 'undefined')).toBe(
+        expect(actual.registerReturns.every((value) => value.kind === 'registration-handle')).toBe(
             true
         );
     });

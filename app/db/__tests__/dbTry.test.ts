@@ -1,6 +1,6 @@
 import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { dbTry } from '../dbTry';
+import { dbTry, dbRequired, dbBestEffort } from '../dbTry';
 import { reportError } from '~/utils/errors';
 
 vi.mock('~/utils/errors', async () => {
@@ -16,6 +16,13 @@ const mockedReportError = reportError as unknown as Mock;
 describe('dbTry', () => {
     beforeEach(() => {
         mockedReportError.mockReset();
+    });
+
+    it('distinguishes required failures from best-effort reads and missing rows', async () => {
+        const failure = new Error('disk failed');
+        await expect(dbRequired(() => { throw failure; }, { op: 'write' })).rejects.toBe(failure);
+        await expect(dbBestEffort(() => { throw failure; }, { op: 'read' })).resolves.toBeUndefined();
+        await expect(dbRequired(() => undefined, { op: 'read' })).resolves.toBeUndefined();
     });
 
     it('reports quota exceeded', async () => {

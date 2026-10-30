@@ -4,6 +4,7 @@ import { getChatJobExecution } from './types';
 import { getSyncGatewayAdapter } from "../../sync/gateway/registry";
 import type { CanonicalGenerationSnapshot } from "~~/shared/chat/background-history";
 import { readRequestUsage } from '~~/shared/chat/compaction';
+import { normalizeHistoryProviderFailure, BackgroundHistoryUnsupportedError } from '../../sync/gateway/history-errors';
 
 function historyAdapterFor(job: BackgroundJob) {
   if (!job.syncProviderId) return null;
@@ -18,11 +19,7 @@ export function assertBackgroundHistoryProvider(providerId: string): void {
     !adapter.admitChatGeneration ||
     !adapter.finalizeChatGeneration
   ) {
-    const error = new Error(
-      `Sync provider "${providerId || "unknown"}" does not support background generation history v1`,
-    );
-    error.name = "BackgroundHistoryUnsupportedError";
-    throw error;
+    throw new BackgroundHistoryUnsupportedError(providerId);
   }
 }
 
@@ -34,14 +31,20 @@ function assertHistoryContract(job: BackgroundJob) {
     !adapter.admitChatGeneration ||
     !adapter.finalizeChatGeneration
   ) {
-    throw new Error(
-      `Sync provider "${job.syncProviderId ?? "unknown"}" does not support background generation history v1`,
-    );
+    throw new BackgroundHistoryUnsupportedError(job.syncProviderId);
   }
   return adapter as typeof adapter & {
     admitChatGeneration: NonNullable<typeof adapter.admitChatGeneration>;
     finalizeChatGeneration: NonNullable<typeof adapter.finalizeChatGeneration>;
   };
+}
+
+async function callHistoryAdapter<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    throw normalizeHistoryProviderFailure(error);
+  }
 }
 
 function terminalSnapshot(
@@ -72,16 +75,16 @@ export async function reconcileBackgroundJobHistory(
   try {
     const adapter = assertHistoryContract(job);
     if (job.historyPhase === "admission_pending") {
-      await adapter.admitChatGeneration(actor, admission);
+      await callHistoryAdapter(() => adapter.admitChatGeneration(actor, admission));
       const snapshot = terminalSnapshot(job);
       if (snapshot) {
         await provider.setHistoryPhase?.(job.id, "finalization_pending", {
           from: ["admission_pending"],
         });
-        const result = await adapter.finalizeChatGeneration(actor, {
+        const result = await callHistoryAdapter(() => adapter.finalizeChatGeneration(actor, {
           admission,
           snapshot,
-        });
+        }));
         const phase =
           result.status === "committed" ? "committed" : "superseded";
         await provider.setHistoryPhase?.(job.id, phase, {
@@ -98,10 +101,10 @@ export async function reconcileBackgroundJobHistory(
     if (job.historyPhase === "finalization_pending") {
       const snapshot = terminalSnapshot(job);
       if (!snapshot) return "unchanged";
-      const result = await adapter.finalizeChatGeneration(actor, {
+      const result = await callHistoryAdapter(() => adapter.finalizeChatGeneration(actor, {
         admission,
         snapshot,
-      });
+      }));
       const phase = result.status === "committed" ? "committed" : "superseded";
       await provider.setHistoryPhase?.(job.id, phase, {
         from: ["finalization_pending"],
@@ -110,14 +113,8 @@ export async function reconcileBackgroundJobHistory(
     }
     return "unchanged";
   } catch (error) {
-    // Provider/network faults remain retryable. Only an explicit contract or
-    // validation failure is blocked; transient delivery stays pending.
-    const message = error instanceof Error ? error.message : String(error);
-    if (
-      /does not support|invalid|forbidden|unauthorized|conflict|superseded/i.test(
-        message,
-      )
-    ) {
+    if (error instanceof BackgroundHistoryUnsupportedError ||
+        (error instanceof Error && 'historyFailure' in error && error.historyFailure === 'blocked')) {
       await provider.setHistoryPhase?.(job.id, "blocked", {
         from: ["admission_pending", "finalization_pending"],
       });

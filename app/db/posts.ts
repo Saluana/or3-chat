@@ -14,7 +14,7 @@
  */
 import { getDb, type Or3DB } from './client';
 
-import { dbTry } from './dbTry';
+import { dbTry, dbRequired } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import { nowSec, parseOrThrow, nextClock, getWriteTxTableNames } from './util';
 import {
@@ -172,10 +172,9 @@ export async function createPost(input: PostCreate, scope?: PostWriteScope): Pro
     });
     scope?.assertCurrent();
     await db.transaction('rw', getWriteTxTableNames(db, 'posts'), async () => {
-        await dbTry(
+        await dbRequired(
             () => { scope?.assertCurrent(); return db.posts.put(next); },
-            { op: 'write', entity: 'posts', action: 'create' },
-            { rethrow: true }
+            { op: 'write', entity: 'posts', action: 'create' }
         );
     });
     await hooks.doAction('db.posts.create:action:after', {
@@ -217,7 +216,7 @@ export async function upsertPost(value: Post, scope?: PostWriteScope): Promise<v
     scope?.assertCurrent();
     await db.transaction('rw', getWriteTxTableNames(db, 'posts'), async () => {
         const validated = parseOrThrow(PostSchema, filtered);
-        const existing = await dbTry(() => db.posts.get(validated.id), {
+        const existing = await dbRequired(() => db.posts.get(validated.id), {
             op: 'read',
             entity: 'posts',
             action: 'get',
@@ -230,10 +229,9 @@ export async function upsertPost(value: Post, scope?: PostWriteScope): Promise<v
             entity: toPostEntity(next),
             tableName: 'posts',
         });
-        await dbTry(
+        await dbRequired(
             () => { scope?.assertCurrent(); return db.posts.put(next); },
-            { op: 'write', entity: 'posts', action: 'upsert' },
-            { rethrow: true }
+            { op: 'write', entity: 'posts', action: 'upsert' }
         );
         await hooks.doAction('db.posts.upsert:action:after', {
             entity: toPostEntity(next),
@@ -343,7 +341,7 @@ export async function softDeletePost(id: string, scope?: PostWriteScope): Promis
         'rw',
         getWriteTxTableNames(db, 'posts', { includeTombstones: true }),
         async () => {
-        const p = await dbTry(() => db.posts.get(id), {
+        const p = await dbRequired(() => db.posts.get(id), {
             op: 'read',
             entity: 'posts',
             action: 'get',
@@ -391,7 +389,7 @@ export async function hardDeletePost(id: string): Promise<void> {
         'rw',
         getWriteTxTableNames(db, 'posts', { includeTombstones: true }),
         async () => {
-        const existing = await dbTry(() => db.posts.get(id), {
+        const existing = await dbRequired(() => db.posts.get(id), {
             op: 'read',
             entity: 'posts',
             action: 'get',
