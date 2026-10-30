@@ -338,8 +338,10 @@ if (import.meta.main) {
     const limits = {
         totalJavascriptRawBytes: positiveNumber(
             process.env.OR3_PERF_MAX_TOTAL_JS_BYTES,
-            // Measured 13,858,208 raw bytes with the highlight worker.
-            13_900_000
+            // Same-host builds measured 13,899,039 bytes at 0.1.93 and
+            // 13,910,387 after delegation and recovery changes. Allow the
+            // measured feature cost while keeping the other limits unchanged.
+            13_915_000
         ),
         totalJavascriptGzipBytes: positiveNumber(
             process.env.OR3_PERF_MAX_TOTAL_JS_GZIP_BYTES,
