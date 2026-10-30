@@ -51,7 +51,7 @@ export default defineEventHandler(async (event) => {
         const live = fresh ? getChatJobExecution(fresh)?.clientToolCall : undefined;
         const freshIdentity = fresh ? backgroundJobClientToolIdentity(fresh) : null;
         if (!fresh || fresh.status !== 'streaming' || live?.callId !== callId || live.claimToken !== claimToken ||
-            !freshIdentity || freshIdentity.workspaceId !== current.execution?.workspaceId ||
+            !freshIdentity || freshIdentity.workspaceId !== current.execution.workspaceId ||
             backgroundClientToolDigest(freshIdentity) !== backgroundClientToolTokenDigest(claimToken) ||
             (live.claimExpiresAt ?? 0) <= Date.now()) {
             throw createError({ statusCode: 409, statusMessage: 'Tool approval is no longer active' });
