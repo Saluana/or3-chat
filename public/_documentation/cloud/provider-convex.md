@@ -18,6 +18,11 @@ History delivery and cleanup batches are bounded by bytes as well as rows, so
 large retained snapshots do not prevent recovery. Source scaffolds require
 Convex SDK 1.31.7 or newer for the size-accounting helper.
 
+Provider **0.0.26** and its matching deployed backend return structured errors
+for rejected background history operations. Update and deploy its backend
+templates together with the provider; upgrading the package alone does not
+change an existing Convex deployment.
+
 Provider **0.0.24** and its matching backend derive missing message ordering
 keys during background admission. Earlier backends can reject pending assistant
 messages with `Object is missing the required field order_key`, leaving the

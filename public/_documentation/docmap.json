@@ -674,7 +674,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 9,
-                    "summary": "SQLite auth/sync, owner-bound notification deletion, atomic native/D1 Files and Trash capability admission, bounded snapshots, exact commit retries, quotas, maintenance controls and D1 support limits."
+                    "summary": "SQLite auth/sync, structured background recovery errors, qualified backup inspection, owner-bound notification deletion, atomic native/D1 Files and Trash admission, bounded snapshots, exact commit retries, quotas, maintenance controls and D1 support limits."
                 },
                 {
                     "name": "provider-fs.md",
@@ -701,7 +701,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 12,
-                    "summary": "Convex setup, strict canonical sync admission, truthful winner/replay receipts, legacy snapshot recovery, account-scoped cursors, bounded retention, and explicit file restoration after deletion."
+                    "summary": "Convex setup, matching backend template deployment, structured background recovery errors, strict canonical sync admission, truthful winner/replay receipts, legacy snapshot recovery, account-scoped cursors, bounded retention, and explicit file restoration after deletion."
                 },
                 {
                     "name": "provider-s3.md",

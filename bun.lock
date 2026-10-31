@@ -40,10 +40,10 @@
         "nuxt": "4.6.2",
         "or3-provider-basic-auth": "0.0.17",
         "or3-provider-clerk": "0.0.11",
-        "or3-provider-convex": "0.0.24",
+        "or3-provider-convex": "0.0.26",
         "or3-provider-fs": "0.0.15",
         "or3-provider-s3": "0.0.14",
-        "or3-provider-sqlite": "0.0.22",
+        "or3-provider-sqlite": "0.0.24",
         "or3-scroll": "0.1.6",
         "pathe": "2.0.3",
         "pdfjs-dist": "^6.4.299",
@@ -2315,13 +2315,13 @@
 
     "or3-provider-clerk": ["or3-provider-clerk@0.0.11", "", { "dependencies": { "@clerk/nuxt": "^1.13.34" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-FczlY9+3kw79oJlkGadI9BWa3BQaqXP6c7kZ1HRIS17dsYvUBWDvCXvosLYTPVSvW8GJvLC/odKmmC5zC6wkfw=="],
 
-    "or3-provider-convex": ["or3-provider-convex@0.0.24", "", { "dependencies": { "convex": "^1.48.0", "convex-nuxt": "0.1.5", "convex-vue": "^0.1.4" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0", "zod": "^3.0.0 || ^4.0.0" }, "bin": { "or3-provider-convex": "scripts/init.mjs" } }, "sha512-WeJzhd0EB1NSE3FwW8qXeqyJ+sbgyklllmG8qJRoGrBa/2XpH2/ryvv0/SVfJtmkUnNXAvZkQp13X2mEljSf9w=="],
+    "or3-provider-convex": ["or3-provider-convex@0.0.26", "", { "dependencies": { "convex": "^1.48.0", "convex-nuxt": "0.1.5", "convex-vue": "^0.1.4" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0", "zod": "^3.0.0 || ^4.0.0" }, "bin": { "or3-provider-convex": "scripts/init.mjs" } }, "sha512-JFwObcMNS4m6rVJV/sadkrE4Puky/skjkfvQWQnfQizCy3IMVaCP7maIe+mp9d2cAANeruPF3oV0qVb4CTeJLA=="],
 
     "or3-provider-fs": ["or3-provider-fs@0.0.15", "", { "dependencies": { "jsonwebtoken": "^9.0.3" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-kxo9Tb2x0OUrfzcc5Zhlm4Zfg+ro3rrMPV7dTK/kCTLPhw8l2rr3yP6jHJ2QeKuFu7ImrggXtKYZTsar9lIxFQ=="],
 
     "or3-provider-s3": ["or3-provider-s3@0.0.14", "", { "dependencies": { "@aws-sdk/client-s3": "^3.1156.0", "@aws-sdk/s3-request-presigner": "^3.1156.0" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-8mIDk9gwbeKkdJmdPGbllfPwqNL+OPrhY3OV135a9TNqgAjizEQqvrWUWkNKkRdB3HrBccF4AGz3b5oJyxTbVA=="],
 
-    "or3-provider-sqlite": ["or3-provider-sqlite@0.0.22", "", { "dependencies": { "kysely": "^0.28.18" }, "optionalDependencies": { "better-sqlite3": "^13.0.3", "libsql": "^0.5.29" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-H7KdDnv8p9xiz9+Ec2LtwQmR9LEU5MlT3pG2TZW0soKZ1rMxHeWzpZiZ9svcrSV1VTRsM4lvZgOHwltWF/QCog=="],
+    "or3-provider-sqlite": ["or3-provider-sqlite@0.0.24", "", { "dependencies": { "kysely": "^0.28.18" }, "optionalDependencies": { "better-sqlite3": "^13.0.3", "libsql": "^0.5.29" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-VXn0NottGHWCKjrhb3f7IytG5dJEC07X9eLeb3sr3HwoVU8rrwyF09yPqZ1lqjTteUHYSJLw5O2Xkc65rY4UBw=="],
 
     "or3-scroll": ["or3-scroll@0.1.6", "", { "peerDependencies": { "vue": "^3.3.0" } }, "sha512-6ypwWXWTiavfYIimgHajoWi7cQbTpmipsioX4/V+uBcAtDiNZ+j6u2sOy0XjhrZ5XRr0ySzCqhWRLbg906VQug=="],
 
