@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "7b16278567598a389b6140d32a65093309867ad9db0c8596d8b35d6558150b29",
+      "apiSha256": "2076df921fcb8e321a26cf8b9c27162ccafaccefe9fc23a4355ff97fe3898efa",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -6735,7 +6735,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAi.ts",
-                "line": 217,
+                "line": 244,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[] } = {}\n);"
               }
@@ -6744,7 +6744,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAi.ts",
-              "line": 217,
+              "line": 244,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[] } = {}\n);"
             }
@@ -11580,7 +11580,7 @@
     },
     {
       "source": "app/core/hooks/hooks.ts",
-      "apiSha256": "b7caf2922462443be5792788316945961758914d3b477327c4076b2ff74e3c83",
+      "apiSha256": "5a7c046a17235e1c2bd3d1bcaa51c7236c78507311c7a4c263d4628345b602f4",
       "runtime": "client",
       "publicPaths": [
         "~/core/hooks",
@@ -11629,7 +11629,7 @@
               "source": "shared/hooks/hook-engine-core.ts",
               "line": 92,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface HookEngine {\n    addFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    applyFilters: <T>(name: string, value: T, ...args: unknown[]) => Promise<T>;\n    applyFiltersSync: <T>(name: string, value: T, ...args: unknown[]) => T;\n\n    addAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    doAction: (name: string, ...args: unknown[]) => Promise<void>;\n    doActionSync: (name: string, ...args: unknown[]) => void;\n\n    hasFilter: (name?: string, fn?: HookFn) => boolean | number;\n    /** Read-only ownership receipt; dispatching a filter is never part of validation. */\n    captureFilterChain: (names: readonly string[]) => () => boolean;\n    hasAction: (name?: string, fn?: HookFn) => boolean | number;\n    removeAllCallbacks: (priority?: number) => void;\n    currentPriority: () => number | false;\n\n    onceAction: (name: string, fn: HookFn, priority?: number) => () => void;\n    on: (name: string, fn: HookFn, opts?: OnOptions) => () => void;\n    off: (disposer: () => void) => void;\n\n    _diagnostics: {\n        timings: Record<string, number[]>;\n        errors: Record<string, number>;\n        callbacks(actionOrFilter?: HookKind): number;\n    };\n}"
+              "text": "export interface HookEngine {\n    addFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    applyFilters: <T>(name: string, value: T, ...args: unknown[]) => Promise<T>;\n    applyFiltersSync: <T>(name: string, value: T, ...args: unknown[]) => T;\n\n    addAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    doAction: (name: string, ...args: unknown[]) => Promise<void>;\n    doActionSync: (name: string, ...args: unknown[]) => void;\n\n    hasFilter: (name?: string, fn?: HookFn) => boolean | number;\n    /** True only when this callback is the sole matching filter, including wildcards. */\n    hasOnlyFilter: (name: string, fn: HookFn) => boolean;\n    /** Read-only ownership receipt; dispatching a filter is never part of validation. */\n    captureFilterChain: (names: readonly string[]) => () => boolean;\n    hasAction: (name?: string, fn?: HookFn) => boolean | number;\n    removeAllCallbacks: (priority?: number) => void;\n    currentPriority: () => number | false;\n\n    onceAction: (name: string, fn: HookFn, priority?: number) => () => void;\n    on: (name: string, fn: HookFn, opts?: OnOptions) => () => void;\n    off: (disposer: () => void) => void;\n\n    _diagnostics: {\n        timings: Record<string, number[]>;\n        errors: Record<string, number>;\n        callbacks(actionOrFilter?: HookKind): number;\n    };\n}"
             }
           ]
         },
@@ -11693,7 +11693,7 @@
     },
     {
       "source": "app/core/hooks/typed-hooks.ts",
-      "apiSha256": "7adabef0a8820cdb36592b1c9da22691c262f101172de6347ae9e60a9899543a",
+      "apiSha256": "96d50de50dc0a0bfc15b0d84847dc1fc99e52bf7989c16fac37b1e2c149e09de",
       "runtime": "client",
       "publicPaths": [
         "~/core/hooks/typed-hooks"
@@ -11716,7 +11716,7 @@
               "resolvedReturnType": "TypedHookEngine",
               "declaration": {
                 "source": "app/core/hooks/typed-hooks.ts",
-                "line": 170,
+                "line": 171,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createTypedHookEngine(engine: HookEngine): TypedHookEngine;"
               }
@@ -11725,7 +11725,7 @@
           "declarations": [
             {
               "source": "app/core/hooks/typed-hooks.ts",
-              "line": 170,
+              "line": 171,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createTypedHookEngine(engine: HookEngine): TypedHookEngine;"
             }
@@ -11741,7 +11741,7 @@
               "source": "app/core/hooks/typed-hooks.ts",
               "line": 41,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface TypedHookEngine {\n    // Actions (registration)\n    /**\n     * Register an action callback for a known hook name.\n     * await hooks.doAction('ui.pane.blur:action', {\n     *   pane,\n     *   index: 0,\n     * });\n     * @example\n     * hooks.addAction('ai.chat.send:action:before', (ctx) => {\n     *   console.log(ctx.modelId);\n     * });\n     */\n    addAction<K extends ActionHookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        priority?: number\n    ): void;\n\n    removeAction<K extends ActionHookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        priority?: number\n    ): void;\n\n    // Actions (execution)\n    /**\n     * Execute an action asynchronously.\n     * @example\n     * await hooks.doAction('ui.pane.blur:action', {\n     *   pane,\n     *   index: 0,\n     * });\n     */\n    doAction<K extends ActionHookName>(\n        name: K,\n        ...args: InferHookParams<K>\n    ): Promise<void>;\n\n    doActionSync<K extends ActionHookName>(\n        name: K,\n        ...args: InferHookParams<K>\n    ): void;\n\n    // Filters (registration)\n    /**\n     * Register a filter callback. Must return the value type.\n     * @example\n     * hooks.addFilter('ui.chat.message:filter:outgoing', (value) => value.trim());\n     */\n    addFilter<K extends FilterHookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        priority?: number\n    ): void;\n\n    removeFilter<K extends FilterHookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        priority?: number\n    ): void;\n\n    // Filters (execution)\n    /**\n     * Apply filters asynchronously to a value.\n     * @example\n     * const text = await hooks.applyFilters('ui.chat.message:filter:outgoing', input);\n     */\n    applyFilters<K extends FilterHookName>(\n        name: K,\n        value: InferHookParams<K>[0],\n        ...args: Tail<InferHookParams<K>>\n    ): Promise<InferHookReturn<K>>;\n\n    applyFiltersSync<K extends FilterHookName>(\n        name: K,\n        value: InferHookParams<K>[0],\n        ...args: Tail<InferHookParams<K>>\n    ): InferHookReturn<K>;\n\n    // Unified API (typed by hook name)\n    /**\n     * Register either an action or a filter based on the hook name.\n     * @example\n     * const off = hooks.on('files.attach:filter:input', (payload) => payload, { kind: 'filter' });\n     */\n    on<K extends HookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        opts?: OnOptions & {\n            // infer sensible default kind when provided\n            kind?: K extends ActionHookName\n                ? 'action'\n                : K extends FilterHookName\n                ? 'filter'\n                : 'action' | 'filter';\n        }\n    ): () => void;\n\n    off(disposer: () => void): void;\n\n    onceAction<K extends ActionHookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        priority?: number\n    ): () => void;\n\n    // Diagnostics + passthrough\n    hasAction<K extends ActionHookName>(\n        name?: K,\n        fn?: InferHookCallback<K>\n    ): boolean | number;\n    hasFilter<K extends FilterHookName>(\n        name?: K,\n        fn?: InferHookCallback<K>\n    ): boolean | number;\n    removeAllCallbacks(priority?: number): void;\n    captureFilterChain(names: readonly string[]): () => boolean;\n    currentPriority(): number | false;\n\n    readonly _engine: HookEngine;\n    readonly _diagnostics: HookEngine['_diagnostics'];\n}"
+              "text": "export interface TypedHookEngine {\n    // Actions (registration)\n    /**\n     * Register an action callback for a known hook name.\n     * await hooks.doAction('ui.pane.blur:action', {\n     *   pane,\n     *   index: 0,\n     * });\n     * @example\n     * hooks.addAction('ai.chat.send:action:before', (ctx) => {\n     *   console.log(ctx.modelId);\n     * });\n     */\n    addAction<K extends ActionHookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        priority?: number\n    ): void;\n\n    removeAction<K extends ActionHookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        priority?: number\n    ): void;\n\n    // Actions (execution)\n    /**\n     * Execute an action asynchronously.\n     * @example\n     * await hooks.doAction('ui.pane.blur:action', {\n     *   pane,\n     *   index: 0,\n     * });\n     */\n    doAction<K extends ActionHookName>(\n        name: K,\n        ...args: InferHookParams<K>\n    ): Promise<void>;\n\n    doActionSync<K extends ActionHookName>(\n        name: K,\n        ...args: InferHookParams<K>\n    ): void;\n\n    // Filters (registration)\n    /**\n     * Register a filter callback. Must return the value type.\n     * @example\n     * hooks.addFilter('ui.chat.message:filter:outgoing', (value) => value.trim());\n     */\n    addFilter<K extends FilterHookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        priority?: number\n    ): void;\n\n    removeFilter<K extends FilterHookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        priority?: number\n    ): void;\n\n    // Filters (execution)\n    /**\n     * Apply filters asynchronously to a value.\n     * @example\n     * const text = await hooks.applyFilters('ui.chat.message:filter:outgoing', input);\n     */\n    applyFilters<K extends FilterHookName>(\n        name: K,\n        value: InferHookParams<K>[0],\n        ...args: Tail<InferHookParams<K>>\n    ): Promise<InferHookReturn<K>>;\n\n    applyFiltersSync<K extends FilterHookName>(\n        name: K,\n        value: InferHookParams<K>[0],\n        ...args: Tail<InferHookParams<K>>\n    ): InferHookReturn<K>;\n\n    // Unified API (typed by hook name)\n    /**\n     * Register either an action or a filter based on the hook name.\n     * @example\n     * const off = hooks.on('files.attach:filter:input', (payload) => payload, { kind: 'filter' });\n     */\n    on<K extends HookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        opts?: OnOptions & {\n            // infer sensible default kind when provided\n            kind?: K extends ActionHookName\n                ? 'action'\n                : K extends FilterHookName\n                ? 'filter'\n                : 'action' | 'filter';\n        }\n    ): () => void;\n\n    off(disposer: () => void): void;\n\n    onceAction<K extends ActionHookName>(\n        name: K,\n        callback: InferHookCallback<K>,\n        priority?: number\n    ): () => void;\n\n    // Diagnostics + passthrough\n    hasAction<K extends ActionHookName>(\n        name?: K,\n        fn?: InferHookCallback<K>\n    ): boolean | number;\n    hasFilter<K extends FilterHookName>(\n        name?: K,\n        fn?: InferHookCallback<K>\n    ): boolean | number;\n    hasOnlyFilter<K extends FilterHookName>(name: K, fn: InferHookCallback<K>): boolean;\n    removeAllCallbacks(priority?: number): void;\n    captureFilterChain(names: readonly string[]): () => boolean;\n    currentPriority(): number | false;\n\n    readonly _engine: HookEngine;\n    readonly _diagnostics: HookEngine['_diagnostics'];\n}"
             }
           ]
         }
@@ -12289,7 +12289,7 @@
     },
     {
       "source": "server/hooks/hook-engine.ts",
-      "apiSha256": "463176f1462341d748209bef68bbca0956b8e74dbbffe720c665b19c9be3e2e2",
+      "apiSha256": "18b1999c0367541a77d143e407e11a1a6ce4e44e9c701e3e833791db88c022ff",
       "runtime": "server",
       "publicPaths": [
         "~~/server/hooks/hook-engine"
@@ -12336,7 +12336,7 @@
               "source": "shared/hooks/hook-engine-core.ts",
               "line": 92,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface HookEngine {\n    addFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    applyFilters: <T>(name: string, value: T, ...args: unknown[]) => Promise<T>;\n    applyFiltersSync: <T>(name: string, value: T, ...args: unknown[]) => T;\n\n    addAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    doAction: (name: string, ...args: unknown[]) => Promise<void>;\n    doActionSync: (name: string, ...args: unknown[]) => void;\n\n    hasFilter: (name?: string, fn?: HookFn) => boolean | number;\n    /** Read-only ownership receipt; dispatching a filter is never part of validation. */\n    captureFilterChain: (names: readonly string[]) => () => boolean;\n    hasAction: (name?: string, fn?: HookFn) => boolean | number;\n    removeAllCallbacks: (priority?: number) => void;\n    currentPriority: () => number | false;\n\n    onceAction: (name: string, fn: HookFn, priority?: number) => () => void;\n    on: (name: string, fn: HookFn, opts?: OnOptions) => () => void;\n    off: (disposer: () => void) => void;\n\n    _diagnostics: {\n        timings: Record<string, number[]>;\n        errors: Record<string, number>;\n        callbacks(actionOrFilter?: HookKind): number;\n    };\n}"
+              "text": "export interface HookEngine {\n    addFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    applyFilters: <T>(name: string, value: T, ...args: unknown[]) => Promise<T>;\n    applyFiltersSync: <T>(name: string, value: T, ...args: unknown[]) => T;\n\n    addAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    doAction: (name: string, ...args: unknown[]) => Promise<void>;\n    doActionSync: (name: string, ...args: unknown[]) => void;\n\n    hasFilter: (name?: string, fn?: HookFn) => boolean | number;\n    /** True only when this callback is the sole matching filter, including wildcards. */\n    hasOnlyFilter: (name: string, fn: HookFn) => boolean;\n    /** Read-only ownership receipt; dispatching a filter is never part of validation. */\n    captureFilterChain: (names: readonly string[]) => () => boolean;\n    hasAction: (name?: string, fn?: HookFn) => boolean | number;\n    removeAllCallbacks: (priority?: number) => void;\n    currentPriority: () => number | false;\n\n    onceAction: (name: string, fn: HookFn, priority?: number) => () => void;\n    on: (name: string, fn: HookFn, opts?: OnOptions) => () => void;\n    off: (disposer: () => void) => void;\n\n    _diagnostics: {\n        timings: Record<string, number[]>;\n        errors: Record<string, number>;\n        callbacks(actionOrFilter?: HookKind): number;\n    };\n}"
             }
           ]
         },
@@ -12564,7 +12564,7 @@
     },
     {
       "source": "server/utils/chat/tool-registry.ts",
-      "apiSha256": "35c452af105706523f03251ee3cc2f7b86ca56e7b03094aa6b7fb34851e826d2",
+      "apiSha256": "cf245eae21567c61606ce20656c943745809a6e6f0da5cb40a562e45c03d6d9d",
       "runtime": "server",
       "publicPaths": [
         "~~/server/utils/chat/tool-registry"
@@ -12585,7 +12585,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 36,
+              "line": 37,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ContextualToolHandler<TArgs = Record<string, unknown>> = (\n    args: TArgs,\n    context: ToolExecutionContext\n) => Promise<string> | string;"
             }
@@ -12597,23 +12597,23 @@
           "nuxtAutoImport": false,
           "signatures": [
             {
-              "signature": "(toolName: string, argsJson: string, context?: ToolExecutionContext, admission?: ToolExecutionAdmission): Promise<{ result: string | null; toolName: string; error?: string; timedOut: boolean; runtime?: ToolRuntime; }>",
+              "signature": "(toolName: string, argsJson: string, context?: ToolExecutionContext, admission?: ToolExecutionAdmission, host?: { modelCatalog?: (signal: AbortSignal) => Promise<DelegationCatalogModel[]>; }): Promise<{ result: string | null; toolName: string; error?: string; timedOut: boolean; runtime?: ToolRuntime; }>",
               "declaredReturnType": "Promise<{\n    result: string | null;\n    toolName: string;\n    error?: string;\n    timedOut: boolean;\n    runtime?: ToolRuntime;\n}>",
               "resolvedReturnType": "Promise<{ result: string | null; toolName: string; error?: string; timedOut: boolean; runtime?: ToolRuntime; }>",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 176,
+                "line": 177,
                 "syntaxKind": "FunctionDeclaration",
-                "text": "export async function executeServerTool(\n    toolName: string,\n    argsJson: string,\n    context?: ToolExecutionContext,\n    admission?: ToolExecutionAdmission\n): Promise<{\n    result: string | null;\n    toolName: string;\n    error?: string;\n    timedOut: boolean;\n    runtime?: ToolRuntime;\n}>;"
+                "text": "export async function executeServerTool(\n    toolName: string,\n    argsJson: string,\n    context?: ToolExecutionContext,\n    admission?: ToolExecutionAdmission,\n    host?: { modelCatalog?: (signal: AbortSignal) => Promise<DelegationCatalogModel[]> }\n): Promise<{\n    result: string | null;\n    toolName: string;\n    error?: string;\n    timedOut: boolean;\n    runtime?: ToolRuntime;\n}>;"
               }
             }
           ],
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 176,
+              "line": 177,
               "syntaxKind": "FunctionDeclaration",
-              "text": "export async function executeServerTool(\n    toolName: string,\n    argsJson: string,\n    context?: ToolExecutionContext,\n    admission?: ToolExecutionAdmission\n): Promise<{\n    result: string | null;\n    toolName: string;\n    error?: string;\n    timedOut: boolean;\n    runtime?: ToolRuntime;\n}>;"
+              "text": "export async function executeServerTool(\n    toolName: string,\n    argsJson: string,\n    context?: ToolExecutionContext,\n    admission?: ToolExecutionAdmission,\n    host?: { modelCatalog?: (signal: AbortSignal) => Promise<DelegationCatalogModel[]> }\n): Promise<{\n    result: string | null;\n    toolName: string;\n    error?: string;\n    timedOut: boolean;\n    runtime?: ToolRuntime;\n}>;"
             }
           ]
         },
@@ -12628,7 +12628,7 @@
               "resolvedReturnType": "RegisteredServerTool | undefined",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 139,
+                "line": 140,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getServerTool(name: string): RegisteredServerTool | undefined;"
               }
@@ -12637,7 +12637,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 139,
+              "line": 140,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getServerTool(name: string): RegisteredServerTool | undefined;"
             }
@@ -12651,7 +12651,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 33,
+              "line": 34,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type LegacyToolHandler<TArgs = Record<string, unknown>> = (\n    args: TArgs\n) => Promise<string> | string;"
             }
@@ -12668,7 +12668,7 @@
               "resolvedReturnType": "RegisteredServerTool[]",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 143,
+                "line": 144,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listServerTools(): RegisteredServerTool[];"
               }
@@ -12677,7 +12677,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 143,
+              "line": 144,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listServerTools(): RegisteredServerTool[];"
             }
@@ -12691,7 +12691,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 44,
+              "line": 45,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisteredServerTool {\n    definition: ToolDefinition;\n    handler: ContextualToolHandler<Record<string, unknown>>;\n    runtime: ToolRuntime;\n    timeoutMs: number;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    owner: symbol;\n}"
             }
@@ -12708,7 +12708,7 @@
               "resolvedReturnType": "() => boolean",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 93,
+                "line": 94,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerServerTool<\n    TArgs extends Record<string, unknown> = Record<string, unknown>\n>(\n    definition: ToolDefinition,\n    handler: ToolHandler<TArgs>,\n    opts: RegisterServerToolOptions = {}\n): () => boolean;"
               }
@@ -12717,7 +12717,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 93,
+              "line": 94,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerServerTool<\n    TArgs extends Record<string, unknown> = Record<string, unknown>\n>(\n    definition: ToolDefinition,\n    handler: ToolHandler<TArgs>,\n    opts: RegisterServerToolOptions = {}\n): () => boolean;"
             }
@@ -12731,7 +12731,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 53,
+              "line": 54,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisterServerToolOptions {\n    runtime?: ToolRuntime;\n    timeoutMs?: number;\n    override?: boolean;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n}"
             }
@@ -12745,7 +12745,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 42,
+              "line": 43,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolHandler<TArgs = Record<string, unknown>> = ContextualToolHandler<TArgs>;"
             }
@@ -12762,7 +12762,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 134,
+                "line": 135,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterServerTool(name: string): void;"
               }
@@ -12771,7 +12771,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 134,
+              "line": 135,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterServerTool(name: string): void;"
             }
@@ -12788,7 +12788,7 @@
               "resolvedReturnType": "{ valid: true; } | { valid: false; error: string; }",
               "declaration": {
                 "source": "server/utils/chat/tool-registry.ts",
-                "line": 148,
+                "line": 149,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function validateServerToolRequest(\n    tools: unknown,\n    runtimeHints: unknown,\n    requireServerMatches: boolean\n): { valid: true } | { valid: false; error: string };"
               }
@@ -12797,7 +12797,7 @@
           "declarations": [
             {
               "source": "server/utils/chat/tool-registry.ts",
-              "line": 148,
+              "line": 149,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function validateServerToolRequest(\n    tools: unknown,\n    runtimeHints: unknown,\n    requireServerMatches: boolean\n): { valid: true } | { valid: false; error: string };"
             }
@@ -12807,7 +12807,7 @@
     },
     {
       "source": "shared/hooks/hook-engine-core.ts",
-      "apiSha256": "b619fa42060fd6e5bc82e6456d0d6256bf3efbf1f51d7a4cf9d3ff666f0ba4e2",
+      "apiSha256": "8a0a60081c5a6c3bde6bffd3c38f9f7108e0e6f9bee86e1c84e4f39c07f917b4",
       "runtime": "shared",
       "publicPaths": [
         "~~/shared/hooks/hook-engine-core"
@@ -12829,7 +12829,7 @@
               "resolvedReturnType": "HookEngine",
               "declaration": {
                 "source": "shared/hooks/hook-engine-core.ts",
-                "line": 190,
+                "line": 192,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createHookEngine(options: HookEngineOptions = {}): HookEngine;"
               }
@@ -12838,7 +12838,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-engine-core.ts",
-              "line": 190,
+              "line": 192,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createHookEngine(options: HookEngineOptions = {}): HookEngine;"
             }
@@ -12854,7 +12854,7 @@
               "source": "shared/hooks/hook-engine-core.ts",
               "line": 92,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface HookEngine {\n    addFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    applyFilters: <T>(name: string, value: T, ...args: unknown[]) => Promise<T>;\n    applyFiltersSync: <T>(name: string, value: T, ...args: unknown[]) => T;\n\n    addAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    doAction: (name: string, ...args: unknown[]) => Promise<void>;\n    doActionSync: (name: string, ...args: unknown[]) => void;\n\n    hasFilter: (name?: string, fn?: HookFn) => boolean | number;\n    /** Read-only ownership receipt; dispatching a filter is never part of validation. */\n    captureFilterChain: (names: readonly string[]) => () => boolean;\n    hasAction: (name?: string, fn?: HookFn) => boolean | number;\n    removeAllCallbacks: (priority?: number) => void;\n    currentPriority: () => number | false;\n\n    onceAction: (name: string, fn: HookFn, priority?: number) => () => void;\n    on: (name: string, fn: HookFn, opts?: OnOptions) => () => void;\n    off: (disposer: () => void) => void;\n\n    _diagnostics: {\n        timings: Record<string, number[]>;\n        errors: Record<string, number>;\n        callbacks(actionOrFilter?: HookKind): number;\n    };\n}"
+              "text": "export interface HookEngine {\n    addFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    applyFilters: <T>(name: string, value: T, ...args: unknown[]) => Promise<T>;\n    applyFiltersSync: <T>(name: string, value: T, ...args: unknown[]) => T;\n\n    addAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    doAction: (name: string, ...args: unknown[]) => Promise<void>;\n    doActionSync: (name: string, ...args: unknown[]) => void;\n\n    hasFilter: (name?: string, fn?: HookFn) => boolean | number;\n    /** True only when this callback is the sole matching filter, including wildcards. */\n    hasOnlyFilter: (name: string, fn: HookFn) => boolean;\n    /** Read-only ownership receipt; dispatching a filter is never part of validation. */\n    captureFilterChain: (names: readonly string[]) => () => boolean;\n    hasAction: (name?: string, fn?: HookFn) => boolean | number;\n    removeAllCallbacks: (priority?: number) => void;\n    currentPriority: () => number | false;\n\n    onceAction: (name: string, fn: HookFn, priority?: number) => () => void;\n    on: (name: string, fn: HookFn, opts?: OnOptions) => () => void;\n    off: (disposer: () => void) => void;\n\n    _diagnostics: {\n        timings: Record<string, number[]>;\n        errors: Record<string, number>;\n        callbacks(actionOrFilter?: HookKind): number;\n    };\n}"
             }
           ]
         },
@@ -12866,7 +12866,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-engine-core.ts",
-              "line": 139,
+              "line": 141,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface HookEngineErrorContext {\n    error: unknown;\n    isFilter: boolean;\n    name: string;\n}"
             }
@@ -12880,7 +12880,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-engine-core.ts",
-              "line": 145,
+              "line": 147,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface HookEngineOptions {\n    logCallbackError?: (context: HookEngineErrorContext) => void;\n    resolveOnKind?: (name: string, explicitKind: HookKind | undefined) => HookKind;\n    onOffError?: (error: unknown) => void;\n}"
             }

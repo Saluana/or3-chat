@@ -4123,6 +4123,7 @@ export interface TypedHookEngine {
     onceAction<K extends ActionHookName>(name: K, callback: InferHookCallback<K>, priority?: number): () => void;
     hasAction<K extends ActionHookName>(name?: K, fn?: InferHookCallback<K>): boolean | number;
     hasFilter<K extends FilterHookName>(name?: K, fn?: InferHookCallback<K>): boolean | number;
+    hasOnlyFilter<K extends FilterHookName>(name: K, fn: InferHookCallback<K>): boolean;
     removeAllCallbacks(priority?: number): void;
     captureFilterChain(names: readonly string[]): () => boolean;
     currentPriority(): number | false;
@@ -4470,6 +4471,7 @@ export declare function createTypedAdminHookEngine(engine: HookEngine): TypedAdm
  * - Server-only runtime; no Vue or localStorage.
  */
 import type { ToolDefinition, ToolExecutionAdmission, ToolExecutionContext, ToolRuntime } from '~/utils/chat/types';
+import { type DelegationCatalogModel } from '~~/shared/openrouter/delegation-model-catalog';
 import type { WorkflowToolRegistrationPolicy } from '~~/shared/chat/workflow-tool-policy';
 export type LegacyToolHandler<TArgs = Record<string, unknown>> = (args: TArgs) => Promise<string> | string;
 export type ContextualToolHandler<TArgs = Record<string, unknown>> = (args: TArgs, context: ToolExecutionContext) => Promise<string> | string;
@@ -4499,7 +4501,9 @@ export declare function validateServerToolRequest(tools: unknown, runtimeHints: 
     valid: false;
     error: string;
 };
-export declare function executeServerTool(toolName: string, argsJson: string, context?: ToolExecutionContext, admission?: ToolExecutionAdmission): Promise<{
+export declare function executeServerTool(toolName: string, argsJson: string, context?: ToolExecutionContext, admission?: ToolExecutionAdmission, host?: {
+    modelCatalog?: (signal: AbortSignal) => Promise<DelegationCatalogModel[]>;
+}): Promise<{
     result: string | null;
     toolName: string;
     error?: string;
@@ -4527,6 +4531,8 @@ export interface HookEngine {
     doAction: (name: string, ...args: unknown[]) => Promise<void>;
     doActionSync: (name: string, ...args: unknown[]) => void;
     hasFilter: (name?: string, fn?: HookFn) => boolean | number;
+    /** True only when this callback is the sole matching filter, including wildcards. */
+    hasOnlyFilter: (name: string, fn: HookFn) => boolean;
     /** Read-only ownership receipt; dispatching a filter is never part of validation. */
     captureFilterChain: (names: readonly string[]) => () => boolean;
     hasAction: (name?: string, fn?: HookFn) => boolean | number;
