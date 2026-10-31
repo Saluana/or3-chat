@@ -68,9 +68,80 @@ provider limits still apply. Cancellation propagates to the child. An
 interrupted browser execution is not automatically repeated: inspect the saved
 child chat before explicitly retrying.
 
+Before claiming or executing a browser tool, the client rechecks that the
+originating canonical message still belongs to the pending generation. A local
+history read failure defers execution; it is not a tool failure. If the message
+has finished or been replaced, retries stop and existing execution evidence is
+retained until the server confirms the outcome.
+
+Newer clients and servers can capture the selected system prompt in private
+background job state for future durable delegation. This metadata does not
+enable durable delegation or change the browser requirement. It excludes
+historical system messages and is omitted when preparation depends on browser
+hooks or the server does not support the metadata format.
+
+The in-development durable admission protocol uses `_durableDelegation: 1` on a
+background request. The server accepts it only with matching job and sync
+capabilities, captured defaults and context, text output, and a fully
+server-executable tool set apart from delegation itself. It rejects unsupported
+requests before creating a job instead of silently switching modes. The field
+is private routing metadata and is not sent to the model provider. The client
+selects this protocol only when discovery and request preparation establish
+eligibility. Otherwise it warns before sending that delegated chats need the
+browser to stay open. Current released job providers do not advertise the
+required capability.
+
+For eligible durable calls, child activity can show waiting, working, or saving.
+Saving means the child has finished model execution and its canonical history
+is still being finalized; it is not a completed result. These live labels are
+derived from the matching child job and are not stored as final outcomes.
+When a durable child chat is opened on another device, its composer starts with
+the model and variant used for that child once its history syncs. A saved
+per-chat choice or an explicit return to inherited settings takes precedence.
+The unreleased durable path also distinguishes unavailable child history from
+an unknown model outcome. If both apply, the activity shows both; the parent
+cannot automatically delegate again in the same turn.
+
+The versioned durable-delegation provider contract also requires
+`deferDelegationHistory`. It must postpone only the specified job generation and
+pending history phase, so denied or temporarily unavailable history cannot
+starve other jobs. A deferred job remains a shutdown blocker and is retried; the
+deferral does not mark its generation as failed. Current released providers do
+not advertise this delegation contract.
+
+The unreleased SQLite delegation draft preserves malformed checkpoints in
+quarantine and leaves unrecognized checkpoint versions untouched. Both remain
+restart blockers. Its recovery diagnostics report bounded lists of opaque job
+IDs without logging checkpoint contents, including after a server restart.
+The saved delegation deadline still stops admitted children if the authorization
+service is unavailable; starting work or delivering results continues to require
+current authorization.
+Unreadable tool or workflow data on a parked job is also quarantined. Recovery
+preserves that data, stops linked children of a stopped parent, and honors the
+saved deadline for children of an active parent. Other eligible history and
+delegation work can continue.
+Use a compatible host and provider to investigate those IDs and preserve the
+database and job evidence; the draft does not yet provide automated repair.
+Do not clear checkpoints or downgrade to a worker that does not understand them.
+If the originating user permanently loses workspace write access or the
+workspace is deleted, terminal history cannot be delivered under that user's
+authority. The SQLite delegation implementation retains the affected parent and
+child evidence and blocks dashboard restart preparation. The restart attempt
+cancels without replacing the running server. If access can legitimately be
+restored, normal recovery can finish delivery without repeating a model request.
+There is no qualified automatic release procedure when access cannot be restored;
+preserve the database and evidence. Do not clear pending state or downgrade to a
+worker that cannot understand it. See [server restarts](/documentation/cloud/operations).
+The draft migration also preserves malformed legacy execution JSON separately
+and fences the affected job and history delivery. The original bytes can contain
+private job data, so protect the database and its backups accordingly. The
+migration can resume after an interrupted step; this has been tested locally
+with SQLite and a D1 emulator, not on a deployed D1 service.
+
 Tool results larger than 16 KiB (JSON-escaped) are retained through the selected
-sync gateway's optional `retainChatToolResult(actor, { admission, rows })` method.
+sync gateway's optional `retainChatToolResult(actor, { admission, callId, reference, rows })` method.
 The provider authorizes the current workspace writer and live admitted generation,
+validates that the reference and chunks belong to that parent message and tool call,
 then commits immutable workspace KV chunks and contiguous change-log versions in
 one transaction. Identical replays allocate no versions; conflicting or deleted
 artifacts fail closed. The terminal tool receipt contains a bounded reference.
@@ -157,10 +228,15 @@ full snapshot recovery path. Deploy the updated `background_job_controls` schema
 fallback.
 
 Recovery scans back off from 5 to 60 seconds while idle. Useful work resets the
-interval; cleanup runs at most once per minute per process. Newly admitted jobs
+interval; successful cleanup runs at most once per minute per process. Newly admitted jobs
 still start immediately through their admission path. This changes idle recovery
 cost, not token delivery; an abandoned job on another process can take up to the
 recovery interval to be discovered. Shutdown cancels scheduled work.
+Recovery phases run independently: a transient cleanup, history-delivery, or
+delegation error does not prevent other phases from making progress. A failed
+delegation attempt is retried; any lease it still holds expires normally, and the
+error itself does not invent an outcome. During shutdown preparation, existing bookkeeping can
+continue, but new model work is not claimed.
 
 ### Cancelling before the job ID exists
 
@@ -218,6 +294,15 @@ viewer instead of emitting a synthetic terminal `error`, and the client
 classifies retryable failures (network, timeout, 429, 5xx), pauses on auth, and
 stops reconnection on malformed protocol responses. A job confirmed missing via
 bounded 404s is projected as `stream_interrupted` so Continue is offered.
+While a viewer reconnects, the chat shows a temporary status without changing
+the saved generation outcome. An offline browser closes its viewer stream;
+tracking resumes from the server when connectivity returns.
+
+If canonical history has already finalized the same generation, the browser
+ignores late streaming projections and rereads the current message before
+updating the view. An edit, deletion, or replacement generation is therefore
+not overwritten by an older terminal snapshot. The server job outcome remains
+separate from the saved message shown in the chat.
 
 Viewer queues retain delivery state without server-only execution input or worker leases. A large input history therefore does not consume the output viewer queue.
 
@@ -394,7 +479,7 @@ regardless of viewer count. Healthy SSE delivery suppresses hot polling. Polling
 uses typed retryable transport/rate-limit/server errors with bounded jitter,
 limited not-found reconciliation, and one bounded auth refresh. A transient poll
 or Dexie failure does not fabricate model completion, cancel a valid server job,
-or advance the durable offset. Terminal provider state is projected into both
+or advance the durable offset. Terminal provider state is normally projected into both
 Dexie and the live card from the same normalized snapshot, including lost-job
 reconciliation where the server has no final workflow payload.
 
@@ -489,6 +574,16 @@ Deterministic browser harness + Playwright specs cover:
 
 - reattachment behavior while streaming is still active
 - detached completion notification emission behavior
+
+The opt-in `test:e2e:chat-delegation:live` harness defaults to foreground
+delegation. Set `OR3_DELEGATION_LIVE_PROFILE=durable` and `OR3_LIVE_ENV_PATH` to
+an environment file containing `OPENROUTER_API_KEY` to select its isolated
+SQLite background profile. This makes paid model requests. The installed
+provider must advertise durable delegation; otherwise the profile stops before
+making a model request. `OR3_DELEGATION_LIVE_MODEL` can select an exact model ID.
+The profile uses temporary authentication and workspace databases, caps the
+model and request count through a loopback guard, and records a sanitized receipt
+under `test-results/chat-delegation-durable-live`. It does not modify production.
 
 ## Related
 

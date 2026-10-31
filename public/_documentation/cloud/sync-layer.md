@@ -524,12 +524,35 @@ Large tool results use the existing workspace KV wire schema with the
 `chat.tool-result:<encoded-thread>:` name prefix and content-addressed row IDs.
 Each chunk stays below the sync row limit after JSON escaping. Foreground writes
 use normal atomic outbox capture; background providers that implement
-`retainChatToolResult` authorize the admitted generation and atomically allocate
-contiguous versions for new chunks (older providers keep results inline). Replay
+`retainChatToolResult` authorize the admitted generation, bind the supplied call ID
+and reference to the exact chunk contents, and atomically allocate contiguous versions
+for new chunks (older providers keep results inline). Replay
 must preserve the existing bytes and must never resurrect a retained tombstone.
-The tool message carries a versioned reference with a SHA-256 checksum. Readers
-reject incomplete sync or corrupted content and can retry after synchronization.
+The tool message carries a versioned reference with a SHA-256 checksum. Server-side
+recovery may use the optional `readChatToolResult(actor, { admission, callId, reference })`
+to authorize the live parent and verify the complete call-bound artifact in one snapshot.
+It rejects confirmed missing or corrupt chunks with `TOOL_RESULT_UNAVAILABLE`;
+authorization and transient storage errors must use a different error code so
+recovery can retry them without inventing a terminal result.
+Readers reject incomplete sync or corrupted content and can retry after synchronization.
 Thread hard deletion owns cleanup; retain chunks while their chat history remains.
+
+Durable delegation additionally requires the server sync adapter to advertise
+`delegationTerminalHistory: 'v1'`. When a terminal generation snapshot includes
+`expectedWorkspaceRevision`, the adapter must compare it with the current workspace
+version in the same transaction as finalization, and return a retryable failure
+without writing a receipt if they differ. A snapshot with
+`onlyIfThreadUnavailable: true` must also check in that transaction that its
+parent thread is missing or deleted. If the thread is available, return a
+retryable failure without writing a message or receipt. If it is unavailable,
+record a superseded finalization receipt without writing the parent message.
+An existing finalization receipt is replayed before these checks, so a crash
+after commit remains idempotent. Both fields are write preconditions rather than
+part of the result identity: receipt fingerprints exclude them while continuing
+to bind the admission and terminal content. A retry may therefore replay the
+same result after a later workspace edit, but cannot substitute different content.
+This capability is part of the in-development delegation contract; currently
+released adapters do not advertise it.
 
 ## Durable recovery and account ownership
 

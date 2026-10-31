@@ -1,0 +1,252 @@
+--- a/src/runtime/server/background-jobs/sqlite-provider.ts
++++ b/src/runtime/server/background-jobs/sqlite-provider.ts
+@@ -27,6 +27,7 @@
+ import { d1All, d1Run } from '../db/d1';
+ import { getRawDb, getSqliteDriver, isD1Driver } from '../db/kysely';
+ import { resolveCanonicalProjectOwnership } from '../sync/canonical-project-ownership';
++import { backgroundFinalizationFingerprint } from '../sync/background-history-fingerprint';
+ 
+ type JobRow = {
+     id: string;
+@@ -167,56 +168,34 @@
+         error: parent.status === 'aborted' ? 'Delegation stopped.' : 'Delegation could not finish.', delegation: activity.data } : item);
+ }
+ 
+-function terminalProjectionCommitted(raw: ReturnType<typeof getRawDb>, parent: JobRow,
++function terminalProjectionSettled(raw: ReturnType<typeof getRawDb>, parent: JobRow,
+     execution: BackgroundJobExecution, wait: DelegationWait): boolean {
+-    if (parent.history_phase !== 'committed' || !parent.generation_id || !execution.history ||
+-        execution.delegationTerminalProjection?.version !== 1) return false;
+-    const receipt = raw.prepare(`SELECT outcome FROM background_generation_receipts
+-        WHERE workspace_id = ? AND generation_id = ? AND stage = 'finalization'`)
+-        .get(execution.workspaceId, parent.generation_id) as { outcome: string } | undefined;
+-    const row = raw.prepare('SELECT data_json, clock, deleted FROM s_messages WHERE workspace_id = ? AND id = ?')
+-        .get(execution.workspaceId, parent.message_id) as { data_json: string; clock: number; deleted: number } | undefined;
+-    if (receipt?.outcome !== 'committed' || !row || row.deleted || row.clock !== execution.history.assistantMessage.clock + 1) return false;
++    if (parent.status === 'streaming' || !['committed', 'superseded'].includes(parent.history_phase ?? '') || !parent.generation_id || !execution.history ||
++        execution.delegationTerminalProjection?.version !== 1 || parent.completed_at === null) return false;
+     try {
+-        const current = JSON.parse(row.data_json) as { id?: unknown; thread_id?: unknown; deleted?: unknown; data?: { generation_id?: unknown; tool_calls?: unknown } };
+-        const calls = parseJson<BackgroundJob['tool_calls']>(parent.tool_calls_json) ?? [];
+-        const expected = calls.find(call => call.id === wait.callId)?.delegation;
+-        const canonical = Array.isArray(current.data?.tool_calls)
+-            ? current.data.tool_calls.find((call: { id?: unknown }) => call?.id === wait.callId)?.delegation : undefined;
+-        return !current.deleted && current.id === parent.message_id && current.thread_id === parent.thread_id &&
+-            current.data?.generation_id === parent.generation_id && DelegationActivitySchema.safeParse(expected).success &&
+-            JSON.stringify(expected) === JSON.stringify(canonical);
++        const admission = parseChatGenerationAdmissionEnvelope(execution.history);
++        if (admission.workspaceId !== execution.workspaceId || admission.threadId !== parent.thread_id ||
++            admission.messageId !== parent.message_id || admission.generationId !== parent.generation_id) return false;
++        const job = toJob(parent);
++        const calls = job.tool_calls ?? [];
++        const matches = calls.filter(call => call.id === wait.callId);
++        const call = matches[0];
++        if (matches.length !== 1 || !call || call.name !== 'delegate_chat' || typeof call.args !== 'string' ||
++            toolCallFingerprint(call.name, call.args) !== wait.argumentFingerprint ||
++            !DelegationActivitySchema.safeParse(call.delegation).success) return false;
++        const receipt = raw.prepare(`SELECT outcome, fingerprint FROM background_generation_receipts
++            WHERE workspace_id = ? AND generation_id = ? AND stage = 'finalization'`)
++            .get(execution.workspaceId, parent.generation_id) as { outcome: string; fingerprint: string } | undefined;
++        const fingerprint = backgroundFinalizationFingerprint({ admission: execution.history, snapshot: {
++            status: job.status, content: job.content, reasoning: job.reasoning, toolCalls: job.tool_calls,
++            usage: readRequestUsage(job.usage), error: job.error, completedAt: job.completedAt,
++        } });
++        // The immutable receipt proves this exact terminal projection settled.
++        // Later changes to canonical history must not strand the retained wait.
++        return receipt?.fingerprint === fingerprint && (parent.history_phase === 'committed'
++            ? receipt.outcome === 'committed'
++            : ['deleted', 'missing', 'newer_generation', 'edited'].includes(receipt.outcome));
+     } catch { return false; }
+-}
+-
+-/** A superseded receipt proves that finalization did not overwrite newer history. */
+-function terminalProjectionSuperseded(raw: ReturnType<typeof getRawDb>, parent: JobRow,
+-    execution: BackgroundJobExecution, wait: DelegationWait): boolean {
+-    if (parent.history_phase !== 'superseded' || !parent.generation_id || !execution.history ||
+-        execution.delegationTerminalProjection?.version !== 1) return false;
+-    const receipt = raw.prepare(`SELECT outcome FROM background_generation_receipts
+-        WHERE workspace_id = ? AND generation_id = ? AND stage = 'finalization'`)
+-        .get(execution.workspaceId, parent.generation_id) as { outcome: string } | undefined;
+-    if (!receipt || !['deleted', 'missing', 'newer_generation', 'edited'].includes(receipt.outcome)) return false;
+-    const row = raw.prepare('SELECT data_json, clock, deleted FROM s_messages WHERE workspace_id = ? AND id = ?')
+-        .get(execution.workspaceId, parent.message_id) as { data_json: string; clock: number; deleted: number } | undefined;
+-    const thread = raw.prepare('SELECT deleted FROM s_threads WHERE workspace_id = ? AND id = ?')
+-        .get(execution.workspaceId, parent.thread_id) as { deleted: number } | undefined;
+-    const missingThread = !thread || !!thread.deleted;
+-    if (execution.delegationTerminalProjection.parentThreadUnavailable === true && !missingThread) return false;
+-    if (!missingThread && row && !row.deleted) {
+-        try {
+-            const current = JSON.parse(row.data_json) as { id?: unknown; thread_id?: unknown; deleted?: unknown; data?: { generation_id?: unknown } };
+-            if (!current || current.id !== parent.message_id || current.thread_id !== parent.thread_id ||
+-                !current.data || typeof current.data.generation_id !== 'string') return false;
+-            if (!current.deleted && current.data.generation_id === parent.generation_id &&
+-                row.clock === execution.history.assistantMessage.clock) return false;
+-        } catch { return false; }
+-    }
+-    // Revalidate every linked child and its settled canonical history before
+-    // allowing retention to remove the private evidence.
+-    return terminalDelegationCheckpoint(raw, { ...parent, history_phase: 'finalization_pending' }, execution, wait,
+-        execution.delegationTerminalProjection.parentThreadUnavailable === true) !== null;
+ }
+ 
+ function readStoredUsage(value: string | null) {
+@@ -1357,8 +1336,7 @@
+                     .run(now, now, parent.id, parent.user_id);
+                 const committedAt = Date.now();
+                 if (parent.lease_expires_at <= committedAt) throw leaseLost;
+-                if (!expired && (terminalProjectionCommitted(raw, parent, execution, wait) ||
+-                    terminalProjectionSuperseded(raw, parent, execution, wait))) {
++                if (!expired && terminalProjectionSettled(raw, parent, execution, wait)) {
+                     const { delegationWait: _wait, delegationTerminalProjection: _projection, ...finishedExecution } = execution;
+                     const result = raw.prepare(`UPDATE background_jobs SET execution_json = ?, tool_calls_json = ?, delegation_wait_active = 0, delegation_wait_deadline = NULL,
+                         last_activity_at = ?, lease_owner = NULL, lease_expires_at = NULL
+--- a/src/runtime/server/sync/sqlite-sync-gateway-adapter.ts
++++ b/src/runtime/server/sync/sqlite-sync-gateway-adapter.ts
+@@ -1,3 +1,4 @@
++import { backgroundFinalizationFingerprint, stableJson } from './background-history-fingerprint';
+ import { hasWorkspaceItemSemantics, WORKSPACE_ITEM_CAPABILITY } from './workspace-item-capability';
+ /**
+  * SQLite implementation of SyncGatewayAdapter.
+@@ -187,15 +188,6 @@
+     }
+ }
+ 
+-function stableJson(value: unknown): string {
+-    if (value === undefined) return 'undefined';
+-    if (value === null || typeof value !== 'object') return JSON.stringify(value);
+-    if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+-    const record = value as Record<string, unknown>;
+-    return `{${Object.keys(record).sort().map((key) =>
+-        `${JSON.stringify(key)}:${stableJson(record[key])}`
+-    ).join(',')}}`;
+-}
+ 
+ function backgroundHistoryOpId(
+     admission: Pick<ChatGenerationAdmissionEnvelope, 'workspaceId' | 'generationId'>,
+@@ -1159,12 +1151,8 @@
+             throw Object.assign(new Error('Invalid background history workspace'), { code: 'VALIDATION_ERROR' });
+         }
+         const raw = getRawDb();
+-        // The revision is a write precondition, not part of the saved result.
+-        // Replaying an already committed receipt may use a newer revision.
+-        const { expectedWorkspaceRevision: _revision, onlyIfThreadUnavailable: _threadPrecondition, ...resultSnapshot } = input.snapshot;
+-        const fingerprint = createHash('sha256')
+-            .update(stableJson({ ...input, snapshot: resultSnapshot }))
+-            .digest('hex');
++        // Preconditions may change on replay; the admission and result may not.
++        const fingerprint = backgroundFinalizationFingerprint(input);
+         return raw.transaction(() => {
+             this.assertCanonicalActor(actor);
+             const receipt = raw
+--- /dev/null
++++ b/src/runtime/server/sync/background-history-fingerprint.ts
+@@ -0,0 +1,18 @@
++import { createHash } from 'node:crypto';
++
++export function stableJson(value: unknown): string {
++    if (value === undefined) return 'undefined';
++    if (value === null || typeof value !== 'object') return JSON.stringify(value);
++    if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
++    const record = value as Record<string, unknown>;
++    return `{${Object.keys(record).sort().map((key) =>
++        `${JSON.stringify(key)}:${stableJson(record[key])}`
++    ).join(',')}}`;
++}
++
++
++/** Bind a finalization receipt to its immutable admission and terminal result. */
++export function backgroundFinalizationFingerprint(input: { admission: unknown; snapshot: unknown }): string {
++    const { expectedWorkspaceRevision: _revision, onlyIfThreadUnavailable: _threadPrecondition, ...snapshot } = input.snapshot as Record<string, unknown>;
++    return createHash('sha256').update(stableJson({ ...input, snapshot })).digest('hex');
++}
+--- a/test/integration/delegation.test.ts
++++ b/test/integration/delegation.test.ts
+@@ -858,7 +858,7 @@
+         expect(calls.filter(call => call.id === 'delegate-call')).toHaveLength(1);
+     });
+ 
+-    it('aborts an in-flight child after parent Stop and keeps dispatch evidence across reopen', async () => {
++    it.each(['unchanged', 'edited', 'deleted', 'forged receipt'] as const)('releases stopped-parent evidence after canonical history is %s', async change => {
+         const delegate = { type: 'function' as const, function: { name: 'delegate_chat', description: 'Delegate',
+             parameters: { type: 'object' as const, properties: {} } } };
+         const body = { model: 'fixture/model', messages: [{ role: 'user', content: 'Parent task' }], tools: [delegate],
+@@ -936,11 +936,36 @@
+                     expect.objectContaining({ threadId: child.threadId, outcome: 'unknown' }),
+                 ] }) }),
+             ]) });
++            if (change === 'edited' || change === 'deleted') {
++                const operation = change === 'deleted' ? 'delete' : 'put';
++                const pushed = await sync.push(actor, { scope: { workspaceId: actor.workspaceId }, ops: [{
++                    id: `parent-${change}`, tableName: 'messages', operation, pk: history.messageId,
++                    ...(operation === 'put' ? { payload: { ...saved.messages![0]!, data: { ...saved.messages![0]!.data, content: 'Later edit' } } } : {}),
++                    stamp: { deviceId: 'other-device', opId: `parent-${change}`, hlc: '2026-10-31T00:00:00.000Z-0000', clock: 3 },
++                    createdAt: Math.floor(Date.now() / 1000), attempts: 0, status: 'pending',
++                }] });
++                expect(pushed.results[0]).toMatchObject({ success: true });
++            }
++            if (change === 'forged receipt') {
++                getRawDb().prepare("UPDATE background_generation_receipts SET fingerprint = 'mismatch' WHERE workspace_id = ? AND generation_id = ? AND stage = 'finalization'")
++                    .run(actor.workspaceId, history.generationId);
++            }
+             const releaseAt = Date.now() + 5_001;
+             const release = (await provider.claimNextDelegationWait('release-stopped-parent', releaseAt, releaseAt + 60_000))!;
+             expect(await provider.cleanupDelegationWait({ parentJobId: parentId, leaseOwner: 'release-stopped-parent',
+-                expectedRevision: getChatJobExecution(release)!.delegationWait!.revision })).toBe('settled');
++                expectedRevision: getChatJobExecution(release)!.delegationWait!.revision })).toBe(change === 'forged receipt' ? 'pending' : 'settled');
++            if (change === 'forged receipt') {
++                expect(await provider.getShutdownBlockerCount()).toBe(1);
++                return;
++            }
+             expect(await provider.getShutdownBlockerCount()).toBe(0);
++            if (change === 'edited') {
++                const after = await sync.readChatHistory(actor, { kind: 'messages', message_ids: [history.messageId] });
++                expect(after.messages?.[0]?.data?.content).toBe('Later edit');
++            } else if (change === 'deleted') {
++                const after = await sync.readChatHistory(actor, { kind: 'messages', message_ids: [history.messageId] });
++                expect(after.messages?.[0]).toMatchObject({ deleted: true });
++            }
+         } finally { cancelFixture(); await running.catch(() => {}); }
+     });
+ 
+--- a/src/runtime/__tests__/sqlite-background-jobs.test.ts
++++ b/src/runtime/__tests__/sqlite-background-jobs.test.ts
+@@ -1197,7 +1197,7 @@
+         expect(await provider.getJob(admitted.jobId, params.userId)).not.toBeNull();
+     });
+ 
+-    it('releases settled child evidence after the parent thread is deleted', async () => {
++    it.each(['unchanged', 'restored', 'forged receipt'] as const)('settles deleted-thread evidence after %s', async change => {
+         const adapter = await prepareCanonicalWorkspace();
+         const input = await prepareChildAdmission(7_200_000, true, true, parentHistory);
+         const admitted = await provider.admitDelegationChild(input);
+@@ -1223,9 +1223,29 @@
+         expect(await reconcileBackgroundJobHistory(provider, parent)).toBe('superseded');
+         expect(getRawDb().prepare('SELECT data_json, deleted FROM s_messages WHERE workspace_id = ? AND id = ?')
+             .get(execution.workspaceId, params.messageId)).toEqual(before);
++        if (change === 'restored') {
++            const restored = await adapter.push({} as never, { scope: { workspaceId: execution.workspaceId }, ops: [{
++                id: 'restore-after-receipt', tableName: 'threads', operation: 'put', pk: params.threadId,
++                payload: { id: params.threadId },
++                stamp: { deviceId: 'other-device', opId: 'restore-after-receipt', hlc: '2026-10-31T00:00:00.000Z-0000', clock: 4 },
++                createdAt: 1, attempts: 0, status: 'pending',
++            }] });
++            expect(restored.results[0]).toMatchObject({ success: true });
++        } else if (change === 'forged receipt') {
++            getRawDb().prepare("UPDATE background_generation_receipts SET fingerprint = 'mismatch' WHERE workspace_id = ? AND generation_id = ? AND stage = 'finalization'")
++                .run(execution.workspaceId, params.generationId);
++        }
+         vi.mocked(Date.now).mockReturnValue(Date.now() + 5_001);
+         expect(await reconcileDueDelegationWaits(eligible, 1)).toBe(1);
+-        expect((await provider.getJob(parent.id, params.userId))!.execution).not.toHaveProperty('delegationWait');
++        if (change === 'forged receipt') {
++            expect((await provider.getJob(parent.id, params.userId))!.execution).toHaveProperty('delegationWait');
++            expect(await provider.getShutdownBlockerCount()).toBe(1);
++        } else {
++            expect((await provider.getJob(parent.id, params.userId))!.execution).not.toHaveProperty('delegationWait');
++            expect(await provider.getShutdownBlockerCount()).toBe(0);
++        }
++        expect(getRawDb().prepare('SELECT data_json, deleted FROM s_messages WHERE workspace_id = ? AND id = ?')
++            .get(execution.workspaceId, params.messageId)).toEqual(before);
+         expect((await provider.getJob(admitted.jobId, params.userId))?.historyPhase).toBe('committed');
+     });
+ 

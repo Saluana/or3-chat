@@ -34,6 +34,7 @@ export type ErrorCode =
     | 'ERR_UNSUPPORTED_MODEL'
     | 'ERR_HOOK_FAILURE'
     | 'ERR_TOOL_OUTCOME_UNKNOWN'
+    | 'ERR_MODEL_OUTCOME_UNKNOWN'
     | 'ERR_SYNC_PAYLOAD_TOO_LARGE'
     | 'ERR_CONTEXT_FULL'
     | 'ERR_PLUGIN_LOADER_DISABLED'
@@ -271,6 +272,7 @@ export function normalizeError(
             'ERR_FILE_VALIDATION',
             'ERR_FILE_TOO_LARGE',
             'ERR_TOOL_OUTCOME_UNKNOWN',
+            'ERR_MODEL_OUTCOME_UNKNOWN',
             'ERR_SYNC_PAYLOAD_TOO_LARGE',
             'ERR_CONTEXT_FULL', 'ERR_MODEL_METADATA_UNAVAILABLE', 'ERR_CONTEXT_LIMIT_INVALID', 'ERR_OUTPUT_LIMIT_INVALID',
         ].includes(code) ||
@@ -327,6 +329,10 @@ const copy: Record<ErrorCode, [string, string]> = {
     ERR_TOOL_OUTCOME_UNKNOWN: [
         'Tool outcome unknown',
         'A tool may have already run. Check its result before retrying to avoid repeating a side effect.',
+    ],
+    ERR_MODEL_OUTCOME_UNKNOWN: [
+        'Response outcome unknown',
+        'The model may have received this request. Check the chat before starting it again.',
     ],
     ERR_SYNC_PAYLOAD_TOO_LARGE: [
         'Change too large to sync',

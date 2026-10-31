@@ -34,6 +34,7 @@ import type { NotificationCreatePayload } from '../hooks/hook-types';
 import { nowSec, nextClock, getWriteTxTableNames } from '~/db/util';
 import { z } from 'zod';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
+import { sha256Hex } from '~~/shared/runtime-crypto';
 
 // Callback type for the push action handler
 type PushActionCallback = (payload: unknown) => Promise<void>;
@@ -133,8 +134,10 @@ export class NotificationService {
     /**
      * Create a new notification
      * Applies filter hooks before storage
+     * An idempotency key creates at most one row per user in this workspace,
+     * including when that row has been soft-deleted.
      */
-    async create(payload: NotificationCreatePayload): Promise<Notification | null> {
+    async create(payload: NotificationCreatePayload, options?: { idempotencyKey?: string }): Promise<Notification | null> {
         const parsedPayload = NotificationCreatePayloadSchema.safeParse(payload);
         if (!parsedPayload.success) {
             console.warn(
@@ -165,8 +168,11 @@ export class NotificationService {
         }
 
         const now = nowSec();
+        const id = options?.idempotencyKey
+            ? `notification:${await sha256Hex(JSON.stringify([this.userId, options.idempotencyKey]))}`
+            : createRuntimeUuid();
         const notification: Notification = {
-            id: createRuntimeUuid(),
+            id,
             user_id: this.userId,
             type: filteredPayload.data.type,
             title: filteredPayload.data.title,
@@ -181,10 +187,15 @@ export class NotificationService {
             clock: now,
         };
 
-        await this.runNotificationWriteTx(async () => {
+        const created = await this.runNotificationWriteTx(async () => {
+            // The same job can be observed by several tabs or after a tracker
+            // is recreated. Include deleted rows so clearing an alert does not
+            // cause it to reappear on reconnect.
+            if (options?.idempotencyKey && await this.db.notifications.get(id)) return false;
             await this.db.notifications.add(notification);
+            return true;
         });
-        return notification;
+        return created ? notification : null;
     }
 
     /**

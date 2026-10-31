@@ -47,7 +47,10 @@ import { encryptBackgroundCredential } from './crypto';
 import { getScopedAdmissionKey, hasAdmissionCancelled } from './admission-cancels';
 import { AdmissionCancelledError } from './types';
 import { claimAndRunBackgroundJob } from './lifecycle';
-import { supportsClientToolHandoff, supportsDurableBackgroundJobs } from './capabilities';
+import { supportsClientToolHandoff, supportsDelegationCoordination, supportsDelegationHistory, supportsDurableBackgroundJobs } from './capabilities';
+import { DelegationPreparationError, prepareDelegationWait } from './delegation-prepare';
+import { getSyncGatewayAdapter } from '../../sync/gateway/registry';
+import { getShutdownRuntime } from '../shutdown/runtime';
 import {
     parseOpenRouterSSE,
     type StreamedFieldMode,
@@ -59,17 +62,20 @@ import {
     emitJobStatus,
     hasJobViewers,
     initJobLiveState,
+    pauseJobLiveState,
 } from './viewers';
 import { logBackgroundEvent } from './logging';
 import type { ToolCall, ToolDefinition } from '~/utils/chat/types';
-import { executeServerTool } from '../chat/tool-registry';
+import { executeServerTool, getServerTool } from '../chat/tool-registry';
+import { createOpenRouterClient, fetchOpenRouterCatalog } from '~~/shared/openrouter';
 import { MAX_TOOL_ITERATIONS } from '~/utils/chat/constants';
 import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
 import {
     emitBackgroundJobWebhookEvent,
     emitMessageCompletedWebhookEvent,
 } from '../webhooks/hook-emissions';
-import { snapshotToolDefinitions } from '~~/shared/chat/tool-policy';
+import { snapshotToolDefinitions, toolDefinitionEquals } from '~~/shared/chat/tool-policy';
+import { validateToolDefinitions } from '~~/shared/chat/tool-schema';
 import { sensitiveValueMetadata } from '~~/shared/logging/sensitive-metadata';
 import {
     MAX_CANONICAL_MESSAGE_OUTPUT_BYTES,
@@ -99,11 +105,10 @@ import {
     withIdleWatchdog,
 } from '~~/shared/openrouter/deadlines';
 import { sendWithAffordableReply } from '~~/shared/openrouter/credit-retry';
-import {
-    parseChatGenerationAdmissionEnvelope,
-    type CanonicalHistoryRecord,
-} from '~~/shared/chat/background-history';
-import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
+import { classifyDelegationDispatchFailure } from './model-dispatch';
+import { DelegationDefaultsSchema, DelegationDispatchSchema } from '~~/shared/chat/delegation-checkpoint';
+import { DELEGATE_CHAT_TOOL } from '~~/shared/chat/delegation';
+import { prepareBackgroundHistory } from './admission-history';
 import {
     assertBackgroundHistoryProvider,
     reconcileBackgroundJobHistory,
@@ -170,6 +175,36 @@ async function assertJobNotAborted(params: {
             throw createAbortError();
         }
     }
+}
+
+/** Persist evidence after authorization and immediately before the paid request. */
+async function beginDelegationDispatch(jobId: string, context: BackgroundStreamParams, provider: BackgroundJobProvider) {
+    const execution = context.execution;
+    if (!execution || execution.delegationRecoveryPolicy === undefined) return;
+    if (execution.delegationRecoveryPolicy !== 'v1' || !context.leaseOwner || !provider.beginDelegationDispatch)
+        throw new Error('Durable model dispatch is unavailable.');
+    if (execution.delegationDispatch !== undefined)
+        throw Object.assign(new Error('Model request outcome is unknown.'), { code: 'ERR_MODEL_OUTCOME_UNKNOWN', retryable: false });
+    const previousSequence = execution.delegationDispatchSequence ?? 0;
+    if (!Number.isSafeInteger(previousSequence) || previousSequence < 0 || previousSequence >= Number.MAX_SAFE_INTEGER)
+        throw new Error('Invalid durable model dispatch sequence.');
+    const marker = await provider.beginDelegationDispatch(jobId, context.leaseOwner);
+    if (!marker) throw createBackgroundJobLeaseLostError();
+    if (!DelegationDispatchSchema.safeParse(marker).success || marker.sequence !== previousSequence + 1)
+        throw new Error('Invalid durable model dispatch marker.');
+    context.execution = { ...execution, delegationDispatchSequence: marker.sequence, delegationDispatch: marker };
+    // Stop or another worker can win while the marker write is in flight.
+    // Re-read the fence before sending; a marker alone does not grant a lease.
+    const current = await provider.getJob(jobId, context.userId);
+    if (!current) throw createBackgroundJobLeaseLostError();
+    const currentExecution = getChatJobExecution(current);
+    if (current.status !== 'streaming' || currentExecution?.cancellationRequestedAt !== undefined)
+        throw createAbortError();
+    const currentMarker = DelegationDispatchSchema.safeParse(currentExecution?.delegationDispatch);
+    if (!currentExecution || current.leaseOwner !== context.leaseOwner ||
+        (current.leaseExpiresAt ?? 0) <= Date.now() || current.historyPhase !== 'ready' ||
+        currentExecution.delegationRecoveryPolicy !== 'v1' || !currentMarker.success ||
+        currentMarker.data.sequence !== marker.sequence) throw createBackgroundJobLeaseLostError();
 }
 
 /**
@@ -306,6 +341,19 @@ export async function startBackgroundStream(
     const prepared = await admitServerProviderBody(withoutOr3RequestMetadata(params.body), contextPolicy);
     params.body = { ...params.body, ...prepared };
     if (contextPolicy) params.body._context = captureContextEnvelope(contextPolicy);
+    let delegationDefaults: BackgroundJobExecution['delegationDefaults'];
+    if (params.body._delegationDefaults !== undefined) {
+        const parsed = DelegationDefaultsSchema.safeParse(params.body._delegationDefaults);
+        const prefix = parsed.success && Array.isArray(params.body.messages)
+            ? DelegationDefaultsSchema.safeParse({ version: 1, instructions: params.body.messages.slice(0, parsed.data.instructions.length) })
+            : null;
+        if (!parsed.success || !prefix?.success || JSON.stringify(prefix.data.instructions) !== JSON.stringify(parsed.data.instructions)) {
+            const error = new Error('Delegation defaults must match the admitted instructions.');
+            error.name = 'BackgroundDelegationDefaultsError';
+            throw error;
+        }
+        delegationDefaults = parsed.data;
+    }
     const provider = await getJobProvider();
     if (!supportsDurableBackgroundJobs(provider)) {
         const error = new Error(
@@ -328,33 +376,6 @@ export async function startBackgroundStream(
         throw error;
     }
     const encryptionKey = getBackgroundJobEncryptionKey();
-    const parsedHistory = parseChatGenerationAdmissionEnvelope(params.body._history);
-    const sanitizeHistoryRecord = (
-        tableName: 'threads' | 'messages',
-        value: CanonicalHistoryRecord
-    ): CanonicalHistoryRecord => {
-        const sanitized = sanitizePayloadForSync(tableName, value, 'put');
-        if (!sanitized) throw new Error('Invalid background history payload');
-        return {
-            ...sanitized,
-            id: value.id,
-            clock: value.clock,
-            ...(value.hlc ? { hlc: value.hlc } : {}),
-        };
-    };
-    const history = {
-        ...parsedHistory,
-        thread: parsedHistory.thread
-            ? sanitizeHistoryRecord('threads', parsedHistory.thread)
-            : undefined,
-        userMessage: parsedHistory.userMessage
-            ? sanitizeHistoryRecord('messages', parsedHistory.userMessage)
-            : undefined,
-        assistantMessage: sanitizeHistoryRecord(
-            'messages',
-            parsedHistory.assistantMessage
-        ),
-    };
     const syncProviderId = String(
         (
             useRuntimeConfig().public as {
@@ -368,20 +389,42 @@ export async function startBackgroundStream(
         params.body._backgroundAdmissionId.length <= 128
             ? params.body._backgroundAdmissionId.trim()
             : params.messageId;
-    if (
-        !syncProviderId ||
-        history.admissionId !== admissionId ||
-        history.workspaceId !== params.workspaceId ||
-        history.threadId !== params.threadId ||
-        history.messageId !== params.messageId
-    ) {
-        throw new Error('Invalid background history scope');
-    }
+    const history = prepareBackgroundHistory(params.body._history, { admissionId, syncProviderId,
+        workspaceId: params.workspaceId, threadId: params.threadId, messageId: params.messageId });
     assertBackgroundHistoryProvider(syncProviderId);
     const { assertServerProjectExecutionSupported } = await import('../chat/project-policy');
     const hints = params.body._toolRuntime && typeof params.body._toolRuntime === 'object'
         ? params.body._toolRuntime as Record<string, unknown> : {};
     const definitions = Array.isArray(params.body.tools) ? params.body.tools as ToolDefinition[] : [];
+    const durableDelegationRequested = params.body._durableDelegation !== undefined;
+    if (durableDelegationRequested) {
+        const unsupported = () => {
+            const error = new Error('Durable delegation is unavailable for this request or deployment.');
+            error.name = 'BackgroundDurableDelegationUnsupportedError';
+            return error;
+        };
+        const tools = validateToolDefinitions(params.body.tools);
+        const context = params.body._context;
+        const modalities = params.body.modalities;
+        const runtimes = params.body._toolRuntime;
+        if (params.body._durableDelegation !== 1 || !supportsDelegationCoordination(provider) ||
+            !supportsDelegationHistory(getSyncGatewayAdapter(syncProviderId)) || !delegationDefaults ||
+            !context || typeof context !== 'object' || Array.isArray(context) || (context as Record<string, unknown>).version !== 1 ||
+            (modalities !== undefined && (!Array.isArray(modalities) || modalities.length !== 1 || modalities[0] !== 'text')) ||
+            !tools.valid || !tools.value.some(tool => tool.function.name === DELEGATE_CHAT_TOOL) ||
+            !runtimes || typeof runtimes !== 'object' || Array.isArray(runtimes) || hints[DELEGATE_CHAT_TOOL] !== 'client' ||
+            !getShutdownRuntime().controller.canStartWork()) throw unsupported();
+        const names = new Set(tools.value.map(tool => tool.function.name));
+        if (Object.entries(hints).some(([name, runtime]) => !names.has(name) || !['client', 'server', 'hybrid'].includes(String(runtime))))
+            throw unsupported();
+        for (const tool of tools.value) {
+            const name = tool.function.name;
+            if (name === DELEGATE_CHAT_TOOL) continue;
+            const registered = getServerTool(name);
+            if (hints[name] === 'client' || !registered || registered.runtime === 'client' ||
+                !toolDefinitionEquals(registered.definition, tool)) throw unsupported();
+        }
+    }
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Request tool definitions have not yet passed runtime validation.
     if (definitions.some((tool) => HISTORY_TOOL_NAMES.some((name) => tool.function?.name === name) && hints[tool.function.name] !== 'client')) {
         const context = canonicalHistoryContext({ subject: params.userId, workspaceId: params.workspaceId,
@@ -393,6 +436,8 @@ export async function startBackgroundStream(
     }
     const executionBody = { ...params.body };
     delete executionBody._history;
+    delete executionBody._delegationDefaults;
+    delete executionBody._durableDelegation;
     const execution: BackgroundJobExecution = {
         version: 1,
         credentialSource: params.credentialSource,
@@ -404,6 +449,8 @@ export async function startBackgroundStream(
             encryptionKey
         ),
         history,
+        ...(delegationDefaults ? { delegationDefaults } : {}),
+        ...(durableDelegationRequested ? { delegationRecoveryPolicy: 'v1' as const } : {}),
         contentBase:
             history.kind === 'continuation'
                 ? String(
@@ -451,6 +498,11 @@ export async function startBackgroundStream(
     }
     const created = await provider.getJob(jobId, params.userId);
     if (!created) throw new Error('Background job disappeared during admission');
+    if (durableDelegationRequested && getChatJobExecution(created)?.delegationRecoveryPolicy !== 'v1') {
+        const error = new Error('This admission already belongs to a different execution mode.');
+        error.name = 'BackgroundHistoryAdmissionError';
+        throw error;
+    }
     const historyResult = await reconcileBackgroundJobHistory(provider, created);
     if (
         historyResult !== 'ready' &&
@@ -828,7 +880,7 @@ export async function consumeBackgroundStream(params: {
         }
 
         const failedAt = Date.now();
-        const failureMessage = serializeError(err, { code: 'ERR_STREAM_FAILURE', source: 'provider', credentialSource: params.context.credentialSource ?? params.context.execution?.credentialSource });
+        const failureMessage = serializeError(classifyDelegationDispatchFailure(err, params.context.execution), { code: 'ERR_STREAM_FAILURE', source: 'provider', credentialSource: params.context.credentialSource ?? params.context.execution?.credentialSource });
         await persistTerminalGenerationSnapshot(
             params.provider,
             params.jobId,
@@ -1042,7 +1094,8 @@ export async function consumeBackgroundStreamWithTools(params: {
 
     const persistToolCheckpoint = async (
         pendingToolCalls: ToolCall[] | undefined,
-        clientToolCall?: BackgroundJobExecution['clientToolCall']
+        clientToolCall?: BackgroundJobExecution['clientToolCall'],
+        completeDispatch = false,
     ) => {
         if (
             !params.context.execution ||
@@ -1077,12 +1130,15 @@ export async function consumeBackgroundStreamWithTools(params: {
                     ? pendingToolCalls
                     : undefined,
             clientToolCall,
+            ...(completeDispatch ? { delegationDispatch: undefined } : {}),
         };
-        const saved = await params.provider.updateJobExecution(
-            params.jobId,
-            checkpoint,
-            params.context.leaseOwner
-        );
+        const marker = params.context.execution.delegationDispatch;
+        if (completeDispatch && (!marker || !params.provider.commitDelegationDispatch))
+            throw new Error('Durable model checkpoint is unavailable.');
+        const saved = completeDispatch
+            ? await params.provider.commitDelegationDispatch!(params.jobId, params.context.leaseOwner, marker!.sequence,
+                checkpoint, Array.from(toolStates.values()))
+            : await params.provider.updateJobExecution(params.jobId, checkpoint, params.context.leaseOwner);
         if (!saved) throw createBackgroundJobLeaseLostError();
         params.context.execution = checkpoint;
         params.context.body = checkpoint.body;
@@ -1104,11 +1160,69 @@ export async function consumeBackgroundStreamWithTools(params: {
                 name: toolCall.function.name,
                 arguments: toolCall.function.arguments,
             });
+            const blockedDelegation = params.context.execution?.delegationBlocked === true &&
+                toolCall.function.name === DELEGATE_CHAT_TOOL && decision.action === 'execute';
+
+            let durableDelegationError: string | undefined;
+            if (!blockedDelegation && admittedDefinition && toolCall.function.name === DELEGATE_CHAT_TOOL && decision.action === 'execute' &&
+                params.context.execution?.delegationRecoveryPolicy === 'v1') {
+                try {
+                    const leaseOwner = params.context.leaseOwner;
+                    const syncId = persistedJob?.syncProviderId;
+                    const configuredSync = (useRuntimeConfig().public as { sync?: { provider?: string } }).sync?.provider;
+                    const sync = syncId ? getSyncGatewayAdapter(syncId) : undefined;
+                    if (!leaseOwner || !supportsDelegationCoordination(params.provider) || !syncId || syncId !== configuredSync ||
+                        !supportsDelegationHistory(sync) || !getShutdownRuntime().controller.canStartWork())
+                        throw new DelegationPreparationError('Durable delegation is unavailable for this deployment.');
+                    setToolState(toolCall.id, { id: toolCall.id, name: toolCall.function.name, status: 'pending',
+                        runtime: 'server', args: toolCall.function.arguments, argument_fingerprint: decision.fingerprint });
+                    await emitToolState(true);
+                    await persistToolCheckpoint(calls.slice(index));
+                    const parent = await params.provider.getJob(params.jobId, params.context.userId);
+                    if (!parent || parent.leaseOwner !== leaseOwner || (parent.leaseExpiresAt ?? 0) <= Date.now())
+                        throw createBackgroundJobLeaseLostError();
+                    const { assertServerProjectExecutionSupported } = await import('../chat/project-policy');
+                    const authority = { subject: params.context.userId, workspaceId: params.context.workspaceId,
+                        threadId: params.context.threadId, abortSignal: params.abortSignal ?? AbortSignal.timeout(10_000) };
+                    await assertServerProjectExecutionSupported(authority, 'workspace.write');
+                    const wait = await prepareDelegationWait(parent, { callId: toolCall.id, argumentsJson: toolCall.function.arguments,
+                        apiKey: params.apiKey, serverURL: useRuntimeConfig().openrouterBaseUrl, signal: params.abortSignal });
+                    await assertServerProjectExecutionSupported(authority, 'workspace.write');
+                    await assertJobNotAborted({ provider: params.provider, jobId: params.jobId, abortSignal: params.abortSignal });
+                    if (!getShutdownRuntime().controller.canStartWork()) throw new DelegationPreparationError('Durable delegation is unavailable during shutdown.');
+                    if ((useRuntimeConfig().public as { sync?: { provider?: string } }).sync?.provider !== syncId ||
+                        getSyncGatewayAdapter(syncId) !== sync)
+                        throw new DelegationPreparationError('The delegation sync provider changed during preparation.');
+                    const checkpoint = { ...params.context.execution!, delegationWait: wait };
+                    let parked: boolean;
+                    try {
+                        parked = await params.provider.parkDelegationWait!(params.jobId, leaseOwner, checkpoint, Array.from(toolStates.values()));
+                    } catch {
+                        // The write may have committed despite a lost acknowledgement.
+                        // Yield the worker; recovery will inspect the durable checkpoint.
+                        pauseJobLiveState(params.jobId, attempt);
+                        throw createBackgroundJobLeaseLostError();
+                    }
+                    if (parked) {
+                        params.context.execution = checkpoint;
+                        pauseJobLiveState(params.jobId, attempt);
+                        return true;
+                    }
+                    const fresh = await params.provider.getJob(params.jobId, params.context.userId);
+                    if (!fresh || fresh.leaseOwner !== leaseOwner || (fresh.leaseExpiresAt ?? 0) <= Date.now())
+                        throw createBackgroundJobLeaseLostError();
+                    throw new DelegationPreparationError('The delegated chat waiting limit has been reached.');
+                } catch (error) {
+                    if (params.abortSignal?.aborted || (error instanceof Error && error.name === 'AbortError') || isBackgroundJobLeaseLost(error)) throw error;
+                    durableDelegationError = error instanceof DelegationPreparationError ? error.message : 'Durable delegation is unavailable.';
+                }
+            }
 
             if (
                 runtimeHint === 'client' &&
                 admittedDefinition &&
-                decision.action === 'execute'
+                decision.action === 'execute' &&
+                !blockedDelegation && !durableDelegationError
             ) {
                 setToolState(toolCall.id, {
                     id: toolCall.id,
@@ -1132,7 +1246,15 @@ export async function consumeBackgroundStreamWithTools(params: {
             let toolResultText = '';
             let status: 'complete' | 'error' | 'skipped' = 'complete';
             let errorMessage: string | undefined;
-            if (decision.action === 'replay') {
+            if (durableDelegationError) {
+                status = 'error';
+                errorMessage = durableDelegationError;
+                toolResultText = errorMessage;
+            } else if (blockedDelegation) {
+                status = 'error';
+                errorMessage = 'A previous delegated chat has an unknown outcome. Start a new user turn to retry.';
+                toolResultText = errorMessage;
+            } else if (decision.action === 'replay') {
                 toolResultText = decision.result;
             } else if (decision.action === 'conflict') {
                 status = 'error';
@@ -1183,7 +1305,18 @@ export async function consumeBackgroundStreamWithTools(params: {
                         abortSignal:
                             params.abortSignal ?? new AbortController().signal,
                     },
-                    { definition: admittedDefinition }
+                    { definition: admittedDefinition },
+                    toolCall.function.name === 'search_models' ? {
+                        modelCatalog: async (signal) => {
+                            try {
+                                return await fetchOpenRouterCatalog(createOpenRouterClient({
+                                    apiKey: params.apiKey, serverURL: useRuntimeConfig().openrouterBaseUrl,
+                                }), signal, { deadlineMs: 15_000 });
+                            } catch {
+                                throw new Error('Model catalog is unavailable.');
+                            }
+                        },
+                    } : undefined
                 );
                 if (execution.error) {
                     status = execution.runtime === 'client' ? 'skipped' : 'error';
@@ -1331,6 +1464,8 @@ export async function consumeBackgroundStreamWithTools(params: {
                 await assertServerProjectExecutionSupported({ subject: params.context.userId,
                     workspaceId: params.context.workspaceId, threadId: params.context.threadId,
                     abortSignal: params.abortSignal ?? AbortSignal.timeout(10_000) }, 'workspace.write');
+                await assertJobNotAborted({ provider: params.provider, jobId: params.jobId, abortSignal: params.abortSignal });
+                await beginDelegationDispatch(params.jobId, params.context, params.provider);
                 return fetchWithResponseDeadline(openRouterUrl, {
                 method: 'POST',
                 headers: {
@@ -1343,7 +1478,8 @@ export async function consumeBackgroundStreamWithTools(params: {
                 body: JSON.stringify(body),
             }, { signal: params.abortSignal });
             }, requestBody, {
-                defaultAllowance: !!params.contextPolicy && params.contextPolicy.requestedCompletionTokens == null,
+                defaultAllowance: params.context.execution?.delegationRecoveryPolicy !== 'v1' &&
+                    !!params.contextPolicy && params.contextPolicy.requestedCompletionTokens == null,
                 signal: params.abortSignal,
             });
 
@@ -1360,7 +1496,8 @@ export async function consumeBackgroundStreamWithTools(params: {
                 const metadata = { ...normalizeProviderResponseError(errorText, upstream.status,
                     { credentialSource: params.context.credentialSource ?? params.context.execution?.credentialSource }),
                     retryAfterMs: parseRetryAfter(upstream.headers.get('retry-after')) };
-        throw new OpenRouterStreamError(presentError(metadata).message, { ...metadata, status: upstream.status });
+                throw Object.assign(new OpenRouterStreamError(presentError(metadata).message, { ...metadata, status: upstream.status }),
+                    { confirmedModelRejection: !upstream.ok });
             }
 
             const pendingToolCalls: ToolCall[] = [];
@@ -1475,6 +1612,8 @@ export async function consumeBackgroundStreamWithTools(params: {
                 const state = toolStates.get(toolCall.id);
                 if (state) setToolState(toolCall.id, state);
             }
+            if (params.context.execution?.delegationRecoveryPolicy === 'v1')
+                await persistToolCheckpoint(pendingToolCalls, undefined, true);
             const parked = await processToolQueue(pendingToolCalls);
             if (parked) return;
             await flushProviderProgress(true);
@@ -1615,7 +1754,7 @@ export async function consumeBackgroundStreamWithTools(params: {
         }
 
         const toolFailedAt = Date.now();
-        const toolFailureMessage = serializeError(err, { code: 'ERR_STREAM_FAILURE', source: 'provider', credentialSource: params.context.credentialSource ?? params.context.execution?.credentialSource });
+        const toolFailureMessage = serializeError(classifyDelegationDispatchFailure(err, params.context.execution), { code: 'ERR_STREAM_FAILURE', source: 'provider', credentialSource: params.context.credentialSource ?? params.context.execution?.credentialSource });
         await persistTerminalGenerationSnapshot(
             params.provider,
             params.jobId,
@@ -1737,6 +1876,8 @@ export async function executeBackgroundJob(
         _streamedFieldMode,
         _history,
         _context,
+        _delegationDefaults,
+        _durableDelegation,
         ...cleanBody
     } = admittedBody;
     const toolRuntime =
@@ -1774,6 +1915,8 @@ export async function executeBackgroundJob(
     const { response: upstream, errorText: refusedText } = await sendWithAffordableReply(async (body) => {
         await assertServerProjectExecutionSupported({ subject: params.userId, workspaceId: params.workspaceId,
             threadId: params.threadId, abortSignal: signal }, 'workspace.write');
+        await assertJobNotAborted({ provider, jobId, abortSignal: signal });
+        await beginDelegationDispatch(jobId, params, provider);
         return fetchWithResponseDeadline(openRouterUrl, {
         method: 'POST',
         headers: {
@@ -1786,7 +1929,8 @@ export async function executeBackgroundJob(
         body: JSON.stringify(body),
     }, { signal });
     }, cleanBody, {
-        defaultAllowance: !!contextPolicy && contextPolicy.requestedCompletionTokens == null,
+        defaultAllowance: params.execution?.delegationRecoveryPolicy !== 'v1' &&
+            !!contextPolicy && contextPolicy.requestedCompletionTokens == null,
         signal,
     });
 
@@ -1798,7 +1942,8 @@ export async function executeBackgroundJob(
         const metadata = { ...normalizeProviderResponseError(errorText, upstream.status,
             { credentialSource: params.credentialSource ?? params.execution?.credentialSource }),
             retryAfterMs: parseRetryAfter(upstream.headers.get('retry-after')) };
-        throw new OpenRouterStreamError(presentError(metadata).message, { ...metadata, status: upstream.status });
+        throw Object.assign(new OpenRouterStreamError(presentError(metadata).message, { ...metadata, status: upstream.status }),
+            { confirmedModelRejection: !upstream.ok });
     }
 
     await consumeBackgroundStream({

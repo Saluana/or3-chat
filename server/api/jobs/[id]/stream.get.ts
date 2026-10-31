@@ -10,11 +10,11 @@
  * - Implements "smart polling" (adaptive intervals).
  * - Handles client disconnects.
  */
-import type { BackgroundJob } from '../../../utils/background-jobs/types';
+import { getChatJobExecution, type BackgroundJob } from '../../../utils/background-jobs/types';
 import { readRequestUsage, type RequestUsage } from '../../../../shared/chat/compaction';
 import { toolCallFingerprint } from '../../../../shared/chat/tool-ledger';
 import { shouldResetBackgroundContent } from '../../../utils/background-jobs/recovery';
-import { projectJobView } from '../../../utils/background-jobs/job-view';
+import { projectJobView, projectJobViewWithChildStatus } from '../../../utils/background-jobs/job-view';
 import { requireJobWorkspaceAccess } from '../../../utils/background-jobs/access';
 import { getJobProvider } from '../../../utils/background-jobs/store';
 import { resolveSessionContext } from '../../../auth/session';
@@ -586,6 +586,7 @@ export default defineEventHandler(async (event) => {
                     jobReasoning.length > lastReasoningLength;
                 const statusChanged = job.status !== lastStatus;
                 const usageChanged = JSON.stringify(readRequestUsage(job.usage)) !== lastUsage;
+                const toolCallsChanged = JSON.stringify(job.tool_calls) !== lastToolCalls;
                 const workflowStateAdvanced = hasWorkflowStateAdvanced(
                     lastWorkflowVersion,
                     job.workflow_state
@@ -668,7 +669,7 @@ export default defineEventHandler(async (event) => {
                             reasoning_length: jobReasoning.length,
                         }),
                     });
-                } else if (workflowStateAdvanced || usageChanged) {
+                } else if (workflowStateAdvanced || usageChanged || toolCallsChanged) {
                     // Node lifecycle and reasoning updates may advance while
                     // final workflow content is still empty. Project those
                     // state-only changes instead of waiting for text.
@@ -684,7 +685,7 @@ export default defineEventHandler(async (event) => {
                 lastWorkflowVersion = attemptChanged
                     ? workflowStateVersionOf(job.workflow_state)
                     : Math.max(lastWorkflowVersion, workflowStateVersionOf(job.workflow_state));
-                if (attemptChanged || hasNewContent || hasNewReasoning || statusChanged || workflowStateAdvanced) {
+                if (attemptChanged || hasNewContent || hasNewReasoning || statusChanged || workflowStateAdvanced || toolCallsChanged || usageChanged) {
                     lastToolCalls = JSON.stringify(job.tool_calls);
                 }
 
@@ -911,25 +912,55 @@ export default defineEventHandler(async (event) => {
             }, KEEPALIVE_INTERVAL_MS);
 
             let observedControlRevision: number | undefined;
+            let cachedParkedJob: BackgroundJob | undefined;
+            let cachedActivityKey: string | undefined;
+            let cachedActivity: BackgroundJob['tool_calls'];
+            let refreshChildStatusAt = 0;
             disposeReconciler = registerJobReconciler(
                 jobId,
                 async () => {
                     const live = getJobLiveState(jobId);
                     const control = provider.getJobControl ? await provider.getJobControl(jobId, userId) : undefined;
+                    let reuseParkedJob = false;
                     if (control?.status === 'streaming' && control.workspaceId === initialJob.execution?.workspaceId) {
                         if (live?.producing && live.status === 'streaming' &&
                             control.attempts === (live.attempt ?? initialJob.attempts ?? 0)) return undefined;
-                        if (control.revision !== undefined && control.revision === observedControlRevision) return undefined;
+                        if (control.revision !== undefined && control.revision === observedControlRevision) {
+                            if (!cachedParkedJob) return undefined;
+                            if (control.attempts !== (cachedParkedJob.attempts ?? 0)) {
+                                cachedParkedJob = undefined;
+                            } else if (Date.now() < refreshChildStatusAt) return undefined;
+                            else reuseParkedJob = true;
+                        }
                     }
-                    const job = await provider.getJob(jobId, userId);
+                    const job = reuseParkedJob ? cachedParkedJob! : await provider.getJob(jobId, userId);
                     // Capture the revision read before the snapshot. A concurrent
                     // update can cause an extra refresh, never hide newer output.
                     observedControlRevision = control?.revision;
                     // A stale terminal must not stop the shared reconciler,
                     // including while a newer live event awaits authorization.
                     const liveAttempt = getJobLiveState(jobId)?.attempt ?? 0;
-                    return job && (job.attempts ?? 0) < Math.max(lastAttempt, liveAttempt)
-                        ? undefined : job;
+                    if (job && (job.attempts ?? 0) < Math.max(lastAttempt, liveAttempt)) return undefined;
+                    // The listener closes a changed workspace before delivery;
+                    // don't inspect its child jobs under the old viewer scope.
+                    if (job && job.execution?.workspaceId !== initialJob.execution?.workspaceId) return job;
+                    const baseView = job && projectJobView(job);
+                    const hasLiveDelegation = baseView?.tool_calls?.some(call => call.delegation?.version === 2);
+                    if (!job || !hasLiveDelegation) {
+                        cachedParkedJob = undefined;
+                        cachedActivityKey = undefined;
+                        cachedActivity = undefined;
+                        return job;
+                    }
+                    cachedParkedJob = job;
+                    const key = JSON.stringify([job.generationId, job.attempts,
+                        getChatJobExecution(job)?.delegationWait?.revision, baseView!.tool_calls]);
+                    if (key !== cachedActivityKey || Date.now() >= refreshChildStatusAt) {
+                        cachedActivity = (await projectJobViewWithChildStatus(provider, job, userId)).tool_calls;
+                        cachedActivityKey = key;
+                        refreshChildStatusAt = Date.now() + 1000;
+                    }
+                    return { ...job, _delegationViewerToolCalls: cachedActivity };
                 },
                 (job, pollError) => {
                     if (pollError || !job) {
@@ -1058,7 +1089,12 @@ function queuedUpdate(
         // The viewer never needs recovery input, encrypted credentials or
         // worker leases. Do not retain/count private execution history in its
         // bounded queue; admission already captured workspace authorization.
-        const { execution: _execution, leaseOwner: _owner, leaseExpiresAt: _expires, ...job } = update.job;
+        const { execution: _execution, leaseOwner: _owner, leaseExpiresAt: _expires,
+            _delegationViewerToolCalls: cachedCalls, ...job } = update.job as BackgroundJob & {
+                _delegationViewerToolCalls?: BackgroundJob['tool_calls'];
+            };
+        const projectedCalls = cachedCalls ?? projectJobView(update.job).tool_calls;
+        job.tool_calls = projectedCalls;
         return {
             kind: 'snapshot', job,
             bytes: encoder.encode(JSON.stringify(job)).byteLength,

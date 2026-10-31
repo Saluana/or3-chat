@@ -18,6 +18,12 @@ import type {
     BackgroundJob,
 } from '../../../utils/background-jobs/types';
 import type { RequestUsage } from '../../../../shared/chat/compaction';
+import { toolCallFingerprint } from '../../../../shared/chat/tool-ledger';
+import { delegationAdmissionFingerprint } from '../../../../shared/chat/delegation-identities';
+import { DelegationWaitSchema } from '../../../../shared/chat/delegation-checkpoint';
+import { serializeError } from '../../../../shared/errors';
+import { prepareNewDelegationChild } from '../../../utils/background-jobs/delegation-child';
+import { getChatJobExecution } from '../../../utils/background-jobs/types';
 
 const usage: RequestUsage = {
     prompt_tokens: 42, completion_tokens: 7, model: 'test',
@@ -137,6 +143,7 @@ describe('fresh authorization of bounded, ordered SSE batches', () => {
             execution: { workspaceId: 'workspace' } as BackgroundJobExecution,
         });
         const handler = (await import('../[id]/stream.get')).default;
+        const status = (await import('../[id]/status.get')).default;
         const abort = (await import('../[id]/abort.post')).default;
         const send = h3.toWebHandler(
             h3
@@ -145,6 +152,7 @@ describe('fresh authorization of bounded, ordered SSE batches', () => {
                     h3
                         .createRouter()
                         .get('/api/jobs/:id/stream', handler)
+                        .get('/api/jobs/:id/status', status)
                         .post('/api/jobs/:id/abort', abort)
                 )
         );
@@ -902,6 +910,117 @@ describe('fresh authorization of bounded, ordered SSE batches', () => {
             await stream.reader.cancel();
             await stream.consumed;
         }
+    });
+
+    it('delivers tool-only changes learned by reconciliation', async () => {
+        const args = '{}';
+        const execution = { version: 1 as const, workspaceId: 'workspace', referer: 'https://example.test',
+            apiKeyCiphertext: 'private-credential', body: { messages: [{ role: 'user', content: 'private-history' }] } };
+        const jobId = await memoryJobProvider.createJob({ userId: 'owner', threadId: 't', messageId: 'm', model: 'test', execution,
+            tool_calls: [{ id: 'call', name: 'delegate_chat', args, status: 'pending', runtime: 'server' }] });
+        expect(await memoryJobProvider.claimJob(jobId, 'worker', Date.now(), Date.now() + 60_000)).toBeTruthy();
+        const stream = await attach(jobId);
+        try {
+            expect(await memoryJobProvider.updateJobExecution!(jobId, { ...execution, delegationWait: {
+                version: 1, revision: 0, callId: 'call', argumentFingerprint: toolCallFingerprint('delegate_chat', args),
+                deadlineAt: 120_000, nextCheckAt: 1, children: [{ kind: 'rejected', index: 0,
+                    settlement: { kind: 'unavailable', code: 'model_unavailable' } }],
+            } }, 'worker')).toBe(true);
+            await vi.advanceTimersByTimeAsync(1100);
+            expect(stream.frames.at(-1)?.status.tool_calls?.[0]?.delegation).toMatchObject({
+                version: 2, children: [{ outcome: 'unavailable' }],
+            });
+            expect(JSON.stringify(stream.frames)).not.toContain('private-credential');
+            expect(JSON.stringify(stream.frames)).not.toContain('private-history');
+        } finally { await stream.reader.cancel(); await stream.consumed; }
+    });
+
+    it.each((['complete', 'unknown error', 'confirmed failure', 'dispatched stop', 'confirmed stop'] as const)
+        .flatMap(outcome => (['blocked', 'superseded'] as const).map(phase => ({ outcome, phase }))))(
+        'reports saving and $phase child history without a parent revision change: $outcome', async ({ outcome, phase }) => {
+        const args = JSON.stringify({ task: 'Research' });
+        const execution: BackgroundJobExecution = { version: 1, workspaceId: 'workspace', referer: 'https://example.test',
+            apiKeyCiphertext: 'private-credential', body: { messages: [{ role: 'user', content: 'parent' }] },
+            delegationRecoveryPolicy: 'v1', delegationDefaults: { version: 1, instructions: [] } };
+        const parentId = await memoryJobProvider.createJob({ userId: 'owner', threadId: 'parent', messageId: 'parent-message',
+            generationId: 'parent-generation', syncProviderId: 'sqlite', model: 'test', execution,
+            tool_calls: [{ id: 'call', name: 'delegate_chat', args, status: 'pending', runtime: 'server' }] });
+        const parent = await memoryJobProvider.claimJob(parentId, 'worker', Date.now(), Date.now() + 60_000);
+        if (!parent) throw new Error('Parent not claimed');
+        const admission = prepareNewDelegationChild(parent, { callId: 'call', index: 0, task: 'Research', createdAt: 1,
+            body: { model: 'test/model', messages: [{ role: 'user', content: 'Research' }] } });
+        const history = getChatJobExecution({ execution: admission.execution })!.history!;
+        const childId = await memoryJobProvider.createJob(admission);
+        expect(await memoryJobProvider.updateJobExecution!(parentId, { ...execution, delegationWait: DelegationWaitSchema.parse({
+            version: 1, revision: 0, callId: 'call', argumentFingerprint: toolCallFingerprint('delegate_chat', args),
+            deadlineAt: 120_000, nextCheckAt: 1, children: [{ kind: 'prepared', index: 0, admissionId: history.admissionId,
+                threadId: history.threadId, userMessageId: String(history.userMessage!.id), assistantMessageId: history.messageId,
+                admissionFingerprint: delegationAdmissionFingerprint(admission), admission: { body: getChatJobExecution({ execution: admission.execution })!.body,
+                    history }, request: { task: 'Research', model: 'test/model' }, jobId: childId }],
+        }) }, 'worker')).toBe(true);
+        const provider = memoryJobProvider as BackgroundJobProvider;
+        provider.getJobControl = vi.fn(async () => ({ status: 'streaming' as const, attempts: parent.attempts ?? 0,
+            workspaceId: 'workspace', revision: 1 }));
+        const stream = await attach(parentId);
+        try {
+            expect(stream.frames.at(-1)?.status.tool_calls?.[0]?.delegation?.children[0]?.outcome).toBe('working');
+            expect(await memoryJobProvider.setHistoryPhase!(childId, 'ready')).toBe(true);
+            const claimedChild = await memoryJobProvider.claimJob(childId, 'child-worker', Date.now(), Date.now() + 60_000);
+            if (!claimedChild) throw new Error('Child not claimed');
+            if (outcome === 'dispatched stop') {
+                const childExecution = getChatJobExecution(claimedChild)!;
+                expect(await memoryJobProvider.updateJobExecution!(childId, { ...childExecution,
+                    delegationDispatch: { version: 1, sequence: 1, state: 'started' } }, 'child-worker')).toBe(true);
+            }
+            const status = outcome === 'complete' ? 'complete' : outcome.endsWith('stop') ? 'aborted' : 'error';
+            const error = status === 'error' ? serializeError(Object.assign(new Error('Child error'), {
+                code: outcome === 'unknown error' ? 'ERR_MODEL_OUTCOME_UNKNOWN' : 'ERR_STREAM_FAILURE', retryable: false,
+            })) : undefined;
+            expect(await memoryJobProvider.saveTerminalSnapshot!(childId, { status, error, content: 'answer', reasoning: '', completedAt: Date.now() }, 'child-worker')).toBe(true);
+            await vi.advanceTimersByTimeAsync(2500);
+            expect(stream.frames.at(-1)?.status.tool_calls?.[0]?.delegation?.children[0]?.outcome).toBe('saving');
+            expect(JSON.stringify(stream.frames)).not.toContain('private-credential');
+            expect(JSON.stringify(stream.frames)).not.toContain('answer');
+            const poll = stream.send(new Request(`http://chat.test/api/jobs/${parentId}/status`));
+            await vi.advanceTimersByTimeAsync(auth.delay * 2);
+            const response = await poll;
+            expect(response.status).toBe(200);
+            const state = await response.json() as Status;
+            expect(state.tool_calls?.[0]?.delegation?.children[0]?.outcome).toBe('saving');
+            expect(JSON.stringify(state)).not.toContain('answer');
+
+            // A stale or substituted child generation must not supply even a live label.
+            const originalGet = memoryJobProvider.getJob.bind(memoryJobProvider);
+            const getJob = vi.spyOn(memoryJobProvider, 'getJob');
+            const substitutions: Array<(job: BackgroundJob) => BackgroundJob> = [
+                job => ({ ...job, generationId: 'different-generation' }),
+                job => ({ ...job, userId: 'different-user' }),
+                job => ({ ...job, threadId: 'different-thread' }),
+                job => ({ ...job, messageId: 'different-message' }),
+                job => ({ ...job, syncProviderId: 'different-provider' }),
+                job => ({ ...job, execution: { ...getChatJobExecution(job)!, workspaceId: 'different-workspace' } }),
+            ];
+            for (const substitute of substitutions) {
+                getJob.mockImplementation(async (id, userId) => {
+                    const job = await originalGet(id, userId);
+                    return job && id === childId ? substitute(job) : job;
+                });
+                const mismatched = stream.send(new Request(`http://chat.test/api/jobs/${parentId}/status`));
+                await vi.advanceTimersByTimeAsync(auth.delay);
+                const mismatchResponse = await mismatched;
+                expect(mismatchResponse.status).toBe(200);
+                const mismatchState = await mismatchResponse.json() as Status;
+                expect(mismatchState.tool_calls?.[0]?.delegation?.children[0]?.outcome).toBe('working');
+            }
+            getJob.mockRestore();
+            expect(await memoryJobProvider.setHistoryPhase!(childId, phase)).toBe(true);
+            await vi.advanceTimersByTimeAsync(2500);
+            const expectedOutcome = outcome === 'unknown error' || outcome === 'dispatched stop' ? 'unknown' : 'unavailable';
+            expect(stream.frames.at(-1)?.status.tool_calls?.[0]?.delegation?.children[0]?.outcome).toBe(expectedOutcome);
+            const unavailable = stream.send(new Request(`http://chat.test/api/jobs/${parentId}/status`));
+            await vi.advanceTimersByTimeAsync(auth.delay * 2);
+            expect(((await (await unavailable).json()) as Status).tool_calls?.[0]?.delegation?.children[0]?.outcome).toBe(expectedOutcome);
+        } finally { delete provider.getJobControl; await stream.reader.cancel(); await stream.consumed; }
     });
 
     it('delivers a full canonical terminal when completion is learned only by reconciliation', async () => {

@@ -39,6 +39,10 @@ export type CanonicalGenerationSnapshot = {
     usage?: RequestUsage;
     error?: string;
     completedAt: number;
+    /** Optional fenced revision for a stopped delegation's terminal projection. */
+    expectedWorkspaceRevision?: string;
+    /** Finalize only as superseded if the parent thread is still missing or deleted. */
+    onlyIfThreadUnavailable?: true;
 };
 
 export type AdmitChatGenerationResult = {

@@ -543,6 +543,14 @@ describe('POST /api/openrouter/stream credential authorization', () => {
         }));
     });
 
+    it('rejects a durable delegation request that does not request background execution', async () => {
+        readBodyMock.mockResolvedValue({ model: 'test/model', messages: [], stream: true, _durableDelegation: 1 });
+        expect(await handler(makeEvent())).toMatchObject({ code: 'background_delegation_unsupported' });
+        expect(setResponseStatusMock).toHaveBeenCalledWith(expect.anything(), 400);
+        expect(fetch).not.toHaveBeenCalled();
+        expect(startBackgroundStreamMock).not.toHaveBeenCalled();
+    });
+
     it('strips OR3 metadata from a foreground provider request', async () => {
         backgroundStreamingAvailableMock.mockReturnValue(false);
         readBodyMock.mockResolvedValue({

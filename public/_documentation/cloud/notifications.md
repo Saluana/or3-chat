@@ -212,6 +212,10 @@ Notifications for detached background chat jobs follow strict creation rules:
 - Muting is stored in Dexie `kv` under `notification_muted_threads`
   (scoped per user as `notification_muted_threads:<userId>` with a legacy
   unscoped fallback).
+- Local completion alerts use the originating user and job identity, so
+  simultaneous or reattached trackers do not create another local row for the
+  same job. Clearing an alert does not cause it to reappear on reconnect while
+  its deleted row remains available.
 - When server-side notifications are preferred and the tracker has no subscribers, the client skips its local alert. The **server** emits one only when no SSE viewers are connected to that instance (`hasJobViewers(jobId)`).
 - Viewer tracking is process-local. In multi-instance deployments, a user
   watching on another server is not seen, so server notifications can still

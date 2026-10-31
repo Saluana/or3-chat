@@ -11,6 +11,7 @@
 
 import type { ToolDefinition } from '~/utils/chat/types';
 import { registerServerTool } from '../utils/chat/tool-registry';
+import { modelSearchDefinition } from '~~/shared/openrouter/delegation-model-catalog';
 
 const calculateTool: ToolDefinition = {
     type: 'function',
@@ -66,6 +67,11 @@ function normalizeString(value: unknown): string {
 }
 
 export default defineNitroPlugin(() => {
+    // Only an authenticated background worker can supply the job-scoped
+    // catalog service; other callers fail closed without receiving credentials.
+    registerServerTool({ ...modelSearchDefinition, runtime: 'server' }, () => {
+        throw new Error('Model catalog is unavailable for this execution.');
+    }, { runtime: 'server', timeoutMs: 16_000, override: true });
     registerServerTool(
         calculateTool,
         async (args) => {

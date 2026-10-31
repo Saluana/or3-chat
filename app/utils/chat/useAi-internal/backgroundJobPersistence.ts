@@ -13,6 +13,59 @@ import Dexie from 'dexie';
 
 export const BACKGROUND_JOB_PERSIST_INTERVAL_MS = 500;
 
+type ProjectionDisposition = 'eligible' | 'superseded' | 'stale-attempt' | 'canonical-finalized';
+
+function classifyProjection(
+    existing: StoredMessage | undefined,
+    tracker: BackgroundJobTracker,
+    status: BackgroundJobStatus
+): ProjectionDisposition {
+    if (!existing) return 'superseded';
+    const data = existing.data && typeof existing.data === 'object'
+        ? existing.data as Record<string, unknown> : {};
+    if (existing.deleted || typeof data.superseded_by === 'string' ||
+        data.generation_state === 'superseded' ||
+        (typeof data.background_job_id === 'string' && data.background_job_id !== tracker.jobId) ||
+        (tracker.generationId && typeof data.generation_id === 'string' && data.generation_id !== tracker.generationId) ||
+        (tracker.canonicalHistory && tracker.generationId && data.generation_id !== tracker.generationId))
+        return 'superseded';
+    if (typeof data.background_job_attempt === 'number' && typeof status.attempt === 'number' &&
+        data.background_job_attempt > status.attempt) return 'stale-attempt';
+    if (tracker.canonicalHistory && existing.pending !== true) return 'canonical-finalized';
+    return 'eligible';
+}
+
+function rejectedProjection(disposition: ProjectionDisposition) {
+    if (disposition === 'stale-attempt') return { persisted: false, staleAttempt: true };
+    if (disposition === 'canonical-finalized') return { persisted: false, canonicalFinalized: true };
+    return { persisted: false, missing: true, superseded: true };
+}
+
+/** Recheck the originating canonical row before a browser tool can run. */
+export async function readCanonicalToolProjection(
+    tracker: BackgroundJobTracker,
+    status: BackgroundJobStatus
+): Promise<'eligible' | 'stale' | 'ended' | 'unavailable'> {
+    if (!tracker.canonicalHistory) return 'eligible';
+    try {
+        const db = tracker.originDb ?? getDb();
+        const row = (await db.messages.get(tracker.messageId)) as
+            | StoredMessage
+            | undefined;
+        if (row && (row.role !== 'assistant' || row.thread_id !== tracker.threadId))
+            return 'ended';
+        const disposition = classifyProjection(row, tracker, status);
+        return disposition === 'eligible'
+            ? 'eligible'
+            : disposition === 'stale-attempt'
+              ? 'stale'
+              : 'ended';
+    } catch {
+        // A transient local read cannot authorize a side effect or prove an outcome.
+        return 'unavailable';
+    }
+}
+
 export function isBackgroundUsageReset(
     status: BackgroundJobStatus,
     previousAttempt: number | undefined
@@ -236,6 +289,8 @@ export async function persistBackgroundJobUpdate(
     superseded?: boolean;
     /** Another tab already projected a newer server execution attempt. */
     staleAttempt?: boolean;
+    /** The matching canonical message has already been finalized. */
+    canonicalFinalized?: boolean;
     usage?: RequestUsage;
     workflowState?: BackgroundJobStatus['workflow_state'];
 }> {
@@ -260,7 +315,17 @@ export async function persistBackgroundJobUpdate(
         reasoning !== undefined &&
         (replaceReasoning ||
             reasoning.length > (tracker.lastPersistedReasoningLength));
-    const toolStateFingerprint = JSON.stringify(status.tool_calls ?? []);
+    // Live child activity is a viewer snapshot, not a durable outcome. Keeping
+    // it in the local row would resurrect stale waiting/saving labels on reload.
+    const persistedToolCalls = Array.isArray(status.tool_calls)
+        ? status.tool_calls.map((toolCall) => {
+              const { delegation, ...rest } = toolCall;
+              return { ...rest,
+                  ...(delegation?.version === 1 ? { delegation } : {}),
+                  status: toolCall.status === 'skipped' ? ('error' as const) : toolCall.status };
+          })
+        : undefined;
+    const toolStateFingerprint = JSON.stringify(persistedToolCalls ?? []);
     const workflowFingerprint = JSON.stringify(status.workflow_state ?? null);
     const toolStateChanged =
         toolStateFingerprint !== (tracker.lastToolStateFingerprint ?? '[]');
@@ -287,6 +352,12 @@ export async function persistBackgroundJobUpdate(
         !usageChanged &&
         !resetUsage
     ) {
+        if (tracker.canonicalHistory) {
+            const db = tracker.originDb ?? getDb();
+            const existing = await db.messages.get(tracker.messageId) as StoredMessage | undefined;
+            const disposition = classifyProjection(existing, tracker, status);
+            if (disposition !== 'eligible') return rejectedProjection(disposition);
+        }
         return { persisted: true, workflowState: status.workflow_state };
     }
 
@@ -306,17 +377,8 @@ export async function persistBackgroundJobUpdate(
               : status.status === 'aborted'
                 ? 'aborted'
                 : 'failed';
-    const persistedToolCalls = Array.isArray(status.tool_calls)
-        ? status.tool_calls.map((toolCall) => ({
-              ...toolCall,
-              status:
-                  toolCall.status === 'skipped'
-                      ? ('error' as const)
-                      : toolCall.status,
-          }))
-        : undefined;
     const currentDb = tracker.originDb ?? getDb();
-    const disposition = { staleAttempt: false, superseded: false };
+    const disposition: { value: ProjectionDisposition } = { value: 'eligible' };
     const persistedResult = await currentDb.transaction(
         'rw',
         getWriteTxTableNames(currentDb, 'messages'),
@@ -338,39 +400,13 @@ export async function persistBackgroundJobUpdate(
             const existing = (await currentDb.messages.get(
                 tracker.messageId
             )) as StoredMessage | undefined;
-            if (!existing) {
-                disposition.superseded = true;
-                return null;
-            }
+            disposition.value = classifyProjection(existing, tracker, status);
+            if (disposition.value !== 'eligible' || !existing) return null;
 
             const baseData =
                 existing.data && typeof existing.data === 'object'
                     ? (existing.data as Record<string, unknown>)
                     : {};
-            if (
-                existing.deleted ||
-                typeof baseData.superseded_by === 'string' ||
-                baseData.generation_state === 'superseded' ||
-                (typeof baseData.background_job_id === 'string' &&
-                    baseData.background_job_id !== tracker.jobId) ||
-                (tracker.generationId &&
-                    typeof baseData.generation_id === 'string' &&
-                    baseData.generation_id !== tracker.generationId) ||
-                (tracker.canonicalHistory && tracker.generationId &&
-                    baseData.generation_id !== tracker.generationId)
-            ) {
-                disposition.superseded = true;
-                return null;
-            }
-            if (
-                typeof baseData.background_job_attempt === 'number' &&
-                typeof status.attempt === 'number' &&
-                baseData.background_job_attempt > status.attempt
-            ) {
-                disposition.staleAttempt = true;
-                return null;
-            }
-            if (tracker.canonicalHistory && existing.pending !== true) return null;
             const resetsStoredUsage = resetUsage || isBackgroundUsageReset(
                 status,
                 typeof baseData.background_job_attempt === 'number'
@@ -446,9 +482,7 @@ export async function persistBackgroundJobUpdate(
             };
         }
     );
-    if (!persistedResult) return disposition.staleAttempt
-        ? { persisted: false, staleAttempt: true }
-        : { persisted: false, missing: true, superseded: disposition.superseded };
+    if (!persistedResult) return rejectedProjection(disposition.value);
 
     tracker.status = status.status;
     tracker.lastPersistAt = now;

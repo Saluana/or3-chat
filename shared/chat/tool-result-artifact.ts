@@ -8,9 +8,19 @@ export type ToolResultArtifactRow = {
     id: string; name: string; value: string; deleted: false;
     clock: number; created_at: number; updated_at: number;
 };
-async function digest(value: string): Promise<string> {
+function digest(value: string): string {
     const bytes = sha256(encoder.encode(value));
     return [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+function splitResult(result: string): string[] {
+    const parts: string[] = []; let current = ''; let bytes = 2;
+    for (const point of result) {
+        const cost = encoder.encode(JSON.stringify(point)).length - 2;
+        if (bytes + cost > PART_JSON_BYTES) { parts.push(current); current = ''; bytes = 2; }
+        current += point; bytes += cost;
+    }
+    if (current) parts.push(current);
+    return parts;
 }
 export function toolResultArtifactPrefix(threadId: string): string {
     return `chat.tool-result:${encodeURIComponent(threadId)}:`;
@@ -23,21 +33,24 @@ export function parseToolResultArtifact(value: string) {
     try { return { threadId: decodeURIComponent(match[1]!), id: match[2]!, sha256: match[3]!, parts }; }
     catch { return null; }
 }
+export function matchesToolResultStorage(reference: string, result: string,
+    identity: { threadId: string; parentAssistantId: string; callId: string }): boolean {
+    const manifest = parseToolResultArtifact(reference);
+    if (!manifest || encoder.encode(JSON.stringify(result)).length <= TOOL_RESULT_INLINE_JSON_BYTES ||
+        encoder.encode(result).length > 256 * 1024) return false;
+    return manifest.threadId === identity.threadId &&
+        manifest.id === digest(JSON.stringify([identity.threadId, identity.parentAssistantId, identity.callId, result])) &&
+        manifest.sha256 === digest(result) && manifest.parts === splitResult(result).length;
+}
 export async function prepareToolResultStorage(result: string, identity: { threadId: string; parentAssistantId: string; callId: string }) {
     // Measure JSON escaping, rather than raw characters. The existing accepted
     // result cap remains unchanged; every overflow byte is retained below.
     if (encoder.encode(JSON.stringify(result)).length <= TOOL_RESULT_INLINE_JSON_BYTES)
         return { result, rows: [] as ToolResultArtifactRow[] };
     if (encoder.encode(result).length > 256 * 1024) throw new Error('Tool result exceeds its durable limit');
-    const id = await digest(JSON.stringify([identity.threadId, identity.parentAssistantId, identity.callId, result]));
-    const checksum = await digest(result);
-    const parts: string[] = []; let current = ''; let bytes = 2;
-    for (const point of result) {
-        const cost = encoder.encode(JSON.stringify(point)).length - 2;
-        if (bytes + cost > PART_JSON_BYTES) { parts.push(current); current = ''; bytes = 2; }
-        current += point; bytes += cost;
-    }
-    if (current) parts.push(current);
+    const id = digest(JSON.stringify([identity.threadId, identity.parentAssistantId, identity.callId, result]));
+    const checksum = digest(result);
+    const parts = splitResult(result);
     const now = Math.floor(Date.now() / 1000);
     const rows = parts.map((value, index): ToolResultArtifactRow => ({
         id: `tool-result:${id}:${index}`, name: `${toolResultArtifactPrefix(identity.threadId)}${id}:${index}`,

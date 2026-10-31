@@ -137,34 +137,36 @@ export function useChatModelSelection(options: {
             generation === getWorkspaceGeneration();
         try {
             await persistence;
-            const { row } = await getKvRecordByName('chat-model:' + id, db);
             if (!current()) return;
-            if (row?.value) {
-                let saved: { model?: unknown; variant?: unknown } | null = null;
-                try { saved = JSON.parse(row.value) as { model?: unknown; variant?: unknown } | null; } catch { /* Invalid preferences inherit the current default. */ }
-                if (
-                    saved &&
-                    typeof saved.model === 'string' &&
-                    saved.model.trim()
-                ) {
-                    modelInherited.value = false;
-                    applySelection(
-                        saved.model,
-                        sanitizeModelVariant(saved.variant),
-                    );
-                    return;
-                }
-            }
             policySubscription = liveQuery(async () => {
+                const preference = await getKvRecordByName('chat-model:' + id, db);
                 const owner = await resolveChatProject(db, id);
                 const row = owner ? await db.posts.get(projectSettingsId(owner)) : undefined;
-                return row && !row.deleted
+                const projectModel = row && !row.deleted
                     ? readPersistedProjectRecord(ProjectSettingsSchema, row.content)?.default_model ?? null
                     : null;
-            }).subscribe({ next(model) {
-                if (!current() || !modelInherited.value) return;
-                inheritedProjectModel = model;
-                applySelection(model ?? chatDefault(), defaultVariant());
+                const first = await db.messages.where('[thread_id+index]').equals([id, 1]).first();
+                const data = first && !first.deleted && first.role === 'assistant' && first.data && typeof first.data === 'object'
+                    ? first.data as Record<string, unknown> : undefined;
+                return { preference, projectModel, delegatedModel: data?.delegated_model };
+            }).subscribe({ next({ preference, projectModel, delegatedModel }) {
+                if (!current()) return;
+                let saved: { model?: unknown; variant?: unknown } | null = null;
+                try { if (preference.row?.value) saved = JSON.parse(preference.row.value); } catch { /* Invalid preferences inherit. */ }
+                if (saved && typeof saved.model === 'string' && saved.model.trim()) {
+                    modelInherited.value = false;
+                    applySelection(saved.model, sanitizeModelVariant(saved.variant));
+                    return;
+                }
+                if (!preference.row && !preference.revision && typeof delegatedModel === 'string' && delegatedModel.trim() && delegatedModel.length <= 200) {
+                    const base = stripModelVariantSuffix(delegatedModel);
+                    modelInherited.value = false;
+                    applySelection(base, sanitizeModelVariant(delegatedModel.slice(base.length + 1)));
+                    return;
+                }
+                modelInherited.value = true;
+                inheritedProjectModel = projectModel;
+                applySelection(projectModel ?? chatDefault(), defaultVariant());
             }, error() { /* Invalid project policy is surfaced by request admission. */ } });
         } catch {
             /* Invalid project state is surfaced by request admission. */

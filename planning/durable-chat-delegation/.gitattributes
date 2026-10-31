@@ -1,0 +1,2 @@
+# Patch context lines contain a required leading space, including blank lines.
+*.patch whitespace=-blank-at-eol,-blank-at-eof

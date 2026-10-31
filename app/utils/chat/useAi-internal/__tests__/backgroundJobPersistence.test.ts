@@ -104,6 +104,30 @@ describe('background projection ownership across tabs', () => {
         expect((await db.messages.get('assistant'))?.data).toMatchObject({ content: 'done', usage: zero });
     });
 
+    it('does not persist live delegation labels as saved history', async () => {
+        await db.messages.put({ id: 'assistant', thread_id: 'thread', role: 'assistant', index: 1,
+            created_at: 1, updated_at: 1, clock: 1, pending: true, deleted: false,
+            data: { content: '', generation_id: 'generation', background_job_id: 'job' } });
+        const tracker = trackerFor(db);
+        tracker.canonicalHistory = true;
+        const call = { id: 'call', name: 'delegate_chat', status: 'pending' as const,
+            delegation: { version: 3 as const, callId: 'call', children: [
+                { index: 0, threadId: 'child', outcome: 'saving' as const },
+            ] } };
+        await persistBackgroundJobUpdate(tracker, { ...statusFor(), tool_calls: [call] }, '');
+        db.close(); await db.open();
+        const stored = (await db.messages.get('assistant'))!.data as Record<string, unknown>;
+        expect(stored.tool_calls).toMatchObject([{ id: 'call', name: 'delegate_chat', status: 'pending' }]);
+        expect((stored.tool_calls as Record<string, unknown>[])[0]).not.toHaveProperty('delegation');
+        const finalActivity = { version: 1 as const, callId: 'call', children: [
+            { index: 0, threadId: 'child', outcome: 'complete' as const },
+        ] };
+        await persistBackgroundJobUpdate(tracker, { ...statusFor(), tool_calls: [
+            { ...call, status: 'complete', delegation: finalActivity },
+        ] }, '');
+        expect((await db.messages.get('assistant'))?.data).toMatchObject({ tool_calls: [{ delegation: finalActivity }] });
+    });
+
     it.each([
         { attempt: 2, status: 'streaming' as const },
         { attempt: 1, content_reset: true, status: 'streaming' as const },

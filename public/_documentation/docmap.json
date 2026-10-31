@@ -380,7 +380,7 @@
                     "category": "Using tools",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Use scoped workspace tools, delegate independent tasks in parallel with model and routing choices, inspect activity, review edits, and download verified full results."
+                    "summary": "Use scoped workspace tools, search models, delegate independent tasks in parallel, open child chats on mobile or desktop, review edits, and download verified full results."
                 },
                 {
                     "name": "chat-tool-reliability.md",
@@ -629,7 +629,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers authorization, browser delegation, polling and SSE, durable recovery, tool-result storage, retention and safe dashboard drains."
+                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers authorization, browser delegation and tool retry fences, the in-development durable admission contract, child saving and uncertain outcomes, checkpoint diagnostics, polling and SSE, canonical reattachment and edit protection, durable recovery, call-bound tool-result storage, retention, safe dashboard drains, and opt-in live delegation testing."
                 },
                 {
                     "name": "notifications.md",
@@ -638,7 +638,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "Use the local-first Notification Center, extend it from source, and understand originating tracker accounts/workspace mute settings, scoped preference writes, detached completion alerts, and account changes during delivery."
+                    "summary": "Use the local-first Notification Center, extend it from source, and understand originating tracker accounts/workspace mute settings, scoped preference writes, deduplicated local completion alerts, and account changes during delivery."
                 },
                 {
                     "name": "webhooks.md",
@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Durable snapshot replay, principal-scoped feed coverage, fenced multi-tab outboxes, indefinite outage recovery, request cancellation, bounded gateway bodies, real Chromium crash verification, foreground progress across snapshot replacement, active-database capture during route pauses, immutable tool-result KV chunks, and structured provider recovery failures."
+                    "summary": "Durable snapshot replay, principal-scoped feed coverage, fenced multi-tab outboxes, indefinite outage recovery, request cancellation, bounded gateway bodies, real Chromium crash verification, foreground progress across snapshot replacement, active-database capture during route pauses, call-bound immutable tool-result KV chunks, and structured provider recovery failures."
                 },
                 {
                     "name": "storage-layer.md",

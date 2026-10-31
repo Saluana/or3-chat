@@ -190,6 +190,8 @@ export interface SyncGatewayAdapter {
         historyRetention?: 'snapshot-v1';
         /** Atomic canonical chat admission/finalization and durable receipts. */
         backgroundGenerationHistory?: 'v1';
+        /** Terminal finalization checks the supplied workspace revision transactionally. */
+        delegationTerminalHistory?: 'v1';
         /** Bounded current materialized history, independently workspace authorized. */
         canonicalChatHistory?: 'v1';
         /** Transactional preservation/admission for catalog, Trash and file memberships. */
@@ -232,8 +234,17 @@ export interface SyncGatewayAdapter {
     /** Retain completed tool output in canonical workspace KV before settling its receipt. */
     retainChatToolResult?(
         actor: CanonicalHistoryActor,
-        input: { admission: ChatGenerationAdmissionEnvelope; rows: import('~~/shared/chat/tool-result-artifact').ToolResultArtifactRow[] },
+        input: { admission: ChatGenerationAdmissionEnvelope; callId: string; reference: string; rows: import('~~/shared/chat/tool-result-artifact').ToolResultArtifactRow[] },
     ): Promise<void>;
+
+    /** Read and verify a retained result under its live admitted parent generation.
+     * Confirmed missing or corrupt chunks reject with code TOOL_RESULT_UNAVAILABLE;
+     * authorization and transient storage errors must remain distinct.
+     */
+    readChatToolResult?(
+        actor: CanonicalHistoryActor,
+        input: { admission: ChatGenerationAdmissionEnvelope; callId: string; reference: string },
+    ): Promise<string>;
 
     /**
      * Pull changes from server since cursor.

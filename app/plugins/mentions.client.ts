@@ -17,6 +17,7 @@ import type * as MentionIndexApi from './ChatMentions/useChatMentions';
 import type { createMentionSuggestion } from './ChatMentions/suggestions';
 import type MentionExtension from '@tiptap/extension-mention';
 import { getDb, subscribeActiveWorkspaceDb } from '~/db/client';
+import { registerBuiltinMentionFilter } from '~/utils/chat/mention-filter-identity';
 
 type MentionsConfig = {
     enabled?: boolean;
@@ -107,6 +108,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     let mentionsModule: MentionsModule | null = null;
     let mentionsModulePromise: Promise<MentionsModule | null> | null = null;
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    let stopMentionFilter: (() => void) | undefined;
     const refreshDisposers: Array<() => void> = [];
     const refreshMentions = () => {
         if (!mentionsModule) return;
@@ -117,7 +119,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     };
     const stopWorkspace = subscribeActiveWorkspaceDb(refreshMentions);
     const disposeRefresh = () => {
-        clearTimeout(refreshTimer); stopWorkspace();
+        clearTimeout(refreshTimer); stopWorkspace(); stopMentionFilter?.(); stopMentionFilter = undefined;
         for (const off of refreshDisposers.splice(0)) off();
     };
     nuxtApp.vueApp.onUnmount(disposeRefresh);
@@ -269,8 +271,8 @@ export default defineNuxtPlugin((nuxtApp) => {
     );
 
     // 3) Inject context via filter before send (registered once at plugin init)
-    hooks.on(
-        'ai.chat.messages:filter:before_send',
+    stopMentionFilter = registerBuiltinMentionFilter(
+        hooks,
         async (payload: MessagesPayload) => {
             const module = mentionsModule || (await loadMentionsModule());
             if (!module) return payload;

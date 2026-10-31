@@ -29,7 +29,7 @@ import { moveChatToProject, saveProjectSource, saveProjectSettings } from '~/db/
 import type { ChatMessage } from '~/utils/chat/types';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 
-const external = vi.hoisted(() => ({ capacity: 1_000_000, bodies: [] as Record<string, unknown>[],
+const external = vi.hoisted(() => ({ capacity: 1_000_000, bodies: [] as Record<string, unknown>[], notices: [] as Array<{ title?: string }>,
     workspace: '', catalogGate: undefined as Promise<void> | undefined, catalogEntered: undefined as (() => void) | undefined,
     toolCall: false, background: false, role: 'owner' }));
 vi.unmock('~/composables/chat/useAi');
@@ -38,7 +38,7 @@ vi.mock('#imports', async (original) => ({
     useRuntimeConfig: () => ({ public: { ssrAuthEnabled: external.background, sync: { enabled: external.background },
         backgroundStreaming: { enabled: external.background }, limits: { enabled: false },
         openRouter: { allowUserOverride: true, hasInstanceKey: false, requireUserKey: false } } }),
-    useToast: () => ({ add() {} }), useAppConfig: () => ({}),
+    useToast: () => ({ add(value: { title?: string }) { external.notices.push(value); } }), useAppConfig: () => ({}),
     useUserApiKey: () => ({ apiKey: ref('scripted-key'), connected: ref(true), setKey() {} }),
     useActivePrompt: () => ({ activePromptContent: ref(null) }),
     useHooks: () => useHooks(),
@@ -72,7 +72,7 @@ beforeEach(async () => {
     workspace = `native-context-${crypto.randomUUID()}`; external.workspace = workspace;
     await setActiveWorkspaceDb(workspace).open();
     setHookEngine(createTypedHookEngine(createHookEngine()));
-    localStorage.clear(); external.capacity = 1_000_000; external.bodies = [];
+    localStorage.clear(); external.capacity = 1_000_000; external.bodies = []; external.notices = [];
     external.catalogGate = undefined; external.catalogEntered = undefined;
     external.toolCall = false; external.background = false; external.role = 'owner';
     await useModelStore().invalidate();
@@ -656,6 +656,39 @@ describe('native context admission at the actual durable boundary', () => {
         } finally { wrapper.unmount(); }
     });
 
+    it('restores a delegated model when its history arrives and preserves later user choices', async () => {
+        vi.stubGlobal('process', { ...process, client: true });
+        const db = getDb();
+        localStorage.setItem('last_selected_model', 'fixture/default');
+        await db.projects.put({ id: 'project', name: 'Project', data: [], clock: 0, created_at: 1, updated_at: 1, deleted: false });
+        const { defaultProjectSettings } = await import('~~/shared/projects/workspace');
+        await saveProjectSettings(captureProjectOperation(), 'project',
+            { ...defaultProjectSettings(), default_model: 'fixture/default' }, null);
+        const thread = await createThreadInDb(db, { title: 'Delegated', project_id: 'project' });
+        let selection!: ReturnType<typeof useChatModelSelection>;
+        const component = defineComponent({ setup() {
+            selection = useChatModelSelection({ threadId: () => thread.id, onChange() {} });
+            return () => h('div', selection.selectedModel.value);
+        } });
+        let wrapper = mount(component);
+        try {
+            await vi.waitFor(() => expect(wrapper.text()).toBe('fixture/default'));
+            await db.messages.put({ id: 'delegated-answer', thread_id: thread.id, role: 'assistant', index: 1,
+                data: { content: 'Answer', delegated_model: 'fixture/child:nitro' }, clock: 0,
+                created_at: 1, updated_at: 1, deleted: false });
+            await vi.waitFor(() => expect(wrapper.text()).toBe('fixture/child'));
+            expect(selection.modelVariant.value).toBe('nitro');
+            selection.selectedModel.value = 'fixture/explicit';
+            await vi.waitFor(() => expect(db.kv.where('name').equals('chat-model:' + thread.id).count()).resolves.toBe(1));
+            wrapper.unmount(); wrapper = mount(component);
+            await vi.waitFor(() => expect(wrapper.text()).toBe('fixture/explicit'));
+            await selection.useInheritedModel();
+            await vi.waitFor(() => expect(wrapper.text()).toBe('fixture/default'));
+            wrapper.unmount(); wrapper = mount(component);
+            await vi.waitFor(() => expect(wrapper.text()).toBe('fixture/default'));
+        } finally { wrapper.unmount(); }
+    });
+
     it('updates inherited models on policy changes and project moves without overwriting explicit choices', async () => {
         vi.stubGlobal('process', { ...process, client: true });
         const db = getDb();
@@ -1003,6 +1036,128 @@ describe('native context admission at the actual durable boundary', () => {
             expect(JSON.stringify(body.messages)).toContain('Read history.'); expect(JSON.stringify(body.messages)).not.toContain('Placement source');
         } finally { dispose(); }
     });
+    it.each(['durable', 'durable-model-search', 'modified-model-search', 'old-server-model-search', 'builtin-mentions-unchanged', 'builtin-mentions-changed', 'builtin-mentions-throws', 'builtin-and-plugin-filter', 'durable-browser-tool', 'supported', 'old-server', 'browser-hook', 'late-once-action', 'late-once-filter'] as const)(
+        'sends selected delegation defaults without historical system content (%s)', async scenario => {
+            external.background = true;
+            await useAiSettings().set({ masterSystemPrompt: 'Selected instruction' });
+            const db = getDb();
+            const thread = await createThreadInDb(db, { title: 'Delegation defaults' });
+            await db.messages.add({ id: 'historical-system', thread_id: thread.id, role: 'system', index: 0,
+                created_at: 1, updated_at: 1, clock: 1, deleted: false, pending: false,
+                data: { content: 'Private historical summary' } });
+            const { delegationDefinition, modelSearchDefinition } = await import('~/utils/chat/delegation-tool');
+            const registration = useToolRegistry().registerTool(delegationDefinition, () => 'unused', { runtime: 'client' });
+            const modelSearch = scenario === 'durable-model-search' || scenario === 'modified-model-search' || scenario === 'old-server-model-search'
+                ? useToolRegistry().registerTool(scenario === 'modified-model-search' ? { ...modelSearchDefinition,
+                    function: { ...modelSearchDefinition.function, description: 'Different search' } } : modelSearchDefinition,
+                () => 'unused', { runtime: 'client' }) : undefined;
+            const isBuiltin = scenario === 'builtin-mentions-unchanged' || scenario === 'builtin-mentions-changed' || scenario === 'builtin-mentions-throws' || scenario === 'builtin-and-plugin-filter';
+            const { registerBuiltinMentionFilter } = await import('~/utils/chat/mention-filter-identity');
+            const removeBuiltin = isBuiltin ? registerBuiltinMentionFilter(useHooks(), payload => {
+                if (scenario === 'builtin-mentions-throws') throw new Error('Mention preparation failed');
+                if (scenario !== 'builtin-mentions-changed' || Array.isArray(payload)) return payload;
+                return { messages: [...payload.messages, { role: 'system', content: [{ type: 'text', text: 'Mention context' }] }] };
+            }) : undefined;
+            if (scenario === 'builtin-and-plugin-filter') useHooks().addFilter('ai.chat.messages:filter:before_send', value => value);
+            const browserTool = scenario === 'durable-browser-tool' ? useToolRegistry().registerTool({ type: 'function',
+                function: { name: 'fixture_browser_tool', description: 'Browser tool', parameters: { type: 'object', properties: {} } } },
+            () => 'unused', { runtime: 'client' }) : undefined;
+            if (scenario === 'browser-hook') useHooks().addFilter('ai.chat.send:filter:prepare', value => value);
+            let capabilityRequests = 0;
+            const lateAction = vi.fn();
+            const lateFilter = vi.fn((value: import('~/core/hooks/hook-types').InferHookParams<'ai.chat.messages:filter:before_send'>[0]) => {
+                useHooks().removeFilter('ai.chat.messages:filter:before_send', lateFilter);
+                return value;
+            });
+            if (scenario === 'late-once-filter') useHooks().onceAction('db.messages.append:action:after', () => {
+                useHooks().addFilter('ai.chat.messages:filter:before_send', lateFilter);
+            });
+            vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+                if (url === '/api/openrouter/models') return scriptedCloudCatalog();
+                if (url === '/api/openrouter/title') return Response.json({ title: 'Delegation defaults' });
+                if (url === '/api/jobs/client-tool/capability') {
+                    capabilityRequests++;
+                    if (scenario === 'late-once-action') useHooks().onceAction('ai.chat.send:action:before', lateAction);
+                    return Response.json({ available: true, ...(scenario === 'old-server' || scenario === 'old-server-model-search' ? {} : { delegationDefaultsCaptureVersion: 1 }),
+                        ...(scenario === 'durable' || scenario === 'durable-model-search' || scenario === 'modified-model-search' || isBuiltin || scenario === 'durable-browser-tool' || scenario === 'browser-hook' ? { durableDelegationVersion: 1 } : {}),
+                        ...(scenario === 'durable-model-search' || scenario === 'modified-model-search' ? { serverModelSearchVersion: 1 } : {}) });
+                }
+                external.bodies.push(JSON.parse(init?.body as string));
+                return Response.json({ code: 'context_full', error: 'Scripted refusal before job', retryable: false }, { status: 400 });
+            }));
+            try {
+                const result = await chat(thread.id).sendMessage('Research this task', { model: 'fixture/model' });
+                expect(result.status, JSON.stringify(result)).toBe('failed');
+                expect(capabilityRequests).toBe(1);
+                if (scenario === 'late-once-action') expect(lateAction).toHaveBeenCalledOnce();
+                if (scenario === 'late-once-filter') expect(lateFilter).toHaveBeenCalledOnce();
+                const body = external.bodies[0]!;
+                expect(JSON.stringify(body.messages)).toContain('Private historical summary');
+                if (scenario === 'supported' || scenario === 'durable' || scenario === 'durable-model-search' || scenario === 'modified-model-search' || scenario === 'builtin-mentions-unchanged' || scenario === 'durable-browser-tool') {
+                    expect(body._delegationDefaults).toEqual({ version: 1, instructions: [
+                        { role: 'system', content: [{ type: 'text', text: 'Selected instruction' }] },
+                    ] });
+                    expect(JSON.stringify(body._delegationDefaults)).not.toContain('Private historical summary');
+                } else expect(body).not.toHaveProperty('_delegationDefaults');
+                if (scenario === 'durable' || scenario === 'durable-model-search' || scenario === 'builtin-mentions-unchanged') {
+                    expect(body._durableDelegation).toBe(1);
+                    if (scenario === 'durable-model-search') expect(body._toolRuntime).toMatchObject({ search_models: 'hybrid' });
+                    expect(external.notices.some(notice => notice.title === 'Keep this page open for delegated chats')).toBe(false);
+                } else {
+                    expect(body).not.toHaveProperty('_durableDelegation');
+                    if (scenario === 'old-server-model-search' || scenario === 'modified-model-search') expect(body._toolRuntime).toMatchObject({ search_models: 'client' });
+                    expect(external.notices.some(notice => notice.title === 'Keep this page open for delegated chats')).toBe(true);
+                }
+            } finally { removeBuiltin?.(); modelSearch?.dispose(); browserTool?.dispose(); registration.dispose(); }
+        });
+    it.each(['supported', 'durable', 'durable-downgrade', 'server-downgrade', 'browser-hook'] as const)(
+        'preserves only eligible delegation defaults across initial request recovery (%s)', async scenario => {
+            external.background = true;
+            await useAiSettings().set({ masterSystemPrompt: 'Selected instruction' });
+            const db = getDb();
+            const thread = await createThreadInDb(db, { title: 'Recover delegation defaults' });
+            await db.messages.add({ id: 'historical-system', thread_id: thread.id, role: 'system', index: 0,
+                created_at: 1, updated_at: 1, clock: 1, deleted: false, pending: false,
+                data: { content: 'Private historical summary' } });
+            const { delegationDefinition } = await import('~/utils/chat/delegation-tool');
+            const registration = useToolRegistry().registerTool(delegationDefinition, () => 'unused', { runtime: 'client' });
+            if (scenario === 'browser-hook') useHooks().addFilter('ai.chat.send:filter:prepare', value => value);
+            let capabilityRequests = 0;
+            vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+                if (url === '/api/openrouter/models') return scriptedCloudCatalog();
+                if (url === '/api/openrouter/title') return Response.json({ title: 'Recover delegation defaults' });
+                if (url === '/api/jobs/client-tool/capability') {
+                    capabilityRequests++;
+                    return Response.json({ available: true, ...(scenario === 'server-downgrade' && capabilityRequests > 1
+                        ? {} : { delegationDefaultsCaptureVersion: 1 }),
+                        ...(scenario === 'durable' || scenario === 'durable-downgrade' && capabilityRequests === 1 ? { durableDelegationVersion: 1 } : {}) });
+                }
+                external.bodies.push(JSON.parse(init?.body as string));
+                return Response.json({ code: 'context_full', error: 'Scripted refusal before job', retryable: false }, { status: 400 });
+            }));
+            try {
+                const first = await chat(thread.id).sendMessage('Research this task', { model: 'fixture/model' });
+                expect(first).toMatchObject({ status: 'failed', reason: 'context_full' });
+                const checkpoint = await db.chat_request_recoveries.get(thread.id);
+                expect(checkpoint).toBeTruthy();
+                scope?.stop();
+                const second = await chat(thread.id).retryMessage(checkpoint!.assistant_message_id, 'fixture/model');
+                expect(second).toMatchObject({ status: 'failed', reason: 'context_full' });
+                expect(capabilityRequests).toBe(2);
+                expect(external.bodies).toHaveLength(2);
+                if (scenario === 'supported' || scenario === 'durable' || scenario === 'durable-downgrade') {
+                    expect(external.bodies[0]?._delegationDefaults).toEqual({ version: 1, instructions: [
+                        { role: 'system', content: [{ type: 'text', text: 'Selected instruction' }] },
+                    ] });
+                    expect(external.bodies[1]?._delegationDefaults).toEqual(external.bodies[0]?._delegationDefaults);
+                    expect(JSON.stringify(external.bodies[1]?._delegationDefaults)).not.toContain('Private historical summary');
+                } else expect(external.bodies[1]).not.toHaveProperty('_delegationDefaults');
+                if (scenario === 'durable' || scenario === 'durable-downgrade') expect(external.bodies[0]?._durableDelegation).toBe(1);
+                if (scenario === 'durable') expect(external.bodies[1]?._durableDelegation).toBe(1);
+                else expect(external.bodies[1]).not.toHaveProperty('_durableDelegation');
+                if (scenario === 'browser-hook') expect(external.bodies[0]).not.toHaveProperty('_delegationDefaults');
+            } finally { registration.dispose(); }
+        });
     it('recovers an initial background server context rejection after reload with the same durable IDs', async () => {
         external.background = true;
         const final = vi.fn((request) => request); useHooks().addFilter('ai.chat.messages:filter:before_send', final);

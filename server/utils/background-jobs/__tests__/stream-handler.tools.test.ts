@@ -3,7 +3,7 @@ import { useRuntimeConfig } from '#imports';
 import { registerAuthWorkspaceStore } from '../../../auth/store/registry';
 import type { AuthWorkspaceStore } from '../../../auth/store/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DurableBackgroundJobProvider, BackgroundJob, JobUpdate } from '../types';
+import type { DurableBackgroundJobProvider, BackgroundJob, BackgroundJobExecution, JobUpdate } from '../types';
 import {
     consumeBackgroundStream,
     consumeBackgroundStreamWithTools,
@@ -26,6 +26,8 @@ import type { ToolDefinition } from '~/utils/chat/types';
 import { toolCallFingerprint } from '~~/shared/chat/tool-ledger';
 import { canonicalToolResultData } from '~~/shared/chat/canonical-tool-transcript';
 import { toolResultTranscriptData } from '~/utils/chat/transcript';
+import { modelSearchDefinition } from '~~/shared/openrouter/delegation-model-catalog';
+import { normalizeError } from '~~/shared/errors';
 import {
     registerJobStream,
     resetJobViewersForTests,
@@ -33,18 +35,22 @@ import {
     getJobLiveState,
 } from '../viewers';
 
-const contextCatalog = vi.hoisted(() => ({ capacity: 1_000_000, calls: 0 }));
+const contextCatalog = vi.hoisted(() => ({ capacity: 1_000_000, calls: 0, unavailable: false, apiKey: '', reasoning: false }));
 vi.mock('~~/shared/openrouter', async (original) => ({
     ...await original<typeof import('~~/shared/openrouter')>(),
-    createOpenRouterClient: () => ({ models: { list: async () => ({
+    createOpenRouterClient: (options: { apiKey?: string }) => {
+        contextCatalog.apiKey = options.apiKey ?? '';
+        return { models: { list: async () => ({
         async *[Symbol.asyncIterator]() {
             contextCatalog.calls++;
+            if (contextCatalog.unavailable) throw new Error('fixture credential must not leak');
             yield { result: { data: [{ id: 'test-model', name: 'Test', contextLength: contextCatalog.capacity,
                 architecture: { inputModalities: ['text'], outputModalities: ['text'] },
                 topProvider: { contextLength: contextCatalog.capacity, maxCompletionTokens: 4096, isModerated: false },
-                pricing: { prompt: '0', completion: '0' }, supportedParameters: ['tools'] }] } };
+                pricing: { prompt: '0', completion: '0' }, supportedParameters: contextCatalog.reasoning ? ['tools', 'reasoning'] : ['tools'] }] } };
         },
-    }) } }),
+        }) } };
+    },
 }));
 
 function makeSseStream(chunks: unknown[]): ReadableStream<Uint8Array> {
@@ -116,7 +122,7 @@ function createProvider(
     const completeJob = vi.fn(async (_id?: string, _content?: string, _leaseOwner?: string) => {
         statusRef.status = 'complete';
     });
-    const updateJobExecution = vi.fn(async () => true);
+    const updateJobExecution = vi.fn(async (_id: string, _execution: BackgroundJobExecution, _leaseOwner: string) => true);
     const failJob = vi.fn(async (_id?: string, _error?: string, _leaseOwner?: string) => {});
 
     const provider: DurableBackgroundJobProvider = {
@@ -219,8 +225,57 @@ describe('consumeBackgroundStreamWithTools', () => {
 
     afterEach(() => {
         unregisterServerTool('server_echo');
+        unregisterServerTool('search_models');
+        contextCatalog.unavailable = false;
         vi.unstubAllGlobals();
         resetJobViewersForTests();
+    });
+
+    it('searches the job catalog as a server tool and returns results to the model', async () => {
+        registerServerTool({ ...modelSearchDefinition, runtime: 'server' }, () => {
+            throw new Error('No host catalog service');
+        }, { runtime: 'server', override: true });
+        const statusRef = { status: 'streaming' as const };
+        const { provider, completeJob } = createProvider(statusRef);
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(makeToolCallResponse('search_models', '{"query":"test"}'))
+            .mockResolvedValueOnce(makeTextResponse('found it'));
+        vi.stubGlobal('fetch', fetchMock);
+        await consumeBackgroundStreamWithTools({
+            jobId: 'job-1', body: { model: 'test-model', messages: [], tools: [modelSearchDefinition] },
+            apiKey: 'fixture-key', referer: 'http://localhost:3000', provider,
+            toolRuntime: { search_models: 'server' },
+            context: { body: {}, apiKey: 'fixture-key', userId: 'user-1', workspaceId: 'ws-1',
+                threadId: 'thread-1', messageId: 'msg-1', referer: 'http://localhost:3000' },
+        });
+        expect(completeJob).toHaveBeenCalledWith('job-1', 'found it');
+        expect(contextCatalog.apiKey).toBe('fixture-key');
+        const request = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+        const result = request.messages.find((message: { role: string }) => message.role === 'tool');
+        expect(JSON.parse(result.content[0].text)).toMatchObject({ models: [{ id: 'test-model', name: 'Test' }], truncated: false });
+    });
+
+    it('reports an unavailable server catalog without exposing provider errors', async () => {
+        registerServerTool({ ...modelSearchDefinition, runtime: 'server' }, () => 'unexpected',
+            { runtime: 'server', override: true });
+        contextCatalog.unavailable = true;
+        const statusRef = { status: 'streaming' as const };
+        const { provider } = createProvider(statusRef);
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(makeToolCallResponse('search_models', '{"query":"test"}'))
+            .mockResolvedValueOnce(makeTextResponse('try later'));
+        vi.stubGlobal('fetch', fetchMock);
+        await consumeBackgroundStreamWithTools({
+            jobId: 'job-1', body: { model: 'test-model', messages: [], tools: [modelSearchDefinition] },
+            apiKey: 'fixture-key', referer: 'http://localhost:3000', provider,
+            toolRuntime: { search_models: 'server' },
+            context: { body: {}, apiKey: 'fixture-key', userId: 'user-1', workspaceId: 'ws-1',
+                threadId: 'thread-1', messageId: 'msg-1', referer: 'http://localhost:3000' },
+        });
+        const request = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+        const result = request.messages.find((message: { role: string }) => message.role === 'tool');
+        expect(result.content[0].text).toContain('Model catalog is unavailable');
+        expect(result.content[0].text).not.toContain('fixture credential');
     });
 
     it.each([['plain', consumeBackgroundStream], ['tools', consumeBackgroundStreamWithTools]] as const)('coalesces 500 tiny %s updates without losing terminal content', async (_kind, consume) => {
@@ -408,6 +463,30 @@ describe('consumeBackgroundStreamWithTools', () => {
                         call.id === 'call-1' && call.runtime === 'client'
                 )
         ).toMatchObject({ status: 'pending', runtime: 'client' });
+    });
+
+    it('does not launch another delegated chat after an unknown child outcome', async () => {
+        const { provider, updateJob, updateJobExecution, completeJob } = createProvider({ status: 'streaming' });
+        const definition = { ...clientToolDef, function: { ...clientToolDef.function, name: 'delegate_chat' } };
+        const execution = { version: 1 as const, body: { model: 'test-model', messages: [], tools: [definition] },
+            workspaceId: 'ws-1', referer: 'http://localhost:3000', apiKeyCiphertext: 'ciphertext',
+            checkpointedToolCallIds: [], delegationBlocked: true };
+        const fetchMock = vi.fn().mockResolvedValueOnce(makeToolCallResponse('delegate_chat'))
+            .mockResolvedValueOnce(makeTextResponse('Summary of known results'));
+        vi.stubGlobal('fetch', fetchMock);
+        await consumeBackgroundStreamWithTools({ jobId: 'job-1', body: execution.body, apiKey: 'key',
+            referer: execution.referer, provider, toolRuntime: { delegate_chat: 'client' },
+            context: { body: execution.body, apiKey: 'key', userId: 'user-1', workspaceId: 'ws-1',
+                threadId: 'thread-1', messageId: 'msg-1', referer: execution.referer, execution, leaseOwner: 'worker-1' } });
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(completeJob).toHaveBeenCalledWith('job-1', 'Summary of known results', 'worker-1');
+        expect(updateJobExecution.mock.calls.every((call) => !call[1].clientToolCall)).toBe(true);
+        const recorded = updateJob.mock.calls.flatMap(call => call[1].tool_calls ?? [])
+            .find(call => call.id === 'call-1' && call.status === 'error');
+        expect(recorded?.error).toContain('unknown outcome');
+        const request = JSON.parse(String(fetchMock.mock.calls[1]![1].body));
+        expect(request.messages.find((message: { role: string }) => message.role === 'tool').content[0].text)
+            .toContain('unknown outcome');
     });
 
     it('drains the remaining batch before resuming the model', async () => {
@@ -881,7 +960,7 @@ describe('background usage through terminal history', () => {
     });
     beforeEach(() => {
         clearAllJobs();
-        contextCatalog.capacity = 1_000_000; contextCatalog.calls = 0;
+        contextCatalog.capacity = 1_000_000; contextCatalog.calls = 0; contextCatalog.reasoning = false;
         delivered.length = 0; artifacts.clear();
         finalize.mockClear();
         vi.stubGlobal('useRuntimeConfig', () => ({ backgroundJobs: {}, public: { sync: { provider: 'usage-boundary' } } }));
@@ -939,6 +1018,14 @@ describe('background usage through terminal history', () => {
             execution, leaseOwner: 'worker',
         };
         return { jobId, context, body };
+    }
+    async function saveGuardedMarker(jobId: string, owner: string, sequence: number) {
+        const job = await memoryJobProvider.getJob(jobId, 'owner');
+        const execution = job?.execution as BackgroundJobExecution;
+        const marker = { version: 1 as const, sequence, state: 'started' as const };
+        expect(await memoryJobProvider.updateJobExecution!(jobId, { ...execution, delegationRecoveryPolicy: 'v1',
+            delegationDispatchSequence: sequence, delegationDispatch: marker }, owner)).toBe(true);
+        return marker;
     }
     function response(prompt: number | undefined, tool = false) {
         const usage = prompt === undefined ? [] : [
@@ -1017,6 +1104,165 @@ describe('background usage through terminal history', () => {
         expect(sent.map((body) => body.max_tokens)).toEqual([4_096, 2_048]);
         const { snapshot } = await terminal(jobId);
         expect(snapshot.status).toBe('complete'); expect(snapshot.content).toBe('answer');
+    });
+    it.each([false, true])('does not replay a credit-refused guarded request (tools: %s)', async (withTools) => {
+        const { jobId, context } = await admitted(withTools, { version: 1, user_max_context_tokens: null, requested_completion_tokens: null });
+        Object.assign(context.execution, { delegationRecoveryPolicy: 'v1' });
+        const provider = { ...memoryJobProvider, beginDelegationDispatch: vi.fn((id: string, owner: string) => saveGuardedMarker(id, owner, 1)) };
+        vi.stubGlobal('fetch', vi.fn(async () => creditRefusal(2_048)));
+        await expect(executeBackgroundJob(jobId, context, provider)).rejects.toMatchObject({ code: 'ERR_CREDITS', status: 402 });
+        expect(fetch).toHaveBeenCalledOnce();
+        expect(provider.beginDelegationDispatch).toHaveBeenCalledOnce();
+    });
+
+    it('checkpoints a guarded tool-call iteration before executing the tool and requesting again', async () => {
+        const { jobId, context } = await admitted(true);
+        Object.assign(context.execution, { delegationRecoveryPolicy: 'v1' });
+        const order: string[] = [];
+        let sequence = 0;
+        const provider = { ...memoryJobProvider,
+            beginDelegationDispatch: vi.fn(async (id: string, owner: string) => { order.push('marker'); return saveGuardedMarker(id, owner, ++sequence); }),
+            commitDelegationDispatch: vi.fn(async (_jobId: string, _owner: string, _sequence: number, checkpoint: BackgroundJobExecution) => {
+                order.push('checkpoint');
+                expect(checkpoint.pendingToolCalls?.map(call => call.id)).toEqual(['call-1']);
+                expect(checkpoint.delegationDispatch).toBeUndefined();
+                return true;
+            }),
+        };
+        registerServerTool(toolDef, () => { order.push('tool'); return 'ok'; }, { override: true });
+        let requests = 0;
+        vi.stubGlobal('fetch', vi.fn(async () => { order.push('request'); return ++requests === 1 ? response(100, true) : response(100); }));
+        await executeBackgroundJob(jobId, context, provider);
+        expect(order).toEqual(['marker', 'request', 'checkpoint', 'tool', 'marker', 'request']);
+    });
+
+    it.each(['park', 'stop', 'provider-error', 'child-error', 'child-context', 'existing-chat'] as const)('handles a guarded delegation during %s without running later tools', async scenario => {
+        contextCatalog.reasoning = true;
+        const { jobId, context, body } = await admitted(false, { version: 1, user_max_context_tokens: 50_000, requested_completion_tokens: null });
+        const delegate: ToolDefinition = { type: 'function', function: { name: 'delegate_chat', description: 'Delegate',
+            parameters: { type: 'object', properties: {} } }, runtime: 'client' };
+        const instruction = { role: 'system', content: 'Selected instruction' };
+        Object.assign(body, { messages: [instruction, { role: 'user', content: 'Private parent history' }],
+            tools: [delegate, toolDef], _toolRuntime: { delegate_chat: 'client', server_echo: 'server' } });
+        Object.assign(context.execution, { delegationRecoveryPolicy: 'v1', delegationDefaults: { version: 1, instructions: [instruction] } });
+        await memoryJobProvider.updateJobExecution!(jobId, context.execution, 'worker');
+        registerSyncGatewayAdapter({ id: 'usage-boundary', create: () => ({
+            capabilities: { backgroundGenerationHistory: 'v1', canonicalChatHistory: 'v1', delegationTerminalHistory: 'v1' },
+            readChatHistory: async (_actor: unknown, query: { thread_id: string }) => ({ status: 'ok', project_ownership: 'resolved',
+                thread: { id: query.thread_id, clock: 1, project_id: null } }),
+            admitChatGeneration: async () => ({ status: 'admitted', replayed: false, serverVersion: 1 }),
+            finalizeChatGeneration: finalize, retainChatToolResult: async () => {}, readChatToolResult: async () => null,
+        }) as unknown as SyncGatewayAdapter });
+        const later = vi.fn(() => 'unexpected');
+        registerServerTool(toolDef, later, { override: true });
+        let parked: BackgroundJobExecution | undefined;
+        let abortChecks = 0;
+        let dispatchSequence = 0;
+        const provider = { ...memoryJobProvider, delegationCoordinatorVersion: 1,
+            checkJobAborted: async () => { abortChecks++; return scenario === 'stop' && contextCatalog.calls >= 2; },
+            getShutdownBlockerCount: async () => 0,
+            parkDelegationWait: async (_job: string, _owner: string, checkpoint: BackgroundJobExecution) => {
+                if (scenario === 'provider-error') throw new Error('private-provider-secret');
+                parked = checkpoint; return true;
+            },
+            claimNextDelegationWait: async () => null, admitDelegationChild: async () => ({ status: 'not-owned' }),
+            commitDelegationWait: async () => false, cleanupDelegationWait: async () => 'not-owned',
+            stopInvalidDelegationWait: async () => 'valid',
+            deferDelegationHistory: async () => false,
+            expireDelegationWait: async () => 'not-owned', resumeDelegationWait: async () => ({ status: 'not-owned' }),
+            beginDelegationDispatch: (id: string, owner: string) => saveGuardedMarker(id, owner, ++dispatchSequence),
+            commitDelegationDispatch: async (id: string, owner: string, _sequence: number, checkpoint: BackgroundJobExecution) =>
+                memoryJobProvider.updateJobExecution!(id, checkpoint, owner),
+        } as unknown as DurableBackgroundJobProvider;
+        const args = JSON.stringify(scenario === 'existing-chat' ? { task: 'Continue research', threadId: 'existing-chat' } :
+            { tasks: [{ task: 'Research the topic', model: 'Test', variant: 'nitro', reasoningEffort: 'high' },
+                { task: 'Compare another model', model: 'missing-model' }, { task: '' }] });
+        if (scenario === 'child-error' || scenario === 'child-context') {
+            const admission = await import('../../chat/context-admission');
+            const { ChatContextAdmissionError } = await import('~~/shared/chat/context-budget');
+            const original = admission.admitServerProviderBody;
+            vi.spyOn(admission, 'admitServerProviderBody').mockImplementation(async (request, policy, signal) => {
+                if (JSON.stringify(request.messages).includes('Research the topic')) {
+                    if (scenario === 'child-context') throw new ChatContextAdmissionError({ ok: false, code: 'model_metadata_unavailable' });
+                    throw new Error('private-child-secret');
+                }
+                return original(request, policy, signal);
+            });
+        }
+        const requests: string[] = [];
+        vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+            requests.push(String(init.body));
+            return requests.length === 1 ? new Response(makeSseStream([{ choices: [{ delta: { tool_calls: [
+                { index: 0, id: 'call-1', function: { name: 'delegate_chat', arguments: args } },
+                ...(scenario === 'provider-error' || scenario === 'existing-chat' ? [] : [{ index: 1, id: 'later', function: { name: 'server_echo', arguments: '{"value":"later"}' } }]),
+            ] }, finish_reason: 'tool_calls' }] }])) : response(100);
+        }));
+        if (scenario === 'stop') {
+            await expect(executeBackgroundJob(jobId, context, provider)).rejects.toMatchObject({ name: 'AbortError' });
+            expect(abortChecks).toBeGreaterThan(0);
+            expect(contextCatalog.calls).toBe(2);
+            const job = await memoryJobProvider.getJob(jobId, 'owner');
+            expect((job?.execution as BackgroundJobExecution).checkpointedToolCallIds ?? []).not.toContain('call-1');
+            expect(job?.tool_calls?.find(call => call.id === 'call-1')?.status).toBe('pending');
+        } else if (scenario === 'provider-error') {
+            await expect(executeBackgroundJob(jobId, context, provider)).rejects.toMatchObject({ name: 'BackgroundJobLeaseLostError' });
+            expect(fetch).toHaveBeenCalledOnce();
+            expect(parked).toBeUndefined();
+            const job = await memoryJobProvider.getJob(jobId, 'owner');
+            expect(job?.tool_calls?.find(call => call.id === 'call-1')?.status).toBe('pending');
+            expect(JSON.stringify(job?.tool_calls)).not.toContain('private-provider-secret');
+            return;
+        } else await executeBackgroundJob(jobId, context, provider);
+        if (scenario === 'existing-chat') {
+            expect(fetch).toHaveBeenCalledTimes(2);
+            expect(parked).toBeUndefined();
+            expect(requests[1]).toContain('Continuing an existing chat is unavailable for durable delegation.');
+            expect(requests[1]).not.toContain('private-provider-secret');
+            const job = await memoryJobProvider.getJob(jobId, 'owner');
+            expect(JSON.stringify(job?.tool_calls)).not.toContain('private-provider-secret');
+            return;
+        }
+        expect(fetch).toHaveBeenCalledOnce();
+        expect(later).not.toHaveBeenCalled();
+        if (scenario === 'stop') { expect(parked).toBeUndefined(); return; }
+        if (scenario === 'child-error' || scenario === 'child-context') {
+            expect(parked?.delegationWait?.children[0]).toMatchObject({ kind: 'rejected',
+                settlement: { kind: 'unavailable', code: scenario === 'child-error' ? 'Delegated chat is unavailable.' :
+                    'Model capacity is unavailable. Refresh models or choose a model with known capacity.' } });
+            expect(JSON.stringify(parked)).not.toContain('private-child-secret');
+            return;
+        }
+        expect(parked?.pendingToolCalls?.map(call => call.id)).toEqual(['call-1', 'later']);
+        expect(parked?.delegationWait?.children).toMatchObject([
+            { kind: 'prepared', index: 0, request: { task: 'Research the topic', model: 'test-model:nitro' },
+                admission: { body: { model: 'test-model:nitro', reasoning: { effort: 'high' },
+                    messages: [instruction, { role: 'user', content: 'Research the topic' }],
+                    _context: { user_max_context_tokens: 50_000 } } } },
+            { kind: 'rejected', index: 1, settlement: { kind: 'unavailable', code: expect.stringContaining('Model not found') } },
+            { kind: 'rejected', index: 2, settlement: { kind: 'unavailable', code: 'Invalid delegated task.' } },
+        ]);
+    });
+
+    it('records an interrupted guarded stream as unknown and does not dispatch twice', async () => {
+        const { jobId, context } = await admitted(true);
+        Object.assign(context.execution, { delegationRecoveryPolicy: 'v1' });
+        const provider = { ...memoryJobProvider, beginDelegationDispatch: vi.fn((id: string, owner: string) => saveGuardedMarker(id, owner, 1)) };
+        const interrupted = new ReadableStream<Uint8Array>({ start(controller) { controller.error(new Error('connection lost')); } });
+        vi.stubGlobal('fetch', vi.fn(async () => new Response(interrupted)));
+        await expect(executeBackgroundJob(jobId, context, provider)).rejects.toThrow();
+        expect(fetch).toHaveBeenCalledOnce();
+        const job = await memoryJobProvider.getJob(jobId, 'owner');
+        expect(job?.status).toBe('error');
+        expect(normalizeError(job?.error)).toMatchObject({ code: 'ERR_MODEL_OUTCOME_UNKNOWN', retryable: false });
+    });
+
+    it('does not contact the model if the guarded dispatch fence is lost', async () => {
+        const { jobId, context } = await admitted(false);
+        Object.assign(context.execution, { delegationRecoveryPolicy: 'v1' });
+        const provider = { ...memoryJobProvider, beginDelegationDispatch: vi.fn(async () => null) };
+        vi.stubGlobal('fetch', vi.fn());
+        await expect(executeBackgroundJob(jobId, context, provider)).rejects.toMatchObject({ name: 'BackgroundJobLeaseLostError' });
+        expect(fetch).not.toHaveBeenCalled();
     });
     it.each([
         ['an explicit reply allowance', 4_096, 2_048],

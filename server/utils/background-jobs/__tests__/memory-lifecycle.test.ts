@@ -16,6 +16,7 @@ import { getChatJobExecution } from '../types';
 import type { JobUpdate } from '../types';
 import type { RequestUsage } from '~~/shared/chat/compaction';
 import { createNormalizedStreamState } from '~~/shared/chat/normalized-stream-reducer';
+import { normalizeError } from '~~/shared/errors';
 import { registerSyncGatewayAdapter } from '~~/server/sync/gateway/registry';
 import { registerAuthWorkspaceStore } from '~~/server/auth/store/registry';
 import type { SyncGatewayAdapter } from '~~/server/sync/gateway/types';
@@ -782,6 +783,44 @@ describe('memory background job admission and lifecycle', () => {
         expect(retry).not.toBe(first);
     });
 
+    it('captures declared parent instructions privately at background admission', async () => {
+        const instruction = { role: 'system', content: 'User-selected instruction' };
+        const defaults = { version: 1, instructions: [instruction] };
+        const fetchMock = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(new ReadableStream({ start(controller) {
+            controller.enqueue(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"done"}}]}\n\ndata: [DONE]\n\n'));
+            controller.close();
+        } })));
+        vi.stubGlobal('fetch', fetchMock);
+        const params = {
+            body: { _background: true, _threadId: 'thread-1', _messageId: 'message-1', _backgroundAdmissionId: 'defaults-admission',
+                _delegationDefaults: defaults, model: 'test-model', messages: [instruction, { role: 'user', content: 'Private task' }], stream: true,
+                _history: { version: 1, kind: 'new-turn', admissionId: 'defaults-admission', generationId: 'defaults-generation',
+                    workspaceId: 'workspace-1', threadId: 'thread-1', messageId: 'message-1', thread: { id: 'thread-1', clock: 1 },
+                    userMessage: { id: 'user-message-1', thread_id: 'thread-1', role: 'user', clock: 1 },
+                    assistantMessage: { id: 'message-1', thread_id: 'thread-1', role: 'assistant', clock: 1 } } },
+            apiKey: 'user-api-key', userId: 'user-1', workspaceId: 'workspace-1', threadId: 'thread-1', messageId: 'message-1',
+            referer: 'http://localhost:3000',
+        };
+        await expect(startBackgroundStream({ ...params, body: { ...params.body,
+            _delegationDefaults: { version: 1, instructions: [{ role: 'system', content: 'Different instruction' }] } } }))
+            .rejects.toThrow('Delegation defaults must match');
+        await expect(startBackgroundStream({ ...params, body: { ...params.body,
+            _delegationDefaults: { version: 2, instructions: [instruction] } } })).rejects.toThrow('Delegation defaults must match');
+        await expect(startBackgroundStream({ ...params, body: { ...params.body, _durableDelegation: 1,
+            tools: [{ type: 'function', function: { name: 'delegate_chat', description: 'Delegate',
+                parameters: { type: 'object', properties: {} } } }], _toolRuntime: { delegate_chat: 'client' } } }))
+            .rejects.toMatchObject({ name: 'BackgroundDurableDelegationUnsupportedError' });
+        expect(fetchMock).not.toHaveBeenCalled();
+        const { jobId } = await startBackgroundStream(params);
+        await vi.waitFor(async () => expect((await memoryJobProvider.getJob(jobId, 'user-1'))?.status).toBe('complete'));
+        const job = (await memoryJobProvider.getJob(jobId, 'user-1'))!;
+        expect(getChatJobExecution(job)?.delegationDefaults).toEqual(defaults);
+        expect(getChatJobExecution(job)?.body).not.toHaveProperty('_delegationDefaults');
+        const sent = JSON.parse(String(fetchMock.mock.calls[0]![1]!.body));
+        expect(sent).not.toHaveProperty('_delegationDefaults');
+        expect(sent.messages).toEqual(params.body.messages);
+    });
+
     it('starts one model stream for duplicate background admissions', async () => {
         const encoder = new TextEncoder();
         const fetchMock = vi.fn(
@@ -868,6 +907,20 @@ describe('memory background job admission and lifecycle', () => {
             expect(execute).not.toHaveBeenCalled();
             expect(await memoryJobProvider.getJob(id, 'user-1')).toMatchObject({ status: 'aborted', content: 'durable checkpoint', reasoning: 'durable reason' });
         } finally { vi.restoreAllMocks(); }
+    });
+
+    it('refuses to dispatch a recovered request with outstanding model-dispatch evidence', async () => {
+        const now = Date.now();
+        const id = await memoryJobProvider.createJob({ userId: 'user-1', threadId: 'thread-1', messageId: 'message-1',
+            model: 'test-model', execution: { ...execution(), delegationRecoveryPolicy: 'v1',
+                delegationDispatchSequence: 1, delegationDispatch: { version: 1, sequence: 1, state: 'started' } } });
+        const job = await memoryJobProvider.claimJob!(id, 'recovery', now, now + 60_000);
+        const execute = vi.fn();
+        await runClaimedBackgroundJob(job!, { provider: memoryJobProvider, encryptionKey: secret, execute });
+        expect(execute).not.toHaveBeenCalled();
+        const stored = await memoryJobProvider.getJob(id, 'user-1');
+        expect(stored?.status).toBe('error');
+        expect(normalizeError(stored?.error)).toMatchObject({ code: 'ERR_MODEL_OUTCOME_UNKNOWN', retryable: false });
     });
 
     it('reclaims an expired lease, resets partial text, and fences the old worker', async () => {

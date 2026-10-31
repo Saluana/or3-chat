@@ -1,4 +1,5 @@
 import { createOpenRouterClient, fetchOpenRouterCatalog } from '~~/shared/openrouter';
+import type { OpenRouterModel } from '~~/shared/openrouter/types';
 import { stripModelVariantSuffix } from '~~/shared/openrouter/model-variants';
 import { admitProviderRequest, ChatContextAdmissionError, type ContextRequestPolicy,
     type CountableChatMessage } from '~~/shared/chat/context-budget';
@@ -19,9 +20,8 @@ export class OpenRouterCatalogUnavailableError extends Error {
     }
 }
 
-/** New native requests carry only user choices. Legacy payloads retain their existing boundary. */
-export async function resolveServerContextPolicy(body: Record<string, unknown>, apiKey: string,
-    serverURL?: string, signal?: AbortSignal): Promise<ContextRequestPolicy | undefined> {
+/** Use one live catalog snapshot for both model choice and context admission. */
+export function contextPolicyFromCatalog(body: Record<string, unknown>, catalog: readonly OpenRouterModel[]): ContextRequestPolicy | undefined {
     if (!('_context' in body)) return undefined;
     const envelope = body._context && typeof body._context === 'object' && !Array.isArray(body._context)
         ? body._context as Record<string, unknown> : null;
@@ -33,15 +33,6 @@ export async function resolveServerContextPolicy(body: Record<string, unknown>, 
         : typeof envelope.user_max_context_tokens === 'number' ? envelope.user_max_context_tokens : NaN;
     const requestedCompletion = envelope.requested_completion_tokens === null ? null
         : typeof envelope.requested_completion_tokens === 'number' ? envelope.requested_completion_tokens : NaN;
-    let catalog;
-    try { catalog = await fetchOpenRouterCatalog(createOpenRouterClient({ apiKey, serverURL }), signal,
-        { deadlineMs: CATALOG_DEADLINE_MS }); }
-    catch (error) {
-        if (signal?.aborted) throw error;
-        // The catalog itself could not be read: that is a provider outage or
-        // egress problem, not something the user fixes by changing models.
-        throw new OpenRouterCatalogUnavailableError(error);
-    }
     const withoutThinking = selectedModel.endsWith(':thinking') ? selectedModel.slice(0, -':thinking'.length) : selectedModel;
     const lookupId = stripModelVariantSuffix(withoutThinking);
     const model = catalog.find((candidate) => candidate.id === lookupId)
@@ -51,6 +42,24 @@ export async function resolveServerContextPolicy(body: Record<string, unknown>, 
         top_provider: model.top_provider ? Object.freeze({ context_length: model.top_provider.context_length,
             max_completion_tokens: model.top_provider.max_completion_tokens }) : undefined }), source: 'openrouter-live', userMaxContextTokens: userMaximum,
         requestedCompletionTokens: requestedCompletion });
+}
+
+/** New native requests carry only user choices. Legacy payloads retain their existing boundary. */
+export async function resolveServerContextPolicy(body: Record<string, unknown>, apiKey: string,
+    serverURL?: string, signal?: AbortSignal): Promise<ContextRequestPolicy | undefined> {
+    if (!('_context' in body)) return undefined;
+    // Validate the envelope before a network request, preserving the admission boundary.
+    if (!body._context || typeof body._context !== 'object' || Array.isArray(body._context) ||
+        (body._context as Record<string, unknown>).version !== 1 || typeof body.model !== 'string' || !Array.isArray(body.messages))
+        throw new ChatContextAdmissionError({ ok: false, code: 'model_metadata_unavailable' });
+    let catalog;
+    try { catalog = await fetchOpenRouterCatalog(createOpenRouterClient({ apiKey, serverURL }), signal,
+        { deadlineMs: CATALOG_DEADLINE_MS }); }
+    catch (error) {
+        if (signal?.aborted) throw error;
+        throw new OpenRouterCatalogUnavailableError(error);
+    }
+    return contextPolicyFromCatalog(body, catalog);
 }
 
 export async function admitServerProviderBody(body: Record<string, unknown>, policy: ContextRequestPolicy | undefined,
@@ -73,6 +82,6 @@ export function contextAdmissionResponse(error: ChatContextAdmissionError) {
 export function withoutOr3RequestMetadata(body: Record<string, unknown>): Record<string, unknown> {
     const providerBody = { ...body };
     for (const key of ['_background', '_threadId', '_messageId', '_backgroundAdmissionId', '_backgroundMode',
-        '_toolRuntime', '_clientDeviceId', '_streamedFieldMode', '_history', '_context']) delete providerBody[key];
+        '_toolRuntime', '_clientDeviceId', '_streamedFieldMode', '_history', '_context', '_delegationDefaults', '_durableDelegation']) delete providerBody[key];
     return providerBody;
 }

@@ -4,6 +4,7 @@ import { sha256Hex } from '~~/shared/runtime-crypto';
 import type { SendMessageParams, ToolDefinition } from './types';
 import type { ORMessage } from '~/core/auth/openrouter-build';
 import { resolveThreadProjection } from './compaction/history';
+import type { DelegationDefaults } from '~~/shared/chat/delegation-checkpoint';
 
 /** Local-only final native payload. Never synchronized or a delegated intent. */
 export interface NativeRecoveryCheckpoint {
@@ -17,6 +18,8 @@ export interface NativeRecoveryCheckpoint {
     source_fingerprint: string;
     messages: Array<ORMessage | { role: 'tool'; [key: string]: unknown }>;
     tools: ToolDefinition[];
+    /** Previously captured effective instructions; absent for unsupported preparation. */
+    delegation_defaults?: DelegationDefaults;
     project_fingerprint?: string;
     /** Effective outgoing prompt/paste used for the admitted project retrieval. */
     project_query?: string;

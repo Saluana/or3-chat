@@ -8,6 +8,7 @@ import { emitJobStatus } from './viewers';
 import { reconcileBackgroundJobHistory } from './history';
 import { getShutdownRuntime } from '../shutdown/runtime';
 import { supportsDurableBackgroundJobs } from './capabilities';
+import { classifyDelegationDispatchFailure } from './model-dispatch';
 
 export const BACKGROUND_JOB_LEASE_MS = 30_000;
 const BACKGROUND_JOB_HEARTBEAT_MS = 10_000;
@@ -134,6 +135,14 @@ export async function runClaimedBackgroundJob(
             }
             return;
         }
+        // Presence alone is unsafe, even if the marker is malformed or from a
+        // newer version. Never contact the model to guess its outcome.
+        if (execution.delegationDispatch !== undefined) {
+            throw Object.assign(new Error('Model request outcome is unknown.'), { code: 'ERR_MODEL_OUTCOME_UNKNOWN', retryable: false });
+        }
+        if (execution.delegationRecoveryPolicy !== undefined && execution.delegationRecoveryPolicy !== 'v1') {
+            throw Object.assign(new Error('Unsupported model recovery policy.'), { code: 'ERR_VALIDATION', retryable: false });
+        }
         if (hasUnsafeInterruptedTool(job)) {
             throw Object.assign(new Error('Tool execution was interrupted before checkpointing.'), { code: 'ERR_TOOL_OUTCOME_UNKNOWN', retryable: false });
         }
@@ -205,13 +214,16 @@ export async function runClaimedBackgroundJob(
             }
             return;
         }
+        // A worker that yielded after an ambiguous write or lost lease cannot
+        // decide a terminal outcome, even if its old lease is still visible.
+        if (error instanceof Error && error.name === 'BackgroundJobLeaseLostError') return;
         if (
             latest?.status === 'streaming' &&
             latest.leaseOwner === workerId &&
             !abortController.signal.aborted
         ) {
             const execution = getChatJobExecution(latest);
-            const message = serializeError(error, { code: 'ERR_STREAM_FAILURE', source: 'provider', credentialSource: execution?.credentialSource });
+            const message = serializeError(classifyDelegationDispatchFailure(error, execution), { code: 'ERR_STREAM_FAILURE', source: 'provider', credentialSource: execution?.credentialSource });
             if (
                 execution?.history
             ) {

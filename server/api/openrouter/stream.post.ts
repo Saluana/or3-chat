@@ -102,6 +102,10 @@ export default defineEventHandler(async (event) => {
         return 'Invalid request body';
     }
     const backgroundRequested = isBackgroundModeRequest(body);
+    if (!backgroundRequested && body._durableDelegation !== undefined) {
+        setResponseStatus(event, 400);
+        return { error: 'Durable delegation requires background execution.', code: 'background_delegation_unsupported' };
+    }
     if ('tools' in body) {
         const toolValidation = validateServerToolRequest(
             body.tools,
@@ -288,6 +292,10 @@ export default defineEventHandler(async (event) => {
 
             return result;
         } catch (err) {
+            if (err instanceof Error && err.name === 'BackgroundDelegationDefaultsError') {
+                setResponseStatus(event, 400);
+                return { error: err.message, code: 'background_delegation_defaults_invalid' };
+            }
             if (err instanceof ChatContextAdmissionError) {
                 setResponseStatus(event, 400);
                 return contextAdmissionResponse(err);
@@ -309,13 +317,14 @@ export default defineEventHandler(async (event) => {
             if (
                 err instanceof Error &&
                 (err.name === 'BackgroundHistoryUnsupportedError' ||
+                    err.name === 'BackgroundDurableDelegationUnsupportedError' ||
                     err.name === 'BackgroundClientToolUnsupportedError')
             ) {
                 setResponseStatus(event, 503);
                 return {
                     error: err.message,
-                    code: err.name === 'BackgroundClientToolUnsupportedError'
-                        ? 'background_client_tool_unsupported'
+                    code: err.name === 'BackgroundClientToolUnsupportedError' ? 'background_client_tool_unsupported'
+                        : err.name === 'BackgroundDurableDelegationUnsupportedError' ? 'background_delegation_unsupported'
                         : 'background_history_unsupported',
                 };
             }
@@ -369,6 +378,8 @@ export default defineEventHandler(async (event) => {
         _history: _history,
         _clientDeviceId: _clientDeviceId,
         _context: _context,
+        _delegationDefaults: _delegationDefaults,
+        _durableDelegation: _durableDelegation,
         ...providerBody
     } = body;
 

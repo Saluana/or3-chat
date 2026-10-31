@@ -26,6 +26,7 @@ The client plugin installs a cache for utilities outside setup. `useHooks` prefe
 | `applyFilters(name, value, ...args)` | Sequential async transforms; returns the final value |
 | `doActionSync / applyFiltersSync` | Synchronous dispatch; callbacks must be synchronous |
 | `hasAction / hasFilter(name?, fn?)` | Inspect registrations |
+| `hasOnlyFilter(name, fn)` | Check whether a callback is the sole matching filter, including wildcard registrations |
 | `captureFilterChain(names)` | Capture a pure registration receipt; calling the returned predicate checks that those filter chains still match |
 | `currentPriority()` | Current callback priority, or false |
 | `removeAllCallbacks(priority?)` | Broad teardown; avoid removing other extensions' listeners |

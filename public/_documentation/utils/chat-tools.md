@@ -17,6 +17,7 @@ the newly focused database. Saved Chat settings can disable any tool.
 | `search_threads` | Searches the existing workspace chat index by title or message text. Returns up to 10 matches and excludes the current chat. |
 | `read_thread` | Reads up to 40 recent, non-deleted user/assistant messages from canonical branch history, including inherited reference messages and excluding superseded retries. Each message is capped at 4,000 characters and the transcript at 18,000; system, tool, and deleted messages are omitted. The result is read-only. |
 | `send_message_to_thread` | Appends a message to another existing thread in the active workspace. It records a user turn by default, or an assistant note when `role: "assistant"` is supplied. It does not start a model reply and cannot target the current chat. |
+| `search_models` | Searches the available model catalog by name, provider, or ID and returns up to 20 matching model IDs. |
 | `delegate_chat` | Creates another chat or continues a specified chat, sends a task to the chosen model, and waits for its reply. The originating chat receives the completed response and can summarize it. |
 
 The write rechecks the originating database immediately before saving and
@@ -24,7 +25,8 @@ refuses a missing or deleted target thread.
 
 Ask for a model by its catalog name or ID and, optionally, a supported reasoning
 effort. Without a model, the originating request's model and reasoning are
-inherited. Unavailable, ambiguous, or unsupported choices are reported rather
+inherited. The chat can search the model catalog to resolve an unfamiliar or
+ambiguous name. Unavailable, ambiguous, or unsupported choices are reported rather
 than silently changed. A routing variant (`off`, `online`, `nitro`, or `floor`)
 can be supplied explicitly, or as a suffix on the model ID. The explicit variant
 overrides the suffix. Up to four independent new chats can be submitted together
@@ -36,9 +38,10 @@ project chats can continue only chats in the same project. A busy target is
 refused. The delegated request uses normal chat permissions and tools, except
 that it cannot delegate again.
 
-The chat icon and elapsed time show the model's activity. Select the line to
-open the child in another pane, where its conversation remains available after
-completion. Stopping the parent stops the delegated request. Keep the
+The chat icon and elapsed time show the model's activity. For a batch, each
+child has its own activity line. Select a child to open it in another pane on
+desktop or a workspace tab on mobile, where its conversation remains available
+after completion. Stopping the parent stops the delegated request. Keep the
 originating browser open while it waits; if execution is interrupted, inspect
 the saved child before explicitly retrying. A result longer than 18,000
 characters is labeled as truncated in the tool response.

@@ -8,7 +8,9 @@ import type {
     SendResult,
     SendFailureReason,
 } from '~/utils/chat/types';
-import type { UiChatMessage, ToolCallInfo } from '~/utils/chat/uiMessages';
+import { ensureUiMessage, type UiChatMessage, type ToolCallInfo } from '~/utils/chat/uiMessages';
+import { deriveMessageContent } from '~/utils/chat/messages';
+import { associateUiToolResultMessages } from '~/utils/chat/transcript';
 import type { ToolLedgerEntry } from '~~/shared/chat/tool-ledger';
 import type { AssistantPersister, StoredMessage } from './types';
 import { updateMessageRecord } from './persistence';
@@ -58,6 +60,8 @@ export type RequestTerminal = {
     deleteEmpty?: boolean;
     /** The existing tracker owns background persistence and its retry queue. */
     persistence?: 'request' | 'tracker' | 'canonical';
+    /** Re-read already-finalized local canonical history before projecting UI. */
+    canonicalFinalized?: boolean;
     attempt?: number;
     /** Completion hooks/history writeback run after a successful durable write. */
     afterPersist?: () => Promise<void>;
@@ -70,6 +74,8 @@ export type RequestFinalization = {
     superseded: boolean;
     persistenceError?: unknown;
     effectError?: unknown;
+    canonicalRow?: StoredMessage;
+    canonicalUnavailable?: boolean;
 };
 
 /** One owner per admitted generation; attachment and save state are independent. */
@@ -78,6 +84,8 @@ export type ChatRequest = {
     readonly requestId: string;
     readonly originDb: Or3DB;
     readonly workspaceId: string;
+    /** Account captured before asynchronous admission. */
+    readonly originUserId?: string;
     readonly accumulator: Accumulator;
     readonly kind: 'send' | 'continue' | 'reattach' | 'recovery';
     projectContext?: import('~/utils/projects/context').ProjectContextSnapshot | null;
@@ -118,6 +126,7 @@ export function createChatRequest(options: {
     requestId: string;
     originDb: Or3DB;
     workspaceId: string;
+    originUserId?: string;
     projectContext?: import('~/utils/projects/context').ProjectContextSnapshot | null;
     threadId?: string;
     accumulator: Accumulator;
@@ -196,12 +205,53 @@ export function projectTerminalMessages(
             view.tailAssistant.value = null;
         return;
     }
+    if (result.canonicalUnavailable) return;
     const target =
         view.tailAssistant.value?.id === id
             ? view.tailAssistant.value
             : (view.messages.value.find((message) => message.id === id) ??
               request.message);
     if (!target) return;
+    if (result.canonicalRow) {
+        const row = result.canonicalRow;
+        const rawIndex = view.rawMessages.value.findIndex(
+            (message) => message.id === id
+        );
+        const raw: ChatMessage = {
+            id: row.id,
+            role: 'assistant',
+            content: deriveMessageContent(row),
+            data: row.data ?? null,
+            reasoning_text:
+                typeof row.data?.reasoning_text === 'string'
+                    ? row.data.reasoning_text
+                    : null,
+            pending: row.pending,
+            error: row.error,
+            stream_id: row.stream_id ?? undefined,
+            file_hashes: row.file_hashes ?? undefined,
+            index: row.index,
+            order_key: row.order_key ?? null,
+            created_at: row.created_at,
+        };
+        if (rawIndex >= 0) {
+            view.rawMessages.value[rawIndex] = raw;
+            view.rawMessages.value = [...view.rawMessages.value];
+        }
+        const canonicalUi = associateUiToolResultMessages(
+            [ensureUiMessage(raw)],
+            rawIndex >= 0
+                ? view.rawMessages.value
+                : [...view.rawMessages.value, raw]
+        )[0]!;
+        request.message = canonicalUi;
+        if (view.tailAssistant.value?.id === id)
+            view.tailAssistant.value = canonicalUi;
+        view.messages.value = view.messages.value.map((message) =>
+            message.id === id ? canonicalUi : message
+        );
+        return;
+    }
     target.text = terminal.content ?? target.text;
     target.reasoning_text = terminal.reasoning ?? undefined;
     if (terminal.toolCalls !== undefined)
@@ -352,6 +402,46 @@ export function finalizeRequest(
         try {
             if (terminal.persistence === 'tracker') {
                 request.persistence.value = 'tracker';
+                if (terminal.canonicalFinalized && request.assistantMessageId) {
+                    let row: StoredMessage | undefined;
+                    let readSucceeded = false;
+                    // The server outcome is already terminal. Retry only the
+                    // local read, and stop promptly if this view no longer owns it.
+                    for (let attempt = 0; attempt < 3; attempt++) {
+                        try {
+                            row = (await request.originDb.messages.get(
+                                request.assistantMessageId
+                            )) as StoredMessage | undefined;
+                            readSucceeded = true;
+                            break;
+                        } catch {
+                            if (attempt === 2 || !request.ownsView()) break;
+                            await new Promise<void>((resolve) => setTimeout(resolve, 100 * 2 ** attempt));
+                            if (!request.ownsView()) break;
+                        }
+                    }
+                    if (readSucceeded) {
+                        const data = row?.data;
+                        if (
+                            !row || row.deleted || row.role !== 'assistant' ||
+                            row.thread_id !== request.threadId || row.pending !== false ||
+                            data?.generation_state === 'superseded' ||
+                            typeof data?.superseded_by === 'string' ||
+                            (request.streamId && data?.generation_id !== request.streamId) ||
+                            (typeof data?.background_job_id === 'string' &&
+                                data.background_job_id !== request.jobId)
+                        ) {
+                            result.superseded = true;
+                            request.persistence.value = 'superseded';
+                        } else {
+                            result.canonicalRow = row;
+                        }
+                    } else {
+                        // Keep the job outcome separate from local read failure.
+                        // History observation can still restore it later.
+                        result.canonicalUnavailable = true;
+                    }
+                }
             } else if (
                 terminal.persistence === 'canonical' &&
                 request.assistantMessageId

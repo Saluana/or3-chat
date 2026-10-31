@@ -24,6 +24,7 @@ import * as jobStore from '../../background-jobs/store';
 import type { CanonicalHistoryActor, CanonicalHistoryRecord } from '~~/shared/chat/background-history';
 import type { CanonicalChatQuery } from '~~/shared/chat/history-reader';
 import { historyToolDefinitions } from '~~/shared/chat/history-tools';
+import { modelSearchDefinition } from '~~/shared/openrouter/delegation-model-catalog';
 import type { ToolDefinition, ToolExecutionContext } from '~/utils/chat/types';
 import { getShutdownRuntime } from '../../shutdown/runtime';
 
@@ -43,6 +44,19 @@ describe('server tool registry', () => {
     });
 
     afterEach(() => vi.useRealTimers());
+    it('does not query the job catalog after workspace access is lost', async () => {
+        registerServerTool({ ...modelSearchDefinition, runtime: 'server' }, () => 'unexpected',
+            { runtime: 'server', override: true });
+        const modelCatalog = vi.fn(async () => [{ id: 'test/model', name: 'Test' }]);
+        try {
+            const response = await executeServerTool('search_models', '{"query":"test"}', {
+                subject: 'user-without-access', workspaceId: 'ws-1', threadId: 'thread-1',
+                messageId: 'message-1', callId: 'call', requestId: 'job', abortSignal: new AbortController().signal,
+            }, { definition: modelSearchDefinition }, { modelCatalog });
+            expect(response.error).toBeTruthy();
+            expect(modelCatalog).not.toHaveBeenCalled();
+        } finally { unregisterServerTool('search_models'); }
+    });
     it('executes a hybrid tool', async () => {
         const def: ToolDefinition = {
             type: 'function',

@@ -7,6 +7,7 @@ import {
     openRouterStreamWithRetry,
     startBackgroundStream,
     isBackgroundStreamingEnabled,
+    getBackgroundClientToolCapability,
     pollJobStatus,
     BackgroundJobPollError,
     abortBackgroundAdmission,
@@ -68,6 +69,7 @@ describe('openrouterStream', () => {
     afterEach(() => {
         vi.useRealTimers();
     });
+
 
     it('closes the provider iterator when its retry wrapper consumer exits early', async () => {
         let closed = false;
@@ -661,6 +663,35 @@ describe('background streaming helpers', () => {
             role: 'assistant',
             clock: 1,
         },
+    });
+
+    it('negotiates durable delegation separately from defaults metadata and sends both in admission', async () => {
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(createJsonResponse({ available: true }))
+            .mockResolvedValueOnce(createJsonResponse({ available: true, delegationDefaultsCaptureVersion: 1, durableDelegationVersion: 1, serverModelSearchVersion: 1 }))
+            .mockResolvedValueOnce(createJsonResponse({ jobId: 'job-1', status: 'streaming', historyVersion: 1 }));
+        vi.stubGlobal('fetch', fetchMock);
+        expect(await getBackgroundClientToolCapability()).toEqual({ available: true, defaultsCapture: false, durableDelegation: false, serverModelSearch: false });
+        expect(await getBackgroundClientToolCapability()).toEqual({ available: true, defaultsCapture: true, durableDelegation: true, serverModelSearch: true });
+        const instruction = { role: 'system' as const, content: [{ type: 'text' as const, text: 'Selected prompt' }] };
+        await startBackgroundStream({ model: 'model-1', orMessages: [instruction, { role: 'user', content: 'Task' }],
+            modalities: ['text'], threadId: 't1', messageId: 'm1', history: testHistory(),
+            delegationDefaults: { version: 1, instructions: [instruction] }, durableDelegation: true });
+        const request = JSON.parse(String(fetchMock.mock.calls[2]![1]!.body));
+        expect(request._delegationDefaults).toEqual({ version: 1, instructions: [instruction] });
+        expect(request._durableDelegation).toBe(1);
+        expect(request.messages).toEqual([instruction, { role: 'user', content: 'Task' }]);
+    });
+
+    it('does not retry or disable ordinary background streaming after durable delegation is refused', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({ code: 'background_delegation_unsupported',
+            error: 'Durable delegation is unavailable.' }, 503));
+        vi.stubGlobal('fetch', fetchMock);
+        await expect(startBackgroundStream({ model: 'model-1', orMessages: [{ role: 'user', content: 'Task' }],
+            modalities: ['text'], threadId: 't1', messageId: 'm1', history: testHistory(), durableDelegation: true }))
+            .rejects.toMatchObject({ backgroundAdmissionRetryable: false, message: 'Durable delegation is unavailable.' });
+        expect(fetchMock).toHaveBeenCalledOnce();
+        expect(isBackgroundStreamingEnabled(true)).toBe(true);
     });
 
     beforeEach(() => {

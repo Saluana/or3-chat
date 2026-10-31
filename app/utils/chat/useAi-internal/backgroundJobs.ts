@@ -68,6 +68,7 @@ import {
     isBackgroundUsageReset,
     persistBackgroundJobUpdate,
     persistBackgroundTrackingInterruption,
+    readCanonicalToolProjection,
 } from './backgroundJobPersistence';
 import {
     dispatchWorkflowComplete,
@@ -162,7 +163,12 @@ export function refreshPendingClientToolsForWorkspace(workspaceId: string): void
     for (const tracker of backgroundJobTrackers.values()) {
         if (!tracker.active || tracker.workspaceId !== workspaceId) continue;
         void pollJobStatus(tracker.jobId).then(
-            (status) => dispatchPendingClientTools(tracker, status),
+            (status) => {
+                // Refresh only discovers pending tools. The normal tracker
+                // transport owns attempt-checked terminal cleanup.
+                if (status.status === 'streaming')
+                    dispatchPendingClientTools(tracker, status);
+            },
             () => undefined
         );
     }
@@ -211,7 +217,8 @@ function clearClientToolJournal(key: string): void {
 async function executePendingClientTool(
     tracker: BackgroundJobTracker,
     callId: string,
-    toolName: string
+    toolName: string,
+    status: BackgroundJobStatus
 ): Promise<void> {
     const dispatchKey = `${tracker.jobId}:${callId}`;
     if (clientToolDispatches.has(dispatchKey)) return;
@@ -227,8 +234,27 @@ async function executePendingClientTool(
     // cannot turn a recoverable reconnect into a false tool failure.
     if (!useToolRegistry().getTool(toolName)) return;
     const abortController = new AbortController();
-    const canDispatch = (): boolean => tracker.active && !abortController.signal.aborted;
+    const canDispatch = (): boolean =>
+        tracker.active && !tracker.terminalStatus && !abortController.signal.aborted;
+    const canExecute = async (): Promise<boolean> => {
+        if (
+            !canDispatch() ||
+            (getActiveWorkspaceId() ?? 'local') !== tracker.workspaceId ||
+            getCachedSessionContext()?.user?.id !== tracker.userId
+        ) return false;
+        const projection = await readCanonicalToolProjection(tracker, status);
+        if (projection === 'ended') {
+            clearClientToolRetriesForJob(tracker.jobId);
+            for (const [key, active] of clientToolDispatches) {
+                if (key.startsWith(`${tracker.jobId}:`)) active.abortController.abort();
+            }
+        }
+        return projection === 'eligible' && canDispatch() &&
+            (getActiveWorkspaceId() ?? 'local') === tracker.workspaceId &&
+            getCachedSessionContext()?.user?.id === tracker.userId;
+    };
     const dispatch = (async () => {
+        if (!(await canExecute())) return;
         const returned = await claimBackgroundClientTool(tracker.jobId, callId);
         if (!returned) {
             // Another tab may hold the lease. Status updates can arrive every
@@ -236,6 +262,7 @@ async function executePendingClientTool(
             if (canDispatch()) clientToolClaimDeferredUntil.set(dispatchKey, Date.now() + CLIENT_TOOL_CLAIM_CONFLICT_DELAY_MS);
             return;
         }
+        if (!(await canExecute())) return;
         clientToolClaimDeferredUntil.delete(dispatchKey);
         const claim = structuredClone(returned) as Omit<typeof returned, 'call' | 'context'> & Partial<Pick<typeof returned, 'call' | 'context'>>;
         if (!claim.call || !claim.context || claim.call.id !== callId || claim.call.name !== toolName ||
@@ -278,6 +305,7 @@ async function executePendingClientTool(
             getCachedSessionContext()?.user?.id !== tracker.userId ||
             claim.context.workspaceId !== tracker.workspaceId
         ) return;
+        if (!(await canExecute())) return;
         const journalKey = clientToolJournalKey(tracker.jobId, callId);
         assertLocalClaim();
         let settled = readClientToolJournal(journalKey);
@@ -328,7 +356,19 @@ async function executePendingClientTool(
                         requestId: tracker.jobId,
                         abortSignal: abortController.signal,
                         parentModel: claim.parentModel,
-                        assertToolAuthorized: async () => { assertLocalClaim(); },
+                        assertToolAuthorized: async () => {
+                            try {
+                                assertLocalClaim();
+                                if (!(await canExecute()))
+                                    throw new Error('The originating chat is no longer eligible for this tool.');
+                                assertLocalClaim();
+                            } catch (error) {
+                                // A failed guard must not be submitted as a tool result.
+                                // Preserve the journal if a handler may already have run.
+                                validation.failed = true;
+                                throw error;
+                            }
+                        },
                     },
                     { definition: claim.call.definition, beforeExecute: async () => {
                         assertLocalClaim();
@@ -364,6 +404,7 @@ async function executePendingClientTool(
             (getActiveWorkspaceId() ?? 'local') !== tracker.workspaceId ||
             getCachedSessionContext()?.user?.id !== tracker.userId
         ) return;
+        if (!(await canExecute())) return;
         assertLocalClaim();
         await submitBackgroundClientToolResult({
             jobId: tracker.jobId,
@@ -384,6 +425,8 @@ function dispatchPendingClientTools(
     tracker: BackgroundJobTracker,
     status: BackgroundJobStatus
 ): void {
+    if (typeof status.attempt === 'number' && typeof tracker.lastAttempt === 'number' &&
+        status.attempt < tracker.lastAttempt) return;
     if (status.status !== 'streaming') {
         clearClientToolRetriesForJob(tracker.jobId);
         clearClientToolJournalsForJob(tracker.jobId);
@@ -394,6 +437,7 @@ function dispatchPendingClientTools(
         }
         return;
     }
+    if (!tracker.active || tracker.terminalStatus) return;
     for (const call of status.tool_calls ?? []) {
         if (call.id && call.runtime === 'client' && call.status === 'pending') {
             const dispatchKey = `${tracker.jobId}:${call.id}`;
@@ -404,13 +448,16 @@ function dispatchPendingClientTools(
                     clientToolRetryTimers.delete(dispatchKey);
                     if (!tracker.active || (getActiveWorkspaceId() ?? 'local') !== tracker.workspaceId) return;
                     void pollJobStatus(tracker.jobId).then(
-                        (fresh) => dispatchPendingClientTools(tracker, fresh),
+                        (fresh) => {
+                            if (fresh.status === 'streaming')
+                                dispatchPendingClientTools(tracker, fresh);
+                        },
                         () => dispatchPendingClientTools(tracker, status)
                     );
                 }, Math.min(30_000, 3_000 * 2 ** Math.min(attempts, 4)));
                 clientToolRetryTimers.set(dispatchKey, timer);
             }
-            void executePendingClientTool(tracker, call.id, call.name).catch((error) => {
+            void executePendingClientTool(tracker, call.id, call.name, status).catch((error) => {
                 bgStreamWarn('client-tool-dispatch-failed', {
                     jobId: tracker.jobId,
                     callId: call.id,
@@ -550,6 +597,52 @@ function notifyBackgroundSubscribers(
             });
         }
     }
+}
+
+function setReconnecting(tracker: BackgroundJobTracker, reconnecting: boolean): void {
+    if (Boolean(tracker.reconnecting) === reconnecting) return;
+    tracker.reconnecting = reconnecting;
+    for (const subscriber of [...tracker.subscribers]) {
+        try { subscriber.onReconnecting?.(reconnecting); }
+        catch { /* A viewer must not interrupt tracking. */ }
+    }
+}
+
+/** Observe browser connectivity only while this tracker owns a live transport. */
+function observeConnectivity(tracker: BackgroundJobTracker): void {
+    if (tracker.disposeConnectivity || typeof window === 'undefined') return;
+    const offline = () => {
+        if (!tracker.active || tracker.terminalStatus) return;
+        setReconnecting(tracker, true);
+        if (!tracker.streaming || !tracker.streamUnsubscribe) return;
+        const generation = tracker.sseGeneration;
+        const drain = tracker.streamChain ?? Promise.resolve();
+        tracker.streamUnsubscribe();
+        void drain.finally(() => {
+            if (tracker.active && !tracker.terminalStatus && !tracker.streaming && !tracker.polling &&
+                tracker.sseGeneration === generation && navigator.onLine === false) void pollBackgroundJob(tracker);
+        });
+    };
+    const online = () => {
+        if (!tracker.active || tracker.terminalStatus) return;
+        const generation = tracker.sseGeneration;
+        const drain = tracker.streamChain ?? Promise.resolve();
+        void drain.finally(() => {
+            if (!tracker.active || tracker.terminalStatus || tracker.streaming || tracker.polling ||
+                tracker.sseGeneration !== generation || navigator.onLine === false) return;
+            startBackgroundJobTracking(tracker, {
+                useSse: tracker.preferSse && tracker.subscribers.size > 0,
+            });
+        });
+    };
+    window.addEventListener('offline', offline);
+    window.addEventListener('online', online);
+    tracker.disposeConnectivity = () => {
+        window.removeEventListener('offline', offline);
+        window.removeEventListener('online', online);
+        tracker.disposeConnectivity = undefined;
+    };
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) offline();
 }
 
 /**
@@ -745,6 +838,9 @@ async function handleBackgroundStatus(
             nextStatus.attempt < tracker.lastAttempt) ||
             (typeof status.attempt === 'number' && nextStatus.attempt < status.attempt))
     ) return true;
+    if (!tracker.active) return false;
+    if (nextStatus.status !== 'streaming' || typeof navigator === 'undefined' || navigator.onLine !== false)
+        setReconnecting(tracker, false);
     const resetUsage = isBackgroundUsageReset(nextStatus, tracker.lastAttempt) ||
         tracker.usageResetPending === true;
     const incomingUsage = readRequestUsage(nextStatus.usage);
@@ -817,6 +913,9 @@ async function handleBackgroundStatus(
         });
         return false;
     }
+    const canonicalFinalized =
+        'canonicalFinalized' in persistence && persistence.canonicalFinalized === true;
+    if (canonicalFinalized && nextStatus.status === 'streaming') return true;
     if (persistence.persisted && 'usage' in persistence) {
         usage = persistence.usage;
         nextStatus = { ...nextStatus, usage };
@@ -829,7 +928,7 @@ async function handleBackgroundStatus(
     if (nextStatus.workflow_state && typeof nextStatus.workflow_state === 'object') {
         tracker.lastWorkflowState = nextStatus.workflow_state;
     }
-    if (!persistence.persisted) {
+    if (!persistence.persisted && !canonicalFinalized) {
         // Local projection failures must never cancel a valid server job. The
         // next status will retry persistence while subscribers keep receiving
         // live progress.
@@ -857,10 +956,13 @@ async function handleBackgroundStatus(
         reasoning: safeReasoning,
         reasoningDelta,
         reasoningReplace: replaceReasoning,
+        ...(canonicalFinalized ? { canonicalFinalized: true } : {}),
     };
     const workflowVersion = workflowVersionOf(nextStatus.workflow_state);
-    notifyBackgroundSubscribers(tracker, 'onUpdate', update);
+    if (!canonicalFinalized)
+        notifyBackgroundSubscribers(tracker, 'onUpdate', update);
     if (
+        !canonicalFinalized &&
         nextStatus.workflow_state &&
         typeof nextStatus.workflow_state === 'object' &&
         workflowVersion >= tracker.lastWorkflowVersion
@@ -869,6 +971,7 @@ async function handleBackgroundStatus(
     }
 
     if (nextStatus.status !== 'streaming') {
+        tracker.disposeConnectivity?.();
         tracker.terminalStatus = nextStatus;
         tracker.terminalContent = safeContent;
         tracker.terminalReplace = replace;
@@ -904,9 +1007,12 @@ async function handleBackgroundStatus(
             }
             // The generation indicator may stop immediately; local persistence
             // is allowed to retry independently below.
-            tracker.resolveCompletion(nextStatus);
+            tracker.resolveCompletion({
+                ...nextStatus,
+                canonicalFinalized: canonicalFinalized || undefined,
+            });
         }
-        if (persistence.persisted) {
+        if (persistence.persisted || canonicalFinalized) {
             bgStreamLog('status-terminal-cleanup', {
                 jobId: tracker.jobId,
                 status: nextStatus.status,
@@ -982,7 +1088,7 @@ async function retryTerminalPersistence(
         });
         return { persisted: false as const, missing: false as const };
     });
-    if (persistence.persisted) {
+    if (persistence.persisted || ('canonicalFinalized' in persistence && persistence.canonicalFinalized)) {
         bgStreamLog('terminal-persist-retry-succeeded', {
             jobId: tracker.jobId,
             status: status.status,
@@ -1099,6 +1205,8 @@ async function interruptBackgroundTracking(
     options: { interrupt: boolean; kind: 'missing' | 'auth' | 'protocol' }
 ): Promise<void> {
     if (tracker.transportInterrupted) return;
+    setReconnecting(tracker, false);
+    tracker.disposeConnectivity?.();
     clearClientToolRetriesForJob(tracker.jobId);
     tracker.transportInterrupted = true;
     tracker.active = false;
@@ -1190,6 +1298,7 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
             tracker.notFoundPollFailures = 0;
             tracker.authPollFailures = 0;
         } catch (err) {
+            if (!isActive() || tracker.pollRunId !== runId || pollAbortController.signal.aborted) break;
             const error = err instanceof Error ? err.message : 'Unknown error';
             bgStreamWarn('poll-status-failed', {
                 jobId: tracker.jobId,
@@ -1197,6 +1306,7 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
                 error,
             });
             if (err instanceof BackgroundJobPollError && err.retryable) {
+                setReconnecting(tracker, true);
                 tracker.consecutivePollFailures =
                     (tracker.consecutivePollFailures ?? 0) + 1;
                 if (err.kind === 'not_found') {
@@ -1256,6 +1366,7 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
             // capped backoff instead of minting a terminal error.
             tracker.consecutivePollFailures =
                 (tracker.consecutivePollFailures ?? 0) + 1;
+            setReconnecting(tracker, true);
             await abortableDelay(
                 retryDelayMs(
                     new BackgroundJobPollError(error, 'transport', true),
@@ -1337,6 +1448,8 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
 export function stopBackgroundJobTracking(
     tracker: BackgroundJobTracker
 ): void {
+    setReconnecting(tracker, false);
+    tracker.disposeConnectivity?.();
     clearClientToolRetriesForJob(tracker.jobId);
     bgStreamLog('stop-tracking', {
         jobId: tracker.jobId,
@@ -1386,6 +1499,8 @@ function startBackgroundJobTracking(
         });
         return;
     }
+    tracker.active = true;
+    observeConnectivity(tracker);
     if (options?.useSse) {
         bgStreamLog('start-sse', {
             jobId: tracker.jobId,
@@ -1510,6 +1625,7 @@ function startBackgroundJobTracking(
                         jobId: tracker.jobId,
                         error: error.message,
                     });
+                    setReconnecting(tracker, true);
                     closeStream();
                     fallbackToPolling();
                 },
@@ -1519,6 +1635,7 @@ function startBackgroundJobTracking(
                 jobId: tracker.jobId,
                 error: error instanceof Error ? error.message : String(error),
             });
+            setReconnecting(tracker, true);
             closeStream();
             void pollBackgroundJob(tracker);
             return;
@@ -1579,8 +1696,14 @@ export function ensureBackgroundJobTracker(
 ): BackgroundJobTracker {
     const existing = backgroundJobTrackers.get(params.jobId);
     if (existing) {
-        // A known account owns the tracker for its whole lifetime.
-        if (existing.userId && params.userId && existing.userId !== params.userId) return existing;
+        // Validate every known identity before updating any state. Callers
+        // must not attach a returned tracker with a conflicting identity.
+        if ((existing.userId && params.userId && existing.userId !== params.userId) ||
+            (existing.threadId && existing.threadId !== params.threadId) ||
+            (existing.messageId && existing.messageId !== params.messageId) ||
+            (existing.workspaceId && params.workspaceId && existing.workspaceId !== params.workspaceId) ||
+            (existing.originDb && params.originDb && existing.originDb !== params.originDb) ||
+            (existing.generationId && params.generationId && existing.generationId !== params.generationId)) return existing;
         bgStreamLog('tracker-reused', {
             jobId: params.jobId,
             existingStatus: existing.status,
@@ -1615,22 +1738,6 @@ export function ensureBackgroundJobTracker(
         }
         if (params.userId && existing.userId !== params.userId) {
             existing.userId = params.userId;
-        }
-        if (
-            (existing.threadId && existing.threadId !== params.threadId) ||
-            (existing.messageId && existing.messageId !== params.messageId)
-        ) {
-            // A job's ownership must never be silently reassigned. Reusing the
-            // tracker for a different thread/message would bind persistence and
-            // Stop controls to the wrong conversation.
-            bgStreamWarn('tracker-reuse-ownership-conflict', {
-                jobId: params.jobId,
-                existingThreadId: existing.threadId,
-                incomingThreadId: params.threadId,
-                existingMessageId: existing.messageId,
-                incomingMessageId: params.messageId,
-            });
-            return existing;
         }
         if (!existing.threadId) existing.threadId = params.threadId;
         if (!existing.messageId) existing.messageId = params.messageId;
@@ -1786,6 +1893,7 @@ export function subscribeBackgroundJob(
     if (typeof tracker.pollRunId !== 'number') tracker.pollRunId = 0;
     if (typeof tracker.preferSse !== 'boolean') tracker.preferSse = false;
     tracker.subscribers.add(subscriber);
+    try { subscriber.onReconnecting?.(Boolean(tracker.reconnecting)); } catch { /* Viewer callbacks are isolated. */ }
     bgStreamLog('subscriber-added', {
         jobId: tracker.jobId,
         subscribers: tracker.subscribers.size,
@@ -1859,4 +1967,10 @@ export function subscribeBackgroundJob(
             void pollBackgroundJob(tracker);
         }
     };
+}
+
+if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+        for (const tracker of backgroundJobTrackers.values()) tracker.disposeConnectivity?.();
+    });
 }

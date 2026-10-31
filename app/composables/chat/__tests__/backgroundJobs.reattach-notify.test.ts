@@ -185,6 +185,239 @@ describe('backgroundJobs reattach + notifications', () => {
         ).__OR3_TEST_CLIENT = undefined;
     });
 
+    it('ignores stale streaming events after canonical finalization and completes without a missing-row warning', async () => {
+        const { Or3DB } = await vi.importActual<typeof import('~/db/client')>('~/db/client');
+        const db = new Or3DB(`background-finalized-${crypto.randomUUID()}`);
+        await db.open();
+        const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const workflowUpdate = vi.fn();
+        (globalThis as typeof globalThis & { __NUXT_HOOKS__: HookEngine }).__NUXT_HOOKS__
+            .addAction('workflow.execution:action:state_update', workflowUpdate);
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        try {
+            await db.messages.put({ id: 'msg-1', role: 'assistant', thread_id: 'thread-1', index: 1,
+                pending: true, deleted: false, created_at: 1, updated_at: 1, clock: 1,
+                data: { content: '', generation_id: 'generation-1', background_job_id: 'job-1' } });
+            const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1', threadId: 'thread-1',
+                messageId: 'msg-1', originDb: db, canonicalHistory: true, generationId: 'generation-1', useSse: true });
+            const onUpdate = vi.fn(), onComplete = vi.fn();
+            mod.subscribeBackgroundJob(tracker, { onUpdate, onComplete });
+            const handlers = subscribeBackgroundJobStreamMock.mock.calls[0]![0] as { onStatus: (status: ReturnType<typeof makeStatus>) => void };
+            const finalized = { id: 'msg-1', role: 'assistant' as const, thread_id: 'thread-1', index: 1,
+                pending: false, deleted: false, created_at: 1, updated_at: 2, clock: 2,
+                data: { content: 'finished', generation_id: 'generation-1', generation_state: 'complete',
+                    background_job_id: 'job-1', background_job_status: 'complete' } };
+            await db.messages.put(finalized);
+            handlers.onStatus(makeStatus('streaming', { content: '', content_length: 0 }));
+            await tracker.streamChain;
+            handlers.onStatus(makeStatus('streaming', { content: 'outdated', content_length: 8 }));
+            await tracker.streamChain;
+            handlers.onStatus(makeStatus('streaming', { content: 'outdated', content_length: 8,
+                tool_calls: [{ id: 'late-call', name: 'client_tool', runtime: 'client', status: 'pending' }] }));
+            await tracker.streamChain;
+            expect(onUpdate).not.toHaveBeenCalled();
+            expect(claimBackgroundClientToolMock).not.toHaveBeenCalled();
+            expect(executeToolMock).not.toHaveBeenCalled();
+            expect(tracker.active).toBe(true);
+            expect(await db.messages.get('msg-1')).toEqual(finalized);
+            handlers.onStatus(makeStatus('complete', { content: 'original answer', content_length: 15,
+                workflow_state: { type: 'workflow-execution', workflowId: 'wf', workflowName: 'Workflow', prompt: '',
+                    executionState: 'completed', nodeStates: {}, executionOrder: [], currentNodeId: null,
+                    finalOutput: 'original answer', version: 1 } }));
+            await expect(tracker.completion).resolves.toMatchObject({ status: 'complete', content: 'original answer', canonicalFinalized: true });
+            expect(onComplete).toHaveBeenCalledTimes(1);
+            expect(onComplete.mock.calls[0]![0]).toMatchObject({ canonicalFinalized: true, content: 'original answer' });
+            expect(onUpdate).not.toHaveBeenCalled();
+            expect(workflowUpdate).not.toHaveBeenCalled();
+            expect(await db.messages.get('msg-1')).toEqual(finalized);
+            expect(JSON.stringify(warning.mock.calls)).not.toContain('status-terminal-persist-row-missing');
+            expect(abortBackgroundJobMock).not.toHaveBeenCalled();
+        } finally {
+            mod.backgroundJobTrackers.forEach(mod.stopBackgroundJobTracking);
+            mod.backgroundJobTrackers.clear();
+            warning.mockRestore();
+            db.close();
+            await db.delete();
+        }
+    });
+
+    it.each(['finalized', 'new generation', 'deleted'] as const)(
+        'does not execute a claimed browser tool after its canonical row is %s',
+        async (change) => {
+            const { Or3DB } = await vi.importActual<typeof import('~/db/client')>('~/db/client');
+            const db = new Or3DB(`background-claim-race-${crypto.randomUUID()}`);
+            await db.open();
+            sessionValue = { user: { id: 'user-1' } };
+            subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+            let releaseClaim!: (claim: Awaited<ReturnType<typeof makeClientToolClaim>>) => void;
+            claimBackgroundClientToolMock.mockReturnValue(new Promise((resolve) => { releaseClaim = resolve; }));
+            const claim = await makeClientToolClaim();
+            const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+            try {
+                await db.messages.put({ id: 'msg-1', role: 'assistant', thread_id: 'thread-1', index: 1,
+                    pending: true, deleted: false, created_at: 1, updated_at: 1, clock: 1,
+                    data: { content: '', generation_id: 'generation-1', background_job_id: 'job-1' } });
+                const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1', threadId: 'thread-1',
+                    messageId: 'msg-1', workspaceId: 'workspace-1', originDb: db, canonicalHistory: true,
+                    generationId: 'generation-1', useSse: true });
+                const handlers = subscribeBackgroundJobStreamMock.mock.calls[0]![0] as { onStatus: (status: ReturnType<typeof makeStatus>) => void };
+                handlers.onStatus(makeStatus('streaming', { tool_calls: [{ id: 'call-1', name: 'client_tool', status: 'pending', runtime: 'client' }] }));
+                await vi.waitFor(() => expect(claimBackgroundClientToolMock).toHaveBeenCalledTimes(1));
+                const row = (await db.messages.get('msg-1'))!;
+                await db.messages.put(change === 'deleted' ? { ...row, deleted: true } : change === 'new generation'
+                    ? { ...row, data: { ...(row.data as Record<string, unknown>), generation_id: 'generation-2' } }
+                    : { ...row, pending: false });
+                releaseClaim(claim);
+                await new Promise((resolve) => setTimeout(resolve, 50));
+                expect(executeToolMock).not.toHaveBeenCalled();
+                expect(submitBackgroundClientToolResultMock).not.toHaveBeenCalled();
+                expect(localStorage.getItem('or3:bg-client-tool:job-1:call-1')).toBeNull();
+                expect(abortBackgroundJobMock).not.toHaveBeenCalled();
+            } finally {
+                mod.backgroundJobTrackers.forEach(mod.stopBackgroundJobTracking);
+                mod.backgroundJobTrackers.clear();
+                db.close();
+                await db.delete();
+            }
+        }
+    );
+
+    it('does not dispatch an old pending tool from a workspace refresh after canonical completion', async () => {
+        const { Or3DB } = await vi.importActual<typeof import('~/db/client')>('~/db/client');
+        const db = new Or3DB(`background-refresh-race-${crypto.randomUUID()}`);
+        await db.open();
+        sessionValue = { user: { id: 'user-1' } };
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        let releasePoll!: (status: ReturnType<typeof makeStatus>) => void;
+        pollJobStatusMock.mockReturnValue(new Promise((resolve) => { releasePoll = resolve; }));
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        try {
+            await db.messages.put({ id: 'msg-1', role: 'assistant', thread_id: 'thread-1', index: 1,
+                pending: true, deleted: false, created_at: 1, updated_at: 1, clock: 1,
+                data: { content: '', generation_id: 'generation-1', background_job_id: 'job-1' } });
+            mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1', threadId: 'thread-1', messageId: 'msg-1',
+                workspaceId: 'workspace-1', originDb: db, canonicalHistory: true, generationId: 'generation-1', useSse: true });
+            mod.refreshPendingClientToolsForWorkspace('workspace-1');
+            await vi.waitFor(() => expect(pollJobStatusMock).toHaveBeenCalledTimes(1));
+            const row = (await db.messages.get('msg-1'))!;
+            await db.messages.put({ ...row, pending: false });
+            releasePoll(makeStatus('streaming', { tool_calls: [{ id: 'call-1', name: 'client_tool', status: 'pending', runtime: 'client' }] }));
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            expect(claimBackgroundClientToolMock).not.toHaveBeenCalled();
+            expect(executeToolMock).not.toHaveBeenCalled();
+        } finally {
+            mod.backgroundJobTrackers.forEach(mod.stopBackgroundJobTracking);
+            mod.backgroundJobTrackers.clear();
+            db.close();
+            await db.delete();
+        }
+    });
+
+    it('does not retry a pending browser tool after its canonical message completes', async () => {
+        const { Or3DB } = await vi.importActual<typeof import('~/db/client')>('~/db/client');
+        const db = new Or3DB(`background-retry-race-${crypto.randomUUID()}`);
+        await db.open();
+        sessionValue = { user: { id: 'user-1' } };
+        getToolMock.mockReturnValue(undefined);
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        const status = makeStatus('streaming', { tool_calls: [{ id: 'call-1', name: 'client_tool', status: 'pending', runtime: 'client' }] });
+        pollJobStatusMock.mockResolvedValue(status);
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        try {
+            await db.messages.put({ id: 'msg-1', role: 'assistant', thread_id: 'thread-1', index: 1,
+                pending: true, deleted: false, created_at: 1, updated_at: 1, clock: 1,
+                data: { content: '', generation_id: 'generation-1', background_job_id: 'job-1' } });
+            const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1', threadId: 'thread-1',
+                messageId: 'msg-1', workspaceId: 'workspace-1', originDb: db, canonicalHistory: true,
+                generationId: 'generation-1', useSse: true });
+            const handlers = subscribeBackgroundJobStreamMock.mock.calls[0]![0] as { onStatus: (status: ReturnType<typeof makeStatus>) => void };
+            handlers.onStatus(status);
+            await tracker.streamChain;
+            const row = (await db.messages.get('msg-1'))!;
+            await db.messages.put({ ...row, pending: false });
+            getToolMock.mockReturnValue({ definition: { runtime: 'client' } });
+            await vi.waitFor(() => expect(pollJobStatusMock).toHaveBeenCalledTimes(1), { timeout: 4000 });
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            expect(claimBackgroundClientToolMock).not.toHaveBeenCalled();
+            expect(executeToolMock).not.toHaveBeenCalled();
+        } finally {
+            mod.backgroundJobTrackers.forEach(mod.stopBackgroundJobTracking);
+            mod.backgroundJobTrackers.clear();
+            db.close();
+            await db.delete();
+        }
+    }, 6000);
+
+    it.each(['streaming', 'complete'] as const)('does not let an old %s refresh interrupt a newer pending tool attempt', async (oldStatus) => {
+        const { Or3DB } = await vi.importActual<typeof import('~/db/client')>('~/db/client');
+        const db = new Or3DB(`background-tool-attempt-${crypto.randomUUID()}`);
+        await db.open();
+        sessionValue = { user: { id: 'user-1' } };
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        let releaseClaim!: (claim: Awaited<ReturnType<typeof makeClientToolClaim>>) => void;
+        claimBackgroundClientToolMock.mockReturnValue(new Promise((resolve) => { releaseClaim = resolve; }));
+        const claim = await makeClientToolClaim();
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        try {
+            await db.messages.put({ id: 'msg-1', role: 'assistant', thread_id: 'thread-1', index: 1,
+                pending: true, deleted: false, created_at: 1, updated_at: 1, clock: 1,
+                data: { content: '', generation_id: 'generation-1', background_job_id: 'job-1', background_job_attempt: 2 } });
+            const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1', threadId: 'thread-1',
+                messageId: 'msg-1', workspaceId: 'workspace-1', originDb: db, canonicalHistory: true,
+                generationId: 'generation-1', initialAttempt: 2, useSse: true });
+            const handlers = subscribeBackgroundJobStreamMock.mock.calls[0]![0] as { onStatus: (status: ReturnType<typeof makeStatus>) => void };
+            handlers.onStatus(makeStatus('streaming', { attempt: 2, tool_calls: [{ id: 'call-1', name: 'client_tool', status: 'pending', runtime: 'client' }] }));
+            await vi.waitFor(() => expect(claimBackgroundClientToolMock).toHaveBeenCalledTimes(1));
+            pollJobStatusMock.mockResolvedValue(makeStatus(oldStatus, { attempt: 1,
+                tool_calls: [{ id: 'old-call', name: 'client_tool', status: 'pending', runtime: 'client' }] }));
+            mod.refreshPendingClientToolsForWorkspace('workspace-1');
+            await vi.waitFor(() => expect(pollJobStatusMock).toHaveBeenCalledTimes(1));
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            expect(claimBackgroundClientToolMock).toHaveBeenCalledTimes(1);
+            releaseClaim(claim);
+            await vi.waitFor(() => expect(executeToolMock).toHaveBeenCalledTimes(1));
+            await vi.waitFor(() => expect(submitBackgroundClientToolResultMock).toHaveBeenCalledTimes(1));
+        } finally {
+            mod.backgroundJobTrackers.forEach(mod.stopBackgroundJobTracking);
+            mod.backgroundJobTrackers.clear();
+            db.close();
+            await db.delete();
+        }
+    });
+
+    it('defers a browser tool on a temporary canonical read failure and retries it later', async () => {
+        const { Or3DB } = await vi.importActual<typeof import('~/db/client')>('~/db/client');
+        const db = new Or3DB(`background-tool-read-${crypto.randomUUID()}`);
+        await db.open();
+        sessionValue = { user: { id: 'user-1' } };
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        const status = makeStatus('streaming', { tool_calls: [{ id: 'call-1', name: 'client_tool', status: 'pending', runtime: 'client' }] });
+        pollJobStatusMock.mockResolvedValue(status);
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        try {
+            await db.messages.put({ id: 'msg-1', role: 'assistant', thread_id: 'thread-1', index: 1,
+                pending: true, deleted: false, created_at: 1, updated_at: 1, clock: 1,
+                data: { content: '', generation_id: 'generation-1', background_job_id: 'job-1' } });
+            mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1', threadId: 'thread-1', messageId: 'msg-1',
+                workspaceId: 'workspace-1', originDb: db, canonicalHistory: true, generationId: 'generation-1', useSse: true });
+            const reads = vi.spyOn(db.messages, 'get').mockRejectedValueOnce(new Error('temporary IndexedDB failure'));
+            mod.refreshPendingClientToolsForWorkspace('workspace-1');
+            await vi.waitFor(() => expect(reads).toHaveBeenCalledTimes(1));
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            expect(claimBackgroundClientToolMock).not.toHaveBeenCalled();
+            expect(submitBackgroundClientToolResultMock).not.toHaveBeenCalled();
+            mod.refreshPendingClientToolsForWorkspace('workspace-1');
+            await vi.waitFor(() => expect(claimBackgroundClientToolMock).toHaveBeenCalledTimes(1));
+            reads.mockRestore();
+        } finally {
+            mod.backgroundJobTrackers.forEach(mod.stopBackgroundJobTracking);
+            mod.backgroundJobTrackers.clear();
+            db.close();
+            await db.delete();
+        }
+    });
+
     it.each(['missing', 'malformed'] as const)('retains accepted usage after a failed write and %s later snapshots', async (laterUsage) => {
         subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
         const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
@@ -1095,6 +1328,40 @@ describe('backgroundJobs reattach + notifications', () => {
         backgroundJobTrackers.clear();
     });
 
+    it('stores one notification when the same job completes in concurrent or recreated trackers', async () => {
+        vi.doUnmock('~/core/notifications/notification-service');
+        const { Or3DB } = await vi.importActual<typeof import('~/db/client')>('~/db/client');
+        const db = new Or3DB(`background-notification-${crypto.randomUUID()}`);
+        await db.open();
+        const otherTab = new Or3DB(db.name);
+        await otherTab.open();
+        try {
+            const { emitBackgroundComplete } = await import('~/utils/chat/useAi-internal/backgroundJobNotifications');
+            const tracker = { jobId: 'job-1', userId: 'user-1', workspaceId: 'workspace-1',
+                threadId: 'thread-1', messageId: 'msg-1', originDb: db, subscribers: new Set() } as any;
+            await Promise.all([emitBackgroundComplete(tracker, makeStatus('complete')),
+                emitBackgroundComplete({ ...tracker, originDb: otherTab }, makeStatus('complete'))]);
+            expect(await db.notifications.count()).toBe(1);
+            const notification = (await db.notifications.toArray())[0]!;
+            await db.notifications.update(notification.id, { deleted: true });
+            await emitBackgroundComplete({ ...tracker }, makeStatus('complete'));
+            expect(await db.notifications.count()).toBe(1);
+            await emitBackgroundComplete({ ...tracker, jobId: 'job-2' }, makeStatus('complete'));
+            await emitBackgroundComplete({ ...tracker, userId: 'user-2' }, makeStatus('complete'));
+            expect(await db.notifications.count()).toBe(3);
+        } finally {
+            otherTab.close();
+            await db.delete();
+            vi.doMock('~/core/notifications/notification-service', () => ({
+                NotificationService: class {
+                    private readonly userId: string;
+                    constructor(_db: unknown, _hooks: unknown, userId: string) { this.userId = userId; }
+                    async create(payload: unknown) { notificationCreateMock(this.userId, payload); return null; }
+                },
+            }));
+        }
+    });
+
     it('uses tracker user scope for fallback completion notifications when session is unavailable', async () => {
         pollJobStatusMock.mockResolvedValue(
             makeStatus('complete', { content: 'done', content_length: 4 })
@@ -1183,6 +1450,20 @@ describe('backgroundJobs reattach + notifications', () => {
             expect(reused).toBe(tracker);
             expect(tracker.userId).toBe('origin-user');
             expect(subscribeBackgroundJobStreamMock).toHaveBeenCalledTimes(1);
+        } finally { mod.stopBackgroundJobTracking(tracker); mod.backgroundJobTrackers.clear(); }
+    });
+
+    it('does not mutate a tracker when reuse names a different conversation', async () => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: '', workspaceId: 'workspace-1',
+            threadId: 'thread-1', messageId: 'msg-1', initialAttempt: 1, initialContent: 'original', useSse: true });
+        try {
+            mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'other-user', workspaceId: 'workspace-1',
+                threadId: 'other-thread', messageId: 'other-message', initialAttempt: 9,
+                initialContent: 'different content that must not replace the original', useSse: true });
+            expect(tracker).toMatchObject({ userId: '', threadId: 'thread-1', messageId: 'msg-1',
+                lastAttempt: 1, lastContent: 'original' });
         } finally { mod.stopBackgroundJobTracking(tracker); mod.backgroundJobTrackers.clear(); }
     });
 
@@ -1375,6 +1656,60 @@ describe('backgroundJobs reattach + notifications', () => {
             random.mockRestore();
             vi.useRealTimers();
         }
+    });
+
+    it('replays reconnecting state to reattached viewers and removes connectivity listeners on completion', async () => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        let resolvePoll!: (value: ReturnType<typeof makeStatus>) => void;
+        pollJobStatusMock.mockReturnValue(new Promise(resolve => { resolvePoll = resolve; }));
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1',
+            threadId: 'thread-1', messageId: 'msg-1', useSse: true });
+        const first = vi.fn(), reattached = vi.fn();
+        mod.subscribeBackgroundJob(tracker, { onReconnecting: first });
+        const handlers = subscribeBackgroundJobStreamMock.mock.calls[0]![0] as { onError: (error: Error) => void };
+        handlers.onError(new Error('connection lost'));
+        await vi.waitFor(() => expect(pollJobStatusMock).toHaveBeenCalledTimes(1));
+        mod.subscribeBackgroundJob(tracker, { onReconnecting: reattached });
+        expect(first.mock.calls.map(([value]) => value)).toEqual([false, true]);
+        expect(reattached.mock.calls.map(([value]) => value)).toEqual([true]);
+        expect(subscribeBackgroundJobStreamMock).toHaveBeenCalledTimes(2);
+        const resumed = subscribeBackgroundJobStreamMock.mock.calls[1]![0] as { onStatus: (status: ReturnType<typeof makeStatus>) => void };
+        resolvePoll(makeStatus('streaming'));
+        resumed.onStatus(makeStatus('complete', { content: 'done', content_length: 4 }));
+        await tracker.completion;
+        expect(first.mock.calls.map(([value]) => value)).toEqual([false, true, false]);
+        expect(reattached.mock.calls.map(([value]) => value)).toEqual([true, false]);
+        window.dispatchEvent(new Event('offline'));
+        expect(first).toHaveBeenCalledTimes(3);
+        expect(pollJobStatusMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('drains an accepted stream update before reconnecting after a rapid offline/online transition', async () => {
+        subscribeBackgroundJobStreamMock.mockImplementation(() => () => {});
+        pollJobStatusMock.mockReturnValue(new Promise(() => {}));
+        let releaseWrite!: () => void;
+        dbMock.messages.put.mockReturnValueOnce(new Promise<void>(resolve => { releaseWrite = resolve; }));
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        const listeners = vi.spyOn(window, 'addEventListener');
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1',
+            threadId: 'thread-1', messageId: 'msg-1', useSse: true });
+        mod.subscribeBackgroundJob(tracker, {});
+        const initial = subscribeBackgroundJobStreamMock.mock.calls[0]![0] as { onStatus: (status: ReturnType<typeof makeStatus>) => void };
+        initial.onStatus(makeStatus('streaming', { content: 'first update', content_length: 12 }));
+        await vi.waitFor(() => expect(dbMock.messages.put).toHaveBeenCalledTimes(1));
+        const offline = listeners.mock.calls.find(([type]) => type === 'offline')![1] as EventListener;
+        const online = listeners.mock.calls.find(([type]) => type === 'online')![1] as EventListener;
+        offline(new Event('offline'));
+        online(new Event('online'));
+        await Promise.resolve();
+        expect(subscribeBackgroundJobStreamMock).toHaveBeenCalledTimes(1);
+        releaseWrite();
+        await vi.waitFor(() => expect(subscribeBackgroundJobStreamMock).toHaveBeenCalledTimes(2));
+        const resumed = subscribeBackgroundJobStreamMock.mock.calls[1]![0] as { onStatus: (status: ReturnType<typeof makeStatus>) => void };
+        resumed.onStatus(makeStatus('complete', { content: 'first update and final', content_length: 22 }));
+        await expect(tracker.completion).resolves.toMatchObject({ content: 'first update and final' });
+        listeners.mockRestore();
     });
 
     it('preserves metadata written between background status updates', async () => {

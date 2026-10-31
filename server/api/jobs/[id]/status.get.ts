@@ -10,7 +10,7 @@ import { resolveSessionContext } from '../../../auth/session';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 import { getJobLiveState } from '../../../utils/background-jobs/viewers';
 import { shouldResetBackgroundContent } from '../../../utils/background-jobs/recovery';
-import { projectJobView } from '../../../utils/background-jobs/job-view';
+import { projectJobViewWithChildStatus } from '../../../utils/background-jobs/job-view';
 
 /**
  * GET /api/jobs/:id/status
@@ -78,7 +78,9 @@ export default defineEventHandler(async (event) => {
         : null;
     const attemptParam =
         typeof query.attempt === 'string' ? Number(query.attempt) : null;
-    const view = projectJobView(job, getJobLiveState(jobId));
+    const view = await projectJobViewWithChildStatus(provider, job, userId, getJobLiveState(jobId));
+    if (view.tool_calls?.some(call => call.delegation?.version === 3))
+        await requireJobWorkspaceAccess(event, session, job.execution?.workspaceId, 'workspace.read');
     const { attempt: currentAttempt, content: effectiveContent,
         reasoning_text: effectiveReasoning } = view;
     const attemptChanged = shouldResetBackgroundContent(

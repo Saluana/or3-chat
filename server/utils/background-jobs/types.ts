@@ -22,6 +22,7 @@ import type { ChatGenerationAdmissionEnvelope } from '~~/shared/chat/background-
 import type { ToolDefinition } from '~/utils/chat/types';
 import type { NormalizedStreamState } from '~~/shared/chat/normalized-stream-reducer';
 import type { RequestUsage } from '~~/shared/chat/compaction';
+import type { DelegationDisplayActivity, DelegationDefaults, DelegationDispatch, DelegationWait } from '~~/shared/chat/delegation-checkpoint';
 
 export type BackgroundClientToolCall = {
     callId: string;
@@ -138,6 +139,8 @@ export interface BackgroundJob {
         error?: string;
         argument_fingerprint?: string;
         transcript?: CanonicalToolResult;
+        /** Credential-free child outcomes retained with the parent transcript. */
+        delegation?: DelegationDisplayActivity;
         runtime?: 'client' | 'server' | 'hybrid';
         /** Length of the assistant text when this call's results arrived. */
         text_offset?: number;
@@ -187,6 +190,20 @@ export interface BackgroundJobExecution {
     pendingToolCalls?: BackgroundPendingToolCall[];
     /** Present while execution is parked for the originating browser. */
     clientToolCall?: BackgroundClientToolCall;
+    /** Server-owned delegation, present only for qualified persistent providers. */
+    delegationWait?: DelegationWait;
+    /** Fences terminal child metadata against canonical writes before finalization. */
+    delegationTerminalProjection?: { version: 1; workspaceRevision: string; parentThreadUnavailable?: true };
+    /** Private effective instructions captured before the parent starts. */
+    delegationDefaults?: DelegationDefaults;
+    /** Enable conservative request recovery for an eligible parent or child. */
+    delegationRecoveryPolicy?: 'v1';
+    /** Monotonic model-request sequence, including requests already checkpointed. */
+    delegationDispatchSequence?: number;
+    /** Fenced evidence that a model request may have reached the provider. */
+    delegationDispatch?: DelegationDispatch;
+    /** An uncertain child outcome forbids more delegation in this parent turn. */
+    delegationBlocked?: boolean;
 }
 
 /**
@@ -258,6 +275,46 @@ export interface CreateJobParams {
     execution?: BackgroundJobExecution | BackgroundWorkflowScope;
 }
 
+/** Fenced child admission; all identities are bound to the persisted parent wait. */
+export interface DelegationChildAdmission {
+    parentJobId: string;
+    leaseOwner: string;
+    revision: number;
+    callId: string;
+    argumentFingerprint: string;
+    childIndex: number;
+    child: CreateJobParams;
+}
+
+export type DelegationChildAdmissionResult =
+    | { status: 'admitted'; jobId: string; replayed: boolean }
+    | { status: 'capacity' | 'not-owned' | 'cancelled' | 'expired' };
+
+/** A single fenced checkpoint update; it cannot itself resume the parent. */
+export interface DelegationWaitCommit {
+    parentJobId: string;
+    leaseOwner: string;
+    expectedRevision: number;
+    wait: DelegationWait;
+}
+
+/** Inputs needed to atomically consume an already settled wait. */
+export interface DelegationResume {
+    parentJobId: string;
+    leaseOwner: string;
+    expectedRevision: number;
+    /** Canonical workspace revision observed while validating the complete aggregate. */
+    expectedSyncRevision: string;
+    /** Settled children whose history, or completed result, is unavailable. */
+    unavailableChildren?: Array<{ index: number; code: 'history_unavailable' | 'result_unavailable' }>;
+    /** Resolved child artifact content, keyed by batch index when needed. */
+    resolvedResults?: Record<number, string>;
+    /** Aggregate retained in canonical tool-result storage, when chunked. */
+    durableResult?: string;
+}
+
+export type DelegationResumeResult = 'resumed' | 'not-owned' | 'capacity';
+
 /**
  * Purpose:
  * Partial update payload for a streaming job.
@@ -300,6 +357,8 @@ export interface JobUpdate {
  * - Directly streaming content to clients. That is handled elsewhere.
  */
 export interface BackgroundJobProvider {
+    /** Advertise only after the complete persistent delegation contract is qualified. */
+    readonly delegationCoordinatorVersion?: 1;
     /** Provider name for logging and diagnostics */
     readonly name: string;
     /** A rejected atomic progress write throws instead of silently ignoring abort. */
@@ -380,6 +439,52 @@ export interface BackgroundJobProvider {
         leaseExpiresAt: number
     ): Promise<BackgroundJob | null>;
 
+    /** Park an authorized delegation atomically, retaining the tool checkpoint. */
+    parkDelegationWait?(
+        jobId: string,
+        leaseOwner: string,
+        execution: BackgroundJobExecution,
+        toolCalls: BackgroundJob['tool_calls']
+    ): Promise<boolean>;
+
+    /** Claim a due parked parent without resetting model state or its attempt. */
+    claimNextDelegationWait?(
+        leaseOwner: string,
+        now: number,
+        leaseExpiresAt: number
+    ): Promise<BackgroundJob | null>;
+
+    /** Create or reuse and link a child in the same fenced job-store transaction. */
+    admitDelegationChild?(input: DelegationChildAdmission): Promise<DelegationChildAdmissionResult>;
+
+    /** Persist monotonic child settlements and yield a coordinator lease. */
+    commitDelegationWait?(input: DelegationWaitCommit): Promise<boolean>;
+
+    /** Fence a confirmed parent deletion, supersession, or loss of workspace write access. */
+    stopInvalidDelegationWait?(input: {
+        parentJobId: string; leaseOwner: string; expectedRevision: number; authorizationDenied?: boolean;
+    }): Promise<'valid' | 'stopped' | 'not-owned' | 'unavailable'>;
+
+    /** Stop linked children while retaining their evidence for terminal history. */
+    cleanupDelegationWait?(input: {
+        parentJobId: string; leaseOwner: string; expectedRevision: number;
+    }): Promise<'not-owned' | 'pending' | 'settled'>;
+
+    /** Atomically expire a wait, prevent admission, and stop linked active children. */
+    expireDelegationWait?(input: {
+        parentJobId: string; leaseOwner: string; expectedRevision: number;
+    }): Promise<'not-owned' | 'pending'>;
+
+    /** Atomically insert the aggregate and make an eligible parent runnable. */
+    resumeDelegationWait?(input: DelegationResume): Promise<DelegationResumeResult>;
+
+    /** Atomically record a possibly dispatched request before contacting the model. */
+    beginDelegationDispatch?(jobId: string, leaseOwner: string): Promise<DelegationDispatch | null>;
+
+    /** Atomically replace dispatch evidence with the completed iteration checkpoint. */
+    commitDelegationDispatch?(jobId: string, leaseOwner: string, sequence: number,
+        execution: BackgroundJobExecution, toolCalls: BackgroundJob['tool_calls']): Promise<boolean>;
+
     /** Extend a claim only when it is still owned by the caller. */
     renewJobLease?(
         jobId: string,
@@ -457,6 +562,10 @@ export interface BackgroundJobProvider {
 
     /** Return a bounded page of jobs whose canonical history delivery is pending. */
     getPendingHistoryJobs?(limit: number): Promise<BackgroundJob[]>;
+
+    /** Defer one unchanged guarded history phase without changing its outcome. */
+    deferDelegationHistory?(input: { jobId: string; userId: string; generationId: string;
+        phase: 'admission_pending' | 'finalization_pending' }): Promise<boolean>;
 
     /**
      * Clean up expired or stale jobs.

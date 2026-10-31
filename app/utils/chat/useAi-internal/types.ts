@@ -29,10 +29,19 @@ export type BackgroundJobUpdate = {
     reasoningDelta?: string;
     /** True when recovery replaced the previous reasoning snapshot. */
     reasoningReplace?: boolean;
+    /** Local canonical history was already final when this terminal arrived. */
+    canonicalFinalized?: boolean;
+};
+
+export type BackgroundJobCompletion = BackgroundJobStatus & {
+    /** Local-only signal; the status and content still describe the server job. */
+    canonicalFinalized?: boolean;
 };
 
 /** Subscriber callbacks for background job events */
 export type BackgroundJobSubscriber = {
+    /** Transient viewer transport state; it is not a server job outcome. */
+    onReconnecting?: (reconnecting: boolean) => void;
     onUpdate?: (update: BackgroundJobUpdate) => void;
     onComplete?: (update: BackgroundJobUpdate) => void;
     onError?: (update: BackgroundJobUpdate) => void;
@@ -105,9 +114,11 @@ export type BackgroundJobTracker = {
     sseGeneration?: number;
     /** Set when tracking stopped due to connection/protocol/auth problems. */
     transportInterrupted?: boolean;
+    reconnecting?: boolean;
+    disposeConnectivity?: () => void;
     subscribers: Set<BackgroundJobSubscriber>;
-    completion: Promise<BackgroundJobStatus>;
-    resolveCompletion: (status: BackgroundJobStatus) => void;
+    completion: Promise<BackgroundJobCompletion>;
+    resolveCompletion: (status: BackgroundJobCompletion) => void;
 };
 
 /** Extended message row from Dexie with typed data field */

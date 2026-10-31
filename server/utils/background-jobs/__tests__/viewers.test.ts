@@ -6,6 +6,7 @@ import {
     getJobLiveState,
     getJobReconcilerCount,
     initJobLiveState,
+    pauseJobLiveState,
     registerJobReconciler,
     registerJobStream,
     resetJobViewersForTests,
@@ -128,6 +129,17 @@ describe('job reconciliation', () => {
             contentBase: 'checkpoint', reasoningBase: '', attempt: 4, usage,
         });
         expect(getJobLiveState('job-1')).toMatchObject({ content: 'checkpoint', attempt: 4, usage });
+    });
+
+    it('does not let a stale parked worker pause a newer producer', () => {
+        emitJobStatus('job-1', 'streaming', { content: '', contentLength: 0, chunksReceived: 0, attempt: 1,
+            tool_calls: [{ id: 'call', name: 'delegate_chat', status: 'pending' }] });
+        initJobLiveState('job-1', { attempt: 2 });
+        expect(getJobLiveState('job-1')?.tool_calls).toBeUndefined();
+        pauseJobLiveState('job-1', 1);
+        expect(getJobLiveState('job-1')?.producing).toBe(true);
+        pauseJobLiveState('job-1', 2);
+        expect(getJobLiveState('job-1')).toMatchObject({ producing: false, status: 'streaming' });
     });
 
     // A status-only read can confirm the producer is still authoritative

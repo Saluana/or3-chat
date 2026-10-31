@@ -6,6 +6,18 @@ describe.each([
     ['V1', createV1HookEngine],
     ['V2', createHookEngineV2],
 ] as const)('hook-engine-core (%s)', (_runtime, createHookEngine) => {
+    it('recognizes a sole filter and rejects another matching wildcard', () => {
+        const engine = createHookEngine();
+        const builtin = (value: unknown) => value;
+        const other = (value: unknown) => value;
+        expect(engine.hasOnlyFilter('prepare:filter:input', builtin)).toBe(false);
+        engine.addFilter('prepare:filter:input', builtin);
+        expect(engine.hasOnlyFilter('prepare:filter:input', builtin)).toBe(true);
+        engine.addFilter('prepare:*', other);
+        expect(engine.hasOnlyFilter('prepare:filter:input', builtin)).toBe(false);
+        engine.removeFilter('prepare:*', other);
+        expect(engine.hasOnlyFilter('prepare:filter:input', builtin)).toBe(true);
+    });
     it('captures filter-chain ownership across async preparation including replacement and wildcard changes', () => {
         const engine = createHookEngine();
         const filter = (value: unknown) => value;

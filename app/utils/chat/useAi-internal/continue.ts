@@ -2,6 +2,7 @@ import { addUsageTotals, readMeasuredRequestUsage } from '~~/shared/chat/request
 import { readRequestUsage, type RequestUsage } from '~~/shared/chat/compaction';
 import { resolveThreadProjection } from '~/utils/chat/compaction/history';
 import { ChatContextAdmissionError, contextAdmissionFailureReason, type ContextRequestPolicy } from '~~/shared/chat/context-budget';
+import { BackgroundTrackerConflict } from './background-tracker-conflict';
 /**
  * @module app/utils/chat/useAi-internal/continue.ts
  *
@@ -504,6 +505,9 @@ export async function continueMessageImpl(
                 },
             });
         if (!claimed) throw new ContinuationOwnershipLost();
+        if (request.cancelled || continuationAbortController.signal.aborted)
+            throw new DOMException('Continuation cancelled.', 'AbortError');
+        if (!ownsThread()) { request.attached.value = false; return; }
 
         // A rejected claim owns neither persistence nor presentation. In
         // particular, legacy replies may have no generation ID for the terminal
@@ -576,6 +580,9 @@ export async function continueMessageImpl(
             if (!admittedAssistant || !backgroundAdmissionId || !ctx.workspaceId) {
                 throw new Error('Unable to capture continuation history');
             }
+            if (request.cancelled || continuationAbortController.signal.aborted)
+                throw new DOMException('Continuation cancelled.', 'AbortError');
+            if (!ownsThread()) { request.attached.value = false; return; }
             const result = await startBackgroundStream({
                 expectedProjectId: initialProjectId,
                 apiKey: ctx.effectiveApiKey.value,
@@ -654,6 +661,7 @@ export async function continueMessageImpl(
                               : (completion.error ??
                                 'Background continuation failed'),
                     persistence: 'tracker',
+                    canonicalFinalized: completion.canonicalFinalized,
                     attempt: completion.attempt,
                 });
             } finally {
@@ -851,6 +859,10 @@ export async function continueMessageImpl(
             }, 0);
         }
     } catch (e) {
+        if (e instanceof BackgroundTrackerConflict && !request.cancelled && !continuationAbortController.signal.aborted) {
+            request.attached.value = false;
+            return;
+        }
         if (e instanceof Error && 'backgroundAdmissionUncertain' in e && e.backgroundAdmissionUncertain === true) {
             ctx.onBackgroundAdmissionUncertain?.();
             request.attached.value = false;

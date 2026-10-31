@@ -1,0 +1,394 @@
+--- a/src/runtime/server/background-jobs/sqlite-provider.ts
++++ b/src/runtime/server/background-jobs/sqlite-provider.ts
+@@ -25,7 +25,7 @@
+ import { normalizeError, serializeError } from '~~/shared/errors';
+ import { randomUUID } from 'node:crypto';
+ import { d1All, d1Run } from '../db/d1';
+-import { getRawDb, isD1Driver } from '../db/kysely';
++import { getRawDb, getSqliteDriver, isD1Driver } from '../db/kysely';
+ import { resolveCanonicalProjectOwnership } from '../sync/canonical-project-ownership';
+ 
+ type JobRow = {
+@@ -385,6 +385,20 @@
+ 
+ export class SqliteBackgroundJobProvider implements BackgroundJobProvider {
+     readonly name = 'sqlite';
++
++    // Advertise only after the native database has completed the required migration.
++    // Other drivers remain disabled until their coordination contracts are qualified.
++    get delegationCoordinatorVersion(): 1 | undefined {
++        if (getSqliteDriver() !== 'better-sqlite3') return undefined;
++        try {
++            const applied = getRawDb().prepare(
++                "SELECT 1 AS applied FROM kysely_migration WHERE name = ?"
++            ).get('029_delegation_wait') as { applied?: number } | undefined;
++            return applied?.applied === 1 ? 1 : undefined;
++        } catch {
++            return undefined;
++        }
++    }
+     private lastDelegationDiagnosticCheckAt?: number;
+ 
+     async createJob(params: CreateJobParams): Promise<string> {
+--- a/test/integration/delegation.test.ts
++++ b/test/integration/delegation.test.ts
+@@ -83,8 +83,7 @@
+ 
+     function enableDraft() {
+         provider = new SqliteBackgroundJobProvider();
+-        // The draft deliberately does not advertise this capability in production.
+-        Object.defineProperty(provider, 'delegationCoordinatorVersion', { value: 1 });
++        expect(supportsDelegationCoordination(provider)).toBe(true);
+         draftStore.provider = provider;
+     }
+     async function reopen() {
+@@ -112,6 +111,16 @@
+         vi.unstubAllGlobals(); vi.restoreAllMocks();
+         await destroySqliteDb();
+         await rm(directory, { recursive: true, force: true });
++    });
++
++    it('does not advertise durable delegation until the native migration finishes', async () => {
++        await destroySqliteDb();
++        const uninitialized = new SqliteBackgroundJobProvider();
++        expect(supportsDelegationCoordination(uninitialized)).toBe(false);
++        const fresh = await initializeSqliteDb({ path: join(directory, 'fresh.sqlite') });
++        expect(supportsDelegationCoordination(uninitialized)).toBe(false);
++        await runMigrations(fresh);
++        expect(supportsDelegationCoordination(uninitialized)).toBe(true);
+     });
+ 
+     it.each(['completes', 'loses its first worker'] as const)(
+@@ -154,7 +163,9 @@
+         try { expect(await discover()).toMatchObject({ serverModelSearchVersion: 1 }); }
+         finally { removeSearch(); }
+         expect(await discover()).not.toHaveProperty('serverModelSearchVersion');
+-        draftStore.provider = new SqliteBackgroundJobProvider();
++        const legacyProvider = new SqliteBackgroundJobProvider();
++        Object.defineProperty(legacyProvider, 'delegationCoordinatorVersion', { value: undefined });
++        draftStore.provider = legacyProvider;
+         expect(await discover()).not.toHaveProperty('durableDelegationVersion');
+         draftStore.provider = provider;
+         const browserTool = { type: 'function' as const, function: { name: 'browser_tool', description: 'Browser',
+@@ -512,7 +523,7 @@
+         expect(fetchModel).toHaveBeenCalledOnce();
+     });
+ 
+-    it('keeps parked parents as shutdown blockers without starting children during preparation', async () => {
++    it.each(['resume', 'stop'] as const)('keeps parked parents as shutdown blockers during preparation (%s)', async outcome => {
+         const delegate = { type: 'function' as const, function: { name: 'delegate_chat', description: 'Delegate',
+             parameters: { type: 'object' as const, properties: {} } } };
+         const body = { model: 'fixture/model', messages: [{ role: 'user', content: 'Parent task' }], tools: [delegate],
+@@ -544,11 +555,23 @@
+             expect(getChatJobExecution(parked)!.delegationWait!.children[0]).not.toHaveProperty('jobId');
+             expect(await provider.getShutdownBlockerCount()).toBeGreaterThan(0);
+             expect(fetchModel).toHaveBeenCalledOnce();
++            if (outcome === 'stop') {
++                expect(await provider.abortJob(id, actor.userId)).toBe(true);
++                expect(await reconcileDueDelegationWaits(provider, 1)).toBe(1);
++                expect(await reconcileBackgroundJobHistory(provider, (await provider.getJob(id, actor.userId))!)).toBe('committed');
++                const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 5_001);
++                try { expect(await reconcileDueDelegationWaits(provider, 1)).toBe(1); }
++                finally { clock.mockRestore(); }
++                expect(await provider.getShutdownBlockerCount()).toBe(0);
++                expect(fetchModel).toHaveBeenCalledOnce();
++                expect(await preparation).toEqual({ drained: true });
++            }
+         } finally {
+             controller.cancel('fixture-preparation');
+             await preparation;
+         }
+         expect(controller.phase()).toBe('running');
++        if (outcome === 'stop') return;
+         const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 5_001);
+         try {
+             expect(await reconcileDueDelegationWaits(provider, 1)).toBe(1);
+--- a/src/runtime/__tests__/sqlite-background-jobs.test.ts
++++ b/src/runtime/__tests__/sqlite-background-jobs.test.ts
+@@ -2,9 +2,9 @@
+ import { mkdtemp, rm } from 'node:fs/promises';
+ import { tmpdir } from 'node:os';
+ import { join } from 'node:path';
+-import { destroySqliteDb, getRawDb, initializeSqliteDb } from '../server/db/kysely';
+-import { runMigrations } from '../server/db/migrate';
+-import { SqliteBackgroundJobProvider } from '../server/background-jobs/sqlite-provider';
++import { destroySqliteDb, getRawDb, initializeSqliteDb } from '#sqlite-runtime/server/db/kysely';
++import { runMigrations } from '#sqlite-runtime/server/db/migrate';
++import { SqliteBackgroundJobProvider } from '#sqlite-runtime/server/background-jobs/sqlite-provider';
+ import { createD1TestDatabase } from '../../../test/support/d1-test-database';
+ import type { RequestUsage } from '~~/shared/chat/compaction';
+ import type { BackgroundJobExecution, DelegationChildAdmission, JobUpdate, TerminalGenerationSnapshot } from '~~/server/utils/background-jobs/types';
+@@ -20,8 +20,8 @@
+ import { prepareBackgroundHistory } from '~~/server/utils/background-jobs/admission-history';
+ import { admitPreparedDelegationChildren, inspectCompletedDelegationChild, reconcileDelegationChild, resumeReconciledDelegation } from '~~/server/utils/background-jobs/delegation-coordinator';
+ import { reconcileBackgroundJobHistory, reconcilePendingBackgroundHistory } from '~~/server/utils/background-jobs/history';
+-import { SqliteSyncGatewayAdapter } from '../server/sync/sqlite-sync-gateway-adapter';
+-import { SqliteAuthWorkspaceStore } from '../server/auth/sqlite-auth-workspace-store';
++import { SqliteSyncGatewayAdapter } from '#sqlite-runtime/server/sync/sqlite-sync-gateway-adapter';
++import { SqliteAuthWorkspaceStore } from '#sqlite-runtime/server/auth/sqlite-auth-workspace-store';
+ import { registerAuthWorkspaceStore } from '~~/server/auth/store/registry';
+ import { registerSyncGatewayAdapter } from '~~/server/sync/gateway/registry';
+ import { normalizeError, serializeError } from '~~/shared/errors';
+@@ -237,7 +237,7 @@
+         const assistant = history.messages.find(message => message.id === ids.assistantMessageId)!;
+         expect(user).toMatchObject({ thread_id: ids.threadId, role: 'user', index: 0, data: { content: 'Research' } });
+         expect(assistant).toMatchObject({ thread_id: ids.threadId, role: 'assistant', index: 1, pending: true,
+-            data: { generation_id: ids.generationId, generation_state: 'streaming' } });
++            data: { generation_id: ids.generationId, generation_state: 'streaming', delegated_model: 'test-model' } });
+         expect(typeof user.order_key).toBe('string');
+         expect(typeof assistant.order_key).toBe('string');
+         expect(user.order_key).not.toBe(assistant.order_key);
+@@ -267,22 +267,39 @@
+             expect(() => prepareNewDelegationChild(authorizedParent, { ...input, body: { ...input.body,
+                 messages: [{ role: 'system', content: 'Not an authorized parent default' }, ...input.body.messages] } })).toThrow(/instructions/i);
+             const instruction = { role: 'system' as const, content: 'Captured user instruction' };
++            const developer = { role: 'developer' as const, content: 'Captured developer instruction' };
+             const instructedId = await provider.createJob({ ...params, syncProviderId: 'sqlite', execution: {
+-                ...execution, body: { ...execution.body, messages: [instruction], tools: [definition], _toolRuntime: { scoped_server_tool: 'server' } },
+-                delegationDefaults: { version: 1, instructions: [instruction] },
++                ...execution, body: { ...execution.body, messages: [instruction, developer], tools: [definition], _toolRuntime: { scoped_server_tool: 'server' } },
++                delegationDefaults: { version: 1, instructions: [instruction, developer] },
+             } });
+             await provider.claimJob(instructedId, 'model', now, now + 60_000);
+             const instructedParent = (await provider.getJob(instructedId, params.userId))!;
+-            const instructedInput = { ...input, body: { ...input.body, messages: [instruction, ...input.body.messages] } };
++            const instructedInput = { ...input, body: { ...input.body, messages: [instruction, developer, ...input.body.messages] } };
+             expect((prepareNewDelegationChild(instructedParent, instructedInput).execution as BackgroundJobExecution).body.messages)
+-                .toEqual([instruction, ...input.body.messages]);
++                .toEqual([instruction, developer, ...input.body.messages]);
+             expect(() => prepareNewDelegationChild(instructedParent, input)).toThrow(/instructions/i);
+             expect(() => prepareNewDelegationChild(authorizedParent, { ...input, body: { ...input.body,
+                 messages: [{ role: 'assistant', content: 'Private conversation' }, ...input.body.messages] } })).toThrow(/task and effective instructions/i);
+             expect(() => prepareNewDelegationChild(authorizedParent, { ...input, body: { ...input.body,
+                 messages: [{ role: 'system', content: [{ type: 'image_url', image_url: 'private' }] }, ...input.body.messages] } })).toThrow(/task and effective instructions/i);
++            const recursive = { type: 'function' as const, function: { name: 'delegate_chat', description: 'Delegate',
++                parameters: { type: 'object' as const, properties: {} } } };
++            const removeRecursive = registerServerTool(recursive, () => 'unexpected', { runtime: 'server' });
++            try {
++                const recursiveId = await provider.createJob({ ...params, syncProviderId: 'sqlite', execution: {
++                    ...execution, body: { ...execution.body, tools: [recursive], _toolRuntime: { delegate_chat: 'server' } },
++                } });
++                await provider.claimJob(recursiveId, 'model', now, now + 60_000);
++                const recursiveParent = (await provider.getJob(recursiveId, params.userId))!;
++                expect(() => prepareNewDelegationChild(recursiveParent, { ...input, body: { ...input.body,
++                    tools: [recursive], _toolRuntime: { delegate_chat: 'server' } } })).toThrow(/recursive delegation/i);
++            } finally { removeRecursive(); }
+             unregister();
+             expect(() => prepareNewDelegationChild(authorizedParent, input)).toThrow(/unavailable/i);
++            const changed = registerServerTool({ ...definition, function: { ...definition.function, description: 'Changed contract' } },
++                () => 'unexpected', { runtime: 'server' });
++            try { expect(() => prepareNewDelegationChild(authorizedParent, input)).toThrow(/unavailable/i); }
++            finally { changed(); }
+         } finally {
+             unregister();
+         }
+@@ -407,10 +424,10 @@
+             expectedRevision: wait.revision, wait: { ...wait, revision: wait.revision + 1 } })).toBe(true);
+         vi.mocked(Date.now).mockReturnValue(Date.now() + 1_001);
+         const { reconcileDueDelegationWaits } = await import('~~/server/utils/background-jobs/delegation-coordinator');
+-        let eligible = Object.assign(Object.create(provider) as SqliteBackgroundJobProvider, { delegationCoordinatorVersion: 1 as const });
++        let eligible = provider;
+         expect(await reconcileDueDelegationWaits(eligible, 1)).toBe(1);
+         await reopen();
+-        eligible = Object.assign(Object.create(provider) as SqliteBackgroundJobProvider, { delegationCoordinatorVersion: 1 as const });
++        eligible = provider;
+         const expired = await provider.getJob(input.parentJobId, params.userId);
+         expect((expired!.execution as BackgroundJobExecution).delegationWait).toHaveProperty('expiredAt');
+         if (childId) {
+@@ -438,8 +455,10 @@
+             expectedRevision: wait.revision, wait: { ...wait, revision: wait.revision + 1 } })).toBe(true);
+         await reopen();
+         const { reconcileDueDelegationWaits } = await import('~~/server/utils/background-jobs/delegation-coordinator');
+-        expect(await reconcileDueDelegationWaits(provider, 1)).toBe(0);
+-        const eligible = Object.assign(Object.create(provider) as SqliteBackgroundJobProvider, { delegationCoordinatorVersion: 1 as const });
++        const legacy = Object.create(provider) as SqliteBackgroundJobProvider;
++        Object.defineProperty(legacy, 'delegationCoordinatorVersion', { value: undefined });
++        expect(await reconcileDueDelegationWaits(legacy, 1)).toBe(0);
++        const eligible = provider;
+         const { getShutdownRuntime } = await import('~~/server/utils/shutdown/runtime');
+         const phase = vi.spyOn(getShutdownRuntime().controller, 'phase').mockReturnValue('preparing');
+         const admission = vi.spyOn(getShutdownRuntime().controller, 'canStartWork').mockReturnValue(false);
+@@ -458,7 +477,7 @@
+         expect(await reconcileBackgroundJobHistory(provider, (await provider.getJob(child.jobId, params.userId))!)).toBe('committed');
+         await reopen();
+         vi.mocked(Date.now).mockReturnValue(Date.now() + 5_001);
+-        const recovered = Object.assign(Object.create(provider) as SqliteBackgroundJobProvider, { delegationCoordinatorVersion: 1 as const });
++        const recovered = provider;
+         expect(await reconcileDueDelegationWaits(recovered, 1)).toBe(1);
+         vi.mocked(Date.now).mockReturnValue(Date.now() + 5_001);
+         expect(await reconcileDueDelegationWaits(recovered, 1)).toBe(1);
+@@ -1087,7 +1106,7 @@
+             vi.mocked(Date.now).mockReturnValue(Date.now() + 30_001);
+         }
+         const { reconcileDueDelegationWaits } = await import('~~/server/utils/background-jobs/delegation-coordinator');
+-        const eligible = Object.assign(Object.create(provider) as SqliteBackgroundJobProvider, { delegationCoordinatorVersion: 1 as const });
++        const eligible = provider;
+         expect(await reconcileDueDelegationWaits(eligible, 1)).toBe(1);
+         expect(await provider.getJob(input.parentJobId, params.userId)).toMatchObject({ status: 'aborted', execution: { delegationWait: expect.any(Object) } });
+         expect((await provider.getJob(admitted.jobId, params.userId))?.status).toBe('aborted');
+@@ -1114,7 +1133,7 @@
+         await reopen();
+         vi.mocked(Date.now).mockReturnValue(Date.now() + 60_001);
+         const { reconcileDueDelegationWaits } = await import('~~/server/utils/background-jobs/delegation-coordinator');
+-        let eligible = Object.assign(Object.create(provider) as SqliteBackgroundJobProvider, { delegationCoordinatorVersion: 1 as const });
++        let eligible = provider;
+         expect(await reconcileDueDelegationWaits(eligible, 1)).toBe(1);
+         const parent = (await provider.getJob(input.parentJobId, params.userId))!;
+         expect(parent.status).toBe('aborted');
+@@ -1129,7 +1148,7 @@
+         vi.mocked(Date.now).mockReturnValue(Date.now() + 3_600_001);
+         await provider.cleanupExpired();
+         expect(await provider.getJob(admitted.jobId, params.userId)).not.toBeNull();
+-        eligible = Object.assign(Object.create(provider) as SqliteBackgroundJobProvider, { delegationCoordinatorVersion: 1 as const });
++        eligible = provider;
+         expect(await reconcileDueDelegationWaits(eligible, 1)).toBe(1);
+         expect((await provider.getJob(parent.id, params.userId))!.execution).toHaveProperty('delegationWait');
+         expect(await reconcileBackgroundJobHistory(provider, (await provider.getJob(parent.id, params.userId))!)).toBe('superseded');
+@@ -1197,7 +1216,7 @@
+         await reopen();
+         vi.mocked(Date.now).mockReturnValue(Date.now() + 60_001);
+         const { reconcileDueDelegationWaits } = await import('~~/server/utils/background-jobs/delegation-coordinator');
+-        const eligible = Object.assign(Object.create(provider) as SqliteBackgroundJobProvider, { delegationCoordinatorVersion: 1 as const });
++        const eligible = provider;
+         expect(await reconcileDueDelegationWaits(eligible, 1)).toBe(1);
+         const parent = (await provider.getJob(input.parentJobId, params.userId))!;
+         expect(parent.status).toBe('aborted');
+@@ -1226,7 +1245,7 @@
+         expect(deleted.results[0]).toMatchObject({ success: true });
+         vi.mocked(Date.now).mockReturnValue(Date.now() + 60_001);
+         const { reconcileDueDelegationWaits } = await import('~~/server/utils/background-jobs/delegation-coordinator');
+-        const eligible = Object.assign(Object.create(provider) as SqliteBackgroundJobProvider, { delegationCoordinatorVersion: 1 as const });
++        const eligible = provider;
+         expect(await reconcileDueDelegationWaits(eligible, 1)).toBe(1);
+         const parent = (await provider.getJob(input.parentJobId, params.userId))!;
+         const before = getRawDb().prepare('SELECT data_json, clock, deleted FROM s_messages WHERE workspace_id = ? AND id = ?')
+@@ -1291,7 +1310,7 @@
+         await reopen();
+         vi.mocked(Date.now).mockReturnValue(Date.now() + 60_001);
+         const { reconcileDueDelegationWaits } = await import('~~/server/utils/background-jobs/delegation-coordinator');
+-        const eligible = Object.assign(Object.create(provider) as SqliteBackgroundJobProvider, { delegationCoordinatorVersion: 1 as const });
++        const eligible = provider;
+         expect(await reconcileDueDelegationWaits(eligible, 1)).toBe(1);
+         const expectedStatus = ownership === 'released' ? 'streaming' : 'aborted';
+         expect((await provider.getJob(input.parentJobId, params.userId))?.status).toBe(expectedStatus);
+@@ -1313,7 +1332,7 @@
+             await reopen();
+             vi.mocked(Date.now).mockReturnValue(Date.now() + 60_001);
+             const { reconcileDueDelegationWaits } = await import('~~/server/utils/background-jobs/delegation-coordinator');
+-            const eligible = Object.assign(Object.create(provider) as SqliteBackgroundJobProvider, { delegationCoordinatorVersion: 1 as const });
++            const eligible = provider;
+             expect(await reconcileDueDelegationWaits(eligible, 1)).toBe(1);
+             expect((await provider.getJob(input.parentJobId, params.userId))?.status).toBe('aborted');
+             expect((await provider.getJob(admitted.jobId, params.userId))?.status).toBe('aborted');
+@@ -1345,7 +1364,7 @@
+             await reopen();
+             vi.mocked(Date.now).mockReturnValue(Date.now() + 60_001);
+             const { reconcileDueDelegationWaits } = await import('~~/server/utils/background-jobs/delegation-coordinator');
+-            const eligible = Object.assign(Object.create(provider) as SqliteBackgroundJobProvider, { delegationCoordinatorVersion: 1 as const });
++            const eligible = provider;
+             expect(await reconcileDueDelegationWaits(eligible, 1)).toBe(1);
+             const parent = (await provider.getJob(input.parentJobId, params.userId))!;
+             expect(parent.status).toBe('aborted');
+@@ -1392,7 +1411,7 @@
+         await reopen();
+         vi.mocked(Date.now).mockReturnValue(now + 60_001);
+         const { reconcileDueDelegationWaits } = await import('~~/server/utils/background-jobs/delegation-coordinator');
+-        const eligible = Object.assign(Object.create(provider) as SqliteBackgroundJobProvider, { delegationCoordinatorVersion: 1 as const });
++        const eligible = provider;
+         expect(await reconcileDueDelegationWaits(eligible, 1)).toBe(1);
+         expect(await provider.getJob(input.parentJobId, params.userId)).toMatchObject({ status: 'aborted' });
+         expect(await provider.getJob(admitted.jobId, params.userId)).toMatchObject({ status: 'aborted', execution: { delegationDispatch: { state: 'started' } } });
+@@ -1509,7 +1528,7 @@
+             await reopen();
+             vi.mocked(Date.now).mockReturnValue(Date.now() + 60_001);
+             const { reconcileDueDelegationWaits } = await import('~~/server/utils/background-jobs/delegation-coordinator');
+-            const eligible = Object.assign(Object.create(provider) as SqliteBackgroundJobProvider, { delegationCoordinatorVersion: 1 as const });
++            const eligible = provider;
+             expect(await reconcileDueDelegationWaits(eligible, 1)).toBe(1);
+             const parent = await provider.getJob(input.parentJobId, params.userId);
+             expect(parent?.status).toBe('streaming');
+@@ -1538,7 +1557,7 @@
+         try {
+             await reopen();
+             const { reconcileDueDelegationWaits } = await import('~~/server/utils/background-jobs/delegation-coordinator');
+-            const eligible = Object.assign(Object.create(provider) as SqliteBackgroundJobProvider, { delegationCoordinatorVersion: 1 as const });
++            const eligible = provider;
+             vi.mocked(Date.now).mockReturnValue(now + 500);
+             expect(await reconcileDueDelegationWaits(eligible, 1)).toBe(1);
+             const deferred = (await provider.getJob(input.parentJobId, params.userId))!;
+@@ -1566,7 +1585,7 @@
+         await reopen();
+         vi.mocked(Date.now).mockReturnValue(Date.now() + 60_001);
+         const { reconcileDueDelegationWaits } = await import('~~/server/utils/background-jobs/delegation-coordinator');
+-        const eligible = Object.assign(Object.create(provider) as SqliteBackgroundJobProvider, { delegationCoordinatorVersion: 1 as const });
++        const eligible = provider;
+         expect(await reconcileDueDelegationWaits(eligible, 1)).toBe(1);
+         expect((await provider.getJob(input.parentJobId, params.userId))?.status).toBe('streaming');
+         expect((await provider.getJob(admitted.jobId, params.userId))?.status).toBe('streaming');
+@@ -1611,7 +1630,7 @@
+         const { getShutdownRuntime } = await import('~~/server/utils/shutdown/runtime');
+         vi.spyOn(getShutdownRuntime().controller, 'phase').mockReturnValue('preparing');
+         vi.spyOn(getShutdownRuntime().controller, 'canStartWork').mockReturnValue(false);
+-        const eligible = Object.assign(Object.create(provider) as SqliteBackgroundJobProvider, { delegationCoordinatorVersion: 1 as const });
++        const eligible = provider;
+         expect(await reconcileDueDelegationWaits(eligible, 1)).toBe(1);
+         const child = await provider.getJob(admitted.jobId, params.userId);
+         expect(child).toMatchObject({ status: errorCode ? 'error' : 'aborted', historyPhase: 'finalization_pending' });
+@@ -2896,6 +2915,7 @@
+ 
+     it('refuses delegation admission without an interactive transaction', async () => {
+         const provider = new SqliteBackgroundJobProvider();
++        expect(provider.delegationCoordinatorVersion).toBeUndefined();
+         await expect(provider.admitDelegationChild({} as never))
+             .rejects.toThrow('unavailable for D1');
+         await expect(provider.commitDelegationWait({} as never)).rejects.toThrow('unavailable for D1');
+--- a/src/runtime/__tests__/sqlite-sync-gateway-adapter.test.ts
++++ b/src/runtime/__tests__/sqlite-sync-gateway-adapter.test.ts
+@@ -9,11 +9,11 @@
+ import { tmpdir } from 'node:os';
+ import { join } from 'node:path';
+ import { sql } from 'kysely';
+-import { initializeSqliteDb, getSqliteDb, getRawDb, destroySqliteDb, _resetForTest } from '../server/db/kysely';
++import { initializeSqliteDb, getSqliteDb, getRawDb, destroySqliteDb, _resetForTest } from '#sqlite-runtime/server/db/kysely';
+ import { createD1TestDatabase } from '../../../test/support/d1-test-database';
+-import { runMigrations } from '../server/db/migrate';
+-import { down as rollbackDelegationMigration } from '../server/db/migrations/029_delegation_wait';
+-import { SqliteSyncGatewayAdapter } from '../server/sync/sqlite-sync-gateway-adapter';
++import { runMigrations } from '#sqlite-runtime/server/db/migrate';
++import { down as rollbackDelegationMigration } from '#sqlite-runtime/server/db/migrations/029_delegation_wait';
++import { SqliteSyncGatewayAdapter } from '#sqlite-runtime/server/sync/sqlite-sync-gateway-adapter';
+ import type {
+     PendingOp,
+     PullRequest,
+@@ -24,7 +24,7 @@
+ import type { H3Event } from 'h3';
+ import { verifySyncContract } from '~~/shared/testing/contracts/sync';
+ import { incomingRevisionWins } from '~~/shared/sync/revision';
+-import { SqliteBackgroundJobProvider } from '../server/background-jobs/sqlite-provider';
++import { SqliteBackgroundJobProvider } from '#sqlite-runtime/server/background-jobs/sqlite-provider';
+ import { reconcileBackgroundJobHistory, retainBackgroundToolResult } from '~~/server/utils/background-jobs/history';
+ import { prepareToolResultStorage, readToolResultStorage } from '~~/shared/chat/tool-result-artifact';
+ import { registerSyncGatewayAdapter } from '~~/server/sync/gateway/registry';
+@@ -2415,7 +2415,7 @@
+             expect(retainedBob).toHaveLength(1);
+             if (runtime === 'd1') await d1TestDatabase!.database.prepare('UPDATE sync_snapshots SET expires_at = 0').run();
+             else getRawDb().prepare('UPDATE sync_snapshots SET expires_at = 0').run();
+-            const { pruneExpiredSyncSnapshots } = await import('../server/sync/sqlite-sync-gateway-adapter');
++            const { pruneExpiredSyncSnapshots } = await import('#sqlite-runtime/server/sync/sqlite-sync-gateway-adapter');
+             await pruneExpiredSyncSnapshots();
+             for (const table of ['sync_snapshots', 'sync_snapshot_items']) {
+                 const query = `SELECT count(*) AS count FROM ${table}`;
+--- a/vitest.config.ts
++++ b/vitest.config.ts
+@@ -12,6 +12,11 @@
+ return defineConfig({
+     resolve: {
+         alias: [
++            {
++                find: /^#sqlite-runtime\/(.*)$/,
++                replacement: path.resolve(process.env.OR3_SQLITE_ARTIFACT_ROOT || '.',
++                    process.env.OR3_SQLITE_ARTIFACT_ROOT ? 'dist/runtime/$1' : 'src/runtime/$1'),
++            },
+             ...[{
+                 find: '~~/shared/openrouter/delegation-model-catalog',
+                 replacement: path.resolve(host, 'shared/openrouter/delegation-model-catalog.ts'),

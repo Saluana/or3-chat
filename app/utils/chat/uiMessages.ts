@@ -20,6 +20,7 @@ import {
 } from '~/utils/chat/workflow-types';
 import { TRANSPARENT_PIXEL_GIF_DATA_URI } from '~/utils/chat/imagePlaceholders';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
+import type { DelegationDisplayActivity } from '~~/shared/chat/delegation-checkpoint';
 
 interface ContentPartLike {
     type?: string;
@@ -73,6 +74,8 @@ export interface ToolCallInfo {
     runtime?: 'client' | 'server' | 'hybrid';
     fingerprint?: string;
     completedAt?: number;
+    /** Saved child links and outcomes for a durable delegation. */
+    delegation?: DelegationDisplayActivity;
     /** Length of the row's text when this call's results arrived (stored as is). */
     text_offset?: number;
 }
@@ -106,6 +109,8 @@ export interface UiChatMessage {
     reasoning_text?: string | null;
     stream_id?: string;
     pending?: boolean;
+    /** Local viewer transport state; never persisted as a generation outcome. */
+    reconnecting?: boolean;
     toolCalls?: ToolCallInfo[];
     toolCards?: ToolCardStateMap;
     cardOrigin?: CardOrigin;

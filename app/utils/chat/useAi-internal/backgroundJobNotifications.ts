@@ -135,7 +135,9 @@ export async function emitBackgroundComplete(
             sessionUserId ||
             tracker.userId ||
             resolveNotificationUserId(session);
-        await new NotificationService(originDb, hooks, userId).create(payload);
+        await new NotificationService(originDb, hooks, userId).create(payload, {
+            idempotencyKey: `background-job:${tracker.jobId}`,
+        });
     } catch {
         // Notifications are best-effort and must never fail job finalization.
     }

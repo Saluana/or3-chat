@@ -154,6 +154,7 @@ export interface TypedHookEngine {
         name?: K,
         fn?: InferHookCallback<K>
     ): boolean | number;
+    hasOnlyFilter<K extends FilterHookName>(name: K, fn: InferHookCallback<K>): boolean;
     removeAllCallbacks(priority?: number): void;
     captureFilterChain(names: readonly string[]): () => boolean;
     currentPriority(): number | false;
@@ -213,6 +214,7 @@ export function createTypedHookEngine(engine: HookEngine): TypedHookEngine {
         // Utilities
         hasAction: (name, fn) => engine.hasAction(name as any, fn as any),
         hasFilter: (name, fn) => engine.hasFilter(name as any, fn as any),
+        hasOnlyFilter: (name, fn) => engine.hasOnlyFilter(name as any, fn as any),
         captureFilterChain: (names) => engine.captureFilterChain(names),
         removeAllCallbacks: (priority) => engine.removeAllCallbacks(priority),
         currentPriority: () => engine.currentPriority(),

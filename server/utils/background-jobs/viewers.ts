@@ -247,6 +247,10 @@ export function initJobLiveState(
 ): void {
     const state = ensureJobLiveState(jobId);
     if (isStaleAttempt(state, options?.attempt)) return;
+    // A resumed attempt starts from the durable ledger; old live tool state
+    // must not hide its newly settled delegation metadata.
+    if (options?.attempt !== undefined && state.attempt !== undefined && options.attempt > state.attempt)
+        state.tool_calls = undefined;
     state.producing = true;
     updateLiveUsage(state, options?.usage, options?.attempt);
     if (options?.attempt !== undefined) state.attempt = options.attempt;
@@ -261,6 +265,13 @@ export function initJobLiveState(
         state.cleanupTimer = null;
     }
 
+}
+
+/** A parked worker is no longer producing, but the job is still streaming. */
+export function pauseJobLiveState(jobId: string, attempt?: number): void {
+    const state = jobStreams.get(jobId);
+    if (!state || state.attempt !== attempt) return;
+    state.producing = false;
 }
 
 /**

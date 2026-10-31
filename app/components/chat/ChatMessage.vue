@@ -252,6 +252,9 @@
                     data-card-origin
                     >via {{ props.message.cardOrigin.label }}</span
                 >
+                <p v-if="props.message.reconnecting" role="status" class="mb-3 text-xs opacity-70">
+                    Reconnecting to the response…
+                </p>
                 <!-- Tool Call Indicators -->
                 <ChatToolBlock
                     v-if="

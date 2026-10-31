@@ -85,13 +85,21 @@ test('offline inspection accepts the installed provider migration history and re
   expect(inspectCanonicalReferences(OfflineDatabase, path, inventory, '/data/storage')).toMatchObject({ complete: true, liveAttachments: 0 });
   const db = new Database(path);
   try {
-    expect(db.query('SELECT name FROM kysely_migration ORDER BY name').all()).toEqual(QUALIFIED_MIGRATIONS.map(name => ({ name })));
-    db.query('DELETE FROM kysely_migration WHERE name=?').run(QUALIFIED_MIGRATIONS.at(-1)!);
+    const installed = JSON.parse(await readFile(new URL('../../../node_modules/or3-provider-sqlite/package.json', import.meta.url), 'utf8')) as { version: string };
+    const migrationCount = installed.version === '0.0.24' ? 28 : installed.version === '0.0.25' ? 29 : 0;
+    expect(migrationCount).toBeGreaterThan(0);
+    expect(db.query('SELECT name FROM kysely_migration ORDER BY name').all())
+      .toEqual(QUALIFIED_MIGRATIONS.slice(0, migrationCount).map(name => ({ name })));
+    if (migrationCount === 29) {
+      db.query('DELETE FROM kysely_migration WHERE name=?').run('029_delegation_wait');
+      expect(inspectCanonicalReferences(OfflineDatabase, path, inventory, '/data/storage')).toMatchObject({ complete: true });
+    }
+    db.query('DELETE FROM kysely_migration WHERE name=?').run('028_user_scoped_device_cursors');
     expect(() => inspectCanonicalReferences(OfflineDatabase, path, inventory, '/data/storage')).toThrow('migration history');
     // Published 0.0.20 backups remain valid for upgrade and rollback inspection.
-    db.query('DELETE FROM kysely_migration WHERE name=?').run(QUALIFIED_MIGRATIONS.at(-2)!);
+    db.query('DELETE FROM kysely_migration WHERE name=?').run('027_verified_storage_usage');
     expect(inspectCanonicalReferences(OfflineDatabase, path, inventory, '/data/storage')).toMatchObject({ complete: true });
-    db.query('DELETE FROM kysely_migration WHERE name=?').run(QUALIFIED_MIGRATIONS.at(-3)!);
+    db.query('DELETE FROM kysely_migration WHERE name=?').run('026_retained_storage_usage');
     expect(() => inspectCanonicalReferences(OfflineDatabase, path, inventory, '/data/storage')).toThrow('migration history');
   } finally { db.close(); }
 });

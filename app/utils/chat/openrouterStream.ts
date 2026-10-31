@@ -119,6 +119,8 @@ type OpenRouterRequestBody = {
     _clientDeviceId?: string;
     _streamedFieldMode?: StreamedFieldMode;
     _context?: ContextRequestEnvelope;
+    _delegationDefaults?: import('~~/shared/chat/delegation-checkpoint').DelegationDefaults;
+    _durableDelegation?: 1;
 };
 
 // Cache key for detecting static build (no server routes)
@@ -801,6 +803,8 @@ export interface BackgroundJobStatus {
         result?: string;
         error?: string;
         runtime?: 'client' | 'server' | 'hybrid';
+        /** Server metadata is validated against the call before display. */
+        delegation?: import('~~/shared/chat/delegation-checkpoint').DelegationDisplayActivity;
         /** Length of the assistant text when this call's results arrived. */
         text_offset?: number;
     }>;
@@ -954,6 +958,8 @@ export async function startBackgroundStream(params: {
     toolChoice?: ToolChoice;
     toolRuntime?: Record<string, string>;
     contextPolicy?: ContextRequestPolicy;
+    delegationDefaults?: import('~~/shared/chat/delegation-checkpoint').DelegationDefaults;
+    durableDelegation?: boolean;
     streamedFieldMode?: StreamedFieldMode;
     signal?: AbortSignal;
     responseTimeoutMs?: number;
@@ -985,6 +991,8 @@ export async function startBackgroundStream(params: {
     if (params.toolRuntime) {
         body._toolRuntime = params.toolRuntime;
     }
+    if (params.delegationDefaults) body._delegationDefaults = params.delegationDefaults;
+    if (params.durableDelegation) body._durableDelegation = 1;
     if (params.streamedFieldMode) {
         body._streamedFieldMode = params.streamedFieldMode;
     }
@@ -1019,6 +1027,9 @@ export async function startBackgroundStream(params: {
                 const payload = await readErrorPayload(resp);
                 const message =
                     payload.error ?? `Background stream failed: ${resp.status}`;
+                if (payload.code === 'background_delegation_unsupported') {
+                    throw makeBackgroundAdmissionError(message, { retryable: false });
+                }
                 if (
                     payload.code === 'background_streaming_disabled' ||
                     payload.code === 'background_history_unsupported' ||
@@ -1352,19 +1363,27 @@ export async function claimBackgroundClientTool(
     return (await response.json()) as BackgroundClientToolClaim;
 }
 
-export async function isBackgroundClientToolBridgeAvailable(): Promise<boolean> {
+/** Defaults capture and durable delegation are independently versioned. */
+export async function getBackgroundClientToolCapability(signal?: AbortSignal): Promise<{ available: boolean; defaultsCapture: boolean; durableDelegation: boolean; serverModelSearch: boolean }> {
     try {
         const response = await fetchWithResponseDeadline(
             '/api/jobs/client-tool/capability',
             { credentials: 'include', cache: 'no-store' },
-            { timeoutMs: 3_000 }
+            { signal, timeoutMs: 3_000 }
         );
-        if (!response.ok) return false;
-        const body = (await response.json()) as { available?: unknown };
-        return body.available === true;
-    } catch {
-        return false;
+        if (!response.ok) return { available: false, defaultsCapture: false, durableDelegation: false, serverModelSearch: false };
+        const body = await readResponseJsonWithIdleDeadline<{ available?: unknown; delegationDefaultsCaptureVersion?: unknown; durableDelegationVersion?: unknown; serverModelSearchVersion?: unknown } | null>(response,
+            { signal, timeoutMs: 3_000 });
+        return { available: body?.available === true, defaultsCapture: body?.delegationDefaultsCaptureVersion === 1,
+            durableDelegation: body?.durableDelegationVersion === 1, serverModelSearch: body?.serverModelSearchVersion === 1 };
+    } catch (error) {
+        if (signal?.aborted) throw error;
+        return { available: false, defaultsCapture: false, durableDelegation: false, serverModelSearch: false };
     }
+}
+
+export async function isBackgroundClientToolBridgeAvailable(): Promise<boolean> {
+    return (await getBackgroundClientToolCapability()).available;
 }
 
 export async function submitBackgroundClientToolResult(params: {

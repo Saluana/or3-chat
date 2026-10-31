@@ -783,6 +783,10 @@ export function createHookEngineV2(
         hasFilter(name?: string, fn?: HookFn) {
             return records.has('filter', name, fn);
         },
+        hasOnlyFilter(name, fn) {
+            const entries = records.matching('filter', name);
+            return entries.length === 1 && entries[0]!.fn === fn;
+        },
         captureFilterChain(names) {
             const captured = names.map((name) => ({ name, entries: records.matching('filter', name).map((entry) => entry.sequence) }));
             return () => captured.every(({ name, entries }) => {

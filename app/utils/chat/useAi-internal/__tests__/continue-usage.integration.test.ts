@@ -4,6 +4,7 @@ import { ref } from 'vue';
 import { getDb, setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import { continueMessageImpl, type ContinueMessageContext } from '../continue';
 import { createChatRequest } from '../requestController';
+import { BackgroundTrackerConflict } from '../background-tracker-conflict';
 import { storedMessagesToCanonicalTranscript } from '~/utils/chat/transcript';
 import { captureUsagePrefix, attachRequestUsage } from '~~/shared/chat/request-usage';
 import { countTokensApprox } from '~/utils/chat/tokens';
@@ -134,4 +135,75 @@ it('preserves canonical continuation state when admission recovery is uncertain'
     expect(stored.error ?? null).toBeNull();
     expect(stored.data).toMatchObject({ content: 'Hello', generation_mode: 'background',
         generation_state: 'streaming', background_admission_id: expect.any(String), plugin_owned: 'preserve' });
+});
+
+it('leaves an accepted continuation pending when its tracker belongs to another scope', async () => {
+    backgroundProvider.mockResolvedValueOnce({ jobId: 'accepted-job' });
+    const db = getDb();
+    const accumulator = { reset: vi.fn(), append: vi.fn(), finalize: vi.fn(), state: { finalized: false } };
+    const request = createChatRequest({ requestId: 'tracker-conflict', kind: 'continue', originDb: db,
+        workspaceId: workspace, threadId: 'thread', accumulator });
+    request.ownsView = () => !request.cancelled;
+    const ctx: ContinueMessageContext = {
+        request, loading: ref(false), aborted: ref(false), abortController: ref(null),
+        threadIdRef: ref('thread'), tailAssistant: ref(null), rawMessages: ref([]), messages: ref([]), streamId: ref(undefined),
+        streamAcc: accumulator, streamState: accumulator.state, hooks: useHooks(), effectiveApiKey: ref('scripted'),
+        hasInstanceKey: ref(false), hasUserKey: ref(false), defaultModelId: 'model', getSystemPromptContent: async () => null,
+        useAiSettings: () => ({ settings: ref(undefined) }), resetStream: vi.fn(),
+        resolveContextPolicy: async () => ({ model: { context_length: 1_000_000 }, userMaxContextTokens: null, source: 'openrouter-live' }),
+        backgroundStreamingAllowed: true, workspaceId: workspace, userId: 'user',
+        attachBackgroundJob: vi.fn(() => { throw new BackgroundTrackerConflict(); }),
+    };
+    await continueMessageImpl(ctx, 'assistant');
+    expect(backgroundProvider).toHaveBeenCalledOnce();
+    expect(ctx.attachBackgroundJob).toHaveBeenCalledOnce();
+    expect(request.attached.value).toBe(false);
+    const stored = await db.messages.get('assistant');
+    expect(stored).toMatchObject({ pending: true, data: { content: 'Hello' } });
+    expect(stored?.error).toBeFalsy();
+});
+
+it('does not dispatch a continuation after view ownership changes during history capture', async () => {
+    const db = getDb();
+    let release!: () => void, captured!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    const entered = new Promise<void>(resolve => { captured = resolve; });
+    const originalGet = db.messages.get.bind(db.messages);
+    const read = vi.spyOn(db.messages, 'get').mockImplementation((async (id: string) => {
+        const row = await originalGet(id);
+        const data = row?.data as Record<string, unknown> | undefined;
+        if (row?.id === 'assistant' && row.pending && data?.generation_mode === 'background') {
+            captured();
+            await held;
+        }
+        return row;
+    }) as unknown as typeof db.messages.get);
+    backgroundProvider.mockRejectedValueOnce(new Error('unexpected dispatch'));
+    const accumulator = { reset: vi.fn(), append: vi.fn(), finalize: vi.fn(), state: { finalized: false } };
+    const request = createChatRequest({ requestId: 'ownership', kind: 'continue', originDb: db,
+        workspaceId: workspace, threadId: 'thread', accumulator });
+    let ownsView = true;
+    request.ownsView = () => ownsView;
+    const ctx: ContinueMessageContext = {
+        request, loading: ref(false), aborted: ref(false), abortController: ref(null),
+        threadIdRef: ref('thread'), tailAssistant: ref(null), rawMessages: ref([]), messages: ref([]), streamId: ref(undefined),
+        streamAcc: accumulator, streamState: accumulator.state, hooks: useHooks(), effectiveApiKey: ref('scripted'),
+        hasInstanceKey: ref(false), hasUserKey: ref(false), defaultModelId: 'model', getSystemPromptContent: async () => null,
+        useAiSettings: () => ({ settings: ref(undefined) }), resetStream: vi.fn(),
+        resolveContextPolicy: async () => ({ model: { context_length: 1_000_000 }, userMaxContextTokens: null, source: 'openrouter-live' }),
+        backgroundStreamingAllowed: true, workspaceId: workspace, userId: 'origin-user', attachBackgroundJob: vi.fn(),
+    };
+    try {
+        const continuation = continueMessageImpl(ctx, 'assistant');
+        await entered;
+        ownsView = false;
+        release();
+        await continuation;
+        expect(backgroundProvider).not.toHaveBeenCalled();
+        expect(ctx.attachBackgroundJob).not.toHaveBeenCalled();
+        expect(request.attached.value).toBe(false);
+        const stored = await originalGet('assistant');
+        expect(stored).toMatchObject({ pending: true, data: { content: 'Hello' } });
+        expect(stored?.error).toBeFalsy();
+    } finally { release(); read.mockRestore(); }
 });

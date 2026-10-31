@@ -5,6 +5,10 @@ import type { WorkspaceOperationScope } from '~/utils/chat/workspace-access';
 import { resolveThreadProjection, requestHistoryFingerprint } from '~/utils/chat/compaction/history';
 import { recoveryInputFingerprint, recoverySourceFingerprint, recoveryProjectFingerprint, type NativeRecoveryCheckpoint } from '~/utils/chat/native-recovery';
 import { toolDefinitionEquals } from '~~/shared/chat/tool-policy';
+import { modelSearchDefinition } from '~~/shared/openrouter/delegation-model-catalog';
+import { getBuiltinMentionFilter } from '~/utils/chat/mention-filter-identity';
+import { BackgroundTrackerConflict } from '~/utils/chat/useAi-internal/background-tracker-conflict';
+import type { TypedHookEngine } from '~/core/hooks/typed-hooks';
 import { projectTranscriptForOpenRouter, storedMessagesToCanonicalTranscript, associateUiToolResultMessages } from '~/utils/chat/transcript';
 import { ChatContextAdmissionError, contextAdmissionFailureReason, type ContextRequestPolicy } from '~~/shared/chat/context-budget';
 import type { ChatSendPreparation, ChatSendCommit } from '~~/shared/hooks/hook-domain-types';
@@ -97,11 +101,13 @@ import {
     abortBackgroundAdmission,
     pollJobStatus,
     isBackgroundStreamingEnabled,
-    isBackgroundClientToolBridgeAvailable,
+    getBackgroundClientToolCapability,
     type BackgroundJobStatus,
     type OpenRouterReasoningConfig,
 } from '../../utils/chat/openrouterStream';
 import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
+import { DELEGATE_CHAT_TOOL } from '~~/shared/chat/delegation';
+import { DelegationDisplayActivitySchema, DelegationDefaultsSchema, type DelegationDefaults } from '~~/shared/chat/delegation-checkpoint';
 import {
     appendModelVariant,
     stripModelVariantSuffix,
@@ -142,7 +148,7 @@ import {
     ensureBackgroundJobTracker,
     subscribeBackgroundJob,
 } from '~/utils/chat/useAi-internal/backgroundJobs';
-import type { BackgroundJobSubscriber, BackgroundJobTracker } from '~/utils/chat/useAi-internal/types';
+import type { BackgroundJobSubscriber, BackgroundJobTracker, EnsureBackgroundJobTrackerParams } from '~/utils/chat/useAi-internal/types';
 import { resolveSystemPromptText, buildSystemPromptMessage, buildOpenRouterMessagesForSend } from '~/utils/chat/useAi-internal/messageBuild';
 import { makeAssistantPersister, updateMessageRecord, startForegroundGenerationHeartbeat } from '~/utils/chat/useAi-internal/persistence';
 import { projectCanonicalBackgroundMessage } from '~/utils/chat/useAi-internal/backgroundJobPersistence';
@@ -155,6 +161,27 @@ import {
 const DEFAULT_AI_MODEL = '~openai/gpt-luna-latest';
 
 const THINKING_SUFFIX = ':thinking';
+
+const delegationPreparationFilters = ['ui.chat.message:filter:outgoing', 'ai.chat.model:filter:select',
+    'ai.chat.messages:filter:input', 'ai.chat.send:filter:prepare', 'ai.chat.send:filter:commit',
+    'ai.chat.messages:filter:before_send'] as const;
+
+function hasUnsafeDelegationFilter(hooks: TypedHookEngine, name: typeof delegationPreparationFilters[number]): boolean {
+    const builtin = name === 'ai.chat.messages:filter:before_send' ? getBuiltinMentionFilter() : undefined;
+    if (builtin && typeof hooks.hasOnlyFilter === 'function' && hooks.hasOnlyFilter('ai.chat.messages:filter:before_send', builtin)) return false;
+    return Boolean(hooks.hasFilter(name));
+}
+
+function canUseDurableDelegation(tools: import('~/utils/chat/types').ToolDefinition[], defaults: DelegationDefaults | undefined,
+    available: boolean): boolean {
+    return available && !!defaults && tools.some(tool => tool.function.name === DELEGATE_CHAT_TOOL && tool.runtime === 'client') &&
+        tools.every(tool => tool.function.name === DELEGATE_CHAT_TOOL || tool.runtime === 'server' || tool.runtime === 'hybrid');
+}
+
+function placeServerModelSearch(tools: import('~/utils/chat/types').ToolDefinition[], available: boolean) {
+    return available ? tools.map(tool => tool.runtime === 'client' && toolDefinitionEquals(tool, modelSearchDefinition)
+        ? { ...tool, runtime: 'hybrid' as const } : tool) : tools;
+}
 
 function stripThinkingSuffix(modelId: string): string {
     return modelId.endsWith(THINKING_SUFFIX)
@@ -339,22 +366,6 @@ export function useChat(
         console.warn('[bg-stream]', stage, redactDiagnosticDetails(details));
     };
 
-    watch(
-        () => notificationUserId.value,
-        (nextUserId) => {
-            if (!nextUserId) return;
-            logBgStream('notification-user-sync', {
-                threadId: threadIdRef.value || null,
-                nextUserId,
-                trackerCount: backgroundJobTrackers.size,
-            });
-            for (const tracker of backgroundJobTrackers.values()) {
-                tracker.userId = nextUserId;
-            }
-        },
-        { immediate: true }
-    );
-
     if (import.meta.dev) {
         if (state.value.openrouterKey && apiKey.value) {
             setKey(state.value.openrouterKey);
@@ -371,12 +382,14 @@ export function useChat(
         originDb = getDb(),
         workspaceId = getActiveWorkspaceId() ?? 'local'
     ): ChatRequestScope {
+        const admissionRevision = navigationRevision;
         const scope = createChatRequest({
             requestId: newId(),
             kind,
             threadId,
             originDb,
             workspaceId,
+            originUserId: notificationUserId.value,
             accumulator:
                 kind === 'reattach' ? createStreamAccumulator() : streamAcc,
         });
@@ -384,6 +397,8 @@ export function useChat(
             visibleRequest.value === scope &&
             scope.attached.value &&
             !detached.value &&
+            navigationRevision === admissionRevision &&
+            notificationUserId.value === scope.originUserId &&
             getDb() === scope.originDb &&
             threadIdRef.value === scope.threadId;
         scope.projectTerminal = (result) =>
@@ -488,6 +503,9 @@ export function useChat(
         navigationRevision += 1;
         clearForegroundReconcileTimers();
     }
+    // Account switches invalidate in-flight view ownership even when the
+    // workspace database and thread happen to stay the same.
+    watch(notificationUserId, () => bumpNavigationRevision(), { flush: 'sync' });
     /**
      * True only while this request still owns the visible conversation. Used to
      * guard every asynchronous mutation of shared UI state (loading, tail,
@@ -880,7 +898,7 @@ export function useChat(
      * - Safe to call repeatedly
      */
     async function ensureHistorySynced() {
-        if (typeof window === 'undefined') return;
+        if (typeof window === 'undefined' || disposed) return;
         if (historySyncInFlight) {
             historySyncQueued = true;
             logBgStream('history-sync-skip-in-flight', {
@@ -897,6 +915,10 @@ export function useChat(
         }
         if (threadIdRef.value && historyLoadedFor.value !== threadIdRef.value) {
             const targetThreadId = threadIdRef.value;
+            const targetDb = getDb();
+            const targetWorkspaceGeneration = getWorkspaceGeneration();
+            const targetUserId = notificationUserId.value;
+            const targetRevision = navigationRevision;
             logBgStream('history-sync-start', {
                 threadId: targetThreadId,
                 historyLoadedFor: historyLoadedFor.value,
@@ -905,15 +927,23 @@ export function useChat(
             historySyncInFlight = true;
             try {
                 if (detached.value) detached.value = false;
+                // The history helper writes its output refs before returning.
+                // Stage them privately until this view still owns the read.
+                const stagedHistory = ref<ChatMessage[]>([]);
+                const stagedLoadedFor = ref<string | null>(historyLoadedFor.value);
                 const { ensureThreadHistoryLoaded } = await getHistoryModule();
                 await ensureThreadHistoryLoaded(
                     threadIdRef,
-                    historyLoadedFor,
-                    rawMessages
+                    stagedLoadedFor,
+                    stagedHistory
                 );
                 // A newer navigation owns the reactive state now. The queued
                 // sync below will load that target after this stale query ends.
-                if (threadIdRef.value !== targetThreadId) return;
+                if (disposed || navigationRevision !== targetRevision || notificationUserId.value !== targetUserId ||
+                    getDb() !== targetDb || getWorkspaceGeneration() !== targetWorkspaceGeneration ||
+                    threadIdRef.value !== targetThreadId || stagedLoadedFor.value !== targetThreadId) return;
+                rawMessages.value = stagedHistory.value;
+                historyLoadedFor.value = targetThreadId;
                 messages.value = associateUiToolResultMessages(rawMessages.value
                     .filter((m: ChatMessage) => m.role !== 'tool')
                     .map((m) => ensureUiMessage(m)), rawMessages.value);
@@ -1012,6 +1042,7 @@ export function useChat(
         return calls.map((call) => {
             const mappedStatus =
                 call.status === 'skipped' ? 'error' : call.status;
+            const activity = DelegationDisplayActivitySchema.safeParse(call.delegation);
             return {
                 id: call.id,
                 name: call.name,
@@ -1019,6 +1050,9 @@ export function useChat(
                 status: mappedStatus,
                 args: call.args,
                 result: call.result,
+                ...(call.name === DELEGATE_CHAT_TOOL && call.id && activity.success && activity.data.callId === call.id
+                    ? { delegation: activity.data } : {}),
+                ...(typeof call.text_offset === 'number' ? { text_offset: call.text_offset } : {}),
                 error:
                     mappedStatus === 'error'
                         ? call.error ||
@@ -1090,6 +1124,18 @@ export function useChat(
      * - Only attaches once per job id
      * - Respects detached mode to avoid UI updates
      */
+    function ensureScopedBackgroundTracker(params: EnsureBackgroundJobTrackerParams): BackgroundJobTracker {
+        const tracker = ensureBackgroundJobTracker(params);
+        if (tracker.jobId !== params.jobId || tracker.userId !== params.userId ||
+            tracker.threadId !== params.threadId || tracker.messageId !== params.messageId ||
+            (tracker.workspaceId && params.workspaceId && tracker.workspaceId !== params.workspaceId) ||
+            (tracker.originDb && params.originDb && tracker.originDb !== params.originDb) ||
+            (tracker.generationId && params.generationId && tracker.generationId !== params.generationId)) {
+            throw new BackgroundTrackerConflict();
+        }
+        return tracker;
+    }
+
     function attachBackgroundJobToUi(params: {
         jobId: string;
         userId: string;
@@ -1123,7 +1169,7 @@ export function useChat(
         const priorTrackerAttempt = backgroundJobTrackers.get(
             params.jobId
         )?.lastAttempt;
-        const tracker = ensureBackgroundJobTracker({
+        const tracker = ensureScopedBackgroundTracker({
             jobId: params.jobId,
             userId: params.userId,
             threadId: params.threadId,
@@ -1166,6 +1212,8 @@ export function useChat(
         request.ownsView = () =>
             backgroundRequestScopes.get(params.jobId) === request &&
             navigationRevision === attachmentRevision &&
+            notificationUserId.value === params.userId &&
+            (!tracker.userId || tracker.userId === params.userId) &&
             request.attached.value &&
             !detached.value &&
             getDb() === request.originDb &&
@@ -1239,14 +1287,17 @@ export function useChat(
         ) => {
             // Subscriber delivery and the completion promise can carry the
             // same terminal status. Claim/report it only once.
-            if (request.finalization) return;
+            if (request.finalization) {
+                await request.finalization;
+                return;
+            }
             if (
                 typeof update.status.attempt === 'number' &&
                 typeof request.lastAttempt === 'number' &&
                 update.status.attempt < request.lastAttempt
             )
                 return;
-            if (request.ownsView()) {
+            if (request.ownsView() && !update.canonicalFinalized) {
                 request.message = resolveUiMessage(params.messageId);
                 syncTailAccumulator(
                     params.messageId,
@@ -1278,6 +1329,7 @@ export function useChat(
                             : undefined,
                     attempt: update.status.attempt,
                     persistence: 'tracker',
+                    canonicalFinalized: update.canonicalFinalized,
                 })
             );
         };
@@ -1294,6 +1346,13 @@ export function useChat(
                 attachedAlready: attachedBackgroundJobs.has(params.jobId),
             });
             const subscriber: BackgroundJobSubscriber = {
+                onReconnecting: (reconnecting) => {
+                    if (request.finalization || !request.ownsView()) return;
+                    const target = resolveUiMessage(params.messageId);
+                    if (!target || Boolean(target.reconnecting) === reconnecting) return;
+                    target.reconnecting = reconnecting;
+                    messages.value = [...messages.value];
+                },
                 onUpdate: ({ content, delta, replace, reasoning, reasoningReplace, status }) => {
                     if (
                         request.finalization ||
@@ -1446,6 +1505,7 @@ export function useChat(
                         content: status.content ?? tracker.terminalContent ?? tracker.lastContent,
                         reasoning: status.reasoning_text ?? tracker.lastReasoning,
                         delta: '',
+                        canonicalFinalized: status.canonicalFinalized,
                     }
                 );
             })
@@ -1640,10 +1700,17 @@ export function useChat(
         const reattachThreadId = threadIdRef.value;
         const reattachDb = getDb();
         const reattachWorkspaceId = getActiveWorkspaceId() ?? 'local';
+        const reattachWorkspaceGeneration = getWorkspaceGeneration();
+        const reattachUserId = notificationUserId.value;
         const reattachRevision = navigationRevision;
         const ownsReattach = () =>
+            !disposed && backgroundStreamingAllowed.value &&
             navigationRevision === reattachRevision &&
-            threadIdRef.value === reattachThreadId;
+            threadIdRef.value === reattachThreadId &&
+            getDb() === reattachDb &&
+            (getActiveWorkspaceId() ?? 'local') === reattachWorkspaceId &&
+            getWorkspaceGeneration() === reattachWorkspaceGeneration &&
+            notificationUserId.value === reattachUserId;
         logBgStream('reattach-start', {
             threadId: reattachThreadId,
             workspaceId: reattachWorkspaceId,
@@ -1703,7 +1770,7 @@ export function useChat(
 
                 attachBackgroundJobToUi({
                     jobId,
-                    userId: notificationUserId.value,
+                    userId: reattachUserId,
                     messageId: msg.id,
                     threadId: reattachThreadId,
                     originDb: reattachDb,
@@ -1908,10 +1975,13 @@ export function useChat(
             editorDoc: sendMessagesParams.editorDoc ? structuredClone(sendMessagesParams.editorDoc) : undefined,
         };
         const workspaceGeneration = getWorkspaceGeneration();
-        const preparationHookNames = ['ui.chat.message:filter:outgoing', 'ai.chat.model:filter:select',
-            'ai.chat.messages:filter:input', 'ai.chat.send:filter:prepare', 'ai.chat.send:filter:commit',
-            'ai.chat.messages:filter:before_send'];
+        const preparationHookNames = delegationPreparationFilters;
         const ownsFilterChain = hooks.captureFilterChain(preparationHookNames);
+        let hadPreparationAction = typeof hooks.hasAction === 'function' && Boolean(hooks.hasAction('ai.chat.send:action:before'));
+        let hadPreparationFilter = typeof hooks.hasFilter === 'function' && preparationHookNames.some(name => hasUnsafeDelegationFilter(hooks, name));
+        const recordPreparationFilter = (name: typeof preparationHookNames[number]) => {
+            hadPreparationFilter ||= typeof hooks.hasFilter === 'function' && hasUnsafeDelegationFilter(hooks, name);
+        };
         const preparationErrors = preparationHookNames.map((name) => hooks._diagnostics.errors[name] ?? 0);
         requestScope.abortController ??= new AbortController();
         abortController.value = requestScope.abortController;
@@ -2005,6 +2075,7 @@ export function useChat(
               )
             : [];
 
+        recordPreparationFilter('ui.chat.message:filter:outgoing');
         const outgoing = await hooks.applyFilters(
             'ui.chat.message:filter:outgoing',
             content
@@ -2237,6 +2308,7 @@ export function useChat(
             }
         }
         const startedAt = Date.now();
+        recordPreparationFilter('ai.chat.model:filter:select');
         const modelId = await hooks.applyFilters('ai.chat.model:filter:select', model);
         const readiness = await useModelStore().resolveContextModel(modelId, { signal: preparationSignal });
         if (!readiness.ok) throw new ChatContextAdmissionError(readiness);
@@ -2265,6 +2337,7 @@ export function useChat(
             file_hashes: file_hashes.length ? serializeFileHashes(file_hashes) : undefined };
         const messagesWithSystemRaw = [...canonicalHistory, ...(requestScope.projectContext?.messages ?? []), candidateUser];
         if (systemMessage) messagesWithSystemRaw.unshift(systemMessage);
+        recordPreparationFilter('ai.chat.messages:filter:input');
         const effectiveMessages = await hooks.applyFilters('ai.chat.messages:filter:input', messagesWithSystemRaw);
         const sanitizedEffectiveMessages = (Array.isArray(effectiveMessages) ? effectiveMessages : []).filter(shouldKeepAssistantMessage);
         let orMessages = await buildOpenRouterMessagesForSend({ effectiveMessages: sanitizedEffectiveMessages,
@@ -2274,6 +2347,7 @@ export function useChat(
         const preparation: ChatSendPreparation = { requestId, workspaceId: requestScope.workspaceId,
             workspaceGeneration, model: modelId, messages: JSON.parse(JSON.stringify(orMessages)) as ChatSendPreparation['messages'],
             editorDoc: sendMessagesParams.editorDoc, signal: preparationSignal };
+        recordPreparationFilter('ai.chat.send:filter:prepare');
         const prepared = await hooks.applyFilters('ai.chat.send:filter:prepare', preparation);
         if (!ownsPreparation()) return { status: 'aborted', requestId, reason: 'aborted' };
         if (!ownsFilterChain() || preparationHookNames.some((name, index) => (hooks._diagnostics.errors[name] ?? 0) > preparationErrors[index]!))
@@ -2295,14 +2369,16 @@ export function useChat(
             ? tools.filter(tool => projectToolEnabled(requestScope.projectContext!.settings, tool.function.name)) : tools;
         const advertisedToolDefs = JSON.parse(JSON.stringify(filterProjectTools(modelSupportsTools ? toolRegistry.getEnabledDefinitions({
             workspaceId: requestScope.workspaceId, threadId: admissionThreadId }).filter(tool => !options.excludedTools?.includes(tool.function.name)) : []))) as import('~/utils/chat/types').ToolDefinition[];
-        const enabledToolDefs = await placeHistoryTools(advertisedToolDefs, { background: !options.forceForeground && backgroundStreamingAllowed.value,
+        let enabledToolDefs = await placeHistoryTools(advertisedToolDefs, { background: !options.forceForeground && backgroundStreamingAllowed.value,
             threadId: preparationThreadId, signal: preparationSignal });
-        const foregroundToolDefs = enabledToolDefs.filter((tool) => tool.runtime !== 'server');
         const hasBrowserTools = enabledToolDefs.some((tool) => tool.runtime === 'client');
-        const browserToolBridgeAvailable = options.forceForeground || !hasBrowserTools || !backgroundStreamingAllowed.value
-            || await isBackgroundClientToolBridgeAvailable();
+        const browserToolCapability = options.forceForeground || !hasBrowserTools || !backgroundStreamingAllowed.value
+            ? undefined : await getBackgroundClientToolCapability(preparationSignal);
+        const browserToolBridgeAvailable = !browserToolCapability || browserToolCapability.available;
         const allowBackgroundStreaming = !options.forceForeground && !requestScope.projectContext && backgroundStreamingAllowed.value && browserToolBridgeAvailable
             && modalities.length === 1 && modalities[0] === 'text';
+        enabledToolDefs = placeServerModelSearch(enabledToolDefs, allowBackgroundStreaming && browserToolCapability?.serverModelSearch === true);
+        const foregroundToolDefs = enabledToolDefs.filter((tool) => tool.runtime !== 'server');
         const providerPreparation = { projectContext: requestScope.projectContext, model: modelId, orMessages, modalities, reasoning,
             tools: (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs).length
                 ? (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs) : undefined,
@@ -2579,6 +2655,9 @@ export function useChat(
             });
             requestScope.workflowMessageId = assistantDbMsg.id;
 
+            // A listener can be registered while preparation awaits and remove
+            // itself when invoked. Capture its presence at the dispatch boundary.
+            hadPreparationAction ||= typeof hooks.hasAction === 'function' && Boolean(hooks.hasAction('ai.chat.send:action:before'));
             await hooks.doAction('ai.chat.send:action:before', {
                 threadId: requestThreadId,
                 modelId,
@@ -2595,6 +2674,10 @@ export function useChat(
             backgroundJobMode.value = 'none';
             backgroundJobInfo.value = null;
 
+            recordPreparationFilter('ai.chat.messages:filter:before_send');
+            const mentionFilter = getBuiltinMentionFilter();
+            const unchangedMentionInput = mentionFilter && typeof hooks.hasOnlyFilter === 'function' &&
+                hooks.hasOnlyFilter('ai.chat.messages:filter:before_send', mentionFilter) ? JSON.stringify(orMessages) : undefined;
             const filteredMessages = await hooks.applyFilters(
                 'ai.chat.messages:filter:before_send',
                 { messages: orMessages }
@@ -2615,11 +2698,13 @@ export function useChat(
                     orMessages = candidate;
                 }
             }
+            if (unchangedMentionInput !== undefined && unchangedMentionInput !== JSON.stringify(orMessages)) hadPreparationFilter = true;
             if (prepared.delegation) {
                 const expectedDelegation = { ...prepared.delegation };
                 const commit: ChatSendCommit = { requestId, workspaceId: requestScope.workspaceId,
                     workspaceGeneration, signal: preparationSignal, delegation: { ...expectedDelegation },
                     assistant: { id: assistantDbMsg.id, threadId: requestThreadId, streamId: newStreamId }, status: 'pending' };
+                recordPreparationFilter('ai.chat.send:filter:commit');
                 const acknowledgement = await hooks.applyFilters('ai.chat.send:filter:commit', commit);
                 if (!ownsPreparation()) throw new DOMException('Chat request cancelled', 'AbortError');
                 if (acknowledgement.status !== 'handled'
@@ -2712,7 +2797,26 @@ export function useChat(
                 };
             }
 
-            return await runPreparedNative({ requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy, enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt, reviewedLossyMessages, recoveryInput: { ...sendMessagesParams, content }, projectQuery: persistedUserText, advertisedToolDefs });
+            let delegationDefaults: DelegationDefaults | undefined;
+            const nativePreparation = () => !hadPreparationAction && !hadPreparationFilter && ownsFilterChain() && !preparationHookNames.some(name => hasUnsafeDelegationFilter(hooks, name)) &&
+                !preparationHookNames.some((name, index) => (hooks._diagnostics.errors[name] ?? 0) > preparationErrors[index]!) &&
+                !hooks.hasAction('ai.chat.send:action:before');
+            if (allowBackgroundStreaming && browserToolCapability?.defaultsCapture &&
+                enabledToolDefs.some(tool => tool.function.name === DELEGATE_CHAT_TOOL) && nativePreparation()) {
+                if (!ownsPreparation()) throw new DOMException('Chat request cancelled', 'AbortError');
+                if (nativePreparation()) {
+                    const first = orMessages[0];
+                    const text = first?.role === 'system' && (typeof first.content === 'string' ? first.content
+                        : Array.isArray(first.content) && first.content.length === 1 && first.content[0]?.type === 'text' ? first.content[0].text : undefined);
+                    if (!systemMessage || (typeof systemMessage.content === 'string' && text === systemMessage.content)) {
+                        const captured = DelegationDefaultsSchema.safeParse({ version: 1, instructions: systemMessage ? [first] : [] });
+                        if (captured.success) delegationDefaults = captured.data;
+                    }
+                }
+            }
+            const durableDelegation = canUseDurableDelegation(enabledToolDefs, delegationDefaults,
+                allowBackgroundStreaming && browserToolCapability?.durableDelegation === true);
+            return await runPreparedNative({ requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy, enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt, reviewedLossyMessages, delegationDefaults, durableDelegation, recoveryInput: { ...sendMessagesParams, content }, projectQuery: persistedUserText, advertisedToolDefs });
         } catch (err) {
             stopForegroundHeartbeat?.();
             if (err instanceof Error && err.name === 'AbortError') {
@@ -2920,14 +3024,24 @@ export function useChat(
                 .filter(tool => !options.excludedTools?.includes(tool.function.name)));
         if (advertisedToolDefs.length !== checkpoint.tools.length || advertisedToolDefs.some((tool, index) => !toolDefinitionEquals(tool, checkpoint.tools[index]!)))
             return unavailable('The saved attempt’s tools changed or this model cannot use them. Restore its tools or edit the draft for a new request.');
-        const enabledToolDefs = await placeHistoryTools(structuredClone(advertisedToolDefs), { background: !options.forceForeground && !projectId && backgroundStreamingAllowed.value, threadId: checkpoint.thread_id, signal });
-        const foregroundToolDefs = enabledToolDefs.filter((tool) => tool.runtime !== 'server');
+        let enabledToolDefs = await placeHistoryTools(structuredClone(advertisedToolDefs), { background: !options.forceForeground && !projectId && backgroundStreamingAllowed.value, threadId: checkpoint.thread_id, signal });
         const hasBrowserTools = enabledToolDefs.some((tool) => tool.runtime === 'client');
-        const bridgeReady = options.forceForeground || !hasBrowserTools || !backgroundStreamingAllowed.value || await isBackgroundClientToolBridgeAvailable();
+        const browserToolCapability = options.forceForeground || !hasBrowserTools || !backgroundStreamingAllowed.value
+            ? undefined : await getBackgroundClientToolCapability(signal);
+        const bridgeReady = !browserToolCapability || browserToolCapability.available;
         const modalities = getChatModalities(modelId); const allowBackgroundStreaming = !options.forceForeground && !projectId && backgroundStreamingAllowed.value && bridgeReady && modalities.length === 1 && modalities[0] === 'text';
+        enabledToolDefs = placeServerModelSearch(enabledToolDefs, allowBackgroundStreaming && browserToolCapability?.serverModelSearch === true);
+        const foregroundToolDefs = enabledToolDefs.filter((tool) => tool.runtime !== 'server');
         const contextPolicy: ContextRequestPolicy = { model: readiness.metadata, source: readiness.source,
             userMaxContextTokens: preference.maxContextTokens, requestedCompletionTokens: params.maxCompletionTokens };
         const orMessages = structuredClone(checkpoint.messages);
+        const savedDelegationDefaults = DelegationDefaultsSchema.safeParse(checkpoint.delegation_defaults);
+        const delegationDefaults = allowBackgroundStreaming && browserToolCapability?.defaultsCapture
+            && enabledToolDefs.some(tool => tool.function.name === DELEGATE_CHAT_TOOL) && savedDelegationDefaults.success
+            && !delegationPreparationFilters.some(name => hasUnsafeDelegationFilter(hooks, name)) && !hooks.hasAction('ai.chat.send:action:before')
+            ? savedDelegationDefaults.data : undefined;
+        const durableDelegation = canUseDurableDelegation(enabledToolDefs, delegationDefaults,
+            allowBackgroundStreaming && browserToolCapability?.durableDelegation === true);
         try {
             await prepareOpenRouterRequest({ projectContext: requestScope.projectContext, model: modelId, orMessages, modalities, reasoning, contextPolicy, signal,
                 tools: (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs).length ? (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs) : undefined });
@@ -2963,7 +3077,7 @@ export function useChat(
         if (tailAssistant.value?.id === assistantDbMsg.id) tailAssistant.value = null;
         publishRequest(requestScope, { status: 'streaming', requestId, userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id });
         return await runPreparedNative({ requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy,
-            enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt: Date.now(),
+            enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, delegationDefaults, durableDelegation, startedAt: Date.now(),
             recoveryInput: { ...checkpoint.input, ...params, content: checkpoint.input.content }, projectQuery: checkpoint.project_query, advertisedToolDefs });
     }
 
@@ -2974,11 +3088,13 @@ export function useChat(
         reasoning: ReturnType<typeof resolveReasoningConfig>; contextPolicy: ContextRequestPolicy;
         enabledToolDefs: import('~/utils/chat/types').ToolDefinition[]; foregroundToolDefs: import('~/utils/chat/types').ToolDefinition[];
         allowBackgroundStreaming: boolean; startedAt: number; reviewedLossyMessages?: string;
+        delegationDefaults?: DelegationDefaults;
+        durableDelegation: boolean;
         recoveryInput: SendMessageParams & { content: string }; projectQuery?: string; advertisedToolDefs: import('~/utils/chat/types').ToolDefinition[];
     };
     /** One native foreground/background owner, shared by new turns and explicit unsent recovery. */
     async function runPreparedNative(input: NativeExecutionInput): Promise<SendResult> {
-        const { requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy, enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt, reviewedLossyMessages, recoveryInput, projectQuery, advertisedToolDefs } = input;
+        const { requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy, enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt, reviewedLossyMessages, delegationDefaults, durableDelegation, recoveryInput, projectQuery, advertisedToolDefs } = input;
         const requestId = requestScope.requestId; const requestThreadId = requestScope.threadId!;
         const preparationSignal = requestScope.abortController!.signal;
         const toolRegistry = useToolRegistry(); const activeToolCalls = new Map<string, ToolCallInfo>();
@@ -2999,6 +3115,7 @@ export function useChat(
                 input: structuredClone(savedInput), input_fingerprint: await recoveryInputFingerprint(savedInput.content, savedInput),
                 source_fingerprint: await recoverySourceFingerprint(requestScope.originDb, requestThreadId, assistantDbMsg.id, useAiSettings().settings.value.masterSystemPrompt, activePromptContent.value),
                 messages: structuredClone(orMessages), tools: structuredClone(advertisedToolDefs),
+                ...(delegationDefaults ? { delegation_defaults: structuredClone(delegationDefaults) } : {}),
                 ...(requestScope.projectContext ? { project_fingerprint: await recoveryProjectFingerprint(requestScope.projectContext), project_query: projectQuery } : {}),
             };
             // Durable before inference: a crash after rejection cannot append a
@@ -3016,11 +3133,20 @@ export function useChat(
                 tools: (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs).length
                     ? (allowBackgroundStreaming ? enabledToolDefs : foregroundToolDefs) : undefined,
                 contextPolicy, signal: preparationSignal });
-            if (isRequestCancelled(requestScope) || !ownsCurrentView(requestScope)) {
+            if (isRequestCancelled(requestScope)) {
                 reportFinalization(await finalizeRequest(requestScope, {
                     outcome: 'aborted', messageError: 'stopped', deleteEmpty: true,
                 }));
                 return { status: 'aborted', requestId, reason: 'aborted', userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id };
+            }
+            if (!ownsCurrentView(requestScope)) {
+                requestScope.attached.value = false;
+                return { status: 'detached', requestId, reason: 'detached', userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id };
+            }
+            if (!durableDelegation && enabledToolDefs.some(tool => tool.function.name === DELEGATE_CHAT_TOOL)) {
+                toast.add({ title: 'Keep this page open for delegated chats',
+                    description: 'If this response starts another chat, it needs this browser to stay open.',
+                    color: 'warning', duration: 8000 });
             }
             logBgStream('send-message-stream-mode-decision', {
                 threadId: requestThreadId,
@@ -3108,6 +3234,17 @@ export function useChat(
                         );
                     }
 
+                    // No request has been sent yet. A session or view change
+                    // during history capture must not dispatch under the new
+                    // authority. The pending turn uses normal interruption recovery.
+                    if (isRequestCancelled(requestScope) || requestScope.abortController.signal.aborted)
+                        throw new DOMException('Chat request cancelled.', 'AbortError');
+                    if (!ownsCurrentView(requestScope)) {
+                        requestScope.attached.value = false;
+                        return { status: 'detached', requestId, reason: 'detached',
+                            userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id };
+                    }
+
                     const result = await startBackgroundStream({
                         expectedProjectId: requestScope.expectedProjectId,
                         apiKey: effectiveApiKey.value,
@@ -3117,6 +3254,8 @@ export function useChat(
                         >[0]['orMessages'],
                         modalities,
                         contextPolicy,
+                        delegationDefaults,
+                        durableDelegation,
                         threadId: requestThreadId,
                         messageId: assistantDbMsg.id,
                         admissionId: backgroundAdmissionId,
@@ -3198,7 +3337,7 @@ export function useChat(
                     const tracker = ownsCurrentThread
                         ? attachBackgroundJobToUi({
                               jobId: result.jobId,
-                              userId: notificationUserId.value,
+                              userId: requestScope.originUserId!,
                               messageId: assistantDbMsg.id,
                               threadId: requestThreadId,
                               originDb: requestScope.originDb,
@@ -3209,9 +3348,9 @@ export function useChat(
                               useSse: backgroundStreamingAllowed.value,
                               request: requestScope,
                           })
-                        : ensureBackgroundJobTracker({
+                        : ensureScopedBackgroundTracker({
                               jobId: result.jobId,
-                              userId: notificationUserId.value,
+                              userId: requestScope.originUserId!,
                               messageId: assistantDbMsg.id,
                               threadId: requestThreadId,
                               originDb: requestScope.originDb,
@@ -3261,6 +3400,7 @@ export function useChat(
                                       : (completion.error ??
                                         'Background stream failed'),
                             persistence: 'tracker',
+                            canonicalFinalized: completion.canonicalFinalized,
                             attempt: completion.attempt,
                         })
                     );
@@ -3299,6 +3439,11 @@ export function useChat(
                         // terminal result. Treating admission cancellation as a
                         // provider failure leaves a false error row behind.
                         throw error;
+                    }
+                    if (error instanceof BackgroundTrackerConflict) {
+                        requestScope.attached.value = false;
+                        return { status: 'detached', requestId, reason: 'detached',
+                            userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id };
                     }
                     if (error instanceof Error && 'backgroundAdmissionUncertain' in error && error.backgroundAdmissionUncertain === true) {
                         const candidate = nativeRecoveryCandidates.get(requestScope);
@@ -3365,6 +3510,11 @@ export function useChat(
             const { runForegroundStreamLoop } = await import('~/utils/chat/useAi-internal/foregroundStream');
             if (isRequestCancelled(requestScope) || getDb() !== requestScope.originDb
                 || getWorkspaceGeneration() !== streamGeneration) throw new DOMException('Chat request cancelled.', 'AbortError');
+            if (!ownsCurrentView(requestScope)) {
+                requestScope.attached.value = false;
+                return { status: 'detached', requestId, reason: 'detached',
+                    userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id };
+            }
             await runForegroundStreamLoop({
                 apiKey: streamApiKey,
                 modelId,
@@ -3779,7 +3929,7 @@ export function useChat(
                     backgroundStreamingAllowed:
                         backgroundStreamingAllowed.value,
                     workspaceId: request.workspaceId,
-                    userId: notificationUserId.value,
+                    userId: request.originUserId!,
                     onBackgroundAdmissionUncertain: () => {
                         if (request.ownsView()) notifyBackgroundAdmissionUncertain();
                     },
@@ -3804,16 +3954,16 @@ export function useChat(
                             };
                             return attachBackgroundJobToUi({
                                 ...params,
-                                userId: notificationUserId.value,
+                                userId: request.originUserId!,
                                 workspaceId: params.workspaceId,
                                 canonicalHistory: true,
                                 useSse: backgroundStreamingAllowed.value,
                                 request,
                             });
                         }
-                        return ensureBackgroundJobTracker({
+                        return ensureScopedBackgroundTracker({
                             ...params,
-                            userId: notificationUserId.value,
+                            userId: request.originUserId!,
                             workspaceId: params.workspaceId,
                             canonicalHistory: true,
                             preferServerNotifications:

@@ -9,6 +9,7 @@ import {
 import { reconcileBackgroundJobs } from '../utils/background-jobs/lifecycle';
 import { executeBackgroundJob } from '../utils/background-jobs/stream-handler';
 import { reconcilePendingBackgroundHistory } from '../utils/background-jobs/history';
+import { reconcileDueDelegationWaits } from '../utils/background-jobs/delegation-coordinator';
 import { getShutdownRuntime } from '../utils/shutdown/runtime';
 
 const RECONCILE_INTERVAL_MS = 5_000;
@@ -39,19 +40,36 @@ export default defineNitroPlugin((nitroApp) => {
         scanning = true;
         try {
             const provider = await getJobProvider();
+            let phaseFailed = false;
+            const runPhase = async (label: string, work: () => Promise<number>): Promise<number> => {
+                try { return await work(); }
+                catch {
+                    phaseFailed = true;
+                    // Provider errors may contain request or credential data.
+                    console.warn(`[background-jobs] ${label} failed; recovery will retry.`);
+                    return 0;
+                }
+            };
             if (controller.canStartWork() && Date.now() >= nextCleanupAt) {
-                await provider.cleanupExpired();
-                nextCleanupAt = Date.now() + CLEANUP_INTERVAL_MS;
+                await runPhase('Cleanup', async () => {
+                    await provider.cleanupExpired();
+                    nextCleanupAt = Date.now() + CLEANUP_INTERVAL_MS;
+                    return 0;
+                });
             }
             // Pending delivery is existing work and must finish while preparing.
             // Pausing it along with new claims would make its own drain blocker
             // impossible to clear after a transient canonical-history failure.
-            const delivered = await reconcilePendingBackgroundHistory(
-                provider,
-                getJobConfig().maxConcurrentJobs
-            );
-            if (!controller.canStartWork()) return;
-            const claimed = await reconcileBackgroundJobs(
+            const delivered = await runPhase('History recovery', () => reconcilePendingBackgroundHistory(
+                provider, getJobConfig().maxConcurrentJobs
+            ));
+            const coordinated = await runPhase('Delegation recovery', () =>
+                reconcileDueDelegationWaits(provider, getJobConfig().maxConcurrentJobs));
+            if (!controller.canStartWork()) {
+                if (phaseFailed) delay = RECONCILE_INTERVAL_MS;
+                return;
+            }
+            const claimed = await runPhase('Model recovery', () => reconcileBackgroundJobs(
                 {
                     provider,
                     encryptionKey,
@@ -59,15 +77,12 @@ export default defineNitroPlugin((nitroApp) => {
                     workerId,
                 },
                 getJobConfig().maxConcurrentJobs
-            );
-            delay = delivered || claimed ? RECONCILE_INTERVAL_MS
+            ));
+            delay = phaseFailed || delivered || coordinated || claimed ? RECONCILE_INTERVAL_MS
                 : Math.min(delay * 2, MAX_IDLE_INTERVAL_MS);
-        } catch (error) {
+        } catch {
             delay = RECONCILE_INTERVAL_MS;
-            console.warn(
-                '[background-jobs] Recovery scan failed:',
-                error instanceof Error ? error.message : 'Unknown error'
-            );
+            console.warn('[background-jobs] Recovery scan failed; recovery will retry.');
         } finally {
             scanning = false;
         }

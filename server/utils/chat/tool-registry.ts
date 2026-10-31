@@ -11,6 +11,7 @@
 import type { ToolDefinition, ToolExecutionAdmission, ToolExecutionContext, ToolRuntime } from '~/utils/chat/types';
 import { getShutdownRuntime } from '../shutdown/runtime';
 import { toolDefinitionEquals } from '~~/shared/chat/tool-policy';
+import { searchDelegationModels, type DelegationCatalogModel } from '~~/shared/openrouter/delegation-model-catalog';
 import { validateToolArguments, validateToolDefinition, validateToolDefinitions } from '~~/shared/chat/tool-schema';
 import {
     executeWithAbortTimeout,
@@ -177,7 +178,8 @@ export async function executeServerTool(
     toolName: string,
     argsJson: string,
     context?: ToolExecutionContext,
-    admission?: ToolExecutionAdmission
+    admission?: ToolExecutionAdmission,
+    host?: { modelCatalog?: (signal: AbortSignal) => Promise<DelegationCatalogModel[]> }
 ): Promise<{
     result: string | null;
     toolName: string;
@@ -246,9 +248,12 @@ export async function executeServerTool(
         abortSignal: new AbortController().signal,
     };
     const execution = await withTimeout(
-        (abortSignal) => getShutdownRuntime().controller.track(Promise.resolve().then(() => tool.handler(
-            parsed.value, { ...baseContext, abortSignal }
-        ))),
+        (abortSignal) => getShutdownRuntime().controller.track(Promise.resolve().then(async () => {
+            if (toolName === 'search_models' && host?.modelCatalog) {
+                return JSON.stringify(searchDelegationModels(await host.modelCatalog(abortSignal), String(parsed.value.query)));
+            }
+            return tool.handler(parsed.value, { ...baseContext, abortSignal });
+        })),
         baseContext.abortSignal,
         tool.timeoutMs
     );

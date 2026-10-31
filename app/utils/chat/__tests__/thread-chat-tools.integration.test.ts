@@ -12,6 +12,7 @@ import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine, useHooks } from '~/core/hooks/useHooks';
 import { testRuntimeConfig } from '~~/tests/setup';
 import { useModelStore } from '~/composables/chat/useModelStore';
+import modelsService from '~/core/auth/models-service';
 import { useChatModelSelection } from '~/composables/chat/useChatModelSelection';
 import { getKvByName, setKvByName } from '~/db/kv';
 import { assertDelegatedChatCurrent, attachDelegatedChat, delegatedChatController, delegatedChatJobs, finishDelegatedChat } from '../delegated-chat-runtime';
@@ -118,6 +119,47 @@ it('continues an existing chat and inherits the originating model and reasoning'
         data: { content: 'Done.' }, created_at: 1, updated_at: 1, clock: 1 }));
     finishDelegatedChat(job, { status: 'complete', requestId: 'child', userMessageId: 'question', assistantMessageId: 'follow-up' });
     expect((await execution).error).toBeUndefined();
+});
+
+it('finds a model by unordered name terms and delegates using the returned ID', async () => {
+    const { context } = await delegationOrigin();
+    useModelStore().catalog.value.push({ id: 'openai/gpt-6.1-terra', name: 'OpenAI: GPT-6.1 Terra', supported_parameters: ['tools'] });
+    useModelStore().catalog.value.push({ id: 'openai/gpt-6.10-terra', name: 'OpenAI: GPT-6.10 Terra', supported_parameters: ['tools'] });
+    const registry = useToolRegistry();
+    const search = await registry.executeTool('search_models', JSON.stringify({ query: 'terra 6.1' }), context);
+    expect(search.error).toBeUndefined();
+    expect(JSON.parse(search.result!).models).toEqual([{ id: 'openai/gpt-6.1-terra', name: 'OpenAI: GPT-6.1 Terra' }]);
+    const execution = registry.executeTool('delegate_chat', JSON.stringify({ task: 'Research', model: 'terra 6.1' }), context);
+    await vi.waitFor(() => expect(delegatedChatJobs()).toHaveLength(1));
+    const job = delegatedChatJobs()[0]!;
+    expect(job.model).toBe('openai/gpt-6.1-terra');
+    finishDelegatedChat(job, { status: 'failed', requestId: 'child', reason: 'unavailable', error: 'Stopped' });
+    expect((await execution).error).toContain('Stopped');
+});
+
+it('bounds model search results without hiding that more matches exist', async () => {
+    const { context } = await delegationOrigin();
+    useModelStore().catalog.value = Array.from({ length: 25 }, (_, index) => ({
+        id: `test/terra-${index}`, name: `Terra ${index}`, supported_parameters: ['tools'],
+    }));
+    const result = await useToolRegistry().executeTool('search_models', JSON.stringify({ query: 'terra' }), context);
+    expect(result.error).toBeUndefined();
+    const parsed = JSON.parse(result.result!);
+    expect(parsed.models).toHaveLength(20);
+    expect(parsed.models[0].id).toBe('test/terra-0');
+    expect(parsed.truncated).toBe(true);
+});
+
+it.each(['search_models', 'delegate_chat'] as const)('%s reports an unavailable catalog without exposing provider errors', async tool => {
+    const { context } = await delegationOrigin();
+    useModelStore().catalog.value = [];
+    const fetch = vi.spyOn(modelsService, 'fetchModelCatalog').mockRejectedValue(new Error('fixture credential'));
+    try {
+        const args = tool === 'search_models' ? { query: 'terra' } : { task: 'Research', model: 'terra' };
+        const result = await useToolRegistry().executeTool(tool, JSON.stringify(args), context);
+        expect(result.error).toContain('Model catalog is unavailable');
+        expect(result.error).not.toContain('fixture credential');
+    } finally { fetch.mockRestore(); }
 });
 
 it('starts independent delegated tasks together and returns each result', async () => {
