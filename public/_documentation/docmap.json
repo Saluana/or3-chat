@@ -380,7 +380,7 @@
                     "category": "Using tools",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Use scoped workspace tools, delegate tasks to other chats and models, inspect activity, review edits, and download verified full results."
+                    "summary": "Use scoped workspace tools, delegate independent tasks in parallel with model and routing choices, inspect activity, review edits, and download verified full results."
                 },
                 {
                     "name": "chat-tool-reliability.md",

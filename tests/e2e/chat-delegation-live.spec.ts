@@ -100,3 +100,51 @@ test('delegates to a chosen model, opens its live chat, and resumes the parent',
         console.log(`Live OpenRouter requests: ${calls.length}; models: ${[...new Set(calls.map(call => call.model))].join(', ')}`);
     } finally { releaseChild(); }
 });
+
+test('runs independent delegated chats concurrently', async ({ page }) => {
+    const envPath = process.env.OR3_LIVE_ENV_PATH;
+    if (!envPath) throw new Error('OR3_LIVE_ENV_PATH is required.');
+    const key = parse(readFileSync(envPath)).OPENROUTER_API_KEY;
+    if (!key) throw new Error('OPENROUTER_API_KEY is missing from the environment file.');
+    let release!: () => void;
+    const barrier = new Promise<void>(resolve => { release = resolve; });
+    const started = new Set<string>();
+    let requestCount = 0;
+    const guard = async (route: Route) => {
+        if (route.request().method() !== 'POST') { await route.continue(); return; }
+        const body = route.request().postDataJSON() as Record<string, any>;
+        const model = String(body.model || '');
+        if (!['~openai/gpt-luna-latest', 'openai/gpt-6-luna', 'deepseek/deepseek-v4.1-flash'].includes(model)
+            || ++requestCount > 8 || JSON.stringify(body).length > 100_000) {
+            await route.abort('blockedbyclient'); return;
+        }
+        body.max_tokens = Math.min(Number(body.max_tokens) || 1024, 1024);
+        if (model === 'deepseek/deepseek-v4.1-flash') {
+            const messages = JSON.stringify(body.messages);
+            if (messages.includes('AMBER FALCON')) started.add('first');
+            if (messages.includes('SILVER OTTER')) started.add('second');
+            await barrier;
+        }
+        await route.continue({ postData: JSON.stringify(body) });
+    };
+    await page.route('**/api/v1/chat/completions', guard);
+    await page.route('**/api/openrouter/stream', guard);
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Use an existing API key' }).click();
+    await page.getByRole('textbox', { name: 'OpenRouter API key' }).fill(key)
+        .catch(() => { throw new Error('Could not enter the OpenRouter key.'); });
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Message input' }).fill(
+        'Use one delegate_chat call with the tasks array to launch two independent new chats in parallel, both using model deepseek/deepseek-v4.1-flash. Ask the first to reply exactly AMBER FALCON and the second exactly SILVER OTTER. Wait for both and report both answers.',
+    );
+    await page.getByRole('button', { name: 'Send message', exact: true }).click();
+    try {
+        await expect.poll(() => started.size, { timeout: 100_000 }).toBe(2);
+        release();
+        await expect(page.getByRole('button', { name: 'Stop generation', exact: true })).toHaveCount(0, { timeout: 100_000 });
+        const answer = page.locator('[data-msg-id]').last();
+        await expect(answer).toContainText('AMBER FALCON');
+        await expect(answer).toContainText('SILVER OTTER');
+        console.log('Both child requests reached OpenRouter concurrently.');
+    } finally { release(); }
+});

@@ -120,6 +120,32 @@ it('continues an existing chat and inherits the originating model and reasoning'
     expect((await execution).error).toBeUndefined();
 });
 
+it('starts independent delegated tasks together and returns each result', async () => {
+    const { db, context } = await delegationOrigin();
+    const execution = useToolRegistry().executeTool('delegate_chat', JSON.stringify({ tasks: [
+        { task: 'First', variant: 'floor' }, { task: 'Second', model: 'test/sol:nitro', variant: 'off' },
+    ] }), context);
+    await vi.waitFor(() => expect(delegatedChatJobs()).toHaveLength(2));
+    const jobs = delegatedChatJobs();
+    expect(jobs.find(job => job.content === 'First')?.model).toBe('test/sol:floor');
+    expect(jobs.find(job => job.content === 'Second')?.model).toBe('test/sol');
+    for (const job of jobs) {
+        const id = `reply-${job.content}`;
+        await db.messages.put(MessageSchema.parse({ id, thread_id: job.threadId, role: 'assistant', index: 1,
+            data: { content: `Done ${job.content}` }, created_at: 1, updated_at: 1, clock: 1 }));
+        finishDelegatedChat(job, { status: 'complete', requestId: 'child', userMessageId: 'question', assistantMessageId: id });
+    }
+    const response = await execution;
+    expect(response.error).toBeUndefined();
+    expect(JSON.parse(response.result!).results).toMatchObject([
+        { index: 0, content: 'Done First' }, { index: 1, content: 'Done Second' },
+    ]);
+    const replay = await useToolRegistry().executeTool('delegate_chat', JSON.stringify({ tasks: [
+        { task: 'First', variant: 'floor' }, { task: 'Second', model: 'test/sol:nitro', variant: 'off' },
+    ] }), context);
+    expect(JSON.parse(replay.result!).results.every((item: { error: string }) => item.error.includes('already started'))).toBe(true);
+});
+
 it('updates the model selection in an already-open child pane when delegating a follow-up', async () => {
     const { db, context } = await delegationOrigin();
     await db.threads.put(ThreadSchema.parse({ created_at: 1, updated_at: 1, clock: 1, id: 'target' }));

@@ -25,7 +25,13 @@ refuses a missing or deleted target thread.
 Ask for a model by its catalog name or ID and, optionally, a supported reasoning
 effort. Without a model, the originating request's model and reasoning are
 inherited. Unavailable, ambiguous, or unsupported choices are reported rather
-than silently changed. A new child chat belongs to the originating project;
+than silently changed. A routing variant (`off`, `online`, `nitro`, or `floor`)
+can be supplied explicitly, or as a suffix on the model ID. The explicit variant
+overrides the suffix. Up to four independent new chats can be submitted together
+in `tasks`; they run concurrently and return results in task order. For work
+that depends on an earlier answer, wait for that answer before delegating the
+next task. Each task in a batch can choose its own model, variant, and reasoning
+effort. A new child chat belongs to the originating project;
 project chats can continue only chats in the same project. A busy target is
 refused. The delegated request uses normal chat permissions and tools, except
 that it cannot delegate again.
