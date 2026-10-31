@@ -2,7 +2,7 @@
     "name": "or3-chat",
     "type": "module",
     "private": false,
-    "version": "0.1.95",
+    "version": "0.1.96",
     "license": "GPL-3.0",
     "engines": {
         "node": "^24.22.1"
@@ -196,7 +196,7 @@
         "or3-provider-convex": "0.0.26",
         "or3-provider-fs": "0.0.15",
         "or3-provider-s3": "0.0.14",
-        "or3-provider-sqlite": "0.0.24",
+        "or3-provider-sqlite": "0.0.25",
         "or3-scroll": "0.1.6",
         "pathe": "2.0.3",
         "pdfjs-dist": "^6.4.299",

@@ -5,7 +5,7 @@
   "or3-provider-convex": "0.0.26",
   "or3-provider-fs": "0.0.15",
   "or3-provider-s3": "0.0.14",
-  "or3-provider-sqlite": "0.0.24",
+  "or3-provider-sqlite": "0.0.25",
   "or3-scroll": "0.1.6",
   "or3-workflow-core": "0.1.4",
   "or3-workflow-vue": "0.1.6"

@@ -43,7 +43,7 @@
         "or3-provider-convex": "0.0.26",
         "or3-provider-fs": "0.0.15",
         "or3-provider-s3": "0.0.14",
-        "or3-provider-sqlite": "0.0.24",
+        "or3-provider-sqlite": "0.0.25",
         "or3-scroll": "0.1.6",
         "pathe": "2.0.3",
         "pdfjs-dist": "^6.4.299",
@@ -2321,7 +2321,7 @@
 
     "or3-provider-s3": ["or3-provider-s3@0.0.14", "", { "dependencies": { "@aws-sdk/client-s3": "^3.1156.0", "@aws-sdk/s3-request-presigner": "^3.1156.0" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-8mIDk9gwbeKkdJmdPGbllfPwqNL+OPrhY3OV135a9TNqgAjizEQqvrWUWkNKkRdB3HrBccF4AGz3b5oJyxTbVA=="],
 
-    "or3-provider-sqlite": ["or3-provider-sqlite@0.0.24", "", { "dependencies": { "kysely": "^0.28.18" }, "optionalDependencies": { "better-sqlite3": "^13.0.3", "libsql": "^0.5.29" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-VXn0NottGHWCKjrhb3f7IytG5dJEC07X9eLeb3sr3HwoVU8rrwyF09yPqZ1lqjTteUHYSJLw5O2Xkc65rY4UBw=="],
+    "or3-provider-sqlite": ["or3-provider-sqlite@0.0.25", "", { "dependencies": { "kysely": "^0.28.18" }, "optionalDependencies": { "better-sqlite3": "^13.0.3", "libsql": "^0.5.29" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-ilQUW5iU8L68CpKsGsvp7mBWP+W5HvPSoFv86weAKOMPmUTDSZItPQqk7K0n7qrH4siWB+TE8X7eilxXrVPJyA=="],
 
     "or3-scroll": ["or3-scroll@0.1.6", "", { "peerDependencies": { "vue": "^3.3.0" } }, "sha512-6ypwWXWTiavfYIimgHajoWi7cQbTpmipsioX4/V+uBcAtDiNZ+j6u2sOy0XjhrZ5XRr0ySzCqhWRLbg906VQug=="],
 
