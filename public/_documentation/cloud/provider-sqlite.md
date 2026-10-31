@@ -180,7 +180,7 @@ Acceptance atomically creates the canonical user, provider mapping, private work
 
 Native SQLite uses one immediate transaction. Cloudflare D1 does not advertise signup-invite support because it cannot provide this transaction; legacy workspace capabilities remain available.
 
-Managed Cloud backup inspection qualifies `or3-provider-sqlite@0.0.24` with filesystem provider `0.0.15` and migration history through `028_user_scoped_device_cursors`. Unknown migrations remain rejected; provider upgrades must requalify backup inspection before releasing an image. Normal deployment updates follow the [Cloud update guide](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/cloud-updates.md).
+Managed Cloud backup inspection qualifies `or3-provider-sqlite@0.0.25` with filesystem provider `0.0.15` and migration history through `029_delegation_wait`. Unknown migrations remain rejected; provider upgrades must requalify backup inspection before releasing an image. Normal deployment updates follow the [Cloud update guide](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/cloud-updates.md).
 
 SQLite provider `0.0.24` reports structured validation, authorization, conflict,
 and supersession errors for background history. Unknown database failures remain
