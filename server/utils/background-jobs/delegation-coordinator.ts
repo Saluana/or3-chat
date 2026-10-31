@@ -13,7 +13,7 @@ import { getShutdownRuntime } from '../shutdown/runtime';
 import { DelegationToolUnavailableError, reconstructDelegationChild } from './delegation-child';
 import { buildDelegationResume } from './delegation-resume';
 import { retainBackgroundToolResult } from './history';
-import { getChatJobExecution, type BackgroundJobProvider, type DelegationResume } from './types';
+import { getChatJobExecution, type BackgroundJob, type BackgroundJobProvider, type DelegationResume } from './types';
 import { supportsDelegationCoordination, supportsDelegationHistory } from './capabilities';
 
 function nextDelegationCheck(wait: DelegationWait, now: number, delay: number): number {
