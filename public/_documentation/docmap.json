@@ -629,7 +629,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers authorization, browser delegation and tool retry fences, the in-development durable admission contract, child saving and uncertain outcomes, checkpoint diagnostics, polling and SSE, canonical reattachment and edit protection, durable recovery, call-bound tool-result storage, retention, safe dashboard drains, and opt-in live delegation testing."
+                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers authorization, browser delegation and tool retry fences, the durable admission contract, child saving and uncertain outcomes, checkpoint diagnostics, polling and SSE, canonical reattachment and edit protection, durable recovery, call-bound tool-result storage, retention, persisted delegation across dashboard restarts, and opt-in live delegation testing."
                 },
                 {
                     "name": "notifications.md",
@@ -818,7 +818,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4.5,
-                    "summary": "Supervised dev and managed restarts, active-work protection, verified settings activation, bounded outage observation, and uncertain-receipt recovery."
+                    "summary": "Supervised dev and managed restarts, active-work protection, retained delegation evidence across restarts, verified settings activation, bounded outage observation, and uncertain-receipt recovery."
                 },
                 {
                     "name": "secret-store.md",

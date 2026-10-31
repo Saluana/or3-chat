@@ -9,7 +9,9 @@ function createRuntime() {
             if (!store.isBackgroundStreamingEnabled()) return 0;
             const provider = await store.getJobProvider();
             if (!provider.getShutdownBlockerCount) throw new Error('Background execution cannot be drained safely');
-            return await provider.getShutdownBlockerCount();
+            // The controller tracks in-flight workers and recovery scans. Saved
+            // delegation evidence can stay pending in a supporting durable store.
+            return await provider.getShutdownBlockerCount({ allowPersistedDelegation: true });
         },
     });
     return { bootId: randomUUID(), controller };

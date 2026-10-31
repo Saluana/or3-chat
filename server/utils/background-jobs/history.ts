@@ -51,6 +51,7 @@ async function callHistoryAdapter<T>(operation: () => Promise<T>): Promise<T> {
 function terminalSnapshot(
   job: BackgroundJob,
   checkedRevision?: string,
+  checkedThreadUnavailable = false,
 ): CanonicalGenerationSnapshot | null {
   if (job.status === "streaming" || typeof job.completedAt !== "number")
     return null;
@@ -66,7 +67,7 @@ function terminalSnapshot(
     ...(execution?.delegationWait && execution.delegationTerminalProjection?.version === 1
       ? { expectedWorkspaceRevision: execution.delegationTerminalProjection.workspaceRevision }
       : checkedRevision !== undefined ? { expectedWorkspaceRevision: checkedRevision } : {}),
-    ...(execution?.delegationWait && execution.delegationTerminalProjection?.parentThreadUnavailable === true
+    ...(checkedThreadUnavailable || execution?.delegationWait && execution.delegationTerminalProjection?.parentThreadUnavailable === true
       ? { onlyIfThreadUnavailable: true as const } : {}),
   };
 }
@@ -89,6 +90,7 @@ export async function reconcileBackgroundJobHistory(
     (projection.parentThreadUnavailable === undefined || projection.parentThreadUnavailable === true);
   if (terminalWait && !projectionReady && job.historyPhase !== 'admission_pending') return 'unchanged';
   let checkedRevision: string | undefined;
+  let checkedThreadUnavailable = false;
   if (execution?.delegationRecoveryPolicy === 'v1' && ['admission_pending', 'finalization_pending'].includes(job.historyPhase ?? '')) {
     if (await checkDelegationAccess(job, false) !== 'allowed') return 'unchanged';
     if (job.historyPhase === 'finalization_pending') {
@@ -101,7 +103,16 @@ export async function reconcileBackgroundJobHistory(
           result.revision.length <= 16 && /^(0|[1-9][0-9]*)$/.test(result.revision) ? result.revision : undefined;
       };
       const before = await readRevision();
-      if (!before || await checkDelegationAccess(job, true, terminalWait && projection?.parentThreadUnavailable === true) !== 'allowed') return 'unchanged';
+      if (!before) return 'unchanged';
+      const access = await checkDelegationAccess(job, true, terminalWait && projection?.parentThreadUnavailable === true);
+      if (access !== 'allowed') {
+        // A deleted child cannot receive history, but its authorized terminal
+        // receipt must still settle. Fence this path against thread restoration;
+        // a live project-bound thread or unavailable authority still defers.
+        if (terminalWait || job.status === 'streaming' || access !== 'denied' ||
+          await checkDelegationAccess(job, true, true) !== 'allowed') return 'unchanged';
+        checkedThreadUnavailable = true;
+      }
       const after = await readRevision();
       if (after !== before || await checkDelegationAccess(job, false) !== 'allowed') return 'unchanged';
       checkedRevision = after;
@@ -118,7 +129,7 @@ export async function reconcileBackgroundJobHistory(
         await provider.setHistoryPhase?.(job.id, 'finalization_pending', { from: ['admission_pending'] });
         return 'ready';
       }
-      const snapshot = terminalSnapshot(job, checkedRevision);
+      const snapshot = terminalSnapshot(job, checkedRevision, checkedThreadUnavailable);
       if (snapshot) {
         await provider.setHistoryPhase?.(job.id, "finalization_pending", {
           from: ["admission_pending"],
@@ -141,7 +152,7 @@ export async function reconcileBackgroundJobHistory(
     }
 
     if (job.historyPhase === "finalization_pending") {
-      const snapshot = terminalSnapshot(job, checkedRevision);
+      const snapshot = terminalSnapshot(job, checkedRevision, checkedThreadUnavailable);
       if (!snapshot) return "unchanged";
       const result = await callHistoryAdapter(() => adapter.finalizeChatGeneration(actor, {
         admission,

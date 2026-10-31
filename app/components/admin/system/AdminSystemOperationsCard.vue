@@ -33,7 +33,7 @@
                 <UButton v-if="needsAttention" color="neutral" variant="outline" :disabled="!isOwner || busy" @click="emit('reconcile')">Recheck existing restart</UButton>
                 <UButton v-if="canCancel" color="neutral" variant="outline" :disabled="!isOwner" @click="emit('cancel')">Cancel waiting restart</UButton>
                 <p v-if="reason === 'background_drain_unsupported'" class="text-sm">The selected background-job provider has no verified shutdown accounting. Dashboard restart is disabled to protect active jobs.</p>
-                <p class="text-xs opacity-70">Restarts wait for active work. Application and bundled theme changes require the supported build or update workflow.</p>
+                <p class="text-xs opacity-70">Restarts wait for active work. Supported providers preserve saved background work for recovery after restart. Application and bundled theme changes require the supported build or update workflow.</p>
                 <NuxtLink to="/documentation/cloud/operations" class="text-xs underline">Restart and recovery guidance</NuxtLink>
             </div>
         </div>

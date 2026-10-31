@@ -582,8 +582,12 @@ export interface BackgroundJobProvider {
      * Wait-policy blockers: streaming (including parked work) and pending
      * admission/history delivery. A bounded lower-bound count is permitted,
      * but zero must mean no blockers. Lookup failures must reject, never return 0.
+     * A host that tracks in-flight execution/reconciliation can opt into leaving
+     * unleased, durably retained delegation waits and terminal delivery pending
+     * across restart. Providers may ignore the option and remain conservative.
+     * Never exclude active model work or a live/indeterminate worker lease.
      */
-    getShutdownBlockerCount?(): Promise<number>;
+    getShutdownBlockerCount?(options?: { allowPersistedDelegation?: boolean }): Promise<number>;
 }
 
 /** Capabilities required by admitted and recovered chat executions. */

@@ -10,6 +10,16 @@ Preparation waits up to five minutes. **Cancel waiting restart** is available be
 
 There is no force button. Memory, SQLite and Convex jobs, including parked browser-tool handoffs and workflows, block replacement until they finish or are safely cancelled through their existing job controls. SQLite/Convex accounting also waits for pending admission and terminal history delivery. Use rebuilt provider artifacts containing shutdown accounting; Convex requires its matching generated backend. Versions without that contract report unsupported when background execution is enabled. Database errors or a missing Convex function cancel preparation safely. Custom execution owners must participate in the shutdown controller; detached work cannot assume automatic recovery or tool replay.
 
+Matching host and native SQLite provider support for
+`getShutdownBlockerCount({ allowPersistedDelegation: true })` lets saved delegation
+waits and terminal delivery remain pending across restart. Active model work,
+live or indeterminate leases, and in-flight workers or recovery writes still
+block replacement. Authorization failures and damaged checkpoints keep their
+evidence; restart does not clear them, fabricate success, or replay uncertain
+work. Recovery resumes under the same authorization and claim rules after boot.
+This requires provider code newer than 0.0.25; that release, D1 and providers
+without the option keep the conservative behavior above.
+
 Pending canonical history continues retrying during preparation, so a temporary
 delivery failure can recover without restarting model execution. New claims
 stay paused. Cancelling the restart releases the wait even if a provider lookup

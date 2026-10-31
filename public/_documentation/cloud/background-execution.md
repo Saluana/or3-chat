@@ -60,8 +60,8 @@ provider lacks the durable claim/settle bridge, that turn uses the foreground
 tool loop. The server also rejects an unsupported browser-tool admission before
 creating a job or contacting the model.
 
-`delegate_chat` waits for a child chat in the originating browser, even when
-the parent is a background job. Keep that browser open until the response is
+Without a compatible durable provider, `delegate_chat` waits for a child chat
+in the originating browser, even when the parent is a background job. Keep that browser open until the response is
 received. While the authorized browser remains connected, it refreshes the
 parked parent's activity and uses a bounded two-hour delegation wait; normal
 provider limits still apply. Cancellation propagates to the child. An
@@ -75,12 +75,12 @@ has finished or been replaced, retries stop and existing execution evidence is
 retained until the server confirms the outcome.
 
 Newer clients and servers can capture the selected system prompt in private
-background job state for future durable delegation. This metadata does not
+background job state for durable delegation. This metadata alone does not
 enable durable delegation or change the browser requirement. It excludes
 historical system messages and is omitted when preparation depends on browser
 hooks or the server does not support the metadata format.
 
-The in-development durable admission protocol uses `_durableDelegation: 1` on a
+The durable admission protocol uses `_durableDelegation: 1` on a
 background request. The server accepts it only with matching job and sync
 capabilities, captured defaults and context, text output, and a fully
 server-executable tool set apart from delegation itself. It rejects unsupported
@@ -88,8 +88,8 @@ requests before creating a job instead of silently switching modes. The field
 is private routing metadata and is not sent to the model provider. The client
 selects this protocol only when discovery and request preparation establish
 eligibility. Otherwise it warns before sending that delegated chats need the
-browser to stay open. Current released job providers do not advertise the
-required capability.
+browser to stay open. Native SQLite provider 0.0.25 supplies this capability
+with a compatible host; D1 does not.
 
 For eligible durable calls, child activity can show waiting, working, or saving.
 Saving means the child has finished model execution and its canonical history
@@ -98,20 +98,26 @@ derived from the matching child job and are not stored as final outcomes.
 When a durable child chat is opened on another device, its composer starts with
 the model and variant used for that child once its history syncs. A saved
 per-chat choice or an explicit return to inherited settings takes precedence.
-The unreleased durable path also distinguishes unavailable child history from
+The durable path also distinguishes unavailable child history from
 an unknown model outcome. If both apply, the activity shows both; the parent
 cannot automatically delegate again in the same turn.
 
 The versioned durable-delegation provider contract also requires
 `deferDelegationHistory`. It must postpone only the specified job generation and
 pending history phase, so denied or temporarily unavailable history cannot
-starve other jobs. A deferred job remains a shutdown blocker and is retried; the
-deferral does not mark its generation as failed. Current released providers do
-not advertise this delegation contract.
+starve other jobs. A deferred job is retried without marking its generation
+as failed. With matching host and native SQLite provider support for
+`getShutdownBlockerCount({ allowPersistedDelegation: true })`, saved delegation
+waits and terminal delivery can remain pending across a dashboard restart.
+Active model work, live or indeterminate worker leases, and in-flight execution
+or reconciliation still block restart. This opt-in accounting is a source
+change after provider 0.0.25; that published version and providers without the
+option retain conservative blocking behavior.
 
-The unreleased SQLite delegation draft preserves malformed checkpoints in
-quarantine and leaves unrecognized checkpoint versions untouched. Both remain
-restart blockers. Its recovery diagnostics report bounded lists of opaque job
+SQLite delegation preserves malformed checkpoints in quarantine and leaves
+unrecognized checkpoint versions untouched. With the opt-in accounting above,
+unleased retained evidence does not prevent restart; it is not discarded,
+replayed, or marked successful. Its recovery diagnostics report bounded lists of opaque job
 IDs without logging checkpoint contents, including after a server restart.
 The saved delegation deadline still stops admitted children if the authorization
 service is unavailable; starting work or delivering results continues to require
@@ -121,18 +127,18 @@ preserves that data, stops linked children of a stopped parent, and honors the
 saved deadline for children of an active parent. Other eligible history and
 delegation work can continue.
 Use a compatible host and provider to investigate those IDs and preserve the
-database and job evidence; the draft does not yet provide automated repair.
+database and job evidence; automated repair is not provided.
 Do not clear checkpoints or downgrade to a worker that does not understand them.
 If the originating user permanently loses workspace write access or the
 workspace is deleted, terminal history cannot be delivered under that user's
 authority. The SQLite delegation implementation retains the affected parent and
-child evidence and blocks dashboard restart preparation. The restart attempt
-cancels without replacing the running server. If access can legitimately be
-restored, normal recovery can finish delivery without repeating a model request.
-There is no qualified automatic release procedure when access cannot be restored;
-preserve the database and evidence. Do not clear pending state or downgrade to a
-worker that cannot understand it. See [server restarts](/documentation/cloud/operations).
-The draft migration also preserves malformed legacy execution JSON separately
+child evidence. The opt-in accounting allows restart once execution has stopped,
+even when delivery cannot recover. If access can legitimately be restored,
+normal recovery can finish delivery without repeating a model request. Restart
+does not grant access or repair damaged evidence. Preserve the database and
+evidence; do not clear pending state or downgrade to a worker that cannot
+understand it. See [server restarts](/documentation/cloud/operations).
+The migration also preserves malformed legacy execution JSON separately
 and fences the affected job and history delivery. The original bytes can contain
 private job data, so protect the database and its backups accordingly. The
 migration can resume after an interrupted step; this has been tested locally
