@@ -17,8 +17,8 @@ live or indeterminate leases, and in-flight workers or recovery writes still
 block replacement. Authorization failures and damaged checkpoints keep their
 evidence; restart does not clear them, fabricate success, or replay uncertain
 work. Recovery resumes under the same authorization and claim rules after boot.
-This requires provider code newer than 0.0.25; that release, D1 and providers
-without the option keep the conservative behavior above.
+This ships in OR3 Cloud 0.1.98 with native SQLite provider 0.0.26. Earlier
+providers, D1 and providers without the option keep the conservative behavior above.
 
 Pending canonical history continues retrying during preparation, so a temporary
 delivery failure can recover without restarting model execution. New claims

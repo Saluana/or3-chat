@@ -86,11 +86,17 @@ test('offline inspection accepts the installed provider migration history and re
   const db = new Database(path);
   try {
     const installed = JSON.parse(await readFile(new URL('../../../node_modules/or3-provider-sqlite/package.json', import.meta.url), 'utf8')) as { version: string };
-    const migrationCount = installed.version === '0.0.24' ? 28 : installed.version === '0.0.25' ? 29 : 0;
+    const migrationCount = installed.version === '0.0.24' ? 28 : installed.version === '0.0.25' ? 29 : installed.version === '0.0.26' ? 31 : 0;
     expect(migrationCount).toBeGreaterThan(0);
     expect(db.query('SELECT name FROM kysely_migration ORDER BY name').all())
       .toEqual(QUALIFIED_MIGRATIONS.slice(0, migrationCount).map(name => ({ name })));
-    if (migrationCount === 29) {
+    if (migrationCount === 31) {
+      db.query('DELETE FROM kysely_migration WHERE name=?').run('031_storage_generation_uploads');
+      expect(() => inspectCanonicalReferences(OfflineDatabase, path, inventory, '/data/storage')).toThrow('migration history');
+      db.query('DELETE FROM kysely_migration WHERE name=?').run('030_storage_generations');
+      expect(inspectCanonicalReferences(OfflineDatabase, path, inventory, '/data/storage')).toMatchObject({ complete: true });
+    }
+    if (migrationCount >= 29) {
       db.query('DELETE FROM kysely_migration WHERE name=?').run('029_delegation_wait');
       expect(inspectCanonicalReferences(OfflineDatabase, path, inventory, '/data/storage')).toMatchObject({ complete: true });
     }
@@ -105,8 +111,8 @@ test('offline inspection accepts the installed provider migration history and re
 });
 
 test('offline inspection refuses unsupported versions, ambiguous archives and scratch exhaustion', () => {
-  expect(() => assertInspectionProfile({ contract: 1, sqlite: '0.0.25', filesystem: '0.0.15' })).not.toThrow();
-  for (const profile of [{ contract: 2, sqlite: '0.0.25', filesystem: '0.0.15' }, { contract: 1, sqlite: '0.0.24', filesystem: '0.0.15' }, { contract: 1, sqlite: '0.0.25', filesystem: '0.0.14' }]) expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
+  expect(() => assertInspectionProfile({ contract: 1, sqlite: '0.0.26', filesystem: '0.0.15' })).not.toThrow();
+  for (const profile of [{ contract: 2, sqlite: '0.0.26', filesystem: '0.0.15' }, { contract: 1, sqlite: '0.0.25', filesystem: '0.0.15' }, { contract: 1, sqlite: '0.0.26', filesystem: '0.0.14' }]) expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
   const entry = '-rw------- nonroot/nonroot 4096 2026-10-11 10:16:23 ./sync.sqlite\n';
   expect(() => readBackupInventory(entry + entry)).toThrow('Duplicate');
   expect(() => readBackupInventory(entry.replace('./sync.sqlite', '../sync.sqlite'))).toThrow('Unsafe');

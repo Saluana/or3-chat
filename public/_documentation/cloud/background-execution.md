@@ -110,9 +110,9 @@ as failed. With matching host and native SQLite provider support for
 `getShutdownBlockerCount({ allowPersistedDelegation: true })`, saved delegation
 waits and terminal delivery can remain pending across a dashboard restart.
 Active model work, live or indeterminate worker leases, and in-flight execution
-or reconciliation still block restart. This opt-in accounting is a source
-change after provider 0.0.25; that published version and providers without the
-option retain conservative blocking behavior.
+or reconciliation still block restart. This opt-in accounting ships in native
+SQLite provider 0.0.26 with OR3 Cloud 0.1.98. Earlier providers and providers
+without the option retain conservative blocking behavior.
 
 SQLite delegation preserves malformed checkpoints in quarantine and leaves
 unrecognized checkpoint versions untouched. With the opt-in accounting above,
