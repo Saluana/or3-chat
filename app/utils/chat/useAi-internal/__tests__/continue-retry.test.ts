@@ -73,10 +73,6 @@ vi.mock('~/db/files-util', () => ({
 vi.mock('~/utils/chat/messages', async (importOriginal) => ({
     ...(await importOriginal<typeof import('~/utils/chat/messages')>()),
     shouldKeepAssistantMessage: () => true,
-    getChatModalities: (modelId: string) =>
-        /dall-e|stable-diffusion|midjourney|imagen/i.test(modelId)
-            ? ['image', 'text']
-            : ['text'],
 }));
 
 vi.mock('~/utils/chat/uiMessages', () => ({

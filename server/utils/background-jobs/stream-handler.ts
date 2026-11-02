@@ -70,6 +70,7 @@ import { executeServerTool, getServerTool } from '../chat/tool-registry';
 import { createOpenRouterClient, fetchOpenRouterCatalog } from '~~/shared/openrouter';
 import { MAX_TOOL_ITERATIONS } from '~/utils/chat/constants';
 import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
+import { prepareOpenRouterWebSearch } from '~~/shared/openrouter/request';
 import {
     emitBackgroundJobWebhookEvent,
     emitMessageCompletedWebhookEvent,
@@ -1476,7 +1477,7 @@ export async function consumeBackgroundStreamWithTools(params: {
                     'HTTP-Referer': params.referer,
                     'X-Title': 'or3.chat',
                 },
-                body: JSON.stringify(body),
+                body: JSON.stringify(prepareOpenRouterWebSearch(body)),
             }, { signal: params.abortSignal });
             }, requestBody, {
                 defaultAllowance: params.context.execution?.delegationRecoveryPolicy !== 'v1' &&
@@ -1927,7 +1928,7 @@ export async function executeBackgroundJob(
             'HTTP-Referer': params.referer,
             'X-Title': 'or3.chat',
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(prepareOpenRouterWebSearch(body)),
     }, { signal });
     }, cleanBody, {
         defaultAllowance: params.execution?.delegationRecoveryPolicy !== 'v1' &&

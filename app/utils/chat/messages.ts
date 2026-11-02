@@ -7,6 +7,7 @@
 
 import type { ContentPart } from './types';
 import { isWorkflowMessageData } from './workflow-types';
+import type { ContextModelMetadata } from '~~/shared/chat/context-budget';
 
 /**
  * `buildParts`
@@ -259,19 +260,22 @@ export function shouldKeepAssistantMessage(m: {
  * `getChatModalities`
  *
  * Purpose:
- * Returns the output modalities to request for a given model id.
+ * Returns the output modalities to request for a resolved model.
  *
  * Behavior:
- * - Most models are text-only output
- * - Known image-generation model families also request image output
+ * - Uses the catalog's `architecture.output_modalities`
+ * - Image-output models request image output (plus text when supported)
+ * - Routers (e.g. `openrouter/auto`) stay text-only: requesting image output
+ *   would steer every routed chat toward image models
+ * - Missing metadata falls back to text-only output
  *
  * Constraints:
  * - This decides OUTPUT format, not vision/input capability
  */
-export function getChatModalities(modelId: string): string[] {
-    const isImageGenerationModel =
-        /dall-e|stable-diffusion|midjourney|imagen/i.test(modelId);
-    return isImageGenerationModel ? ['image', 'text'] : ['text'];
+export function getChatModalities(model: ContextModelMetadata | null | undefined): string[] {
+    const output = model?.architecture?.output_modalities;
+    if (!output?.includes('image') || model?.architecture?.tokenizer === 'Router') return ['text'];
+    return output.includes('text') ? ['image', 'text'] : ['image'];
 }
 
 /**

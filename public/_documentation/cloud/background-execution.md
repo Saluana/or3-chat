@@ -37,7 +37,9 @@ Eligibility on the client requires all of the following:
 
 - `runtimeConfig.public.backgroundStreaming.enabled` is true (config flag)
 - `runtimeConfig.public.sync.enabled` is true
-- Model modality is text-only (`modalities === ['text']`)
+- Model modality is text-only (`modalities === ['text']`). Models whose catalog
+  `output_modalities` include `image` (routers excepted) request image output
+  and stream in the foreground, because background jobs persist text only.
 - An authenticated SSR session with an active workspace exists
 
 Eligible chat turns start as server-side background jobs whenever background

@@ -70,6 +70,18 @@ describe('openrouterStream', () => {
         vi.useRealTimers();
     });
 
+    it('sends saved online selections as a server search tool alongside client tools', async () => {
+        localStorage.setItem('or3:server-route-available', JSON.stringify({ available: false, timestamp: Date.now() }));
+        const fetchMock = vi.fn().mockResolvedValue(createStreamResponse());
+        vi.stubGlobal('fetch', fetchMock);
+        const tool = { type: 'function' as const, function: { name: 'lookup', description: 'Look up', parameters: { type: 'object' as const, properties: {} } } };
+        for await (const _event of openRouterStream({ apiKey: 'key', model: 'model-1:online',
+            orMessages: [{ role: 'user', content: 'Question' }], tools: [tool] })) { /* drain */ }
+        expect(JSON.parse(fetchMock.mock.calls[0]![1].body)).toMatchObject({
+            model: 'model-1', tools: [tool, { type: 'openrouter:web_search' }],
+        });
+    });
+
 
     it('closes the provider iterator when its retry wrapper consumer exits early', async () => {
         let closed = false;

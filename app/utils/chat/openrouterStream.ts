@@ -30,6 +30,7 @@ import {
     type StreamedFieldMode,
 } from '~~/shared/openrouter/parseOpenRouterSSE';
 import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
+import { prepareOpenRouterWebSearch } from '~~/shared/openrouter/request';
 import { PROJECT_MEMORY_HEADING } from '~~/shared/projects/workspace';
 import { OpenRouterStreamError, normalizeProviderResponseError } from '~~/shared/openrouter/errors';
 import {
@@ -577,7 +578,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
                 'X-Title': 'or3.chat',
                 Accept: 'text/event-stream',
             },
-            body: JSON.stringify(requestBody),
+            body: JSON.stringify(prepareOpenRouterWebSearch(requestBody)),
         }), fallbackBody, {
             defaultAllowance: !!params.contextPolicy
                 && (params.contextPolicy.requestedCompletionTokens ?? params.maxCompletionTokens) == null,

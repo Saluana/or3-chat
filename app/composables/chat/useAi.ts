@@ -2365,7 +2365,7 @@ export function useChat(
         orMessages = JSON.parse(JSON.stringify(prepared.messages)) as OpenRouterMessage[];
         if (!prepared.delegation && !orMessages.length)
             return { status: 'rejected', requestId, reason: 'empty_context', error: 'No model input remained after preparation.' };
-        const modalities = getChatModalities(modelId);
+        const modalities = getChatModalities(readiness.metadata);
         const toolRegistry = useToolRegistry();
         const modelSupportsTools = !budgetModelMeta?.supported_parameters || budgetModelMeta.supported_parameters.includes('tools');
         const { projectToolEnabled } = await import('~/utils/projects/context');
@@ -3051,7 +3051,7 @@ export function useChat(
         const browserToolCapability = options.forceForeground || !hasBrowserTools || !backgroundStreamingAllowed.value
             ? undefined : await getBackgroundClientToolCapability(signal);
         const bridgeReady = !browserToolCapability || browserToolCapability.available;
-        const modalities = getChatModalities(modelId); const allowBackgroundStreaming = !options.forceForeground && !projectId && backgroundStreamingAllowed.value && bridgeReady && modalities.length === 1 && modalities[0] === 'text';
+        const modalities = getChatModalities(readiness.metadata); const allowBackgroundStreaming = !options.forceForeground && !projectId && backgroundStreamingAllowed.value && bridgeReady && modalities.length === 1 && modalities[0] === 'text';
         enabledToolDefs = placeServerModelSearch(enabledToolDefs, allowBackgroundStreaming && browserToolCapability?.serverModelSearch === true);
         const foregroundToolDefs = enabledToolDefs.filter((tool) => tool.runtime !== 'server');
         const contextPolicy: ContextRequestPolicy = { model: readiness.metadata, source: readiness.source,

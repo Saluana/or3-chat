@@ -406,6 +406,8 @@ export function useModelStore() {
                 const metadata = Object.freeze({ context_length: model.context_length,
                     architecture: model.architecture ? Object.freeze({
                         input_modalities: Object.freeze([...(model.architecture.input_modalities ?? [])]),
+                        output_modalities: Object.freeze([...(model.architecture.output_modalities ?? [])]),
+                        tokenizer: model.architecture.tokenizer,
                     }) : undefined,
                     top_provider: model.top_provider ? Object.freeze({ context_length: model.top_provider.context_length,
                         max_completion_tokens: model.top_provider.max_completion_tokens }) : undefined });

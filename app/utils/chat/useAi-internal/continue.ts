@@ -456,7 +456,7 @@ export async function continueMessageImpl(
                 'No model input remained after continuation filters.'
             );
         // modalities controls OUTPUT format, not input capability
-        const modalities = getChatModalities(modelId);
+        const modalities = getChatModalities(resolvedPolicy.model);
         const useBackground =
             !projectContext && ctx.backgroundStreamingAllowed === true &&
             modalities.length === 1 &&

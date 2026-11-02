@@ -261,6 +261,16 @@ describe('POST /api/openrouter/stream credential authorization', () => {
         expect(body).not.toHaveProperty('_context'); expect(catalogBoundary.calls).toBe(1);
     });
 
+    it('converts a saved online model to server-side web search when proxying', async () => {
+        readBodyMock.mockResolvedValue({ model: 'test/model:online', stream: true,
+            messages: [{ role: 'user', content: 'Question' }] });
+        await handler(makeEvent());
+        expect(fetch).toHaveBeenCalledOnce();
+        expect(JSON.parse(vi.mocked(fetch).mock.calls[0]![1]!.body as string)).toMatchObject({
+            model: 'test/model', tools: [{ type: 'openrouter:web_search' }],
+        });
+    });
+
     // OpenRouter reserves credit for max_tokens. The default allowance is the
     // model's whole output window, which a small balance cannot reserve.
     const creditRefusal = (affordable: number) => new Response(JSON.stringify({ error: { code: 402, message:

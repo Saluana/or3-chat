@@ -45,7 +45,9 @@ inherited. The chat can search the model catalog to resolve an unfamiliar or
 ambiguous name. Unavailable, ambiguous, or unsupported choices are reported rather
 than silently changed. A routing variant (`off`, `online`, `nitro`, or `floor`)
 can be supplied explicitly, or as a suffix on the model ID. The explicit variant
-overrides the suffix. Up to four independent new chats can be submitted together
+overrides the suffix. The saved `online` selection enables OpenRouter's web
+search server tool; the model decides whether to search, potentially more than
+once, and search charges may apply. Up to four independent new chats can be submitted together
 in `tasks`; they run concurrently and return results in task order. For work
 that depends on an earlier answer, wait for that answer before delegating the
 next task. Each task in a batch can choose its own model, variant, and reasoning

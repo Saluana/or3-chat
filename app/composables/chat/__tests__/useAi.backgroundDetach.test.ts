@@ -221,10 +221,7 @@ vi.mock('~/utils/chat/messages', async (importOriginal) => ({
     buildParts: (text: string) => [{ type: 'text', text }],
     deriveMessageContent: (await importOriginal<typeof import('~/utils/chat/messages')>()).deriveMessageContent,
     shouldKeepAssistantMessage: () => true,
-    getChatModalities: (modelId: string) =>
-        /dall-e|stable-diffusion|midjourney|imagen/i.test(modelId)
-            ? ['image', 'text']
-            : ['text'],
+    getChatModalities: (await importOriginal<typeof import('~/utils/chat/messages')>()).getChatModalities,
 }));
 
 vi.mock('~/utils/chat/openrouterStream', async (original) => ({
