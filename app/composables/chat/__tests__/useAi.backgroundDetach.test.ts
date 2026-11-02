@@ -404,11 +404,7 @@ vi.unmock('~/composables/chat/useAi');
 async function waitForCall(mock: {
     mock: { calls: unknown[][] };
 }): Promise<void> {
-    for (let i = 0; i < 200; i++) {
-        if (mock.mock.calls.length > 0) return;
-        await new Promise((resolve) => setTimeout(resolve, 1));
-    }
-    throw new Error('Timed out waiting for mock to be called');
+    await vi.waitFor(() => expect(mock.mock.calls.length).toBeGreaterThan(0), { interval: 1 });
 }
 
 function holdBackgroundHistoryCapture() {
