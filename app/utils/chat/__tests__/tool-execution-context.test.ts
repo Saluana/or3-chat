@@ -125,7 +125,7 @@ describe('client tool execution context', () => {
         registry.registerTool(definition, async (_args, context) => {
             const db = getDb();
             // Local authorization also reads the chat's KV preference and revision.
-            await db.transaction('rw', db.threads, db.projects, db.posts, db.file_meta, db.kv, db.tombstones, async () => {
+            await db.transaction('rw', [db.threads, db.projects, db.posts, db.file_meta, db.kv, db.tombstones], async () => {
                 expect(Dexie.currentTransaction).toBeTruthy();
                 await context.assertToolAuthorized?.();
                 await db.threads.update('thread-1', { title: 'Authorized mutation' });
