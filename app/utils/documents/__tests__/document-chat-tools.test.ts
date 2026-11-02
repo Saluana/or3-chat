@@ -8,6 +8,8 @@ import { setWorkspaceTabPaletteProvider } from '~/core/search/command-palette/so
 import { evictWorkspaceDb, getDb, setActiveWorkspaceDb, Or3DB } from '~/db/client';
 import { flush, loadDocument, setDocumentContent, useDocumentState } from '~/composables/documents/useDocumentsStore';
 import { getDocumentInDb } from '~/db/documents';
+import { setKvByName } from '~/db/kv';
+import { chatToolPreferenceKey } from '~/utils/chat/tool-preferences';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine } from '~/core/hooks/useHooks';
@@ -26,6 +28,7 @@ beforeEach(async () => {
     await setActiveWorkspaceDb('workspace-a').open();
     await getDb().threads.put({ id: 'thread-a', title: 'Tool origin', project_id: null,
         created_at: 1, updated_at: 1, deleted: false, clock: 0, forked: false, status: 'active', pinned: false });
+    await setKvByName(chatToolPreferenceKey('thread-a'), JSON.stringify({ enabled: true, tools: {} }), getDb());
 });
 afterEach(async () => {
     testRuntimeConfig.value.public.ssrAuthEnabled = originalSsrAuth;

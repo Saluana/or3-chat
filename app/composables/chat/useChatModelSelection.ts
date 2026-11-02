@@ -151,8 +151,9 @@ export function useChatModelSelection(options: {
                 return { preference, projectModel, delegatedModel: data?.delegated_model };
             }).subscribe({ next({ preference, projectModel, delegatedModel }) {
                 if (!current()) return;
-                let saved: { model?: unknown; variant?: unknown } | null = null;
-                try { if (preference.row?.value) saved = JSON.parse(preference.row.value); } catch { /* Invalid preferences inherit. */ }
+                type SavedModelPreference = { model?: unknown; variant?: unknown };
+                let saved: SavedModelPreference | null = null;
+                try { if (preference.row?.value) saved = JSON.parse(preference.row.value) as SavedModelPreference | null; } catch { /* Invalid preferences inherit. */ }
                 if (saved && typeof saved.model === 'string' && saved.model.trim()) {
                     modelInherited.value = false;
                     applySelection(saved.model, sanitizeModelVariant(saved.variant));

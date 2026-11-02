@@ -112,7 +112,8 @@ export async function prepareDelegationWait(parent: BackgroundJob, input: {
             children.push({ kind: 'prepared', index, admissionId: history.admissionId, threadId: child.threadId,
                 userMessageId: history.userMessage.id, assistantMessageId: child.messageId,
                 admissionFingerprint: delegationAdmissionFingerprint(child),
-                admission: { body: JSON.parse(JSON.stringify(childBody)), history: JSON.parse(JSON.stringify(history)) },
+                admission: { body: z.record(z.string(), z.json()).parse(JSON.parse(JSON.stringify(childBody))),
+                    history: z.json().parse(JSON.parse(JSON.stringify(history))) },
                 request: { task: item.task, model: selected.model, ...(item.variant ? { variant: item.variant } : {}),
                     ...(item.reasoningEffort ? { reasoningEffort: item.reasoningEffort } : {}) } });
         } catch (error) {

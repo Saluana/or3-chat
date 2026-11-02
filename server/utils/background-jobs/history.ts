@@ -83,15 +83,16 @@ export async function reconcileBackgroundJobHistory(
   // A stopped parent still needs its child links and outcomes inserted into
   // its terminal snapshot. Finalizing first would make the history receipt
   // immutable and strand the evidence hold indefinitely.
-  const terminalWait = job.status !== 'streaming' && execution?.delegationWait !== undefined;
-  const projection = execution?.delegationTerminalProjection;
+  const terminalWait = job.status !== 'streaming' && execution.delegationWait !== undefined;
+  const projection = execution.delegationTerminalProjection;
+  const parentThreadUnavailable: unknown = projection?.parentThreadUnavailable;
   const projectionReady = projection?.version === 1 && typeof projection.workspaceRevision === 'string' &&
     projection.workspaceRevision.length <= 16 && /^(0|[1-9][0-9]*)$/.test(projection.workspaceRevision) &&
-    (projection.parentThreadUnavailable === undefined || projection.parentThreadUnavailable === true);
+    (parentThreadUnavailable === undefined || parentThreadUnavailable === true);
   if (terminalWait && !projectionReady && job.historyPhase !== 'admission_pending') return 'unchanged';
   let checkedRevision: string | undefined;
   let checkedThreadUnavailable = false;
-  if (execution?.delegationRecoveryPolicy === 'v1' && ['admission_pending', 'finalization_pending'].includes(job.historyPhase ?? '')) {
+  if (execution.delegationRecoveryPolicy === 'v1' && ['admission_pending', 'finalization_pending'].includes(job.historyPhase ?? '')) {
     if (await checkDelegationAccess(job, false) !== 'allowed') return 'unchanged';
     if (job.historyPhase === 'finalization_pending') {
       const reader = historyAdapterFor(job);
@@ -125,7 +126,7 @@ export async function reconcileBackgroundJobHistory(
     if (terminalWait && projectionReady && adapter.capabilities?.delegationTerminalHistory !== 'v1') return 'unchanged';
     if (job.historyPhase === "admission_pending") {
       await callHistoryAdapter(() => adapter.admitChatGeneration(actor, admission));
-      if (terminalWait && !projectionReady || execution?.delegationRecoveryPolicy === 'v1' && job.status !== 'streaming') {
+      if (terminalWait && !projectionReady || execution.delegationRecoveryPolicy === 'v1' && job.status !== 'streaming') {
         await provider.setHistoryPhase?.(job.id, 'finalization_pending', { from: ['admission_pending'] });
         return 'ready';
       }

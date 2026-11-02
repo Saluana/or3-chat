@@ -4201,6 +4201,7 @@ export declare function useHooks(): TypedHookEngine;
  */
 import { type Ref } from 'vue';
 import type { ToolDefinition, ToolExecutionAdmission, ToolExecutionContext, ToolRuntime } from './types';
+import type { ChatToolPreferences } from './tool-preferences';
 import type { WorkflowToolRegistrationPolicy } from '~~/shared/chat/workflow-tool-policy';
 /**
  * `ToolHandler`
@@ -4288,7 +4289,7 @@ export declare function useToolRegistry(): {
     ownerOf: (name: string) => string | undefined;
     setEnabled: (name: string, enabled: boolean) => void;
     hydrate: (states: Record<string, boolean>) => void;
-    getEnabledDefinitions: (context?: ToolAvailabilityContext) => ToolDefinition[];
+    getEnabledDefinitions: (context?: ToolAvailabilityContext, preferences?: ChatToolPreferences) => ToolDefinition[];
     executeTool: (toolName: string, argumentsJson: string, context?: ToolExecutionContext, admission?: ToolExecutionAdmission) => Promise<{
         result: string | null;
         toolName: string;

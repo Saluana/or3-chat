@@ -10,14 +10,47 @@ function readGrammar(source: string): Json | undefined {
     catch { return undefined; }
 }
 
-function visitStrings(value: Json, visit: (value: string) => void): void {
+function visitStrings(value: Json, visit: (value: string) => void, includeKeys = true): void {
     if (typeof value === 'string') visit(value);
     else if (value && typeof value === 'object') {
         for (const [key, child] of Object.entries(value)) {
-            if (!Array.isArray(value)) visit(key);
-            visitStrings(child, visit);
+            if (includeKeys && !Array.isArray(value)) visit(key);
+            visitStrings(child, visit, includeKeys);
         }
     }
+}
+
+/** Factor repeated object keys and values while reconstructing independent objects. */
+function packGrammar(grammar: Json): string {
+    const counts = new Map<string, number>();
+    visitStrings(grammar, value => counts.set(value, (counts.get(value) ?? 0) + 1), false);
+    const strings = [...counts].filter(([value, count]) => value.length > 4 && count > 1).map(([value]) => value);
+    const pool = new Map(strings.map((value, index) => [value, index]));
+    const shapes: string[][] = [];
+    const shapeIds = new Map<string, number>();
+    function encode(value: Json): Json {
+        if (typeof value === 'string') return pool.get(value) ?? value;
+        if (typeof value === 'number') return [-1, Object.is(value, -0) ? '-0' : String(value)];
+        if (Array.isArray(value)) return [0, ...value.map(encode)];
+        if (value && typeof value === 'object') {
+            const keys = Object.keys(value);
+            const key = JSON.stringify(keys);
+            let shapeId = shapeIds.get(key);
+            if (shapeId === undefined) {
+                shapeId = shapes.push(keys);
+                shapeIds.set(key, shapeId);
+            }
+            return [shapeId, ...Object.values(value).map(encode)];
+        }
+        return value;
+    }
+    const encoded = encode(grammar);
+    // Arrays start with 0, objects with their positive shape ID, and numeric
+    // literals with -1. Unboxed numbers reference the immutable string table.
+    // fromEntries retains own __proto__ keys without invoking its setter.
+    return `const __or3_strings=${JSON.stringify(strings)};const __or3_shapes=${JSON.stringify(shapes)};
+function __or3_decode(v){if(typeof v==="number")return __or3_strings[v];if(!Array.isArray(v))return v;if(v[0]===-1)return Number(v[1]);if(v[0]===0)return v.slice(1).map(__or3_decode);return Object.fromEntries(__or3_shapes[v[0]-1].map((k,i)=>[k,__or3_decode(v[i+1])]))}
+const __or3_grammar=__or3_decode(${JSON.stringify(encoded)});\n`;
 }
 
 /** Compact generated data without changing tokens, grammar objects or lazy imports. */
@@ -39,6 +72,11 @@ export function compactGeneratedDataPlugin(): Plugin {
                 if (/\b__or3_s\d+\b/.test(source)) return null;
                 const grammar = readGrammar(source);
                 if (grammar === undefined) return null;
+                // Small grammars keep the simpler expression form. Larger
+                // grammars repeat enough shapes to amortize the tiny decoder.
+                if (source.length >= 40_000 && !/\b__or3_(?:strings|shapes|decode|grammar)\b/.test(source)) {
+                    return { code: packGrammar(grammar) + source.replace(grammarJson, '__or3_grammar'), map: null };
+                }
                 const counts = new Map<string, number>();
                 visitStrings(grammar, (value) => {
                     counts.set(value, (counts.get(value) ?? 0) + 1);

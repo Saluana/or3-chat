@@ -921,6 +921,9 @@ export function useChat(
             const targetWorkspaceGeneration = getWorkspaceGeneration();
             const targetUserId = notificationUserId.value;
             const targetRevision = navigationRevision;
+            const ownsHistoryRead = () => !disposed && navigationRevision === targetRevision &&
+                notificationUserId.value === targetUserId && getDb() === targetDb &&
+                getWorkspaceGeneration() === targetWorkspaceGeneration && threadIdRef.value === targetThreadId;
             logBgStream('history-sync-start', {
                 threadId: targetThreadId,
                 historyLoadedFor: historyLoadedFor.value,
@@ -941,9 +944,7 @@ export function useChat(
                 );
                 // A newer navigation owns the reactive state now. The queued
                 // sync below will load that target after this stale query ends.
-                if (disposed || navigationRevision !== targetRevision || notificationUserId.value !== targetUserId ||
-                    getDb() !== targetDb || getWorkspaceGeneration() !== targetWorkspaceGeneration ||
-                    threadIdRef.value !== targetThreadId || stagedLoadedFor.value !== targetThreadId) return;
+                if (!ownsHistoryRead() || stagedLoadedFor.value !== targetThreadId) return;
                 rawMessages.value = stagedHistory.value;
                 historyLoadedFor.value = targetThreadId;
                 messages.value = associateUiToolResultMessages(rawMessages.value

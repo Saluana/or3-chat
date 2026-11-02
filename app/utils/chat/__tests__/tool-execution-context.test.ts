@@ -3,6 +3,8 @@ import Dexie from 'dexie';
 import { setActiveWorkspaceDb, evictWorkspaceDb, getDb } from '~/db/client';
 import type { ToolDefinition, ToolExecutionContext } from '../types';
 import { useToolRegistry } from '../tool-registry';
+import { setKvByName } from '~/db/kv';
+import { chatToolPreferenceKey } from '../tool-preferences';
 
 const names: string[] = [];
 let workspace: string;
@@ -12,6 +14,7 @@ beforeEach(async () => {
     const db = setActiveWorkspaceDb(workspace);
     await db.threads.put({ id: 'thread-1', title: 'Ordinary tool origin', status: 'ready',
         created_at: 1, updated_at: 1, clock: 1, deleted: false, pinned: false, forked: false });
+    await setKvByName(chatToolPreferenceKey('thread-1'), JSON.stringify({ enabled: true, tools: {} }), db);
 });
 
 afterEach(async () => {
@@ -147,7 +150,8 @@ describe('client tool execution context', () => {
         const beforeExecute = vi.fn(async () => {
             await Promise.resolve();
             if (outcome === 'refused') throw new Error('Tool claim expired or was replaced');
-            if (outcome === 'disabled') registry.setEnabled(definition.function.name, false);
+            if (outcome === 'disabled') await setKvByName(chatToolPreferenceKey('thread-1'),
+                JSON.stringify({ enabled: true, tools: { [definition.function.name]: false } }), getDb());
             if (outcome === 'aborted') abortController.abort();
         });
         const context: ToolExecutionContext = {
