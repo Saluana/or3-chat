@@ -9,8 +9,6 @@ const destructiveOutlineButton = {
 
 export const dashboardOverrides = {
     'button.image-viewer': {
-        color: 'on-surface' as const,
-        variant: 'solid',
         class: 'retro-press',
     },
     'selectmenu#dashboard.workspace.logout-policy': {
