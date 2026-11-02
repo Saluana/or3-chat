@@ -5,11 +5,15 @@ import type { ToolDefinition, ToolExecutionContext } from '../types';
 import { useToolRegistry } from '../tool-registry';
 import { setKvByName } from '~/db/kv';
 import { chatToolPreferenceKey } from '../tool-preferences';
+import { createHookEngine } from '~/core/hooks/hooks';
+import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
+import { setHookEngine } from '~/core/hooks/useHooks';
 
 const names: string[] = [];
 let workspace: string;
 
 beforeEach(async () => {
+    setHookEngine(createTypedHookEngine(createHookEngine()));
     workspace = `tool-context-${crypto.randomUUID()}`;
     const db = setActiveWorkspaceDb(workspace);
     await db.threads.put({ id: 'thread-1', title: 'Ordinary tool origin', status: 'ready',
@@ -23,6 +27,7 @@ afterEach(async () => {
     names.splice(0).forEach((name) => registry.unregisterTool(name));
     const db = getDb();
     setActiveWorkspaceDb(null); evictWorkspaceDb(workspace); await Dexie.delete(db.name);
+    setHookEngine(null);
 });
 
 describe('client tool execution context', () => {
