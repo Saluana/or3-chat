@@ -24,7 +24,9 @@ function visitStrings(value: Json, visit: (value: string) => void, includeKeys =
 function packGrammar(grammar: Json): string {
     const counts = new Map<string, number>();
     visitStrings(grammar, value => counts.set(value, (counts.get(value) ?? 0) + 1), false);
-    const strings = [...counts].filter(([value, count]) => value.length > 4 && count > 1).map(([value]) => value);
+    // Short numeric references go to the most frequently reused strings.
+    const strings = [...counts].filter(([value, count]) => value.length > 4 && count > 1)
+        .sort(([, left], [, right]) => right - left).map(([value]) => value);
     const pool = new Map(strings.map((value, index) => [value, index]));
     const shapes: string[][] = [];
     const shapeIds = new Map<string, number>();
