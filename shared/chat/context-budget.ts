@@ -1,6 +1,6 @@
 /** Provider capacity is a fact; usage is an estimate and the user's maximum is optional. */
 export interface ContextModelMetadata {
-    architecture?: { input_modalities?: readonly string[] };
+    architecture?: { input_modalities?: readonly string[]; output_modalities?: readonly string[]; tokenizer?: string };
     context_length?: unknown;
     top_provider?: { context_length?: unknown; max_completion_tokens?: unknown } | null;
 }
