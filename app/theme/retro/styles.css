@@ -3346,30 +3346,16 @@ html[data-theme='retro'].dark
 	box-shadow: var(--app-elevation-low, 2px 2px 0 0 var(--md-surface-variant));
 }
 
-[data-theme="retro"] .chat-settings-popover .chat-settings-model-trigger {
-	border-radius: var(--md-border-radius);
-	box-shadow: var(--app-elevation-low, 2px 2px 0 0 var(--md-surface-variant));
-}
-
 [data-theme="retro"] .chat-settings-popover .chat-settings-header {
 	border-bottom: var(--md-border-width-subtle, var(--md-border-width)) solid
 		var(--md-border-color);
 }
 
-[data-theme="retro"] .chat-settings-popover .chat-settings-tools {
+[data-theme="retro"] .chat-settings-popover :is(.chat-settings-group, .chat-settings-bulk-row, .chat-memory-card) {
 	background: var(--md-surface);
 	border: var(--md-border-width) solid var(--md-border-color);
 	border-radius: var(--md-border-radius);
-}
-
-[data-theme="retro"] .chat-settings-popover .chat-settings-row-item + .chat-settings-row-item::before,
-[data-theme="retro"] .chat-settings-popover .chat-settings-nav-button + .chat-settings-nav-button::before {
-	border-top-color: var(--md-border-color);
-}
-
-[data-theme="retro"] .chat-settings-popover .chat-settings-section-heading,
-[data-theme="retro"] .chat-settings-popover .chat-settings-tool-list {
-	border-color: var(--md-border-color);
+	box-shadow: var(--app-elevation-low, 2px 2px 0 0 var(--md-surface-variant));
 }
 
 [data-theme="retro"] .chat-settings-popover .chat-settings-close {

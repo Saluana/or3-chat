@@ -200,7 +200,7 @@
                     >
                     <p class="supporting-text mt-1">
                         Default routing for new chats: fastest (Nitro),
-                        cheapest (Floor), or web search (Online).
+                        cheapest (Floor), or web search.
                     </p>
                 </div>
                 <ChatModelVariantSelect

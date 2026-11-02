@@ -107,6 +107,8 @@ test('chat tool suspension preserves selections, defaults and draft ownership ac
     await page.getByRole('button', { name: /Other tools/ }).click();
     await expect(page.getByRole('switch', { name: 'Enable test_echo', exact: true })).not.toBeChecked();
     await page.getByRole('button', { name: 'Close chat settings' }).click();
+    // Reopening during the exit animation would reuse the closing instance.
+    await expect(page.getByRole('dialog', { name: 'Settings' })).toBeHidden();
 
     await page.getByRole('button', { name: 'New draft', exact: true }).click();
     await settings(page);

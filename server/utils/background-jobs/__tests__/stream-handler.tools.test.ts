@@ -301,7 +301,7 @@ describe('consumeBackgroundStreamWithTools', () => {
         expect(persisted).toBe('x'.repeat(500));
     });
 
-    it('executes registered server tools and completes with follow-up text', async () => {
+    it('keeps web search enabled while executing registered tools across iterations', async () => {
         const statusRef = { status: 'streaming' as const };
         const { provider, updateJob, completeJob } = createProvider(statusRef);
         const fetchMock = vi
@@ -313,7 +313,7 @@ describe('consumeBackgroundStreamWithTools', () => {
         await consumeBackgroundStreamWithTools({
             jobId: 'job-1',
             body: {
-                model: 'test-model',
+                model: 'test-model:online',
                 messages: [],
                 tools: [toolDef],
             },
@@ -332,6 +332,11 @@ describe('consumeBackgroundStreamWithTools', () => {
         });
 
         expect(fetchMock).toHaveBeenCalledTimes(2);
+        for (const call of fetchMock.mock.calls) {
+            expect(JSON.parse(String(call[1]!.body))).toMatchObject({
+                model: 'test-model', tools: [toolDef, { type: 'openrouter:web_search' }],
+            });
+        }
         expect(completeJob).toHaveBeenCalledWith('job-1', 'final answer');
         const hasToolCallUpdate = (
             updateJob.mock.calls as Array<unknown[]>

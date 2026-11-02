@@ -8,21 +8,21 @@
                     <span class="chat-memory-description block truncate">{{ expanded ? 'Manage context and automatic compaction.' : usageLabel }}</span>
                 </span>
             </button>
-            <UButton v-if="inProgress" size="xs" color="neutral" variant="soft" class="chat-memory-compact shrink-0 w-auto! max-md:px-2! max-md:text-xs! max-md:leading-4!" @click="emit('cancel')">Cancel</UButton>
-            <UButton v-else size="xs" color="neutral" variant="soft" class="chat-memory-compact shrink-0 w-auto! max-md:px-2! max-md:text-xs! max-md:leading-4!" :disabled="Boolean(blockedReason)" :title="blockedReason" @click="emit('compact')">Compact</UButton>
+            <UButton v-if="inProgress" size="xs" color="neutral" variant="soft" class="chat-memory-compact shrink-0 w-auto! max-md:min-h-0! max-md:px-2! max-md:text-xs! max-md:leading-4!" @click="emit('cancel')">Cancel</UButton>
+            <UButton v-else size="xs" color="neutral" variant="soft" class="chat-memory-compact shrink-0 w-auto! max-md:min-h-0! max-md:px-2! max-md:text-xs! max-md:leading-4!" :disabled="Boolean(blockedReason)" :title="blockedReason" @click="emit('compact')">Compact</UButton>
         </div>
         <div v-show="expanded" :id="detailsId" class="chat-memory-details">
             <div data-context-indicator :aria-busy="state.pending">
                 <div class="mb-1.5 flex items-center justify-between gap-3 text-xs">
                     <span>Context usage</span><span class="text-(--md-on-surface-variant)">{{ usageLabel }}</span>
                 </div>
-                <div role="meter" aria-label="Estimated context used" :aria-valuemin="0" :aria-valuemax="100" :aria-valuenow="percent" :aria-valuetext="meterDescription" class="h-1.5 overflow-hidden rounded-full bg-(--md-surface-variant)">
-                    <div class="h-full rounded-full transition-[width]" :class="percent >= 90 ? 'bg-error' : percent >= 70 ? 'bg-warning' : 'bg-blue-500'" :style="{ width: `${percent}%` }" />
+                <div role="meter" aria-label="Estimated context used" :aria-valuemin="0" :aria-valuemax="100" :aria-valuenow="percent" :aria-valuetext="meterDescription" class="h-1.5 overflow-hidden rounded-full bg-(--md-surface-container)">
+                    <div class="h-full rounded-full transition-[width]" :class="percent >= 90 ? 'bg-error' : percent >= 70 ? 'bg-warning' : 'bg-(--md-primary)'" :style="{ width: `${percent}%` }" />
                 </div>
             </div>
             <div class="mt-3 flex items-center justify-between gap-3">
                 <label :for="switchId" class="text-[0.8125rem]">Auto-compact when context is high</label>
-                <USwitch :id="switchId" :model-value="settings.autoCompactContext" color="info" :ui="{ base: 'data-[state=checked]:bg-blue-500! data-[state=unchecked]:bg-gray-300!', thumb: 'bg-white!' }" aria-label="Auto-compact when context is high" :disabled="saving" @update:model-value="setAutomatic" />
+                <USwitch :id="switchId" class="chat-settings-control" :model-value="settings.autoCompactContext" color="primary" size="sm" aria-label="Auto-compact when context is high" :disabled="saving" @update:model-value="setAutomatic" />
             </div>
             <div v-if="settings.autoCompactContext" class="chat-memory-threshold">
                 <div class="mb-3 flex items-center justify-between gap-3">
@@ -35,8 +35,8 @@
                     :max="100"
                     :step="10"
                     size="sm"
-                    color="info"
-                    :ui="{ track: 'rounded-full! bg-(--md-surface-variant)!', range: 'rounded-full! bg-blue-500!', thumb: 'rounded-full! bg-white! ring-blue-500!' }"
+                    color="primary"
+                    :ui="{ track: 'rounded-full! bg-(--md-surface-container)!', range: 'rounded-full!', thumb: 'rounded-full!' }"
                     :aria-labelledby="thresholdLabelId"
                     :aria-describedby="thresholdDescriptionId"
                     :aria-valuetext="`${thresholdPercent}% context usage`"
@@ -68,7 +68,7 @@
                                         <span class="chat-memory-version-title block truncate">{{ version.title || 'Untitled chat' }}</span>
                                         <span class="chat-memory-version-description block">{{ version.id === rootId ? 'Original conversation' : version.branch_mode === 'compacted' ? version.id === latestId ? 'Latest compacted version' : 'Earlier compacted version' : 'Branch' }}</span>
                                     </span>
-                                    <UIcon v-if="version.id === threadId" name="i-lucide-check" class="size-3.5 shrink-0 text-blue-500" aria-hidden="true" />
+                                    <UIcon v-if="version.id === threadId" name="i-lucide-check" class="size-3.5 shrink-0 text-(--md-primary)" aria-hidden="true" />
                                 </button>
                                 <button v-if="historyHasMore" type="button" class="chat-memory-version-more" @click="loadVersions(historyLimit + 50)">Load more versions</button>
                             </div>
@@ -150,49 +150,48 @@ async function openVersion(id: string) {
 .chat-memory-card {
     flex-shrink: 0;
     border: var(--md-border-width, 1px) solid var(--md-border-color);
-    border-radius: var(--md-border-radius-small, var(--md-border-radius));
+    border-radius: var(--md-border-radius);
     background: var(--md-surface);
     overflow: hidden;
 }
-.chat-memory-header { display: flex; align-items: center; gap: 0.75rem; min-height: calc(3.5rem - 2 * var(--md-border-width, 1px)); padding-right: 0.75rem; }
+.chat-memory-header { display: flex; align-items: center; gap: 0.875rem; padding-right: 0.875rem; }
 .chat-memory-toggle {
-    display: flex; align-items: center; gap: 0.75rem; flex: 1; min-width: 0;
-    min-height: calc(3.5rem - 2 * var(--md-border-width, 1px)); padding: 0.625rem 0 0.625rem 0.75rem;
+    display: flex; align-items: center; gap: 0.875rem; flex: 1; min-width: 0;
+    min-height: 2.75rem; padding: 0.4375rem 0 0.4375rem 0.875rem;
     text-align: left; color: var(--md-on-surface); cursor: pointer;
 }
 .chat-memory-header:hover { background: var(--md-surface-hover); }
 .chat-memory-toggle { background: transparent; }
 .chat-memory-toggle:focus-visible { outline: 2px solid var(--md-focus-ring, var(--md-primary)); outline-offset: -2px; border-radius: var(--md-border-radius-small, var(--md-border-radius)); }
-.chat-memory-details { padding: 0.125rem 0.75rem 0.625rem; }
+.chat-memory-details { padding: 0.125rem 0.875rem 0.75rem; }
 .chat-memory-icon {
     display: grid; place-items: center; width: 2rem; height: 2rem; flex: none;
-    color: var(--md-primary);
-    background: color-mix(in srgb, var(--md-primary) 8%, var(--md-surface));
-    border: max(1px, var(--md-border-width-subtle, 1px)) solid color-mix(in srgb, var(--md-primary) 18%, transparent);
+    color: var(--md-on-surface-variant);
+    background: var(--md-surface-container-low);
     border-radius: var(--md-border-radius-small, var(--md-border-radius));
 }
-.chat-memory-title { margin: 0; font-size: 0.8125rem; font-weight: 550; line-height: 1.3; }
+.chat-memory-title { margin: 0; font-size: 0.8125rem; font-weight: 500; line-height: 1.3; }
 .chat-memory-description { margin: 0.125rem 0 0; color: var(--md-on-surface-variant); font-size: 0.6875rem; line-height: 1.35; }
 .chat-memory-compact {
-    background: color-mix(in srgb, var(--md-on-surface) 5%, var(--md-surface)) !important;
+    background: var(--md-surface-container) !important;
     color: var(--md-on-surface) !important;
-    font-size: 0.6875rem !important;
-    font-weight: 400 !important;
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
 }
-.chat-memory-compact:hover:not(:disabled) { background: color-mix(in srgb, var(--md-on-surface) 9%, var(--md-surface)) !important; }
+.chat-memory-compact:hover:not(:disabled) { background: var(--md-surface-container-high) !important; }
 .chat-memory-threshold {
     margin-top: 0.75rem; padding: 0.75rem;
-    background: color-mix(in srgb, var(--md-on-surface) 3%, var(--md-surface));
+    background: var(--md-surface-container-low);
     border-radius: var(--md-border-radius-small, var(--md-border-radius));
 }
 .chat-memory-threshold-value {
     padding: 0.125rem 0.5rem; border-radius: 999px;
-    background: color-mix(in srgb, var(--ui-info) 12%, var(--md-surface));
+    background: var(--md-surface-container);
     font-size: 0.75rem; font-weight: 550; font-variant-numeric: tabular-nums;
 }
 .chat-memory-history-section {
     margin-top: 0.75rem; padding-top: 0.5rem;
-    border-top: 1px solid color-mix(in srgb, var(--md-on-surface) 10%, var(--md-surface));
+    border-top: 1px solid var(--md-border-color);
 }
 .chat-memory-history {
     display: flex; align-items: center; gap: 0.75rem;
@@ -201,7 +200,7 @@ async function openVersion(id: string) {
     border-radius: var(--md-border-radius-small, var(--md-border-radius)); cursor: pointer;
 }
 .chat-memory-history:hover:not(:disabled), .chat-memory-history[data-state="open"] {
-    background: color-mix(in srgb, var(--md-on-surface) 4%, var(--md-surface));
+    background: var(--md-surface-hover);
 }
 .chat-memory-history:disabled { opacity: 0.5; cursor: default; }
 .chat-memory-history:focus-visible, .chat-memory-version:focus-visible, .chat-memory-version-more:focus-visible {
@@ -215,7 +214,7 @@ async function openVersion(id: string) {
     text-align: left; background: transparent; border-radius: var(--md-border-radius-small, var(--md-border-radius)); cursor: pointer;
 }
 .chat-memory-version:hover, .chat-memory-version[aria-current="page"] {
-    background: color-mix(in srgb, var(--md-on-surface) 4%, var(--md-surface));
+    background: var(--md-surface-hover);
 }
 .chat-memory-version-icon { width: 0.875rem; height: 0.875rem; flex: none; color: var(--md-on-surface-variant); }
 .chat-memory-version-title { font-size: 0.75rem; font-weight: 400; line-height: 1.35; }
@@ -223,5 +222,5 @@ async function openVersion(id: string) {
 .chat-memory-version-notice { margin: 0; padding: 0.5rem; font-size: 0.75rem; }
 .chat-memory-version-more { width: 100%; padding: 0.5rem; color: var(--md-on-surface-variant); font-size: 0.6875rem; border-radius: var(--md-border-radius-small, var(--md-border-radius)); cursor: pointer; }
 .chat-memory-version-more:hover { background: var(--md-surface-hover); }
-.chat-memory-progress { margin: 0; padding: 0 0.75rem 0.625rem; color: var(--md-on-surface-variant); font-size: 0.6875rem; }
+.chat-memory-progress { margin: 0; padding: 0 0.875rem 0.625rem; color: var(--md-on-surface-variant); font-size: 0.6875rem; }
 </style>

@@ -172,11 +172,10 @@ describe('ChatSettingsPopover options layout', () => {
         expect(wrapper.findAll('.chat-settings-tool-row')).toHaveLength(0);
     });
 
-    it('renders Options/More headings with dropdown rows', () => {
+    it('renders Chat/Preferences/Library headings with dropdown rows', () => {
         const wrapper = mountPopover();
         const text = wrapper.text();
-        expect(text).toContain('Options');
-        expect(text).toContain('More');
+        expect(wrapper.findAll('.chat-settings-heading').map((heading) => heading.text())).toEqual(['Chat', 'Preferences', 'Library']);
         expect(text).toContain('Model variant');
         expect(text).toContain('Thinking');
         // Rows show their current value and act as dropdown triggers.

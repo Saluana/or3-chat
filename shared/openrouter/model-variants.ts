@@ -1,15 +1,15 @@
 /**
  * OpenRouter model routing variants.
  *
- * Variants are requested by appending a suffix to the model id:
- * - `:online` — real-time web search (deprecated upstream in favor of the
- *   `openrouter:web_search` server tool, but still supported)
+ * The legacy `online` selection is retained for saved settings and translated
+ * to the `openrouter:web_search` server tool at the provider boundary.
+ * Routing variants are requested by appending a suffix to the model id:
  * - `:nitro` — sort providers by throughput (fastest)
  * - `:floor` — sort providers by price (cheapest)
  *
  * See https://openrouter.ai/docs/guides/routing/model-variants/nitro,
  * https://openrouter.ai/docs/guides/routing/model-variants/floor,
- * https://openrouter.ai/docs/guides/routing/model-variants/online
+ * https://openrouter.ai/docs/guides/features/server-tools/web-search
  */
 
 export const OPENROUTER_MODEL_VARIANTS = [
@@ -81,8 +81,8 @@ export const MODEL_VARIANT_OPTIONS: readonly ModelVariantOption[] = [
     },
     {
         value: 'online',
-        label: 'Online',
-        description: 'Live web results in answers.',
+        label: 'Web search',
+        description: 'Model can search the web; extra charges may apply.',
     },
     {
         value: 'nitro',

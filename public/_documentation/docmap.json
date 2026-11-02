@@ -380,7 +380,7 @@
                     "category": "Using tools",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Enable default-off tools per chat, preserve selections across suspension and reload, configure the dashboard default, use scoped workspace tools, search models, delegate independent tasks in parallel, open child chats on mobile or desktop, review edits, and download verified full results."
+                    "summary": "Enable default-off tools per chat, use OpenRouter web search, preserve selections across suspension and reload, configure the dashboard default, use scoped workspace tools, search models, delegate independent tasks in parallel, open child chats on mobile or desktop, review edits, and download verified full results."
                 },
                 {
                     "name": "chat-tool-reliability.md",
@@ -467,7 +467,7 @@
                     "category": "Reference",
                     "categoryOrder": 1,
                     "order": 0,
-                    "summary": "Internal content, durable send results, tools with chat preference authorization and KV transaction scope, and stream events."
+                    "summary": "Internal content, durable send results, web search compatibility, tools with chat preference authorization and KV transaction scope, and stream events."
                 },
                 {
                     "name": "database.md",

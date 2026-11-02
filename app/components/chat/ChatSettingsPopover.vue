@@ -1,11 +1,13 @@
 <template>
     <div
+        ref="root"
         :class="[
             'chat-settings-popover flex w-[360px] max-w-[calc(100vw-1.5rem)] flex-col',
             containerProps?.class || '',
         ]"
         :data-theme-target="containerProps?.['data-theme-target']"
         :data-theme-matches="containerProps?.['data-theme-matches']"
+        :style="lockedHeight ? { height: `${lockedHeight}px` } : undefined"
     >
         <header class="chat-settings-header">
             <button
@@ -18,22 +20,13 @@
             >
                 <UIcon :name="iconChevronLeft" class="size-4" />
             </button>
-            <div class="min-w-0">
-                <h2 class="chat-settings-title">
-                    {{
-                        activeGroup
-                            ? getCategoryLabel(activeGroup.category)
-                            : toolsView ? 'Tools' : 'Chat settings'
-                    }}
-                </h2>
-                <p v-if="toolsView" class="chat-settings-subtitle">
-                    {{
-                        !toolPreferences.preferences.value.enabled
-                            ? 'Tools are off. Your selection is remembered.'
-                            : activeGroup ? `${activeGroup.tools.length} tools` : 'Choose a tool category.'
-                    }}
-                </p>
-            </div>
+            <h2 class="chat-settings-title">
+                {{
+                    activeGroup
+                        ? getCategoryLabel(activeGroup.category)
+                        : toolsView ? 'Tools' : 'Chat settings'
+                }}
+            </h2>
             <UButton
                 v-bind="closeButtonProps"
                 class="chat-settings-close"
@@ -43,6 +36,13 @@
             >
                 <UIcon :name="iconClose" class="size-4" />
             </UButton>
+            <p v-if="toolsView" class="chat-settings-subtitle">
+                {{
+                    !toolPreferences.preferences.value.enabled
+                        ? 'Tools are off. Your selection is remembered.'
+                        : activeGroup ? `${activeGroup.tools.length} tools` : 'Choose a tool category.'
+                }}
+            </p>
         </header>
 
         <p v-if="toolPreferences.error.value" role="alert" class="px-4 py-2 text-sm text-error">{{ toolPreferences.error.value }}</p>
@@ -51,274 +51,282 @@
             class="chat-settings-body"
             :class="{ 'chat-settings-view-enter is-back': hasNavigated && !activeGroup }"
         >
-            <UButton
-                v-if="(isMobile || !containerWidth || containerWidth <= 400) && !modelItems.length"
-                variant="ghost"
-                color="neutral"
-                aria-label="Current model"
-                class="chat-settings-model-trigger ring-0! w-full"
-                :disabled="loading"
-                @click="emit('open-model-catalog')"
-            >
-                <ModelCatalogProviderLogo :slug="selectedProviderSlug" :size="32" :tile="true" />
-                <span class="chat-settings-row-copy min-w-0 text-left">
-                    <span class="chat-settings-row-title truncate">{{ selectedModelLabel }}</span>
-                    <span class="chat-settings-row-description truncate">Browse available models</span>
-                </span>
-                <UIcon :name="iconChevronDown" class="size-4 shrink-0" aria-hidden="true" />
-            </UButton>
-            <!-- Favorites stay one click away; fresh accounts open the catalog. -->
-            <USelectMenu
-                v-else-if="isMobile || !containerWidth || containerWidth <= 400"
-                v-model="selectedModel"
-                :items="modelItems"
-                value-key="value"
-                :search-input="modelSearchInput"
-                :disabled="loading"
-                aria-label="Current model"
-                class="chat-settings-model-trigger ring-0!"
-                :ui="selectMenuUi"
-            >
-                <template #default="{ open }">
-                    <ModelCatalogProviderLogo
-                        :slug="selectedProviderSlug"
-                        :size="32"
-                        :tile="true"
-                    />
-                    <span class="chat-settings-row-copy min-w-0">
-                        <span class="chat-settings-row-title truncate">
-                            {{ selectedModelLabel }}
-                        </span>
-                        <span class="chat-settings-row-description truncate">
-                            Current model for this chat
-                        </span>
-                    </span>
-                    <UIcon
-                        :name="iconChevronDown"
-                        class="chat-settings-option-chevron size-4 shrink-0"
-                        :class="{ 'is-open': open }"
-                        aria-hidden="true"
-                    />
-                </template>
-                <template #item-leading="{ item }">
-                    <ModelCatalogProviderLogo :slug="item.slug" :size="20" />
-                </template>
-                <template #empty>
+            <section class="chat-settings-section">
+                <h3 class="chat-settings-heading">Chat</h3>
+                <div class="chat-settings-group">
                     <UButton
+                        v-if="(isMobile || !containerWidth || containerWidth <= 400) && !modelItems.length"
                         variant="ghost"
-                        size="sm"
-                        block
-                        class="chat-settings-popover-button"
+                        color="neutral"
+                        aria-label="Current model"
+                        class="chat-settings-model-trigger ring-0! w-full px-3.5!"
+                        :disabled="loading"
                         @click="emit('open-model-catalog')"
                     >
-                        Browse model catalog
+                        <span class="chat-settings-icon" aria-hidden="true">
+                            <ModelCatalogProviderLogo :slug="selectedProviderSlug" :size="18" />
+                        </span>
+                        <span class="chat-settings-row-copy min-w-0 text-left">
+                            <span class="chat-settings-row-title truncate">{{ selectedModelLabel }}</span>
+                            <span class="chat-settings-row-description truncate">Browse available models</span>
+                        </span>
+                        <UIcon :name="iconChevronDown" class="chat-settings-option-chevron size-4 shrink-0" aria-hidden="true" />
                     </UButton>
-                </template>
-            </USelectMenu>
-
-            <UButton
-                v-if="threadId && modelInherited === false"
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                class="justify-start"
-                :disabled="loading || streaming"
-                :label="projectModelDefault ? 'Use project default' : 'Use default model'"
-                @click="emit('use-default-model')"
-            />
-
-            <USelectMenu
-                :model-value="promptSelection"
-                :items="promptItems"
-                value-key="value"
-                :search-input="promptSearchInput"
-                :disabled="loading || streaming || promptSaving || promptLoading"
-                aria-label="System prompt for this chat"
-                class="chat-settings-model-trigger ring-0!"
-                :ui="selectMenuUi"
-                @update:model-value="selectPrompt"
-            >
-                <template #default="{ open }">
-                    <span class="chat-settings-icon" aria-hidden="true">
-                        <UIcon :name="iconSystemPrompt" class="size-4" />
-                    </span>
-                    <span class="chat-settings-row-copy min-w-0">
-                        <span class="chat-settings-row-title truncate">
-                            {{ selectedPromptLabel }}
-                        </span>
-                        <span class="chat-settings-row-description truncate">
-                            System prompt for this chat
-                        </span>
-                    </span>
-                    <UIcon
-                        :name="iconChevronDown"
-                        class="chat-settings-option-chevron size-4 shrink-0"
-                        :class="{ 'is-open': open }"
-                        aria-hidden="true"
-                    />
-                </template>
-            </USelectMenu>
-            <p v-if="promptError" class="m-0 px-3 text-xs text-error" role="alert">
-                {{ promptError }}
-            </p>
-
-            <ChatMemorySettings v-if="contextState" :state="contextState" :thread-id="threadId"
-                :compaction-state="compactionState" :blocked-reason="compactionBlockedReason"
-                @compact="emit('compact')" @cancel="emit('cancel-compaction')"
-                @close="emit('close')" />
-
-            <p class="chat-settings-heading" aria-hidden="true">Options</p>
-
-            <div class="chat-settings-options">
-                <div class="chat-settings-row-item">
+                    <!-- Favorites stay one click away; fresh accounts open the catalog. -->
                     <USelectMenu
-                        v-model="modelVariant"
-                        :items="variantItems"
+                        v-else-if="isMobile || !containerWidth || containerWidth <= 400"
+                        v-model="selectedModel"
+                        :items="modelItems"
                         value-key="value"
-                        :search-input="false"
-                        :disabled="loading || streaming"
-                        aria-label="Model variant"
-                        class="chat-settings-row-trigger ring-0! border-0 bg-transparent"
+                        :search-input="modelSearchInput"
+                        :disabled="loading"
+                        aria-label="Current model"
+                        class="chat-settings-model-trigger ring-0!"
                         :ui="selectMenuUi"
                     >
                         <template #default="{ open }">
                             <span class="chat-settings-icon" aria-hidden="true">
+                                <ModelCatalogProviderLogo :slug="selectedProviderSlug" :size="18" />
+                            </span>
+                            <span class="chat-settings-row-copy min-w-0">
+                                <span class="chat-settings-row-title truncate">
+                                    {{ selectedModelLabel }}
+                                </span>
+                                <span class="chat-settings-row-description truncate">
+                                    Current model for this chat
+                                </span>
+                            </span>
+                            <UIcon
+                                :name="iconChevronDown"
+                                class="chat-settings-option-chevron size-4 shrink-0"
+                                :class="{ 'is-open': open }"
+                                aria-hidden="true"
+                            />
+                        </template>
+                        <template #item-leading="{ item }">
+                            <ModelCatalogProviderLogo :slug="item.slug" :size="20" />
+                        </template>
+                        <template #empty>
+                            <UButton
+                                variant="ghost"
+                                size="sm"
+                                block
+                                class="chat-settings-popover-button"
+                                @click="emit('open-model-catalog')"
+                            >
+                                Browse model catalog
+                            </UButton>
+                        </template>
+                    </USelectMenu>
+
+                    <USelectMenu
+                        :model-value="promptSelection"
+                        :items="promptItems"
+                        value-key="value"
+                        :search-input="promptSearchInput"
+                        :disabled="loading || streaming || promptSaving || promptLoading"
+                        aria-label="System prompt for this chat"
+                        class="chat-settings-model-trigger ring-0!"
+                        :ui="selectMenuUi"
+                        @update:model-value="selectPrompt"
+                    >
+                        <template #default="{ open }">
+                            <span class="chat-settings-icon" aria-hidden="true">
+                                <UIcon :name="iconSystemPrompt" class="size-4" />
+                            </span>
+                            <span class="chat-settings-row-copy min-w-0">
+                                <span class="chat-settings-row-title truncate">
+                                    {{ selectedPromptLabel }}
+                                </span>
+                                <span class="chat-settings-row-description truncate">
+                                    System prompt for this chat
+                                </span>
+                            </span>
+                            <UIcon
+                                :name="iconChevronDown"
+                                class="chat-settings-option-chevron size-4 shrink-0"
+                                :class="{ 'is-open': open }"
+                                aria-hidden="true"
+                            />
+                        </template>
+                    </USelectMenu>
+                </div>
+
+                <UButton
+                    v-if="threadId && modelInherited === false"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    class="self-start"
+                    :disabled="loading || streaming"
+                    :label="projectModelDefault ? 'Use project default' : 'Use default model'"
+                    @click="emit('use-default-model')"
+                />
+                <p v-if="promptError" class="m-0 px-1.5 text-xs text-error" role="alert">
+                    {{ promptError }}
+                </p>
+            </section>
+
+            <section v-if="contextState" class="chat-settings-section">
+                <h3 class="chat-settings-heading">Memory</h3>
+                <ChatMemorySettings :state="contextState" :thread-id="threadId"
+                    :compaction-state="compactionState" :blocked-reason="compactionBlockedReason"
+                    @compact="emit('compact')" @cancel="emit('cancel-compaction')"
+                    @close="emit('close')" />
+            </section>
+
+            <section class="chat-settings-section">
+                <h3 class="chat-settings-heading">Preferences</h3>
+                <div class="chat-settings-group">
+                    <div class="chat-settings-row-item">
+                        <USelectMenu
+                            v-model="modelVariant"
+                            :items="variantItems"
+                            value-key="value"
+                            :search-input="false"
+                            :disabled="loading || streaming"
+                            aria-label="Model variant"
+                            class="chat-settings-row-trigger ring-0! border-0 bg-transparent"
+                            :ui="selectMenuUi"
+                        >
+                            <template #default="{ open }">
+                                <span class="chat-settings-icon" aria-hidden="true">
+                                    <UIcon
+                                        :name="iconVariantSettings"
+                                        class="size-4"
+                                    />
+                                </span>
+                                <span class="chat-settings-row-title">
+                                    Model variant
+                                </span>
+                                <span class="chat-settings-option-value">
+                                    {{ activeVariantLabel }}
+                                </span>
                                 <UIcon
-                                    :name="iconVariantSettings"
-                                    class="size-4"
+                                    :name="iconChevronDown"
+                                    class="chat-settings-option-chevron size-4 shrink-0"
+                                    :class="{ 'is-open': open }"
+                                    aria-hidden="true"
                                 />
-                            </span>
-                            <span class="chat-settings-row-title">
-                                Model variant
-                            </span>
-                            <span class="chat-settings-option-value">
-                                {{ activeVariantLabel }}
-                            </span>
-                            <UIcon
-                                :name="iconChevronDown"
-                                class="chat-settings-option-chevron size-4 shrink-0"
-                                :class="{ 'is-open': open }"
-                                aria-hidden="true"
-                            />
-                        </template>
-                    </USelectMenu>
-                </div>
+                            </template>
+                        </USelectMenu>
+                    </div>
 
-                <div v-if="thinkingSupported" class="chat-settings-row-item">
-                    <USelectMenu
-                        v-model="thinkingSelection"
-                        :items="thinkingItems"
-                        value-key="value"
-                        :search-input="false"
-                        :disabled="loading || streaming"
-                        aria-label="Thinking level"
-                        class="chat-settings-row-trigger ring-0! border-0 bg-transparent"
-                        :ui="selectMenuUi"
+                    <div v-if="thinkingSupported" class="chat-settings-row-item">
+                        <USelectMenu
+                            v-model="thinkingSelection"
+                            :items="thinkingItems"
+                            value-key="value"
+                            :search-input="false"
+                            :disabled="loading || streaming"
+                            aria-label="Thinking level"
+                            class="chat-settings-row-trigger ring-0! border-0 bg-transparent"
+                            :ui="selectMenuUi"
+                        >
+                            <template #default="{ open }">
+                                <span class="chat-settings-icon" aria-hidden="true">
+                                    <UIcon :name="iconReasoning" class="size-4" />
+                                </span>
+                                <span class="chat-settings-row-title">
+                                    Thinking
+                                </span>
+                                <span class="chat-settings-option-value">
+                                    {{ thinkingValueLabel }}
+                                </span>
+                                <UIcon
+                                    :name="iconChevronDown"
+                                    class="chat-settings-option-chevron size-4 shrink-0"
+                                    :class="{ 'is-open': open }"
+                                    aria-hidden="true"
+                                />
+                            </template>
+                        </USelectMenu>
+                    </div>
+                    <div v-if="registeredTools.length" class="chat-settings-row-item chat-settings-tools-row">
+                        <button ref="toolsButton" type="button" class="chat-settings-row-trigger" @click="openTools">
+                            <span class="chat-settings-icon" aria-hidden="true"><UIcon :name="iconToolWrench" class="size-4" /></span>
+                            <span class="chat-settings-row-title">Tools</span>
+                            <span class="chat-settings-tool-value" aria-hidden="true" />
+                            <UIcon :name="iconChevronRight" class="chat-settings-option-chevron size-4 shrink-0" aria-hidden="true" />
+                        </button>
+                        <USwitch
+                            class="chat-settings-control chat-settings-tools-toggle"
+                            color="primary"
+                            size="sm"
+                            aria-label="Enable tools for this chat"
+                            :model-value="toolPreferences.preferences.value.enabled"
+                            :disabled="toolControlsDisabled"
+                            @update:model-value="toolPreferences.setEnabled"
+                        />
+                    </div>
+                </div>
+            </section>
+
+            <nav class="chat-settings-section" aria-label="Library">
+                <h3 class="chat-settings-heading" aria-hidden="true">Library</h3>
+                <div class="chat-settings-group">
+                    <UButton
+                        v-bind="systemPromptsButtonProps"
+                        class="chat-settings-popover-button chat-settings-nav-button px-3.5!"
+                        @click="emit('open-system-prompts')"
                     >
-                        <template #default="{ open }">
-                            <span class="chat-settings-icon" aria-hidden="true">
-                                <UIcon :name="iconReasoning" class="size-4" />
-                            </span>
+                        <span class="chat-settings-icon" aria-hidden="true">
+                            <UIcon :name="iconSystemPrompt" class="size-4" />
+                        </span>
+                        <span class="chat-settings-row-copy">
                             <span class="chat-settings-row-title">
-                                Thinking
+                                Manage system prompts
                             </span>
-                            <span class="chat-settings-option-value">
-                                {{ thinkingValueLabel }}
+                            <span class="chat-settings-row-description">
+                                Customize behavior and tone.
                             </span>
-                            <UIcon
-                                :name="iconChevronDown"
-                                class="chat-settings-option-chevron size-4 shrink-0"
-                                :class="{ 'is-open': open }"
-                                aria-hidden="true"
-                            />
-                        </template>
-                    </USelectMenu>
+                        </span>
+                        <UIcon
+                            :name="iconChevronRight"
+                            class="chat-settings-option-chevron size-4 shrink-0"
+                            aria-hidden="true"
+                        />
+                    </UButton>
+                    <UButton
+                        v-bind="modelCatalogButtonProps"
+                        class="chat-settings-popover-button chat-settings-nav-button px-3.5!"
+                        @click="emit('open-model-catalog')"
+                    >
+                        <span class="chat-settings-icon" aria-hidden="true">
+                            <UIcon :name="iconModelCatalog" class="size-4" />
+                        </span>
+                        <span class="chat-settings-row-copy">
+                            <span class="chat-settings-row-title">
+                                Model catalog
+                            </span>
+                            <span class="chat-settings-row-description">
+                                Browse and compare available models.
+                            </span>
+                        </span>
+                        <UIcon
+                            :name="iconChevronRight"
+                            class="chat-settings-option-chevron size-4 shrink-0"
+                            aria-hidden="true"
+                        />
+                    </UButton>
                 </div>
-                <div v-if="registeredTools.length" class="chat-settings-row-item chat-settings-tools-row">
-                    <button ref="toolsButton" type="button" class="chat-settings-row-trigger" @click="openTools">
-                        <span class="chat-settings-icon" aria-hidden="true"><UIcon :name="iconToolWrench" class="size-4" /></span>
-                        <span class="chat-settings-row-title">Tools</span>
-                        <span class="chat-settings-tool-value" aria-hidden="true" />
-                        <UIcon :name="iconChevronRight" class="chat-settings-option-chevron size-4 shrink-0" aria-hidden="true" />
-                    </button>
-                    <USwitch
-                        class="chat-settings-control chat-settings-tools-toggle"
-                        color="primary"
-                        size="sm"
-                        aria-label="Enable tools for this chat"
-                        :model-value="toolPreferences.preferences.value.enabled"
-                        :disabled="toolControlsDisabled"
-                        @update:model-value="toolPreferences.setEnabled"
-                    />
-                </div>
-            </div>
-
-            <p class="chat-settings-heading" aria-hidden="true">More</p>
-
-            <nav class="chat-settings-navigation" aria-label="More settings">
-                <UButton
-                    v-bind="systemPromptsButtonProps"
-                    class="chat-settings-popover-button chat-settings-nav-button"
-                    @click="emit('open-system-prompts')"
-                >
-                    <span class="chat-settings-icon" aria-hidden="true">
-                        <UIcon :name="iconSystemPrompt" class="size-4" />
-                    </span>
-                    <span class="chat-settings-row-copy">
-                        <span class="chat-settings-row-title">
-                            Manage system prompts
-                        </span>
-                        <span class="chat-settings-row-description">
-                            Customize behavior and tone.
-                        </span>
-                    </span>
-                    <UIcon
-                        :name="iconChevronRight"
-                        class="size-4 shrink-0 text-[var(--md-on-surface-variant)]"
-                        aria-hidden="true"
-                    />
-                </UButton>
-                <UButton
-                    v-bind="modelCatalogButtonProps"
-                    class="chat-settings-popover-button chat-settings-nav-button"
-                    @click="emit('open-model-catalog')"
-                >
-                    <span class="chat-settings-icon" aria-hidden="true">
-                        <UIcon :name="iconModelCatalog" class="size-4" />
-                    </span>
-                    <span class="chat-settings-row-copy">
-                        <span class="chat-settings-row-title">
-                            Model catalog
-                        </span>
-                        <span class="chat-settings-row-description">
-                            Browse and compare available models.
-                        </span>
-                    </span>
-                    <UIcon
-                        :name="iconChevronRight"
-                        class="size-4 shrink-0 text-[var(--md-on-surface-variant)]"
-                        aria-hidden="true"
-                    />
-                </UButton>
             </nav>
         </div>
         <div v-if="toolsView && !activeGroup" class="chat-settings-body chat-settings-view-enter" :class="{ 'is-back': hasNavigated }">
             <!-- Tool categories open a dedicated view with one scroll area. -->
             <section
                 v-if="registeredTools.length > 0"
-                class="chat-settings-tools"
+                class="chat-settings-section"
                 aria-labelledby="chat-settings-tools-label"
             >
                 <div class="chat-settings-section-heading">
-                    <span id="chat-settings-tools-label" class="chat-settings-section-label">Tools</span>
+                    <span id="chat-settings-tools-label" class="chat-settings-heading">Tools</span>
                     <span class="chat-settings-section-count">{{ registeredTools.length }}</span>
                 </div>
-                <div
-                    v-for="group in groupedToolCategories"
-                    :key="group.category"
-                    class="chat-settings-tool-group"
-                >
+                <div class="chat-settings-group">
                     <button
+                        v-for="group in groupedToolCategories"
+                        :key="group.category"
                         type="button"
                         class="chat-settings-tool-category"
                         @click="openToolCategory(group.category, $event)"
@@ -336,7 +344,7 @@
                         </span>
                         <span class="flex shrink-0 items-center gap-2 self-center">
                             <span class="chat-settings-section-count">{{ group.tools.length }}</span>
-                            <UIcon :name="iconChevronRight" class="size-4 shrink-0" />
+                            <UIcon :name="iconChevronRight" class="chat-settings-option-chevron size-4 shrink-0" />
                         </span>
                     </button>
                 </div>
@@ -367,7 +375,7 @@
                     @update:model-value="setGroupToolsEnabled"
                 />
             </div>
-            <div class="chat-settings-tool-list">
+            <div class="chat-settings-group">
                 <div
                     v-for="tool in activeGroup.tools"
                     :key="tool.name"
@@ -536,7 +544,10 @@ const groupedToolCategories = computed(() => {
     }));
 });
 
+const root = ref<HTMLElement | null>(null);
 const toolsView = ref(false);
+// Tool views keep the main view's height so the popover does not jump.
+const lockedHeight = ref<number>();
 const toolsButton = ref<HTMLButtonElement | null>(null);
 const activeCategory = ref<string | null>(null);
 const hasNavigated = ref(false);
@@ -571,6 +582,8 @@ watch(groupedToolCategories, (groups) => {
 });
 
 async function navigateToCategory(category: string | null, showTools = true) {
+    if (!showTools) lockedHeight.value = undefined;
+    else if (!toolsView.value) lockedHeight.value = root.value?.offsetHeight;
     toolsView.value = showTools;
     activeCategory.value = category;
     hasNavigated.value = true;
@@ -947,8 +960,8 @@ const modelCatalogButtonProps = computed(() => {
 <style scoped>
 .chat-settings-popover {
     --chat-settings-divider-width: var(--md-border-width-subtle, var(--md-border-width));
+    --chat-settings-row-padding: 0.4375rem 0.875rem;
 
-    height: 600px;
     max-height: min(
         calc(100dvh - 2rem),
         calc(var(--reka-popover-content-available-height, 100dvh) - 0.5rem)
@@ -959,26 +972,35 @@ const modelCatalogButtonProps = computed(() => {
     border-radius: var(--md-border-radius-large, var(--md-border-radius));
 }
 
+/*
+ * Buttons center on the title line (themes may enlarge them on touch
+ * screens); the tool views' subtitle wraps onto its own line below.
+ */
 .chat-settings-header {
     display: flex;
     flex-shrink: 0;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 1rem 1rem 0.875rem;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 1rem;
+    padding: 0.75rem 1rem 0.5rem;
     border-bottom: var(--chat-settings-divider-width) solid
         color-mix(in srgb, var(--md-border-color) 40%, transparent);
 }
 
 .chat-settings-title {
+    flex: 1;
+    min-width: 0;
     font-size: 1rem;
-    font-weight: 650;
-    line-height: 1.35;
+    font-weight: 600;
+    line-height: 1.5rem;
     letter-spacing: -0.012em;
 }
 
 .chat-settings-subtitle {
+    flex-basis: 100%;
     margin-top: 0.125rem;
+    /* Aligned with the title: back button (2rem - 0.25rem) + 1rem gap. */
+    padding-inline-start: 2.75rem;
     color: var(--md-on-surface-variant);
     font-size: 0.75rem;
     line-height: 1.4;
@@ -986,7 +1008,7 @@ const modelCatalogButtonProps = computed(() => {
 
 .chat-settings-close {
     flex: none;
-    margin: -0.25rem -0.25rem 0 0;
+    margin-inline-end: -0.25rem;
 }
 
 .chat-settings-back {
@@ -996,7 +1018,7 @@ const modelCatalogButtonProps = computed(() => {
     flex: none;
     align-items: center;
     justify-content: center;
-    margin: -0.25rem 0 0 -0.25rem;
+    margin-inline-start: -0.25rem;
     color: var(--md-on-surface);
     border-radius: var(--md-border-radius-small, var(--md-border-radius));
 }
@@ -1017,9 +1039,8 @@ const modelCatalogButtonProps = computed(() => {
     gap: 0.75rem;
     min-height: 0;
     overflow-y: auto;
-    padding: 0.75rem;
+    padding: 0.625rem 0.625rem 0.875rem;
 }
-.chat-settings-body > * { flex-shrink: 0; }
 
 .chat-settings-body > * {
     flex-shrink: 0;
@@ -1044,54 +1065,93 @@ const modelCatalogButtonProps = computed(() => {
     }
 }
 
-.chat-settings-tools {
-    overflow: hidden;
-    border: var(--chat-settings-divider-width) solid
-        color-mix(in srgb, var(--md-border-color) 45%, transparent);
-    border-radius: var(--md-border-radius-small, var(--md-border-radius));
-    background: var(--md-surface);
+.chat-settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 0;
 }
 
 .chat-settings-heading {
-    margin: 0.25rem 0 0;
-    padding: 0 0.25rem;
+    margin: 0;
+    padding: 0 0.375rem;
     color: var(--md-on-surface-variant);
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    line-height: 1.2;
+    line-height: 1rem;
+}
+
+.chat-settings-section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-inline-end: 0.875rem;
+}
+
+/* A bordered card of rows separated by inset hairlines. */
+.chat-settings-group {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    background: var(--md-surface);
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius);
 }
 
 /*
- * Rows are USelectMenu triggers, so their base button lives inside a child
- * component: layout is applied with :deep(). All rows share one geometry so
- * the Options and More sections line up exactly.
+ * Row dividers are drawn with a pseudo-element instead of `border-top` so
+ * they can be inset from both edges like grouped iOS lists.
+ */
+.chat-settings-group > * + * {
+    position: relative;
+}
+
+.chat-settings-group > * + *::before {
+    content: '';
+    position: absolute;
+    inset-inline: 0.875rem;
+    top: 0;
+    /* Keep the hairline above a row's hover fill. */
+    z-index: 1;
+    border-top: max(1px, var(--chat-settings-divider-width)) solid
+        color-mix(in srgb, var(--md-border-color) 60%, transparent);
+    pointer-events: none;
+}
+
+/*
+ * Rows are USelectMenu triggers and UButtons, so their base button lives
+ * inside a child component: layout is applied with :deep(). All rows share
+ * one geometry so every section lines up exactly.
  */
 :deep(.chat-settings-model-trigger),
-:deep(.chat-settings-row-trigger) {
+:deep(.chat-settings-row-trigger),
+.chat-settings-nav-button {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    gap: 0.75rem;
+    column-gap: 0.875rem;
     width: 100%;
-    min-height: 3.5rem;
-    padding: 0.625rem 0.75rem;
+    height: auto;
+    min-height: 2.75rem;
+    padding: var(--chat-settings-row-padding);
     color: var(--md-on-surface);
     text-align: left;
     background: transparent;
-    border-radius: var(--md-border-radius-small, var(--md-border-radius));
+    border: 0;
+    border-radius: 0;
     cursor: pointer;
 }
 
-:deep(.chat-settings-model-trigger) {
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    background: var(--md-surface);
-    border: var(--md-border-width) solid var(--md-border-color);
+:deep(.chat-settings-row-trigger) {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
 }
 
 :deep(.chat-settings-model-trigger:hover),
-:deep(.chat-settings-row-trigger:hover) {
+:deep(.chat-settings-row-trigger:hover),
+.chat-settings-nav-button:hover {
     background: var(--md-surface-hover);
 }
 
@@ -1102,34 +1162,13 @@ const modelCatalogButtonProps = computed(() => {
     outline-offset: -2px;
 }
 
-.chat-settings-options {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-}
-
 /*
- * Row dividers are drawn with a pseudo-element instead of `border-top`:
- * a border on a rounded row curves down at the ends, while the pseudo
- * element keeps the line perfectly straight.
+ * UButton wraps slotted content in its label span, which would lay the
+ * icon/copy/chevron out with flex instead of the row grid. Collapsing the
+ * wrapper keeps button rows on the same grid as the select rows.
  */
-.chat-settings-row-item + .chat-settings-row-item,
-.chat-settings-nav-button + .chat-settings-nav-button {
-    position: relative;
-}
-
-.chat-settings-row-item + .chat-settings-row-item::before,
-.chat-settings-nav-button + .chat-settings-nav-button::before {
-    content: '';
-    position: absolute;
-    inset-inline: 0;
-    top: 0;
-    /* Rows are positioned (relative) buttons; without a stacking context of
-       its own the divider would be painted under an opaque hover background. */
-    z-index: 1;
-    border-top: var(--chat-settings-divider-width) solid
-        color-mix(in srgb, var(--md-border-color) 35%, transparent);
-    pointer-events: none;
+:is(.chat-settings-nav-button, .chat-settings-model-trigger) > [data-slot='label'] {
+    display: contents;
 }
 
 .chat-settings-option-value {
@@ -1149,28 +1188,6 @@ const modelCatalogButtonProps = computed(() => {
     transform: rotate(180deg);
 }
 
-.chat-settings-section-label {
-    color: var(--md-on-surface);
-    font-size: 0.75rem;
-    font-weight: 650;
-    line-height: 1.2;
-}
-
-.chat-settings-row,
-.chat-settings-tool-row {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 0.75rem;
-    min-height: 3.5rem;
-    padding: 0.625rem 0.75rem;
-}
-
-.chat-settings-row + .chat-settings-row {
-    border-top: var(--chat-settings-divider-width) solid
-        color-mix(in srgb, var(--md-border-color) 35%, transparent);
-}
-
 .chat-settings-icon {
     display: inline-flex;
     width: 2rem;
@@ -1178,14 +1195,8 @@ const modelCatalogButtonProps = computed(() => {
     flex: none;
     align-items: center;
     justify-content: center;
-    color: var(--md-primary);
-    background: color-mix(
-        in srgb,
-        var(--md-primary) 8%,
-        var(--md-surface)
-    );
-    border: var(--chat-settings-divider-width) solid
-        color-mix(in srgb, var(--md-primary) 18%, transparent);
+    color: var(--md-on-surface-variant);
+    background: var(--md-surface-container-low);
     border-radius: var(--md-border-radius-small, var(--md-border-radius));
 }
 
@@ -1201,7 +1212,7 @@ const modelCatalogButtonProps = computed(() => {
     display: block;
     color: var(--md-on-surface);
     font-size: 0.8125rem;
-    font-weight: 550;
+    font-weight: 500;
     line-height: 1.3;
 }
 
@@ -1228,7 +1239,7 @@ const modelCatalogButtonProps = computed(() => {
 
 :deep(.chat-settings-tools-toggle) {
     position: absolute;
-    inset-inline-end: 2.5rem; /* 12px padding + 16px chevron + 12px gap. */
+    inset-inline-end: 2.5rem; /* 14px padding + 16px chevron + 10px gap. */
     top: 50%;
     transform: translateY(-50%);
 }
@@ -1247,33 +1258,24 @@ const modelCatalogButtonProps = computed(() => {
     transform: translate(-50%, -50%);
 }
 
-:deep(.chat-settings-tools-toggle [data-slot='base'][data-state='unchecked']) {
-    background: color-mix(in srgb, var(--md-on-surface) 28%, var(--md-surface));
-    border-color: color-mix(in srgb, var(--md-on-surface) 50%, var(--md-surface));
-}
-
-.chat-settings-section-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.625rem 0.75rem;
-    background: var(--md-surface-container-lowest);
-    border-bottom: var(--chat-settings-divider-width) solid
-        color-mix(in srgb, var(--md-border-color) 35%, transparent);
+/*
+ * Off switches get a filled track and a hairline edge so they stay visible on
+ * the white cards; the padding keeps the thumb where the 2px border put it.
+ */
+:deep(.chat-settings-control [data-slot='base'][data-state='unchecked']) {
+    padding: 1px;
+    background: var(--md-surface-container-high);
+    border-width: 1px;
+    border-color: var(--md-outline-variant);
 }
 
 .chat-settings-section-count {
     min-width: 1.25rem;
     color: var(--md-on-surface-variant);
-    font-size: 0.625rem;
+    font-size: 0.75rem;
     font-variant-numeric: tabular-nums;
     line-height: 1;
     text-align: right;
-}
-
-.chat-settings-tool-group + .chat-settings-tool-group {
-    border-top: var(--chat-settings-divider-width) solid
-        color-mix(in srgb, var(--md-border-color) 35%, transparent);
 }
 
 .chat-settings-tool-category {
@@ -1281,9 +1283,9 @@ const modelCatalogButtonProps = computed(() => {
     width: 100%;
     align-items: center;
     justify-content: space-between;
-    gap: 0.75rem;
+    gap: 0.875rem;
     min-height: 2.75rem;
-    padding: 0.625rem 0.75rem;
+    padding: var(--chat-settings-row-padding);
     color: var(--md-on-surface);
     text-align: left;
     transition: background-color var(--app-motion-duration-fast, 150ms)
@@ -1300,72 +1302,31 @@ const modelCatalogButtonProps = computed(() => {
     outline-offset: calc(-1 * var(--app-focus-ring-width, 2px));
 }
 
-.chat-settings-tool-list {
-    flex: none;
-}
-
 .chat-settings-bulk-row {
     display: flex;
     flex: none;
     align-items: center;
     justify-content: space-between;
-    gap: 0.75rem;
-    min-height: 3.25rem;
-    padding: 0.625rem 0.75rem;
-    background: var(--md-surface-container-lowest);
-    border: var(--chat-settings-divider-width) solid
-        color-mix(in srgb, var(--md-border-color) 45%, transparent);
-    border-radius: var(--md-border-radius-small, var(--md-border-radius));
+    gap: 0.875rem;
+    min-height: 2.75rem;
+    padding: var(--chat-settings-row-padding);
+    background: var(--md-surface);
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius);
 }
 
-.chat-settings-tool-row + .chat-settings-tool-row {
-    border-top: var(--chat-settings-divider-width) solid
-        color-mix(in srgb, var(--md-border-color) 25%, transparent);
-}
-
-.chat-settings-navigation {
-    display: flex;
-    flex-direction: column;
-}
-
-.chat-settings-nav-button {
+.chat-settings-tool-row {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    gap: 0.75rem;
-    width: 100%;
-    min-height: 3.5rem;
-    padding: 0.625rem 0.75rem;
-    color: var(--md-on-surface);
-    border: 0;
-    border-radius: var(--md-border-radius-small, var(--md-border-radius));
-}
-
-.chat-settings-nav-button:hover {
-    background: var(--md-surface-hover);
-}
-
-/*
- * UButton wraps slotted content in its label span, which would lay the
- * icon/copy/chevron out with flex instead of the grid below. Collapsing
- * the wrapper keeps nav rows on the exact same grid as the option rows.
- */
-.chat-settings-nav-button > [data-slot='label'] {
-    display: contents;
+    gap: 0.875rem;
+    min-height: 2.75rem;
+    padding: var(--chat-settings-row-padding);
 }
 
 @media (max-width: 640px) {
     .chat-settings-popover {
         width: min(360px, calc(100vw - 1rem));
-    }
-
-    .chat-settings-header {
-        padding: 0.875rem;
-    }
-
-    .chat-settings-body {
-        gap: 0.625rem;
-        padding: 0.625rem;
     }
 }
 

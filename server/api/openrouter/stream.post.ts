@@ -47,6 +47,7 @@ import {
 } from '../../utils/net/request-identity';
 import { normalizeHost } from '../../utils/normalize-host';
 import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
+import { prepareOpenRouterWebSearch } from '~~/shared/openrouter/request';
 import {
     isBackgroundModeRequest,
     validateBackgroundParams,
@@ -443,7 +444,7 @@ export default defineEventHandler(async (event) => {
                     'HTTP-Referer': `${proto}://${host}`,
                     'X-Title': 'or3.chat',
                 },
-                body: JSON.stringify(requestBody),
+                body: JSON.stringify(prepareOpenRouterWebSearch(requestBody)),
             }, { signal: ac.signal });
             ({ response: upstream, errorText: upstreamErrorText } = await sendWithAffordableReply(requestUpstream, providerBody,
                 { defaultAllowance: !!policy && policy.requestedCompletionTokens == null, signal: ac.signal }));
