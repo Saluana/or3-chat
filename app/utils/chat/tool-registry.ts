@@ -29,6 +29,7 @@ import {
     MAX_TOOL_ARGUMENT_BYTES,
     MAX_TOOL_DURABLE_RESULT_BYTES,
 } from '~~/shared/chat/tool-limits';
+import type { ChatToolPreferences } from './tool-preferences';
 import type { WorkflowToolRegistrationPolicy } from '~~/shared/chat/workflow-tool-policy';
 import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
 import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
@@ -401,9 +402,9 @@ export function useToolRegistry() {
     /**
      * Get all tool definitions that are currently enabled (for OpenRouter).
      */
-    function getEnabledDefinitions(context: ToolAvailabilityContext = { workspaceId: null, threadId: null }): ToolDefinition[] {
+    function getEnabledDefinitions(context: ToolAvailabilityContext = { workspaceId: null, threadId: null }, preferences?: ChatToolPreferences): ToolDefinition[] {
         return Array.from(registryState.tools.values())
-            .filter((tool) => tool.enabled.value && isToolAvailable(tool, context))
+            .filter((tool) => (preferences ? preferences.enabled && preferences.tools[tool.definition.function.name] !== false : tool.enabled.value) && isToolAvailable(tool, context))
             .map((tool) => tool.definition);
     }
 
@@ -442,8 +443,21 @@ export function useToolRegistry() {
             return { result: null, toolName, error: `Tool "${toolName}" is unavailable for this conversation context.`, timedOut: false };
         }
 
-        if (!admission?.ignoreGlobalEnabled && !tool.enabled.value) {
-            return { result: null, toolName, error: `Tool "${toolName}" is disabled.`, timedOut: false };
+        const { getDb } = await import('~/db/client');
+        const chatDb = getDb();
+        const isEnabled = async () => {
+            if (admission?.ignoreGlobalEnabled) return true;
+            if (!context?.threadId) return tool.enabled.value;
+            const { readChatToolPreferences } = await import('./tool-preferences');
+            const preferences = await readChatToolPreferences(chatDb, context.threadId);
+            return preferences.enabled && preferences.tools[toolName] !== false;
+        };
+        try {
+            if (!await isEnabled()) {
+                return { result: null, toolName, error: `Tool "${toolName}" is disabled.`, timedOut: false };
+            }
+        } catch {
+            return { result: null, toolName, error: 'Tool settings could not be read. Retry after reopening chat settings.', timedOut: false };
         }
         if (admission) {
             if (tool.runtime === 'server') {
@@ -475,8 +489,6 @@ export function useToolRegistry() {
         let projectScope: import('./workspace-access').WorkspaceOperationScope | undefined;
         let projectOwner: string | null = null;
         let projectPolicy: string | undefined;
-        const { getDb } = await import('~/db/client');
-        const chatDb = getDb();
         if (context?.threadId) {
             try {
                 const { resolveChatProject } = await import('~/db/project-workspace');
@@ -514,7 +526,7 @@ export function useToolRegistry() {
             if (getTool(toolName) !== tool
                 || !toolDefinitionEquals(tool.definition, capturedDefinition)
                 || !isToolAvailable(tool, context ?? { workspaceId: null, threadId: null })
-                || (!admission?.ignoreGlobalEnabled && !tool.enabled.value)
+                || !await isEnabled()
                 || (admission && tool.runtime === 'server')) {
                 throw new Error('Tool availability or its admitted definition changed before execution.');
             }

@@ -4,6 +4,8 @@ import { countTokensApprox } from '~/utils/chat/tokens';
 import { useAiSettings } from './useAiSettings';
 import { useModelStore } from './useModelStore';
 import { admitChatContext, type ContextAdmission, type CountableChatMessage } from '~~/shared/chat/context-budget';
+import { useChatToolPreferences } from './useChatToolPreferences';
+import { readChatToolPreferences } from '~/utils/chat/tool-preferences';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 import { parseFileHashes } from '~/db/files-util';
@@ -11,6 +13,7 @@ import { parseFileHashes } from '~/db/files-util';
 /** Read-only advisory preview. It never resolves media bytes or invokes send hooks. */
 export function useContextPreview(options: {
     threadId: MaybeRefOrGetter<string | undefined>;
+    draftId?: MaybeRefOrGetter<string | undefined>;
     enabled?: MaybeRefOrGetter<boolean>;
     model: MaybeRefOrGetter<string>;
     text: MaybeRefOrGetter<string>;
@@ -23,6 +26,7 @@ export function useContextPreview(options: {
     const state = shallowRef<{ admission?: ContextAdmission; pending: boolean; unavailable?: string }>({ pending: false });
     const preferences = useAiSettings(); const models = useModelStore();
     const tools = useToolRegistry();
+    const chatTools = useChatToolPreferences({ threadId: () => toValue(options.threadId), draftId: () => toValue(options.draftId) });
     const workspaceRevision = shallowRef(getWorkspaceGeneration());
     let sequence = 0; let timer: ReturnType<typeof setTimeout> | undefined; let controller: AbortController | undefined;
     const memo = new Map<string, number>();
@@ -34,7 +38,7 @@ export function useContextPreview(options: {
     const stop = watch(() => [toValue(options.threadId), toValue(options.model), toValue(options.text),
         toValue(options.extraText), toValue(options.attachments)?.map((file) => [file.kind, file.hash, file.meta?.width, file.meta?.height]), toValue(options.promptSelection),
         toValue(options.revision), toValue(options.reasoning), tools.listTools.value.map((tool) => [tool.definition, tool.enabled.value]),
-        preferences.settings.value, workspaceRevision.value, toValue(options.enabled)], () => {
+        preferences.settings.value, chatTools.preferences.value, workspaceRevision.value, toValue(options.enabled)], () => {
         if (import.meta.server) return;
         const token = ++sequence; controller?.abort(); if (timer) clearTimeout(timer);
         if (toValue(options.enabled) === false) {
@@ -113,7 +117,7 @@ export function useContextPreview(options: {
             const catalogModel = models.catalog.value.find((row) => row.id === readiness.modelId)
                 ?? models.favoriteModels.value.find((row) => row.id === readiness.modelId);
             const enabled = !catalogModel?.supported_parameters || catalogModel.supported_parameters.includes('tools')
-                ? tools.getEnabledDefinitions({ workspaceId: getActiveWorkspaceId(), threadId: threadId ?? null }) : [];
+                ? tools.getEnabledDefinitions({ workspaceId: getActiveWorkspaceId(), threadId: threadId ?? null }, await readChatToolPreferences(db, threadId, toValue(options.draftId))) : [];
             const definitions = isBackgroundStreamingEnabled() ? enabled : enabled.filter((tool) => tool.runtime !== 'server');
             const body = buildOpenRouterRequestBody({ model, orMessages: messages as Parameters<typeof buildOpenRouterRequestBody>[0]['orMessages'],
                 modalities: ['text'], tools: definitions.length ? definitions : undefined, reasoning: toValue(options.reasoning) });

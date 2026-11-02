@@ -159,7 +159,7 @@ export interface ToolExecutionAdmission {
     /** Async pre-handler revalidation, outside storage transactions. Never forwarded into local authorization guards. */
     beforeExecute?: () => Promise<void>;
     /**
-     * When true, skip the chat-global enablement check.
+     * When true, skip chat/global enablement checks.
      * Used by Document AI, which gates tools via its own `enabledTools` map.
      */
     ignoreGlobalEnabled?: boolean;

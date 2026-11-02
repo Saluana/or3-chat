@@ -129,7 +129,7 @@ export async function updateWorkspaceProject(args: Record<string, unknown>, cont
     scope.assertCurrent('write');
     let saved = prepared.row;
     let moved: Awaited<ReturnType<typeof moveChatProjectRows>> | undefined;
-    await scope.db.transaction('rw', getWriteTxTableNames(scope.db, 'projects', { include: ['posts', 'threads', 'file_meta', 'messages'], includeTombstones: true }), async () => {
+    await scope.db.transaction('rw', getWriteTxTableNames(scope.db, 'projects', { include: ['posts', 'threads', 'file_meta', 'messages', 'kv'], includeTombstones: true }), async () => {
         scope.assertCurrent('write');
         await context.assertToolAuthorized?.();
         const current = await scope.db.projects.get(proposed.id);

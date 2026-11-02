@@ -77,6 +77,8 @@ beforeEach(async () => {
     external.toolCall = false; external.background = false; external.role = 'owner';
     await useModelStore().invalidate();
     await useAiSettings().ensureLoaded();
+    // This suite exercises admitted tool behavior; the default-off UI is covered by the browser journey.
+    await useAiSettings().set({ defaultToolsEnabled: true });
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
             if (_url === '/api/openrouter/models') return scriptedCloudCatalog();
             if (_url === '/api/openrouter/title') return Response.json({ title: 'Scripted Conversation Title' });
@@ -534,7 +536,10 @@ describe('native context admission at the actual durable boundary', () => {
                     { ...defaultProjectSettings(), tools: { [name]: { mode: 'disabled', resources: [] } } }, null);
             }
             if (change === 'registration') registry.unregisterTool(name);
-            if (change === 'enabled' || change === 'legacy-enabled') tool.enabled.value = false;
+            if (change === 'enabled' || change === 'legacy-enabled') {
+                const { setKvByName } = await import('~/db/kv');
+                await setKvByName('chat-tools:' + thread.id, JSON.stringify({ enabled: false, tools: {} }), db);
+            }
             return value;
         });
         try {

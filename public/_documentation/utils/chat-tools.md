@@ -8,7 +8,23 @@ private `~/utils/**` modules.
 The tools are client-side. Their handlers capture the originating workspace
 and thread, then reject calls if that context no longer matches the active
 workspace. A workspace switch cannot redirect an in-flight search or write to
-the newly focused database. Saved Chat settings can disable any tool.
+the newly focused database.
+
+## Enable tools for a chat
+
+Tools start **off**. Open the chat input's **Settings** and turn on the switch
+beside **Tools** to enable all available tools. Select the **Tools** row to choose
+categories and individual tools. Turning the main switch off suspends tools
+without changing that selection; turning it back on restores the same setup.
+Each chat remembers its switch and selection after reopening or reloading.
+
+In **Dashboard → AI → Chat tools**, use **Enable all tools by default** to choose
+whether chats start with all tools on or off. This workspace preference applies
+until a chat saves its own choice. Sending a message captures that chat's current
+preference; later changes to the dashboard default leave saved choices intact.
+Unsent drafts keep their tool choices and pass them to the chat when sent.
+Tools still require a compatible model and the applicable project permissions.
+Document AI has its own tool settings.
 
 ## Conversation tools
 

@@ -241,6 +241,7 @@ import { useThreadCompaction } from '~/composables/chat/useThreadCompaction';
 import { provideChatProjectOwner } from '~/composables/projects/useChatProjectOwner';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
 import { useModelStore } from '~/composables/chat/useModelStore';
+import { useChatToolPreferences } from '~/composables/chat/useChatToolPreferences';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { appendModelVariant, stripModelVariantSuffix } from '~~/shared/openrouter/model-variants';
 import { resolveSystemPromptText } from '~/utils/chat/useAi-internal/messageBuild';
@@ -432,7 +433,7 @@ const chat = shallowRef<ChatInstance>(
         props.messageHistory,
         props.threadId,
         pendingPromptId.value || undefined,
-        { historyAlreadyLoaded: true }
+        { historyAlreadyLoaded: true, toolDraftId: () => promptOwnerId.value }
     ) as ChatInstance
 );
 // The child runner owns its foreground stream independently of any pane.
@@ -763,13 +764,14 @@ function messageKey(message: UiChatMessage) {
 const compactionPreferences = useAiSettings();
 const compactionModels = useModelStore();
 const historyRegistry = useToolRegistry();
+const chatTools = useChatToolPreferences({ threadId: () => currentThreadId.value, draftId: () => promptOwnerId.value });
 const historyRetrievalAvailable = computed(() => {
     const id = stripModelVariantSuffix(model.value.replace(/:thinking$/, ''));
     const metadata = compactionModels.catalog.value.find((row) => row.id === id || row.canonical_slug === id)
         ?? compactionModels.favoriteModels.value.find((row) => row.id === id || row.canonical_slug === id);
     return metadata?.supported_parameters?.includes('tools') === true && historyRegistry.getEnabledDefinitions({
         workspaceId: getActiveWorkspaceId() ?? 'local', threadId: currentThreadId.value ?? null,
-    }).some((tool) => tool.function.name === 'get_message');
+    }, chatTools.preferences.value).some((tool) => tool.function.name === 'get_message');
 });
 const compaction = useThreadCompaction({ threadId: currentThreadId, model,
     isBusy: () => inputLoading.value || workflowRunning.value,

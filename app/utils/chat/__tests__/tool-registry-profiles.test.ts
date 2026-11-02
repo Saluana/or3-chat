@@ -11,6 +11,10 @@ import type { ToolDefinition } from '../types';
 import { useToolRegistry } from '../tool-registry';
 import Dexie from 'dexie';
 import { getDb, setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
+import { setHookEngine } from '~/core/hooks/useHooks';
+import { createHookEngine } from '~/core/hooks/hooks';
+import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
+import { setKvByName } from '~/db/kv';
 import { testRuntimeConfig } from '~~/tests/setup';
 
 function definition(name: string, runtime?: ToolDefinition['runtime']): ToolDefinition {
@@ -30,6 +34,7 @@ describe('V1 client tool registry profile', () => {
     let originalSsrAuth: boolean;
 
     beforeEach(async () => {
+        setHookEngine(createTypedHookEngine(createHookEngine()));
         originalSsrAuth = testRuntimeConfig.value.public.ssrAuthEnabled;
         testRuntimeConfig.value.public.ssrAuthEnabled = false;
         await setActiveWorkspaceDb('workspace-a').open();
@@ -61,11 +66,12 @@ describe('V1 client tool registry profile', () => {
         expect(registry.getEnabledDefinitions({ workspaceId: 'workspace-a', threadId: 'thread-a' })).toHaveLength(1);
         const rejected = await registry.executeTool('origin_scoped', '{}');
         expect(rejected.error).toContain('unavailable'); expect(handler).not.toHaveBeenCalled();
+        await setKvByName('chat-tools:thread-a', JSON.stringify({ enabled: true, tools: {} }));
         const result = await registry.executeTool('origin_scoped', '{}', {
             subject: null, workspaceId: 'workspace-a', threadId: 'thread-a', messageId: 'message', callId: 'call', requestId: 'request', abortSignal: new AbortController().signal,
         });
         expect(result.result).toBe('{"ok":true}'); expect(handler).toHaveBeenCalledOnce();
-        registry.setEnabled('origin_scoped', false);
+        await setKvByName('chat-tools:thread-a', JSON.stringify({ enabled: false, tools: {} }));
         const disabled = await registry.executeTool('origin_scoped', '{}', {
             subject: null, workspaceId: 'workspace-a', threadId: 'thread-a', messageId: 'message', callId: 'disabled-call', requestId: 'request', abortSignal: new AbortController().signal,
         });

@@ -78,8 +78,11 @@ entries and component directories. These are maintained implementation examples,
 not additional framework APIs. The source aliases in the snippet are for source
 plugins only; packaged plugins use the SDK and contribution APIs below.
 
-`icon`, `category` and `defaultEnabled` configure the tool picker;
-`defaultEnabled` defaults to `false`, and an absent category appears under Other.
+`icon` and `category` configure the tool picker; an absent category appears under
+Other. `defaultEnabled` sets the registry's global preference and defaults to
+`false`. Chat has its own master switch (off by default) and saved tool selection;
+turning it on initially selects all available tools. The dashboard can change
+that starting default. Document AI keeps its separate tool selection.
 For display-only tools, a handler can return a note telling the model that the
 card already shows the content and it should wait for user input.
 

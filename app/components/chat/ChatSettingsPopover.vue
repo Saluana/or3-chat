@@ -28,9 +28,9 @@
                 </h2>
                 <p v-if="toolsView" class="chat-settings-subtitle">
                     {{
-                        activeGroup
-                            ? `${activeGroup.tools.length} tools`
-                            : 'Choose a tool category.'
+                        !toolPreferences.preferences.value.enabled
+                            ? 'Tools are off. Your selection is remembered.'
+                            : activeGroup ? `${activeGroup.tools.length} tools` : 'Choose a tool category.'
                     }}
                 </p>
             </div>
@@ -45,6 +45,7 @@
             </UButton>
         </header>
 
+        <p v-if="toolPreferences.error.value" role="alert" class="px-4 py-2 text-sm text-error">{{ toolPreferences.error.value }}</p>
         <div
             v-show="!toolsView"
             class="chat-settings-body"
@@ -233,12 +234,23 @@
                         </template>
                     </USelectMenu>
                 </div>
-                <button v-if="registeredTools.length" ref="toolsButton" type="button" class="chat-settings-row-trigger chat-settings-row-item" @click="openTools">
-                    <span class="chat-settings-icon" aria-hidden="true"><UIcon :name="iconToolWrench" class="size-4" /></span>
-                    <span class="chat-settings-row-title">Tools</span>
-                    <span class="chat-settings-option-value">{{ registeredTools.length }}</span>
-                    <UIcon :name="iconChevronRight" class="size-4 shrink-0" aria-hidden="true" />
-                </button>
+                <div v-if="registeredTools.length" class="chat-settings-row-item chat-settings-tools-row">
+                    <button ref="toolsButton" type="button" class="chat-settings-row-trigger" @click="openTools">
+                        <span class="chat-settings-icon" aria-hidden="true"><UIcon :name="iconToolWrench" class="size-4" /></span>
+                        <span class="chat-settings-row-title">Tools</span>
+                        <span class="chat-settings-tool-value" aria-hidden="true" />
+                        <UIcon :name="iconChevronRight" class="chat-settings-option-chevron size-4 shrink-0" aria-hidden="true" />
+                    </button>
+                    <USwitch
+                        class="chat-settings-control chat-settings-tools-toggle"
+                        color="primary"
+                        size="sm"
+                        aria-label="Enable tools for this chat"
+                        :model-value="toolPreferences.preferences.value.enabled"
+                        :disabled="toolControlsDisabled"
+                        @update:model-value="toolPreferences.setEnabled"
+                    />
+                </div>
             </div>
 
             <p class="chat-settings-heading" aria-hidden="true">More</p>
@@ -341,7 +353,7 @@
                         id="chat-tools-enabled-count"
                         class="chat-settings-row-description"
                     >
-                        {{ enabledGroupToolCount }} of {{ activeGroup.tools.length }} enabled
+                        {{ enabledGroupToolCount }} of {{ activeGroup.tools.length }} selected
                     </span>
                 </div>
                 <USwitch
@@ -351,7 +363,7 @@
                     size="sm"
                     :model-value="allGroupToolsEnabled"
                     aria-describedby="chat-tools-enabled-count"
-                    :disabled="loading || streaming"
+                    :disabled="toolControlsDisabled"
                     @update:model-value="setGroupToolsEnabled"
                 />
             </div>
@@ -419,15 +431,8 @@
                                 ? `tool-desc-${tool.name}`
                                 : undefined
                         "
-                        :disabled="loading || streaming"
-                        @update:model-value="
-                            (val: boolean) => {
-                                toolRegistry.setEnabled(
-                                    tool.name,
-                                    val
-                                );
-                            }
-                        "
+                        :disabled="toolControlsDisabled"
+                        @update:model-value="(val: boolean) => toolPreferences.setTools({ [tool.name]: val })"
                     />
                 </div>
             </div>
@@ -440,6 +445,7 @@ import ChatMemorySettings from './ChatMemorySettings.vue';
 import { computed, nextTick, ref, watch } from 'vue';
 import { useIcon } from '~/composables/useIcon';
 import { useToolRegistry } from '~/utils/chat/tools-public';
+import { useChatToolPreferences } from '~/composables/chat/useChatToolPreferences';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import type { OpenRouterModelVariant } from '~~/shared/openrouter/model-variants';
 import { MODEL_VARIANT_OPTIONS } from '~~/shared/openrouter/model-variants';
@@ -499,10 +505,12 @@ const emit = defineEmits<{
 
 // Tool Registry
 const toolRegistry = useToolRegistry();
+const toolPreferences = useChatToolPreferences({ threadId: () => props.threadId, draftId: () => props.paneId });
+const toolControlsDisabled = computed(() => props.loading || props.streaming || !toolPreferences.ready.value || toolPreferences.saving.value);
 const registeredTools = computed(() =>
     toolRegistry.listTools.value.map((tool) => ({
         definition: tool.definition,
-        enabledValue: tool.enabled.value,
+        enabledValue: toolPreferences.preferences.value.tools[tool.definition.function.name] !== false,
         name: tool.definition.function.name,
     }))
 );
@@ -546,12 +554,8 @@ const allGroupToolsEnabled = computed(
 );
 
 function setGroupToolsEnabled(enabled: boolean) {
-    if (props.loading || props.streaming) return;
-    for (const tool of activeGroup.value?.tools ?? []) {
-        if (tool.enabledValue !== enabled) {
-            toolRegistry.setEnabled(tool.name, enabled);
-        }
-    }
+    if (toolControlsDisabled.value) return;
+    void toolPreferences.setTools(Object.fromEntries((activeGroup.value?.tools ?? []).map((tool) => [tool.name, enabled])));
 }
 
 const backButton = ref<HTMLButtonElement | null>(null);
@@ -1211,6 +1215,41 @@ const modelCatalogButtonProps = computed(() => {
 
 .chat-settings-control {
     flex: none;
+}
+
+.chat-settings-tools-row {
+    position: relative;
+}
+
+/* Reserve the value column while keeping the switch beside the row button. */
+.chat-settings-tool-value {
+    width: 2rem;
+}
+
+:deep(.chat-settings-tools-toggle) {
+    position: absolute;
+    inset-inline-end: 2.5rem; /* 12px padding + 16px chevron + 12px gap. */
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+:deep(.chat-settings-tools-toggle [data-slot='base']) {
+    position: relative;
+}
+
+/* Extend the hit area to at least 44px without enlarging the visible track. */
+:deep(.chat-settings-tools-toggle [data-slot='base'])::after {
+    content: '';
+    position: absolute;
+    inset: 50% auto auto 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+}
+
+:deep(.chat-settings-tools-toggle [data-slot='base'][data-state='unchecked']) {
+    background: color-mix(in srgb, var(--md-on-surface) 28%, var(--md-surface));
+    border-color: color-mix(in srgb, var(--md-on-surface) 50%, var(--md-surface));
 }
 
 .chat-settings-section-heading {

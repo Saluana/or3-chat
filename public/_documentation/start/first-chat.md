@@ -18,6 +18,11 @@ The input clears once your message is saved, without waiting for the model to re
 
 Choose the system prompt for this chat in **Settings**. For an unsent chat, the selection is saved with its draft and restored after reload when browser storage is available. While sending, the send control shows progress, then becomes **Stop generation** while the response streams.
 
+Tools start off. Turn on the switch beside **Settings → Tools** to enable them,
+and select the **Tools** row to choose individual tools. The switch remembers
+your selection when you turn it off and back on. Each chat keeps its own setup.
+Change the starting default in **Dashboard → AI → Chat tools**.
+
 Choose a model with the capabilities your request needs. For an image or file, use the attachment control and select a compatible model. A text-only model cannot be assumed to understand an image. If an attachment cannot be prepared, remove it or reattach the original file and try again.
 
 ## 3. Check that your work is saved

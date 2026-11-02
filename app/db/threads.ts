@@ -117,7 +117,7 @@ export async function createThreadInDb(
         tableName: 'threads',
     });
     const tables = context.assertAuthorized
-        ? ['threads', 'projects', 'posts', 'file_meta'] as const
+        ? ['threads', 'projects', 'posts', 'file_meta', 'kv'] as const
         : value.project_id ? ['threads', 'projects'] as const : ['threads'] as const;
     await db.transaction('rw', getWriteTxTableNames(db, [...tables]), async () => {
         context.assertCurrent?.();

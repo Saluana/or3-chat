@@ -922,7 +922,7 @@ const previewReasoning = computed(() => {
         ?? previewModels.favoriteModels.value.find((row) => row.id === id || row.canonical_slug === id);
     return thinkingEnabled.value && modelSupportsThinking.value ? resolveReasoningConfig({ model: metadata, enabled: true, effort: reasoningEffort.value }) : undefined;
 });
-const contextPreview = useContextPreview({ threadId: () => props.threadId, model: previewModel,
+const contextPreview = useContextPreview({ threadId: () => props.threadId, draftId: promptOwnerId, model: previewModel,
     enabled: () => Boolean(props.threadId || connected.value || apiKey.value || hasInstanceKey.value || settingsPopoverOpen.value || showModelCatalog.value),
     text: promptText, extraText: () => largeTextBlocks.value.map((block) => block.text).join('\n\n'),
     attachments: () => attachments.value, promptSelection: stagedPromptId,

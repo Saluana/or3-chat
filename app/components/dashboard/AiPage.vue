@@ -212,6 +212,25 @@
             </div>
         </section>
 
+        <section class="section-card space-y-3" role="group" aria-labelledby="ai-section-tools">
+            <div class="flex items-center justify-between gap-4">
+                <div>
+                    <h2 id="ai-section-tools" class="dashboard-section-title">Chat tools</h2>
+                    <p id="ai-tools-help" class="supporting-text mt-1">
+                        Start chats with all tools on or off. Saved chat selections stay unchanged.
+                    </p>
+                </div>
+                <USwitch
+                    aria-label="Enable all tools by default"
+                    aria-describedby="ai-tools-help"
+                    :model-value="settings.defaultToolsEnabled"
+                    :disabled="toolsStatus === 'saving'"
+                    @update:model-value="saveToolDefault"
+                />
+            </div>
+            <AiSaveStatus id="ai-tools-status" :status="toolsStatus" />
+        </section>
+
         <TitleModelSetting />
 
         <!-- Native generations capture this workspace preference at admission. -->
@@ -421,6 +440,7 @@ async function commitMasterPrompt() {
 }
 
 const stopWorkspace = subscribeActiveWorkspaceDb(() => {
+    toolsStatus.value = 'idle';
     contextAutosave.discard();
     promptAutosave.discard();
     resetError.value = '';
@@ -450,6 +470,16 @@ const searchQuery = computed({
 });
 const modelsBusy = computed(() => modelSearch.busy.value);
 const limitedResults = computed(() => modelSearch.results.value.slice(0, 100));
+const toolsStatus = ref<SaveStatus>('idle');
+async function saveToolDefault(enabled: boolean) {
+    const generation = getWorkspaceGeneration();
+    toolsStatus.value = 'saving';
+    const failed = await set({ defaultToolsEnabled: enabled }).then(() => false, () => true);
+    if (generation === getWorkspaceGeneration()) {
+        toolsStatus.value = failed ? 'error' : 'saved';
+        if (!failed) announce('Default chat tools saved');
+    }
+}
 const modelStatus = ref<SaveStatus>('idle');
 let modelSaves = 0;
 async function saveModelDefaults(patch: Parameters<typeof set>[0]) {
@@ -491,6 +521,7 @@ async function onReset() {
     promptAutosave.discard();
     modelSaves++;
     modelStatus.value = 'idle';
+    toolsStatus.value = 'idle';
     resetting.value = true;
     contextError.value = '';
     resetError.value = '';

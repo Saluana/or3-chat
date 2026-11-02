@@ -8,7 +8,6 @@ import type { RegisteredTool } from '~/utils/chat/tool-registry';
 
 const mockTools = vi.hoisted(() => ({
     tools: [] as RegisteredTool[],
-    setEnabled: vi.fn(),
 }));
 const mockPrompts = vi.hoisted(() => ({
     items: [] as Array<{ id: string; title: string; favorite: boolean }>,
@@ -49,7 +48,15 @@ vi.mock('~/composables/useThemeResolver', () => ({
 vi.mock('~/utils/chat/tools-public', () => ({
     useToolRegistry: () => ({
         listTools: shallowRef(mockTools.tools),
-        setEnabled: mockTools.setEnabled,
+    }),
+}));
+
+// Tool preference behavior is exercised by the real browser/persistence journey.
+// These component tests own navigation and model/prompt controls only.
+vi.mock('~/composables/chat/useChatToolPreferences', () => ({
+    useChatToolPreferences: () => ({
+        preferences: ref({ enabled: false, tools: {} }), ready: ref(true), saving: ref(false), error: ref(''),
+        setEnabled: vi.fn(), setTools: vi.fn(),
     }),
 }));
 
@@ -117,12 +124,6 @@ describe('ChatSettingsPopover options layout', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockTools.tools.splice(0);
-        mockTools.setEnabled.mockImplementation((name: string, enabled: boolean) => {
-            const tool = mockTools.tools.find(
-                (tool) => tool.definition.function.name === name
-            );
-            if (tool) tool.enabled.value = enabled;
-        });
         mockPrompts.items = [];
         mockPrompts.threadSelection = null;
         mockPrompts.paneSelection = null;
@@ -169,64 +170,6 @@ describe('ChatSettingsPopover options layout', () => {
         await wrapper.find('[aria-label="Back to chat settings"]').trigger('click');
         expect(wrapper.find('.chat-settings-title').text()).toBe('Chat settings');
         expect(wrapper.findAll('.chat-settings-tool-row')).toHaveLength(0);
-    });
-
-    it('toggles only the active category and reflects partial selection', async () => {
-        for (const name of ['search', 'create', 'delete']) {
-            mockTools.tools.push({
-                definition: {
-                    type: 'function',
-                    function: {
-                        name,
-                        description: name,
-                        parameters: { type: 'object' },
-                    },
-                    ui: { category: 'OR3 Tasks', label: name },
-                },
-                enabled: ref(false),
-            } as RegisteredTool);
-        }
-        mockTools.tools.push({
-            definition: {
-                type: 'function',
-                function: {
-                    name: 'other',
-                    description: 'Other tool',
-                    parameters: { type: 'object' },
-                },
-                ui: { category: 'Other' },
-            },
-            enabled: ref(false),
-        } as RegisteredTool);
-
-        const wrapper = mountPopover();
-        await wrapper.findAll('button').find(button => button.text().startsWith('Tools'))!.trigger('click');
-        await wrapper.find('.chat-settings-tool-category').trigger('click');
-        const allSwitch = wrapper.find('#chat-tools-all');
-        expect(allSwitch.attributes('aria-checked')).toBe('false');
-        expect(wrapper.find('#chat-tools-enabled-count').text()).toBe('0 of 3 enabled');
-
-        await allSwitch.trigger('click');
-        expect(mockTools.setEnabled.mock.calls).toEqual([
-            ['search', true], ['create', true], ['delete', true],
-        ]);
-        expect(allSwitch.attributes('aria-checked')).toBe('true');
-        expect(wrapper.find('#chat-tools-enabled-count').text()).toBe('3 of 3 enabled');
-
-        await wrapper.find('#chat-tool-search').trigger('click');
-        expect(allSwitch.attributes('aria-checked')).toBe('false');
-        expect(wrapper.find('#chat-tools-enabled-count').text()).toBe('2 of 3 enabled');
-
-        mockTools.setEnabled.mockClear();
-        await allSwitch.trigger('click');
-        expect(mockTools.setEnabled.mock.calls).toEqual([['search', true]]);
-
-        mockTools.setEnabled.mockClear();
-        await allSwitch.trigger('click');
-        expect(mockTools.setEnabled.mock.calls).toEqual([
-            ['search', false], ['create', false], ['delete', false],
-        ]);
-        expect(allSwitch.attributes('aria-checked')).toBe('false');
     });
 
     it('renders Options/More headings with dropdown rows', () => {

@@ -113,6 +113,8 @@ import {
     stripModelVariantSuffix,
 } from '~~/shared/openrouter/model-variants';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
+import { chatToolPreferenceKey, readChatToolPreferences } from '~/utils/chat/tool-preferences';
+import { getKvRecordByName, setKvByName } from '~/db/kv';
 import { placeHistoryTools } from '~/utils/chat/history-placement';
 import { inferMimeFromUrl } from '~/utils/chat/files';
 import { acceptsImageInput, unsupportedImageInputMessage } from '~/utils/modelCatalog';
@@ -245,7 +247,7 @@ export function useChat(
     msgs: ChatMessage[] = [],
     initialThreadId?: string,
     pendingPromptId?: string,
-    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[] } = {}
+    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[]; toolDraftId?: () => string | undefined } = {}
 ) {
     // Messages and basic state
     const messages = ref<UiChatMessage[]>(associateUiToolResultMessages(msgs
@@ -1975,6 +1977,7 @@ export function useChat(
             editorDoc: sendMessagesParams.editorDoc ? structuredClone(sendMessagesParams.editorDoc) : undefined,
         };
         const workspaceGeneration = getWorkspaceGeneration();
+        const toolDraftId = options.toolDraftId?.();
         const preparationHookNames = delegationPreparationFilters;
         const ownsFilterChain = hooks.captureFilterChain(preparationHookNames);
         let hadPreparationAction = typeof hooks.hasAction === 'function' && Boolean(hooks.hasAction('ai.chat.send:action:before'));
@@ -2367,8 +2370,9 @@ export function useChat(
         const { projectToolEnabled } = await import('~/utils/projects/context');
         const filterProjectTools = (tools: import('~/utils/chat/types').ToolDefinition[]) => requestScope.projectContext
             ? tools.filter(tool => projectToolEnabled(requestScope.projectContext!.settings, tool.function.name)) : tools;
+        const chatToolPreferences = await readChatToolPreferences(requestScope.originDb, preparationThreadId, toolDraftId);
         const advertisedToolDefs = JSON.parse(JSON.stringify(filterProjectTools(modelSupportsTools ? toolRegistry.getEnabledDefinitions({
-            workspaceId: requestScope.workspaceId, threadId: admissionThreadId }).filter(tool => !options.excludedTools?.includes(tool.function.name)) : []))) as import('~/utils/chat/types').ToolDefinition[];
+            workspaceId: requestScope.workspaceId, threadId: admissionThreadId }, chatToolPreferences).filter(tool => !options.excludedTools?.includes(tool.function.name)) : []))) as import('~/utils/chat/types').ToolDefinition[];
         let enabledToolDefs = await placeHistoryTools(advertisedToolDefs, { background: !options.forceForeground && backgroundStreamingAllowed.value,
             threadId: preparationThreadId, signal: preparationSignal });
         const hasBrowserTools = enabledToolDefs.some((tool) => tool.runtime === 'client');
@@ -2409,14 +2413,24 @@ export function useChat(
             return { status: 'rejected', requestId, reason: 'unavailable', error: 'This chat changed projects during preparation. Retry the request.' };
         if (sourceFingerprint && requestHistoryFingerprint(await resolveThreadProjection(preparationThreadId!, requestScope.originDb)) !== sourceFingerprint)
             return { status: 'rejected', requestId, reason: 'unavailable', error: 'Conversation changed during preparation. Retry the request.' };
+        const currentToolPreferences = await readChatToolPreferences(requestScope.originDb, preparationThreadId, toolDraftId);
         if (!ownsPreparation()) return { status: 'aborted', requestId, reason: 'aborted' };
-        if (!ownsFilterChain() || useAiSettings().settings.value.masterSystemPrompt !== masterPrompt
+        if (JSON.stringify(currentToolPreferences) !== JSON.stringify(chatToolPreferences)
+            || !ownsFilterChain() || useAiSettings().settings.value.masterSystemPrompt !== masterPrompt
             || (!preparationThreadId && (pendingPromptIdRef.value || DEFAULT_PROMPT_SELECTION) !== newPromptSelection)
             || JSON.stringify(filterProjectTools(modelSupportsTools ? toolRegistry.getEnabledDefinitions({ workspaceId: requestScope.workspaceId,
-                threadId: admissionThreadId }).filter(tool => !options.excludedTools?.includes(tool.function.name)) : [])) !== JSON.stringify(advertisedToolDefs))
+                threadId: admissionThreadId }, currentToolPreferences).filter(tool => !options.excludedTools?.includes(tool.function.name)) : [])) !== JSON.stringify(advertisedToolDefs))
             return { status: 'rejected', requestId, reason: 'unavailable', error: 'Request configuration changed during preparation. Retry the request.' };
+        if (!preparationThreadId && options.toolDraftId?.() !== toolDraftId)
+            return { status: 'rejected', requestId, reason: 'unavailable', error: 'The active draft changed. Retry the request.' };
         if (lossyPreview) return { status: 'rejected', requestId, reason: 'context_full', lossyPreview,
             error: 'Review the listed omissions before sending this one request.' };
+        const toolPreferenceKey = chatToolPreferenceKey(admissionThreadId);
+        const { row: savedTools } = await getKvRecordByName(toolPreferenceKey, requestScope.originDb);
+        if (!savedTools?.value) await setKvByName(toolPreferenceKey, JSON.stringify(chatToolPreferences), requestScope.originDb, {
+            isValid: () => getDb() === requestScope.originDb && getWorkspaceGeneration() === workspaceGeneration && !isRequestCancelled(requestScope),
+            ifClock: savedTools?.clock ?? null,
+        });
         if (!requestScope.threadId) {
             const newThread = await createThreadInDb(
                 requestScope.originDb,
@@ -2436,6 +2450,13 @@ export function useChat(
             if (isRequestCancelled(requestScope)) {
                 return { status: 'aborted', requestId, reason: 'aborted' };
             }
+            // A later new draft in this tab inherits the dashboard default.
+            const draftKey = chatToolPreferenceKey(undefined, toolDraftId);
+            const { row: draftTools } = await getKvRecordByName(draftKey, requestScope.originDb);
+            if (draftTools?.value) await setKvByName(draftKey, null, requestScope.originDb, {
+                isValid: () => getDb() === requestScope.originDb && getWorkspaceGeneration() === workspaceGeneration,
+                ifClock: draftTools.clock,
+            });
             requestScope.threadId = newThread.id;
             threadIdRef.value = newThread.id;
             // Bind thread to active pane immediately (before first user message hook) if multi-pane present.
@@ -3020,7 +3041,7 @@ export function useChat(
         const filterProjectTools = (tools: import('~/utils/chat/types').ToolDefinition[]) => requestScope.projectContext
             ? tools.filter(tool => projectToolEnabled(requestScope.projectContext!.settings, tool.function.name)) : tools;
         const advertisedToolDefs = metadata?.supported_parameters && !metadata.supported_parameters.includes('tools') ? []
-            : filterProjectTools(useToolRegistry().getEnabledDefinitions({ workspaceId: requestScope.workspaceId, threadId: checkpoint.thread_id })
+            : filterProjectTools(useToolRegistry().getEnabledDefinitions({ workspaceId: requestScope.workspaceId, threadId: checkpoint.thread_id }, await readChatToolPreferences(db, checkpoint.thread_id))
                 .filter(tool => !options.excludedTools?.includes(tool.function.name)));
         if (advertisedToolDefs.length !== checkpoint.tools.length || advertisedToolDefs.some((tool, index) => !toolDefinitionEquals(tool, checkpoint.tools[index]!)))
             return unavailable('The saved attempt’s tools changed or this model cannot use them. Restore its tools or edit the draft for a new request.');
@@ -3052,7 +3073,8 @@ export function useChat(
         }
         if (!owns()) return { status: 'aborted', requestId, reason: 'aborted' };
         if (JSON.stringify(advertisedToolDefs) !== JSON.stringify(metadata?.supported_parameters && !metadata.supported_parameters.includes('tools') ? []
-            : filterProjectTools(useToolRegistry().getEnabledDefinitions({ workspaceId: requestScope.workspaceId, threadId: checkpoint.thread_id }))))
+            : filterProjectTools(useToolRegistry().getEnabledDefinitions({ workspaceId: requestScope.workspaceId, threadId: checkpoint.thread_id }, await readChatToolPreferences(db, checkpoint.thread_id))
+                .filter(tool => !options.excludedTools?.includes(tool.function.name)))))
             return unavailable('Tool selection changed during recovery. Retry the saved attempt again.');
         const newStreamId = newId();
         const reset = await db.transaction('rw', [...new Set([...getWriteTxTableNames(db, 'messages', { includeTombstones: true }), 'threads', 'projects', 'posts', 'chat_request_recoveries'])], async () => {

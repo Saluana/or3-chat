@@ -238,6 +238,7 @@ async function sendMessageToThread(
             'projects',
             'posts',
             'file_meta',
+            'kv',
         ]),
         async () => {
             scope.assertCurrent('write');

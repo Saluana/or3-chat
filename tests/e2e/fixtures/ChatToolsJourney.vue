@@ -3,6 +3,8 @@ import { nextTick, onMounted, onBeforeUnmount, ref } from 'vue';
 import { liveQuery, type Subscription } from 'dexie';
 import { useRoute } from '#imports';
 import ChatContainer from '~/components/chat/ChatContainer.vue';
+import AiPage from '~/components/dashboard/AiPage.vue';
+import { getKvRecordByName, setKvByName } from '~/db/kv';
 import { getDb, setActiveWorkspaceDb, type Or3DB } from '~/db/client';
 import { createThread } from '~/db/threads';
 import { ensureThreadHistoryLoaded } from '~/utils/chat/history';
@@ -14,6 +16,7 @@ import type { ToolCallInfo } from '~/utils/chat/uiMessages';
 import { parseToolResultArtifact, readToolResultStorage } from '~~/shared/chat/tool-result-artifact';
 
 const scenario = String(useRoute().query.scenario ?? 'normal');
+const showAiDefaults = ref(false);
 const ready = ref(false), threadId = ref(''), history = ref<ChatMessage[]>([]);
 const navigationPending = ref(false);
 const snapshot = ref('{}'), inspector = ref('{}'), selectedId = ref('');
@@ -23,6 +26,7 @@ let subscription: Subscription | undefined;
 let originDb: Or3DB, foreignDb: Or3DB | undefined;
 let originThread = '', otherThread = '';
 let releaseSlow = () => {};
+let failNextToolSave = false;
 const timings = new Map<string, { startedAt: number; endedAt?: number }>();
 const generationStates = new Map<string, string>();
 const ledgerKey = 'chat-tool-fixture-executions';
@@ -77,6 +81,16 @@ onMounted(async () => {
     setActiveWorkspaceDb(null);
     originDb = getDb();
     await originDb.open();
+    if (scenario === 'preferences') {
+        const failToolSave = (changes: unknown, _key: unknown, row: { name?: string }) => {
+            if (failNextToolSave && row.name?.startsWith('chat-tools:')) {
+                failNextToolSave = false;
+                throw new Error('Disposable tool preference write failure');
+            }
+        };
+        originDb.kv.hook('updating', failToolSave);
+        handles.push({ dispose: () => originDb.kv.hook('updating').unsubscribe(failToolSave) });
+    }
     const registry = useToolRegistry();
     for (const tool of registry.listTools.value) registry.setEnabled(tool.definition.function.name, false);
     for (const name of ['test_echo', 'test_fail', 'test_slow', 'test_large_result', 'test_write_once']) {
@@ -130,6 +144,11 @@ onMounted(async () => {
         originThread = (await createThread({ title: 'Tool reliability fixture' })).id;
         localStorage.setItem(key, originThread);
     }
+    if (scenario !== 'preferences' && !(await getKvRecordByName('chat-tools:' + originThread, originDb)).row?.value) {
+        await setKvByName('chat-tools:' + originThread, JSON.stringify({ enabled: true,
+            tools: Object.fromEntries(registry.listTools.value.map(tool => [tool.definition.function.name, tool.enabled.value])),
+        }), originDb);
+    }
     otherThread = (await createThread({ title: 'Other conversation' })).id;
     threadId.value = originThread;
     await ensureThreadHistoryLoaded(threadId, ref(null), history);
@@ -172,6 +191,11 @@ onBeforeUnmount(() => { subscription?.unsubscribe(); handles.forEach(handle => h
 <template>
     <main class="h-dvh flex flex-col min-w-0">
         <nav class="flex flex-wrap gap-2 p-2" :data-navigation-state="navigationPending ? 'pending' : 'ready'" :data-active-thread="threadId">
+            <template v-if="scenario === 'preferences'">
+                <UButton @click="showAiDefaults = !showAiDefaults">AI defaults</UButton>
+                <UButton @click="failNextToolSave = true">Fail next tool save</UButton>
+                <UButton @click="threadId = ''; history = []">New draft</UButton>
+            </template>
             <UButton @click="releaseSlow">Release slow tool</UButton>
             <UButton :disabled="!ready || navigationPending" @click="switchConversation">Switch conversation</UButton>
             <UButton :disabled="!ready || navigationPending" @click="switchWorkspace">Switch workspace</UButton>
@@ -185,7 +209,8 @@ onBeforeUnmount(() => { subscription?.unsubscribe(); handles.forEach(handle => h
                 <pre data-tool-inspector>{{ inspector }}</pre>
             </details>
         </nav>
-        <ChatContainer v-if="ready" :thread-id="threadId" :message-history="history" pane-id="chat-tools-journey" class="flex-1 min-h-0" />
+        <AiPage v-if="ready && showAiDefaults" class="overflow-auto" />
+        <ChatContainer v-else-if="ready" :thread-id="threadId || undefined" :message-history="history" pane-id="chat-tools-journey" class="flex-1 min-h-0" />
         <output data-fixture-snapshot hidden>{{ snapshot }}</output>
     </main>
 </template>

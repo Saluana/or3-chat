@@ -43,7 +43,7 @@ export async function createWorkspaceDocument(args: Record<string, unknown>, con
         args.project as { id: string; revision: string }, { kind: 'document', id, title: prepared.row.title }) : undefined;
     scope.assertCurrent('write');
     const documentRevision = association ? await workspaceRevision(prepared.row) : undefined;
-    const committed = await scope.db.transaction('rw', getWriteTxTableNames(scope.db, 'posts', { include: ['file_meta', 'projects', 'threads', 'messages'], includeTombstones: true }), async () => {
+    const committed = await scope.db.transaction('rw', getWriteTxTableNames(scope.db, 'posts', { include: ['file_meta', 'projects', 'threads', 'messages', 'kv'], includeTombstones: true }), async () => {
         scope.assertCurrent('write');
         await context.assertToolAuthorized?.();
         const existing = await scope.db.posts.get(id);

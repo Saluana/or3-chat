@@ -31,6 +31,7 @@ import { DEFAULT_TITLE_MODEL, TitleModelSchema } from '~~/shared/titles/title';
  * - `defaultModelMode`: "lastSelected" (use last chosen model) or "fixed" (always use fixedModelId)
  * - `fixedModelId`: Model ID to use when defaultModelMode is "fixed"
  * - `defaultModelVariant`: Default OpenRouter routing variant for new chats
+ * - `defaultToolsEnabled`: Start chats with all tools enabled (defaults to false)
  *
  * **Migration**
  * - On first load, checks localStorage for legacy key (`or3.ai.settings.v1`)
@@ -73,6 +74,7 @@ export interface AiSettingsV1 {
     defaultModelVariant: OpenRouterModelVariant;
     /** Null means the full advertised model capacity; values remain independent of model selection. */
     maxContextTokens: number | null;
+    defaultToolsEnabled: boolean;
     autoCompactContext: boolean;
     /** Estimated context usage that triggers automatic compaction, in 10% steps. */
     autoCompactThresholdPercent: number;
@@ -99,6 +101,7 @@ export const DEFAULT_AI_SETTINGS: AiSettingsV1 = {
     fixedModelId: null,
     defaultModelVariant: DEFAULT_MODEL_VARIANT,
     maxContextTokens: null,
+    defaultToolsEnabled: false,
     autoCompactContext: false,
     autoCompactThresholdPercent: 80,
 };
@@ -153,6 +156,7 @@ export function sanitizeAiSettings(
             ? inObj.maxContextTokens : null,
         autoCompactThresholdPercent: isAutoCompactThreshold(inObj.autoCompactThresholdPercent)
             ? inObj.autoCompactThresholdPercent : defaults.autoCompactThresholdPercent,
+        defaultToolsEnabled: typeof inObj.defaultToolsEnabled === 'boolean' ? inObj.defaultToolsEnabled : defaults.defaultToolsEnabled,
         autoCompactContext: typeof inObj.autoCompactContext === 'boolean' ? inObj.autoCompactContext : defaults.autoCompactContext,
         defaultModelVariant: sanitizeModelVariant(
             inObj.defaultModelVariant,

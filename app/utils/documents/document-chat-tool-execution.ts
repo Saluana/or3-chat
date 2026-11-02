@@ -45,7 +45,7 @@ async function saveChatDocument(input: CreateDocumentInput, context: ToolExecuti
     const scope = captureWorkspaceOperation(context);
     scope.assertCurrent('write');
     const prepared = await prepareDocumentCreate(input);
-    await scope.db.transaction('rw', getWriteTxTableNames(scope.db, ['posts', 'file_meta', 'projects', 'threads']), async () => {
+    await scope.db.transaction('rw', getWriteTxTableNames(scope.db, ['posts', 'file_meta', 'projects', 'threads', 'kv']), async () => {
         scope.assertCurrent('write');
         await context.assertToolAuthorized?.();
         if (sourceId) {
