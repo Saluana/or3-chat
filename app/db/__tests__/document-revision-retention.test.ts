@@ -39,4 +39,16 @@ describe('document revision retention', () => {
         ], now, 5_000_000);
         expect([...retained]).toEqual(['revision-000']);
     });
+
+    it('retains a previous UTC day checkpoint beyond the newest twenty', () => {
+        const now = Date.UTC(2026, 10, 3, 0, 0, 30) / 1000;
+        const recent = Array.from({ length: 20 }, (_, index) => manifest(index, now + 100 + index));
+        const daily = manifest(20, now - 60);
+        const olderSameDay = manifest(21, now - 120);
+        const retained = selectRevisionIdsForRetention([...recent, daily, olderSameDay], now, 10_000_000);
+        expect(retained.size).toBe(21);
+        expect(recent.every(item => retained.has(item.revisionId))).toBe(true);
+        expect(retained.has(daily.revisionId)).toBe(true);
+        expect(retained.has(olderSameDay.revisionId)).toBe(false);
+    });
 });

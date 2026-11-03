@@ -221,31 +221,35 @@ describe('chat document tools', () => {
         return { ref: JSON.parse(proposed.result!), context };
     }
     it('prunes chat Apply checkpoints while retaining the checkpoint required by a valid Undo', async () => {
-        const { ref } = await pendingChange();
-        const revisions = await import('~/db/document-revisions');
-        const changes = await import('~/utils/chat/workspace-document-change');
-        const seed = async (prefix: string, createdAt: number) => {
-            for (let index = 0; index < 24; index++) {
-                const prepared = await revisions.prepareDocumentRevision({ documentId: 'apply-doc', title: prefix + index, source: 'auto',
-                    content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: prefix + index }] }] } });
-                prepared.manifest.createdAt = createdAt + index;
-                prepared.rows.at(-1)!.content = JSON.stringify(prepared.manifest);
-                await getDb().posts.bulkPut(prepared.rows);
-            }
-        };
-        const now = Math.floor(Date.now() / 1000);
-        await seed('Old version ', now - 100);
-        const applied = await changes.applyWorkspaceDocumentChange(ref);
-        expect(await revisions.listCompleteDocumentRevisions('apply-doc')).toHaveLength(20);
-        if (applied.status !== 'applied') throw new Error('Apply did not complete');
-        await seed('Later automatic version ', now + 100);
-        await revisions.pruneDocumentRevisions('apply-doc');
-        const retained = await revisions.listCompleteDocumentRevisions('apply-doc');
-        expect(retained.some(item => item.manifest.revisionId === applied.beforeRevisionId)).toBe(true);
-        expect(retained.length).toBeLessThanOrEqual(21);
-        expect((await changes.undoWorkspaceDocumentChange(ref)).status).toBe('undone');
-        expect((await getDb().posts.get('apply-doc'))?.content).toContain('Original apply paragraph');
-        expect((await revisions.listCompleteDocumentRevisions('apply-doc')).length).toBeLessThanOrEqual(20);
+        // Exercise the recent-window/Undo bound independently of daily retention.
+        const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 10, 3, 12));
+        try {
+            const { ref } = await pendingChange();
+            const revisions = await import('~/db/document-revisions');
+            const changes = await import('~/utils/chat/workspace-document-change');
+            const seed = async (prefix: string, createdAt: number) => {
+                for (let index = 0; index < 24; index++) {
+                    const prepared = await revisions.prepareDocumentRevision({ documentId: 'apply-doc', title: prefix + index, source: 'auto',
+                        content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: prefix + index }] }] } });
+                    prepared.manifest.createdAt = createdAt + index;
+                    prepared.rows.at(-1)!.content = JSON.stringify(prepared.manifest);
+                    await getDb().posts.bulkPut(prepared.rows);
+                }
+            };
+            const now = Math.floor(Date.now() / 1000);
+            await seed('Old version ', now - 100);
+            const applied = await changes.applyWorkspaceDocumentChange(ref);
+            expect(await revisions.listCompleteDocumentRevisions('apply-doc')).toHaveLength(20);
+            if (applied.status !== 'applied') throw new Error('Apply did not complete');
+            await seed('Later automatic version ', now + 100);
+            await revisions.pruneDocumentRevisions('apply-doc');
+            const retained = await revisions.listCompleteDocumentRevisions('apply-doc');
+            expect(retained.some(item => item.manifest.revisionId === applied.beforeRevisionId)).toBe(true);
+            expect(retained.length).toBeLessThanOrEqual(21);
+            expect((await changes.undoWorkspaceDocumentChange(ref)).status).toBe('undone');
+            expect((await getDb().posts.get('apply-doc'))?.content).toContain('Original apply paragraph');
+            expect((await revisions.listCompleteDocumentRevisions('apply-doc')).length).toBeLessThanOrEqual(20);
+        } finally { clock.mockRestore(); }
     });
 
     it('commits checkpoint/content/action once across concurrent Apply and guards Undo after later edits', async () => {
