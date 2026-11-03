@@ -27,6 +27,11 @@ function packGrammar(grammar: Json): string {
     // Short numeric references go to the most frequently reused strings.
     const strings = [...counts].filter(([value, count]) => value.length > 4 && count > 1)
         .sort(([, left], [, right]) => right - left).map(([value]) => value);
+    // Group shared prefixes for gzip without lengthening any numeric reference.
+    for (let start = 0, end = 10; start < strings.length; start = end, end *= 10) {
+        const ordered = strings.slice(start, end).sort();
+        for (const [index, value] of ordered.entries()) strings[start + index] = value;
+    }
     const pool = new Map(strings.map((value, index) => [value, index]));
     const shapes: string[][] = [];
     const shapeIds = new Map<string, number>();
