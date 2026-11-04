@@ -1,53 +1,231 @@
 <template>
-    <div id="dashboard-ai-page-container" class="dashboard-page-frame text-sm">
+    <div id="dashboard-ai-page-container" class="dashboard-page-frame ai-settings text-sm">
         <p ref="liveStatus" class="sr-only" aria-live="polite"></p>
 
-        <p class="dashboard-page-description">
-            AI preferences save automatically. Chat model defaults can be
-            overridden in each chat.
-        </p>
+        <UButton
+            v-if="!subpage && view !== 'root'"
+            color="neutral"
+            variant="link"
+            class="self-start"
+            :icon="useIcon('ui.chevron.left').value"
+            @click="closeView"
+            >AI Settings</UButton
+        >
+
+        <template v-if="view === 'root'">
+            <section class="dashboard-list-group" aria-labelledby="ai-group-chat">
+                <h3 id="ai-group-chat" class="dashboard-list-heading">Chat</h3>
+                <div class="dashboard-list">
+                    <DashboardListRow
+                        id="dashboard-ai-model-row"
+                        icon-token="chat.model.catalog"
+                        label="Starting model"
+                        description="Default for new chats"
+                        :value="startingModelLabel"
+                        @click="openView('model')"
+                    />
+                    <DashboardListRow
+                        id="dashboard-ai-prompt-row"
+                        icon-token="chat.system_prompt"
+                        label="Master system prompt"
+                        description="Instructions for new chats"
+                        :value="local.masterPrompt.trim() ? 'Custom' : undefined"
+                        @click="openView('prompt')"
+                    />
+                </div>
+            </section>
+
+            <section class="dashboard-list-group" aria-labelledby="ai-group-preferences">
+                <h3 id="ai-group-preferences" class="dashboard-list-heading">Preferences</h3>
+                <div class="dashboard-list">
+                    <DashboardListRow
+                        id="dashboard-ai-variant-row"
+                        icon-token="chat.model.settings"
+                        label="Model variant"
+                        description="Default routing for new chats"
+                        :value="variantLabel"
+                        @click="openView('variant')"
+                    />
+                    <DashboardListRow
+                        static
+                        icon-token="chat.tool.wrench"
+                        label="Tools"
+                        description="Enabled by default in new chats"
+                    >
+                        <template #trailing>
+                            <USwitch
+                                aria-label="Enable all tools by default"
+                                :model-value="settings.defaultToolsEnabled"
+                                :disabled="toolsStatus === 'saving'"
+                                @update:model-value="saveToolDefault"
+                            />
+                        </template>
+                    </DashboardListRow>
+                </div>
+                <AiSaveStatus id="ai-tools-status" class="dashboard-list-footnote" :status="toolsStatus" />
+            </section>
+
+            <section class="dashboard-list-group" aria-labelledby="ai-group-advanced">
+                <h3 id="ai-group-advanced" class="dashboard-list-heading">Advanced</h3>
+                <div class="dashboard-list">
+                    <DashboardListRow
+                        id="dashboard-ai-title-row"
+                        icon-token="catalog.text"
+                        label="Title model"
+                        description="Names new chats and documents"
+                        @click="openView('title')"
+                    />
+                    <DashboardListRow
+                        id="dashboard-ai-context-row"
+                        icon-token="catalog.context"
+                        label="Context limit"
+                        description="Maximum tokens sent to a model"
+                        :value="contextLabel"
+                        @click="openView('context')"
+                    />
+                </div>
+            </section>
+
+            <section id="dashboard-ai-reset-section" class="dashboard-list-group">
+                <div class="dashboard-list">
+                    <DashboardListRow
+                        id="dashboard-ai-reset-btn"
+                        icon-token="ui.refresh"
+                        label="Reset AI settings"
+                        description="Restore all AI preferences to their defaults"
+                        danger
+                        :disabled="resetting"
+                        @click="onReset"
+                    >
+                        <template #trailing><span /></template>
+                    </DashboardListRow>
+                </div>
+                <p v-if="resetError" id="ai-reset-error" class="dashboard-list-footnote text-error" role="alert">{{ resetError }}</p>
+            </section>
+        </template>
+
+        <template v-else-if="view === 'model'">
+            <section id="dashboard-ai-model-defaults-section" class="dashboard-list-group">
+                <div class="dashboard-list" role="group" aria-label="Default model mode">
+                    <DashboardListRow
+                        id="dashboard-ai-model-last-selected-btn"
+                        label="Last selected"
+                        description="Start with the model you used most recently"
+                        :selected="settings.defaultModelMode === 'lastSelected'"
+                        @click="pickModelMode('lastSelected')"
+                    />
+                    <DashboardListRow
+                        id="dashboard-ai-model-fixed-btn"
+                        label="Fixed model"
+                        description="Always start with the same model"
+                        :selected="settings.defaultModelMode === 'fixed'"
+                        @click="pickModelMode('fixed')"
+                    />
+                </div>
+                <AiSaveStatus id="ai-model-status" class="dashboard-list-footnote" :status="modelStatus" />
+            </section>
+
+            <section
+                v-if="settings.defaultModelMode === 'fixed'"
+                class="dashboard-list-group"
+                aria-labelledby="ai-fixed-model-heading"
+            >
+                <h3 id="ai-fixed-model-heading" class="dashboard-list-heading">Model</h3>
+                <div class="dashboard-list">
+                    <div class="dashboard-list-body">
+                        <UInput
+                            id="dashboard-model-search-input"
+                            v-bind="modelSearchInputProps"
+                            class="w-full"
+                            aria-label="Search models"
+                            placeholder="Search by name, id, or description"
+                            v-model="searchQuery"
+                            :disabled="modelsBusy"
+                        />
+                        <div
+                            id="dashboard-ai-model-results"
+                            class="ai-model-results"
+                            role="listbox"
+                            aria-label="Model results"
+                        >
+                            <UButton
+                                v-for="m in limitedResults"
+                                :key="m.id"
+                                :id="`dashboard-model-option-${m.id}`"
+                                v-bind="modelItemButtonProps"
+                                :class="m.id === settings.fixedModelId ? 'active' : ''"
+                                :active="m.id === settings.fixedModelId"
+                                @click="onPickModel(m.id)"
+                                :aria-selected="m.id === settings.fixedModelId"
+                                role="option"
+                            >
+                                <span class="max-w-full truncate text-left">{{
+                                    m.name || m.id
+                                }}</span>
+                                <span class="max-w-full opacity-60 text-xs sm:ml-2 truncate">{{
+                                    m.canonical_slug || m.id
+                                }}</span>
+                            </UButton>
+                            <div
+                                v-if="!limitedResults.length && !modelsBusy"
+                                class="text-xs opacity-70 px-1 py-2"
+                            >
+                                No results
+                            </div>
+                            <div v-if="modelsBusy" class="text-xs opacity-70 px-1 py-2">
+                                Loading…
+                            </div>
+                        </div>
+                    </div>
+                    <DashboardListRow
+                        id="dashboard-ai-model-selection-row"
+                        static
+                        label="Selected"
+                        :value="settings.fixedModelId || 'None'"
+                    >
+                        <template #trailing>
+                            <UButton
+                                id="dashboard-ai-clear-model-btn"
+                                v-bind="clearModelButtonProps"
+                                @click="clearModel"
+                                :disabled="!settings.fixedModelId"
+                                >Clear</UButton
+                            >
+                        </template>
+                    </DashboardListRow>
+                </div>
+            </section>
+        </template>
 
         <section
+            v-else-if="view === 'prompt'"
             id="dashboard-ai-master-prompt-section"
-            class="section-card space-y-4"
-            role="group"
-            aria-labelledby="ai-section-master-prompt"
+            class="dashboard-list-group"
         >
-            <div class="dashboard-setting-heading">
-                <span class="dashboard-setting-icon" aria-hidden="true">
-                    <UIcon :name="useIcon('ui.chat').value" class="h-5 w-5" />
-                </span>
-                <div>
-                    <h2
-                        id="ai-section-master-prompt"
-                        class="dashboard-section-title"
-                    >
-                        Master system prompt
-                    </h2>
-                    <p id="ai-master-help" class="supporting-text mt-1">
-                        Applies to new chats alongside each thread’s instructions.
-                    </p>
-                </div>
-            </div>
+            <label
+                id="ai-section-master-prompt"
+                class="dashboard-list-heading"
+                for="dashboard-ai-master-textarea"
+                >Instructions</label
+            >
             <UTextarea
                 id="dashboard-ai-master-textarea"
-                aria-labelledby="ai-section-master-prompt"
                 v-bind="masterPromptTextareaProps"
                 :value="local.masterPrompt"
                 @input="onPromptInput"
                 @blur="onPromptBlur"
                 aria-describedby="ai-master-help ai-master-count"
                 spellcheck="false"
+                :rows="8"
                 :maxlength="4000"
-                placeholder="e.g. You are a concise, helpful assistant who prefers structured, minimal answers."
+                placeholder="Enter instructions for new chats…"
             ></UTextarea>
-            <div
-                id="dashboard-ai-master-actions"
-                class="flex flex-wrap items-center justify-between gap-3"
-            >
-                <span
-                    id="ai-master-count"
-                    class="text-xs opacity-70 tabular-nums"
+            <p id="ai-master-help" class="dashboard-list-footnote">
+                Applies to new chats alongside each thread’s instructions.
+                Changes save automatically.
+            </p>
+            <div class="dashboard-list-footnote flex flex-wrap items-center justify-between gap-3">
+                <span id="ai-master-count" class="tabular-nums"
                     >{{ local.masterPrompt.length }} / 4000 characters</span
                 >
                 <AiSaveStatus
@@ -59,198 +237,36 @@
             </div>
         </section>
 
-        <section
-            id="dashboard-ai-model-defaults-section"
-            class="section-card space-y-3"
-            role="group"
-            aria-labelledby="ai-section-model"
-        >
-            <div class="flex flex-wrap items-center justify-between gap-4">
-                <div class="dashboard-setting-heading">
-                    <span class="dashboard-setting-icon" aria-hidden="true">
-                        <UIcon
-                            :name="useIcon('dashboard.plugins').value"
-                            class="h-5 w-5"
-                        />
-                    </span>
-                    <div>
-                        <div class="flex flex-wrap items-center gap-x-3">
-                            <h2
-                                id="ai-section-model"
-                                class="dashboard-section-title"
-                            >
-                                Model defaults
-                            </h2>
-                            <AiSaveStatus
-                                id="ai-model-status"
-                                :status="modelStatus"
-                            />
-                        </div>
-                        <p class="supporting-text mt-1">
-                            Choose how new chats pick their starting model.
-                        </p>
-                    </div>
-                </div>
-                <div
-                    class="ai-model-mode"
-                    role="tablist"
-                    aria-label="Default model mode"
-                >
-                    <UButton
-                        id="dashboard-ai-model-last-selected-btn"
-                        v-bind="modelModeButtonProps"
-                        class="model-mode-btn"
-                        :aria-pressed="
-                            settings.defaultModelMode === 'lastSelected'
-                        "
-                        :active="settings.defaultModelMode === 'lastSelected'"
-                        :disabled="settings.defaultModelMode === 'lastSelected'"
-                        @click="saveModelDefaults({ defaultModelMode: 'lastSelected' })"
-                        >Use last selected</UButton
-                    >
-                    <UButton
-                        id="dashboard-ai-model-fixed-btn"
-                        v-bind="modelModeButtonProps"
-                        class="model-mode-btn"
-                        :aria-pressed="settings.defaultModelMode === 'fixed'"
-                        :active="settings.defaultModelMode === 'fixed'"
-                        :disabled="settings.defaultModelMode === 'fixed'"
-                        @click="saveModelDefaults({ defaultModelMode: 'fixed' })"
-                        >Use fixed model</UButton
-                    >
-                </div>
-            </div>
-            <div
-                v-if="settings.defaultModelMode === 'fixed'"
-                class="ai-model-picker space-y-3"
-            >
-                <label class="text-xs" for="dashboard-model-search-input"
-                    >Search models</label
-                >
-                <UInput
-                    id="dashboard-model-search-input"
-                    v-bind="modelSearchInputProps"
-                    class="w-full"
-                    placeholder="Search by name, id, or description"
-                    v-model="searchQuery"
-                    :disabled="modelsBusy"
-                />
-                <div
-                    id="dashboard-ai-model-results"
-                    class="max-h-64 overflow-auto border-[var(--md-border-width)] border-[var(--md-border-color)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface)] p-1 space-y-1"
-                    role="listbox"
-                    aria-label="Model results"
-                >
-                    <UButton
-                        v-for="m in limitedResults"
-                        :key="m.id"
-                        :id="`dashboard-model-option-${m.id}`"
-                        v-bind="modelItemButtonProps"
-                        :class="m.id === settings.fixedModelId ? 'active' : ''"
-                        :active="m.id === settings.fixedModelId"
-                        @click="onPickModel(m.id)"
-                        :aria-selected="m.id === settings.fixedModelId"
-                        role="option"
-                    >
-                        <span class="truncate text-left">{{
-                            m.name || m.id
-                        }}</span>
-                        <span class="opacity-60 text-xs ml-2 truncate">{{
-                            m.canonical_slug || m.id
-                        }}</span>
-                    </UButton>
-                    <div
-                        v-if="!limitedResults.length && !modelsBusy"
-                        class="text-xs opacity-70 px-1 py-2"
-                    >
-                        No results
-                    </div>
-                    <div v-if="modelsBusy" class="text-xs opacity-70 px-1 py-2">
-                        Loading…
-                    </div>
-                </div>
-                <div
-                    id="dashboard-ai-model-selection-row"
-                    class="flex items-center justify-between"
-                >
-                    <div class="text-xs opacity-70">
-                        Selected:
-                        <span class="tabular-nums">{{
-                            settings.fixedModelId || 'none'
-                        }}</span>
-                    </div>
-                    <UButton
-                        id="dashboard-ai-clear-model-btn"
-                        v-bind="clearModelButtonProps"
-                        @click="clearModel"
-                        :disabled="!settings.fixedModelId"
-                        >Clear</UButton
-                    >
-                </div>
-            </div>
-            <div
-                id="dashboard-ai-variant-row"
-                class="flex flex-wrap items-center justify-between gap-3"
-            >
-                <div>
-                    <label
-                        class="text-xs font-medium"
-                        for="dashboard-ai-variant-select"
-                        >Model variant</label
-                    >
-                    <p class="supporting-text mt-1">
-                        Default routing for new chats: fastest (Nitro),
-                        cheapest (Floor), or web search.
-                    </p>
-                </div>
-                <ChatModelVariantSelect
-                    id="dashboard-ai-variant-select"
-                    :model-value="settings.defaultModelVariant"
-                    class="w-full sm:w-64"
-                    @update:model-value="onPickVariant"
+        <section v-else-if="view === 'variant'" class="dashboard-list-group">
+            <div class="dashboard-list" role="group" aria-label="Default model variant">
+                <DashboardListRow
+                    v-for="option in MODEL_VARIANT_OPTIONS"
+                    :id="`dashboard-ai-variant-${option.value}`"
+                    :key="option.value"
+                    :label="option.label"
+                    :description="option.description"
+                    :selected="settings.defaultModelVariant === option.value"
+                    @click="onPickVariant(option.value)"
                 />
             </div>
+            <AiSaveStatus id="ai-model-status" class="dashboard-list-footnote" :status="modelStatus" />
         </section>
 
-        <section class="section-card space-y-3" role="group" aria-labelledby="ai-section-tools">
-            <div class="flex items-center justify-between gap-4">
-                <div>
-                    <h2 id="ai-section-tools" class="dashboard-section-title">Chat tools</h2>
-                    <p id="ai-tools-help" class="supporting-text mt-1">
-                        Start chats with all tools on or off. Saved chat selections stay unchanged.
-                    </p>
-                </div>
-                <USwitch
-                    aria-label="Enable all tools by default"
-                    aria-describedby="ai-tools-help"
-                    :model-value="settings.defaultToolsEnabled"
-                    :disabled="toolsStatus === 'saving'"
-                    @update:model-value="saveToolDefault"
-                />
-            </div>
-            <AiSaveStatus id="ai-tools-status" :status="toolsStatus" />
-        </section>
-
-        <TitleModelSetting />
+        <TitleModelSetting v-else-if="view === 'title'" />
 
         <!-- Native generations capture this workspace preference at admission. -->
         <section
+            v-else-if="view === 'context'"
             id="dashboard-ai-context-section"
-            class="section-card space-y-3"
-            role="group"
-            aria-labelledby="ai-section-context"
+            class="dashboard-list-group"
         >
-            <h2 id="ai-section-context" class="dashboard-section-title">Context</h2>
-            <label class="text-xs font-medium" for="dashboard-ai-max-context-input">Maximum context tokens</label>
-            <p id="ai-max-context-help" class="supporting-text">
-                Leave blank to use the model limit. A saved maximum can be larger
-                than one model's window; each model still has its own capacity.
-            </p>
+            <label class="dashboard-list-heading" for="dashboard-ai-max-context-input">Maximum context tokens</label>
             <div class="flex flex-wrap items-center gap-3">
                 <UInput
                     id="dashboard-ai-max-context-input"
                     v-bind="contextInputProps"
                     v-model="contextInput"
+                    class="min-w-0 flex-1"
                     type="text"
                     inputmode="numeric"
                     placeholder="Use model limit"
@@ -267,55 +283,26 @@
                     @retry="contextAutosave.flush"
                 />
             </div>
-            <p v-if="contextError" id="ai-max-context-error" class="text-sm text-error" role="alert">{{ contextError }}</p>
+            <p id="ai-max-context-help" class="dashboard-list-footnote">
+                Leave blank to use the model limit. A saved maximum can be larger
+                than one model's window; each model still has its own capacity.
+            </p>
+            <p v-if="contextError" id="ai-max-context-error" class="dashboard-list-footnote text-error" role="alert">{{ contextError }}</p>
         </section>
-
-        <section
-            id="dashboard-ai-reset-section"
-            class="section-card flex flex-wrap items-center justify-between gap-4"
-            role="group"
-            aria-labelledby="ai-section-reset"
-        >
-            <div class="dashboard-setting-heading">
-                <span
-                    class="dashboard-setting-icon dashboard-setting-icon--error"
-                    aria-hidden="true"
-                >
-                    <UIcon
-                        :name="useIcon('ui.refresh').value"
-                        class="h-5 w-5"
-                    />
-                </span>
-                <div>
-                    <h2 id="ai-section-reset" class="dashboard-section-title">
-                        Reset
-                    </h2>
-                    <p class="supporting-text mt-1">
-                        Restore all AI preferences to their defaults.
-                    </p>
-                </div>
-            </div>
-            <UButton
-                id="dashboard-ai-reset-btn"
-                v-bind="resetButtonProps"
-                @click="onReset"
-                :disabled="resetting"
-                >Reset to defaults</UButton
-            >
-            <p v-if="resetError" id="ai-reset-error" class="basis-full text-sm text-error" role="alert">{{ resetError }}</p>
-        </section>
-
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount, inject, nextTick } from 'vue';
 import { useIcon } from '#imports';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
-import { sanitizeModelVariant } from '~~/shared/openrouter/model-variants';import { useModelStore } from '~/composables/chat/useModelStore';
+import { MODEL_VARIANT_OPTIONS, sanitizeModelVariant } from '~~/shared/openrouter/model-variants';
+import { useModelStore } from '~/composables/chat/useModelStore';
 import { useModelSearch } from '~/core/search/useModelSearch';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
+import { DASHBOARD_SUBPAGE_KEY } from '~/core/dashboard/dashboard-navigation-types';
 import AiSaveStatus from './AiSaveStatus.vue';
+import DashboardListRow from './DashboardListRow.vue';
 import TitleModelSetting from './TitleModelSetting.vue';
 import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 
@@ -325,6 +312,30 @@ const settings = computed(() => settingsRef.value!);
 const announce = (message: string) => {
     if (liveStatus.value) liveStatus.value.textContent = message;
 };
+
+// Each setting opens in its own view; the dashboard header shows its title and
+// a back link. Edits live in this component, so leaving a view keeps them.
+type AiView = 'root' | 'model' | 'prompt' | 'variant' | 'title' | 'context';
+const VIEW_TITLES: Record<Exclude<AiView, 'root'>, string> = {
+    model: 'Starting model',
+    prompt: 'Master system prompt',
+    variant: 'Model variant',
+    title: 'Title model',
+    context: 'Context limit',
+};
+const view = ref<AiView>('root');
+const subpage = inject(DASHBOARD_SUBPAGE_KEY, null);
+function openView(next: Exclude<AiView, 'root'>) {
+    view.value = next;
+}
+function closeView() {
+    const from = view.value;
+    view.value = 'root';
+    void nextTick(() => document.getElementById(`dashboard-ai-${from}-row`)?.focus({ preventScroll: true }));
+}
+watch(view, (current) => {
+    if (subpage) subpage.value = current === 'root' ? null : { title: VIEW_TITLES[current], back: closeView };
+}, { immediate: true });
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 const PROMPT_SAVE_DELAY_MS = 800;
@@ -453,6 +464,7 @@ const stopWorkspace = subscribeActiveWorkspaceDb(() => {
 });
 // Closing the dashboard (or leaving this page) saves any edit still waiting.
 onBeforeUnmount(() => {
+    if (subpage) subpage.value = null;
     stopWorkspace();
     void promptAutosave.flush();
     void contextAutosave.flush();
@@ -470,6 +482,18 @@ const searchQuery = computed({
 });
 const modelsBusy = computed(() => modelSearch.busy.value);
 const limitedResults = computed(() => modelSearch.results.value.slice(0, 100));
+const startingModelLabel = computed(() => {
+    if (settings.value.defaultModelMode !== 'fixed') return 'Last selected';
+    const id = settings.value.fixedModelId;
+    if (!id) return 'Fixed model';
+    return catalog.value.find((m) => m.id === id)?.name || id;
+});
+const variantLabel = computed(() =>
+    MODEL_VARIANT_OPTIONS.find((o) => o.value === settings.value.defaultModelVariant)?.label ?? 'Off'
+);
+const contextLabel = computed(() =>
+    settings.value.maxContextTokens ? settings.value.maxContextTokens.toLocaleString() : 'Model limit'
+);
 const toolsStatus = ref<SaveStatus>('idle');
 async function saveToolDefault(enabled: boolean) {
     const generation = getWorkspaceGeneration();
@@ -490,6 +514,10 @@ async function saveModelDefaults(patch: Parameters<typeof set>[0]) {
     if (save === modelSaves && generation === getWorkspaceGeneration()) {
         modelStatus.value = failed ? 'error' : 'saved';
     }
+}
+function pickModelMode(mode: 'lastSelected' | 'fixed') {
+    if (settings.value.defaultModelMode === mode) return;
+    void saveModelDefaults({ defaultModelMode: mode });
 }
 function onPickModel(id: string) {
     void saveModelDefaults({ fixedModelId: id, defaultModelMode: 'fixed' });
@@ -544,24 +572,6 @@ const contextInputProps = computed(() => ({
         component: 'input', context: 'dashboard', identifier: 'dashboard.ai.max-context', isNuxtUI: true,
     }).value,
 }));
-const modelModeButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'dashboard',
-        identifier: 'dashboard.ai.model-mode',
-        isNuxtUI: true,
-    });
-    return {
-        size: 'sm' as const,
-        variant: 'soft' as const,
-        color: 'primary' as const,
-        activeVariant: 'solid' as const,
-        activeColor: 'primary' as const,
-        activeClass: 'model-mode-btn--active',
-        inactiveClass: 'model-mode-btn--inactive',
-        ...(overrides.value as any),
-    };
-});
 
 const modelSearchInputProps = computed(() => {
     const overrides = useThemeOverrides({
@@ -586,8 +596,7 @@ const modelItemButtonProps = computed(() => {
     return {
         size: 'md' as const,
         variant: 'ghost' as const,
-        class: 'model-result-item theme-btn px-2 py-0.5 hover:bg-primary/5 cursor-pointer w-full flex items-center justify-between',
-        block: true as const,
+        class: 'model-result-item theme-btn px-2 py-0.5 hover:bg-primary/5 cursor-pointer w-full flex items-center justify-between! max-sm:flex-col max-sm:items-start! max-sm:justify-center! max-sm:gap-0',
         ...(overrides.value as any),
     };
 });
@@ -622,8 +631,6 @@ const masterPromptTextareaProps = computed(() => {
         'leading-snug',
         'focus:ring-0',
         'focus:outline-0',
-        'min-h-40',
-        'my-3',
         overrideUi.textarea,
     ]
         .filter(Boolean)
@@ -640,85 +647,21 @@ const masterPromptTextareaProps = computed(() => {
     };
 });
 
-const resetButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'dashboard',
-        identifier: 'dashboard.ai.reset',
-        isNuxtUI: true,
-    });
-    return {
-        size: 'sm' as const,
-        variant: 'outline' as const,
-        color: 'primary' as const,
-        ...(overrides.value as any),
-    };
-});
 </script>
 
 <style scoped>
-.supporting-text {
-    font-size: 0.78rem;
-    line-height: 1.45;
-    max-width: min(82ch, 100%);
-    color: var(--md-on-surface-variant, var(--md-on-surface));
-    opacity: 0.76;
-    overflow-wrap: break-word;
+.ai-settings {
+    gap: 28px;
 }
-.dashboard-setting-heading {
+.ai-model-results {
     display: flex;
-    min-width: 0;
-    align-items: flex-start;
-    gap: 0.8rem;
-}
-.dashboard-setting-icon {
-    display: grid;
-    width: 2.5rem;
-    height: 2.5rem;
-    flex: 0 0 auto;
-    place-items: center;
-    color: var(--md-primary);
-    background: var(--md-primary-container);
-    border: var(--md-border-width, 1px) solid var(--md-outline-variant);
-    border-radius: var(--md-border-radius-small, var(--md-border-radius, 0.5rem));
-}
-.dashboard-setting-icon--error {
-    color: var(--md-error);
-    background: var(--md-error-container);
-}
-.ai-model-mode {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.3rem;
-    padding: 0.3rem;
-    background: var(--md-surface-container-low);
-    border: var(--md-border-width, 1px) solid var(--md-border-color);
-    border-radius: var(--md-border-radius-small, var(--md-border-radius, 0.5rem));
-}
-.ai-model-picker {
-    padding-top: 1rem;
-    border-top: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid var(--md-outline-variant);
-}
-.model-mode-btn {
-    text-transform: none;
-    padding-inline: 0.75rem;
-    min-width: 8rem;
-}
-.model-mode-btn--active {
-    box-shadow:
-        inset 0 0 0 1px var(--md-on-surface),
-        0 0 0 1px var(--md-primary);
-}
-.model-mode-btn--inactive {
-    opacity: 0.7;
-    border-color: var(--md-outline-variant);
-}
-@media (max-width: 640px) {
-    .ai-model-mode {
-        width: 100%;
-    }
-    .model-mode-btn {
-        min-width: 0;
-    }
+    flex-direction: column;
+    gap: 2px;
+    max-height: 16rem;
+    overflow: auto;
+    padding: 4px;
+    background: var(--md-surface);
+    border: var(--md-border-width) solid var(--md-border-color);
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
 }
 </style>

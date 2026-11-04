@@ -101,24 +101,6 @@
             @close="closeAddToProject"
             @submit="submitAddToProject"
         />
-
-        <SidebarCreateDocumentModal
-            v-if="createDocumentModalActivated"
-            :modal-props="createDocumentModalProps"
-            :open="showCreateDocumentModal"
-            title="Name new document"
-            :value="newDocumentState.title"
-            :error="newDocumentErrors.title"
-            placeholder="Document title"
-            :icon="iconNote"
-            :loading-icon="iconLoading"
-            :loading="creatingDocument"
-            :form-field-props="sidebarFormFieldProps"
-            @update:open="showCreateDocumentModal = $event"
-            @update:value="newDocumentState.title = $event"
-            @close="closeCreateDocumentModal"
-            @submit="submitCreateDocument"
-        />
     </div>
 </template>
 <script setup lang="ts">
@@ -131,7 +113,6 @@ import { useIcon } from '~/composables/useIcon';
 import { formatShortcut } from '~/utils/keyboard-shortcuts';
 import { isMobile } from '~/state/global';
 const SidebarAddToProjectModal = defineAsyncComponent(() => import('./SidebarAddToProjectModal.vue'));
-const SidebarCreateDocumentModal = defineAsyncComponent(() => import('./SidebarCreateDocumentModal.vue'));
 const SidebarCreateProjectModal = defineAsyncComponent(() => import('./SidebarCreateProjectModal.vue'));
 import SidebarRenameEntityModal from '~/components/sidebar/SidebarRenameEntityModal.vue';
 import SidebarRenameProjectModal from '~/components/sidebar/SidebarRenameProjectModal.vue';
@@ -158,7 +139,6 @@ type AddToProjectRequest = {
 const iconEdit = useIcon('ui.edit');
 const iconFolder = useIcon('sidebar.folder');
 const iconLoading = useIcon('ui.loading');
-const iconNote = useIcon('sidebar.note');
 const iconSearch = useIcon('sidebar.search');
 const iconClose = useIcon('ui.close');
 
@@ -436,39 +416,6 @@ async function submitAddToProject() {
     closeAddToProject();
 }
 
-// ---- New Document Flow (naming modal) ----
-const showCreateDocumentModal = ref(false);
-const createDocumentModalActivated = ref(false);
-watch(showCreateDocumentModal, open => { if (open) createDocumentModalActivated.value = true; });
-const creatingDocument = ref(false);
-const newDocumentState = ref<{ title: string }>({ title: '' });
-const newDocumentErrors = ref<{ title?: string }>({});
-
-const createDocumentModalProps = createSidebarModalProps(
-    'sidebar.create-document',
-    {
-        ui: { footer: 'justify-end' },
-    }
-);
-
-function closeCreateDocumentModal() {
-    showCreateDocumentModal.value = false;
-}
-async function submitCreateDocument() {
-    if (creatingDocument.value) return;
-    const title = newDocumentState.value.title.trim();
-    if (!title) {
-        newDocumentErrors.value.title = 'Title required';
-        return;
-    }
-    creatingDocument.value = true;
-    try {
-        emit('new-document', { title });
-        closeCreateDocumentModal();
-    } finally {
-        creatingDocument.value = false;
-    }
-}
 </script>
 
 <style scoped>

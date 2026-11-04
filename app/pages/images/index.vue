@@ -722,7 +722,7 @@ const searchInputProps = computed(() => {
 
         <header class="image-library-header">
             <div>
-                <h1 class="dashboard-page-title">
+                <h1 :class="['dashboard-page-title', { 'sr-only': !trashMode }]">
                     {{ trashMode ? 'Image trash' : 'Image library' }}
                 </h1>
                 <p class="dashboard-page-description">

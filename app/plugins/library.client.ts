@@ -33,7 +33,7 @@ export default defineNuxtPlugin(() => {
         id: 'library',
         icon: 'i-lucide-library',
         label: 'Marketplace library',
-        description: 'Your marketplace account link and acquired releases',
+        description: 'Acquired releases',
         order: 160,
         access: { authRequired: true },
         pages: [

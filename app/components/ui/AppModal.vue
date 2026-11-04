@@ -121,7 +121,7 @@ const modalUi = computed<ModalProps['ui']>(() => ({
 }
 
 .app-modal[data-compact-viewport] [data-slot='header'] { padding: 16px !important; gap: 8px; }
-.app-modal[data-compact-viewport] > [data-slot='body']:not(:has(.system-prompts-shell, .model-catalog-shell)) { padding: 16px !important; }
+.app-modal[data-compact-viewport] > [data-slot='body']:not(:has(.system-prompts-shell, .model-catalog-shell, .dashboard-shell)) { padding: 16px !important; }
 .app-modal[data-compact-viewport] [data-slot='footer'] { padding: 4px 16px max(16px, env(safe-area-inset-bottom)) !important; }
 
 @media (max-width: 639px), (max-height: 500px) {
@@ -129,7 +129,7 @@ const modalUi = computed<ModalProps['ui']>(() => ({
         padding: 16px !important;
         gap: 8px;
     }
-    .app-modal > [data-slot='body']:not(:has(.system-prompts-shell, .model-catalog-shell)) {
+    .app-modal > [data-slot='body']:not(:has(.system-prompts-shell, .model-catalog-shell, .dashboard-shell)) {
         padding: 16px !important;
     }
     .app-modal [data-slot='footer'] {

@@ -198,7 +198,7 @@
         <div class="editor-layout">
             <main ref="editorScroll" class="editor-scroll" @mousedown="focusCanvas">
                 <article v-theme="'document.canvas'" class="document-canvas">
-                    <UTextarea :disabled="editorLocked" id="document-title" :model-value="titleDraft" name="document-title" class="document-title-field" :ui="{ base: 'max-lg:text-[length:inherit]!' }" :rows="1" :maxrows="3" autoresize variant="none" maxlength="300" placeholder="Untitled" aria-label="Document title" @update:model-value="onTitleInput" @keydown.enter="onTitleEnter" />
+                    <UTextarea :disabled="editorLocked" id="document-title" :model-value="titleFieldValue" name="document-title" class="document-title-field" :ui="{ base: 'max-lg:text-[length:inherit]!' }" :rows="1" :maxrows="3" autoresize variant="none" maxlength="300" placeholder="Untitled" aria-label="Document title" @update:model-value="onTitleInput" @keydown.enter="onTitleEnter" />
                     <p class="document-byline">
                         <span>{{ stats.words.toLocaleString() }} {{ stats.words === 1 ? 'word' : 'words' }}</span>
                         <span v-if="stats.readingMinutes">{{ stats.readingMinutes }} min read</span>
@@ -428,6 +428,9 @@ const rootElement = ref<HTMLElement>();
 const editorScroll = ref<HTMLElement>();
 const state = computed(() => useDocumentState(props.documentId, editorDb.value));
 const titleDraft = ref('');
+const titleFieldValue = computed(() =>
+    titleDraft.value === DEFAULT_DOCUMENT_TITLE ? '' : titleDraft.value
+);
 let capturedTitle = '';
 let capturedEditorDocument: Editor['state']['doc'] | undefined;
 let documentOwnership: { id: string; db: ReturnType<typeof getDb>; release: () => Promise<void> } | undefined;
@@ -1172,8 +1175,8 @@ function inspectorOpensByDefault(): boolean {
 }
 
 // A document created moments ago with nothing in it: let the user start typing,
-// unless they're already typing somewhere else. A still-untitled document gets
-// its title selected for naming; a named one puts the caret in the body.
+// unless they're already typing somewhere else. A still-untitled document puts
+// the caret in the empty title; a named one puts the caret in the body.
 async function focusIfJustCreated(): Promise<void> {
     const record = state.value.record;
     const current = editor.value;
@@ -1188,7 +1191,7 @@ async function focusIfJustCreated(): Promise<void> {
     await nextTick();
     const title = rootElement.value?.querySelector<HTMLTextAreaElement>('.document-title-field textarea');
     title?.focus();
-    title?.select();
+    title?.setSelectionRange(0, 0);
 }
 
 function onTitleEnter(event: KeyboardEvent) {

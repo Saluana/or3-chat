@@ -336,42 +336,27 @@
   font-size: 12px;
 }
 
-[data-theme="blank"] #dashboard-page-header {
-  border-bottom: var(--md-border-width) solid var(--md-border-color) !important;
+[data-theme="blank"] #dashboard-sidebar {
+  background-color: var(--blank-rail-bg);
+  border-right: 1px solid color-mix(in srgb, var(--md-border-color) 70%, transparent);
 }
 
 [data-theme="blank"] .dashboard-page-scroll {
   background-color: var(--md-surface) !important;
 }
 
-[data-theme="blank"] .dashboard-plugin-icon-label {
-  font-size: 14px;
-}
-
 [data-theme="blank"] .dashboard-plugin-icon-button {
-  border: none;
-  border-radius: var(--md-border-radius-small, var(--md-border-radius)) !important;
-  background-color: var(--md-surface-hover);
+  border: var(--md-border-width) solid var(--md-border-color);
+  border-radius: var(--md-border-radius-large, var(--md-border-radius)) !important;
+  background-color: var(--md-surface);
   color: var(--md-on-surface);
 }
 
 [data-theme="blank"] .dashboard-plugin-icon-button:hover {
-  background-color: var(--md-surface-active);
+  background-color: var(--md-surface-hover);
 }
 
 [data-theme="blank"] .dashboard-plugin-icon-button:active {
-  background-color: var(--md-surface-active);
-}
-
-[data-theme="blank"] .dashboard-landing-item {
-  border: none;
-  border-radius: var(--md-border-radius-small, var(--md-border-radius)) !important;
-  background-color: var(--md-surface-hover);
-  color: var(--md-on-surface);
-  cursor: pointer;
-}
-
-[data-theme="blank"] .dashboard-landing-item:hover {
   background-color: var(--md-surface-active);
 }
 

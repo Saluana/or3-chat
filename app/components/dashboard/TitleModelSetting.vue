@@ -1,20 +1,16 @@
 <template>
-    <section class="section-card space-y-3" aria-labelledby="title-model-label">
-        <div class="dashboard-setting-heading">
-            <span class="dashboard-setting-icon" aria-hidden="true"><UIcon name="i-lucide-text-cursor-input" class="h-5 w-5" /></span>
-            <div>
-                <h2 id="title-model-label" class="dashboard-section-title">Title Generation Model</h2>
-                <p class="supporting-text mt-1">Names new chats and documents. Changes apply to future titles; existing names stay as they are.</p>
-            </div>
-        </div>
+    <section class="dashboard-list-group" aria-labelledby="title-model-label">
+        <label id="title-model-label" class="dashboard-list-heading" for="dashboard-title-model">Model</label>
         <USelectMenu id="dashboard-title-model" v-bind="selectProps" :model-value="baseModel" :items="items"
             value-key="value" aria-label="Title Generation Model" class="w-full" :disabled="!editable || busy"
             @update:model-value="pickModel" />
+        <span class="dashboard-list-heading mt-3">Routing</span>
         <USelect id="dashboard-title-routing" v-bind="selectProps" :model-value="variant" :items="variants"
-            value-key="value" aria-label="Title model routing" :disabled="!editable || busy" @update:model-value="pickVariant" />
-        <p class="supporting-text break-all">{{ model }}</p>
-        <p v-if="!editable" class="supporting-text">A workspace administrator can change this model.</p>
-        <p v-if="error" class="text-sm text-error" role="alert">{{ error }}</p>
+            value-key="value" aria-label="Title model routing" class="w-full" :disabled="!editable || busy" @update:model-value="pickVariant" />
+        <p class="dashboard-list-footnote">Names new chats and documents. Changes apply to future titles; existing names stay as they are.</p>
+        <p class="dashboard-list-footnote break-all">{{ model }}</p>
+        <p v-if="!editable" class="dashboard-list-footnote">A workspace administrator can change this model.</p>
+        <p v-if="error" class="dashboard-list-footnote text-error" role="alert">{{ error }}</p>
     </section>
 </template>
 <script setup lang="ts">

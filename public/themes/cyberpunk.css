@@ -205,9 +205,14 @@
   color: var(--md-primary) !important;
 }
 
+[data-theme="cyberpunk"] #dashboard-sidebar {
+  background-color: color-mix(in srgb, var(--md-surface) 86%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--md-primary) 14%, transparent);
+}
+
 [data-theme="cyberpunk"] .dashboard-plugin-icon-label {
   font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: 0.05em;
 }
 
@@ -225,19 +230,6 @@
 
 [data-theme="cyberpunk"] .dashboard-plugin-icon-button:active {
   background-color: var(--md-surface-active);
-}
-
-[data-theme="cyberpunk"] .dashboard-landing-item {
-  border: var(--md-border-width) solid var(--md-border-color);
-  border-radius: var(--md-border-radius) !important;
-  background-color: var(--md-surface);
-  color: var(--md-on-surface);
-  cursor: pointer;
-}
-
-[data-theme="cyberpunk"] .dashboard-landing-item:hover {
-  background-color: var(--md-surface-hover);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--md-primary) 15%, transparent);
 }
 
 [data-theme="cyberpunk"] .section-card {

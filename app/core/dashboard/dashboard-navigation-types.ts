@@ -1,3 +1,4 @@
+import type { InjectionKey, ShallowRef } from 'vue';
 import type { DashboardPlugin } from '~/composables/dashboard/useDashboardPlugins';
 
 export type DashboardNavigationErrorCode =
@@ -29,3 +30,15 @@ export type DashboardNavigationResult =
 export interface UseDashboardNavigationOptions {
     baseItems?: DashboardPlugin[];
 }
+
+/**
+ * A view a dashboard page opens inside itself. The dashboard shell shows its
+ * title, and its back link (labelled with the page title) calls `back`.
+ */
+export interface DashboardSubpage {
+    title: string;
+    back: () => void;
+}
+
+export const DASHBOARD_SUBPAGE_KEY: InjectionKey<ShallowRef<DashboardSubpage | null>> =
+    Symbol('or3:dashboard:subpage');

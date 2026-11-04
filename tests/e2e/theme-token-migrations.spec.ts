@@ -192,7 +192,7 @@ async function expectDialogFits(page: Page, name: string): Promise<void> {
         return r.left >= -1 && r.top >= -1 && r.right <= innerWidth + 1 &&
             r.bottom <= innerHeight + 1 && element.scrollWidth <= element.clientWidth + 1;
     })).toBe(true);
-    for (const button of await dialog.locator('[data-slot="header"] button:visible, [data-slot="footer"] button:visible').all()) {
+    for (const button of await dialog.locator('[data-slot="header"] button:visible, #dashboard-page-header button:visible, [data-slot="footer"] button:visible').all()) {
         await expect(button).toBeInViewport({ ratio: 1 });
         if (page.viewportSize()!.width < 768) {
             // The dialog's entrance transform briefly scales its 44px controls.
@@ -243,9 +243,9 @@ async function runPaletteCommand(page: Page, label: string): Promise<void> {
 }
 
 async function expectDashboardGuttersAligned(page: Page): Promise<void> {
-    const dialog = page.getByRole('dialog', { name: 'Theme Settings', exact: true });
+    const dialog = page.getByRole('dialog', { name: 'Appearance', exact: true });
     await expect.poll(() => dialog.evaluate(element => {
-        const title = element.querySelector<HTMLElement>('[data-slot="title"]')!;
+        const title = element.querySelector<HTMLElement>('.dashboard-shell-title')!;
         const titleLeft = title.getBoundingClientRect().left;
         const zoom = Number.parseFloat(getComputedStyle(document.body).zoom) || 1;
         return ['#dashboard-page-header', '.dashboard-page-frame'].every(selector => {
@@ -358,7 +358,7 @@ test.describe('responsive modal layouts', () => {
         await page.setViewportSize({ width: 1280, height: 900 });
         await openThemeStudio(page, false);
         await setFrame(320, 74);
-        await expect(page.getByRole('dialog', { name: 'Theme Settings', exact: true }))
+        await expect(page.getByRole('dialog', { name: 'Appearance', exact: true }))
             .toHaveAttribute('data-compact-viewport', 'short');
         await expectDashboardGuttersAligned(page);
         await captureChat(page, info, `modal-${theme}-light-keyboard-dashboard-gutters`);
@@ -394,7 +394,7 @@ test.describe('responsive modal layouts', () => {
                 await captureChat(page, info, `modal-${theme}-${mode}-${size.width}x${size.height}-dashboard`);
                 await expectDialogFits(page, 'Dashboard');
             }
-            await page.getByRole('dialog', { name: 'Dashboard', exact: true }).getByRole('button', { name: 'Close', exact: true }).click();
+            await page.getByRole('dialog', { name: 'Dashboard', exact: true }).getByRole('button', { name: 'Close dashboard', exact: true }).click();
             await expect(page.getByRole('dialog', { name: 'Dashboard', exact: true })).toBeHidden();
 
             await runPaletteCommand(page, 'New system prompt');
@@ -685,7 +685,8 @@ async function openThemeStudio(page: Page, isMobile: boolean): Promise<void> {
     if (await title.isVisible()) return;
 
     const dashboardDialog = page.getByRole('dialog', { name: 'Dashboard' });
-    const settings = dashboardDialog.getByRole('button', {
+    // The sidebar lists Settings too; open it from the dashboard grid.
+    const settings = dashboardDialog.locator('#dashboard-plugin-grid').getByRole('button', {
         name: 'Settings',
         exact: true,
     });
@@ -694,7 +695,7 @@ async function openThemeStudio(page: Page, isMobile: boolean): Promise<void> {
 
     const themeSettings = page
         .getByRole('dialog', { name: 'Settings' })
-        .getByRole('button', { name: /Theme Settings/i });
+        .getByRole('button', { name: /^Appearance/ });
     await expect(themeSettings).toBeVisible({ timeout: 30_000 });
     await themeSettings.click();
     await expect(title).toBeVisible({ timeout: 30_000 });
@@ -738,7 +739,7 @@ for (const theme of themes) {
                 { width: 390, height: 320 },
             ]) {
                 await page.setViewportSize(size);
-                await expectDialogFits(page, 'Theme Settings');
+                await expectDialogFits(page, 'Appearance');
                 await expectDashboardGuttersAligned(page);
             }
             // Typography changes must not move content away from the modal's
@@ -1293,13 +1294,13 @@ for (const initialTheme of ['blank', 'cyberpunk'] as const) {
         await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
         // The dashboard dialog is titled after its current page.
         const dashboard = page.getByRole('dialog', { name: 'Dashboard' });
-        await dashboard.getByRole('button', { name: 'Settings', exact: true }).click();
+        await dashboard.locator('#dashboard-plugin-grid').getByRole('button', { name: 'Settings', exact: true }).click();
         await page.getByRole('dialog', { name: 'Settings' })
-            .getByRole('button', { name: /Theme Settings/i }).click();
-        const themeDialog = page.getByRole('dialog', { name: 'Theme Settings' });
+            .getByRole('button', { name: /^Appearance/ }).click();
+        const themeDialog = page.getByRole('dialog', { name: 'Appearance' });
         for (const theme of ['retro', 'cyberpunk', 'blank'] as const) {
             await selectThemeAndMode(page, theme, 'light');
-            await themeDialog.getByRole('button', { name: 'Close', exact: true }).click();
+            await themeDialog.getByRole('button', { name: 'Close dashboard', exact: true }).click();
             await expect(themeDialog).toBeHidden();
             await expectIcons(theme);
             await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
@@ -1519,10 +1520,11 @@ test('empty chat: creation keeps the original draft and persists new resources',
     await expect(dialog).not.toBeVisible();
     await expect(input).toHaveText('Retain this draft while creating resources');
     await state.getByRole('button', { name: 'Create a document', exact: true }).click();
-    dialog = page.getByRole('dialog', { name: 'Create a document', exact: true });
-    await dialog.getByRole('textbox', { name: 'Title', exact: true }).fill('Empty state document');
-    await dialog.getByRole('button', { name: 'Create', exact: true }).dblclick();
-    await expect(dialog).not.toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Create a document', exact: true })).toHaveCount(0);
+    const documentTitle = page.getByRole('textbox', { name: 'Document title', exact: true });
+    await expect(documentTitle).toBeFocused();
+    await expect(documentTitle).toHaveAttribute('placeholder', 'Untitled');
+    await documentTitle.fill('Empty state document');
     await expect(page.getByRole('tab', { name: 'Empty state document', exact: true })).toBeVisible();
     await page.getByRole('tab', { name: /^New chat(?: 1)?$/ }).click();
     await expect(input).toHaveText('Retain this draft while creating resources');
@@ -1624,13 +1626,13 @@ for (const mode of modes) test('blank modal border follows custom colors in ' + 
     await expect(page.getByRole('checkbox', { name: 'Custom colors' })).toBeChecked();
     await page.getByRole('button', { name: /^Borders / }).click();
     await page.getByRole('textbox', { name: 'Borders hex color', exact: true }).fill('#FF7171');
-    const settings = page.getByRole('dialog', { name: 'Theme Settings', exact: true });
+    const settings = page.getByRole('dialog', { name: 'Appearance', exact: true });
     await expect(settings.locator('[data-slot="header"]').first()).toHaveCSS('border-bottom-color', 'rgb(255, 113, 113)');
     for (const side of ['top', 'right', 'bottom', 'left']) {
         await expect(settings).toHaveCSS('border-' + side + '-color', 'rgb(255, 113, 113)');
     }
     await captureChat(page, info, 'blank-custom-modal-border-' + mode);
-    await settings.getByRole('button', { name: 'Close', exact: true }).click();
+    await settings.getByRole('button', { name: 'Close dashboard', exact: true }).click();
     await page.getByRole('button', { name: 'Create a project', exact: true }).first().click();
     await expect(page.getByRole('dialog', { name: 'New Project', exact: true })).toHaveCSS('border-top-color', 'rgb(255, 113, 113)');
 });
@@ -1640,7 +1642,7 @@ test('theme palette preserves exact typed colors while the picker remains intera
     await openResponsiveChat(page, 'blank', 'light');
     await openThemeStudio(page, false);
     await selectThemeAndMode(page, 'blank', 'light');
-    const settings = page.getByRole('dialog', { name: 'Theme Settings', exact: true });
+    const settings = page.getByRole('dialog', { name: 'Appearance', exact: true });
     await settings.getByRole('tab', { name: 'Colors', exact: true }).click();
     await settings.getByText('Custom colors', { exact: true }).click();
     await expect(settings.getByRole('checkbox', { name: 'Custom colors' })).toBeChecked();
