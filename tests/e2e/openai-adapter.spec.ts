@@ -7,9 +7,12 @@ type Captured = { path: string; credential: string; model?: unknown; keys: strin
 
 test.skip(process.env.OR3_OPENAI_E2E !== 'true', 'Run through scripts/test/run-openai-adapter-e2e.ts.');
 
-async function openAiSettings(page: Page) {
+// Each AI setting opens from its row on the AI Settings list.
+async function openAiSettings(page: Page, view: 'openai' | 'fast') {
     await page.goto('/chat?dashboard=core:settings&page=ai-settings');
-    await expect(page.getByRole('heading', { name: 'OpenAI', exact: true })).toBeVisible({ timeout: 45_000 });
+    const row = page.locator(`#dashboard-ai-${view}-row`);
+    await expect(row).toBeVisible({ timeout: 45_000 });
+    await row.click();
 }
 
 async function chooseModel(page: Page, name: string) {
@@ -38,11 +41,12 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
     } })).ok()).toBe(true);
 
     // The key goes to the account vault; the browser never reads it back.
-    await openAiSettings(page);
+    await openAiSettings(page, 'openai');
     await expect(page.getByText('No OpenAI key saved.')).toBeVisible();
     await page.getByLabel('OpenAI API key').fill(key);
     await page.getByRole('button', { name: 'Save key' }).click();
     await expect(page.getByText('Your OpenAI key is saved.')).toBeVisible();
+    await page.locator('#dashboard-back-button').click();
     // New chats start with every tool on, so router-bound tools are visible in the requests.
     await page.getByRole('switch', { name: 'Enable all tools by default' }).click();
     await expect(page.getByRole('switch', { name: 'Enable all tools by default' })).toHaveAttribute('aria-checked', 'true');
@@ -57,7 +61,7 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
     // Saving it is a deployment-admin action, checked against the OpenAI catalog with the saved key.
     expect((await page.request.post('/api/admin/auth/login', { headers: { origin, 'x-or3-admin-intent': 'admin' },
         data: { username: 'openai-adapter-admin', password: process.env.OR3_OPENAI_E2E_ADMIN_PASSWORD } })).ok()).toBe(true);
-    await openAiSettings(page);
+    await openAiSettings(page, 'fast');
     await page.getByRole('button', { name: 'Fast Model', exact: true }).click();
     await page.getByText('gpt-e2e-mini (OpenAI key)', { exact: true }).click();
     await expect(page.getByText('@openai/gpt-e2e-mini', { exact: true })).toBeVisible();
@@ -100,7 +104,7 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
     await page.screenshot({ path: resolve(process.env.OR3_OPENAI_E2E_OUTPUT!, 'openai-and-openrouter-chat.png') });
 
     // Without a personal or instance OpenAI key, the server refuses OpenAI models.
-    await openAiSettings(page);
+    await openAiSettings(page, 'openai');
     await page.getByRole('button', { name: 'Remove key' }).click();
     await expect(page.getByText('No OpenAI key saved.')).toBeVisible();
     const refused = await page.request.post('/api/openrouter/stream', { headers: { origin, 'x-or3-cloud-intent': 'mutation' },

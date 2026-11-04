@@ -1,20 +1,18 @@
 <template>
-    <section class="section-card space-y-3" aria-labelledby="fast-model-label">
-        <div class="dashboard-setting-heading">
-            <span class="dashboard-setting-icon" aria-hidden="true"><UIcon name="i-lucide-zap" class="h-5 w-5" /></span>
-            <div>
-                <h2 id="fast-model-label" class="dashboard-section-title">Fast Model</h2>
-                <p class="supporting-text mt-1">A small, quick model for chat and document titles, editor autocomplete and project memories. Its provider also checks whether a saved memory is a decision. Existing titles and memories stay as they are.</p>
-            </div>
-        </div>
+    <section class="dashboard-list-group" aria-labelledby="fast-model-label">
+        <label id="fast-model-label" class="dashboard-list-heading" for="dashboard-title-model">Model</label>
         <USelectMenu id="dashboard-title-model" v-bind="selectProps" :model-value="baseModel" :items="items"
             value-key="value" aria-label="Fast Model" class="w-full" :disabled="!editable || busy"
             @update:model-value="pickModel" />
-        <USelect v-if="!openAi" id="dashboard-title-routing" v-bind="selectProps" :model-value="variant" :items="variants"
-            value-key="value" aria-label="Fast model routing" :disabled="!editable || busy" @update:model-value="pickVariant" />
-        <p class="supporting-text break-all">{{ model }}</p>
-        <p v-if="!editable" class="supporting-text">A workspace administrator can change this model.</p>
-        <p v-if="error" class="text-sm text-error" role="alert">{{ error }}</p>
+        <template v-if="!openAi">
+            <span class="dashboard-list-heading mt-3">Routing</span>
+            <USelect id="dashboard-title-routing" v-bind="selectProps" :model-value="variant" :items="variants"
+                value-key="value" aria-label="Fast model routing" class="w-full" :disabled="!editable || busy" @update:model-value="pickVariant" />
+        </template>
+        <p class="dashboard-list-footnote">A small, quick model for chat and document titles, editor autocomplete and project memories. Its provider also checks whether a saved memory is a decision. Existing titles and memories stay as they are.</p>
+        <p class="dashboard-list-footnote break-all">{{ model }}</p>
+        <p v-if="!editable" class="dashboard-list-footnote">A workspace administrator can change this model.</p>
+        <p v-if="error" class="dashboard-list-footnote text-error" role="alert">{{ error }}</p>
     </section>
 </template>
 <script setup lang="ts">

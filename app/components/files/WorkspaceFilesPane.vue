@@ -553,7 +553,7 @@ async function newDocument() {
     await run(async origin => {
         const { prepareDocumentCreate } = await import('~/db/documents');
         const { getWriteTxTableNames } = await import('~/db/util');
-        const prepared = await prepareDocumentCreate({ title: 'Untitled document', content: { type: 'doc', content: [{ type: 'paragraph' }] } });
+        const prepared = await prepareDocumentCreate({});
         origin.assertCurrent('write');
         await origin.db.transaction('rw', getWriteTxTableNames(origin.db, 'posts'), async () => {
             origin.assertCurrent('write');

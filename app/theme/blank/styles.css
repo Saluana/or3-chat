@@ -2630,13 +2630,9 @@ html[data-theme='blank'] {
     }
 
     .dashboard-plugin-icon-button .dashboard-plugin-icon-label {
-        font-size: var(--blank-text-body);
-        line-height: var(--blank-leading-body);
-    }
-
-    .dashboard-plugin-icon-button span:is(.text-xs, .text-sm):not(.dashboard-plugin-icon-label) {
-        font-size: var(--blank-text-caption);
-        line-height: var(--blank-leading-caption);
+        font-size: var(--blank-text-reading);
+        font-weight: var(--blank-weight-medium);
+        line-height: var(--blank-leading-reading);
     }
 }
 
@@ -2674,12 +2670,6 @@ html[data-theme='blank'] .dashboard-page-frame .section-card + .section-card {
 html[data-theme='blank'] {
     .dashboard-page-intro {
         padding-inline: 0;
-    }
-
-    /* The back chevron shares the card icons' centre line; the breadcrumb text
-       beside it already shares their text edge, so only the icon moves. */
-    #dashboard-back-button {
-        translate: 4px 0;
     }
 
     .dashboard-page-title {

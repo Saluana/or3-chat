@@ -9,6 +9,7 @@ import {
     type ComputedRef,
     type InjectionKey,
 } from 'vue';
+import { useToast } from '#imports';
 import {
     getWorkspaceGeneration,
     subscribeActiveWorkspaceDb,
@@ -35,20 +36,20 @@ export function useEmptyChatActions(options: {
     available: ComputedRef<readonly EmptyChatActionId[]>;
     activateOrigin(origin: EmptyChatOrigin): Promise<boolean>;
     isCurrent(origin: EmptyChatOrigin): boolean;
-    createDocument(title: string, scope: WorkspaceOperationScope): Promise<string>;
+    createDocument(scope: WorkspaceOperationScope): Promise<string>;
     openDocument(id: string): Promise<void>;
     openProject(id: string): Promise<void>;
 }) {
     type Request = {
-        kind: 'start-project' | 'create-document';
+        kind: 'start-project';
         origin: EmptyChatOrigin;
         generation: number;
         savedId?: string;
     };
+    const toast = useToast();
     const request = shallowRef<Request | null>(null);
     const form = reactive({ title: '', brief: '', error: '', pending: false });
     const active = computed(() => Boolean(request.value));
-    const project = computed(() => request.value?.kind === 'start-project');
     function current(owner: Request) {
         return (
             request.value === owner &&
@@ -85,6 +86,23 @@ export function useEmptyChatActions(options: {
                     !options.available.value.includes(id)
                 )
                     return;
+                if (id === 'create-document') {
+                    try {
+                        const documentId = await options.createDocument(scope);
+                        scope.assertCurrent();
+                        if (!options.isCurrent(origin)) return;
+                        await options.openDocument(documentId);
+                    } catch (error) {
+                        toast.add({
+                            title: 'Document creation failed',
+                            description: error instanceof Error
+                                ? error.message
+                                : 'Please try again.',
+                            color: 'error',
+                        });
+                    }
+                    return;
+                }
             } catch {
                 return;
             } finally {
@@ -95,7 +113,7 @@ export function useEmptyChatActions(options: {
             form.error = '';
             form.pending = false;
             request.value = {
-                kind: id,
+                kind: 'start-project',
                 origin: { ...origin },
                 generation: getWorkspaceGeneration(),
             };
@@ -140,22 +158,18 @@ export function useEmptyChatActions(options: {
             const scope = captureProjectOperation();
             scope.assertCurrent('write');
             if (!owner.savedId) {
-                if (owner.kind === 'start-project') {
-                    const { useProjectsCrud } =
-                        await import('~/composables/projects/useProjectsCrud');
-                    if (!current(owner)) return;
-                    scope.assertCurrent('write');
-                    owner.savedId = await useProjectsCrud().createProject({
-                        name: title,
-                        description: form.brief.trim(),
-                    });
-                } else owner.savedId = await options.createDocument(title, scope);
+                const { useProjectsCrud } =
+                    await import('~/composables/projects/useProjectsCrud');
+                if (!current(owner)) return;
+                scope.assertCurrent('write');
+                owner.savedId = await useProjectsCrud().createProject({
+                    name: title,
+                    description: form.brief.trim(),
+                });
             }
             scope.assertCurrent();
             if (!current(owner)) return;
-            if (owner.kind === 'start-project')
-                await options.openProject(owner.savedId);
-            else await options.openDocument(owner.savedId);
+            await options.openProject(owner.savedId);
             if (request.value === owner) request.value = null;
         } catch (error) {
             if (current(owner))
@@ -171,5 +185,5 @@ export function useEmptyChatActions(options: {
             } else if (!request.value) form.pending = false;
         }
     }
-    return { request, active, project, form, close, submit };
+    return { request, active, form, close, submit };
 }

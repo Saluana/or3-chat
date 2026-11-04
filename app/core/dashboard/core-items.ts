@@ -12,31 +12,31 @@ export function createCoreDashboardItems(ssrAuthEnabled: boolean): DashboardPlug
         {
             id: 'core:settings',
             icon: useIcon('dashboard.settings').value,
+            iconToken: 'dashboard.settings',
             label: 'Settings',
-            description: 'Configure your workspace',
+            description: 'Preferences and layout',
             order: 1,
             access,
             pages: [
                 {
                     id: 'theme-settings',
-                    title: 'Theme Settings',
-                    description: 'Configure application theme and appearance.',
-                    icon: useIcon('ui.view').value,
+                    title: 'Appearance',
+                    description: 'Theme and display',
+                    iconToken: 'shell.theme.light',
                     component: () => import('~/components/dashboard/ThemePage.vue'),
                 },
                 {
                     id: 'ai-settings',
                     title: 'AI Settings',
-                    description: 'Configure AI-related preferences and options.',
-                    icon: useIcon('dashboard.plugins').value,
+                    description: 'Models, prompts and tools',
+                    iconToken: 'ui.sparkles',
                     component: () => import('~/components/dashboard/AiPage.vue'),
                 },
                 {
                     id: 'workspace-profile-settings',
                     title: 'Workspace Profile',
-                    description:
-                        'Choose how navigation, dashboard tools, commands, and initial panes are arranged.',
-                    icon: 'i-lucide-panels-top-left',
+                    description: 'Navigation and layout',
+                    iconToken: 'sidebar.page.default',
                     component: () =>
                         import('~/components/dashboard/WorkspaceProfileSettings.vue'),
                     isAvailable: () => listWorkspaceProfiles().length > 1,
@@ -46,8 +46,9 @@ export function createCoreDashboardItems(ssrAuthEnabled: boolean): DashboardPlug
         {
             id: 'core:images',
             icon: useIcon('dashboard.images').value,
+            iconToken: 'dashboard.images',
             label: 'Images',
-            description: 'Saved and generated images',
+            description: 'Saved and generated',
             order: 10,
             access,
             pages: [
@@ -55,7 +56,7 @@ export function createCoreDashboardItems(ssrAuthEnabled: boolean): DashboardPlug
                     id: 'images-library',
                     title: 'Images',
                     description: 'Browse saved and generated images.',
-                    icon: useIcon('dashboard.images').value,
+                    iconToken: 'dashboard.images',
                     component: () => import('~/pages/images/index.vue'),
                 },
             ],

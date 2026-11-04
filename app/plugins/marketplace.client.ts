@@ -41,7 +41,7 @@ export default defineNuxtPlugin(() => {
         id: 'marketplace',
         icon: 'i-lucide-store',
         label: 'Marketplace',
-        description: 'Discover and manage plugins from the configured marketplace',
+        description: 'Explore plugins',
         order: 150,
         access: { authRequired: true },
         pages: [

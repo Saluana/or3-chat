@@ -116,14 +116,15 @@ for (const [label, viewport] of [
             await expect(signIn).not.toBeVisible();
             await openComposer(page);
             await expect(cards.getByRole('button')).toHaveCount(3);
-            for (const name of ['Start a project', 'Create a document']) {
-                await cards.getByRole('button', { name, exact: true }).click();
-                const create = page.getByRole('dialog', { name, exact: true });
-                await expect(create.getByRole('textbox', { name: 'Title', exact: true })).toBeVisible();
-                await create.getByRole('button', { name: 'Cancel', exact: true }).click();
-                await expect(create).not.toBeVisible();
-            }
+            await cards.getByRole('button', { name: 'Start a project', exact: true }).click();
+            const create = page.getByRole('dialog', { name: 'Start a project', exact: true });
+            await expect(create.getByRole('textbox', { name: 'Title', exact: true })).toBeVisible();
+            await create.getByRole('button', { name: 'Cancel', exact: true }).click();
+            await expect(create).not.toBeVisible();
             await saveEvidence(info, `signed-in-empty-cards-${label}`, { body: await page.screenshot(), contentType: 'image/png' });
+            await cards.getByRole('button', { name: 'Create a document', exact: true }).click();
+            await expect(page.getByRole('dialog', { name: 'Create a document', exact: true })).toHaveCount(0);
+            await expect(page.getByRole('textbox', { name: 'Document title', exact: true })).toBeFocused();
         });
 
         test('signed-out send asks for sign-in, not an OpenRouter key, and sends nothing', async ({ page }, info) => {

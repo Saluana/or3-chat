@@ -18,12 +18,6 @@ export const dashboardOverrides = {
                 'z-[30] ring-0! border-0! rounded-[var(--md-border-radius-large,var(--md-border-radius))] bg-[var(--md-surface)] shadow-lg text-[14px]!',
         },
     },
-    'button#dashboard.back': {
-        variant: 'ghost' as const,
-        ui: {
-            base: 'ml-0! border-0 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]!',
-        },
-    },
     'button#images.gallery.download': {
         class: galleryButtons,
     },
@@ -34,10 +28,11 @@ export const dashboardOverrides = {
     'button#images.delete-selection': destructiveOutlineButton,
 };
 export const dashboardStyles = {
-    '#dashboard-page-header': {
+    // Same surface as the app's icon rail (see styles/sidebar.ts).
+    '#dashboard-sidebar': {
         style: {
-            // Blank zeroes the subtle divider width, which erased this seam. Match the modal title bar above it.
-            borderBottom: 'var(--md-border-width) solid var(--md-border-color) !important',
+            backgroundColor: 'var(--blank-rail-bg)',
+            borderRight: '1px solid color-mix(in srgb, var(--md-border-color) 70%, transparent)',
         },
     },
     '.dashboard-page-scroll': {
@@ -45,39 +40,20 @@ export const dashboardStyles = {
             backgroundColor: 'var(--md-surface) !important',
         },
     },
-    '.dashboard-plugin-icon-label': {
-        style: {
-            fontSize: '14px',
-        },
-    },
     '.dashboard-plugin-icon-button': {
         style: {
-            border: 'none',
-            borderRadius: 'var(--md-border-radius-small, var(--md-border-radius)) !important',
-            backgroundColor: 'var(--md-surface-hover)',
+            border: 'var(--md-border-width) solid var(--md-border-color)',
+            borderRadius: 'var(--md-border-radius-large, var(--md-border-radius)) !important',
+            backgroundColor: 'var(--md-surface)',
             color: 'var(--md-on-surface)',
         },
     },
     '.dashboard-plugin-icon-button:hover': {
         style: {
-            backgroundColor: 'var(--md-surface-active)',
+            backgroundColor: 'var(--md-surface-hover)',
         },
     },
     '.dashboard-plugin-icon-button:active': {
-        style: {
-            backgroundColor: 'var(--md-surface-active)',
-        },
-    },
-    '.dashboard-landing-item': {
-        style: {
-            border: 'none',
-            borderRadius: 'var(--md-border-radius-small, var(--md-border-radius)) !important',
-            backgroundColor: 'var(--md-surface-hover)',
-            color: 'var(--md-on-surface)',
-            cursor: 'pointer',
-        },
-    },
-    '.dashboard-landing-item:hover': {
         style: {
             backgroundColor: 'var(--md-surface-active)',
         },

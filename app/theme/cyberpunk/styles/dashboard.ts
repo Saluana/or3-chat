@@ -15,18 +15,8 @@ export const dashboardOverrides = {
                 'z-[30] ring-0! border-[length:var(--md-border-width)]! border-[color:var(--md-border-color)]! rounded-[var(--md-border-radius)] bg-[var(--md-surface)] text-[13px]!',
         },
     },
-    'button#dashboard.back': {
-        variant: 'basic' as const,
-        ui: {
-            base: 'ml-0! border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] rounded-[var(--md-border-radius)] text-[var(--md-on-surface)]! hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)]!',
-        },
-    },
     'button#dashboard.theme.copy-color': {
         class: 'flex items-center justify-center theme-btn',
-    },
-    'button#dashboard.workspace.import-mode': {
-        variant: 'solid',
-        color: 'on-surface',
     },
     'button#images.gallery.download': {
         class: galleryButtons,
@@ -39,11 +29,18 @@ export const dashboardOverrides = {
 };
 
 export const dashboardStyles = {
+    // Same surface as the app's icon rail (see styles/sidebar.ts).
+    '#dashboard-sidebar': {
+        style: {
+            backgroundColor: 'color-mix(in srgb, var(--md-surface) 86%, transparent)',
+            borderRight: '1px solid color-mix(in srgb, var(--md-primary) 14%, transparent)',
+        },
+    },
     '.dashboard-plugin-icon-label': {
         style: {
             fontFamily:
                 '"IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important',
-            fontSize: '11px',
+            fontSize: '13px',
             letterSpacing: '0.05em',
         },
     },
@@ -65,22 +62,6 @@ export const dashboardStyles = {
     '.dashboard-plugin-icon-button:active': {
         style: {
             backgroundColor: 'var(--md-surface-active)',
-        },
-    },
-    '.dashboard-landing-item': {
-        style: {
-            border: 'var(--md-border-width) solid var(--md-border-color)',
-            borderRadius: 'var(--md-border-radius) !important',
-            backgroundColor: 'var(--md-surface)',
-            color: 'var(--md-on-surface)',
-            cursor: 'pointer',
-        },
-    },
-    '.dashboard-landing-item:hover': {
-        style: {
-            backgroundColor: 'var(--md-surface-hover)',
-            boxShadow:
-                '0 0 8px color-mix(in srgb, var(--md-primary) 15%, transparent)',
         },
     },
     '.section-card': {

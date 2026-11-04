@@ -1,131 +1,94 @@
 <template>
-  <div class="dashboard-page-frame">
-    <header class="dashboard-page-intro">
-      <p class="dashboard-page-description">
-        Arrange existing OR3 surfaces without changing your theme, plugins, or
-        workspace data.
-      </p>
-    </header>
+  <div class="dashboard-page-frame workspace-profile-settings">
+    <p class="dashboard-list-footnote">
+      Arrange existing OR3 surfaces without changing your theme, plugins, or
+      workspace data.
+    </p>
 
-    <UCard class="section-card">
-      <div class="space-y-4">
-        <UFormField label="Profile" name="workspace-profile">
-          <USelect
-            v-model="draftProfileId"
-            :items="profileOptions"
-            value-key="value"
-            label-key="label"
-            class="w-full"
-            :disabled="pending"
-          />
-        </UFormField>
+    <section class="dashboard-list-group" aria-labelledby="profile-choice-heading">
+      <h3 id="profile-choice-heading" class="dashboard-list-heading">Profile</h3>
+      <div class="dashboard-list" role="group" aria-labelledby="profile-choice-heading">
+        <DashboardListRow
+          v-for="registration in profiles"
+          :key="registration.profile.id"
+          :label="registration.profile.label"
+          :description="registration.profile.description || undefined"
+          :value="sourceLabel(registration.source)"
+          :selected="draftProfileId === registration.profile.id"
+          :disabled="pending || saving"
+          @click="draftProfileId = registration.profile.id"
+        />
+      </div>
+    </section>
 
-        <div v-if="draftRegistration" class="space-y-2 text-sm">
-          <div class="flex flex-wrap items-center gap-2">
-            <strong>{{ draftRegistration.profile.label }}</strong>
-            <UBadge color="neutral" variant="soft">
-              {{ sourceLabel(draftRegistration.source) }}
-            </UBadge>
-          </div>
-          <p class="opacity-75">
-            {{
-              draftRegistration.profile.description ||
-              "No description provided."
-            }}
-          </p>
-        </div>
-
-        <section aria-labelledby="profile-effect-heading" class="space-y-2">
-          <h3 id="profile-effect-heading" class="text-xs font-semibold">
-            {{
-              draftProfileId === selectedProfileId
-                ? "Active in this workspace"
-                : "Profile preview"
-            }}
-          </h3>
-          <dl class="profile-effect-list">
-            <div
-              v-for="row in summaryRows"
-              :key="row.label"
-              class="profile-effect-row"
-            >
-              <dt>{{ row.label }}</dt>
-              <dd>
-                {{ row.value }}
-                <span v-if="row.hidden" class="block opacity-70">
-                  Hidden: {{ row.hidden }}
-                </span>
-              </dd>
-            </div>
-          </dl>
-        </section>
-
+    <section class="dashboard-list-group" aria-labelledby="profile-effect-heading">
+      <h3 id="profile-effect-heading" class="dashboard-list-heading">
+        {{
+          draftProfileId === selectedProfileId
+            ? "Active in this workspace"
+            : "Profile preview"
+        }}
+      </h3>
+      <dl class="dashboard-list">
         <div
-          v-if="draftResolved.diagnostics.length"
-          class="rounded border border-[var(--md-warning)]/50 p-3 text-xs"
+          v-for="row in summaryRows"
+          :key="row.label"
+          class="dashboard-list-row profile-effect-row"
         >
-          <strong>Compatibility notes</strong>
-          <ul class="mt-1 list-disc space-y-1 pl-4">
-            <li
-              v-for="diagnostic in draftResolved.diagnostics"
-              :key="`${diagnostic.code}:${diagnostic.path}:${diagnostic.id}`"
-            >
-              {{ diagnostic.message }}
-            </li>
-          </ul>
+          <dt class="dashboard-list-label">{{ row.label }}</dt>
+          <dd class="profile-effect-value">
+            {{ row.value }}
+            <span v-if="row.hidden" class="block">
+              Hidden: {{ row.hidden }}
+            </span>
+          </dd>
         </div>
+      </dl>
+    </section>
 
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <UButton
-            color="primary"
-            :loading="saving"
-            :disabled="
-              !draftRegistration || draftProfileId === selectedProfileId
-            "
-            @click="save"
-          >
-            Apply profile
-          </UButton>
-          <UButton
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            :disabled="saving"
-            @click="showResetConfirmation = true"
-          >
-            Reset to Standard OR3
-          </UButton>
-        </div>
-      </div>
-    </UCard>
-
-    <UCard v-if="recommendedRegistration" class="section-card">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div class="flex-1">
-          <strong>Recommended by active theme</strong>
-          <p class="text-sm opacity-70">
-            {{ recommendedRegistration.profile.label }} is available, but themes
-            never change your layout automatically.
-          </p>
-        </div>
-        <UButton
-          color="neutral"
-          variant="soft"
-          @click="draftProfileId = recommendedRegistration.profile.id"
+    <div
+      v-if="draftResolved.diagnostics.length"
+      class="profile-diagnostics"
+    >
+      <strong>Compatibility notes</strong>
+      <ul class="mt-1 list-disc space-y-1 pl-4">
+        <li
+          v-for="diagnostic in draftResolved.diagnostics"
+          :key="`${diagnostic.code}:${diagnostic.path}:${diagnostic.id}`"
         >
-          Review recommendation
-        </UButton>
-      </div>
-    </UCard>
+          {{ diagnostic.message }}
+        </li>
+      </ul>
+    </div>
 
-    <UCard
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <UButton
+        color="primary"
+        :loading="saving"
+        :disabled="!draftRegistration || draftProfileId === selectedProfileId"
+        @click="save"
+      >
+        Apply profile
+      </UButton>
+      <UButton
+        color="neutral"
+        variant="ghost"
+        size="sm"
+        :disabled="saving"
+        @click="showResetConfirmation = true"
+      >
+        Reset to Standard OR3
+      </UButton>
+    </div>
+
+    <div
       v-if="showResetConfirmation"
-      class="section-card"
+      class="dashboard-list"
       data-testid="profile-reset-confirmation"
     >
-      <div class="space-y-3">
+      <div class="dashboard-list-body">
         <strong>Reset this workspace layout?</strong>
-        <p class="text-sm opacity-70">
+        <p class="dashboard-list-description">
           This selects Standard OR3 and resets the open layout. Chats,
           documents, projects, plugins, and theme settings are preserved.
         </p>
@@ -142,7 +105,26 @@
           </UButton>
         </div>
       </div>
-    </UCard>
+    </div>
+
+    <div v-if="recommendedRegistration" class="dashboard-list">
+      <DashboardListRow
+        static
+        label="Recommended by active theme"
+        :description="`${recommendedRegistration.profile.label} is available, but themes never change your layout automatically.`"
+      >
+        <template #trailing>
+          <UButton
+            color="neutral"
+            variant="soft"
+            size="sm"
+            @click="draftProfileId = recommendedRegistration.profile.id"
+          >
+            Review
+          </UButton>
+        </template>
+      </DashboardListRow>
+    </div>
   </div>
 </template>
 
@@ -156,6 +138,7 @@ import {
 } from "~/core/workspace-profiles";
 import { useWorkspaceProfiles } from "~/composables/workspace-profiles/useWorkspaceProfiles";
 import { useOr3Config } from "~/composables/useOr3Config";
+import DashboardListRow from "./DashboardListRow.vue";
 
 const toast = useToast();
 const or3Config = useOr3Config();
@@ -176,12 +159,6 @@ watch(selectedProfileId, (profileId) => {
   if (!saving.value) draftProfileId.value = profileId;
 });
 
-const profileOptions = computed(() =>
-  profiles.value.map((registration) => ({
-    label: registration.profile.label,
-    value: registration.profile.id,
-  })),
-);
 const draftRegistration = computed(() =>
   profiles.value.find(
     (registration) => registration.profile.id === draftProfileId.value,
@@ -307,30 +284,38 @@ async function reset() {
 </script>
 
 <style scoped>
-.profile-effect-list {
-  display: grid;
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0.75rem;
-  font-size: 0.8rem;
-  background: var(--md-surface-container-low, var(--md-surface-variant));
-  border-radius: var(--md-border-radius-small, var(--md-border-radius));
+.workspace-profile-settings {
+  gap: 28px;
 }
 .profile-effect-row {
-  display: grid;
-  gap: 0.15rem 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
 }
 .profile-effect-row dt {
-  color: var(--md-on-surface-variant, var(--md-on-surface));
-  font-weight: 600;
+  flex-shrink: 0;
 }
-.profile-effect-row dd {
+.profile-effect-value {
   margin: 0;
+  min-width: 0;
+  color: var(--md-on-surface-variant, var(--md-on-surface));
+  font-size: 14px;
+  line-height: 22px;
+  text-align: right;
   overflow-wrap: anywhere;
 }
-@media (min-width: 640px) {
+.profile-diagnostics {
+  padding: 12px 16px;
+  font-size: 12px;
+  border: var(--md-border-width) solid color-mix(in srgb, var(--md-warning) 50%, transparent);
+  border-radius: var(--md-border-radius-large, var(--md-border-radius));
+}
+@media (max-width: 639px) {
   .profile-effect-row {
-    grid-template-columns: 9rem minmax(0, 1fr);
+    flex-direction: column;
+    gap: 2px;
+  }
+  .profile-effect-value {
+    text-align: left;
   }
 }
 </style>

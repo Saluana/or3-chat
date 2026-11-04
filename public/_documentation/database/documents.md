@@ -100,7 +100,7 @@ Document storage built on the shared `posts` table (`postType: 'doc'`) with TipT
 
 ## Implementation notes
 
-1. **Title normalization** — `normalizeTitle` trims empty strings to `'Untitled'`, then passes through the `db.documents.title:filter` hook with phase/id/raw context.
+1. **Title normalization** — `normalizeTitle` trims empty strings to `'Untitled'`, then passes through the `db.documents.title:filter` hook with phase/id/raw context. The mounted editor presents the fallback title as a placeholder instead of selected text, and focuses the empty title field when a document was just created.
 2. **Content safety** — `parseContent` guards against malformed JSON, returning an empty doc structure on error.
 3. **Update payloads** — Build `DbUpdatePayload` objects so hooks receive full `existing`, `updated`, and `patch` context.
 4. **File hashes** — `file_hashes` is derived from embedded file nodes in the content via `serializeDocumentFileHashes` on create and update.

@@ -15,7 +15,7 @@ OR3 is an extensible AI chat workspace with conversations, documents, projects, 
 
 Local-first use does not require an OR3 account. A Cloud instance can require sign-in and add workspace synchronization, remote file storage, and server-side AI requests. Its available features depend on the operator's configuration. OpenRouter connection and OR3 Cloud sign-in are separate; see [Connect OpenRouter](/documentation/auth/connect).
 
-In the Blank theme, a new chat pane offers **Start a chat**, **Start a project**, and **Create a document** above the composer. Start a chat focuses your existing draft. Creation uses the normal naming forms; a new document opens in its own tab so your unsent chat remains available. Theme authors can customize or disable this surface through [empty chat appearance](/documentation/themes/api-reference#empty-chat-panes).
+In the Blank theme, a new chat pane offers **Start a chat**, **Start a project**, and **Create a document** above the composer. Start a chat focuses your existing draft. Starting a project opens its naming form. Creating a document is immediate: it keeps the fallback title **Untitled**, opens in its own tab, and focuses the empty title field so you can name it inline without a dialog. Your unsent chat remains available. Theme authors can customize or disable this surface through [empty chat appearance](/documentation/themes/api-reference#empty-chat-panes).
 
 ## Find and organize your work
 
@@ -29,9 +29,12 @@ When several unsent chats are open, their tabs are numbered in creation order
 so you can distinguish drafts. A restored app keeps its app identity while its
 plugin loads; an unavailable app shows an explanation instead of a chat composer.
 
-Dashboard **Back** returns one level at a time. Its breadcrumb also opens the
-parent section or Dashboard directly. The Dashboard modal keeps the same height
-as you navigate, fits the available screen, and scrolls longer content inside.
+On wider screens the Dashboard sidebar opens Dashboard, Settings, and each app
+directly. On phones the Dashboard fills the screen, and each page links back to
+its parent instead. Settings open each option in its own view (for example
+**AI Settings → Starting model**); the link above the title returns one level at
+a time and names where it goes. The Dashboard modal keeps the same height as you
+navigate, fits the available screen, and scrolls longer content inside.
 Closing it clears its dashboard deep link, so reloading does not reopen the
 closed panel. Other workspace URL parameters are preserved.
 In **Files**, use **Trash** to view deleted items and **Back to files** to return.

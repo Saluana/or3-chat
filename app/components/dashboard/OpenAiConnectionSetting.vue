@@ -1,24 +1,19 @@
 <template>
-    <section class="section-card space-y-3" aria-labelledby="openai-connection-label">
-        <div class="dashboard-setting-heading">
-            <span class="dashboard-setting-icon" aria-hidden="true"><UIcon name="i-lucide-key-round" class="h-5 w-5" /></span>
-            <div>
-                <h2 id="openai-connection-label" class="dashboard-section-title">OpenAI</h2>
-                <p class="supporting-text mt-1">
-                    Use OpenAI models directly with your own API key. They appear in the model picker as
-                    “(OpenAI key)” and are billed to your OpenAI account.
-                </p>
-            </div>
-        </div>
-        <p class="supporting-text" role="status">{{ statusText }}</p>
+    <section class="dashboard-list-group" aria-labelledby="openai-connection-label">
+        <label id="openai-connection-label" class="dashboard-list-heading" for="dashboard-openai-key">API key</label>
         <form v-if="connection.available" class="flex flex-col gap-2 sm:flex-row" @submit.prevent="save">
-            <UInput v-model="key" type="password" autocomplete="off" placeholder="sk-…" aria-label="OpenAI API key"
-                class="flex-1" :disabled="busy" />
+            <UInput id="dashboard-openai-key" v-model="key" type="password" autocomplete="off" placeholder="sk-…"
+                aria-label="OpenAI API key" class="flex-1" :disabled="busy" />
             <UButton type="submit" label="Save key" :loading="busy" :disabled="!key.trim()" />
             <UButton v-if="connection.connected" type="button" color="neutral" variant="outline" label="Remove key"
                 :disabled="busy" @click="remove" />
         </form>
-        <p v-if="error" class="text-sm text-error" role="alert">{{ error }}</p>
+        <p class="dashboard-list-footnote" role="status">{{ statusText }}</p>
+        <p class="dashboard-list-footnote">
+            Use OpenAI models directly with your own API key. They appear in the model picker as
+            “(OpenAI key)” and are billed to your OpenAI account.
+        </p>
+        <p v-if="error" class="dashboard-list-footnote text-error" role="alert">{{ error }}</p>
     </section>
 </template>
 <script setup lang="ts">

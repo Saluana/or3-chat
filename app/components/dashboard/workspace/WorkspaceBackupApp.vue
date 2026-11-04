@@ -1,370 +1,193 @@
 <template>
     <div
         id="dashboard-workspace-backup-container"
-        class="dashboard-page-frame text-sm"
+        class="dashboard-page-frame workspace-backup text-sm"
     >
         <p ref="liveRegion" class="sr-only" aria-live="polite"></p>
-
-        <header class="dashboard-page-intro">
-            <div>
-                <p class="dashboard-page-eyebrow">Workspace</p>
-                <h1 class="dashboard-page-title">Backup and restore</h1>
-                <p class="dashboard-page-description">
-                    {{ cloud ? 'Back up Cloud data and originals, or restore into a fresh workspace.' : 'Export a local backup or restore workspace data from a previous OR3 archive.' }}
-                </p>
-            </div>
-        </header>
-
-        <section
-            id="dashboard-workspace-guidance-section"
-            class="section-card space-y-3"
-            role="group"
-            aria-labelledby="workspace-backup-guidance"
-        >
-            <div class="flex flex-wrap items-start justify-between gap-4">
-                <div class="space-y-2 max-w-prose">
-                    <h2
-                        id="workspace-backup-guidance"
-                        class="font-heading text-base uppercase tracking-wide group-heading"
-                    >
-                        Workspace backup
-                    </h2>
-                    <p class="supporting-text">
-                        {{ cloud ? 'Cloud backups include server records and original files, including files absent from this browser. Finish syncing and uploading first. Restores create a new workspace and keep your source intact.' : 'Local backups contain this browser’s workspace database and stored files. Keep a fresh export before restoring or clearing browser data.' }}
-                    </p>
-                </div>
-                <div></div>
-            </div>
-            <UAlert
-                v-bind="alertProps"
-                color="warning"
-                variant="subtle"
-                :icon="iconWarning"
-                class="text-xs"
-                :title="cloud ? 'Keep your downloaded backup safe. If restore fails, the original workspace and incomplete destination are retained.' : 'Always create a fresh export before importing a backup—replace mode wipes current data.'"
-            />
-        </section>
+        <!-- The dashboard header already shows the page title. -->
+        <h1 class="dashboard-page-title sr-only">Backup and restore</h1>
 
         <section
             id="dashboard-workspace-export-section"
-            class="section-card space-y-4"
-            role="group"
+            class="dashboard-list-group"
             aria-labelledby="workspace-backup-export"
         >
-            <div class="flex items-center justify-between gap-3 flex-wrap">
-                <h3
-                    id="workspace-backup-export"
-                    class="font-heading text-base uppercase tracking-wide group-heading"
+            <h3 id="workspace-backup-export" class="dashboard-list-heading">
+                Export
+            </h3>
+            <div class="dashboard-list">
+                <DashboardListRow
+                    static
+                    :icon="iconBackup"
+                    label="Export workspace"
+                    :description="
+                        cloud
+                            ? 'Download an archive with original files'
+                            : 'Download a backup of this browser’s data'
+                    "
                 >
-                    Export workspace
-                </h3>
-                <div></div>
-            </div>
-            <p class="supporting-text">
-                {{ cloud ? 'Downloads a complete .or3cloud archive with original files and checksums. Data streams directly to disk; unfinished sync or missing originals prevent a complete backup.' : 'Downloads a timestamped JSONL backup of the on-device workspace database. Data streams to disk. Files that exist only on a remote server are not included.' }}
-            </p>
-            <div class="space-y-2">
-                <UProgress
-                    v-bind="progressProps"
-                    v-if="exporting"
-                    size="xs"
-                    :value="state.progress"
-                    :max="100"
-                />
-            </div>
-            <div class="flex items-center flex-wrap justify-between gap-3">
-                <UButton
-                    v-bind="exportButtonProps"
-                    :disabled="!canExport"
-                    :loading="exporting"
-                    @click="onExport"
-                >
-                    <UIcon
-                        :name="iconBackup"
-                        class="h-4 w-4 mr-0.5"
+                    <UProgress
+                        v-if="exporting"
+                        v-bind="progressProps"
+                        class="mt-2"
+                        size="xs"
+                        :value="state.progress"
+                        :max="100"
                     />
-                    Export workspace
-                </UButton>
-                <span class="opacity-80 text-xs">{{ exportStatusText }}</span>
+                    <template #trailing>
+                        <UButton
+                            v-bind="exportButtonProps"
+                            :disabled="!canExport"
+                            :loading="exporting"
+                            @click="onExport"
+                        >
+                            Export
+                        </UButton>
+                    </template>
+                </DashboardListRow>
             </div>
+            <p
+                v-if="exportStatusText"
+                class="dashboard-list-footnote"
+                :class="{ 'text-error': lastExportStatus === 'error' }"
+                :role="lastExportStatus === 'error' ? 'alert' : 'status'"
+            >
+                {{ exportStatusText }}
+            </p>
+            <p v-if="cloud" class="dashboard-list-footnote">
+                Finish syncing and uploading first.
+            </p>
         </section>
 
         <section
             id="dashboard-workspace-import-section"
-            class="section-card space-y-4"
-            role="group"
+            class="dashboard-list-group"
             aria-labelledby="workspace-backup-import"
         >
-            <div class="flex items-center justify-between gap-3 flex-wrap">
-                <h3
-                    id="workspace-backup-import"
-                    class="font-heading text-base uppercase tracking-wide group-heading"
+            <h3 id="workspace-backup-import" class="dashboard-list-heading">
+                {{ cloud ? 'Restore' : 'Import' }}
+            </h3>
+            <input
+                ref="fileInput"
+                type="file"
+                :accept="cloud ? '.or3cloud' : 'application/json,.json,.jsonl,.or3.jsonl'"
+                class="hidden"
+                @change="onFilePicked"
+            />
+            <div class="dashboard-list">
+                <DashboardListRow
+                    static
+                    :icon="iconUpload"
+                    :label="selectedFile ? selectedFile.name : 'Backup file'"
+                    :description="fileDescription"
                 >
-                    Import workspace
-                </h3>
-            </div>
-            <p class="supporting-text">
-                {{ cloud ? 'Validate a .or3cloud archive, then restore into a new workspace. Your current workspace is kept. Leave this page open until restoration finishes.' : 'Validate a backup file, choose an import mode, and restore your data. Append adds records; replace clears current tables inside the restore transaction.' }}
-            </p>
-            <div class="space-y-4">
-                <div class="theme-upload-panel">
-                    <input
-                        ref="fileInput"
-                        type="file"
-                        :accept="cloud ? '.or3cloud' : 'application/json,.json,.jsonl,.or3.jsonl'"
-                        class="hidden"
-                        @change="onFilePicked"
-                    />
-                    <div
-                        class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
-                    >
-                        <div
-                            class="flex items-start gap-3 text-left cursor-pointer"
-                            role="button"
-                            tabindex="0"
-                            @click="handleUploadPanelClick"
-                            @keydown.enter.prevent="handleUploadPanelClick"
-                            @keydown.space.prevent="handleUploadPanelClick"
-                        >
-                            <UIcon
-                                :name="iconUpload"
-                                class="theme-upload-icon"
-                                aria-hidden="true"
-                            />
-                            <div class="space-y-1">
-                                <p
-                                    class="font-heading text-xs uppercase tracking-[0.14em] text-[var(--md-on-surface)]"
-                                >
-                                    Select backup file
-                                </p>
-                                <p class="text-xs opacity-70 leading-snug">
-                                    {{ selectedFileSummary }}
-                                </p>
-                            </div>
-                        </div>
-                        <div class="flex flex-wrap gap-2">
+                    <template #trailing>
+                        <div class="flex items-center gap-1.5">
                             <UButton
                                 v-bind="browseButtonProps"
                                 :disabled="importing || peeking"
                                 @click="onBrowse"
                             >
-                                Browse
+                                {{ selectedFile ? 'Change' : 'Choose file' }}
                             </UButton>
                             <UButton
                                 v-if="selectedFile"
-                                v-bind="clearFileButtonProps"
+                                :icon="iconClose"
+                                color="neutral"
+                                variant="ghost"
+                                size="sm"
+                                square
+                                aria-label="Clear selected file"
                                 :disabled="importing || peeking"
                                 @click="clearSelection"
-                            >
-                                Clear
-                            </UButton>
+                            />
                         </div>
-                    </div>
+                    </template>
+                </DashboardListRow>
+            </div>
+            <p
+                v-if="peekErrorMessage"
+                class="dashboard-list-footnote text-error"
+                role="alert"
+            >
+                {{ peekErrorMessage }}
+            </p>
+            <p v-else-if="cloud" class="dashboard-list-footnote">
+                Restores into a new workspace and keeps your current one. Keep
+                this page open until it finishes.
+            </p>
+        </section>
 
-                    <Transition name="fade">
-                        <div
-                            v-if="selectedFile"
-                            class="theme-file-card"
-                            aria-live="polite"
-                        >
-                            <div class="space-y-1">
-                                <p class="font-semibold text-sm leading-tight">
-                                    {{ selectedFile.name }}
-                                </p>
-                                <p class="text-xs opacity-70">
-                                    Size • {{ formatBytes(selectedFile.size) }}
-                                </p>
-                            </div>
-                            <UBadge
-                                v-bind="badgeProps"
-                                :icon="iconFile"
-                                :class="[
-                                    'theme-badge',
-                                    badgeToneClass(fileBadgeColor),
-                                ]"
-                            >
-                                {{ fileBadgeLabel }}
-                            </UBadge>
-                        </div>
-                    </Transition>
-                </div>
-
-                <UAlert
-                    v-bind="alertProps"
-                    v-if="peeking"
-                    color="primary"
-                    variant="subtle"
-                    :icon="iconWait"
-                    class="text-xs"
-                    title="Validating backup metadata…"
+        <section
+            v-if="!cloud && backupMeta"
+            id="dashboard-workspace-mode-section"
+            class="dashboard-list-group"
+            aria-labelledby="workspace-backup-mode"
+        >
+            <h3 id="workspace-backup-mode" class="dashboard-list-heading">
+                Import mode
+            </h3>
+            <div class="dashboard-list" role="group" aria-labelledby="workspace-backup-mode">
+                <DashboardListRow
+                    v-for="option in importModeOptions"
+                    :key="option.value"
+                    :label="option.label"
+                    :description="option.description"
+                    :selected="importMode === option.value"
+                    @click="importModeModel = option.value"
                 />
-                <UAlert
-                    v-bind="alertProps"
-                    v-if="peekErrorMessage"
-                    color="error"
-                    variant="subtle"
-                    :icon="iconWarning"
-                    class="text-xs"
-                    :title="peekErrorMessage"
-                />
-
-                <Transition name="fade">
-                    <div
-                        v-if="backupMeta"
-                        class="theme-meta-panel"
-                        aria-live="polite"
-                    >
-                        <div class="flex items-center justify-between">
-                            <div class="space-y-1">
-                                <p
-                                    class="text-xs font-semibold uppercase tracking-wide"
-                                >
-                                    {{ backupMeta.databaseName }}
-                                </p>
-                                <p class="text-[11px] opacity-70">
-                                    Schema version
-                                    {{ backupMeta.databaseVersion }}
-                                </p>
-                            </div>
-                            <UBadge
-                                v-if="!cloud && backupMeta.tables.length"
-                                :icon="iconWorkspaces"
-                                :class="[
-                                    'theme-badge',
-                                    badgeToneClass('primary'),
-                                ]"
-                            >
-                                {{ formatNumber(backupMeta.tables.length) }}
-                                tables
-                            </UBadge>
-                        </div>
-                        <div
-                            v-if="!cloud && backupMeta.tables.length"
-                            class="theme-meta-table"
-                            role="list"
-                            aria-label="Tables included in backup"
-                        >
-                            <div
-                                v-for="table in backupMeta.tables"
-                                :key="table.name"
-                                class="theme-meta-row"
-                                role="listitem"
-                            >
-                                <span>{{ table.name }}</span>
-                                <span class="tabular-nums">
-                                    {{ formatNumber(table.rowCount) }} rows
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </Transition>
-
-                <div v-if="!cloud" class="space-y-3">
-                    <div class="space-y-2">
-                        <p
-                            class="text-xs font-semibold uppercase tracking-wide text-[var(--md-on-surface-variant)]"
-                        >
-                            Import mode
-                        </p>
-                        <div class="grid gap-3 sm:grid-cols-2">
-                            <UButton
-                                v-for="option in importModeOptions"
-                                :key="option.value"
-                                v-bind="importModeButtonProps"
-                                class="h-fit"
-                                :class="{
-                                    'bg-primary/20 hover:bg-primary/20':
-                                        importMode === option.value,
-                                }"
-                                block
-                                @click="importModeModel = option.value"
-                                :aria-pressed="importMode === option.value"
-                            >
-                                <div class="flex items-start gap-3 w-full">
-                                    <UIcon
-                                        :name="option.icon"
-                                        class="theme-choice-icon"
-                                        aria-hidden="true"
-                                    />
-                                    <div class="space-y-1 text-left">
-                                        <p
-                                            class="font-semibold text-sm leading-tight"
-                                        >
-                                            {{ option.label }}
-                                        </p>
-                                        <p
-                                            class="text-xs opacity-80 leading-snug"
-                                        >
-                                            {{ option.description }}
-                                        </p>
-                                    </div>
-                                    <UIcon
-                                        v-if="importMode === option.value"
-                                        :name="iconCheck"
-                                        class="ml-auto text-lg text-[var(--md-primary)]"
-                                    />
-                                </div>
-                            </UButton>
-                        </div>
-                    </div>
-
-                    <UCheckbox
-                        v-bind="importCheckboxProps"
-                        v-model="overwriteValuesModel"
-                        size="sm"
-                        :disabled="overwriteDisabled"
-                        class="theme-checkbox"
-                        label="Overwrite records on key conflict"
-                        description="When disabled, any key conflict aborts the import and rolls back changes."
-                    />
-                </div>
-
-                <UAlert
-                    v-bind="alertProps"
-                    v-if="importWarningMessage"
-                    color="warning"
-                    variant="subtle"
-                    :icon="iconWarning"
-                    class="text-xs"
-                    :title="importWarningMessage"
-                />
-                <UAlert
-                    v-bind="alertProps"
-                    v-if="importErrorMessage"
-                    color="error"
-                    variant="subtle"
-                    :icon="iconWarning"
-                    class="text-xs"
-                    :title="importErrorMessage"
-                />
-
-                <div class="space-y-2">
-                    <UProgress
-                        v-bind="progressProps"
-                        v-if="importing"
-                        size="xs"
-                        :value="state.progress"
-                        :max="100"
-                    />
-                </div>
-
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                    <UButton
-                        v-bind="importButtonProps"
-                        :disabled="!canImport"
-                        :loading="importing"
-                        @click="onImport"
-                    >
-                        <UIcon
-                            :name="iconRestore"
-                            class="h-4 w-4 mr-0.5"
+                <DashboardListRow
+                    v-if="importMode === 'append'"
+                    static
+                    label="Overwrite conflicts"
+                    description="Replace records that already exist"
+                >
+                    <template #trailing>
+                        <USwitch
+                            v-model="overwriteValuesModel"
+                            aria-label="Overwrite conflicting records"
                         />
-                        Import workspace
-                    </UButton>
-                    <span class="text-xs opacity-70 tabular-nums">
-                        {{ importStatusText }}
-                    </span>
-                </div>
+                    </template>
+                </DashboardListRow>
+            </div>
+            <p
+                v-if="importWarningMessage"
+                class="dashboard-list-footnote text-error"
+                role="note"
+            >
+                {{ importWarningMessage }}
+            </p>
+        </section>
+
+        <section
+            v-if="selectedFile"
+            id="dashboard-workspace-confirm-section"
+            class="dashboard-list-group"
+        >
+            <UProgress
+                v-if="importing"
+                v-bind="progressProps"
+                size="xs"
+                :value="state.progress"
+                :max="100"
+            />
+            <p
+                v-if="importErrorMessage"
+                class="dashboard-list-footnote text-error"
+                role="alert"
+            >
+                {{ importErrorMessage }}
+            </p>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <span class="dashboard-list-footnote tabular-nums">{{ importStatusText }}</span>
+                <UButton
+                    v-bind="importButtonProps"
+                    :disabled="!canImport"
+                    :loading="importing"
+                    @click="onImport"
+                >
+                    {{ cloud ? 'Restore' : 'Import' }}
+                </UButton>
             </div>
         </section>
     </div>
@@ -377,22 +200,15 @@ import {
     type WorkspaceImportMode,
 } from '~/composables/core/useWorkspaceBackup';
 import { useIcon } from '~/composables/useIcon';
+import DashboardListRow from '../DashboardListRow.vue';
 import { err, reportError, type AppError } from '~/utils/errors';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { isCloudWorkspaceBackupEnabled } from '~/core/storage/file-policy';
 const cloud = isCloudWorkspaceBackupEnabled();
 
-const docsHref =
-    'https://github.com/Saluana/or3-chat/blob/main/docs/UI/workspace-backup.md';
-const iconWarning = useIcon('ui.warning');
 const iconBackup = useIcon('dashboard.backup');
 const iconUpload = useIcon('ui.upload');
-const iconWait = useIcon('ui.wait');
-const iconRestore = useIcon('dashboard.restore');
-const iconFile = useIcon('sidebar.project.knowledge.file');
-const iconWorkspaces = useIcon('dashboard.workspaces');
-const iconCheck = useIcon('ui.check');
-const iconSync = useIcon('ui.sync');
+const iconClose = useIcon('ui.close');
 
 const liveRegion = ref<HTMLElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -413,18 +229,6 @@ const pendingAction = ref<'export' | 'import' | 'peek' | null>(null);
 const { state, exportWorkspace, peekBackup, importWorkspace, reset } =
     useWorkspaceBackup();
 
-type BadgeTone =
-    | 'neutral'
-    | 'primary'
-    | 'success'
-    | 'error'
-    | 'info'
-    | 'warning';
-
-function badgeToneClass(tone?: BadgeTone | null) {
-    return tone ? `theme-badge--${tone}` : 'theme-badge--neutral';
-}
-
 // Theme overrides for buttons
 const exportButtonProps = computed(() => {
     const overrides = useThemeOverrides({
@@ -434,6 +238,7 @@ const exportButtonProps = computed(() => {
         isNuxtUI: true,
     });
     return {
+        size: 'sm' as const,
         variant: 'outline' as const,
         class: 'text-[var(--md-on-surface)]',
         ...(overrides.value as any),
@@ -450,38 +255,6 @@ const browseButtonProps = computed(() => {
     return {
         size: 'sm' as const,
         variant: 'outline' as const,
-
-        ...(overrides.value as any),
-    };
-});
-
-const clearFileButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'dashboard',
-        identifier: 'dashboard.workspace.clear-file',
-        isNuxtUI: true,
-    });
-    return {
-        size: 'sm' as const,
-        color: 'error' as const,
-        variant: 'basic' as const,
-        type: 'button' as const,
-        ...(overrides.value as any),
-    };
-});
-
-const importModeButtonProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'button',
-        context: 'dashboard',
-        identifier: 'dashboard.workspace.import-mode',
-        isNuxtUI: true,
-    });
-    return {
-        variant: 'ghost' as const,
-        color: 'primary' as const,
-        type: 'button' as const,
         ...(overrides.value as any),
     };
 });
@@ -494,21 +267,11 @@ const importButtonProps = computed(() => {
         isNuxtUI: true,
     });
     return {
-        variant: 'outline' as const,
-        class: 'text-[var(--md-on-surface)]',
+        size: 'sm' as const,
+        color: 'primary' as const,
         type: 'button' as const,
         ...(overrides.value as any),
     };
-});
-
-const alertProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'alert',
-        context: 'dashboard',
-        identifier: 'dashboard.workspace.alert',
-        isNuxtUI: true,
-    });
-    return overrides.value || {};
 });
 
 const progressProps = computed(() => {
@@ -516,26 +279,6 @@ const progressProps = computed(() => {
         component: 'progress',
         context: 'dashboard',
         identifier: 'dashboard.workspace.progress',
-        isNuxtUI: true,
-    });
-    return overrides.value || {};
-});
-
-const badgeProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'badge',
-        context: 'dashboard',
-        identifier: 'dashboard.workspace.badge',
-        isNuxtUI: true,
-    });
-    return overrides.value || {};
-});
-
-const importCheckboxProps = computed(() => {
-    const overrides = useThemeOverrides({
-        component: 'checkbox',
-        context: 'dashboard',
-        identifier: 'dashboard.workspace.checkbox',
         isNuxtUI: true,
     });
     return overrides.value || {};
@@ -586,7 +329,7 @@ const exportStatusText = computed(() => {
         return `Last export ${formatDate(lastExportAt.value)}`;
     if (lastExportStatus.value === 'error')
         return exportError.value?.message || 'Export failed';
-    return 'Ready';
+    return '';
 });
 
 const importStatusText = computed(() => {
@@ -597,18 +340,14 @@ const importStatusText = computed(() => {
         return `Last import ${formatDate(lastImportAt.value)}`;
     // The error alert above the button carries the details.
     if (lastImportStatus.value === 'error') return 'Import failed';
-    return 'Awaiting backup';
-});
-
-const importWarning = computed(() => {
-    // The Cloud import description already states that restores create a new workspace.
-    if (cloud) return '';
-    if (importMode.value === 'replace')
-        return 'Replace mode clears all existing workspace data before importing.';
-    if (importMode.value === 'append' && !overwriteValues.value)
-        return 'Append aborts on key conflicts. Enable overwrite to replace conflicting records.';
     return '';
 });
+
+const importWarning = computed(() =>
+    !cloud && importMode.value === 'replace'
+        ? 'Replace clears all current workspace data. Export first if you need it.'
+        : ''
+);
 
 const importWarningMessage = computed(() => importWarning.value.trim());
 const importErrorMessage = computed(
@@ -618,48 +357,34 @@ const peekErrorMessage = computed(() => peekError.value?.message?.trim() ?? '');
 
 const overwriteDisabled = computed(() => importMode.value !== 'append');
 
-const importModeOptions = computed<Array<{
+const importModeOptions: Array<{
     value: WorkspaceImportMode;
     label: string;
     description: string;
-    icon: string;
-}>>(() => [
-    {
-        value: 'replace',
-        label: 'Replace workspace',
-        description: 'Clear all local data, then restore from the backup.',
-        icon: iconWarning.value,
-    },
+}> = [
     {
         value: 'append',
         label: 'Append & merge',
-        description: 'Keep existing records and add new rows from the backup.',
-        icon: iconSync.value,
+        description: 'Keep existing records and add the backup’s',
     },
-]);
+    {
+        value: 'replace',
+        label: 'Replace workspace',
+        description: 'Clear local data, then restore the backup',
+    },
+];
 
-const selectedFileSummary = computed(() => {
-    if (!selectedFile.value)
-        return cloud ? 'Accepted format: .or3cloud' : 'Accepted formats: .or3.jsonl, .jsonl, .json';
-    return `${selectedFile.value.name} • ${formatBytes(
-        selectedFile.value.size
-    )}`;
-});
-
-const fileBadgeLabel = computed(() => {
-    if (!selectedFile.value) return '';
-    if (peeking.value) return 'Validating…';
-    if (peekError.value) return 'Validation failed';
-    if (backupMeta.value) return 'Metadata validated';
-    return 'Ready to validate';
-});
-
-const fileBadgeColor = computed(() => {
-    if (!selectedFile.value) return 'neutral' as const;
-    if (peeking.value) return 'info' as const;
-    if (peekError.value) return 'error' as const;
-    if (backupMeta.value) return 'success' as const;
-    return 'primary' as const;
+const fileDescription = computed(() => {
+    const file = selectedFile.value;
+    if (!file) return cloud ? 'An .or3cloud archive' : 'A .jsonl or .json backup';
+    const size = formatBytes(file.size);
+    if (peeking.value) return `${size} · Validating…`;
+    if (peekError.value) return `${size} · Not a valid backup`;
+    const tables = backupMeta.value?.tables ?? [];
+    if (!backupMeta.value) return size;
+    if (cloud || !tables.length) return `${size} · Valid backup`;
+    const rows = tables.reduce((total, table) => total + table.rowCount, 0);
+    return `${size} · ${formatNumber(tables.length)} tables · ${formatNumber(rows)} rows`;
 });
 
 const exportStatusFormatter = new Intl.DateTimeFormat(undefined, {
@@ -712,12 +437,6 @@ function clearSelection() {
         reset();
         if (pendingAction.value === 'peek') pendingAction.value = null;
     }
-}
-
-function handleUploadPanelClick(event: Event) {
-    const element = event.target as HTMLElement;
-    if (element.closest('button')) return;
-    onBrowse();
 }
 
 async function onFilePicked(event: Event) {
@@ -915,28 +634,7 @@ defineExpose({
 </script>
 
 <style scoped>
-/* Component-specific layout and typography (non-decorative) */
-.group-heading {
-    margin-top: -0.25rem;
-    letter-spacing: 0.08em;
-}
-
-.supporting-text {
-    font-size: 15px;
-    line-height: 1.35;
-    max-width: min(82ch, 100%);
-    color: var(--md-on-surface-variant, var(--md-on-surface));
-    opacity: 0.75;
-    overflow-wrap: break-word;
-}
-
-.fade-enter-active,
-.fade-leave-active {
-    transition: opacity 150ms ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-    opacity: 0;
+.workspace-backup {
+    gap: 28px;
 }
 </style>

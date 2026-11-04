@@ -8,7 +8,7 @@ export default defineNuxtPlugin(() => {
         id: 'core:webhooks',
         icon: 'i-lucide-webhook',
         label: 'Webhooks',
-        description: 'Manage outbound webhook subscriptions',
+        description: 'Event subscriptions',
         order: 50,
         access: { authRequired: true },
         pages: [

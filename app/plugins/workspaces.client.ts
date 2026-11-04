@@ -40,7 +40,7 @@ export default defineNuxtPlugin(() => {
         icon: 'pixelarticons:users',
         iconToken: 'dashboard.workspaces',
         label: 'Workspaces',
-        description: 'Manage and back up your workspaces',
+        description: 'Manage and back up',
         order: 140,
         access: { authRequired: true },
         pages,

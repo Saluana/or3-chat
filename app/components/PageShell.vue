@@ -431,18 +431,12 @@
                 @selected="notifySystemPromptSelected"
             />
         </ClientOnly>
-        <LazySidebarCreateProjectModal v-if="emptyCreate.active.value && emptyCreate.project.value"
+        <LazySidebarCreateProjectModal v-if="emptyCreate.active.value"
             :open="true" title="Start a project" :name="emptyCreate.form.title" :description="emptyCreate.form.brief"
             :name-error="emptyCreate.form.error" :loading="emptyCreate.form.pending" :submit-label="emptyCreate.request.value?.savedId ? 'Open' : undefined"
             :modal-props="emptyCreateModalProps" :form-field-props="{}" :icon-folder="emptyProjectIcon" :loading-icon="emptyLoadingIcon"
             @update:open="!$event && emptyCreate.close()" @close="emptyCreate.close" @submit="emptyCreate.submit"
             @update:name="emptyCreate.form.title = $event" @update:description="emptyCreate.form.brief = $event" />
-        <LazySidebarCreateDocumentModal v-if="emptyCreate.active.value && !emptyCreate.project.value"
-            :open="true" title="Create a document" placeholder="Document title" :value="emptyCreate.form.title"
-            :error="emptyCreate.form.error" :loading="emptyCreate.form.pending" :submit-label="emptyCreate.request.value?.savedId ? 'Open' : undefined"
-            :modal-props="emptyCreateModalProps" :form-field-props="{}" :icon="emptyDocumentIcon" :loading-icon="emptyLoadingIcon"
-            @update:open="!$event && emptyCreate.close()" @close="emptyCreate.close" @submit="emptyCreate.submit"
-            @update:value="emptyCreate.form.title = $event" />
         <LazySearchCommandPalette v-if="shellActive && commandPaletteActivated" />
     </resizable-sidebar-layout>
 </template>
@@ -1803,7 +1797,6 @@ const emptyAvailable = computed<readonly EmptyChatActionId[]>(() => {
 });
 const { openProjectSidebar: openEmptyProject } = useProjectSidebar();
 const emptyProjectIcon = useIcon('sidebar.folder');
-const emptyDocumentIcon = useIcon('sidebar.note');
 const emptyLoadingIcon = useIcon('ui.loading');
 const emptyCreateModalProps = useThemeOverrides({ component: 'modal', context: 'chat', identifier: 'chat.empty.create', isNuxtUI: true });
 const emptyCreate = useEmptyChatActions({
@@ -1823,8 +1816,8 @@ const emptyCreate = useEmptyChatActions({
         return Boolean(pane && pane.id === origin.paneId && pane.mode === 'chat' && !pane.threadId
             && (!workspaceTabsEnabled.value || workspaceTabs.state.value.paneBindings.get(pane.id) === origin.tabId));
     },
-    async createDocument(title, scope) {
-        const document = await prepareDocumentCreate({ title });
+    async createDocument(scope) {
+        const document = await prepareDocumentCreate({});
         await scope.db.transaction('rw', getWriteTxTableNames(scope.db, 'posts'), async () => {
             // Hooks and transaction admission can yield across workspace/account changes.
             scope.assertCurrent('write');
