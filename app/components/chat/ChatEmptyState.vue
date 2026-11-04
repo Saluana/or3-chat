@@ -332,12 +332,11 @@ const hasArtwork = computed(() =>
         font-size: 12px;
     }
 }
+/* Typing on a touch screen leaves room only for the composer. */
 #page-container[data-keyboard-open] .chat-empty-artwork,
 #page-container[data-keyboard-open] .chat-empty-heading,
-#page-container[data-keyboard-open] .chat-empty-description {
-    display: none;
-}
+#page-container[data-keyboard-open] .chat-empty-description,
 #page-container[data-keyboard-open] .chat-empty-actions {
-    margin-top: 0;
+    display: none;
 }
 </style>

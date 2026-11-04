@@ -514,7 +514,9 @@
                 </UFieldGroup>
                 <UTooltip
                     v-if="usageLabel"
+                    v-model:open="usageOpen"
                     :delay-duration="300"
+                    :disable-closing-trigger="true"
                     :teleport="true"
                     :ui="{ content: USAGE_TOOLTIP_CONTENT }"
                 >
@@ -523,6 +525,8 @@
                         role="note"
                         data-testid="message-usage"
                         :aria-label="usageLabel.description"
+                        @pointerdown="onUsagePointerDown"
+                        @click="onUsageClick"
                     >
                         <UIcon
                             :name="usageIcon"
@@ -825,6 +829,18 @@ const showContinueButton = computed(
 // its shadow is invisible there).
 const USAGE_TOOLTIP_CONTENT =
     'p-0 ring-0 rounded-[var(--md-border-radius,10px)] border-[length:var(--md-border-width,1px)] border-[color:var(--md-border-color)] bg-(--md-surface) dark:bg-(--md-surface-container) text-(--md-on-surface) shadow-[var(--app-elevation-high,0_8px_24px_rgb(0_0_0/0.12))]';
+
+// Tooltips never open for touch, so a tap toggles the usage card instead. The
+// state is read at pointerdown: a tap outside the open card dismisses it first.
+const usageOpen = ref(false);
+let usageOpenAtTouch: boolean | undefined;
+function onUsagePointerDown(event: PointerEvent) {
+    usageOpenAtTouch = event.pointerType === 'mouse' ? undefined : usageOpen.value;
+}
+function onUsageClick() {
+    if (usageOpenAtTouch !== undefined) usageOpen.value = !usageOpenAtTouch;
+    usageOpenAtTouch = undefined;
+}
 
 // Per-reply tokens and cost; themes opt in by displaying `.cm-usage`.
 const usageLabel = computed(() =>
