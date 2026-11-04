@@ -309,7 +309,7 @@
                         >
                             <StreamMarkdown
                                 v-if="part.type === 'text'"
-                                :components="streamMarkdownComponents"
+                                :components="chatMarkdownComponents"
                                 :content="processAssistantMarkdown(part.text)"
                                 :shiki-theme="currentShikiTheme"
                                 :class="[
@@ -338,7 +338,7 @@
                     <StreamMarkdown
                         :key="props.message.id"
                         v-else
-                        :components="streamMarkdownComponents"
+                        :components="chatMarkdownComponents"
                         :content="processedAssistantMarkdown"
                         :shiki-theme="currentShikiTheme"
                         :class="[streamMdClasses, 'cm-markdown-assistant']"
@@ -620,6 +620,7 @@ import type {
 } from '~/utils/chat/uiMessages';
 import type { ChatMessageAction } from '~/composables/chat/useMessageActions';
 import { StreamMarkdown, streamMarkdownComponents } from '~/utils/stream-markdown';
+import ChatMessageImage from './ChatMessageImage.vue';
 import ReasoningAccordion from './ReasoningAccordion.vue';
 import { useRafFn, useClipboard } from '@vueuse/core';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
@@ -1284,6 +1285,8 @@ async function runExtraAction(action: ChatMessageAction) {
         console.error('Message action error', action.id, e);
     }
 }
+
+const chatMarkdownComponents = { ...streamMarkdownComponents, img: ChatMessageImage };
 
 // Classes applied to <StreamMarkdown> (joined string for TS friendliness)
 const streamMdClasses = [

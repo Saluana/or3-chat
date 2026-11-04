@@ -77,8 +77,8 @@ export function buildDelegationResume(job: BackgroundJob, input: Pick<Delegation
     const assistantIndex = messages.findIndex(message => message && typeof message === 'object' &&
         (message as Record<string, unknown>).role === 'assistant' &&
         Array.isArray((message as Record<string, unknown>).tool_calls) &&
-        ((message as Record<string, unknown>).tool_calls as Array<{ id?: unknown }>).some(entry => entry?.id === wait.callId));
-    const assistant = messages[assistantIndex] as { tool_calls: Array<{ id?: unknown }> };
+        ((message as Record<string, unknown>).tool_calls as Array<{ id?: unknown } | null | undefined>).some(entry => entry?.id === wait.callId));
+    const assistant = messages[assistantIndex] as { tool_calls: Array<{ id?: unknown } | null | undefined> };
     const assistantIds = assistant.tool_calls.map(entry => entry?.id);
     const currentIndex = assistantIds.indexOf(wait.callId);
     const priorResults = messages.slice(assistantIndex + 1);
@@ -91,10 +91,11 @@ export function buildDelegationResume(job: BackgroundJob, input: Pick<Delegation
         throw new Error('Delegation transcript order is inconsistent');
 
     const unavailable = new Map((input.unavailableChildren ?? []).map(item => [item.index, item.code]));
+    const isUnavailableCode = (code: unknown) => code === 'history_unavailable' || code === 'result_unavailable';
     if (unavailable.size !== (input.unavailableChildren?.length ?? 0) || [...unavailable].some(([index, code]) => {
         const child = wait.children[index];
         return !Number.isSafeInteger(index) || index < 0 || index >= wait.children.length ||
-            (code !== 'history_unavailable' && code !== 'result_unavailable') ||
+            !isUnavailableCode(code) ||
             child?.kind !== 'prepared' || !child.jobId || !child.settlement ||
             child.settlement.kind === 'unavailable' ||
             (code === 'result_unavailable' && child.settlement.kind !== 'complete');

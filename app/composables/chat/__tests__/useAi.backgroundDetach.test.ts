@@ -155,6 +155,28 @@ const dbMock = {
         await (args.at(-1) as () => Promise<unknown>)(),
 };
 let activeDb = dbMock;
+let kvStores = new WeakMap<object, Map<string, { value: string | null; clock: number }>>();
+function kvStore(db: object) {
+    let store = kvStores.get(db);
+    if (!store) { store = new Map(); kvStores.set(db, store); }
+    return store;
+}
+// Match the fixture's other storage boundaries while retaining DB ownership
+// and the preference write guard used during request admission.
+vi.mock('~/db/kv', () => ({
+    getKvRecordByName: async (name: string, db = activeDb) => {
+        const row = kvStore(db).get(name);
+        return { row, revision: row?.clock ?? null };
+    },
+    setKvByName: async (name: string, value: string | null, db = activeDb,
+        options?: Parameters<typeof import('~/db/kv').setKvByName>[3]) => {
+        if (options?.signal?.aborted || options?.isValid?.() === false) throw new Error('Stale fixture preference write');
+        const store = kvStore(db);
+        if (options?.ifClock !== undefined && options.ifClock !== (store.get(name)?.clock ?? null))
+            throw new Error('Conflicting fixture preference write');
+        store.set(name, { value, clock: (store.get(name)?.clock ?? 0) + 1 });
+    },
+}));
 
 vi.mock('~/db/files-util', async (importOriginal) => ({
     ...(await importOriginal<typeof import('~/db/files-util')>()),
@@ -393,11 +415,7 @@ vi.unmock('~/composables/chat/useAi');
 async function waitForCall(mock: {
     mock: { calls: unknown[][] };
 }): Promise<void> {
-    for (let i = 0; i < 200; i++) {
-        if (mock.mock.calls.length > 0) return;
-        await new Promise((resolve) => setTimeout(resolve, 1));
-    }
-    throw new Error('Timed out waiting for mock to be called');
+    await vi.waitFor(() => expect(mock.mock.calls.length).toBeGreaterThan(0), { interval: 1 });
 }
 
 function holdBackgroundHistoryCapture() {
@@ -426,6 +444,7 @@ describe('useChat background detach race', () => {
         recoveryStore.clear();
         kvStore.clear();
         activeDb = dbMock;
+        kvStores = new WeakMap();
         workspaceGeneration = 0;
         consumeWorkflowSend = false;
         catalogModelsRef.value = [{ id: 'test-model' }];

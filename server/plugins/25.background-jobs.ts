@@ -41,6 +41,7 @@ export default defineNitroPlugin((nitroApp) => {
         try {
             const provider = await getJobProvider();
             let phaseFailed = false;
+            const hasPhaseFailed = () => phaseFailed;
             const runPhase = async (label: string, work: () => Promise<number>): Promise<number> => {
                 try { return await work(); }
                 catch {
@@ -66,7 +67,7 @@ export default defineNitroPlugin((nitroApp) => {
             const coordinated = await runPhase('Delegation recovery', () =>
                 reconcileDueDelegationWaits(provider, getJobConfig().maxConcurrentJobs));
             if (!controller.canStartWork()) {
-                if (phaseFailed) delay = RECONCILE_INTERVAL_MS;
+                if (hasPhaseFailed()) delay = RECONCILE_INTERVAL_MS;
                 return;
             }
             const claimed = await runPhase('Model recovery', () => reconcileBackgroundJobs(
@@ -78,7 +79,7 @@ export default defineNitroPlugin((nitroApp) => {
                 },
                 getJobConfig().maxConcurrentJobs
             ));
-            delay = phaseFailed || delivered || coordinated || claimed ? RECONCILE_INTERVAL_MS
+            delay = hasPhaseFailed() || delivered || coordinated || claimed ? RECONCILE_INTERVAL_MS
                 : Math.min(delay * 2, MAX_IDLE_INTERVAL_MS);
         } catch {
             delay = RECONCILE_INTERVAL_MS;

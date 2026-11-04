@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Dexie from 'dexie';
 import { setActiveWorkspaceDb, evictWorkspaceDb, getDb } from '~/db/client';
+import type { ToolDefinition, ToolExecutionContext } from '../types';
+import { useToolRegistry } from '../tool-registry';
 import { setKvByName } from '~/db/kv';
+import { chatToolPreferenceKey } from '../tool-preferences';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine } from '~/core/hooks/useHooks';
-import type { ToolDefinition, ToolExecutionContext } from '../types';
-import { useToolRegistry } from '../tool-registry';
 
 const names: string[] = [];
 let workspace: string;
@@ -15,9 +16,9 @@ beforeEach(async () => {
     setHookEngine(createTypedHookEngine(createHookEngine()));
     workspace = `tool-context-${crypto.randomUUID()}`;
     const db = setActiveWorkspaceDb(workspace);
-    await setKvByName('ai_settings', JSON.stringify({ defaultToolsEnabled: true }), db);
     await db.threads.put({ id: 'thread-1', title: 'Ordinary tool origin', status: 'ready',
         created_at: 1, updated_at: 1, clock: 1, deleted: false, pinned: false, forked: false });
+    await setKvByName(chatToolPreferenceKey('thread-1'), JSON.stringify({ enabled: true, tools: {} }), db);
 });
 
 afterEach(async () => {
@@ -123,6 +124,7 @@ describe('client tool execution context', () => {
         });
         registry.registerTool(definition, async (_args, context) => {
             const db = getDb();
+            // Local authorization also reads the chat's KV preference and revision.
             await db.transaction('rw', [db.threads, db.projects, db.posts, db.file_meta, db.kv, db.tombstones], async () => {
                 expect(Dexie.currentTransaction).toBeTruthy();
                 await context.assertToolAuthorized?.();
@@ -154,7 +156,8 @@ describe('client tool execution context', () => {
         const beforeExecute = vi.fn(async () => {
             await Promise.resolve();
             if (outcome === 'refused') throw new Error('Tool claim expired or was replaced');
-            if (outcome === 'disabled') await setKvByName('chat-tools:thread-1', JSON.stringify({ enabled: false, tools: {} }), getDb());
+            if (outcome === 'disabled') await setKvByName(chatToolPreferenceKey('thread-1'),
+                JSON.stringify({ enabled: true, tools: { [definition.function.name]: false } }), getDb());
             if (outcome === 'aborted') abortController.abort();
         });
         const context: ToolExecutionContext = {

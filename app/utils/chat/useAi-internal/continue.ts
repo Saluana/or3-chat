@@ -243,14 +243,15 @@ export async function continueMessageImpl(
     const originDb = request.originDb;
     const imageOwner = captureChatMediaScope(originDb, undefined, 'write');
     const originThreadId = request.threadId!;
-    const ownsThread = () => !request.cancelled && request.ownsView();
+    const isCancelled = () => request.cancelled;
+    const ownsThread = () => !isCancelled() && request.ownsView();
     let activeCurrent: UiChatMessage | null = null;
     let targetMarkedPending = false;
-    let continuationAbortController: AbortController | null = null;
+    const continuationAbortController = new AbortController();
+    const isStopped = () => isCancelled() || continuationAbortController.signal.aborted;
     let innerStreamLifecycleStarted = false;
     let backgroundAdmissionStarted = false;
     let stopHeartbeat: (() => void) | undefined;
-    continuationAbortController = new AbortController();
     request.abortController = continuationAbortController;
     ctx.abortController.value = continuationAbortController;
 
@@ -515,7 +516,7 @@ export async function continueMessageImpl(
                 },
             });
         if (!claimed) throw new ContinuationOwnershipLost();
-        if (request.cancelled || continuationAbortController.signal.aborted)
+        if (isStopped())
             throw new DOMException('Continuation cancelled.', 'AbortError');
         if (!ownsThread()) { request.attached.value = false; return; }
 
@@ -590,7 +591,7 @@ export async function continueMessageImpl(
             if (!admittedAssistant || !backgroundAdmissionId || !ctx.workspaceId) {
                 throw new Error('Unable to capture continuation history');
             }
-            if (request.cancelled || continuationAbortController.signal.aborted)
+            if (isStopped())
                 throw new DOMException('Continuation cancelled.', 'AbortError');
             if (!ownsThread()) { request.attached.value = false; return; }
             const result = await startBackgroundStream({
@@ -623,7 +624,7 @@ export async function continueMessageImpl(
                 signal: continuationAbortController.signal,
             });
             request.jobId = result.jobId;
-            if (request.cancelled && request.stopConfirmation) {
+            if (isCancelled() && request.stopConfirmation) {
                 throw new DOMException('Admission cancelled', 'AbortError');
             }
             await projectCanonicalBackgroundMessage(originDb, messageId, {
@@ -804,7 +805,7 @@ export async function continueMessageImpl(
             await flushProgress();
 
             const stopped =
-                request.cancelled || continuationAbortController.signal.aborted;
+                isStopped();
             const finalization = await finalizeRequest(request, {
                 outcome: stopped ? 'aborted' : 'completed',
                 content: current.text,
@@ -831,7 +832,7 @@ export async function continueMessageImpl(
             const ownershipLost = streamError instanceof ContinuationOwnershipLost;
             const e = asAppError(streamError, { code: 'ERR_STREAM_FAILURE' });
             const stopped =
-                request.cancelled || continuationAbortController.signal.aborted;
+                isStopped();
             const finalization = await finalizeRequest(request, {
                 outcome: stopped ? 'aborted' : 'failed',
                 error: stopped ? undefined : e,
@@ -871,7 +872,7 @@ export async function continueMessageImpl(
             }, 0);
         }
     } catch (e) {
-        if (e instanceof BackgroundTrackerConflict && !request.cancelled && !continuationAbortController.signal.aborted) {
+        if (e instanceof BackgroundTrackerConflict && !isStopped()) {
             request.attached.value = false;
             return;
         }
@@ -883,8 +884,7 @@ export async function continueMessageImpl(
         const setupError =
             e instanceof Error ? e : new Error(String(e));
         const stopped =
-            request.cancelled ||
-            continuationAbortController.signal.aborted;
+            isStopped();
         if (
             stopped &&
             request.stopConfirmation &&

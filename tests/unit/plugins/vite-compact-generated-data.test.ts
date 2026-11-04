@@ -24,10 +24,15 @@ it('preserves complete tokenizer ranks and grammar values through a real client 
     const json = '{"__proto__":{"safe":true},"negativeZero":-0,"large":1e400,"patterns":[{"__proto__":{"safe":true},"match":"repeated long grammar expression"},{"__proto__":{"safe":true},"match":"repeated long grammar expression"}]}';
     const fixture = join(grammarDirectory, 'fixture.mjs');
     writeFileSync(fixture, `export default Object.freeze(JSON.parse(${JSON.stringify(json)}));`);
+    const largeJson = json.slice(0, -1) + ',"types":[null,true,false,0,-1,1.5,"",-0,1e400,[],{}],"padding":' +
+        JSON.stringify(Array.from({ length: 1000 }, () => ({ name: 'repeated grammar name', match: 'repeated long grammar expression' }))) + '}';
+    const largeFixture = join(grammarDirectory, 'large.mjs');
+    writeFileSync(largeFixture, `export default Object.freeze(JSON.parse(${JSON.stringify(largeJson)}));`);
     const ranksUrl = import.meta.resolve('gpt-tokenizer/bpeRanks/o200k_base');
     const languageUrl = import.meta.resolve('@shikijs/langs/typescript');
     const entry = join(root, 'entry.mjs');
     writeFileSync(entry, `export {default as fixture} from ${JSON.stringify(fixture)};
+export {default as largeFixture} from ${JSON.stringify(largeFixture)};
 export {default as ranks} from ${JSON.stringify(fileURLToPath(ranksUrl))};
 export {default as language} from ${JSON.stringify(fileURLToPath(languageUrl))};`);
     await build({
@@ -43,15 +48,18 @@ export {default as language} from ${JSON.stringify(fileURLToPath(languageUrl))};
     });
     const result = createRequire(import.meta.url)(join(root, 'dist/entry.cjs')) as {
         fixture: { patterns: { match: string }[]; negativeZero: number };
+        largeFixture: { patterns: { match: string }[]; negativeZero: number };
         ranks: (string | number[])[];
         language: unknown;
     };
     expect(result.ranks).toStrictEqual(originalRanks);
     expect(result.language).toStrictEqual(originalLanguage);
-    expect(result.fixture).toStrictEqual(JSON.parse(json));
-    expect(Object.isFrozen(result.fixture)).toBe(true);
-    expect(Object.hasOwn(result.fixture, '__proto__')).toBe(true);
-    expect(Object.is(result.fixture.negativeZero, -0)).toBe(true);
-    result.fixture.patterns[0]!.match = 'changed';
-    expect(result.fixture.patterns[1]!.match).toBe('repeated long grammar expression');
+    for (const [fixture, expected] of [[result.fixture, json], [result.largeFixture, largeJson]] as const) {
+        expect(fixture).toStrictEqual(JSON.parse(expected));
+        expect(Object.isFrozen(fixture)).toBe(true);
+        expect(Object.hasOwn(fixture, '__proto__')).toBe(true);
+        expect(Object.is(fixture.negativeZero, -0)).toBe(true);
+        fixture.patterns[0]!.match = 'changed';
+        expect(fixture.patterns[1]!.match).toBe('repeated long grammar expression');
+    }
 }, 30_000);
