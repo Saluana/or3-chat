@@ -64,10 +64,11 @@ export function createOpenRouterCompletionAdapter(options: { explicitStreamFalse
 
 /** The Chat Completions result shape both routers return. */
 export async function decodeChatCompletion(response: Response): Promise<AiCompletion> {
+    // A provider can answer with JSON `null`.
     const payload = await response.json() as {
         choices?: Array<{ message?: { content?: unknown }; finish_reason?: unknown }>;
         usage?: unknown;
-    };
+    } | null;
     const choice = payload?.choices?.[0];
     return { content: choice?.message?.content, finishReason: choice?.finish_reason, usage: payload?.usage };
 }

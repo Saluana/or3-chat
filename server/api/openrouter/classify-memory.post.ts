@@ -82,7 +82,7 @@ export default defineEventHandler(async (event) => {
             body.data.workspaceId !== session.workspace?.id)
     )
         throw createError({ statusCode: 403 });
-    const caller = session.user?.id ?? 'local:' + event.node.req.socket?.remoteAddress;
+    const caller = session.user?.id ?? 'local:' + event.node.req.socket.remoteAddress;
     const config = useRuntimeConfig(event);
     // The fast model chooses the router; its key pays for both stages.
     const fastModel = cloud ? await readFastModel(event, body.data.workspaceId) : body.data.model!;

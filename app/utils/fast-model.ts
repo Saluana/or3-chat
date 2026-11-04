@@ -11,7 +11,7 @@ import { getUserApiKeyGeneration, useUserApiKey } from '~/core/auth/useUserApiKe
 export async function readLocalFastModel(db: Or3DB): Promise<string> {
     try {
         const record = await getKvRecordByName('ai_settings', db);
-        return sanitizeAiSettings(record?.row?.value ? JSON.parse(record.row.value) as unknown : null).titleGenerationModel;
+        return sanitizeAiSettings(record.row?.value ? JSON.parse(record.row.value) as unknown : null).titleGenerationModel;
     } catch { return DEFAULT_FAST_MODEL; }
 }
 
