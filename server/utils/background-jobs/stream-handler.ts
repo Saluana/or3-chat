@@ -181,8 +181,9 @@ async function assertJobNotAborted(params: {
 /** Persist evidence after authorization and immediately before the paid request. */
 async function beginDelegationDispatch(jobId: string, context: BackgroundStreamParams, provider: BackgroundJobProvider) {
     const execution = context.execution;
-    if (!execution || execution.delegationRecoveryPolicy === undefined) return;
-    if (execution.delegationRecoveryPolicy !== 'v1' || !context.leaseOwner || !provider.beginDelegationDispatch)
+    const recoveryPolicy: unknown = execution?.delegationRecoveryPolicy;
+    if (!execution || recoveryPolicy === undefined) return;
+    if (recoveryPolicy !== 'v1' || !context.leaseOwner || !provider.beginDelegationDispatch)
         throw new Error('Durable model dispatch is unavailable.');
     if (execution.delegationDispatch !== undefined)
         throw Object.assign(new Error('Model request outcome is unknown.'), { code: 'ERR_MODEL_OUTCOME_UNKNOWN', retryable: false });

@@ -8,6 +8,8 @@ import { setWorkspaceTabPaletteProvider } from '~/core/search/command-palette/so
 import { evictWorkspaceDb, getDb, setActiveWorkspaceDb, Or3DB } from '~/db/client';
 import { flush, loadDocument, setDocumentContent, useDocumentState } from '~/composables/documents/useDocumentsStore';
 import { getDocumentInDb } from '~/db/documents';
+import { setKvByName } from '~/db/kv';
+import { chatToolPreferenceKey } from '~/utils/chat/tool-preferences';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine } from '~/core/hooks/useHooks';
@@ -26,6 +28,7 @@ beforeEach(async () => {
     await setActiveWorkspaceDb('workspace-a').open();
     await getDb().threads.put({ id: 'thread-a', title: 'Tool origin', project_id: null,
         created_at: 1, updated_at: 1, deleted: false, clock: 0, forked: false, status: 'active', pinned: false });
+    await setKvByName(chatToolPreferenceKey('thread-a'), JSON.stringify({ enabled: true, tools: {} }), getDb());
 });
 afterEach(async () => {
     testRuntimeConfig.value.public.ssrAuthEnabled = originalSsrAuth;
@@ -218,31 +221,35 @@ describe('chat document tools', () => {
         return { ref: JSON.parse(proposed.result!), context };
     }
     it('prunes chat Apply checkpoints while retaining the checkpoint required by a valid Undo', async () => {
-        const { ref } = await pendingChange();
-        const revisions = await import('~/db/document-revisions');
-        const changes = await import('~/utils/chat/workspace-document-change');
-        const seed = async (prefix: string, createdAt: number) => {
-            for (let index = 0; index < 24; index++) {
-                const prepared = await revisions.prepareDocumentRevision({ documentId: 'apply-doc', title: prefix + index, source: 'auto',
-                    content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: prefix + index }] }] } });
-                prepared.manifest.createdAt = createdAt + index;
-                prepared.rows.at(-1)!.content = JSON.stringify(prepared.manifest);
-                await getDb().posts.bulkPut(prepared.rows);
-            }
-        };
-        const now = Math.floor(Date.now() / 1000);
-        await seed('Old version ', now - 100);
-        const applied = await changes.applyWorkspaceDocumentChange(ref);
-        expect(await revisions.listCompleteDocumentRevisions('apply-doc')).toHaveLength(20);
-        if (applied.status !== 'applied') throw new Error('Apply did not complete');
-        await seed('Later automatic version ', now + 100);
-        await revisions.pruneDocumentRevisions('apply-doc');
-        const retained = await revisions.listCompleteDocumentRevisions('apply-doc');
-        expect(retained.some(item => item.manifest.revisionId === applied.beforeRevisionId)).toBe(true);
-        expect(retained.length).toBeLessThanOrEqual(21);
-        expect((await changes.undoWorkspaceDocumentChange(ref)).status).toBe('undone');
-        expect((await getDb().posts.get('apply-doc'))?.content).toContain('Original apply paragraph');
-        expect((await revisions.listCompleteDocumentRevisions('apply-doc')).length).toBeLessThanOrEqual(20);
+        // Exercise the recent-window/Undo bound independently of daily retention.
+        const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 10, 3, 12));
+        try {
+            const { ref } = await pendingChange();
+            const revisions = await import('~/db/document-revisions');
+            const changes = await import('~/utils/chat/workspace-document-change');
+            const seed = async (prefix: string, createdAt: number) => {
+                for (let index = 0; index < 24; index++) {
+                    const prepared = await revisions.prepareDocumentRevision({ documentId: 'apply-doc', title: prefix + index, source: 'auto',
+                        content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: prefix + index }] }] } });
+                    prepared.manifest.createdAt = createdAt + index;
+                    prepared.rows.at(-1)!.content = JSON.stringify(prepared.manifest);
+                    await getDb().posts.bulkPut(prepared.rows);
+                }
+            };
+            const now = Math.floor(Date.now() / 1000);
+            await seed('Old version ', now - 100);
+            const applied = await changes.applyWorkspaceDocumentChange(ref);
+            expect(await revisions.listCompleteDocumentRevisions('apply-doc')).toHaveLength(20);
+            if (applied.status !== 'applied') throw new Error('Apply did not complete');
+            await seed('Later automatic version ', now + 100);
+            await revisions.pruneDocumentRevisions('apply-doc');
+            const retained = await revisions.listCompleteDocumentRevisions('apply-doc');
+            expect(retained.some(item => item.manifest.revisionId === applied.beforeRevisionId)).toBe(true);
+            expect(retained.length).toBeLessThanOrEqual(21);
+            expect((await changes.undoWorkspaceDocumentChange(ref)).status).toBe('undone');
+            expect((await getDb().posts.get('apply-doc'))?.content).toContain('Original apply paragraph');
+            expect((await revisions.listCompleteDocumentRevisions('apply-doc')).length).toBeLessThanOrEqual(20);
+        } finally { clock.mockRestore(); }
     });
 
     it('commits checkpoint/content/action once across concurrent Apply and guards Undo after later edits', async () => {
