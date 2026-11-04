@@ -674,7 +674,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 9,
-                    "summary": "SQLite auth/sync, structured background recovery errors, qualified backup inspection, owner-bound notification deletion, atomic native/D1 Files and Trash admission, bounded snapshots, exact commit retries, quotas, maintenance controls and D1 support limits."
+                    "summary": "SQLite auth/sync, structured background recovery errors, backup inspection qualified with filesystem provider 0.0.16, owner-bound notification deletion, atomic native/D1 Files and Trash admission, bounded snapshots, exact commit retries, quotas, maintenance controls and D1 support limits."
                 },
                 {
                     "name": "provider-fs.md",
