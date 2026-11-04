@@ -1103,7 +1103,7 @@
     },
     {
       "source": "app/composables/dashboard/useDashboardPlugins.ts",
-      "apiSha256": "4e9ebe532d87dc9d5eb065f8f673b556d1a09d479bf199ea7d9ece1ed5c5f45c",
+      "apiSha256": "17e7a0f3b7fa7416e9ad60da3e49def417c4e4c7553fd4fc340feca2f5d2d5b4",
       "runtime": "client",
       "publicPaths": [
         "~/composables/dashboard/useDashboardPlugins"
@@ -1125,7 +1125,7 @@
           "declarations": [
             {
               "source": "app/core/dashboard/dashboard-navigation-types.ts",
-              "line": 9,
+              "line": 10,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DashboardNavigationError {\n    code: DashboardNavigationErrorCode;\n    message: string;\n    pluginId?: string;\n    pageId?: string;\n    cause?: unknown;\n}"
             }
@@ -1139,7 +1139,7 @@
           "declarations": [
             {
               "source": "app/core/dashboard/dashboard-navigation-types.ts",
-              "line": 3,
+              "line": 4,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DashboardNavigationErrorCode =\n    | 'missing-plugin'\n    | 'missing-page'\n    | 'handler-error'\n    | 'resolve-error';"
             }
@@ -1153,7 +1153,7 @@
           "declarations": [
             {
               "source": "app/core/dashboard/dashboard-navigation-types.ts",
-              "line": 25,
+              "line": 26,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DashboardNavigationResult =\n    | { ok: true }\n    | { ok: false; error: DashboardNavigationError };"
             }
@@ -1167,7 +1167,7 @@
           "declarations": [
             {
               "source": "app/core/dashboard/dashboard-navigation-types.ts",
-              "line": 17,
+              "line": 18,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DashboardNavigationState {\n    view: 'dashboard' | 'page';\n    activePluginId: string | null;\n    activePageId: string | null;\n    loadingPage: boolean;\n    error: DashboardNavigationError | null;\n}"
             }
@@ -1599,7 +1599,7 @@
           "declarations": [
             {
               "source": "app/core/dashboard/dashboard-navigation-types.ts",
-              "line": 29,
+              "line": 30,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UseDashboardNavigationOptions {\n    baseItems?: DashboardPlugin[];\n}"
             }
@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "ea95fd42474cf08c2934237120b5196f00ab20d14d912fa04a8893f5c006fcf9",
+      "apiSha256": "142db786909271900bb60974b98a093d88721608e28287cc4cb64ca244132c87",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -3193,7 +3193,7 @@
           "declarations": [
             {
               "source": "app/core/dashboard/dashboard-navigation-types.ts",
-              "line": 9,
+              "line": 10,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DashboardNavigationError {\n    code: DashboardNavigationErrorCode;\n    message: string;\n    pluginId?: string;\n    pageId?: string;\n    cause?: unknown;\n}"
             }
@@ -3207,7 +3207,7 @@
           "declarations": [
             {
               "source": "app/core/dashboard/dashboard-navigation-types.ts",
-              "line": 3,
+              "line": 4,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DashboardNavigationErrorCode =\n    | 'missing-plugin'\n    | 'missing-page'\n    | 'handler-error'\n    | 'resolve-error';"
             }
@@ -3221,7 +3221,7 @@
           "declarations": [
             {
               "source": "app/core/dashboard/dashboard-navigation-types.ts",
-              "line": 25,
+              "line": 26,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DashboardNavigationResult =\n    | { ok: true }\n    | { ok: false; error: DashboardNavigationError };"
             }
@@ -3235,7 +3235,7 @@
           "declarations": [
             {
               "source": "app/core/dashboard/dashboard-navigation-types.ts",
-              "line": 17,
+              "line": 18,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DashboardNavigationState {\n    view: 'dashboard' | 'page';\n    activePluginId: string | null;\n    activePageId: string | null;\n    loadingPage: boolean;\n    error: DashboardNavigationError | null;\n}"
             }
@@ -6810,7 +6810,7 @@
           "declarations": [
             {
               "source": "app/core/dashboard/dashboard-navigation-types.ts",
-              "line": 29,
+              "line": 30,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UseDashboardNavigationOptions {\n    baseItems?: DashboardPlugin[];\n}"
             }
