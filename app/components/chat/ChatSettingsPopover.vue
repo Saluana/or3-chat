@@ -178,13 +178,13 @@
             <section class="chat-settings-section">
                 <h3 class="chat-settings-heading">Preferences</h3>
                 <div class="chat-settings-group">
-                    <div class="chat-settings-row-item">
+                    <div v-if="variantItems.length" class="chat-settings-row-item">
                         <USelectMenu
                             v-model="modelVariant"
                             :items="variantItems"
                             value-key="value"
                             :search-input="false"
-                            :disabled="loading || streaming"
+                            :disabled="loading || streaming || openAiSelected"
                             aria-label="Model variant"
                             class="chat-settings-row-trigger ring-0! border-0 bg-transparent"
                             :ui="selectMenuUi"
@@ -405,6 +405,7 @@
                         </span>
                         <span
                             v-if="
+                                tool.openRouterOnly ||
                                 tool.definition.ui
                                     ?.descriptionHint ||
                                 tool.definition.function
@@ -414,10 +415,12 @@
                             class="chat-settings-popover-tool-description chat-settings-row-description"
                         >
                             {{
-                                tool.definition.ui
-                                    ?.descriptionHint ||
-                                tool.definition.function
-                                    .description
+                                tool.openRouterOnly
+                                    ? 'Available with OpenRouter models'
+                                    : tool.definition.ui
+                                          ?.descriptionHint ||
+                                      tool.definition.function
+                                          .description
                             }}
                         </span>
                     </label>
@@ -433,13 +436,14 @@
                             tool.definition.function.name
                         }`"
                         :aria-describedby="
+                            tool.openRouterOnly ||
                             tool.definition.ui
                                 ?.descriptionHint ||
                             tool.definition.function.description
                                 ? `tool-desc-${tool.name}`
                                 : undefined
                         "
-                        :disabled="toolControlsDisabled"
+                        :disabled="toolControlsDisabled || tool.openRouterOnly"
                         @update:model-value="(val: boolean) => toolPreferences.setTools({ [tool.name]: val })"
                     />
                 </div>
@@ -455,11 +459,13 @@ import { useIcon } from '~/composables/useIcon';
 import { useToolRegistry } from '~/utils/chat/tools-public';
 import { useChatToolPreferences } from '~/composables/chat/useChatToolPreferences';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
-import type { OpenRouterModelVariant } from '~~/shared/openrouter/model-variants';
-import { MODEL_VARIANT_OPTIONS } from '~~/shared/openrouter/model-variants';
+import { OPENROUTER_OPTION_DESCRIPTORS } from '~~/shared/openrouter/model-variants';
+import type { ModelOptionDescriptor } from '~~/shared/ai/types';
 import { getProviderSlug } from '~/utils/modelCatalog';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useModelVariantItems } from '~/composables/chat/useModelVariantItems';
+import { isOpenAiModel } from '~~/shared/openai/models';
+import { isOpenRouterOnlyTool } from '~/utils/chat/useAi-internal/delegationPolicy';
 import { listPrompts, type PromptRecord } from '~/db/prompts';
 import { getThreadSystemPrompt, updateThreadSystemPrompt } from '~/db/threads';
 import { useDefaultPrompt } from '~/composables/chat/useDefaultPrompt';
@@ -499,6 +505,7 @@ const props = defineProps<{
     contextState?: ReturnType<typeof import('~/composables/chat/useContextPreview').useContextPreview>['state']['value'];
     compactionState?: import('~/composables/chat/useThreadCompaction').ThreadCompactionState;
     compactionBlockedReason?: string;
+    variantOptions?: readonly ModelOptionDescriptor[];
 }>();
 
 const emit = defineEmits<{
@@ -515,11 +522,16 @@ const emit = defineEmits<{
 const toolRegistry = useToolRegistry();
 const toolPreferences = useChatToolPreferences({ threadId: () => props.threadId, draftId: () => props.paneId });
 const toolControlsDisabled = computed(() => props.loading || props.streaming || !toolPreferences.ready.value || toolPreferences.saving.value);
+const selectedModel = defineModel<string>('model');
+// OpenAI requests drop OpenRouter's variants and its delegation tools, so those
+// controls stay visible but disabled, keeping their saved choice for OpenRouter models.
+const openAiSelected = computed(() => isOpenAiModel(selectedModel.value));
 const registeredTools = computed(() =>
     toolRegistry.listTools.value.map((tool) => ({
         definition: tool.definition,
         enabledValue: toolPreferences.preferences.value.tools[tool.definition.function.name] !== false,
         name: tool.definition.function.name,
+        openRouterOnly: openAiSelected.value && isOpenRouterOnlyTool(tool.definition.function.name),
     }))
 );
 
@@ -621,8 +633,8 @@ function getCategorySubtitle(category: string) {
 }
 
 // These will be provided by the parent component via v-model
-const selectedModel = defineModel<string>('model');
-const modelVariant = defineModel<OpenRouterModelVariant>('modelVariant');
+// (the selected model is declared with the tool registry, which reads it).
+const modelVariant = defineModel<string>('modelVariant');
 const thinkingEnabled = defineModel<boolean>('thinkingEnabled');
 const reasoningEffort = defineModel<string | undefined>('reasoningEffort');
 
@@ -809,13 +821,15 @@ const modelSearchInput = computed(() => ({
 }));
 
 // Model variant dropdown (options + descriptions from the shared helper).
-const variantItems = useModelVariantItems();
+const variantItems = useModelVariantItems(() => props.variantOptions ?? OPENROUTER_OPTION_DESCRIPTORS);
 
 const activeVariantLabel = computed(
     () =>
-        MODEL_VARIANT_OPTIONS.find(
-            (option) => option.value === modelVariant.value
-        )?.label ?? 'Off'
+        openAiSelected.value
+            ? 'OpenRouter only'
+            : variantItems.value.find(
+                  (option) => option.value === modelVariant.value
+              )?.label ?? (props.variantOptions === undefined ? 'Off' : '')
 );
 
 // Thinking level select: one dropdown for Disabled / Enabled / effort.

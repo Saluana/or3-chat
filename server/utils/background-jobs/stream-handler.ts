@@ -51,10 +51,7 @@ import { supportsClientToolHandoff, supportsDelegationCoordination, supportsDele
 import { DelegationPreparationError, prepareDelegationWait } from './delegation-prepare';
 import { getSyncGatewayAdapter } from '../../sync/gateway/registry';
 import { getShutdownRuntime } from '../shutdown/runtime';
-import {
-    parseOpenRouterSSE,
-    type StreamedFieldMode,
-} from '~~/shared/openrouter/parseOpenRouterSSE';
+import type { StreamedFieldMode } from '~~/shared/openrouter/parseOpenRouterSSE';
 import { getNotificationEmitter } from '../notifications/registry';
 import {
     emitJobDelta,
@@ -69,8 +66,10 @@ import type { ToolCall, ToolDefinition } from '~/utils/chat/types';
 import { executeServerTool, getServerTool } from '../chat/tool-registry';
 import { createOpenRouterClient, fetchOpenRouterCatalog } from '~~/shared/openrouter';
 import { MAX_TOOL_ITERATIONS } from '~/utils/chat/constants';
-import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
-import { prepareOpenRouterWebSearch } from '~~/shared/openrouter/request';
+import { decodeOpenRouterStream } from '~~/shared/openrouter/adapter';
+import { openChatUpstream } from '../ai/chat-router';
+import { isOpenAiModel } from '~~/shared/openai/models';
+import { encodeProviderRequest } from '~~/shared/ai/provider-body';
 import {
     emitBackgroundJobWebhookEvent,
     emitMessageCompletedWebhookEvent,
@@ -101,7 +100,6 @@ import {
     type CanonicalToolResult,
 } from '~~/shared/chat/canonical-tool-transcript';
 import {
-    fetchWithResponseDeadline,
     readResponseTextWithIdleDeadline,
     withIdleWatchdog,
 } from '~~/shared/openrouter/deadlines';
@@ -137,15 +135,6 @@ function createBackgroundJobLeaseLostError(): Error {
     const error = new Error('Background job lease was superseded');
     error.name = 'BackgroundJobLeaseLostError';
     return error;
-}
-
-function resolveOpenRouterChatCompletionsUrl(): string {
-    try {
-        const config = useRuntimeConfig();
-        return getOpenRouterChatCompletionsUrl(config.openrouterBaseUrl);
-    } catch {
-        return getOpenRouterChatCompletionsUrl(undefined);
-    }
 }
 
 function isForcedFunctionToolChoice(
@@ -322,12 +311,13 @@ async function persistTerminalGenerationSnapshot(
 
 /** Only provider-visible fields enter the request fingerprint. */
 async function captureBackgroundUsagePrefix(body: Record<string, unknown>): Promise<UsagePrefix | undefined> {
-    const { messages, ...configuration } = body;
+    const providerBody = encodeProviderRequest(body);
+    const { messages, ...configuration } = providerBody;
     return captureUsagePrefix({
-        model: typeof body.model === 'string' ? body.model : '',
+        model: typeof providerBody.model === 'string' ? providerBody.model : '',
         messages: Array.isArray(messages) ? messages as CountableChatMessage[] : [],
-        tools: Array.isArray(body.tools) ? body.tools : undefined,
-        modalities: Array.isArray(body.modalities) ? body.modalities as string[] : undefined,
+        tools: Array.isArray(providerBody.tools) ? providerBody.tools : undefined,
+        modalities: Array.isArray(providerBody.modalities) ? providerBody.modalities as string[] : undefined,
         configuration,
         countText: countTokensApprox,
     }).catch(() => undefined);
@@ -339,8 +329,8 @@ export async function startBackgroundStream(
     // Preserve captured choices and bytes before provider/auth/history awaits.
     params = { ...params, body: JSON.parse(JSON.stringify(params.body)) as Record<string, unknown> };
     const contextPolicy = params.contextPolicy ?? await resolveServerContextPolicy(params.body, params.apiKey, useRuntimeConfig().openrouterBaseUrl);
-    const prepared = await admitServerProviderBody(withoutOr3RequestMetadata(params.body), contextPolicy);
-    params.body = { ...params.body, ...prepared };
+    const { hostBody } = await admitServerProviderBody(withoutOr3RequestMetadata(params.body), contextPolicy);
+    params.body = { ...params.body, ...hostBody };
     if (contextPolicy) params.body._context = captureContextEnvelope(contextPolicy);
     let delegationDefaults: BackgroundJobExecution['delegationDefaults'];
     if (params.body._delegationDefaults !== undefined) {
@@ -676,9 +666,7 @@ export async function consumeBackgroundStream(params: {
     };
 
     try {
-        for await (const evt of parseOpenRouterSSE(params.stream, {
-            streamedFieldMode: params.streamedFieldMode,
-        })) {
+        for await (const evt of decodeOpenRouterStream(params.stream, params.streamedFieldMode)) {
             const measuredEvent = evt.type === 'usage'
                 ? { ...evt, requestUsage: attachRequestUsage(usagePrefix, evt.usage, {
                     requestId: usageRequestId, iteration: normalizedState.iteration, measuredAt: Date.now(),
@@ -1175,6 +1163,9 @@ export async function consumeBackgroundStreamWithTools(params: {
                     if (!leaseOwner || !supportsDelegationCoordination(params.provider) || !syncId || syncId !== configuredSync ||
                         !supportsDelegationHistory(sync) || !getShutdownRuntime().controller.canStartWork())
                         throw new DelegationPreparationError('Durable delegation is unavailable for this deployment.');
+                    // Delegation prepares children against OpenRouter; an OpenAI chat's key never goes there.
+                    if (isOpenAiModel(params.body.model))
+                        throw new DelegationPreparationError('Durable delegation uses OpenRouter and is unavailable for OpenAI models.');
                     setToolState(toolCall.id, { id: toolCall.id, name: toolCall.function.name, status: 'pending',
                         runtime: 'server', args: toolCall.function.arguments, argument_fingerprint: decision.fingerprint });
                     await emitToolState(true);
@@ -1309,6 +1300,8 @@ export async function consumeBackgroundStreamWithTools(params: {
                     { definition: admittedDefinition },
                     toolCall.function.name === 'search_models' ? {
                         modelCatalog: async (signal) => {
+                            // The OpenRouter catalog never receives an OpenAI chat's key.
+                            if (isOpenAiModel(params.body.model)) throw new Error('Model search is available only for OpenRouter models.');
                             try {
                                 return await fetchOpenRouterCatalog(createOpenRouterClient({
                                     apiKey: params.apiKey, serverURL: useRuntimeConfig().openrouterBaseUrl,
@@ -1413,7 +1406,6 @@ export async function consumeBackgroundStreamWithTools(params: {
     });
 
     try {
-        const openRouterUrl = resolveOpenRouterChatCompletionsUrl();
         const resumedQueue = params.context.execution?.pendingToolCalls;
         if (resumedQueue?.length) {
             const parked = await processToolQueue(resumedQueue as ToolCall[]);
@@ -1455,30 +1447,21 @@ export async function consumeBackgroundStreamWithTools(params: {
                         : undefined,
                 stream: true,
             })) as Record<string, unknown>;
-            await admitServerProviderBody(requestBody, params.contextPolicy ? { ...params.contextPolicy,
+            const { providerBody } = await admitServerProviderBody(requestBody, params.contextPolicy ? { ...params.contextPolicy,
                 measuredUsage: normalizedState.requestUsage } : undefined, params.abortSignal);
-            const usagePrefix = await captureBackgroundUsagePrefix(requestBody);
+            const usagePrefix = await captureBackgroundUsagePrefix(providerBody);
             const usageRequestId = crypto.randomUUID();
             const { assertServerProjectExecutionSupported } = await import('../chat/project-policy');
 
-            const { response: upstream, errorText: refusedText } = await sendWithAffordableReply(async (body) => {
+            const openUpstream = async (body: Record<string, unknown>) => {
                 await assertServerProjectExecutionSupported({ subject: params.context.userId,
                     workspaceId: params.context.workspaceId, threadId: params.context.threadId,
                     abortSignal: params.abortSignal ?? AbortSignal.timeout(10_000) }, 'workspace.write');
                 await assertJobNotAborted({ provider: params.provider, jobId: params.jobId, abortSignal: params.abortSignal });
                 await beginDelegationDispatch(params.jobId, params.context, params.provider);
-                return fetchWithResponseDeadline(openRouterUrl, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${params.apiKey}`,
-                    'Content-Type': 'application/json',
-                    Accept: 'text/event-stream',
-                    'HTTP-Referer': params.referer,
-                    'X-Title': 'or3.chat',
-                },
-                body: JSON.stringify(prepareOpenRouterWebSearch(body)),
-            }, { signal: params.abortSignal });
-            }, requestBody, {
+                return openChatUpstream(body, params.apiKey, { referer: params.referer, signal: params.abortSignal });
+            };
+            const { response: upstream, errorText: refusedText } = await sendWithAffordableReply(openUpstream, providerBody, {
                 defaultAllowance: params.context.execution?.delegationRecoveryPolicy !== 'v1' &&
                     !!params.contextPolicy && params.contextPolicy.requestedCompletionTokens == null,
                 signal: params.abortSignal,
@@ -1495,7 +1478,8 @@ export async function consumeBackgroundStreamWithTools(params: {
                     responseMetadata: sensitiveValueMetadata(errorText),
                 });
                 const metadata = { ...normalizeProviderResponseError(errorText, upstream.status,
-                    { credentialSource: params.context.credentialSource ?? params.context.execution?.credentialSource }),
+                    { credentialSource: params.context.credentialSource ?? params.context.execution?.credentialSource,
+                        router: isOpenAiModel(params.body.model) ? 'openai' : undefined }),
                     retryAfterMs: parseRetryAfter(upstream.headers.get('retry-after')) };
                 throw Object.assign(new OpenRouterStreamError(presentError(metadata).message, { ...metadata, status: upstream.status }),
                     { confirmedModelRejection: !upstream.ok });
@@ -1506,9 +1490,7 @@ export async function consumeBackgroundStreamWithTools(params: {
             const guardedBody = withIdleWatchdog(upstream.body, {
                 signal: params.abortSignal,
             });
-            for await (const evt of parseOpenRouterSSE(guardedBody, {
-                streamedFieldMode: params.streamedFieldMode,
-            })) {
+            for await (const evt of decodeOpenRouterStream(guardedBody, params.streamedFieldMode)) {
                 await assertJobNotAborted({
                     provider: params.provider,
                     jobId: params.jobId,
@@ -1908,28 +1890,18 @@ export async function executeBackgroundJob(
         return;
     }
 
-    const openRouterUrl = resolveOpenRouterChatCompletionsUrl();
     const contextPolicy = await resolveServerContextPolicy(admittedBody, params.apiKey, useRuntimeConfig().openrouterBaseUrl, signal);
-    await admitServerProviderBody(cleanBody, contextPolicy, signal);
-    const usagePrefix = await captureBackgroundUsagePrefix(cleanBody);
+    const { providerBody } = await admitServerProviderBody(cleanBody, contextPolicy, signal);
+    const usagePrefix = await captureBackgroundUsagePrefix(providerBody);
     const { assertServerProjectExecutionSupported } = await import('../chat/project-policy');
-    const { response: upstream, errorText: refusedText } = await sendWithAffordableReply(async (body) => {
+    const openUpstream = async (body: Record<string, unknown>) => {
         await assertServerProjectExecutionSupported({ subject: params.userId, workspaceId: params.workspaceId,
             threadId: params.threadId, abortSignal: signal }, 'workspace.write');
         await assertJobNotAborted({ provider, jobId, abortSignal: signal });
         await beginDelegationDispatch(jobId, params, provider);
-        return fetchWithResponseDeadline(openRouterUrl, {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${params.apiKey}`,
-            'Content-Type': 'application/json',
-            Accept: 'text/event-stream',
-            'HTTP-Referer': params.referer,
-            'X-Title': 'or3.chat',
-        },
-        body: JSON.stringify(prepareOpenRouterWebSearch(body)),
-    }, { signal });
-    }, cleanBody, {
+        return openChatUpstream(body, params.apiKey, { referer: params.referer, signal });
+    };
+    const { response: upstream, errorText: refusedText } = await sendWithAffordableReply(openUpstream, providerBody, {
         defaultAllowance: params.execution?.delegationRecoveryPolicy !== 'v1' &&
             !!contextPolicy && contextPolicy.requestedCompletionTokens == null,
         signal,
@@ -1941,7 +1913,8 @@ export async function executeBackgroundJob(
         }).catch(() => '<no body>');
 
         const metadata = { ...normalizeProviderResponseError(errorText, upstream.status,
-            { credentialSource: params.credentialSource ?? params.execution?.credentialSource }),
+            { credentialSource: params.credentialSource ?? params.execution?.credentialSource,
+                router: isOpenAiModel(providerBody.model) ? 'openai' : undefined }),
             retryAfterMs: parseRetryAfter(upstream.headers.get('retry-after')) };
         throw Object.assign(new OpenRouterStreamError(presentError(metadata).message, { ...metadata, status: upstream.status }),
             { confirmedModelRejection: !upstream.ok });

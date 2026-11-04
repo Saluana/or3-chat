@@ -3,6 +3,7 @@ import { onMounted, onBeforeUnmount, ref } from 'vue';
 import { useRoute } from '#imports';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { getDb, setActiveWorkspaceDb } from '~/db/client';
+import { getKvRecordByName, setKvByName } from '~/db/kv';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { ensureBackgroundJobTracker, subscribeBackgroundJob, stopBackgroundJobTracking } from '~/utils/chat/useAi-internal/backgroundJobs';
 
@@ -44,6 +45,9 @@ onMounted(async () => {
     if (!await db.messages.get(messageId)) await db.messages.put({ id: messageId, thread_id: threadId, role: 'assistant', index: 1,
         created_at: timestamp, updated_at: timestamp, clock: 1, deleted: false, pending: true,
         data: { content: '', background_job_id: jobId } });
+    const preferenceKey = `chat-tools:${threadId}`;
+    if (!(await getKvRecordByName(preferenceKey, db)).row?.value)
+        await setKvByName(preferenceKey, JSON.stringify({ enabled: true, tools: { test_echo: true } }), db);
     counter.value = Number(localStorage.getItem(counterKey) ?? 0);
     if (mode !== 'delayed') activate();
     tracker = ensureBackgroundJobTracker({ jobId, userId: actor.user.id, workspaceId, threadId, messageId, useSse: false });

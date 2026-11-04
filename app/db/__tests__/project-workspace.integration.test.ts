@@ -1597,9 +1597,15 @@ describe('automatic project memory capture', () => {
         vi.stubGlobal('fetch', fetcher);
         await captureAutomaticMemories(scope(), 'a', 'auto-chat', 'auto-assistant');
         const gateBody = JSON.parse(fetcher.mock.calls[0]![1].body);
+        expect(fetcher.mock.calls[0]![0]).toBe('https://openrouter.ai/api/alpha/decisions');
+        expect(gateBody.model).toBe('perplexity/pplx-decider-v1.2');
         expect(gateBody.state.project).toEqual({ name: 'Atlas', brief: 'Build an accessible team planning app.' });
         expect(gateBody.state.messages.map((message: { text: string }) => message.text)).toEqual([userText, assistantText]);
         const extractionBody = JSON.parse(fetcher.mock.calls[1]![1].body);
+        expect(fetcher.mock.calls[1]![0]).toBe('https://openrouter.ai/api/v1/chat/completions');
+        expect(extractionBody).toMatchObject({ model: 'deepseek/deepseek-v4.1-flash:nitro', stream: false, max_tokens: 600,
+            reasoning: { effort: 'none' }, response_format: { type: 'json_schema', json_schema: { name: 'project_memories', strict: true } } });
+        expect(extractionBody.messages[0].content).toContain('Each must have an exact supporting quote from a fresh user message.');
         expect(JSON.parse(extractionBody.messages[1].content)).toEqual(gateBody.state);
         expect((await readProjectWorkspace(db, 'a')).memories[0]?.value.text).toBe(candidate.text);
     });

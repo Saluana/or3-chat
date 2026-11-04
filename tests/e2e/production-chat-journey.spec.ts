@@ -62,10 +62,18 @@ async function retryDraftRestore(page: Page, text: string): Promise<void> {
 // Chats open at their bottom and mount only rows near the viewport. Scroll to
 // the first message, a compacted chat's summary card, as a reader would.
 // Navigation can still move the list to its own target, so callers retry.
+// Open chat tabs stay mounted while hidden; only the visible list is the reader's chat.
+function visibleMessageList(page: Page) {
+    return page.locator('.chat-message-list:visible').filter({ has: page.locator('[data-msg-id]') }).first();
+}
+
 async function revealFirstMessage(page: Page): Promise<boolean> {
-    const list = page.locator('.chat-message-list').filter({ has: page.locator('[data-msg-id]') }).first();
+    const list = visibleMessageList(page);
     try {
-        await list.evaluate((element) => element.scrollTo({ top: 0 }), undefined, { timeout: 1_000 });
+        // A wheel gesture is reader intent; a programmatic scroll can land inside the
+        // list's own anchor jump and be re-pinned to that target.
+        await list.hover({ timeout: 1_000 });
+        await page.mouse.wheel(0, -1_000_000);
         await list.locator('.or3-scroll-item[data-index="0"]').waitFor({ state: 'attached', timeout: 1_000 });
         return true;
     } catch {
@@ -75,7 +83,7 @@ async function revealFirstMessage(page: Page): Promise<boolean> {
 
 async function compactionSummaryId(page: Page): Promise<string | null> {
     if (!await revealFirstMessage(page)) return null;
-    const row = page.locator('.or3-scroll-item[data-index="0"] [data-msg-id]')
+    const row = visibleMessageList(page).locator('.or3-scroll-item[data-index="0"] [data-msg-id]')
         .filter({ has: page.locator('[data-compaction-card]') });
     return await row.count() ? row.getAttribute('data-msg-id') : null;
 }
@@ -1325,8 +1333,8 @@ test('compaction composer meter updates configuration, media and accessible warn
     await page.getByRole('option', { name: /^Meter selected prompt/ }).click();
     await closeSettings();
     await settle(); expect(await percent()).toBeGreaterThan(beforePrompt);
-    const beforeTool = await percent(); await outside(() => page.getByTestId('fixture-meter-tool').click()); expect(await percent()).toBeGreaterThan(beforeTool);
-    await outside(() => page.getByTestId('fixture-meter-tool').click()); expect(await percent()).toBe(beforeTool);
+    const beforeTool = await percent(); await outside(() => page.getByTestId('fixture-meter-tool').click()); await expect.poll(percent).toBeGreaterThan(beforeTool);
+    await outside(() => page.getByTestId('fixture-meter-tool').click()); await expect.poll(percent).toBe(beforeTool);
     const beforeImage = await percent(); await closeSettings();
     const chooser = page.waitForEvent('filechooser'); await page.getByRole('button', { name: 'Add attachments', exact: true }).click(); await (await chooser).setFiles(fixturePng);
     await expect(page.getByRole('button', { name: 'Remove image', exact: true })).toBeVisible();
@@ -1795,12 +1803,18 @@ test('a trashed source receipt reports unavailable and preserves the chat draft'
 for (const prompt of ['journey:workspace-find', 'journey:workspace-create', 'journey:workspace-project', 'journey:workspace-edit']) {
     test(`disabled workspace tools remain unavailable for ${prompt}`, async ({ page }, info) => {
         test.setTimeout(90_000);
-        await page.addInitScript(() => localStorage.setItem('or3.tools.enabled', JSON.stringify(Object.fromEntries([
-            'workspace_search', 'workspace_read', 'workspace_create_document', 'workspace_update_project', 'workspace_propose_document_edit',
-        ].map(name => [name, false])))));
         await page.route('**/api/__or3-e2e/models*', route => route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }));
         await page.goto(`${chatPage}?workspace=1`);
         await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 45_000 });
+        await page.getByRole('button', { name: 'Settings', exact: true }).click();
+        const settings = page.locator('.chat-settings-popover');
+        await settings.getByRole('button', { name: 'Tools', exact: true }).click();
+        await settings.getByRole('button', { name: /^Workspace tools/ }).click();
+        const workspaceTools = settings.getByRole('switch', { name: 'All tools', exact: true });
+        await expect(workspaceTools).toBeChecked();
+        await workspaceTools.click();
+        await expect(workspaceTools).not.toBeChecked();
+        await settings.getByRole('button', { name: 'Close chat settings', exact: true }).click();
         await send(page, prompt);
         await expect(page.getByText('Workspace tools unavailable in this fixture.', { exact: true })).toBeVisible({ timeout: 30_000 });
         await expect(page.getByRole('button', { name: /^Open source:/ })).toHaveCount(0);
@@ -2911,9 +2925,8 @@ test.describe('production chat journey', () => {
         await send(page, 'journey:error');
         await expect(page.getByRole('alert', { name: 'Response failed', exact: true })).toBeVisible();
         await expect(page.getByRole('button', { name: 'Stop generation' })).toHaveCount(0);
-        const actions = page.getByRole('button', { name: 'Actions for journey:error', exact: true });
-        const item = page.locator('.unified-sb-item-active').filter({ has: actions }).first();
-        await item.getByRole('button', { name: 'Actions for journey:error', exact: true }).click();
+        // Automatic title generation uses the scripted title endpoint.
+        await page.getByRole('button', { name: 'Actions for Scripted conversation', exact: true }).click();
         await page.getByRole('button', { name: 'Delete', exact: true }).click();
         const dialog = page.getByRole('dialog', { name: 'Delete chat', exact: true });
         await expect(dialog).toBeVisible();

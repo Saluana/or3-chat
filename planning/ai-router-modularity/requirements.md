@@ -10,7 +10,7 @@ Research on 2026-11-02 examined the `or3-chat` checkout on branch `or3-cloud`, H
 
 ## Assumptions
 
-- This deliverable authorizes planning only. Implementation, publishing, deployment, real-account credential changes, and paid inference have not been performed.
+- The initial planning request did not authorize implementation. The later request in this session authorized implementation in a new worktree, but did not authorize publishing, deployment, real-account credential changes, or paid inference.
 - OpenRouter remains the only enabled production router. No router switcher, additional connection UI, or new deployment configuration is needed in this phase.
 - Existing behavior includes static/local operation, Cloud with personal or instance billing, foreground/background execution, and supported plugin/workflow contracts.
 - The pre-existing and concurrently edited source/test/documentation files belong to the user. Implementation must first record the intended baseline including relevant changes, without stashing, reverting, or merging over that work. Planning adds only this directory.

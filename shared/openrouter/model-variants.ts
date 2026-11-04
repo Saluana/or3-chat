@@ -12,6 +12,9 @@
  * https://openrouter.ai/docs/guides/features/server-tools/web-search
  */
 
+import type { ModelOptionDescriptor } from '../ai/types';
+import { isOpenAiModel } from '../openai/models';
+
 export const OPENROUTER_MODEL_VARIANTS = [
     'off',
     'online',
@@ -47,7 +50,8 @@ export function appendModelVariant(
     modelId: string,
     variant: OpenRouterModelVariant | undefined | null
 ): string {
-    if (!variant || variant === 'off') return modelId;
+    // Routing variants are OpenRouter's; direct-OpenAI IDs never carry one.
+    if (!variant || variant === 'off' || isOpenAiModel(modelId)) return modelId;
     const base = stripModelVariantSuffix(modelId);
     return `${base}:${variant}`;
 }
@@ -95,6 +99,11 @@ export const MODEL_VARIANT_OPTIONS: readonly ModelVariantOption[] = [
         description: 'Cheapest providers; may be slower.',
     },
 ];
+
+/** Adapter metadata keeps search distinct from provider routing. */
+export const OPENROUTER_OPTION_DESCRIPTORS: readonly ModelOptionDescriptor<OpenRouterModelVariant>[] =
+    MODEL_VARIANT_OPTIONS.map((option) => ({ ...option,
+        kind: option.value === 'off' ? 'default' : option.value === 'online' ? 'search' : 'routing' }));
 
 /** Description for the given variant (falls back to `off` for unknown input). */
 export function getModelVariantDescription(

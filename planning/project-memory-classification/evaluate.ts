@@ -2,30 +2,36 @@ import {
     classifyMemoryReference,
     MEMORY_DECISION_THRESHOLD,
     MEMORY_CLASSIFIER_MODEL,
+    memoryClassifierModel,
     type MemoryClassificationState,
 } from '../../shared/projects/memory-classification';
 import { analyzeAutomaticMemory } from '../../shared/projects/automatic-memory';
+import { DEFAULT_FAST_MODEL } from '../../shared/ai/fast-model';
+import { isOpenAiModel } from '../../shared/openai/models';
 import { readFile, writeFile } from 'node:fs/promises';
 
 // Explicit qualification command only. Never called by the app; prints no state or credentials.
-const key = process.env.OPENROUTER_API_KEY;
+// OR3_EVAL_FAST_MODEL picks the router, as the workspace fast model does in the app.
+const fastModel = process.env.OR3_EVAL_FAST_MODEL || DEFAULT_FAST_MODEL;
+const router = isOpenAiModel(fastModel) ? 'openai' : 'openrouter';
+const key = router === 'openai' ? process.env.OR3_OPENAI_API_KEY : process.env.OPENROUTER_API_KEY;
 if (!key)
     throw new Error(
-        'Set OPENROUTER_API_KEY for this bounded paid qualification run.',
+        `Set ${router === 'openai' ? 'OR3_OPENAI_API_KEY' : 'OPENROUTER_API_KEY'} for this bounded paid qualification run.`,
     );
+const inference = { fastModel, apiKey: key };
 const fixtures = JSON.parse(await readFile(
     new URL('./fixtures.json', import.meta.url), 'utf8',
 )) as Array<{ id: string; expected: 'fact' | 'decision' | 'uncertain'; state: MemoryClassificationState }>;
-const models = ['typesafe/jev-1.13', MEMORY_CLASSIFIER_MODEL];
+const models = router === 'openai' ? [memoryClassifierModel(fastModel)] : ['typesafe/jev-1.13', MEMORY_CLASSIFIER_MODEL];
 const reports = [];
 for (const model of models) {
     const cases = [];
     for (const fixture of fixtures) {
         const result = await classifyMemoryReference(
             fixture.state,
-            key,
+            inference,
             new AbortController().signal,
-            undefined,
             undefined,
             model,
         );
@@ -79,7 +85,7 @@ for (const fixture of [
             project: { name: 'Synthetic project', brief: 'Build a web app with project-specific tooling and documentation preferences.' },
             messages: [{ id: fixture.id, role: 'user', text: fixture.text, fresh: true }],
             existing: [],
-        }, key, new AbortController().signal, undefined);
+        }, inference, new AbortController().signal);
         const supported = result.memories.every((memory) =>
             memory.source_message_id === fixture.id && fixture.text.includes(memory.source_quote),
         );
@@ -91,9 +97,9 @@ for (const fixture of [
             count: 0, passed: false, latencyMs: Date.now() - start });
     }
 }
-const automaticCapture = { model: MEMORY_CLASSIFIER_MODEL,
+const automaticCapture = { model: memoryClassifierModel(fastModel), fastModel,
     passed: automaticCases.every((row) => row.passed), cases: automaticCases };
-const path = new URL('./evaluation-current-results.json', import.meta.url);
+const path = new URL(`./evaluation-current-${router}-results.json`, import.meta.url);
 await writeFile(
     path,
     JSON.stringify(
@@ -105,7 +111,7 @@ await writeFile(
 console.log(JSON.stringify(reports.map(({ cases, ...report }) => report)));
 console.log(JSON.stringify(automaticCapture));
 console.log(
-    'Saved text-free receipt to planning/project-memory-classification/evaluation-current-results.json',
+    `Saved text-free receipt to planning/project-memory-classification/evaluation-current-${router}-results.json`,
 );
 if (
     !reports.every(

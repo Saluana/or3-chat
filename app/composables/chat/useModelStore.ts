@@ -58,7 +58,7 @@ import modelsService, {
 } from '~/core/auth/models-service';
 
 import { openRouterModelListSchema } from '~~/shared/openrouter/types';
-import { stripModelVariantSuffix } from '~~/shared/openrouter/model-variants';
+import { openRouterCatalogLookupId } from '~~/shared/openrouter/selection';
 import { admitChatContext, type ContextModelMetadata } from '~~/shared/chat/context-budget';
 
 // Module-level in-flight promise for deduping parallel fetches across composable instances
@@ -389,8 +389,7 @@ export function useModelStore() {
             if (signal?.aborted) throw new DOMException('Model preparation canceled.', 'AbortError');
         };
         checkCanceled();
-        const withoutThinking = selectedModelId.endsWith(':thinking') ? selectedModelId.slice(0, -':thinking'.length) : selectedModelId;
-        const lookupId = stripModelVariantSuffix(withoutThinking);
+        const lookupId = openRouterCatalogLookupId(selectedModelId);
         const lookup = (): Extract<ContextModelReadiness, { ok: true }> | undefined => {
             const exact = [
                 { model: catalog.value.find((model) => model.id === lookupId), source: catalogSource, fetchedAt: catalogFetchedAt },

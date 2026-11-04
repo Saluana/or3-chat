@@ -6,6 +6,7 @@ import * as nuxtImports from '#imports';
 import Dexie from 'dexie';
 import { Blob as NodeBlob } from 'node:buffer';
 import { setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
+import { setKvByName } from '~/db/kv';
 import { createDocumentInDb, getDocumentInDb } from '~/db/documents';
 import { flush, loadDocument, releaseDocument, useAllDocumentsState, useDocumentState } from '~/composables/documents/useDocumentsStore';
 import { createHookEngine } from '~/core/hooks/hooks';
@@ -69,6 +70,7 @@ async function mountedWorkspaces(initialAvailability?: 'trashed' | 'missing', mo
     const idA = `mounted-doc-a-${crypto.randomUUID()}`;
     const idB = `mounted-doc-b-${crypto.randomUUID()}`;
     const dbA = setActiveWorkspaceDb(idA);
+    await setKvByName('ai_settings', JSON.stringify({ defaultToolsEnabled: true }), dbA);
     await dbA.threads.put({ id: 'mounted-thread', title: 'Tool origin', status: 'ready',
         created_at: 1, updated_at: 1, clock: 1, deleted: false, pinned: false, forked: false });
     const created = await createDocumentInDb(dbA, { title: 'A private title', content: content('A original body') });

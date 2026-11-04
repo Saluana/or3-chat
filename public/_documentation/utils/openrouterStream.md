@@ -1,8 +1,10 @@
 # Chat streaming in OR3 source
 
-`app/utils/chat/openrouterStream.ts` is the host chat's streaming transport.
-It normalizes foreground OpenRouter responses and includes client helpers for
-SSR background jobs. These app imports are for OR3 source code; installable
+`app/utils/chat/openrouterStream.ts` is the compatible host chat streaming entry
+point. It delegates provider encoding and decoding to the OpenRouter adapter;
+host job operations live in `app/utils/chat/background-job-transport.ts` and
+route availability and dispatch ownership in `server-route.ts`. Their existing
+exports from `openrouterStream.ts` remain available. These app imports are for OR3 source code; installable
 plugins use the permission-scoped methods in the [Plugin SDK](/documentation/plugins/plugin-sdk).
 
 ## Foreground route and fallback
@@ -12,13 +14,14 @@ available. Both the proxy response and the direct OpenRouter response use the
 shared SSE parser, so callers receive the same normalized events for text,
 images, reasoning, tool calls, and completion.
 
-With SSR auth enabled and no client API key, the server route is required. A
-missing or failing route returns an error; the browser does not fall back to a
-direct request without a key. When a key is present, the route receives it in
-`x-or3-openrouter-key`; if fallback is allowed and the route is unavailable,
-the legacy direct path sends the key as a Bearer token. A successful server
-stream ends that attempt. In the optional fallback path, proxy errors other
-than 404/405 propagate instead of marking the route unavailable.
+With SSR auth enabled, the server route is required and resolves credentials
+on the server. A missing or failing route returns an error; the browser does not
+fall back to a direct request or send a Cloud vault key. In local mode, a
+personal key may be sent to the route in `x-or3-openrouter-key`; if fallback is
+allowed and the route is unavailable, the direct path sends it as a Bearer
+token. A successful server stream ends that attempt. In the optional fallback
+path, proxy errors other than 404/405 propagate instead of marking the route
+unavailable.
 
 The route-availability result is cached in `localStorage` for 15 minutes. In
 the optional server-first path, unmarked 404/405 responses mark the route
@@ -55,7 +58,9 @@ propagate so a retry cannot silently duplicate already displayed content.
 
 Native chat supplies a captured `contextPolicy` to the complete-body admission
 helper. It preserves every selected message and accounts for tools and request
-configuration. The OR3 server receives only versioned user choices in `_context`,
+configuration, including the provider search tool injected by Web search. The
+detached provider body admitted is the body dispatched and measured. The legacy
+host envelope retains the saved selection for server authorization. The OR3 server receives only versioned user choices in `_context`,
 resolves the selected model through the SDK catalog, and validates before
 provider dispatch or durable job admission. Direct OpenRouter requests omit
 the envelope. Callers without a captured policy retain their legacy contract;
@@ -86,7 +91,7 @@ and message IDs, an admission ID, history admission, and optional tool/runtime
 metadata to `/api/openrouter/stream`. The server must confirm admission with a
 JSON job ID. An unsupported or malformed admission is an error; this helper
 does not silently start a second execution mode. Polling, SSE attachment,
-cancellation, and retryable status errors are provided by the same module.
+cancellation, and retryable status errors are provided by the host job transport.
 
 If all transport attempts lose the admission response, one bounded recovery
 lookup uses the captured workspace and admission ID. A matching version-1 job

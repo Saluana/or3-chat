@@ -58,7 +58,8 @@ async function snapshot(page: Page) {
 test.afterEach(async ({ page }, info) => {
     await info.attach('chat-tools-evidence', { contentType: 'application/json', body: JSON.stringify({
         browser: page.context().browser()?.version(), exceptions: exceptions.get(page),
-        requests: requests.get(page)?.length, snapshot: await snapshot(page).catch(() => null) }) });
+        requests: requests.get(page)?.length, snapshot: await page.locator('[data-fixture-snapshot]').count()
+            ? await snapshot(page).catch(() => null) : null }) });
     await page.screenshot({ path: `${evidence}/${info.title.replace(/[^a-z0-9]+/gi, '-')}-retry-${info.retry}-worker-${info.workerIndex}.png`, animations: 'disabled' });
 });
 
@@ -90,6 +91,140 @@ for (const fixture of priorityCases) test(fixture.name, async ({ page }) => {
     if (fixture.name.startsWith('10 ') || fixture.name.startsWith('11 '))
         expect(stored.executions.filter(call => call.tool === 'test_write_once')).toHaveLength(1);
     await recovered(page);
+});
+
+test('a nonshipping router reaches the shared text and tool consumer with opaque identities', async ({ page }, info) => {
+    await open(page, [], 'adapter-conformance');
+    const result = JSON.parse(await page.locator('[data-adapter-conformance]').textContent() ?? '{}');
+    expect(result.bodies).toEqual([{ id: 'vendor/model:online:free' },
+        { id: 'vendor/model:online', input: [{ role: 'user', content: 'Fixture completion' }], limit: 12 }]);
+    expect(result.events).toEqual(['text', 'tool_call', 'done']);
+    expect(result.text).toBe('Fixture response');
+    expect(result.tool).toMatchObject({ id: 'call-1', name: 'fixture_tool', arguments: '{"value":1}', status: 'pending' });
+    expect(result.unsupported).toBe('Unsupported router option');
+    expect(result.options).toEqual([]);
+    expect(result.unsupportedSearch).toBe('Unsupported router option');
+    expect(result.fixtureCompletion).toMatchObject({ content: 'Fixture response' });
+    expect(result.completionBodies).toEqual([{ model: 'vendor/model:free',
+        messages: [{ role: 'user', content: 'Title this' }], max_tokens: 48, stream: false,
+        reasoning: { effort: 'none' } }]);
+    expect(result.completion).toMatchObject({ content: 'Fixture title', finishReason: 'stop' });
+    expect(result.wrongRouter).toBe('Model belongs to a different router');
+    expect(await page.locator('[data-empty-router-selector] button').count()).toBe(0);
+    expect(await page.locator('[data-empty-router-settings] [aria-label="Model variant"]').count()).toBe(0);
+    await info.attach('adapter-conformance', { contentType: 'application/json', body: JSON.stringify(result) });
+});
+
+test('a nonshipping router drives the real foreground tool loop and durable transcript', async ({ page }, info) => {
+    await open(page, [], 'adapter-conformance');
+    const result = JSON.parse(await page.locator('[data-adapter-conformance]').textContent() ?? '{}');
+    expect(result.loopError).toBeUndefined();
+    expect(result.loop.models).toEqual(['vendor/model:online:free', 'vendor/model:online:free']);
+    expect(result.loop.toolExecutions).toBe(1);
+    expect(result.loop.receiptBeforeExecution).toBe('running');
+    expect(result.loop.assistantText).toBe('Fixture final answer');
+    expect(result.loop.toolResult).toContain('fixture result');
+    expect(result.loop.followup).toContain('fixture result');
+    expect(result.loop.savedToolState).toBe('settled');
+    await info.attach('adapter-foreground-loop', { contentType: 'application/json', body: JSON.stringify(result.loop) });
+});
+
+test('nonshipping router options retain opaque values in both presenters', async ({ page }, info) => {
+    await open(page, [], 'custom-router-options');
+    const selection = page.locator('[data-custom-router-selection]');
+    await expect(selection).toHaveText('fixture:standard');
+    await page.getByRole('button', { name: 'Fixture router options', exact: true }).click();
+    await page.getByRole('listbox', { name: 'Fixture router options' }).getByRole('option', { name: /^Fixture fast/ }).click();
+    await expect(selection).toHaveText('fixture:fast');
+    await page.locator('[data-custom-router-settings]').getByRole('button', { name: 'Model variant', exact: true }).click();
+    await page.getByRole('listbox', { name: 'Model variant' }).getByRole('option', { name: /^Fixture standard/ }).click();
+    await expect(selection).toHaveText('fixture:standard');
+    expect(exceptions.get(page)).toEqual([]);
+    await info.attach('router-option-selection', { contentType: 'application/json', body: JSON.stringify({ selection: await selection.textContent() }) });
+});
+
+test('Web search remains a provider tool through a local tool round', async ({ page }, info) => {
+    await open(page, [[fixtureCall('search-round', 'test_write_once')]]);
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Model variant', exact: true }).click();
+    await page.getByRole('option', { name: /^Web search/ }).click();
+    await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
+    await send(page, 'Find evidence and run the local tool');
+    await expect(page.locator('[data-msg-id]').filter({ hasText: 'Fixture completed.' })).toBeVisible({ timeout: 20000 });
+    const sent = requests.get(page)!;
+    expect(sent).toHaveLength(2);
+    for (const body of sent) {
+        expect(body.model).toBe('~openai/gpt-luna-latest');
+        const tools = body.tools as { type: string; function?: { name: string } }[];
+        expect(tools.filter(tool => tool.type === 'openrouter:web_search')).toHaveLength(1);
+        expect(tools.some(tool => tool.function?.name === 'test_write_once')).toBe(true);
+    }
+    expect((sent[1]!.messages as { role: string; tool_call_id?: string }[])
+        .some(message => message.role === 'tool' && message.tool_call_id === 'search-round')).toBe(true);
+    expect((await snapshot(page)).executions.filter(call => call.tool === 'test_write_once')).toHaveLength(1);
+    expect(exceptions.get(page)).toEqual([]);
+    await info.attach('online-tool-round-requests', { contentType: 'application/json', body: JSON.stringify(sent) });
+});
+
+test('documentation help preserves its fixed model and documentation tool request', async ({ page }, info) => {
+    await open(page, []);
+    await page.goto('/documentation');
+    await expect(async () => {
+        const launcher = page.getByRole('button', { name: 'Open help chat', exact: true });
+        if (await launcher.isVisible()) await launcher.click();
+        await expect(page.getByPlaceholder('Ask about Or3 Chat…')).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 15000 });
+    await page.getByPlaceholder('Ask about Or3 Chat…').fill('How do workspaces work?');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page.getByText('Fixture completed.', { exact: true })).toBeVisible({ timeout: 20000 });
+    const sent = requests.get(page)!;
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.model).toBe('google/gemini-3-flash-preview');
+    expect(JSON.stringify(sent[0]!.messages)).toContain('You are the AI assistant for the Or3 Chat developer documentation.');
+    expect((sent[0]!.tools as { function?: { name: string } }[]).some(tool => tool.function?.name === 'search_docs')).toBe(true);
+    expect(exceptions.get(page)).toEqual([]);
+    await info.attach('help-request', { contentType: 'application/json', body: JSON.stringify(sent[0]) });
+});
+
+test('legacy thinking suffix keeps its current interpretation when a catalog ID collides', async ({ page }, info) => {
+    await open(page, [], 'thinking-collision');
+    await send(page, 'Legacy thinking selection');
+    await expect(page.locator('[data-msg-id]').filter({ hasText: 'Fixture completed.' })).toBeVisible({ timeout: 20000 });
+    const sent = requests.get(page)!;
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ model: 'fixture/collision', reasoning: { effort: 'high' } });
+    expect(exceptions.get(page)).toEqual([]);
+    await info.attach('thinking-collision-request', { contentType: 'application/json', body: JSON.stringify(sent[0]) });
+});
+
+test('free catalog identity survives Off and Nitro provider requests', async ({ page }, info) => {
+    await open(page, [], 'free-identity');
+    await send(page, 'First free request');
+    await expect(page.locator('[data-msg-id]').filter({ hasText: 'Fixture completed.' })).toHaveCount(1);
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Model variant', exact: true }).click();
+    await page.getByRole('option', { name: /^Nitro/ }).click();
+    await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
+    await send(page, 'Second free request');
+    await expect(page.locator('[data-msg-id]').filter({ hasText: 'Fixture completed.' })).toHaveCount(2);
+    const sent = requests.get(page)!;
+    expect(sent.map(body => body.model)).toEqual(['fixture/identity:free', 'fixture/identity:free:nitro']);
+    expect(exceptions.get(page)).toEqual([]);
+    await info.attach('free-identity-requests', { contentType: 'application/json', body: JSON.stringify(sent) });
+});
+
+test('native hook sequence surrounds durable acceptance and finalization', async ({ page }, info) => {
+    await open(page, [], 'hook-order');
+    await send(page, 'Record hook ordering');
+    await expect(page.locator('[data-msg-id]').filter({ hasText: 'Fixture completed.' })).toBeVisible();
+    const readTrace = async () => JSON.parse(await page.locator('[data-hook-trace]').textContent() || '[]') as string[];
+    await expect.poll(async () => (await readTrace()).at(-1)).toBe('after');
+    const trace = await readTrace();
+    expect(trace).toEqual(['ui.chat.message:filter:outgoing', 'ai.chat.model:filter:select',
+        'ai.chat.messages:filter:input', 'ai.chat.send:filter:prepare', 'before:2',
+        'ai.chat.messages:filter:before_send', 'complete', 'after']);
+    expect(exceptions.get(page)).toEqual([]);
+    await info.attach('hook-order', { contentType: 'application/json', body: JSON.stringify({ trace, requests: requests.get(page) }) });
 });
 
 test('12 Stop during tool execution clears loading and permits another message', async ({ page }) => {

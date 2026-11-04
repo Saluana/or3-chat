@@ -1,9 +1,12 @@
 import { EventEmitter } from 'node:events';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setResponseHeader, type H3Event } from 'h3';
 import { checkAndRecordLlmRequest } from '../../../utils/llm/rate-limiter';
+import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 import type { ToolDefinition } from '~/utils/chat/types';
 import { registerServerTool, unregisterServerTool } from '../../../utils/chat/tool-registry';
+import { estimateChatRequest } from '~~/shared/chat/context-budget';
+import { countTokensApprox } from '~/utils/chat/tokens';
 
 const readBodyMock = vi.fn();
 const getHeaderMock = vi.fn();
@@ -35,6 +38,8 @@ vi.mock('~~/shared/openrouter', async (original) => ({
 }));
 
 vi.mock('#imports', () => ({ useRuntimeConfig: () => runtimeConfig }));
+// Memory routes read the workspace fast model; the default keeps them on OpenRouter.
+vi.mock('../../../admin/stores/registry', () => ({ getWorkspaceSettingsStore: () => ({ get: async () => undefined }) }));
 
 // Most tests feed bodies through `readBodyMock`. Tests that need real stream
 // and size semantics switch to the production bounded reader.
@@ -269,6 +274,17 @@ describe('POST /api/openrouter/stream credential authorization', () => {
         expect(JSON.parse(vi.mocked(fetch).mock.calls[0]![1]!.body as string)).toMatchObject({
             model: 'test/model', tools: [{ type: 'openrouter:web_search' }],
         });
+    });
+
+    it('counts the Online provider tool in independent server admission', async () => {
+        const messages = [{ role: 'user', content: 'Question' }];
+        const estimate = await estimateChatRequest({ model: 'test/model', messages,
+            tools: [{ type: 'openrouter:web_search' }],
+            configuration: { model: 'test/model', stream: true, max_tokens: 1 }, countText: countTokensApprox });
+        readBodyMock.mockResolvedValue({ model: 'test/model:online', stream: true, max_tokens: 1, messages,
+            _context: { version: 1, user_max_context_tokens: estimate.input_tokens, requested_completion_tokens: 1 } });
+        expect(await handler(makeEvent())).toMatchObject({ code: 'context_full', retryable: false });
+        expect(fetch).not.toHaveBeenCalled();
     });
 
     // OpenRouter reserves credit for max_tokens. The default allowance is the
@@ -792,6 +808,7 @@ describe('POST /api/openrouter/stream credential authorization', () => {
 describe('project memory classification proxy admission', () => {
     let classify: (event: H3Event) => Promise<unknown>;
     beforeAll(async () => { classify = (await import('../classify-memory.post')).default as typeof classify; });
+    afterEach(() => { vi.mocked(isSsrAuthEnabled).mockReturnValue(true); });
     beforeEach(() => {
         bodyReader.useActual = false;
         runtimeConfig = { auth: { enabled: true }, security: { proxy: {}, allowedOrigins: [] },
@@ -848,6 +865,45 @@ describe('project memory classification proxy admission', () => {
     ])('rejects unbounded or caller-configured input %#', async body => {
         readBodyMock.mockResolvedValue(body);
         await expect(classify(requestEvent())).rejects.toMatchObject({ statusCode: 400 });
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    // Local installs: an OpenAI fast model runs here so it reaches the configured
+    // OpenAI endpoint, paid only with this device's key, never the instance key.
+    const openAiAnswer = (name: string, choice: string, choices: string[]) => new Response(JSON.stringify({ model: 'gpt-6-luna',
+        answers: [{ name, type: 'choice', choice, probabilities: choices.map(value => ({ value, probability: value === choice ? 0.98 : 0.01 })) }] }),
+        { headers: { 'Content-Type': 'application/json' } });
+    const localInstall = () => {
+        vi.mocked(isSsrAuthEnabled).mockReturnValue(false);
+        runtimeConfig = { ...runtimeConfig, auth: { enabled: false }, openaiApiKey: 'instance-openai-key', openaiBaseUrl: 'https://gateway.example/v1' };
+        resolveSessionContextMock.mockResolvedValue({ authenticated: false });
+    };
+    it('classifies a local install\'s OpenAI memory on the configured endpoint with the device key', async () => {
+        localInstall();
+        readBodyMock.mockResolvedValue({ workspaceId: 'local-workspace', state: { memory: 'We chose SQLite.', messages: [] }, model: '@openai/gpt-6-luna' });
+        vi.mocked(fetch).mockResolvedValueOnce(openAiAnswer('memory_kind', 'decision', ['fact', 'decision', 'uncertain']));
+        expect(await classify(makeEvent({ 'x-or3-openai-key': 'device-openai-key' }))).toMatchObject({ kind: 'decision', model: 'gpt-6-luna' });
+        const [url, init] = vi.mocked(fetch).mock.calls[0] as unknown as [string, RequestInit];
+        expect(url).toBe('https://gateway.example/v1/decisions');
+        expect((init.headers as Record<string, string>).Authorization).toBe('Bearer device-openai-key');
+    });
+    it('captures a local install\'s OpenAI memory without a signed-in user', async () => {
+        localInstall();
+        readBodyMock.mockResolvedValue({ workspaceId: 'local-workspace', model: '@openai/gpt-6-luna', capture: {
+            project: { name: 'Atlas', brief: 'Team planning app.' },
+            messages: [{ id: 'u-local', role: 'user', text: 'What is SQLite?', fresh: true }], existing: [] } });
+        vi.mocked(fetch).mockResolvedValueOnce(openAiAnswer('worth_saving', 'skip', ['save', 'skip', 'uncertain']));
+        expect(await classify(makeEvent({ 'x-or3-openai-key': 'device-openai-key' }))).toEqual({ memories: [] });
+        expect((vi.mocked(fetch).mock.calls[0] as unknown as [string])[0]).toBe('https://gateway.example/v1/decisions');
+    });
+    it.each([
+        ['without the device key', {}, '@openai/gpt-6-luna'],
+        ['for an OpenRouter fast model', { 'x-or3-openrouter-key': 'device-openrouter-key' }, 'deepseek/deepseek-v4.1-flash:nitro'],
+        ['without a fast model', { 'x-or3-openai-key': 'device-openai-key' }, undefined],
+    ])('refuses a local request %s before dispatch', async (_label, headers, model) => {
+        localInstall();
+        readBodyMock.mockResolvedValue({ workspaceId: 'local-workspace', state: { memory: 'We chose SQLite.', messages: [] }, ...(model ? { model } : {}) });
+        await expect(classify(makeEvent(headers))).rejects.toMatchObject({ statusCode: 400 });
         expect(fetch).not.toHaveBeenCalled();
     });
 });

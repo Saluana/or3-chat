@@ -2,6 +2,9 @@ import { z } from 'zod';
 import { normalizeOpenRouterBaseUrl } from '../openrouter/url';
 import { DEFAULT_OPENROUTER_BASE_URL } from '../config/constants';
 import { parseRetryAfter } from '../errors';
+import { createOpenRouterDecisions } from '../openrouter/decisions';
+import { createOpenAiDecisions, OPENAI_DECISIONS_MODEL } from '../openai/decisions';
+import { isOpenAiModel } from '../openai/models';
 
 /** A failed inference response, keeping the status and Retry-After for error reporting. */
 export function inferenceHttpError(message: string, response: Response): Error {
@@ -17,8 +20,24 @@ export function memoryInferenceOrigin(baseUrl: unknown): string | null {
     return origin === new URL(DEFAULT_OPENROUTER_BASE_URL).origin ? origin : null;
 }
 
-// Qualified on labeled cases using the real Decisions API; see the evaluation script.
+/** Memory inference runs on the fast model's router with that router's key and base URL. */
+export interface MemoryInference {
+    fastModel: string;
+    apiKey: string;
+    baseUrl?: unknown;
+}
+
+// Qualified on labeled cases using the real Decisions APIs; see the evaluation script.
 export const MEMORY_CLASSIFIER_MODEL = 'perplexity/pplx-decider-v1.2';
+
+/** Each router's Decisions model; the fast model chooses the router. */
+export function memoryClassifierModel(fastModel: string): string {
+    return isOpenAiModel(fastModel) ? OPENAI_DECISIONS_MODEL : MEMORY_CLASSIFIER_MODEL;
+}
+
+export function isMemoryClassifierModel(model: unknown): boolean {
+    return model === MEMORY_CLASSIFIER_MODEL || model === OPENAI_DECISIONS_MODEL;
+}
 export const MEMORY_CLASSIFIER_TIMEOUT_MS = 10000;
 export const MEMORY_DECISION_THRESHOLD = 0.9;
 // Roughly 60K tokens of ordinary English, not an exact tokenizer limit.
@@ -88,11 +107,10 @@ export type MemoryClassificationResult = z.infer<
 /** One fixed question, no retries, and no memory text in diagnostic results. */
 export async function classifyMemoryReference(
     state: MemoryClassificationState,
-    apiKey: string,
+    inference: MemoryInference,
     signal: AbortSignal,
-    baseUrl: unknown,
     beforeDispatch?: () => Promise<void>,
-    model = MEMORY_CLASSIFIER_MODEL,
+    model = memoryClassifierModel(inference.fastModel),
 ): Promise<MemoryClassificationResult> {
     const start = Date.now();
     const result: MemoryClassificationResult = {
@@ -109,22 +127,16 @@ export async function classifyMemoryReference(
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
         MemoryClassificationStateSchema.parse(state);
-        // Gateways may not implement Decisions: keep the saved fact unclassified.
-        const origin = memoryInferenceOrigin(baseUrl);
-        if (!origin) return result;
-        const { HTTPClient } = await import('@openrouter/sdk/lib/http.js');
-        const { createOpenRouterClient } = await import('../openrouter/client');
-        const httpClient = new HTTPClient();
-        if (beforeDispatch)
-            httpClient.addHook('beforeRequest', async () => {
-                await beforeDispatch();
-                controller.signal.throwIfAborted();
-            });
-        const client = createOpenRouterClient({
-            apiKey,
-            serverURL: origin,
-            httpClient,
-        });
+        const { apiKey, baseUrl } = inference;
+        let decide;
+        if (isOpenAiModel(inference.fastModel))
+            decide = createOpenAiDecisions({ apiKey, baseUrl, signal: controller.signal, beforeDispatch });
+        else {
+            // OpenRouter-compatible gateways may not implement Decisions: keep the saved fact unclassified.
+            const origin = memoryInferenceOrigin(baseUrl);
+            if (!origin) return result;
+            decide = await createOpenRouterDecisions({ apiKey, origin, signal: controller.signal, beforeDispatch });
+        }
         const timeout = new Promise<never>((_, reject) => {
             timer = setTimeout(() => {
                 controller.abort();
@@ -139,22 +151,8 @@ export async function classifyMemoryReference(
                 reject(new Error('Classification cancelled.'));
         });
         const response = await Promise.race([
-            client.alpha.decisions.create(
-                {
-                    decisionsRequest: {
-                        model,
-                        state,
-                        questions: {
-                            memory_kind: MEMORY_CLASSIFICATION_QUESTION,
-                        },
-                    },
-                },
-                {
-                    retries: { strategy: 'none' },
-                    timeoutMs: MEMORY_CLASSIFIER_TIMEOUT_MS,
-                    fetchOptions: { signal: controller.signal },
-                },
-            ),
+            decide({ model, state, questions: { memory_kind: MEMORY_CLASSIFICATION_QUESTION } },
+                MEMORY_CLASSIFIER_TIMEOUT_MS),
             timeout,
         ]);
         const answer = response.answers.memory_kind;

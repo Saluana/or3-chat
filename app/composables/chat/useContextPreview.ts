@@ -1,3 +1,4 @@
+import { openRouterToolCapability } from '~~/shared/openrouter/selection';
 import { shallowRef, toValue, watch, onScopeDispose, type MaybeRefOrGetter } from 'vue';
 import { getDb, getWorkspaceGeneration, getActiveWorkspaceId, subscribeActiveWorkspaceDb } from '~/db/client';
 import { countTokensApprox } from '~/utils/chat/tokens';
@@ -9,6 +10,7 @@ import { readChatToolPreferences } from '~/utils/chat/tool-preferences';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 import { parseFileHashes } from '~/db/files-util';
+import { encodeProviderRequest } from '~~/shared/ai/provider-body';
 
 /** Read-only advisory preview. It never resolves media bytes or invokes send hooks. */
 export function useContextPreview(options: {
@@ -116,13 +118,13 @@ export function useContextPreview(options: {
             }
             const catalogModel = models.catalog.value.find((row) => row.id === readiness.modelId)
                 ?? models.favoriteModels.value.find((row) => row.id === readiness.modelId);
-            const enabled = !catalogModel?.supported_parameters || catalogModel.supported_parameters.includes('tools')
+            const enabled = openRouterToolCapability(catalogModel) !== 'unsupported'
                 ? tools.getEnabledDefinitions({ workspaceId: getActiveWorkspaceId(), threadId: threadId ?? null }, await readChatToolPreferences(db, threadId, toValue(options.draftId))) : [];
             const definitions = isBackgroundStreamingEnabled() ? enabled : enabled.filter((tool) => tool.runtime !== 'server');
-            const body = buildOpenRouterRequestBody({ model, orMessages: messages as Parameters<typeof buildOpenRouterRequestBody>[0]['orMessages'],
-                modalities: ['text'], tools: definitions.length ? definitions : undefined, reasoning: toValue(options.reasoning) });
+            const body = encodeProviderRequest(buildOpenRouterRequestBody({ model, orMessages: messages as Parameters<typeof buildOpenRouterRequestBody>[0]['orMessages'],
+                modalities: ['text'], tools: definitions.length ? definitions : undefined, reasoning: toValue(options.reasoning) }));
             const { messages: wireMessages, ...configuration } = body;
-            const estimate = await estimateMeasuredChatRequest({ model, messages: wireMessages, tools: body.tools,
+            const estimate = await estimateMeasuredChatRequest({ model: body.model, messages: wireMessages, tools: body.tools,
                 modalities: body.modalities, configuration, usage, countText });
             if (current()) state.value = { pending: false, admission: admitChatContext({ model: readiness.metadata,
                 inputTokens: estimate.input_tokens, estimate, userMaxContextTokens: settings.maxContextTokens, source: readiness.source }) };

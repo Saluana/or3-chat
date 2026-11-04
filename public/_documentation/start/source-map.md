@@ -12,8 +12,8 @@ The root `repomix.config.json` provides general context; the `repomix.*.config.j
 
 | Task | Source entry points | Feature guide |
 | --- | --- | --- |
-| Chat admission, streaming, retry, and cancellation | `app/composables/chat/useAi.ts` exports useChat; `app/utils/chat/useAi-internal/` contains request and persistence helpers. | [Chat lifecycle](/documentation/architecture/chat-lifecycle) |
-| Model selection, capabilities, and credentials | `app/composables/chat/useChatModelSelection.ts`, `app/core/auth/`, `app/utils/modelCatalog.ts` | [OpenRouter](/documentation/auth/overview) |
+| Chat admission, streaming, retry, and cancellation | `app/composables/chat/useAi.ts` composes focused owners in `app/utils/chat/useAi-internal/`; the existing request controller and persistence remain authoritative. | [Chat lifecycle](/documentation/architecture/chat-lifecycle) |
+| Inference and model selection | `shared/ai/`, `shared/openrouter/`, `shared/openai/`, `server/utils/ai/chat-router.ts`, `app/core/auth/`, `app/composables/chat/useChatModelSelection.ts` | [OpenRouter](/documentation/auth/overview), [OpenAI keys](/documentation/auth/reference#direct-openai-keys) |
 | Document loading, staged edits, and autosave | `app/composables/documents/useDocumentsStore.ts`, `useDocumentEditorSessions.ts`, `app/db/documents.ts`; `app/composables/core/useDocumentSaveHooks.ts` bridges completed saves to workspace pane hooks. | [Documents](/documentation/database/documents) |
 | Document AI proposals and chat/editor tools | `app/composables/documents/useDocumentAiAgent.ts`, `app/utils/documents/document-chat-tools.ts` | [Document tools](/documentation/utils/chat-tools) |
 | Tab session, pane bindings, and drafts | `app/composables/core/useWorkspaceTabs.ts`, `useWorkspaceTabHost.ts`, `useWorkspaceTabDrafts.ts`, `useMultiPane.ts` | [Chat lifecycle](/documentation/architecture/chat-lifecycle#tabs-and-drafts) |

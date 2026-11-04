@@ -6,6 +6,7 @@ import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { registerDocumentEditorSession } from '~/composables/documents/useDocumentEditorSessions';
 import { setWorkspaceTabPaletteProvider } from '~/core/search/command-palette/sources/workspace-tab-source';
 import { evictWorkspaceDb, getDb, setActiveWorkspaceDb, Or3DB } from '~/db/client';
+import { setKvByName } from '~/db/kv';
 import { flush, loadDocument, setDocumentContent, useDocumentState } from '~/composables/documents/useDocumentsStore';
 import { getDocumentInDb } from '~/db/documents';
 import { createHookEngine } from '~/core/hooks/hooks';
@@ -24,6 +25,7 @@ beforeEach(async () => {
     testRuntimeConfig.value.public.ssrAuthEnabled = false;
     setHookEngine(createTypedHookEngine(createHookEngine()));
     await setActiveWorkspaceDb('workspace-a').open();
+    await setKvByName('ai_settings', JSON.stringify({ defaultToolsEnabled: true }), getDb());
     await getDb().threads.put({ id: 'thread-a', title: 'Tool origin', project_id: null,
         created_at: 1, updated_at: 1, deleted: false, clock: 0, forked: false, status: 'active', pinned: false });
 });

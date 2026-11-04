@@ -2,6 +2,11 @@
 
 `buildOpenRouterMessages` translates OR3 chat content into provider messages. It hydrates attachments, applies image-history policies, and preserves tool-call metadata. It does not choose a model, decide output modalities, authenticate, or send a request.
 
+The semantic message and content-part types are owned by `shared/ai/types.ts`
+and retain their existing `~/utils/chat/types` imports. This builder deliberately
+returns OpenRouter-shaped messages: existing chat hooks and recovery records
+continue to receive their established format.
+
 This is a browser-side host utility: local file hydration uses IndexedDB and FileReader. Portable plugins should use [SDK model calls](/documentation/plugins/plugin-sdk).
 
 ## Build a text request payload

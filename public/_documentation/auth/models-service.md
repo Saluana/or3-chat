@@ -2,6 +2,17 @@
 
 The host model service fetches OpenRouter model metadata and supplies small, pure filters. Import it from `~/core/auth/models-service`. It does not manage login, persist keys, send chat requests, or build a search index.
 
+`shared/openrouter/catalog.ts` owns SDK pagination and mapping; the model service
+remains the single browser cache owner. `shared/openrouter/selection.ts` owns
+OpenRouter's legacy suffix and catalog-identity interpretation. A model's
+missing tool metadata is unknown; OpenRouter's existing compatibility policy
+still permits tools in that case. Search, routing and reasoning are separate
+concepts even though the current menu presents the existing four choices.
+The source variant presenters accept a descriptor list with opaque option
+values and hide their control when it is empty; OpenRouter remains their
+default list. Saved OpenRouter settings are still validated at the composer
+boundary.
+
 ## Fetch and filter
 
 Run this from a client-side Nuxt context where runtime configuration is available:
@@ -29,7 +40,7 @@ Filtering metadata does not guarantee that a particular account can use a model,
 | Function | Contract |
 | --- | --- |
 | `fetchModels({ force?, ttlMs? })` | Returns `OpenRouterModel[]`; defaults to a one-hour cache TTL. |
-| `fetchModelCatalog({ force?, ttlMs? })` | Uses the same path and returns `{ data, source, fetchedAt }`. Source is live only after an SDK catalog response; cache fallback retains its original fetch time. |
+| `fetchModelCatalog({ force?, ttlMs? })` | Uses the same path and returns `{ data, source, fetchedAt }`. Source is live only after an SDK catalog response; cache fallback retains its original fetch time. When an OpenAI key is available (Cloud account, or a local device key with the OR3 server), `@openai/…` models from `/api/openai/models` are appended; if OpenRouter is unavailable they are returned alone. |
 | `filterByText(models, query)` | Case-insensitive substring match over ID, name, and description. Empty query returns the input list. |
 | `filterByModalities(models, { input?, output? })` | Requires every requested input/output modality in the advertised arrays. |
 | `filterByContextLength(models, min)` | Uses top-provider context length, then model context length, then zero. |

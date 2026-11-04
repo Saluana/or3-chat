@@ -25,7 +25,8 @@ async function start(request: APIRequestContext, origin: string, name: string, r
     const timestamp = Math.floor(Date.now() / 1000);
     const row = { clock: 1, created_at: timestamp, updated_at: timestamp, deleted: false };
     const response = await request.post('/api/openrouter/stream', { headers, data: {
-        model: 'fixture/model', messages: [{ role: 'user', content: `cloud:${mode}:${id}` }], tools: [definition(name)],
+        model: mode === 'online' ? 'fixture/model:online' : 'fixture/model', messages: [{ role: 'user', content: `cloud:${mode}:${id}` }], tools: [definition(name)],
+        ...(mode === 'online' ? { _context: { version: 1, user_max_context_tokens: null, requested_completion_tokens: null } } : {}),
         _background: true, _threadId: threadId, _messageId: messageId, _clientDeviceId: 'fixture-device',
         _toolRuntime: { [name]: runtime }, _backgroundAdmissionId: id,
         _history: { version: 1, kind: 'new-turn', admissionId: id, generationId: id, workspaceId, threadId, messageId,
@@ -462,7 +463,7 @@ for (const interruption of ['browser closure', 'offline reconnect'] as const) te
         await context.close().catch(() => {});
     }
 });
-for (const mode of ['normal', 'duplicate', 'conflict', 'failure']) test(`authenticated server tool ${mode}`, async ({ request }, info) => {
+for (const mode of ['normal', 'duplicate', 'conflict', 'failure', 'online']) test(`authenticated server tool ${mode}`, async ({ request }, info) => {
     const origin = String(info.project.use.baseURL);
     const job = await start(request, origin, mode === 'failure' ? 'test_fail' : 'test_write_once', 'server', mode);
     await expect.poll(async () => (await status(request, job.jobId)).status, { timeout: 30000 }).toBe('complete');

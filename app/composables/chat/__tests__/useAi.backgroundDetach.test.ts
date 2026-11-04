@@ -69,6 +69,17 @@ let resolveBackgroundStart: ((value: { jobId: string }) => void) | null = null;
 let latestTracker: any = null;
 let holdBackgroundCompletion = false;
 
+const fixtureHooks = () => ({
+    on: hookOnMock,
+    off: vi.fn(),
+    doAction: hookDoActionMock,
+    applyFilters: hookApplyFiltersMock,
+    captureFilterChain: () => () => true,
+    hasFilter: hookHasFilterMock,
+    hasAction: hookHasActionMock,
+    _diagnostics: { errors: {} as Record<string, number> },
+});
+
 vi.mock('#imports', () => ({
     useRuntimeConfig: () => runtimeConfigRef.value,
     useToast: () => ({ add: vi.fn() }),
@@ -76,22 +87,17 @@ vi.mock('#imports', () => ({
     useUserApiKey: () => ({ apiKey: ref('test-key'), connected: ref(true), setKey: vi.fn() }),
     useActivePrompt: () => ({ activePromptContent: ref(null) }),
     getDefaultPromptId: vi.fn(async () => null),
-    useHooks: () => ({
-        on: hookOnMock,
-        off: vi.fn(),
-        doAction: hookDoActionMock,
-        applyFilters: hookApplyFiltersMock,
-        captureFilterChain: () => () => true,
-        hasFilter: hookHasFilterMock,
-        hasAction: hookHasActionMock,
-        _diagnostics: { errors: {} as Record<string, number> },
-    }),
+    useHooks: fixtureHooks,
+}));
+vi.mock('~/core/hooks/useHooks', async (original) => ({
+    ...await original<typeof import('~/core/hooks/useHooks')>(),
+    useHooks: fixtureHooks,
 }));
 
-vi.mock('~/db/util', () => ({
+vi.mock('~/db/util', async (original) => ({
+    ...await original<typeof import('~/db/util')>(),
     nowSec: () => 1,
     newId: () => `id-test-${++syntheticIdSequence}`,
-    getWriteTxTableNames: () => ['messages'],
 }));
 
 vi.mock('~/db', () => ({
@@ -113,7 +119,15 @@ vi.mock('~/db/client', () => ({
 }));
 
 const recoveryStore = new Map<string, any>();
+const kvStore = new Map<string, any>();
 const dbMock = {
+    // Match the real workspace DB's open and empty-preferences behavior so the
+    // lifecycle cases can reach admission instead of failing during KV lookup.
+    isOpen: () => true,
+    kv: {
+        where: () => ({ equals: (name: string) => ({ first: async () => kvStore.get(name) }) }),
+        put: async (row: any) => { kvStore.set(row.name, row); },
+    },
     projects: { where: () => ({ equals: () => ({ toArray: async () => [] }) }) },
     chat_request_recoveries: {
         get: async (id: string) => recoveryStore.get(id),
@@ -410,6 +424,7 @@ describe('useChat background detach race', () => {
         sessionDataRef.value = { session: { authenticated: true, user: { id: 'user-1' }, workspace: { id: 'ws-1' } } };
         messageStore.clear();
         recoveryStore.clear();
+        kvStore.clear();
         activeDb = dbMock;
         workspaceGeneration = 0;
         consumeWorkflowSend = false;
@@ -779,7 +794,7 @@ describe('useChat background detach race', () => {
                 pending: false, deleted: false, clock: 2, created_at: 1, updated_at: 2 });
             const synced = await chat.sendMessage('Preserved draft', { model: 'test-model', file_hashes: ['draft-file'] });
             expect('reason' in synced ? synced.reason : undefined).not.toBe('unavailable');
-            expect(appendMessageMock).toHaveBeenCalledTimes(2);
+            expect(appendMessageMock, JSON.stringify(synced)).toHaveBeenCalledTimes(2);
             expect(appendMessageMock.mock.calls[0]?.[0]).toMatchObject({ data: { content: 'Preserved draft' }, file_hashes: JSON.stringify(['draft-file']) });
 
         } finally { scope.stop(); activeDb = dbMock; origin.close(); await origin.delete(); }
@@ -1890,7 +1905,7 @@ describe('useChat background detach race', () => {
         const chat = useChat([], 'thread-1');
         const result = await chat.sendMessage('hello', { files: [], model: 'test-model',
             file_hashes: [], online: false, context_hashes: [] });
-        expect(result).toMatchObject({ status: 'detached', reason: 'detached' });
+        expect(result, JSON.stringify(result)).toMatchObject({ status: 'detached', reason: 'detached' });
         const assistant = messageStore.get('assistant-msg-1');
         expect(assistant).toBeDefined();
         expect(assistant.pending).toBe(true);

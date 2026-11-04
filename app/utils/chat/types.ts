@@ -6,23 +6,8 @@
  */
 
 import type { CompactionData, RequestUsage } from '~~/shared/chat/compaction';
-
-export type TextPart = { type: 'text'; text: string };
-
-export type ImagePart = {
-    type: 'image';
-    image: string | Uint8Array | Buffer;
-    mediaType?: string;
-};
-
-export type FilePart = {
-    type: 'file';
-    data: string | Uint8Array | Buffer;
-    mediaType: string;
-    name?: string;
-};
-
-export type ContentPart = TextPart | ImagePart | FilePart;
+import type { AiMessage } from '~~/shared/ai/types';
+export type { TextPart, ImagePart, FilePart, ContentPart, ToolCall } from '~~/shared/ai/types';
 
 /**
  * `ChatMessage`
@@ -30,9 +15,7 @@ export type ContentPart = TextPart | ImagePart | FilePart;
  * Purpose:
  * Canonical chat message shape used by UI and persistence layers.
  */
-export interface ChatMessage {
-    role: 'user' | 'assistant' | 'system' | 'tool';
-    content: string | ContentPart[];
+export interface ChatMessage extends AiMessage {
     id?: string;
     stream_id?: string;
     file_hashes?: string | null;
@@ -43,9 +26,6 @@ export interface ChatMessage {
     index?: number | null;
     order_key?: string | null;
     created_at?: number | null;
-    name?: string;
-    tool_call_id?: string;
-    tool_calls?: ToolCall[];
 }
 
 export interface SendMessageParams {
@@ -125,15 +105,6 @@ export type RegisterSendResult = (
     terminal: Promise<SendResult>,
     durableAcceptance?: Promise<SendResult>
 ) => void;
-
-export interface ToolCall {
-    id: string;
-    type: 'function';
-    function: {
-        name: string;
-        arguments: string; // JSON string, parsed by consumer
-    };
-}
 
 export type ToolRuntime = 'hybrid' | 'client' | 'server';
 

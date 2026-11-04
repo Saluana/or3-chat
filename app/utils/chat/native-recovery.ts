@@ -44,3 +44,59 @@ export async function recoverySourceFingerprint(db: Or3DB, threadId: string, ass
             index: row.index, order_key: row.order_key, deleted: row.deleted, pending: row.pending, data: row.data, file_hashes: row.file_hashes })),
     })) });
 }
+
+/**
+ * A checkpoint is written before inference and cleared when its request
+ * settles here. A reload or crash mid-generation leaves it behind while its
+ * turn fails another way; that turn must use ordinary retry and sending.
+ */
+export async function discardStaleRecovery(db: Or3DB, checkpoint: NativeRecoveryCheckpoint): Promise<boolean> {
+    const saved = await db.messages.get(checkpoint.assistant_message_id);
+    if (saved && !saved.deleted && (saved.pending || (saved.error === 'context_full'
+        && (saved.data as Record<string, unknown> | null)?.request_id === checkpoint.request_id))) return false;
+    await db.transaction('rw', db.chat_request_recoveries, async () => {
+        const current = await db.chat_request_recoveries.get(checkpoint.thread_id);
+        if (current?.request_id === checkpoint.request_id) await db.chat_request_recoveries.delete(checkpoint.thread_id);
+    });
+    return true;
+}
+
+/** Capture the existing checkpoint before a native request can reach a provider. */
+export async function saveNativeRecoveryCheckpoint(input: {
+    db: Or3DB;
+    requestId: string;
+    threadId: string;
+    userMessageId: string;
+    assistantMessageId: string;
+    savedInput: SendMessageParams & { content: string };
+    messages: NativeRecoveryCheckpoint['messages'];
+    tools: ToolDefinition[];
+    delegationDefaults?: DelegationDefaults;
+    projectContext: () => import('~/utils/projects/types').ProjectContextSnapshot | null | undefined;
+    projectQuery?: string;
+    masterPrompt: () => unknown;
+    taskPrompt: () => unknown;
+    cancelled: () => boolean;
+}): Promise<NativeRecoveryCheckpoint> {
+    const checkpoint: NativeRecoveryCheckpoint = {
+        version: 1, request_id: input.requestId, thread_id: input.threadId,
+        user_message_id: input.userMessageId, assistant_message_id: input.assistantMessageId,
+        input: structuredClone(input.savedInput),
+        input_fingerprint: await recoveryInputFingerprint(input.savedInput.content, input.savedInput),
+        source_fingerprint: await recoverySourceFingerprint(input.db, input.threadId, input.assistantMessageId,
+            input.masterPrompt(), input.taskPrompt()),
+        messages: structuredClone(input.messages), tools: structuredClone(input.tools),
+        ...(input.delegationDefaults ? { delegation_defaults: structuredClone(input.delegationDefaults) } : {}),
+        ...(input.projectContext() ? { project_fingerprint: await recoveryProjectFingerprint(input.projectContext()!),
+            project_query: input.projectQuery } : {}),
+    };
+    await input.db.transaction('rw', input.db.threads, input.db.messages, input.db.chat_request_recoveries, async () => {
+        const thread = await input.db.threads.get(input.threadId);
+        const assistant = await input.db.messages.get(input.assistantMessageId);
+        if (!thread || thread.deleted || !assistant || assistant.deleted || !assistant.pending
+            || (assistant.data as Record<string, unknown> | null)?.generation_lease_id !== input.requestId
+            || input.cancelled()) throw new Error('The saved attempt changed before native recovery could be recorded.');
+        await input.db.chat_request_recoveries.put(checkpoint);
+    });
+    return checkpoint;
+}

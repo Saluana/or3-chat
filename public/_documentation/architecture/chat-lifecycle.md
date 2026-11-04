@@ -2,6 +2,15 @@
 
 This guide explains the boundaries to preserve when changing the host chat UI. The source controller is `useChat`, exported from `app/composables/chat/useAi.ts`. Its types live in `app/utils/chat/types.ts`; use those imports rather than copying interfaces.
 
+The controller composes focused owners in `app/utils/chat/useAi-internal/`:
+`turnPreparation` captures and admits a turn, `turnAcceptance` and
+`turnDispatch` handle durable acceptance and delegation, `nativeExecution` and
+`nativeRecovery` coordinate execution and recovery, and `viewProjection`,
+`historySync` and `backgroundAttachment` own the corresponding view work.
+The existing request controller, canonical persistence, background tracker and
+tool loop remain authoritative; these modules do not add parallel lifecycle
+state. Hook payloads and version-1 recovery checkpoints retain their format.
+
 ## Admission, durability, and completion
 
 A send moves through admission, durable user-message persistence, response streaming, and a terminal result. Admission is single-flight for the controller; a busy request can be rejected before a message exists. An admitted request retains its originating workspace database and cancellation identity.
@@ -189,7 +198,9 @@ Native admission uses the selected model's advertised total window and the
 optional user maximum. Missing capacity is refreshed through the model catalog;
 unavailable capacity rejects the request with an explicit recovery reason. The
 complete provider body includes selected history, system/injected content,
-tool definitions and configuration. Initial native rejection precedes thread,
+tool definitions, provider-injected Web search and configuration. Client and
+server admission use that provider projection, which also supplies usage
+fingerprints. Initial native rejection precedes thread,
 user and assistant writes; refused retry/continuation preserves existing rows.
 There is no automatic context trimming, guessed capacity or fixed reply
 reserve. An explicit reply allowance must fit the remaining window and model
@@ -369,14 +380,18 @@ awaiting it in the streaming path. Short greetings wait for a descriptive user
 turn. Later messages, retries and branches do not regenerate titles; use Rename.
 
 Chats and message-created documents share `/api/openrouter/title`. Inference runs
-on the backend through the existing OpenRouter credential policy, including
-server-stored BYOK versus instance billing. The default is
+on the backend with the workspace **fast model**, which also drives editor
+autocomplete and project memory. The fast model's router owns the credential:
+OpenRouter models use the OpenRouter policy (server-stored BYOK versus instance
+billing) and `@openai/…` models use the OpenAI key. The default is
 `deepseek/deepseek-v4.1-flash:nitro`; the complete routing ID reaches OpenRouter.
-Workspace owners can select a supported text model and routing in Dashboard → AI
-Settings → Title Generation Model. Managed settings live in the private
-`WorkspaceSettingsStore`; ordinary editors cannot change them or override the
-model in requests. Source/local mode uses existing AI settings KV persistence.
-A changed model affects future requests only.
+A deployment admin selects a supported text model, and routing for OpenRouter
+models, in Dashboard → AI Settings → Fast Model; the choice is checked against
+that router's catalog. Managed settings live in the private
+`WorkspaceSettingsStore` under `ai.title_generation_model`; ordinary editors
+cannot change them or override the model in requests. Source/local mode uses
+existing AI settings KV persistence (`titleGenerationModel`). A changed model
+affects future requests only.
 
 Optional `title_source` on threads/posts distinguishes temporary, generating,
 generated, heading, manual and failed titles. One local transaction claims the

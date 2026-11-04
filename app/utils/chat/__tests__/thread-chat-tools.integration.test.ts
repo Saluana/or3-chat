@@ -30,10 +30,12 @@ let dispose: (() => void) | undefined;
 let previousAuth: boolean;
 let previousModels: ReturnType<typeof useModelStore>['catalog']['value'];
 let previousFavorites: ReturnType<typeof useModelStore>['favoriteModels']['value'];
-beforeEach(() => {
+beforeEach(async () => {
+    const db = setActiveWorkspaceDb(workspace);
     previousAuth = testRuntimeConfig.value.public.ssrAuthEnabled;
     testRuntimeConfig.value.public.ssrAuthEnabled = false;
     setHookEngine(createTypedHookEngine(createHookEngine()));
+    await setKvByName('ai_settings', JSON.stringify({ defaultToolsEnabled: true }), db);
     previousModels = useModelStore().catalog.value;
     previousFavorites = useModelStore().favoriteModels.value;
     useModelStore().favoriteModels.value = [];

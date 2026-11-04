@@ -162,8 +162,9 @@ vi.mock('../../../utils/plugins/ai/plugin-invocation', () => ({
     createPluginAiCompleteMethod: aiFactoryMock as any,
 }));
 
+const providerFactoryMock = vi.fn((_options: unknown) => ({ complete: async () => ({}) }));
 vi.mock('../../../utils/plugins/ai/openrouter-client', () => ({
-    createOpenRouterPluginProvider: () => ({ complete: async () => ({}) }),
+    createOpenRouterPluginProvider: (options: unknown) => providerFactoryMock(options),
 }));
 
 vi.mock('../../../utils/plugins/connections/broker-binding', () => ({
@@ -564,6 +565,58 @@ describe('POST /api/plugins/isolation/capability', () => {
         });
         await expectStatus(handler(makeEvent()), 503);
         expect(aiFactoryMock).not.toHaveBeenCalled();
+    });
+
+    it('offers ai.complete with only an OpenAI key when the allowlist names an OpenAI model', async () => {
+        providerFactoryMock.mockClear();
+        configMock.mockReturnValue({
+            auth: { enabled: true },
+            openaiApiKey: 'sk-openai-host',
+            openaiBaseUrl: 'https://gateway.example/v1',
+            admin: {
+                pluginModuleLoaderV2Enabled: true,
+                pluginModelPrices: { '@openai/m': { promptPerMillion: 1, completionPerMillion: 2 } },
+                pluginAllowedModels: ['@openai/m'],
+            },
+        });
+        readBodyMock.mockResolvedValue({
+            activationId: record.activationId,
+            method: 'ai.complete',
+            params: { model: '@openai/m', prompt: 'p' },
+            requestId: 'rpc-openai',
+        });
+        aiFactoryMock.mockReturnValue({ method: 'ai.complete', grant: 'network.http', handler: async () => ({ text: 'ok' }) });
+
+        await expect(handler(makeEvent())).resolves.toMatchObject({ ok: true, result: { text: 'ok' } });
+        expect(providerFactoryMock).toHaveBeenCalledTimes(1);
+        expect(providerFactoryMock.mock.calls[0]![0]).toMatchObject({
+            apiKey: undefined,
+            openAi: { apiKey: 'sk-openai-host', baseUrl: 'https://gateway.example/v1' },
+        });
+    });
+
+    it('never resolves the OpenAI key for an allowlist without OpenAI models', async () => {
+        providerFactoryMock.mockClear();
+        configMock.mockReturnValue({
+            auth: { enabled: true },
+            openrouterApiKey: 'sk-or-host',
+            openaiApiKey: 'sk-openai-host',
+            admin: {
+                pluginModuleLoaderV2Enabled: true,
+                pluginModelPrices: { m: { promptPerMillion: 1, completionPerMillion: 2 } },
+                pluginAllowedModels: ['m'],
+            },
+        });
+        readBodyMock.mockResolvedValue({
+            activationId: record.activationId,
+            method: 'ai.complete',
+            params: { model: 'm', prompt: 'p' },
+            requestId: 'rpc-openrouter',
+        });
+        aiFactoryMock.mockReturnValue({ method: 'ai.complete', grant: 'network.http', handler: async () => ({ text: 'ok' }) });
+
+        await expect(handler(makeEvent())).resolves.toMatchObject({ ok: true });
+        expect(providerFactoryMock.mock.calls[0]![0]).toMatchObject({ apiKey: 'sk-or-host', openAi: { apiKey: undefined } });
     });
 
     it('discloses the approved models with prices and limits (phase 9)', async () => {

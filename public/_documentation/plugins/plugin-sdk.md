@@ -311,6 +311,11 @@ Additional reviewed grants:
 | `jobs.background` | Track, inspect and abort workspace background jobs. |
 | `hooks.emit` | Emit `workflow.execution:action:start`, `:complete`, `:state_update` and `:node_complete`. |
 
+Governed completion continues to use the host's model allowlist, spend and
+output limits, and credential policy. Its provider uses the shared inference
+runtime internally; this does not add a plugin API for choosing a router or an
+endpoint. Trusted workflow SDK access remains OpenRouter-specific.
+
 `ai.models()` includes favorites and metadata; `ai.onModelsChange` follows catalog/favorite changes. Connect status/list/remove require `workspace.connections.read/manage`; disabled deployments return `unsupported`. Listen to `connections.changed` with the read grant.
 
 Hosts advertising `or3-trusted-chat-origin-v1` accept `ai.provider({ threadId, messageId, streamId })`. The client captures that identity and rechecks the active workspace, write permission, live registered assistant message and canonical project owner before each model request or retry. Project chats are refused until the plugin can capture project context. Requests without an origin are refused in workspaces containing projects. Message upserts, conditional updates and generated-file attachments apply the same workspace and project fences inside their write transactions; they cannot move an existing message to a different thread or stream.

@@ -10,6 +10,10 @@ import { normalizeAutocompleteSuggestion } from './suggestion-utils';
 import { useRuntimeConfig } from '#imports';
 import { useUserApiKey } from '~/core/auth/useUserApiKey';
 import { resolveOpenRouterKeyAvailability } from '~/core/auth/openRouterKeyAvailability';
+import { readLocalOpenAiKey } from '~/core/auth/useOpenAiKey';
+import { getDb } from '~/db/client';
+import { resolveFastModel } from '~/utils/fast-model';
+import { isOpenAiModel } from '~~/shared/openai/models';
 
 interface AutocompletePluginState {
     suggestion: string;
@@ -28,6 +32,7 @@ function isAbortLikeError(error: unknown): boolean {
 
 function isMissingKeyError(error: unknown): boolean {
     if (!(error instanceof Error)) return false;
+    if ((error as { code?: unknown }).code === 'ERR_AUTH') return true;
     const message = error.message.toLowerCase();
     return (
         message.includes('missing openrouter api key') ||
@@ -40,12 +45,17 @@ async function editorAutoComplete(content: string, abortSignal?: AbortSignal) {
     if (isOffline()) return { completion: '' };
     const config = useRuntimeConfig();
     const cloud = config.public.ssrAuthEnabled === true;
+    // Autocomplete shares the workspace fast model with titles and project memory.
+    const model = await resolveFastModel(getDb());
+    abortSignal?.throwIfAborted();
     const { apiKey, connected } = useUserApiKey();
     const orKey = cloud ? null : apiKey.value;
     const availability = resolveOpenRouterKeyAvailability(config.public.openRouter);
     const accountKey = cloud && availability.allowUserOverride && connected.value;
-    if ((!accountKey && !availability.hasUsableKey(orKey))
-        || (cloud && !getCachedSessionContext()?.user?.id)) return { completion: '' };
+    // The server resolves Cloud OpenAI keys; a local install needs this device's key.
+    const ready = isOpenAiModel(model) ? cloud || Boolean(await readLocalOpenAiKey())
+        : accountKey || availability.hasUsableKey(orKey);
+    if (!ready || (cloud && !getCachedSessionContext()?.user?.id)) return { completion: '' };
 
     const { default: systemPrompt } = await import('./AutocompletePrompt');
     abortSignal?.throwIfAborted();
@@ -57,7 +67,7 @@ async function editorAutoComplete(content: string, abortSignal?: AbortSignal) {
     try {
         for await (const event of openRouterStream({
             apiKey: orKey,
-            model: AutocompleteState.value.aiModel || 'openai/gpt-5.6-luna',
+            model,
             orMessages: [
                 {
                     role: 'system',
@@ -69,6 +79,8 @@ async function editorAutoComplete(content: string, abortSignal?: AbortSignal) {
                 },
             ],
             modalities: ['text'],
+            // A suggestion is only useful while the writer is still at the cursor.
+            reasoning: { effort: 'none' },
             signal: abortSignal,
         })) {
             if (event.type === 'text') {

@@ -43,7 +43,11 @@ OR3_PLUGIN_MODEL_PRICES={"<model-id>":{"promptPerMillion":0.2,"completionPerMill
 ```
 
 Use actual model IDs and verified provider prices. Unpriced models are refused;
-an empty allowlist means no approved models. Containers map model/secret values
+an empty allowlist means no approved models. IDs starting with `@openai/` (for
+example `@openai/gpt-5.4-mini`) use the direct OpenAI router with
+`OR3_OPENAI_API_KEY` and `OR3_OPENAI_BASE_URL`; other IDs use OpenRouter. Each
+call's request and key go only to its model's router, and the OpenAI key is
+resolved only when the allowlist names an OpenAI model. Containers map model/secret values
 to their `NUXT_ADMIN_*` runtime overrides at startup. Provider charges belong
 to the configured account and are attributed to the acting plugin.
 
