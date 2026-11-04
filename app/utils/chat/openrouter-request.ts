@@ -152,4 +152,3 @@ export async function prepareOpenRouterDispatch(params: OpenRouterStreamParams):
 export async function prepareOpenRouterRequest(params: OpenRouterStreamParams): Promise<OpenRouterRequestBody> {
     return (await prepareOpenRouterDispatch(params)).hostBody;
 }
-

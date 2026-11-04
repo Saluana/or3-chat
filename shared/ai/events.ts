@@ -45,4 +45,3 @@ export type AiEvent =
           tool_call: ToolCall;
       }
     | { type: 'done'; truncated?: true; refused?: true };
-

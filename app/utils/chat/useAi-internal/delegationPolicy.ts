@@ -37,4 +37,3 @@ export function placeServerModelSearch(tools: import('~/utils/chat/types').ToolD
     return available ? tools.map(tool => tool.runtime === 'client' && toolDefinitionEquals(tool, modelSearchDefinition)
         ? { ...tool, runtime: 'hybrid' as const } : tool) : tools;
 }
-
