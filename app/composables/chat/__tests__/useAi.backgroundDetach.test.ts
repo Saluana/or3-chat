@@ -119,14 +119,14 @@ vi.mock('~/db/client', () => ({
 }));
 
 const recoveryStore = new Map<string, any>();
-const kvStore = new Map<string, any>();
+const dbKvRows = new Map<string, any>();
 const dbMock = {
     // Match the real workspace DB's open and empty-preferences behavior so the
     // lifecycle cases can reach admission instead of failing during KV lookup.
     isOpen: () => true,
     kv: {
-        where: () => ({ equals: (name: string) => ({ first: async () => kvStore.get(name) }) }),
-        put: async (row: any) => { kvStore.set(row.name, row); },
+        where: () => ({ equals: (name: string) => ({ first: async () => dbKvRows.get(name) }) }),
+        put: async (row: any) => { dbKvRows.set(row.name, row); },
     },
     projects: { where: () => ({ equals: () => ({ toArray: async () => [] }) }) },
     chat_request_recoveries: {
@@ -442,7 +442,7 @@ describe('useChat background detach race', () => {
         sessionDataRef.value = { session: { authenticated: true, user: { id: 'user-1' }, workspace: { id: 'ws-1' } } };
         messageStore.clear();
         recoveryStore.clear();
-        kvStore.clear();
+        dbKvRows.clear();
         activeDb = dbMock;
         kvStores = new WeakMap();
         workspaceGeneration = 0;
