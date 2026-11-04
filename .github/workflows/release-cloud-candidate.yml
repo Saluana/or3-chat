@@ -469,6 +469,10 @@ jobs:
           path: release-artifact
       - name: Set disposable deployment path
         run: echo "MANAGED=$RUNNER_TEMP/or3-cloud-candidate" >> "$GITHUB_ENV"
+      - name: Install browser dependencies before starting the deployment
+        run: |
+          npm install --prefix "$RUNNER_TEMP/or3-browser" --no-save --ignore-scripts playwright@1.63.0
+          "$RUNNER_TEMP/or3-browser/node_modules/.bin/playwright" install --with-deps chromium webkit
       - name: Initialize previous release and write persistence fixture
         run: |
           set -euo pipefail
@@ -515,8 +519,6 @@ jobs:
           echo "Candidate update completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Verify browser hydration under the production CSP
         run: |
-          npm install --prefix "$RUNNER_TEMP/or3-browser" --no-save --ignore-scripts playwright@1.63.0
-          "$RUNNER_TEMP/or3-browser/node_modules/.bin/playwright" install --with-deps chromium webkit
           cp scripts/release/smoke-browser.mjs "$RUNNER_TEMP/or3-browser/smoke-browser.mjs"
           OR3_SMOKE_URL=http://127.0.0.1:3017 OR3_SMOKE_HYDRATION_ONLY=1 \
             OR3_SMOKE_CADDYFILE="$GITHUB_WORKSPACE/packages/or3-cloud/assets/Caddyfile" \
