@@ -126,6 +126,7 @@ function makeEvent(headers: Record<string, string> = {}, res = makeResponse()): 
         node: {
             req: {
                 headers: { host: 'chat.test', origin: 'https://chat.test', 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation', ...headers },
+                socket: { remoteAddress: '127.0.0.1' },
                 on: vi.fn(),
                 off: vi.fn(),
             },

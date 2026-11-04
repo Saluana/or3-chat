@@ -42,14 +42,16 @@ export function createOpenAiDecisions(options: {
             status: response.status, retryAfterMs: parseRetryAfter(response.headers.get('retry-after')) });
         const body = await response.json() as {
             model?: unknown;
-            answers?: Array<{ name?: unknown; type?: unknown; choice?: unknown; probabilities?: Array<{ value?: unknown; probability?: unknown }> }>;
+            // Untrusted JSON: entries may be null.
+            answers?: Array<{ name?: unknown; type?: unknown; choice?: unknown; probabilities?: Array<{ value?: unknown; probability?: unknown } | null> } | null>;
         };
         const answers: OpenAiDecisionsResult['answers'] = {};
         for (const answer of Array.isArray(body.answers) ? body.answers : []) {
             if (typeof answer?.name !== 'string' || typeof answer.type !== 'string') continue;
             const entries = Array.isArray(answer.probabilities) ? answer.probabilities
-                .filter(entry => typeof entry?.value === 'string' && typeof entry.probability === 'number')
-                .map(entry => [entry.value as string, entry.probability as number] as const) : [];
+                .filter((entry): entry is { value: string; probability: number } =>
+                    typeof entry?.value === 'string' && typeof entry.probability === 'number')
+                .map(entry => [entry.value, entry.probability] as const) : [];
             // Probabilities arrive rounded to two places; restore a unit total so the callers' checks stay strict.
             const total = entries.reduce((sum, [, probability]) => sum + probability, 0);
             answers[answer.name] = { type: answer.type, choice: answer.choice,

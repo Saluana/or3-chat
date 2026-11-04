@@ -40,7 +40,7 @@ export function encodeOpenAiRequest(body: Record<string, unknown>): Record<strin
         }),
         ...pick(body, REQUEST_KEYS),
     };
-    const tools = Array.isArray(body.tools) ? body.tools.filter(tool => (tool as { type?: unknown })?.type === 'function') : [];
+    const tools = Array.isArray(body.tools) ? body.tools.filter(tool => (tool as { type?: unknown } | null)?.type === 'function') : [];
     if (tools.length) request.tools = tools;
     else delete request.tool_choice;
     const limit = body.max_completion_tokens ?? body.max_tokens;
