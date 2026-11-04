@@ -1,5 +1,6 @@
 <template>
     <USelectMenu
+        v-if="items.length"
         v-model="selected"
         :items="items"
         value-key="value"
@@ -30,29 +31,31 @@
 import { computed } from 'vue';
 import { useModelVariantItems } from '~/composables/chat/useModelVariantItems';
 import {
+    OPENROUTER_OPTION_DESCRIPTORS,
     sanitizeModelVariant,
-    type OpenRouterModelVariant,
 } from '~~/shared/openrouter/model-variants';
+import type { ModelOptionDescriptor } from '~~/shared/ai/types';
 
 const props = withDefaults(
     defineProps<{
-        modelValue?: OpenRouterModelVariant | null;
+        modelValue?: string | null;
         disabled?: boolean;
         size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
         ariaLabel?: string;
+        options?: readonly ModelOptionDescriptor[];
     }>(),
     { modelValue: 'off', disabled: false, size: 'md', ariaLabel: 'Model variant' }
 );
 
 const emit = defineEmits<{
-    (e: 'update:modelValue', value: OpenRouterModelVariant): void;
+    (e: 'update:modelValue', value: string): void;
 }>();
 
-const items = useModelVariantItems();
+const items = useModelVariantItems(() => props.options ?? OPENROUTER_OPTION_DESCRIPTORS);
 
-const selected = computed<OpenRouterModelVariant>({
-    get: () => sanitizeModelVariant(props.modelValue),
-    set: (value) => emit('update:modelValue', sanitizeModelVariant(value)),
+const selected = computed<string>({
+    get: () => props.options === undefined ? sanitizeModelVariant(props.modelValue) : props.modelValue ?? '',
+    set: (value) => emit('update:modelValue', props.options === undefined ? sanitizeModelVariant(value) : value),
 });
 
 const activeIcon = computed(

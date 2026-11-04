@@ -20,13 +20,15 @@ import {
     MemoryClassificationStateSchema,
     MemoryClassificationResultSchema,
     MEMORY_CLASSIFIER_TIMEOUT_MS,
-    MEMORY_CLASSIFIER_MODEL,
     MEMORY_DECISION_THRESHOLD,
+    isMemoryClassifierModel,
     inferenceHttpError,
     type MemoryClassificationState,
     type MemoryClassificationResult,
 } from '~~/shared/projects/memory-classification';
 import type { Message, Thread } from '~/db/schema';
+import { resolveLocalInference } from '~/utils/fast-model';
+import { isOpenAiModel } from '~~/shared/openai/models';
 import { reportError } from '~/utils/errors';
 
 /** An expected invalidation (edit, move, new credentials): the result is dropped, not a failure. */
@@ -130,7 +132,10 @@ async function classifySavedMemory(
     const key = apiKey.value;
     const keyGeneration = getUserApiKeyGeneration();
     const server = useRuntimeConfig().public.ssrAuthEnabled === true;
-    if (!server && !key) return;
+    // Cloud reads the workspace fast model server-side; local installs infer OpenRouter
+    // here and send OpenAI to the OR3 server, which owns the configured OpenAI endpoint.
+    const local = server ? null : await resolveLocalInference(scope.db);
+    if (!server && !local) return;
     scope.assertCurrent('write');
     const policy = await readProjectPolicy(scope.db, projectId);
     const evidence: Message[] = [];
@@ -196,7 +201,7 @@ async function classifySavedMemory(
     if (!MemoryClassificationStateSchema.safeParse(state).success) return;
     const validate = async () => {
         scope.assertCurrent('write');
-        if (getUserApiKeyGeneration() !== keyGeneration || apiKey.value !== key)
+        if (getUserApiKeyGeneration() !== keyGeneration || apiKey.value !== key || (local && !local.current()))
             throw new StaleMemoryError('Credentials changed.');
         const current = await scope.db.posts.get(saved.row.id);
         if (
@@ -240,7 +245,7 @@ async function classifySavedMemory(
     };
     await validate();
     let result: MemoryClassificationResult;
-    if (server) {
+    if (server || isOpenAiModel(local!.fastModel)) {
         // Managed credentials only go through the authenticated host. No direct fallback on auth errors.
         const response = await fetch('/api/openrouter/classify-memory', {
             method: 'POST',
@@ -248,9 +253,9 @@ async function classifySavedMemory(
             headers: {
                 'Content-Type': 'application/json',
                 'x-or3-cloud-intent': 'mutation',
-                ...(key ? { 'x-or3-openrouter-key': key } : {}),
+                ...(local ? { 'x-or3-openai-key': local.apiKey } : key ? { 'x-or3-openrouter-key': key } : {}),
             },
-            body: JSON.stringify({ workspaceId: scope.workspaceId, state }),
+            body: JSON.stringify({ workspaceId: scope.workspaceId, state, ...(local ? { model: local.fastModel } : {}) }),
             signal: scope.signal,
         });
         if (!response.ok)
@@ -262,13 +267,7 @@ async function classifySavedMemory(
             throw new Error('Invalid memory classification response.');
         result = parsed.data;
     } else
-        result = await classifyMemoryReference(
-            state,
-            key!,
-            scope.signal,
-            (useRuntimeConfig().public as { openRouter?: { baseUrl?: string } }).openRouter?.baseUrl,
-            validate,
-        );
+        result = await classifyMemoryReference(state, local!, scope.signal, validate);
     if (import.meta.dev)
         console.debug('[project-memory] classification', {
             model: result.model,
@@ -281,7 +280,7 @@ async function classifySavedMemory(
         result.kind !== 'decision' ||
         !result.probabilities ||
         result.probabilities.decision < MEMORY_DECISION_THRESHOLD ||
-        result.model !== MEMORY_CLASSIFIER_MODEL
+        !isMemoryClassifierModel(result.model)
     )
         return;
     await validate();

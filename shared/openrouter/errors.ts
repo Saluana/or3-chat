@@ -49,6 +49,7 @@ export class OpenRouterStreamError extends Error {
     code?: ErrorCode;
     source: ErrorSource;
     credentialSource?: CredentialSource;
+    router?: 'openai';
     status: number;
     retryAfterMs: number | undefined;
     retryable: boolean;
@@ -63,6 +64,7 @@ export class OpenRouterStreamError extends Error {
             status,
             source = 'provider',
             credentialSource,
+            router,
             retryAfterMs,
             retryable,
             kind = 'transport',
@@ -73,6 +75,7 @@ export class OpenRouterStreamError extends Error {
             status: number;
             source?: ErrorSource;
             credentialSource?: CredentialSource;
+            router?: 'openai';
             retryAfterMs?: number;
             retryable: boolean;
             kind?: OpenRouterStreamFailureKind;
@@ -86,6 +89,7 @@ export class OpenRouterStreamError extends Error {
         this.status = status;
         this.source = source;
         this.credentialSource = credentialSource;
+        if (router) this.router = router;
         this.retryAfterMs = retryAfterMs;
         this.retryable = retryable;
         this.kind = kind;
@@ -151,7 +155,9 @@ export function affordableCompletionTokens(text: string): number | undefined {
 export function normalizeProviderResponseError(text: string, status: number, context: ErrorContext = {}) {
     let data: unknown;
     try { data = JSON.parse(text); } catch { data = undefined; }
-    return normalizeError({ data, status, providerCode: status }, { ...context, source: 'provider' });
+    // OpenAI reports an exhausted account as a 429 with this code, not as a rate limit.
+    const quota = context.router === 'openai' && (data as { error?: { code?: unknown } } | undefined)?.error?.code === 'insufficient_quota';
+    return normalizeError({ data, status, providerCode: status }, { ...context, source: 'provider', ...(quota ? { code: 'ERR_CREDITS' as const } : {}) });
 }
 
 /**

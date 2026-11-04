@@ -49,6 +49,7 @@
 import { defineAsyncComponent, onBeforeUnmount, onMounted, onErrorCaptured, ref } from 'vue';
 import { useRoute } from '#imports';
 import { getDb } from '~/db/client';
+import { getKvRecordByName, setKvByName } from '~/db/kv';
 import { getWorkspaceResourceNavigationApi } from '~/utils/workspaceResourceNavigation';
 import { useThreadCompaction } from '~/composables/chat/useThreadCompaction';
 import ChatContainer from '~/components/chat/ChatContainer.vue';
@@ -132,9 +133,13 @@ const compactor = useThreadCompaction({
     },
 });
 async function startFixtureCompaction() { fixtureResult.value = JSON.stringify(await compactor.start()); }
-function toggleMeterTool() {
-    const registry = useToolRegistry(); const tool = registry.listTools.value.find((row) => row.definition.function.name === 'fixture_preview_tool');
-    registry.setEnabled('fixture_preview_tool', !tool?.enabled.value);
+async function toggleMeterTool() {
+    const db = getDb();
+    const key = `chat-tools:${fixtureViewThread.value}`;
+    const { row } = await getKvRecordByName(key, db);
+    const current = row?.value ? JSON.parse(row.value) as { enabled?: boolean } : null;
+    const enabled = current?.enabled !== true;
+    await setKvByName(key, JSON.stringify({ enabled, tools: { fixture_preview_tool: enabled } }), db);
 }
 async function makeOriginalRecent() {
     const root = localStorage.getItem('or3:e2e:compaction-source');
@@ -585,6 +590,9 @@ onMounted(async () => {
         localStorage.setItem(THREAD_KEY, thread.id);
     }
     if (workspaceJourney) {
+        // These workspace journeys exercise tool requests, so opt this
+        // disposable fixture into the current per-chat default before mount.
+        await useAiSettings().set({ defaultToolsEnabled: true });
         const key = 'or3:e2e:workspace-document';
         const remembered = localStorage.getItem(key);
         if (!remembered || !(await getDocument(remembered))) {

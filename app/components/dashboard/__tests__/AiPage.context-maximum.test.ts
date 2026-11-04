@@ -25,7 +25,7 @@ const Input = defineComponent({
     props: ['modelValue'], emits: ['update:modelValue'],
     template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
 });
-const TitleSelect = defineComponent({ props: ['modelValue', 'items'], emits: ['update:modelValue'], template: '<select />' });
+const FastSelect = defineComponent({ props: ['modelValue', 'items'], emits: ['update:modelValue'], template: '<select />' });
 let wrapper: VueWrapper | undefined;
 // The dashboard shell's sub-page slot: its title and back link.
 const subpage = shallowRef<DashboardSubpage | null>(null);
@@ -42,8 +42,8 @@ async function savedPrompt() {
 }
 async function openPage() {
     wrapper = mount(AiPage, { global: { provide: { [DASHBOARD_SUBPAGE_KEY as symbol]: subpage }, stubs: {
-        USelectMenu: TitleSelect,
-        USelect: TitleSelect,
+        USelectMenu: FastSelect,
+        USelect: FastSelect,
         UInput: Input, UTextarea: { template: '<textarea />' },
         ChatModelVariantSelect: { template: '<select />' },
     } } });
@@ -53,7 +53,7 @@ async function openPage() {
     return wrapper;
 }
 // Each setting opens from its row on the AI Settings list.
-async function show(view: 'model' | 'prompt' | 'variant' | 'title' | 'context') {
+async function show(view: 'model' | 'prompt' | 'variant' | 'fast' | 'context') {
     await wrapper!.get(`#dashboard-ai-${view}-row`).trigger('click');
 }
 async function back() {
@@ -305,18 +305,18 @@ describe('Dashboard context maximum through real KV', () => {
         await vi.waitFor(() => expect(wrapper!.get('#ai-prompt-status').text()).toContain('Saved'));
     });
 
-    it('changes the title model and Nitro routing through AI Settings and restores them on remount', async () => {
+    it('changes the fast model and Nitro routing through AI Settings and restores them on remount', async () => {
         await openPage();
-        await show('title');
+        await show('fast');
         await vi.waitFor(() => expect(wrapper!.find('#dashboard-title-model').exists()).toBe(true));
         expect(wrapper!.text()).toContain('deepseek/deepseek-v4.1-flash:nitro');
-        wrapper!.getComponent<typeof TitleSelect>('#dashboard-title-model').vm.$emit('update:modelValue', 'other/model');
+        wrapper!.getComponent<typeof FastSelect>('#dashboard-title-model').vm.$emit('update:modelValue', 'other/model');
         await vi.waitFor(async () => expect(JSON.parse((await getKvByName('ai_settings'))!.value!).titleGenerationModel).toBe('other/model:nitro'));
         wrapper!.unmount(); wrapper = undefined;
         await openPage();
-        await show('title');
+        await show('fast');
         await vi.waitFor(() => expect(wrapper!.text()).toContain('other/model:nitro'));
-        wrapper!.getComponent<typeof TitleSelect>('#dashboard-title-routing').vm.$emit('update:modelValue', 'floor');
+        wrapper!.getComponent<typeof FastSelect>('#dashboard-title-routing').vm.$emit('update:modelValue', 'floor');
         await vi.waitFor(async () => expect(JSON.parse((await getKvByName('ai_settings'))!.value!).titleGenerationModel).toBe('other/model:floor'));
     });
 

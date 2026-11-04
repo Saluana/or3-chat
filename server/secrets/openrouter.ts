@@ -10,18 +10,19 @@ import { getActiveSecretStore } from './registry';
 const KEY_NAME = 'api-key';
 const unavailable = () => createError({ statusCode: 503, statusMessage: 'OpenRouter credential storage unavailable. Contact the administrator.' });
 
-function requireAccount(session: SessionContext | null): asserts session is SessionContext & { user: { id: string }; workspace: { id: string } } {
+export function requireAccount(session: SessionContext | null, router = 'OpenRouter'): asserts session is SessionContext & { user: { id: string }; workspace: { id: string } } {
     if (!session?.authenticated || !session.user?.id || !session.workspace?.id)
-        throw createError({ statusCode: 401, statusMessage: 'Sign in to connect OpenRouter.' });
+        throw createError({ statusCode: 401, statusMessage: `Sign in to connect ${router}.` });
     requireCan(session, 'workspace.write', { kind: 'workspace', id: session.workspace.id });
 }
-function accountStore(session: SessionContext) {
+/** Account-scoped personal credentials; each router has its own consumer. */
+export function accountStore(session: SessionContext, consumerId = '@or3.openrouter', missing = unavailable) {
     const config = useRuntimeConfig();
     const store = getActiveSecretStore();
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Partial runtime configs can omit secrets.
-    if (!store || !config.secrets?.namespace) throw unavailable();
+    if (!store || !config.secrets?.namespace) throw missing();
     return { store, scope: { namespace: config.secrets.namespace, ownerUserId: session.user!.id,
-        workspaceId: '@account', consumerId: '@or3.openrouter' }, context: { actorId: session.user!.id } };
+        workspaceId: '@account', consumerId }, context: { actorId: session.user!.id } };
 }
 function storageError(error: unknown): never {
     const code = (error as { code?: string }).code;

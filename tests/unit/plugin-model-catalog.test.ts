@@ -21,6 +21,13 @@ describe('plugin model catalog', () => {
         expect(parseAllowedModels('../etc/passwd')).toEqual([])
     })
 
+    it('accepts direct OpenAI ids and no other router prefix', () => {
+        expect(parseAllowedModels('@openai/gpt-5.4-mini,@other/model,@openai/../x')).toEqual(['@openai/gpt-5.4-mini'])
+        expect(
+            parseModelPrices('{"@openai/gpt-5.4-mini":{"promptPerMillion":0.25,"completionPerMillion":2}}'),
+        ).toEqual({ '@openai/gpt-5.4-mini': { promptPerMillion: 0.25, completionPerMillion: 2 } })
+    })
+
     it('accepts only finite nonnegative prices from JSON', () => {
         expect(
             parseModelPrices('{"vendor/alpha":{"promptPerMillion":3,"completionPerMillion":15}}'),

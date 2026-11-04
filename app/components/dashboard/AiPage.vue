@@ -69,11 +69,18 @@
                 <h3 id="ai-group-advanced" class="dashboard-list-heading">Advanced</h3>
                 <div class="dashboard-list">
                     <DashboardListRow
-                        id="dashboard-ai-title-row"
-                        icon-token="catalog.text"
-                        label="Title model"
-                        description="Names new chats and documents"
-                        @click="openView('title')"
+                        id="dashboard-ai-openai-row"
+                        icon-token="ui.lock"
+                        label="OpenAI key"
+                        description="Use OpenAI models with your own key"
+                        @click="openView('openai')"
+                    />
+                    <DashboardListRow
+                        id="dashboard-ai-fast-row"
+                        icon-token="chat.variant.nitro"
+                        label="Fast model"
+                        description="Titles, autocomplete and project memory"
+                        @click="openView('fast')"
                     />
                     <DashboardListRow
                         id="dashboard-ai-context-row"
@@ -252,7 +259,9 @@
             <AiSaveStatus id="ai-model-status" class="dashboard-list-footnote" :status="modelStatus" />
         </section>
 
-        <TitleModelSetting v-else-if="view === 'title'" />
+        <FastModelSetting v-else-if="view === 'fast'" />
+
+        <OpenAiConnectionSetting v-else-if="view === 'openai'" />
 
         <!-- Native generations capture this workspace preference at admission. -->
         <section
@@ -303,7 +312,8 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { DASHBOARD_SUBPAGE_KEY } from '~/core/dashboard/dashboard-navigation-types';
 import AiSaveStatus from './AiSaveStatus.vue';
 import DashboardListRow from './DashboardListRow.vue';
-import TitleModelSetting from './TitleModelSetting.vue';
+import FastModelSetting from './FastModelSetting.vue';
+import OpenAiConnectionSetting from './OpenAiConnectionSetting.vue';
 import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 
 const liveStatus = ref<HTMLElement | null>(null);
@@ -315,12 +325,13 @@ const announce = (message: string) => {
 
 // Each setting opens in its own view; the dashboard header shows its title and
 // a back link. Edits live in this component, so leaving a view keeps them.
-type AiView = 'root' | 'model' | 'prompt' | 'variant' | 'title' | 'context';
+type AiView = 'root' | 'model' | 'prompt' | 'variant' | 'fast' | 'openai' | 'context';
 const VIEW_TITLES: Record<Exclude<AiView, 'root'>, string> = {
     model: 'Starting model',
     prompt: 'Master system prompt',
     variant: 'Model variant',
-    title: 'Title model',
+    fast: 'Fast model',
+    openai: 'OpenAI key',
     context: 'Context limit',
 };
 const view = ref<AiView>('root');

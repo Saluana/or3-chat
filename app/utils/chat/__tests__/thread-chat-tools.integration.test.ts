@@ -7,6 +7,7 @@ import { setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import { ThreadSchema, MessageSchema } from '~/db/schema';
 import { registerThreadChatTools } from '../thread-chat-tools';
 import { useToolRegistry } from '../tool-registry';
+import { chatToolPreferenceKey } from '../tool-preferences';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine, useHooks } from '~/core/hooks/useHooks';
@@ -30,10 +31,12 @@ let dispose: (() => void) | undefined;
 let previousAuth: boolean;
 let previousModels: ReturnType<typeof useModelStore>['catalog']['value'];
 let previousFavorites: ReturnType<typeof useModelStore>['favoriteModels']['value'];
-beforeEach(() => {
+beforeEach(async () => {
+    const db = setActiveWorkspaceDb(workspace);
     previousAuth = testRuntimeConfig.value.public.ssrAuthEnabled;
     testRuntimeConfig.value.public.ssrAuthEnabled = false;
     setHookEngine(createTypedHookEngine(createHookEngine()));
+    await setKvByName('ai_settings', JSON.stringify({ defaultToolsEnabled: true }), db);
     previousModels = useModelStore().catalog.value;
     previousFavorites = useModelStore().favoriteModels.value;
     useModelStore().favoriteModels.value = [];
@@ -54,6 +57,7 @@ afterEach(async () => {
 
 it('read_thread returns inherited reference history and the surviving retry turn in canonical order', async () => {
     const db = setActiveWorkspaceDb(workspace); await db.open();
+    await setKvByName(chatToolPreferenceKey('current'), JSON.stringify({ enabled: true, tools: {} }), db);
     await db.threads.bulkPut([
         ThreadSchema.parse({ created_at: 1, updated_at: 1, clock: 1, id: 'current' }), ThreadSchema.parse({ created_at: 1, updated_at: 1, clock: 1, id: 'parent' }),
         ThreadSchema.parse({ created_at: 1, updated_at: 1, clock: 1, id: 'child', parent_thread_id: 'parent', branch_mode: 'reference', anchor_message_id: 'anchor', anchor_index: 1 }),
@@ -78,6 +82,7 @@ it('read_thread returns inherited reference history and the surviving retry turn
 async function delegationOrigin() {
     const db = setActiveWorkspaceDb(workspace); await db.open();
     await db.threads.put(ThreadSchema.parse({ created_at: 1, updated_at: 1, clock: 1, id: 'origin' }));
+    await setKvByName(chatToolPreferenceKey('origin'), JSON.stringify({ enabled: true, tools: {} }), db);
     dispose = registerThreadChatTools();
     const controller = new AbortController();
     const context: ToolExecutionContext = { subject: null, workspaceId: workspace, threadId: 'origin',

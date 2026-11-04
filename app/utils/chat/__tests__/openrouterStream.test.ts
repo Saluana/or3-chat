@@ -16,6 +16,9 @@ import {
     type BackgroundJobStatus,
 } from '../openrouterStream';
 import { OpenRouterTimeoutError } from '~~/shared/openrouter/deadlines';
+import { captureUsagePrefix } from '~~/shared/chat/request-usage';
+import { estimateChatRequest } from '~~/shared/chat/context-budget';
+import { countTokensApprox } from '../tokens';
 
 const runtimeConfigMock = {
     public: {
@@ -80,6 +83,43 @@ describe('openrouterStream', () => {
         expect(JSON.parse(fetchMock.mock.calls[0]![1].body)).toMatchObject({
             model: 'model-1', tools: [tool, { type: 'openrouter:web_search' }],
         });
+    });
+
+    it('binds Online usage provenance to the request actually sent upstream', async () => {
+        localStorage.setItem('or3:server-route-available', JSON.stringify({ available: false, timestamp: Date.now() }));
+        const fetchMock = vi.fn().mockResolvedValue(createStreamResponse());
+        vi.stubGlobal('fetch', fetchMock);
+        parseMock.mockImplementationOnce(async function* () {
+            yield { type: 'usage', usage: { prompt_tokens: 100, completion_tokens: 10 } };
+        });
+        const events: ORStreamEvent[] = [];
+        for await (const event of openRouterStream({ apiKey: 'synthetic', model: 'vendor/model:online',
+            orMessages: [{ role: 'user', content: 'Find a source' }], modalities: ['text'] })) events.push(event);
+        const wire = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
+        expect(wire.model).toBe('vendor/model');
+        expect(wire.tools).toEqual([{ type: 'openrouter:web_search' }]);
+        const { messages, ...configuration } = wire;
+        const expected = await captureUsagePrefix({ model: wire.model, messages, tools: wire.tools,
+            modalities: wire.modalities, configuration, countText: countTokensApprox });
+        const usage = events.find((event) => event.type === 'usage');
+        expect(usage?.type === 'usage' && usage.requestUsage?.configuration_hash).toBe(expected.configuration_hash);
+    });
+
+    it('admits the Online provider tool before sending a full-context request', async () => {
+        localStorage.setItem('or3:server-route-available', JSON.stringify({ available: false, timestamp: Date.now() }));
+        const fetchMock = vi.fn().mockResolvedValue(createStreamResponse());
+        vi.stubGlobal('fetch', fetchMock);
+        const messages = [{ role: 'user', content: 'Question' }];
+        const estimate = await estimateChatRequest({ model: 'vendor/model', messages,
+            tools: [{ type: 'openrouter:web_search' }],
+            configuration: { model: 'vendor/model', stream: true, max_tokens: 1 }, countText: countTokensApprox });
+        await expect((async () => {
+            for await (const _event of openRouterStream({ apiKey: 'synthetic', model: 'vendor/model:online',
+                orMessages: messages, maxCompletionTokens: 1,
+                contextPolicy: { model: { context_length: 1_000_000 }, source: 'openrouter-live',
+                    userMaxContextTokens: estimate.input_tokens, requestedCompletionTokens: 1 } })) { /* drain */ }
+        })()).rejects.toMatchObject({ code: 'context_full' });
+        expect(fetchMock).not.toHaveBeenCalled();
     });
 
 

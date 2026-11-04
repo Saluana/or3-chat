@@ -13,6 +13,7 @@
 
 import type { HostRpcHandler, HostRpcMethodSpec } from '~~/shared/plugins/isolation/host-rpc-broker';
 import { DEFAULT_CONTAINMENT_BUDGETS } from '~~/shared/plugins/isolation/budgets';
+import { hasRouterConfiguration } from '~~/shared/ai/runtime';
 import {
     PluginAiGovernor,
     type ModelPriceTable,
@@ -100,6 +101,10 @@ export function createPluginAiCompleteMethod(
     });
 
     const handler: HostRpcHandler = async (params, context) => {
+        // Other unknown fields stay ignored, as before; only router overrides are refused.
+        if (!params || typeof params !== 'object' || Array.isArray(params) || hasRouterConfiguration(params)) {
+            throw Object.assign(new Error('Unsupported AI completion parameters'), { rpcCode: 'policy-denied' });
+        }
         const raw = params as {
             model?: unknown;
             prompt?: unknown;

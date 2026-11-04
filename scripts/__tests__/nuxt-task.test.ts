@@ -20,6 +20,9 @@ describe('Nuxt task launcher', () => {
             explicitEnv?: NodeJS.ProcessEnv;
             providerExitCode?: number;
             args?: string[];
+            /** `.nuxt/nuxt.lock` contents, as Nuxt's dev server writes them. */
+            buildLock?: string;
+            typeCheckerExitCode?: number;
         } = {},
     ) {
         const root = realpathSync(mkdtempSync(join(tmpdir(), 'or3-nuxt-task-')));
@@ -65,6 +68,14 @@ describe('Nuxt task launcher', () => {
         }));`;
         const entry = join(nuxt, 'bin/nuxt.mjs');
         writeFileSync(entry, `#!/usr/bin/env node\n${signal ? `process.kill(process.pid, ${JSON.stringify(signal)});` : receipt}`, { mode: 0o755 });
+        const vueTsc = join(root, 'node_modules/vue-tsc');
+        mkdirSync(join(vueTsc, 'bin'), { recursive: true });
+        writeFileSync(join(vueTsc, 'package.json'), JSON.stringify({ name: 'vue-tsc', bin: { 'vue-tsc': './bin/vue-tsc.js' } }));
+        writeFileSync(join(vueTsc, 'bin/vue-tsc.js'), `${receipt}\nprocess.exit(${options.typeCheckerExitCode ?? 0});`);
+        if (options.buildLock !== undefined) {
+            mkdirSync(join(root, '.nuxt'));
+            writeFileSync(join(root, '.nuxt/nuxt.lock'), options.buildLock);
+        }
         symlinkSync(entry, join(root, 'node_modules/.bin/nuxt'));
         symlinkSync(resolve('node_modules/tsx/dist/cli.mjs'), join(root, 'node_modules/.bin/tsx'));
         mkdirSync(join(root, 'scripts/plugin-runtime'), { recursive: true });
@@ -242,6 +253,36 @@ describe('Nuxt task launcher', () => {
             envFile: { ...bunEnvFile, SSR_AUTH_ENABLED: fileSsr },
         }));
         expect(result[0]).toMatchObject({ runtime: 'node', ssr, driver: 'bun', args: [argument] });
+    });
+
+    // Failure inventory: regenerating `.nuxt` under a running dev server makes it
+    // rebuild (and can exhaust its heap); a stale or foreign lock must not stop
+    // regeneration; skipping regeneration must not hide type errors.
+    const lock = (pid: number, command = 'dev') => JSON.stringify({ pid, startedAt: Date.now(), command });
+    const exitedPid = () => spawnSync(process.execPath, ['-e', '0']).pid!;
+
+    it('type-checks against a running dev server\'s types without regenerating them', () => {
+        const launched = launch('type-check', {}, undefined, { buildLock: lock(process.pid) });
+        const result = receipts(launched);
+        expect(result).toHaveLength(1);
+        expect(result[0]?.args).toEqual(['-b', '--noEmit']);
+        expect(launched.stdout).toContain(`dev server (PID ${process.pid})`);
+    });
+
+    it('fails the type check when the checker reports errors against dev types', () => {
+        const result = launch('type-check', {}, undefined, { buildLock: lock(process.pid), typeCheckerExitCode: 2 });
+        expect(result.status).not.toBe(0);
+        expect(result.stdout).toContain('RECEIPT=');
+    });
+
+    it.each([
+        ['an exited dev server', () => lock(exitedPid())],
+        ['a running build', () => lock(process.pid, 'build')],
+        ['a malformed lock', () => '{not json'],
+    ])('regenerates types as before for %s', (_label, buildLock) => {
+        const result = receipts(launch('type-check', {}, undefined, { buildLock: buildLock() }));
+        expect(result).toHaveLength(1);
+        expect(result[0]?.args).toEqual(['typecheck']);
     });
 
     it('keeps explicit environment maps isolated from .env and does not mutate callers', () => {

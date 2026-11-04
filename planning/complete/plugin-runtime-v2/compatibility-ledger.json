@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "2076df921fcb8e321a26cf8b9c27162ccafaccefe9fc23a4355ff97fe3898efa",
+      "apiSha256": "ea95fd42474cf08c2934237120b5196f00ab20d14d912fa04a8893f5c006fcf9",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2935,7 +2935,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 92,
+              "line": 95,
               "syntaxKind": "VariableDeclaration",
               "text": "AI_SETTINGS_STORAGE_KEY = LEGACY_STORAGE_KEY"
             }
@@ -2949,9 +2949,9 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 67,
+              "line": 68,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface AiSettingsV1 {\n    version: 1;\n    titleGenerationModel: string;\n    masterSystemPrompt: string;\n    defaultModelMode: 'lastSelected' | 'fixed';\n    fixedModelId: string | null;\n    defaultModelVariant: OpenRouterModelVariant;\n    /** Null means the full advertised model capacity; values remain independent of model selection. */\n    maxContextTokens: number | null;\n    autoCompactContext: boolean;\n    /** Estimated context usage that triggers automatic compaction, in 10% steps. */\n    autoCompactThresholdPercent: number;\n}"
+              "text": "export interface AiSettingsV1 {\n    version: 1;\n    /** The fast model for titles, editor autocomplete and project memory; named for its original use. */\n    titleGenerationModel: string;\n    masterSystemPrompt: string;\n    defaultModelMode: 'lastSelected' | 'fixed';\n    fixedModelId: string | null;\n    defaultModelVariant: OpenRouterModelVariant;\n    /** Null means the full advertised model capacity; values remain independent of model selection. */\n    maxContextTokens: number | null;\n    defaultToolsEnabled: boolean;\n    autoCompactContext: boolean;\n    /** Estimated context usage that triggers automatic compaction, in 10% steps. */\n    autoCompactThresholdPercent: number;\n}"
             }
           ]
         },
@@ -3003,7 +3003,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 82,
+              "line": 85,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface CapturedContextPreference {\n    readonly db: Or3DB;\n    readonly workspaceGeneration: number;\n    readonly maxContextTokens: number | null;\n}"
             }
@@ -3277,9 +3277,9 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 94,
+              "line": 97,
               "syntaxKind": "VariableDeclaration",
-              "text": "DEFAULT_AI_SETTINGS: AiSettingsV1 = {\n    version: 1,\n    titleGenerationModel: DEFAULT_TITLE_MODEL,\n    masterSystemPrompt: '',\n    defaultModelMode: 'lastSelected',\n    fixedModelId: null,\n    defaultModelVariant: DEFAULT_MODEL_VARIANT,\n    maxContextTokens: null,\n    autoCompactContext: false,\n    autoCompactThresholdPercent: 80,\n}"
+              "text": "DEFAULT_AI_SETTINGS: AiSettingsV1 = {\n    version: 1,\n    titleGenerationModel: DEFAULT_FAST_MODEL,\n    masterSystemPrompt: '',\n    defaultModelMode: 'lastSelected',\n    fixedModelId: null,\n    defaultModelVariant: DEFAULT_MODEL_VARIANT,\n    maxContextTokens: null,\n    defaultToolsEnabled: false,\n    autoCompactContext: false,\n    autoCompactThresholdPercent: 80,\n}"
             }
           ]
         },
@@ -4141,7 +4141,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 90,
+              "line": 93,
               "syntaxKind": "VariableDeclaration",
               "text": "LEGACY_STORAGE_KEY = 'or3.ai.settings.v1'"
             }
@@ -5735,7 +5735,7 @@
               "resolvedReturnType": "AiSettingsV1",
               "declaration": {
                 "source": "app/composables/chat/useAiSettings.ts",
-                "line": 130,
+                "line": 134,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function sanitizeAiSettings(\n    input: unknown,\n    defaults: AiSettingsV1 = DEFAULT_AI_SETTINGS\n): AiSettingsV1;"
               }
@@ -5744,7 +5744,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 130,
+              "line": 134,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function sanitizeAiSettings(\n    input: unknown,\n    defaults: AiSettingsV1 = DEFAULT_AI_SETTINGS\n): AiSettingsV1;"
             }
@@ -6683,7 +6683,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAiSettings.ts",
-                "line": 292,
+                "line": 297,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAiSettings();"
               }
@@ -6692,7 +6692,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 292,
+              "line": 297,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAiSettings();"
             }
@@ -6730,23 +6730,23 @@
           "nuxtAutoImport": false,
           "signatures": [
             {
-              "signature": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[] } = {}\n);",
+              "signature": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[]; toolDraftId?: () => string | undefined } = {}\n);",
               "declaredReturnType": null,
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAi.ts",
-                "line": 244,
+                "line": 75,
                 "syntaxKind": "FunctionDeclaration",
-                "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[] } = {}\n);"
+                "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[]; toolDraftId?: () => string | undefined } = {}\n);"
               }
             }
           ],
           "declarations": [
             {
               "source": "app/composables/chat/useAi.ts",
-              "line": 244,
+              "line": 75,
               "syntaxKind": "FunctionDeclaration",
-              "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[] } = {}\n);"
+              "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[]; toolDraftId?: () => string | undefined } = {}\n);"
             }
           ]
         },
@@ -11842,7 +11842,7 @@
     },
     {
       "source": "app/utils/chat/tool-registry.ts",
-      "apiSha256": "89ba5dacaa518ae2ee196273431c11b4abbdde74f8cbd8cbc22137f1e35ff3d6",
+      "apiSha256": "a5af40f4ac180b38d3e791bff74900e39cab173aeb676172f3816da3da155758",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tool-registry"
@@ -11863,7 +11863,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 46,
+              "line": 47,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ContextualToolHandler<TArgs = Record<string, unknown>> = (\n    args: TArgs,\n    context: ToolExecutionContext\n) => Promise<string> | string;"
             }
@@ -11877,7 +11877,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 60,
+              "line": 61,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ExtendedToolDefinition extends ToolDefinition {\n    description?: string; // human-readable summary for toggles or docs\n    icon?: string; // icon identifier (e.g., 'i-mdi:weather-partly-cloudy')\n    category?: string; // grouping category\n    defaultEnabled?: boolean; // default toggle state\n}"
             }
@@ -11891,7 +11891,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 43,
+              "line": 44,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type LegacyToolHandler<TArgs = Record<string, unknown>> = (\n    args: TArgs\n) => Promise<string> | string;"
             }
@@ -11905,7 +11905,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 76,
+              "line": 77,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisteredTool {\n    definition: ExtendedToolDefinition;\n    handler: ContextualToolHandler;\n    enabled: Ref<boolean>;\n    lastError: Ref<string | null>;\n    runtime: ToolRuntime;\n    available?: (context: ToolAvailabilityContext) => boolean;\n    ownerPluginId?: string;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    timeoutMs?: number;\n    /** Removes this exact registration; returns false after replacement/disposal. */\n    dispose: () => boolean;\n    _owner: symbol;\n    _stopWatcher: () => void;\n}"
             }
@@ -11919,7 +11919,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 93,
+              "line": 94,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisterOptions {\n    ownerPluginId?: string;\n    override?: boolean; // allow replacing an existing tool\n    enabled?: boolean; // explicit initial enabled state\n    runtime?: ToolRuntime;\n    /** Optional origin gate, checked both before advertising and before execution. */\n    available?: (context: ToolAvailabilityContext) => boolean;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    /** Host-owned long-running tools may opt into a longer bounded timeout. */\n    timeoutMs?: number;\n}"
             }
@@ -11933,7 +11933,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 92,
+              "line": 93,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolAvailabilityContext { workspaceId: string | null; threadId: string | null }"
             }
@@ -11947,7 +11947,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 52,
+              "line": 53,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolHandler<TArgs = Record<string, unknown>> = ContextualToolHandler<TArgs>;"
             }
@@ -11961,7 +11961,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 114,
+              "line": 115,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolRegistryState {\n    tools: Map<string, RegisteredTool>;\n    storageHydrated: boolean;\n    pendingEnabledStates?: Record<string, boolean>;\n    persistDebounceTimer: NodeJS.Timeout | null;\n}"
             }
@@ -11975,7 +11975,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 67,
+              "line": 68,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type TypedToolDefinition<TArgs extends Record<string, unknown>> =\n    ExtendedToolDefinition & { readonly __toolArgs?: TArgs };"
             }
@@ -11992,7 +11992,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/utils/chat/tool-registry.ts",
-                "line": 256,
+                "line": 257,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useToolRegistry();"
               }
@@ -12001,7 +12001,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 256,
+              "line": 257,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useToolRegistry();"
             }
@@ -12011,7 +12011,7 @@
     },
     {
       "source": "app/utils/chat/tools-public.ts",
-      "apiSha256": "1c044f7343958028d10d089304a65a0a32e48fb576fc037666e67cd1c99c79ed",
+      "apiSha256": "3efe2f03fd11739ea9bf6cd6b6b8f00d6a8edff179cfe1866daa00a680a3bdfa",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tools-public"
@@ -12056,7 +12056,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 60,
+              "line": 61,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ExtendedToolDefinition extends ToolDefinition {\n    description?: string; // human-readable summary for toggles or docs\n    icon?: string; // icon identifier (e.g., 'i-mdi:weather-partly-cloudy')\n    category?: string; // grouping category\n    defaultEnabled?: boolean; // default toggle state\n}"
             }
@@ -12070,7 +12070,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 76,
+              "line": 77,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisteredTool {\n    definition: ExtendedToolDefinition;\n    handler: ContextualToolHandler;\n    enabled: Ref<boolean>;\n    lastError: Ref<string | null>;\n    runtime: ToolRuntime;\n    available?: (context: ToolAvailabilityContext) => boolean;\n    ownerPluginId?: string;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    timeoutMs?: number;\n    /** Removes this exact registration; returns false after replacement/disposal. */\n    dispose: () => boolean;\n    _owner: symbol;\n    _stopWatcher: () => void;\n}"
             }
@@ -12083,10 +12083,10 @@
           "signatures": [],
           "declarations": [
             {
-              "source": "app/utils/chat/types.ts",
-              "line": 129,
+              "source": "shared/ai/types.ts",
+              "line": 16,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface ToolCall {\n    id: string;\n    type: 'function';\n    function: {\n        name: string;\n        arguments: string; // JSON string, parsed by consumer\n    };\n}"
+              "text": "export interface ToolCall {\n    id: string;\n    type: 'function';\n    function: { name: string; arguments: string };\n}"
             }
           ]
         },
@@ -12098,7 +12098,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 174,
+              "line": 145,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolDefinition {\n    type: 'function';\n    function: {\n        name: string;\n        description: string;\n        parameters: import('~~/shared/chat/tool-schema').JsonSchemaObject;\n    };\n    ui?: {\n        label?: string;\n        icon?: string;\n        descriptionHint?: string;\n        defaultEnabled?: boolean;\n        category?: string;\n    };\n    runtime?: ToolRuntime;\n}"
             }
@@ -12112,7 +12112,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 141,
+              "line": 112,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolExecutionContext {\n    /** Recheck captured registry/project authority inside a host mutation transaction. */\n    assertToolAuthorized?: () => Promise<void>;\n    projectId?: string | null;\n    subject: string | null;\n    workspaceId: string | null;\n    threadId: string | null;\n    messageId: string | null;\n    callId: string;\n    requestId: string;\n    abortSignal: AbortSignal;\n    /** Model settings captured from the request that admitted this tool call. */\n    parentModel?: { model: string; thinking: boolean; reasoningEffort?: string | null };\n}"
             }
@@ -12126,7 +12126,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 52,
+              "line": 53,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolHandler<TArgs = Record<string, unknown>> = ContextualToolHandler<TArgs>;"
             }
@@ -12140,7 +12140,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 138,
+              "line": 109,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolRuntime = 'hybrid' | 'client' | 'server';"
             }
@@ -12154,7 +12154,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 67,
+              "line": 68,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type TypedToolDefinition<TArgs extends Record<string, unknown>> =\n    ExtendedToolDefinition & { readonly __toolArgs?: TArgs };"
             }
@@ -12171,7 +12171,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/utils/chat/tool-registry.ts",
-                "line": 256,
+                "line": 257,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useToolRegistry();"
               }
@@ -12180,7 +12180,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 256,
+              "line": 257,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useToolRegistry();"
             }

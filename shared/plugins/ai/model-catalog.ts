@@ -23,8 +23,8 @@
 
 import { DEFAULT_CONTAINMENT_BUDGETS, type ContainmentBudgets } from '../isolation/budgets';
 
-/** Model ids are provider paths (`vendor/model`); bounded and printable. */
-const MODEL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,191}$/;
+/** Model ids are provider paths (`vendor/model`), or `@openai/model` for the direct OpenAI router; bounded and printable. */
+const MODEL_ID_PATTERN = /^(?:@openai\/)?[A-Za-z0-9][A-Za-z0-9._:/-]{0,191}$/;
 export const MAX_PLUGIN_MODELS = 64;
 
 export interface PluginModelInfo {

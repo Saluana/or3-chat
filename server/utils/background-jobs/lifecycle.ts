@@ -140,7 +140,8 @@ export async function runClaimedBackgroundJob(
         if (execution.delegationDispatch !== undefined) {
             throw Object.assign(new Error('Model request outcome is unknown.'), { code: 'ERR_MODEL_OUTCOME_UNKNOWN', retryable: false });
         }
-        if (execution.delegationRecoveryPolicy !== undefined && execution.delegationRecoveryPolicy !== 'v1') {
+        const recoveryPolicy: unknown = execution.delegationRecoveryPolicy;
+        if (recoveryPolicy !== undefined && recoveryPolicy !== 'v1') {
             throw Object.assign(new Error('Unsupported model recovery policy.'), { code: 'ERR_VALIDATION', retryable: false });
         }
         if (hasUnsafeInterruptedTool(job)) {

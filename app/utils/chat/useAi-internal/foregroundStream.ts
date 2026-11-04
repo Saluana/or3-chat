@@ -7,7 +7,7 @@
  * and throttled persistence to balance responsiveness with database performance.
  *
  * Responsibilities:
- * - Execute OpenRouter streaming requests for foreground (non-background) mode
+ * - Consume a selected router stream for foreground (non-background) mode
  * - Handle tool calls and execute them via ToolRegistry
  * - Support multi-turn tool loops (up to 10 iterations)
  * - Persist assistant content with throttled cadence (500ms or 50 chunks)
@@ -39,6 +39,8 @@ import { captureChatMediaScope } from '~/utils/chat/media-scope';
 import type { ContextRequestPolicy } from '~~/shared/chat/context-budget';
 import type { Or3DB } from '~/db/client';
 import type { ChatMessage, ToolCall, ToolDefinition } from '~/utils/chat/types';
+import type { AiEvent } from '~~/shared/ai/events';
+import type { AiStreamRequest } from '~~/shared/ai/types';
 import { dataUrlToBlob, fetchImageBlob } from '~/utils/chat/files';
 import { TRANSPARENT_PIXEL_GIF_DATA_URI } from '~/utils/chat/imagePlaceholders';
 import {
@@ -231,6 +233,26 @@ export type ForegroundStreamContext = {
     outputLimitBytes?: number;
 };
 
+type ForegroundInferenceRequest = AiStreamRequest<
+    { role: string; content?: unknown },
+    ToolDefinition,
+    { effort?: string; enabled?: boolean; max_tokens?: number; exclude?: boolean }
+>;
+
+/** Host ownership and cancellation remain outside the router request. */
+type ForegroundOperationContext = {
+    contextPolicy?: ContextRequestPolicy;
+    threadId: string;
+    messageId: string;
+    projectContext?: ForegroundStreamContext['projectContext'];
+    expectedProjectId?: string | null;
+    onProjectContext: (receipt: import('~~/shared/projects/workspace').ProjectContextReceipt, iterations: unknown[]) => void;
+    signal: AbortSignal;
+    onProviderAccepted?: () => void;
+};
+
+type ForegroundInference = (request: ForegroundInferenceRequest, context: ForegroundOperationContext) => AsyncIterable<AiEvent>;
+
 /**
  * `ai.chat.stream:action:*` (action)
  *
@@ -240,7 +262,7 @@ export type ForegroundStreamContext = {
  * tool execution.
  *
  * Behavior:
- * 1. Opens OpenRouter stream with provided context
+ * 1. Opens the selected router stream with the captured context
  * 2. Processes stream events:
  *    - `text`: Appends to assistant content, emits `ai.chat.stream:action:delta`
  *    - `reasoning`: Tracks separately, emits `ai.chat.stream:action:reasoning`
@@ -312,6 +334,24 @@ export type ForegroundStreamContext = {
 export async function runForegroundStreamLoop(
     ctx: ForegroundStreamContext
 ): Promise<void> {
+    return createForegroundStreamLoop('openrouter', (request, operation) => openRouterStreamWithRetry({
+        apiKey: ctx.apiKey,
+        model: request.model.modelId,
+        orMessages: request.messages as Parameters<typeof openRouterStreamWithRetry>[0]['orMessages'],
+        modalities: request.modalities,
+        reasoning: request.reasoning as OpenRouterReasoningConfig | undefined,
+        tools: request.tools,
+        ...operation,
+    }))(ctx);
+}
+
+/** Bind one adapter to the existing tool and persistence loop. */
+export function createForegroundStreamLoop(routerId: string, streamInference: ForegroundInference) {
+    return (ctx: ForegroundStreamContext) => runForegroundWithRouter(ctx, routerId, streamInference);
+}
+
+async function runForegroundWithRouter(ctx: ForegroundStreamContext, routerId: string,
+    streamInference: ForegroundInference): Promise<void> {
     const imageOwner = captureChatMediaScope(ctx.originDb, ctx.abortSignal, 'write');
     const admittedTools = snapshotToolDefinitions(ctx.tools);
     const admittedByName = new Map(
@@ -327,14 +367,13 @@ export async function runForegroundStreamLoop(
         normalizedState = beginNormalizedIteration(normalizedState);
         const streamHooks = createStreamHookDispatcher(ctx.hooks);
 
-        const stream = openRouterStreamWithRetry({
-            apiKey: ctx.apiKey,
-            model: ctx.modelId,
-            orMessages: ctx.orMessages as Parameters<
-                typeof openRouterStreamWithRetry
-            >[0]['orMessages'],
+        const stream = streamInference({
+            model: { routerId, modelId: ctx.modelId },
+            messages: ctx.orMessages,
             modalities: ctx.modalities,
             reasoning: ctx.reasoning,
+            tools: admittedTools,
+        }, {
             contextPolicy: ctx.contextPolicy ? { ...ctx.contextPolicy,
                 measuredUsage: normalizedState.requestUsage ?? ctx.contextPolicy.measuredUsage } : undefined,
             threadId: ctx.threadId,
@@ -346,7 +385,6 @@ export async function runForegroundStreamLoop(
                 const row = ctx.rawMessages.value.find(row => row.id === ctx.assistantId);
                 if (row) row.data = { ...row.data, project_context: receipt, project_context_iterations: iterations };
             },
-            tools: admittedTools,
             signal: ctx.abortSignal,
             onProviderAccepted: ctx.onProviderAccepted,
         });

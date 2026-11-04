@@ -12,6 +12,7 @@ import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine, useHooks } from '~/core/hooks/useHooks';
 import type { ORStreamEvent } from '~~/shared/openrouter/parseOpenRouterSSE';
+import { openRouterCatalogLookupId } from '~~/shared/openrouter/selection';
 const provider = vi.hoisted(() => vi.fn());
 const backgroundProvider = vi.hoisted(() => vi.fn());
 vi.mock('~/utils/chat/openrouterStream', async (original) => ({
@@ -206,4 +207,23 @@ it('does not dispatch a continuation after view ownership changes during history
         expect(stored).toMatchObject({ pending: true, data: { content: 'Hello' } });
         expect(stored?.error).toBeFalsy();
     } finally { release(); read.mockRestore(); }
+});
+
+it('decodes a legacy thinking hint like send before continuing', async () => {
+    provider.mockImplementation(async function* (): AsyncGenerator<ORStreamEvent> {
+        yield { type: 'text', text: '>> world' }; yield { type: 'done' };
+    });
+    const db = getDb(); const accumulator = { reset: vi.fn(), append: vi.fn(), finalize: vi.fn(), state: { finalized: false } };
+    const request = createChatRequest({ requestId: 'continue-thinking', kind: 'continue', originDb: db, workspaceId: workspace, threadId: 'thread', accumulator });
+    request.ownsView = () => !request.cancelled;
+    const ctx: ContinueMessageContext = { request, loading: ref(false), aborted: ref(false), abortController: ref(null),
+        threadIdRef: ref('thread'), tailAssistant: ref(null), rawMessages: ref([]), messages: ref([]), streamId: ref(undefined),
+        streamAcc: accumulator, streamState: accumulator.state, hooks: useHooks(),
+        effectiveApiKey: ref('scripted'), hasInstanceKey: ref(false), hasUserKey: ref(false), defaultModelId: 'model', getSystemPromptContent: async () => null,
+        useAiSettings: () => ({ settings: ref(undefined) }), resetStream: vi.fn(),
+        catalogModel: (id) => openRouterCatalogLookupId(id) === 'provider/reasoner' ? { reasoning: { supported_efforts: ['low', 'high'], default_effort: 'high' } } : undefined,
+        resolveContextPolicy: async () => ({ model: { context_length: 1_000_000 }, userMaxContextTokens: null, source: 'openrouter-live' }) };
+    await continueMessageImpl(ctx, 'assistant', 'provider/reasoner:nitro:thinking');
+    expect(provider).toHaveBeenCalledOnce();
+    expect(provider.mock.calls[0]![0]).toMatchObject({ model: 'provider/reasoner:nitro', reasoning: { effort: 'high' } });
 });

@@ -25,11 +25,12 @@
 
 import { hydrateUserApiKeyFromKv, useUserApiKey } from './useUserApiKey';
 import { getCachedSessionPayload } from '~/composables/auth/useSessionContext';
-import { fetchOpenRouterCatalog } from '~~/shared/openrouter/sdk-v1-compat';
+import { fetchBrowserOpenRouterCatalog } from '~~/shared/openrouter/catalog';
 import { normalizeSDKError } from '~~/shared/openrouter/errors';
-import { DEFAULT_HEADERS } from '~~/shared/openrouter/request-options';
-import { normalizeOpenRouterBaseUrl } from '~~/shared/openrouter/url';
 import type { OpenRouterModel } from '~~/shared/openrouter/types';
+import { OPENAI_MODEL_PREFIX } from '~~/shared/openai/models';
+import { openAiKeyHeaders } from './useOpenAiKey';
+import { isServerRouteAvailable } from '~/utils/chat/server-route';
 import { useRuntimeConfig } from '#imports';
 import { openRouterModelListSchema } from '~~/shared/openrouter/types';
 
@@ -114,6 +115,38 @@ export async function fetchModelCatalog(opts?: {
     force?: boolean;
     ttlMs?: number;
 }): Promise<ModelCatalogResult> {
+    const [openRouter, openAi] = await Promise.all([
+        fetchOpenRouterModelCatalog(opts).then(result => ({ result }), (error: unknown) => ({ error })),
+        fetchOpenAiModels(),
+    ]);
+    // An OpenAI-only setup still has a catalog when OpenRouter is unavailable.
+    if ('error' in openRouter) {
+        if (!openAi.length) throw openRouter.error;
+        return { data: openAi, fetchedAt: Date.now(), source: 'openrouter-live' };
+    }
+    return openAi.length ? { ...openRouter.result, data: [...openRouter.result.data, ...openAi] } : openRouter.result;
+}
+
+/** Models for a configured OpenAI key; no key, no server or a failure adds none. */
+async function fetchOpenAiModels(): Promise<OpenRouterModel[]> {
+    // OpenAI chat runs only through the OR3 server. Local deployments can use only
+    // this device's key; Cloud may hold a personal or an instance key for the account.
+    const deviceKey = await openAiKeyHeaders(OPENAI_MODEL_PREFIX);
+    if (useRuntimeConfig().public.ssrAuthEnabled === true
+        ? getCachedSessionPayload()?.session?.authenticated === false
+        : !deviceKey['x-or3-openai-key'] || !isServerRouteAvailable()) return [];
+    try {
+        const response = await fetch('/api/openai/models', { method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error',
+            signal: AbortSignal.timeout(20_000),
+            headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation', ...deviceKey }, body: '{}' });
+        return response.ok ? openRouterModelListSchema.parse(await response.json()) : [];
+    } catch { return []; }
+}
+
+async function fetchOpenRouterModelCatalog(opts?: {
+    force?: boolean;
+    ttlMs?: number;
+}): Promise<ModelCatalogResult> {
     const ttlMs = opts?.ttlMs ?? 1000 * 60 * 60; // 1 hour
     if (!opts?.force) {
         const cached = loadCache();
@@ -145,16 +178,7 @@ export async function fetchModelCatalog(opts?: {
             const fetchedAt = Date.now(); saveCache(data, fetchedAt);
             return { data, fetchedAt, source: 'openrouter-live' };
         }
-        const { Models } = await import('@openrouter/sdk/sdk/models.js');
-        const client = {
-            models: new Models({
-                apiKey: key ?? '',
-                serverURL: normalizeOpenRouterBaseUrl(runtimeConfig.public?.openRouter?.baseUrl),
-                httpReferer: DEFAULT_HEADERS['HTTP-Referer'],
-                appTitle: DEFAULT_HEADERS['X-Title'],
-            }),
-        };
-        const models: OpenRouterModel[] = await fetchOpenRouterCatalog(client);
+        const models = await fetchBrowserOpenRouterCatalog(key ?? '', runtimeConfig.public?.openRouter?.baseUrl);
 
         const fetchedAt = Date.now();
         saveCache(models, fetchedAt);

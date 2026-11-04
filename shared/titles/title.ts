@@ -1,11 +1,7 @@
 import { z } from 'zod';
 
-export const DEFAULT_TITLE_MODEL = 'deepseek/deepseek-v4.1-flash:nitro';
 export const TITLE_CONTENT_CHARS = 2400;
 export const TITLE_TIMEOUT_MS = 8000;
-export const TITLE_MODEL_SETTING = 'ai.title_generation_model';
-// Routing suffixes are preserved; :online is deliberately unavailable for naming.
-export const TitleModelSchema = z.string().max(200).regex(/^[\w.~/-]+(?::free)?(?::(?:nitro|floor))?$/);
 export const TitleSourceSchema = z.enum(['temporary', 'generating', 'generated', 'heading', 'manual', 'failed']);
 export const TitleRequestSchema = z.object({
     type: z.enum(['chat', 'document']),

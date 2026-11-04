@@ -1,9 +1,11 @@
 /**
- * OpenRouter client for plugin-attributed AI calls.
+ * Host model client for plugin-attributed AI calls: OpenRouter by default, and
+ * the direct OpenAI router for `@openai/` models.
  *
- * Reuses the host's existing OpenRouter configuration (base URL and instance key)
+ * Reuses the host's existing router configuration (base URL and instance key)
  * so plugins never receive a credential, and keeps a bounded, cancellable
- * request with a hard output ceiling.
+ * request with a hard output ceiling. Each model's request and key go only to
+ * its own router.
  *
  * The deadline and the caller's cancellation are combined into the signal that
  * fetch (and the body read) actually use, the response is read through a byte
@@ -12,6 +14,10 @@
  */
 
 import { readBoundedBody, combineWithDeadline } from '../connections/bounded-body';
+import { createAiRuntime } from '~~/shared/ai/runtime';
+import { createOpenRouterCompletionAdapter } from '~~/shared/openrouter/adapter';
+import { createOpenAiCompletionAdapter } from '~~/shared/openai/adapter';
+import { isOpenAiModel, openAiApiUrl } from '~~/shared/openai/models';
 import { isUsablePluginModelPrice } from '~~/shared/plugins/ai/model-catalog';
 import type {
     ModelPrice,
@@ -24,8 +30,11 @@ import type {
 } from './plugin-invocation';
 
 export interface OpenRouterPluginProviderOptions {
-    readonly apiKey: string;
+    /** OpenRouter's host key; absent when no allowed model needs it. */
+    readonly apiKey: string | undefined;
     readonly baseUrl: string;
+    /** The OpenAI router's host key and base URL, for `@openai/` models. */
+    readonly openAi?: { readonly apiKey: string | undefined; readonly baseUrl?: unknown };
     readonly fetchImpl?: typeof fetch;
     /**
      * Trusted per-model prices. A model without a usable price is refused, so a
@@ -64,7 +73,9 @@ export function createOpenRouterPluginProvider(
             request: PluginAiCompletionRequest,
             context
         ): Promise<PluginAiCompletionResult> {
-            if (!options.apiKey) {
+            const openAi = isOpenAiModel(request.model);
+            const apiKey = openAi ? options.openAi?.apiKey : options.apiKey;
+            if (!apiKey) {
                 throw new Error('No host model provider credential is configured');
             }
             const price = resolveModelPrice(options.prices, request.model);
@@ -83,62 +94,46 @@ export function createOpenRouterPluginProvider(
             });
 
             try {
-                const response = await fetchImpl(
-                    `${options.baseUrl.replace(/\/$/, '')}/chat/completions`,
-                    {
-                        method: 'POST',
-                        redirect: 'error',
-                        headers: {
-                            authorization: `Bearer ${options.apiKey}`,
-                            'content-type': 'application/json',
-                        },
-                        signal: deadline.signal,
-                        body: JSON.stringify({
-                            model: request.model,
-                            messages: [{ role: 'user', content: request.prompt }],
-                            max_tokens: request.maxOutputTokens,
-                        }),
+                const runtime = createAiRuntime(openAi ? createOpenAiCompletionAdapter() : createOpenRouterCompletionAdapter(), async prepared => {
+                    const response = await fetchImpl(
+                        openAi
+                            ? openAiApiUrl(options.openAi?.baseUrl, 'chat/completions')
+                            : `${options.baseUrl.replace(/\/$/, '')}/chat/completions`,
+                        {
+                            method: 'POST',
+                            redirect: 'error',
+                            headers: {
+                                authorization: `Bearer ${apiKey}`,
+                                'content-type': 'application/json',
+                            },
+                            signal: deadline.signal,
+                            body: JSON.stringify(prepared),
+                        }
+                    );
+                    if (!response.ok) {
+                        try { await response.body?.cancel(); } catch { /* Nothing to release. */ }
+                        throw new Error(`Model provider returned ${response.status}`);
                     }
-                );
-
-                if (!response.ok) {
-                    try {
-                        await response.body?.cancel();
-                    } catch {
-                        // Nothing to release.
-                    }
-                    throw new Error(`Model provider returned ${response.status}`);
-                }
-
-                const bounded = await readBoundedBody(response, {
-                    maxBytes: maxResponseBytes,
+                    const bounded = await readBoundedBody(response, { maxBytes: maxResponseBytes });
+                    if (!bounded.ok) throw new Error(bounded.message);
+                    return new Response(bounded.text);
                 });
-                if (!bounded.ok) {
-                    throw new Error(bounded.message);
+                let result;
+                try { result = await runtime.complete({ model: { routerId: openAi ? 'openai' : 'openrouter', modelId: request.model },
+                    messages: [{ role: 'user', content: request.prompt }], maxOutputTokens: request.maxOutputTokens }); }
+                catch (error) {
+                    if (error instanceof SyntaxError) throw new Error('Model provider returned an unreadable response');
+                    throw error;
                 }
-
-                let payload: {
-                    choices?: Array<{ message?: { content?: unknown } }>;
-                    usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
-                };
-                try {
-                    payload = JSON.parse(bounded.text) as typeof payload;
-                } catch {
-                    throw new Error('Model provider returned an unreadable response');
-                }
-
-                const text =
-                    typeof payload.choices?.[0]?.message?.content === 'string'
-                        ? (payload.choices[0]!.message!.content as string)
-                        : '';
-                const promptTokens = nonNegativeInteger(payload.usage?.prompt_tokens);
-                const completionTokens = nonNegativeInteger(payload.usage?.completion_tokens);
+                const text = typeof result.content === 'string' ? result.content : '';
+                const usage = result.usage && typeof result.usage === 'object'
+                    ? result.usage as { prompt_tokens?: unknown; completion_tokens?: unknown } : undefined;
+                const promptTokens = nonNegativeInteger(usage?.prompt_tokens);
+                const completionTokens = nonNegativeInteger(usage?.completion_tokens);
                 if (promptTokens === null || completionTokens === null) {
                     // Without usable usage the spend cannot be reconciled.
                     throw Object.assign(
-                        new Error(
-                            'Model provider did not report usable token usage; the call cannot be accounted'
-                        ),
+                        new Error('Model provider did not report usable token usage; the call cannot be accounted'),
                         { rpcCode: 'internal' }
                     );
                 }

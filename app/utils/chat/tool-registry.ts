@@ -445,10 +445,11 @@ export function useToolRegistry() {
 
         const { getDb } = await import('~/db/client');
         const chatDb = getDb();
+        // Loaded before any handler transaction: awaiting import() inside one loses Dexie's zone.
+        const { readChatToolPreferences } = await import('./tool-preferences');
         const isEnabled = async () => {
             if (admission?.ignoreGlobalEnabled) return true;
             if (!context?.threadId) return tool.enabled.value;
-            const { readChatToolPreferences } = await import('./tool-preferences');
             const preferences = await readChatToolPreferences(chatDb, context.threadId);
             return preferences.enabled && preferences.tools[toolName] !== false;
         };

@@ -1,6 +1,6 @@
 import { addUsageTotals, readMeasuredRequestUsage } from './request-usage';
 import type { RequestUsage, UsageTotals } from './compaction';
-import { normalizeProviderRequestUsage, type ORStreamEvent, type ProviderRequestUsage } from '../openrouter/parseOpenRouterSSE';
+import { normalizeProviderRequestUsage, type AiEvent, type ProviderRequestUsage } from '../ai/events';
 import {
     CANONICAL_MESSAGE_FIXED_BYTES,
     MAX_STREAM_OUTPUT_BYTES,
@@ -151,7 +151,7 @@ function addOutputBytes(state: NormalizedStreamState, value: string): Pick<Norma
 
 export function reduceNormalizedStreamEvent(
     state: NormalizedStreamState,
-    event: ORStreamEvent
+    event: AiEvent
 ): NormalizedStreamState {
     if (state.terminal !== 'active' || event.type === 'done') return state;
     if (event.type === 'usage') {

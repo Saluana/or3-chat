@@ -6,12 +6,31 @@ import {
     sanitizeModelVariant,
     stripModelVariantSuffix,
 } from '../model-variants';
+import { prepareOpenRouterWebSearch } from '../request';
 
 describe('model-variants', () => {
     it('leaves the model id unchanged when variant is off', () => {
         expect(appendModelVariant('openai/gpt-5.2', 'off')).toBe(
             'openai/gpt-5.2'
         );
+        expect(appendModelVariant('vendor/model:free', 'off')).toBe('vendor/model:free');
+        expect(appendModelVariant('vendor/model:online', 'off')).toBe('vendor/model:online');
+    });
+
+    it('keeps a catalog variant when adding a routing choice', () => {
+        expect(appendModelVariant('vendor/model:free', 'nitro')).toBe('vendor/model:free:nitro');
+        expect(stripModelVariantSuffix('vendor/model:free:floor')).toBe('vendor/model:free');
+    });
+
+    it('adds one provider search tool when a saved Online choice is encoded repeatedly', () => {
+        const first = prepareOpenRouterWebSearch({ model: 'vendor/model:free:online', tools: [
+            { type: 'function', function: { name: 'local_tool' } },
+        ] });
+        expect(first).toEqual({ model: 'vendor/model:free', tools: [
+            { type: 'function', function: { name: 'local_tool' } }, { type: 'openrouter:web_search' },
+        ] });
+        expect(prepareOpenRouterWebSearch(first)).toEqual(first);
+        expect(prepareOpenRouterWebSearch({ ...first, model: 'vendor/model:free:online' })).toEqual(first);
     });
 
     it('appends nitro/floor/online suffixes', () => {

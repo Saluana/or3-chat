@@ -102,8 +102,8 @@ export async function prepareDelegationWait(parent: BackgroundJob, input: {
                 body._toolRuntime = Object.fromEntries(tools.map(tool => [tool.function.name, runtimes[tool.function.name] ?? 'server']));
             }
             const policy = contextPolicyFromCatalog(body, catalog);
-            const admittedBody = await admitServerProviderBody(withoutOr3RequestMetadata(body), policy, input.signal);
-            const childBody = { ...body, ...admittedBody };
+            const { hostBody } = await admitServerProviderBody(withoutOr3RequestMetadata(body), policy, input.signal);
+            const childBody = { ...body, ...hostBody };
             const child = prepareNewDelegationChild(parent, { callId: input.callId, index, task: item.task, body: childBody, createdAt });
             const childExecution = child.execution;
             if (!childExecution || !('history' in childExecution) || !childExecution.history) throw new Error('Invalid child history.');
@@ -112,7 +112,8 @@ export async function prepareDelegationWait(parent: BackgroundJob, input: {
             children.push({ kind: 'prepared', index, admissionId: history.admissionId, threadId: child.threadId,
                 userMessageId: history.userMessage.id, assistantMessageId: child.messageId,
                 admissionFingerprint: delegationAdmissionFingerprint(child),
-                admission: { body: JSON.parse(JSON.stringify(childBody)), history: JSON.parse(JSON.stringify(history)) },
+                admission: { body: z.record(z.string(), z.json()).parse(JSON.parse(JSON.stringify(childBody))),
+                    history: z.json().parse(JSON.parse(JSON.stringify(history))) },
                 request: { task: item.task, model: selected.model, ...(item.variant ? { variant: item.variant } : {}),
                     ...(item.reasoningEffort ? { reasoningEffort: item.reasoningEffort } : {}) } });
         } catch (error) {

@@ -1,4 +1,4 @@
-import { resolveOpenRouterCredential } from '../../secrets/openrouter';
+import { openChatUpstream, resolveChatCredential } from '../../utils/ai/chat-router';
 import { publicErrorEnvelope, parseRetryAfter } from '~~/shared/errors';
 /**
  * @module server/api/openrouter/stream.post
@@ -46,8 +46,8 @@ import {
     normalizeProxyTrustConfig,
 } from '../../utils/net/request-identity';
 import { normalizeHost } from '../../utils/normalize-host';
-import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
-import { prepareOpenRouterWebSearch } from '~~/shared/openrouter/request';
+import { hasRouterConfiguration } from '~~/shared/ai/runtime';
+import { isOpenAiModel } from '~~/shared/openai/models';
 import {
     isBackgroundModeRequest,
     validateBackgroundParams,
@@ -64,7 +64,6 @@ import { ChatContextAdmissionError, captureContextEnvelope } from '~~/shared/cha
 import { normalizeProviderResponseError } from '~~/shared/openrouter/errors';
 import { sendWithAffordableReply } from '~~/shared/openrouter/credit-retry';
 import {
-    fetchWithResponseDeadline,
     OpenRouterTimeoutError,
     readResponseTextWithIdleDeadline,
     withIdleWatchdog,
@@ -102,6 +101,12 @@ export default defineEventHandler(async (event) => {
         setResponseStatus(event, 400);
         return 'Invalid request body';
     }
+    // This route is bound to its host-configured OpenRouter endpoint. It must
+    // never accept client-supplied router identity, endpoint or credentials.
+    if (hasRouterConfiguration(body)) {
+        setResponseStatus(event, 400);
+        return { error: 'Router configuration is not accepted in chat requests.', code: 'unsupported_router_configuration' };
+    }
     const backgroundRequested = isBackgroundModeRequest(body);
     if (!backgroundRequested && body._durableDelegation !== undefined) {
         setResponseStatus(event, 400);
@@ -121,21 +126,20 @@ export default defineEventHandler(async (event) => {
 
     // Req 1, 4: Select API key. Prefer caller-owned credentials when allowed.
     const config = useRuntimeConfig(event);
-    const openRouterUrl = getOpenRouterChatCompletionsUrl(
-        config.openrouterBaseUrl
-    );
     let cachedSession: Awaited<ReturnType<typeof resolveSessionContext>> | null = null;
     const getSession = async () => {
         if (!isSsrAuthEnabled(event)) return null;
         return cachedSession ??= await resolveSessionContext(event);
     };
     if (isSsrAuthEnabled(event)) requireCloudMutation(event);
-    const selected = await resolveOpenRouterCredential(event, await getSession());
+    const selected = await resolveChatCredential(event, body.model, await getSession());
+    // Credential guidance names the router that owns the selected model.
+    const router = isOpenAiModel(body.model) ? 'openai' as const : undefined;
     const apiKey = selected.apiKey;
     if (backgroundRequested) requireCloudMutation(event);
     if (!apiKey) {
         setResponseStatus(event, 400);
-        return publicErrorEnvelope({ code: 'ERR_AUTH', status: 400, source: 'provider', credentialSource: selected.source, retryable: false });
+        return publicErrorEnvelope({ code: 'ERR_AUTH', status: 400, source: 'provider', credentialSource: selected.source, router, retryable: false });
     }
 
     const limits = config.limits;
@@ -275,8 +279,8 @@ export default defineEventHandler(async (event) => {
 
         try {
             const contextPolicy = await resolveServerContextPolicy(body, apiKey, config.openrouterBaseUrl);
-            const prepared = await admitServerProviderBody(withoutOr3RequestMetadata(body), contextPolicy);
-            body = { ...body, ...prepared };
+            const { hostBody } = await admitServerProviderBody(withoutOr3RequestMetadata(body), contextPolicy);
+            body = { ...body, ...hostBody };
             if (contextPolicy) body._context = captureContextEnvelope(contextPolicy);
 
             const result = await startBackgroundStream({
@@ -408,9 +412,10 @@ export default defineEventHandler(async (event) => {
 
     try {
         let policy: Awaited<ReturnType<typeof resolveServerContextPolicy>>;
+        let admittedProviderBody: Record<string, unknown>;
         try {
             policy = await resolveServerContextPolicy(body, apiKey, config.openrouterBaseUrl, ac.signal);
-            await admitServerProviderBody(providerBody, policy, ac.signal);
+            ({ providerBody: admittedProviderBody } = await admitServerProviderBody(providerBody, policy, ac.signal));
         } catch (error) {
             // The client disconnected while the model catalog was being consulted.
             if (ac.signal.aborted) return;
@@ -435,18 +440,9 @@ export default defineEventHandler(async (event) => {
                 normalizeProxyTrustConfig(config.security.proxy),
             ) ?? (normalizeHost(host) === 'localhost' ? 'http' : 'https');
 
-            const requestUpstream = (requestBody: Record<string, unknown>) => fetchWithResponseDeadline(openRouterUrl, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json',
-                    Accept: 'text/event-stream',
-                    'HTTP-Referer': `${proto}://${host}`,
-                    'X-Title': 'or3.chat',
-                },
-                body: JSON.stringify(prepareOpenRouterWebSearch(requestBody)),
-            }, { signal: ac.signal });
-            ({ response: upstream, errorText: upstreamErrorText } = await sendWithAffordableReply(requestUpstream, providerBody,
+            const openUpstream = (requestBody: Record<string, unknown>) => openChatUpstream(requestBody, apiKey,
+                { referer: `${proto}://${host}`, signal: ac.signal });
+            ({ response: upstream, errorText: upstreamErrorText } = await sendWithAffordableReply(openUpstream, admittedProviderBody,
                 { defaultAllowance: !!policy && policy.requestedCompletionTokens == null, signal: ac.signal }));
 
         } catch (e: unknown) {
@@ -482,7 +478,7 @@ export default defineEventHandler(async (event) => {
             const retryAfterMs = parseRetryAfter(upstream.headers.get('retry-after'));
             if (retryAfterMs !== undefined) setHeader(event, 'Retry-After', Math.ceil(retryAfterMs / 1000));
             return publicErrorEnvelope({ ...normalizeProviderResponseError(respText, upstream.status, {
-                credentialSource: selected.source }), retryAfterMs });
+                credentialSource: selected.source, router }), retryAfterMs });
         }
 
         setHeader(event, 'X-OR3-Credential-Source', selected.source);

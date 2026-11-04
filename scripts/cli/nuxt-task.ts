@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import crossSpawn from 'cross-spawn';
 import { configDotenv as loadDotenv } from 'dotenv';
+import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -43,6 +44,22 @@ function run(
             }
         });
     });
+}
+
+/**
+ * PID of a live `nuxt dev` holding this checkout's `.nuxt`, from the lock Nuxt writes there.
+ * That server keeps the generated types current; regenerating them in prepare mode would
+ * replace its development configuration and force a server rebuild that can exhaust its heap.
+ */
+function activeDevServerPid(root: string): number | undefined {
+    let lock: { pid?: unknown; command?: unknown } | null;
+    try { lock = JSON.parse(readFileSync(resolve(root, '.nuxt/nuxt.lock'), 'utf8')); } catch { return undefined; }
+    if (lock?.command !== 'dev' || typeof lock.pid !== 'number') return undefined;
+    try { process.kill(lock.pid, 0); } catch (error) {
+        // EPERM: the process exists but belongs to another user.
+        if ((error as NodeJS.ErrnoException).code !== 'EPERM') return undefined;
+    }
+    return lock.pid;
 }
 
 export async function runNuxtTask(
@@ -93,6 +110,13 @@ export async function runNuxtTask(
     const runtime = task === 'type-check'
         ? (process.versions.bun ? 'node' : process.execPath)
         : nuxtRuntime(taskEnv);
+    const devPid = task === 'type-check' ? activeDevServerPid(process.cwd()) : undefined;
+    if (devPid !== undefined) {
+        console.info(`[or3] A dev server (PID ${devPid}) keeps .nuxt types current; type-checking them without regenerating.`);
+        // The root tsconfig.json is a project-reference solution, as `nuxt typecheck` detects.
+        await run(runtime, [requireFromProject.resolve('vue-tsc/bin/vue-tsc.js'), '-b', '--noEmit'], taskEnv);
+        return;
+    }
     const secrets = task === 'preview'
         ? await prepareSourceSecrets(process.cwd(), taskEnv)
         : undefined;

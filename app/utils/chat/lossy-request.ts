@@ -4,6 +4,7 @@ import { sha256Hex } from '~~/shared/runtime-crypto';
 import { buildOpenRouterRequestBody, prepareOpenRouterRequest, type OpenRouterStreamParams } from './openrouterStream';
 import { estimateMeasuredChatRequest } from '~~/shared/chat/request-usage';
 import { admitChatContext, ChatContextAdmissionError } from '~~/shared/chat/context-budget';
+import { encodeProviderRequest } from '~~/shared/ai/provider-body';
 
 import type { LossyRequestPreview } from '~~/shared/chat/context-budget';
 export type { LossyRequestPreview } from '~~/shared/chat/context-budget';
@@ -68,9 +69,10 @@ export async function prepareLossyRequest(params: OpenRouterStreamParams, scope:
         try {
             const admitted = await prepareOpenRouterRequest({ ...params, orMessages: messages });
             if (!params.contextPolicy) throw new Error('Lossy inspection requires a captured context policy.');
-            const { messages: admittedMessages, ...configuration } = admitted;
-            const estimate = await estimateMeasuredChatRequest({ model: params.model, messages: admittedMessages,
-                tools: admitted.tools, modalities: admitted.modalities, configuration,
+            const providerBody = encodeProviderRequest(admitted);
+            const { messages: admittedMessages, ...configuration } = providerBody;
+            const estimate = await estimateMeasuredChatRequest({ model: providerBody.model, messages: admittedMessages,
+                tools: providerBody.tools, modalities: providerBody.modalities, configuration,
                 usage: params.contextPolicy.measuredUsage, countText: countTokensApprox });
             const admission = admitChatContext({ ...params.contextPolicy, inputTokens: estimate.input_tokens, estimate,
                 requestedCompletionTokens: params.contextPolicy.requestedCompletionTokens ?? params.maxCompletionTokens });

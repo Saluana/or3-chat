@@ -165,6 +165,8 @@ unprotected server that accepts forwarding headers directly from clients.
 
 For provider configuration, use the [source setup wizard](/documentation/cloud/or3-cloud-wizard). Restart after configuration changes. An environment file is an advanced integration tool, not a prerequisite for the ordinary local-first app.
 
+`bun run type-check` is safe while `bun run dev` runs in the same checkout: it finds the dev server through `.nuxt/nuxt.lock` and checks the types that server keeps current instead of regenerating `.nuxt`, which would force the server to rebuild and can exhaust its heap. Without a running dev server it runs `nuxt typecheck` as usual.
+
 ## Build and launch source output
 
 The build wrapper defaults Node's old-space heap limit to 4096 MiB and preserves

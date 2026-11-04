@@ -312,8 +312,15 @@ It persists through `saveProjectMemory` first, with the existing reference (fact
 The form does not await inference. Existing records retain their kinds until explicitly edited;
 there is no migration, backfill or additional memory store. Automatic capture uses the same records as described below.
 
-One OpenRouter Decisions choice question classifies a saved reference. The pinned model is
-`perplexity/pplx-decider-v1.2`, with a 0.9 decision threshold. On October 27, 2026,
+One Decisions choice question classifies a saved reference, on the router of the workspace
+fast model (Dashboard → AI Settings → Fast Model). On OpenRouter the pinned model is
+`perplexity/pplx-decider-v1.2`; on OpenAI it is `gpt-6-luna` through `POST /v1/decisions`,
+which takes the state as JSON text and returns choice probabilities rounded to two places.
+Both use a 0.9 decision threshold. On November 3, 2026, `gpt-6-luna` matched 39/40 labels with
+no false decisions; the one adopted decision it scored 0.78 stays a fact, the conservative outcome,
+and four automatic-capture smokes passed with `@openai/gpt-6-luna` as the fast model. The same day
+Decider V1.2 and Jev again matched 40/40 and capture passed with the default DeepSeek fast model.
+Run the evaluation with `OR3_EVAL_FAST_MODEL` to pick the router. On October 27, 2026,
 the pinned model passed all 40 labeled examples and four automatic-capture smokes.
 The earlier comparison of its predecessor with Jev is recorded below and in the evaluation receipt.
 The fixtures, text-free results and comparison command are under
@@ -338,13 +345,16 @@ validated inference state remains bounded to 240 KiB.
 The fixed rubric adds a small amount of request overhead outside the state budget. Mixed-media messages contribute
 only text parts; image-only messages supply no visual evidence, even though Decider supports images.
 
-Static/BYOK uses the installed SDK directly. Authenticated SSR
-uses `POST /api/openrouter/classify-memory`, requiring mutation intent, workspace write access,
-matching active workspace and normal key precedence. Its per-minute and daily limits use
+Static/BYOK calls OpenRouter from the browser with this device's key. A local install with an
+OpenAI fast model sends `POST /api/openrouter/classify-memory` its model and this device's OpenAI
+key instead (the server never lends its own key there), so OpenAI memory inference always uses the
+configured `OR3_OPENAI_BASE_URL`, like OpenAI chat. Authenticated SSR uses the same route, requiring
+mutation intent, workspace write access, matching active workspace and the fast model router's normal
+key precedence; it reads the workspace fast model and refuses a caller-supplied one. Its per-minute and daily limits use
 separate `memory:user:<id>` buckets (with the configured values), so auxiliary inference never
 spends chat quota; 429 responses include `Retry-After`. The endpoint accepts only bounded
-state, fixes the model/question, and cannot mutate memories or invoke tools. Memory inference
-uses OpenRouter-only APIs, so it runs only when the configured OpenRouter base URL is on
+state, fixes the model/question, and cannot mutate memories or invoke tools. OpenRouter memory
+inference uses OpenRouter-only APIs, so it runs only when the configured OpenRouter base URL is on
 `openrouter.ai`; with a gateway/proxy base URL, classification and capture are skipped rather
 than sending that key to another host.
 
@@ -359,7 +369,7 @@ includes model, probabilities, latency and cost, never memory text or credential
 
 The workspace-projects client plugin subscribes to `ai.chat.stream:action:complete`. Browser foreground completion and successfully persisted canonical/tracker background completion supply captured `workspaceId` and `projectId`. The listener returns immediately and owns a bounded batching helper (at most sixteen active chats), disposed on workspace switch and plugin HMR. No inference runs in the send path. Capture processes three completed exchanges or an idle batch after ten seconds. It requires the browser to remain open.
 
-`app/utils/projects/automatic-memory.ts` reads at most twelve recent message rows and sends up to eight complete user/assistant messages, with a 240 KiB aggregate bound including up to twenty existing references. The state is built per message, never clipped: fresh user messages come first, then existing references, then older context newest-first while the bound allows. A user message exceeding the 240 KiB budget is skipped whole and an oversized assistant reply becomes a fixed omission marker. Messages that fit individually can still be omitted when the combined JSON state fills the budget. Older context can explain an approval; only fresh user messages can establish new memory. Without a processable fresh user message the cursor advances without inference. One `perplexity/pplx-decider-v1.2` Decisions choice must return save with probability at least 0.8 before a bounded non-streaming `~openai/gpt-luna-latest` request extracts zero to three memories, at most 280 characters each. Gate and extraction deadlines are ten and eight seconds, with no retries or tool loop. Static/BYOK calls OpenRouter directly. SSR sends `{ workspaceId, capture }` to the existing authenticated `POST /api/openrouter/classify-memory` endpoint under the same write, origin, key, base-URL and memory rate-limit policies as explicit classification; a 429/503 leaves the cursor for a later batch. Callers cannot choose models or prompts.
+`app/utils/projects/automatic-memory.ts` reads at most twelve recent message rows and sends up to eight complete user/assistant messages, with a 240 KiB aggregate bound including up to twenty existing references. The state is built per message, never clipped: fresh user messages come first, then existing references, then older context newest-first while the bound allows. A user message exceeding the 240 KiB budget is skipped whole and an oversized assistant reply becomes a fixed omission marker. Messages that fit individually can still be omitted when the combined JSON state fills the budget. Older context can explain an approval; only fresh user messages can establish new memory. Without a processable fresh user message the cursor advances without inference. One Decisions choice on the fast model's router must return save with probability at least 0.8 before a bounded non-streaming request to the fast model itself extracts zero to three memories, at most 280 characters each; the fast model must support strict JSON-schema output. Gate and extraction deadlines are ten and eight seconds, with no retries or tool loop. Static/BYOK calls the fast model's router directly. SSR sends `{ workspaceId, capture }` to the existing authenticated `POST /api/openrouter/classify-memory` endpoint under the same write, origin, key, base-URL and memory rate-limit policies as explicit classification; a 429/503 leaves the cursor for a later batch. Callers cannot choose models or prompts; the server reads the workspace fast model.
 
 Automatic state also includes `project: { name, brief }` from the captured owning project, within the same 240 KiB budget. The project name is bounded by that budget and the brief retains its 8,000-character settings limit. Both the decision gate and extraction use the Broader recall rubric recorded in `planning/project-memory-classification/prompt-comparison-results.json`: directly stated recurring preferences and workflow constraints can be remembered without an explicit memory request, while one-time requests and inferred preferences are excluded. Project metadata explains relevance; only fresh user messages establish new information or adoption. Metadata is treated as untrusted data. The SSR capture schema requires this project context. Explicit fact/decision classification retains its separate 0.9 decision threshold.
 

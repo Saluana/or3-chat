@@ -809,7 +809,8 @@ async function handleBackgroundStatus(
     tracker: BackgroundJobTracker,
     status: BackgroundJobStatus
 ): Promise<boolean> {
-    if (!tracker.active) {
+    const isActive = () => tracker.active;
+    if (!isActive()) {
         bgStreamLog('status-ignored-inactive', {
             jobId: tracker.jobId,
             incomingStatus: status.status,
@@ -838,7 +839,7 @@ async function handleBackgroundStatus(
             nextStatus.attempt < tracker.lastAttempt) ||
             (typeof status.attempt === 'number' && nextStatus.attempt < status.attempt))
     ) return true;
-    if (!tracker.active) return false;
+    if (!isActive()) return false;
     if (nextStatus.status !== 'streaming' || typeof navigator === 'undefined' || navigator.onLine !== false)
         setReconnecting(tracker, false);
     const resetUsage = isBackgroundUsageReset(nextStatus, tracker.lastAttempt) ||

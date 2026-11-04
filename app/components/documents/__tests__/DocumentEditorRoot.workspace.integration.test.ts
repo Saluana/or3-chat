@@ -7,12 +7,14 @@ import Dexie from 'dexie';
 import { Blob as NodeBlob } from 'node:buffer';
 import { setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import { createDocumentInDb, getDocumentInDb } from '~/db/documents';
+import { setKvByName } from '~/db/kv';
 import { flush, loadDocument, releaseDocument, useAllDocumentsState, useDocumentState } from '~/composables/documents/useDocumentsStore';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine } from '~/core/hooks/useHooks';
 import { registerWorkspaceChatTools } from '~/utils/chat/workspace-chat-tools';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
+import { chatToolPreferenceKey } from '~/utils/chat/tool-preferences';
 import { applyWorkspaceDocumentChange } from '~/utils/chat/workspace-document-change';
 import { testRuntimeConfig } from '~~/tests/setup';
 
@@ -71,6 +73,8 @@ async function mountedWorkspaces(initialAvailability?: 'trashed' | 'missing', mo
     const dbA = setActiveWorkspaceDb(idA);
     await dbA.threads.put({ id: 'mounted-thread', title: 'Tool origin', status: 'ready',
         created_at: 1, updated_at: 1, clock: 1, deleted: false, pinned: false, forked: false });
+    // This fixture exercises document tools after the chat explicitly opts in.
+    await setKvByName(chatToolPreferenceKey('mounted-thread'), JSON.stringify({ enabled: true, tools: {} }), dbA);
     const created = await createDocumentInDb(dbA, { title: 'A private title', content: content('A original body') });
     const row = (await dbA.posts.get(created.id))!;
     await dbA.posts.delete(created.id);

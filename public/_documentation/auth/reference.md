@@ -2,6 +2,11 @@
 
 These APIs are for OR3 source components. Portable plugins use [SDK model access](/documentation/plugins/plugin-sdk) and do not receive the user's OpenRouter key.
 
+The inference runtime does not choose or persist credentials. Existing host
+authentication and request-scoped authorization remain responsible for key
+selection; the OpenRouter adapter receives an authorized operation rather than
+a new credential store.
+
 ## Connect and disconnect from a component
 
 Create `useOpenRouterAuth()` during component setup so its Nuxt runtime configuration and toast dependencies are available. Call its methods from user actions.
@@ -71,3 +76,28 @@ The callback page `app/pages/openrouter-callback.vue` reads the returned code, v
 The exchange uses the shared SDK client, a 15-second timeout, and retries disabled because the code is single use. Its discriminated result is either `{ ok: true, userKey, status }` or `{ ok: false, reason, status, errorCode?, errorMessage? }`. Failure reasons are `network`, `bad-response`, and `no-key`. The caller owns user-facing recovery; this utility does not display toasts. Do not wrap it in a generic retry loop.
 
 The implementation lives in `app/core/auth/useOpenrouter.ts`, `useUserApiKey.ts`, `openrouter-auth.ts`, and the callback page. The [user connection guide](/documentation/auth/connect) explains recovery without exposing implementation details.
+
+## Direct OpenAI keys
+
+OpenAI models are listed as `@openai/<model>`; the prefix keeps them apart from OpenRouter's `openai/…` routes. They are billed to an OpenAI key. Chat always runs through the OR3 server; on a local install, project-memory inference for an OpenAI fast model calls OpenAI from the browser with the device key, as OpenRouter memory inference does.
+
+```ts
+import { useOpenAiKey } from '~/core/auth/useOpenAiKey';
+
+// Call during client component setup.
+const { connection, refresh, save, remove } = useOpenAiKey();
+
+export async function connectOpenAi(input: string): Promise<boolean> {
+  await save(input); // validates the `sk-` format first
+  await refresh(); // updates connection.connected, .available and .instance
+  return connection.connected;
+}
+
+export const disconnectOpenAi = remove;
+```
+
+- **Cloud:** `POST /api/openai/credentials` with `{ operation: 'status' | 'save' | 'delete' }` stores the key in the account secret vault (consumer `@or3.openai`) and never returns it. It needs the same `x-or3-cloud-intent` and `x-or3-account` headers as the OpenRouter route. A saved personal key wins over `OR3_OPENAI_API_KEY`.
+- **Local mode:** the key is kept in the local-only KV entry `openai_api_key`, which never syncs, and is sent to this OR3 server as `x-or3-openai-key` only with OpenAI-model requests.
+- `POST /api/openai/models` returns the caller's chat models in the catalog shape, or `[]` without a key. OpenAI's list reports no limits, so context and output capacities come from a host table in `shared/openai/models.ts`.
+
+Chat, tools, background jobs and context admission work as for OpenRouter. Choose an OpenAI **Fast Model** in AI Settings and titles, editor autocomplete and project memories (OpenAI Decisions with `gpt-6-luna`) use the OpenAI key too, so no OpenRouter key is needed. Plugin completions, delegation and model search still use OpenRouter credentials.
