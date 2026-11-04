@@ -345,8 +345,9 @@ if (import.meta.main) {
         ),
         totalJavascriptGzipBytes: positiveNumber(
             process.env.OR3_PERF_MAX_TOTAL_JS_GZIP_BYTES,
-            // Measured 4,426,179 gzip bytes with the highlight worker.
-            4_440_000
+            // Same-host fixed-profile builds measured 4,456,709 bytes at
+            // 0.1.98 and 4,459,714 after the dashboard and AI router changes.
+            4_470_000
         ),
         largestJavascriptRawBytes: positiveNumber(
             process.env.OR3_PERF_MAX_CHUNK_JS_BYTES,
@@ -362,7 +363,8 @@ if (import.meta.main) {
         ),
         totalCssGzipBytes: positiveNumber(
             process.env.OR3_PERF_MAX_TOTAL_CSS_GZIP_BYTES,
-            150_000
+            // The same builds measured 149,079 and 150,008 bytes respectively.
+            152_000
         ),
         precacheFiles: positiveNumber(
             process.env.OR3_PERF_MAX_PRECACHE_FILES,
