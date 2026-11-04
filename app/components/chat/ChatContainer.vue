@@ -241,9 +241,12 @@ import { useThreadCompaction } from '~/composables/chat/useThreadCompaction';
 import { provideChatProjectOwner } from '~/composables/projects/useChatProjectOwner';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
 import { useModelStore } from '~/composables/chat/useModelStore';
+import { isOpenAiModel } from '~~/shared/openai/models';
+import { readLocalOpenAiKey } from '~/core/auth/useOpenAiKey';
 import { useChatToolPreferences } from '~/composables/chat/useChatToolPreferences';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
-import { appendModelVariant, stripModelVariantSuffix } from '~~/shared/openrouter/model-variants';
+import { appendModelVariant } from '~~/shared/openrouter/model-variants';
+import { openRouterCatalogLookupId, stripLegacyThinkingSuffix } from '~~/shared/openrouter/selection';
 import { resolveSystemPromptText } from '~/utils/chat/useAi-internal/messageBuild';
 import {
     hydrateUserApiKeyFromKv,
@@ -371,12 +374,22 @@ const welcomeDismissed = ref(true); // default hidden until hydrated
 // Start the independent reads while this component is being set up. Commit only
 // after mount so SSR and client hydration still begin with the same hidden card.
 const welcomeWorkspaceGeneration = getWorkspaceGeneration();
+const welcomeModels = useModelStore();
+// A working OpenAI key needs no OpenRouter connection. Only local signals are read:
+// the first-run card never fetches the model catalog.
+async function hasOpenAiKey(): Promise<boolean> {
+    if ((runtimeConfig.public as { openai?: { hasInstanceKey?: boolean } }).openai?.hasInstanceKey === true) return true;
+    if (runtimeConfig.public.ssrAuthEnabled !== true && await readLocalOpenAiKey()) return true;
+    return (await welcomeModels.loadCachedModels())?.some(entry => isOpenAiModel(entry.id)) ?? false;
+}
 const welcomeStateReady = import.meta.client
     ? Promise.allSettled([
         hydrateUserApiKeyFromKv(),
         kv.get(WELCOME_DISMISS_KV_KEY),
+        hasOpenAiKey(),
     ])
     : null;
+const openAiUsable = ref(false);
 const dashboardModalOpen = inject<Ref<boolean>>('or3:dashboard-modal-open', ref(false));
 const openRouterAvailability = computed(() =>
     resolveOpenRouterKeyAvailability(runtimeConfig.public?.openRouter)
@@ -393,7 +406,7 @@ const showWelcomeCard = computed(
             ? !welcomePreviewDismissed.value
             : !welcomeDismissed.value &&
               openRouterAvailability.value.canAcceptUserKey &&
-              !connected.value && !openRouterAvailability.value.hasUsableKey(apiKey.value) &&
+              !connected.value && !openRouterAvailability.value.hasUsableKey(apiKey.value) && !openAiUsable.value &&
               allMessages.value.length === 0)
 );
 
@@ -413,6 +426,7 @@ onMounted(async () => {
     if (welcomeWorkspaceGeneration !== getWorkspaceGeneration()) return;
     const dismissal = results?.[1];
     welcomeDismissed.value = dismissal?.status === 'fulfilled' && dismissal.value?.value === 'true';
+    openAiUsable.value = results?.[2]?.status === 'fulfilled' && results[2].value === true;
     keyStateReady.value = true;
 });
 
@@ -766,7 +780,7 @@ const compactionModels = useModelStore();
 const historyRegistry = useToolRegistry();
 const chatTools = useChatToolPreferences({ threadId: () => currentThreadId.value, draftId: () => promptOwnerId.value });
 const historyRetrievalAvailable = computed(() => {
-    const id = stripModelVariantSuffix(model.value.replace(/:thinking$/, ''));
+    const id = openRouterCatalogLookupId(model.value);
     const metadata = compactionModels.catalog.value.find((row) => row.id === id || row.canonical_slug === id)
         ?? compactionModels.favoriteModels.value.find((row) => row.id === id || row.canonical_slug === id);
     return metadata?.supported_parameters?.includes('tools') === true && historyRegistry.getEnabledDefinitions({
@@ -1248,7 +1262,7 @@ onBeforeUnmount(() => {
 
 function onSend(payload: ChatInputSendPayload) {
     if (loading.value || retryPending.value || compaction.active.value) return;
-    model.value = appendModelVariant((payload.model || model.value).replace(/:thinking$/, ''), payload.modelVariant ?? 'off');
+    model.value = appendModelVariant(stripLegacyThinkingSuffix(payload.model || model.value), payload.modelVariant ?? 'off');
     const attachments = payload.attachments?.length
         ? payload.attachments
         : payload.images;

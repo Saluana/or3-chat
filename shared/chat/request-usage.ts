@@ -1,4 +1,4 @@
-import { normalizeProviderRequestUsage, type ProviderRequestUsage } from '../openrouter/parseOpenRouterSSE';
+import { normalizeProviderRequestUsage, type ProviderRequestUsage } from '../ai/events';
 import { sha256Hex as digest } from '../runtime-crypto';
 import { readRequestUsage, type RequestUsage, type UsageTotals } from './compaction';
 import { estimateChatRequest, type CountableChatMessage, type ContextEstimate } from './context-budget';

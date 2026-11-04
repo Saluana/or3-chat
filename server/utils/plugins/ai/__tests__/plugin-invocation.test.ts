@@ -322,4 +322,56 @@ describe('plugin AI invocation (4.11)', () => {
             provider.complete({ model: 'm', prompt: 'p' }, { timeoutMs: 100 })
         ).rejects.toThrow(/credential is configured/);
     });
+
+    it('sends each model to its own router with only that router\'s key', async () => {
+        const fetchImpl = vi.fn(async () =>
+            new Response(JSON.stringify({
+                choices: [{ message: { content: 'ok' } }],
+                usage: { prompt_tokens: 100, completion_tokens: 200 },
+            }), { status: 200, headers: { 'content-type': 'application/json' } })
+        );
+        const provider = createOpenRouterPluginProvider({
+            apiKey: 'sk-or-host-key',
+            baseUrl: 'https://openrouter.ai/api/v1',
+            openAi: { apiKey: 'sk-openai-host-key', baseUrl: 'https://gateway.example/v1/' },
+            fetchImpl: fetchImpl as unknown as typeof fetch,
+            prices: {
+                '@openai/gpt-5.4-mini': { promptPerMillion: 1, completionPerMillion: 2 },
+                'openai/gpt-4o-mini': { promptPerMillion: 1, completionPerMillion: 2 },
+            },
+        });
+
+        const direct = await provider.complete(
+            { model: '@openai/gpt-5.4-mini', prompt: 'hi', maxOutputTokens: 64 },
+            { timeoutMs: 500 }
+        );
+        await provider.complete({ model: 'openai/gpt-4o-mini', prompt: 'hi', maxOutputTokens: 64 }, { timeoutMs: 500 });
+
+        expect(direct).toMatchObject({ text: 'ok', model: '@openai/gpt-5.4-mini', completionTokens: 200 });
+        expect(direct.spendUsd).toBeCloseTo(0.0005, 6);
+        const [[openAiUrl, openAiInit], [openRouterUrl, openRouterInit]] =
+            fetchImpl.mock.calls as unknown as [[string, RequestInit], [string, RequestInit]];
+        expect(openAiUrl).toBe('https://gateway.example/v1/chat/completions');
+        expect((openAiInit.headers as Record<string, string>).authorization).toBe('Bearer sk-openai-host-key');
+        const openAiBody = JSON.parse(String(openAiInit.body)) as Record<string, unknown>;
+        expect(openAiBody).toMatchObject({ model: 'gpt-5.4-mini', max_completion_tokens: 64 });
+        expect(openAiBody).not.toHaveProperty('max_tokens');
+        expect(openAiInit.redirect).toBe('error');
+        expect(openRouterUrl).toBe('https://openrouter.ai/api/v1/chat/completions');
+        expect((openRouterInit.headers as Record<string, string>).authorization).toBe('Bearer sk-or-host-key');
+    });
+
+    it('refuses an OpenAI model when only OpenRouter has a key', async () => {
+        const fetchImpl = vi.fn() as unknown as typeof fetch;
+        const provider = createOpenRouterPluginProvider({
+            apiKey: 'sk-or-host-key',
+            baseUrl: 'https://openrouter.ai/api/v1',
+            fetchImpl,
+            prices: { '@openai/gpt-5.4-mini': { promptPerMillion: 1, completionPerMillion: 2 } },
+        });
+        await expect(
+            provider.complete({ model: '@openai/gpt-5.4-mini', prompt: 'p' }, { timeoutMs: 100 })
+        ).rejects.toThrow(/credential is configured/);
+        expect(fetchImpl).not.toHaveBeenCalled();
+    });
 });

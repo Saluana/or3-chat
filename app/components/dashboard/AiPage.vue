@@ -231,7 +231,9 @@
             <AiSaveStatus id="ai-tools-status" :status="toolsStatus" />
         </section>
 
-        <TitleModelSetting />
+        <OpenAiConnectionSetting />
+
+        <FastModelSetting />
 
         <!-- Native generations capture this workspace preference at admission. -->
         <section
@@ -316,7 +318,8 @@ import { sanitizeModelVariant } from '~~/shared/openrouter/model-variants';impor
 import { useModelSearch } from '~/core/search/useModelSearch';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import AiSaveStatus from './AiSaveStatus.vue';
-import TitleModelSetting from './TitleModelSetting.vue';
+import FastModelSetting from './FastModelSetting.vue';
+import OpenAiConnectionSetting from './OpenAiConnectionSetting.vue';
 import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 
 const liveStatus = ref<HTMLElement | null>(null);

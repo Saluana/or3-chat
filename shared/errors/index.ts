@@ -56,6 +56,8 @@ export interface ErrorContext {
     code?: ErrorCode;
     source?: ErrorSource;
     credentialSource?: CredentialSource;
+    /** Set for a non-OpenRouter chat router, so credential guidance names the right account. */
+    router?: 'openai';
     /** App-owned operation fallback, never an exception/response message. */
     fallbackMessage?: string;
     operation?: 'login';
@@ -65,6 +67,7 @@ export interface ErrorMetadata {
     status?: number;
     source: ErrorSource;
     credentialSource?: CredentialSource;
+    router?: 'openai';
     providerCode?: string | number;
     retryAfterMs?: number;
     retryable: boolean;
@@ -181,6 +184,7 @@ export function normalizeError(
     )
         ? (credentialValue as CredentialSource)
         : undefined;
+    const router = (context.router ?? structured.router ?? e.router) === 'openai' ? 'openai' as const : undefined;
     let code: ErrorCode = knownCode(structured.code)
         ? structured.code
         : knownCode(e.code)
@@ -312,6 +316,7 @@ export function normalizeError(
         status,
         source,
         credentialSource,
+        ...(router ? { router } : {}),
         providerCode,
         retryAfterMs:
             delay !== undefined && delay >= 0
@@ -459,7 +464,13 @@ export function presentError(
     const e = normalizeError(input, context);
     let [title, message] = copy[e.code];
     let action: RecoveryAction | undefined;
-    if (e.code === 'ERR_AUTH') {
+    if (e.router === 'openai' && e.source === 'provider' && (e.code === 'ERR_AUTH' || e.code === 'ERR_CREDITS')) {
+        // OpenAI keys are managed in AI settings; OpenRouter's key and credit actions do not apply.
+        title = e.code === 'ERR_AUTH' ? 'OpenAI key needed' : 'OpenAI quota exhausted';
+        message = e.code === 'ERR_CREDITS' ? 'The OpenAI account has no remaining quota. Check its billing, then try again.'
+            : e.credentialSource === 'personal' ? 'Your OpenAI API key was rejected. Update it in AI settings, then try again.'
+            : 'No working OpenAI key is available. Add your key in AI settings, or contact your administrator.';
+    } else if (e.code === 'ERR_AUTH') {
         if (e.source === 'provider') {
             if (e.credentialSource === 'server') {
                 title = 'Server AI connection needs attention';

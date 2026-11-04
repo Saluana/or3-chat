@@ -294,6 +294,8 @@ is selected.
 | `OR3_OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter-compatible API base URL. |
 | `OR3_OPENROUTER_ALLOW_USER_OVERRIDE` | `true` | Allow users to provide their own keys. |
 | `OR3_OPENROUTER_REQUIRE_USER_KEY` | `false` | Require a user-provided key. |
+| `OR3_OPENAI_API_KEY` | unset | Instance OpenAI key for direct `@openai/…` models in Cloud. A user's saved OpenAI key takes precedence. |
+| `OR3_OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI Chat Completions base URL. |
 | `OR3_LIMITS_ENABLED` | `true` | Enable core rate limits and quotas. |
 | `OR3_REQUESTS_PER_MINUTE` | `20` | Per-user LLM request limit. |
 | `OR3_MAX_CONVERSATIONS` | `0` | Conversation cap; `0` means unlimited. |

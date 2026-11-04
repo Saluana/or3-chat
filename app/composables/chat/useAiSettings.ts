@@ -1,4 +1,4 @@
-import { DEFAULT_TITLE_MODEL, TitleModelSchema } from '~~/shared/titles/title';
+import { DEFAULT_FAST_MODEL, FastModelSchema } from '~~/shared/ai/fast-model';
 /**
  * @module composables/chat/useAiSettings
  *
@@ -67,6 +67,7 @@ import {
 // Settings schema
 export interface AiSettingsV1 {
     version: 1;
+    /** The fast model for titles, editor autocomplete and project memory; named for its original use. */
     titleGenerationModel: string;
     masterSystemPrompt: string;
     defaultModelMode: 'lastSelected' | 'fixed';
@@ -95,7 +96,7 @@ export const AI_SETTINGS_STORAGE_KEY = LEGACY_STORAGE_KEY;
 
 export const DEFAULT_AI_SETTINGS: AiSettingsV1 = {
     version: 1,
-    titleGenerationModel: DEFAULT_TITLE_MODEL,
+    titleGenerationModel: DEFAULT_FAST_MODEL,
     masterSystemPrompt: '',
     defaultModelMode: 'lastSelected',
     fixedModelId: null,
@@ -148,7 +149,7 @@ export function sanitizeAiSettings(
 
     return {
         version: 1,
-        titleGenerationModel: TitleModelSchema.safeParse(inObj.titleGenerationModel).data ?? defaults.titleGenerationModel,
+        titleGenerationModel: FastModelSchema.safeParse(inObj.titleGenerationModel).data ?? defaults.titleGenerationModel,
         masterSystemPrompt,
         defaultModelMode,
         fixedModelId: fixedModelId ?? defaults.fixedModelId,

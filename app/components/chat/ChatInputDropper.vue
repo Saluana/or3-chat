@@ -134,7 +134,8 @@
                                         :pane-id="promptOwnerId"
                                         :prompt-selection-revision="promptSelectionRevision"
                                         v-model:model="selectedModel"
-                                        v-model:model-variant="modelVariant"
+                                        :model-variant="modelVariant"
+                                        @update:model-variant="modelVariant = sanitizeModelVariant($event)"
                                         :model-inherited="modelInherited"
                                         :project-model-default="Boolean(attachmentProject)"
                                         @use-default-model="resetModel"
@@ -390,6 +391,8 @@ import { useModelStore } from '~/composables/chat/useModelStore';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
 import { appendModelVariant } from '~~/shared/openrouter/model-variants';
+import { stripLegacyThinkingSuffix } from '~~/shared/openrouter/selection';
+import { isOpenAiModel } from '~~/shared/openai/models';
 import { reportError } from '~/utils/errors';
 import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import {
@@ -915,15 +918,15 @@ const imageSettings = ref<ImageSettings>({
     size: '1024x1024',
 });
 const previewModels = useModelStore();
-const previewModel = computed(() => appendModelVariant(selectedModel.value.replace(/:thinking$/, ''), modelVariant.value));
+const previewModel = computed(() => appendModelVariant(stripLegacyThinkingSuffix(selectedModel.value), modelVariant.value));
 const previewReasoning = computed(() => {
-    const id = selectedModel.value.replace(/:thinking$/, '');
+    const id = stripLegacyThinkingSuffix(selectedModel.value);
     const metadata = previewModels.catalog.value.find((row) => row.id === id || row.canonical_slug === id)
         ?? previewModels.favoriteModels.value.find((row) => row.id === id || row.canonical_slug === id);
     return thinkingEnabled.value && modelSupportsThinking.value ? resolveReasoningConfig({ model: metadata, enabled: true, effort: reasoningEffort.value }) : undefined;
 });
 const contextPreview = useContextPreview({ threadId: () => props.threadId, draftId: promptOwnerId, model: previewModel,
-    enabled: () => Boolean(props.threadId || connected.value || apiKey.value || hasInstanceKey.value || settingsPopoverOpen.value || showModelCatalog.value),
+    enabled: () => Boolean(props.threadId || connected.value || apiKey.value || hasInstanceKey.value || isOpenAiModel(selectedModel.value) || settingsPopoverOpen.value || showModelCatalog.value),
     text: promptText, extraText: () => largeTextBlocks.value.map((block) => block.text).join('\n\n'),
     attachments: () => attachments.value, promptSelection: stagedPromptId,
     revision: () => [props.contextRevision, promptSelectionRevision.value], reasoning: previewReasoning });
@@ -1337,8 +1340,8 @@ const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfi
     ) {
         return { status: 'rejected', reason: 'client_limit' };
     }
-    // Require OpenRouter connection (api key) before sending
-    if (!connected.value && !apiKey.value && !hasInstanceKey.value) {
+    // OpenRouter models need an OpenRouter connection; the server checks OpenAI keys itself.
+    if (!isOpenAiModel(selectedModel.value) && !connected.value && !apiKey.value && !hasInstanceKey.value) {
         if (!allowUserOverride.value) {
             toast.add({
                 title: 'Instance key required',

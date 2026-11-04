@@ -1,10 +1,13 @@
 import { createOpenRouterClient, fetchOpenRouterCatalog } from '~~/shared/openrouter';
 import type { OpenRouterModel } from '~~/shared/openrouter/types';
-import { stripModelVariantSuffix } from '~~/shared/openrouter/model-variants';
+import { openRouterCatalogLookupId } from '~~/shared/openrouter/selection';
 import { admitProviderRequest, ChatContextAdmissionError, type ContextRequestPolicy,
     type CountableChatMessage } from '~~/shared/chat/context-budget';
 import { countTokensApprox } from '~/utils/chat/tokens';
 import { estimateMeasuredChatRequest } from '~~/shared/chat/request-usage';
+import { encodeProviderRequest } from '~~/shared/ai/provider-body';
+import { fetchOpenAiCatalog, isOpenAiModel } from '~~/shared/openai/models';
+import { useRuntimeConfig } from '#imports';
 
 /** The send waits on this lookup; a provider that never answers must not hold it open. */
 const CATALOG_DEADLINE_MS = 15_000;
@@ -33,8 +36,7 @@ export function contextPolicyFromCatalog(body: Record<string, unknown>, catalog:
         : typeof envelope.user_max_context_tokens === 'number' ? envelope.user_max_context_tokens : NaN;
     const requestedCompletion = envelope.requested_completion_tokens === null ? null
         : typeof envelope.requested_completion_tokens === 'number' ? envelope.requested_completion_tokens : NaN;
-    const withoutThinking = selectedModel.endsWith(':thinking') ? selectedModel.slice(0, -':thinking'.length) : selectedModel;
-    const lookupId = stripModelVariantSuffix(withoutThinking);
+    const lookupId = openRouterCatalogLookupId(selectedModel);
     const model = catalog.find((candidate) => candidate.id === lookupId)
         ?? catalog.find((candidate) => candidate.canonical_slug === lookupId);
     if (!model) throw new ChatContextAdmissionError({ ok: false, code: 'model_metadata_unavailable' });
@@ -53,8 +55,9 @@ export async function resolveServerContextPolicy(body: Record<string, unknown>, 
         (body._context as Record<string, unknown>).version !== 1 || typeof body.model !== 'string' || !Array.isArray(body.messages))
         throw new ChatContextAdmissionError({ ok: false, code: 'model_metadata_unavailable' });
     let catalog;
-    try { catalog = await fetchOpenRouterCatalog(createOpenRouterClient({ apiKey, serverURL }), signal,
-        { deadlineMs: CATALOG_DEADLINE_MS }); }
+    // The model's router supplies its own capacity metadata.
+    try { catalog = isOpenAiModel(body.model) ? await fetchOpenAiCatalog(apiKey, useRuntimeConfig().openaiBaseUrl, signal)
+        : await fetchOpenRouterCatalog(createOpenRouterClient({ apiKey, serverURL }), signal, { deadlineMs: CATALOG_DEADLINE_MS }); }
     catch (error) {
         if (signal?.aborted) throw error;
         throw new OpenRouterCatalogUnavailableError(error);
@@ -63,15 +66,21 @@ export async function resolveServerContextPolicy(body: Record<string, unknown>, 
 }
 
 export async function admitServerProviderBody(body: Record<string, unknown>, policy: ContextRequestPolicy | undefined,
-    signal?: AbortSignal): Promise<Record<string, unknown>> {
-    if (!policy) return body;
-    return admitProviderRequest(body as Record<string, unknown> & { messages: CountableChatMessage[];
+    signal?: AbortSignal): Promise<{ hostBody: Record<string, unknown>; providerBody: Record<string, unknown> }> {
+    // Keep the host envelope intact for authorization and persisted jobs, but
+    // admit the exact provider-visible model and search-tool configuration.
+    const providerBody = encodeProviderRequest({ ...body }) as Record<string, unknown> & { messages: CountableChatMessage[];
+        tools?: unknown[]; max_tokens?: number };
+    if (!policy) return { hostBody: body, providerBody };
+    const admitted = await admitProviderRequest(providerBody as Record<string, unknown> & { messages: CountableChatMessage[];
         tools?: unknown[]; max_tokens?: number }, policy, countTokensApprox, signal, async (request) => {
             const { messages, ...configuration } = request;
             return estimateMeasuredChatRequest({ model: typeof request.model === 'string' ? request.model : '',
                 messages, tools: request.tools, modalities: Array.isArray(request.modalities) ? request.modalities as string[] : undefined,
                 configuration, usage: policy.measuredUsage, countText: countTokensApprox });
         });
+    body.max_tokens = admitted.max_tokens;
+    return { hostBody: body, providerBody: admitted };
 }
 
 export function contextAdmissionResponse(error: ChatContextAdmissionError) {

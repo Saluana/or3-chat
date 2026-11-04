@@ -1,4 +1,3 @@
-import { resolveOpenRouterCredential } from '../../secrets/openrouter';
 import { z } from 'zod';
 import {
     createError,
@@ -13,6 +12,10 @@ import { requireCan } from '../../auth/can';
 import { checkAndRecordLlmRequest } from '../../utils/llm/rate-limiter';
 import { getRateLimitProvider } from '../../utils/rate-limit/store';
 import { readLimitedJsonBody } from '../../utils/security/limited-json-body';
+import { resolveChatCredential } from '../../utils/ai/chat-router';
+import { readFastModel } from '../../utils/ai/fast-model';
+import { isOpenAiModel } from '~~/shared/openai/models';
+import { FastModelSchema } from '~~/shared/ai/fast-model';
 import {
     MemoryBatchCooldownError,
     MEMORY_BATCH_COOLDOWN_MS,
@@ -37,20 +40,26 @@ const BodySchema = z.union([
     z.object({
         workspaceId: z.string().min(1).max(200),
         state: MemoryClassificationStateSchema,
+        model: FastModelSchema.optional(),
     }).strict(),
     z.object({
         workspaceId: z.string().min(1).max(200),
         capture: AutomaticMemoryStateSchema,
+        model: FastModelSchema.optional(),
     }).strict(),
 ]);
 
-/** Auxiliary memory inference only: fixed question/model, no writes or arbitrary inference. */
+/**
+ * Auxiliary memory inference only: fixed questions on the fast model's router, no writes or arbitrary inference.
+ * Cloud uses the workspace fast model. A local install sends its own OpenAI fast model, which runs here so it
+ * reaches the configured OpenAI endpoint, paid only with that device's key.
+ */
 export default defineEventHandler(async (event) => {
     setResponseHeader(event, 'Cache-Control', 'no-store');
-    if (!isSsrAuthEnabled(event)) throw createError({ statusCode: 404 });
+    const cloud = isSsrAuthEnabled(event);
     requireCloudMutation(event);
     const session = await resolveSessionContext(event);
-    requireCan(
+    if (cloud) requireCan(
         session,
         'workspace.write',
         session.workspace?.id
@@ -60,31 +69,38 @@ export default defineEventHandler(async (event) => {
     // Both inference states share a 240 KiB JSON bound; allow room for the
     // workspace envelope while bounding the transport before JSON parsing.
     const body = BodySchema.safeParse(await readLimitedJsonBody(event, 256 * 1024));
-    if (!body.success)
+    // Cloud never takes a caller's model; local installs infer OpenRouter in the browser.
+    if (!body.success || (cloud ? body.data.model !== undefined : !isOpenAiModel(body.data.model)))
         throw createError({
             statusCode: 400,
             statusMessage: 'Invalid memory classification input.',
         });
     if (
-        !session.authenticated ||
-        !session.user?.id ||
-        body.data.workspaceId !== session.workspace?.id
+        cloud && (
+            !session.authenticated ||
+            !session.user?.id ||
+            body.data.workspaceId !== session.workspace?.id)
     )
         throw createError({ statusCode: 403 });
+    const caller = session.user?.id ?? 'local:' + event.node.req.socket?.remoteAddress;
     const config = useRuntimeConfig(event);
-    const { apiKey: key } = await resolveOpenRouterCredential(event, session);
-    if (!key)
+    // The fast model chooses the router; its key pays for both stages.
+    const fastModel = cloud ? await readFastModel(event, body.data.workspaceId) : body.data.model!;
+    const openAi = isOpenAiModel(fastModel);
+    const { apiKey: key, source } = await resolveChatCredential(event, fastModel, session);
+    if (!key || (!cloud && source !== 'personal'))
         throw createError({
             statusCode: 400,
-            statusMessage: 'OpenRouter credentials unavailable.',
+            statusMessage: `${openAi ? 'OpenAI' : 'OpenRouter'} credentials unavailable.`,
         });
+    const inference = { fastModel, apiKey: key, baseUrl: openAi ? config.openaiBaseUrl : config.openrouterBaseUrl };
     // The batch identity is derived here, never trusted from the client. A
     // replay passes the same auth, key and workspace checks as a new request but
     // spends neither the model nor the rate budget.
     const input = body.data;
     const batchKey =
         'capture' in input
-            ? session.user.id + ':' + (await automaticMemoryBatchId(input.workspaceId, input.capture))
+            ? caller + ':' + (await automaticMemoryBatchId(input.workspaceId, input.capture, fastModel))
             : undefined;
     const unavailable = (error: unknown): never => {
         const retryAfterMs =
@@ -110,7 +126,7 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 429 });
     };
     if (limits.enabled !== false) {
-        const rateKey = 'memory:user:' + session.user.id;
+        const rateKey = 'memory:user:' + caller;
         if (limits.requestsPerMinute > 0)
             limited(checkAndRecordLlmRequest(rateKey, {
                 windowMs: 60000,
@@ -123,15 +139,13 @@ export default defineEventHandler(async (event) => {
                 maxRequests: limits.maxMessagesPerDay,
             }));
     }
-    const baseUrl = config.openrouterBaseUrl;
     if ('capture' in input) {
         const { capture } = input;
         return await admitMemoryBatch(batchKey!, () =>
             analyzeAutomaticMemory(
                 capture,
-                key,
+                inference,
                 AbortSignal.timeout(CAPTURE_FLIGHT_MS),
-                baseUrl,
             ),
         ).catch(unavailable);
     }
@@ -142,9 +156,8 @@ export default defineEventHandler(async (event) => {
     try {
         return await classifyMemoryReference(
             input.state,
-            key,
+            inference,
             controller.signal,
-            baseUrl,
         );
     } finally {
         event.node.req.off('aborted', abort);

@@ -2,6 +2,22 @@
 
 Import internal chat contracts from `~/utils/chat/types`. They describe UI messages and request state; [provider messages](/documentation/auth/openrouter-build) and [database rows](/documentation/types/database) have separate contracts.
 
+The shared `AiMessage`, content parts and `ToolCall` have one owner in
+`shared/ai/types.ts`. Existing chat imports continue to re-export those types;
+`ChatMessage` adds UI and persistence metadata.
+
+`AiCompletionRequest` describes the text inputs used by title generation and
+governed plugin completions. It carries a router/model reference, messages,
+an optional output limit and explicit reasoning-disable choice; omitting
+that choice leaves the model default. Credentials remain with host-authorized
+I/O. Chat streaming still uses its existing provider-message contract.
+
+The shared `AiStreamRequest` carries a router/model reference and supports the
+existing host message and tool projections. The foreground loop binds a stream
+operation to this request while keeping cancellation and host ownership in the
+operation context. The current chat builder and hooks still use their existing
+OpenRouter-shaped message representation.
+
 ## Messages and content
 
 | Type | Use |
@@ -57,6 +73,10 @@ Portable plugin tool definitions belong to [SDK contracts](/documentation/plugin
 
 ## Stream events
 
-`ORStreamEvent` is re-exported from `~~/shared/openrouter/parseOpenRouterSSE`. Its variants are text, image, reasoning, tool_call, and done. Narrow by `type`; image events can include a final flag and index. The parser reports provider/protocol failures through its error path, not an “error” union member.
+`AiEvent` is owned by `~~/shared/ai/events`; the existing `ORStreamEvent` import
+from `~~/shared/openrouter/parseOpenRouterSSE` remains an alias. Its variants
+are usage, text, image, reasoning, tool_call, and done. Narrow by `type`; image
+events can include a final flag and index. The parser reports provider/protocol
+failures through its error path, not an “error” union member.
 
-The source of truth is `app/utils/chat/types.ts`. Use its actual exported types so additions cause useful TypeScript errors in exhaustive consumers rather than drifting copied declarations.
+Use these exported types so additions cause useful TypeScript errors in exhaustive consumers rather than drifting copied declarations.

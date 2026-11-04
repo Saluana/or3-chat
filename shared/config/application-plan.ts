@@ -258,6 +258,9 @@ export function buildApplicationPlan(input: {
             or3CloudConfig.services.llm?.openRouter?.allowUserOverride ?? true,
         openrouterRequireUserKey:
             or3CloudConfig.services.llm?.openRouter?.requireUserKey ?? false,
+        // Direct OpenAI chat models (`@openai/…`); personal keys use the secret store.
+        openaiApiKey: env.OR3_OPENAI_API_KEY || '',
+        openaiBaseUrl: env.OR3_OPENAI_BASE_URL || 'https://api.openai.com/v1',
         clerkSecretKey: '', // Auto-mapped from NUXT_CLERK_SECRET_KEY
         auth: {
             enabled: effectiveSsrAuthEnabled,
@@ -410,6 +413,10 @@ export function buildApplicationPlan(input: {
                     ? productionJourneyOpenRouterBaseUrl
                     : or3CloudConfig.services.llm?.openRouter?.baseUrl ||
                       'https://openrouter.ai/api/v1',
+            },
+            // Like OpenRouter's flag: only signed-in sessions can use the instance key.
+            openai: {
+                hasInstanceKey: effectiveSsrAuthEnabled && Boolean(env.OR3_OPENAI_API_KEY),
             },
             storage: {
                 enabled: effectiveStorageEnabled,

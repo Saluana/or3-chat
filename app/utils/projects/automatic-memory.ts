@@ -6,6 +6,8 @@ import {
     getUserApiKeyGeneration,
 } from '~/core/auth/useUserApiKey';
 import { captureProjectOperation } from './operation';
+import { resolveFastModel, resolveLocalInference } from '~/utils/fast-model';
+import { isOpenAiModel } from '~~/shared/openai/models';
 import {
     readProjectPolicy,
     resolveChatProject,
@@ -182,7 +184,11 @@ export async function captureAutomaticMemories(
     const key = apiKey.value;
     const keyGeneration = getUserApiKeyGeneration();
     const server = useRuntimeConfig().public.ssrAuthEnabled === true;
-    if (!server && !key) return;
+    // Cloud reads the workspace fast model server-side; local installs infer OpenRouter
+    // here and send OpenAI to the OR3 server, which owns the configured OpenAI endpoint.
+    const local = server ? null : await resolveLocalInference(scope.db);
+    if (!server && !local) return;
+    const fastModel = local?.fastModel ?? await resolveFastModel(scope.db);
     const policy = await readProjectPolicy(scope.db, projectId);
     if (
         policy.settings.excluded_chat_ids.includes(threadId) ||
@@ -293,7 +299,7 @@ export async function captureAutomaticMemories(
     state.messages.sort((a, b) => candidates.indexOf(a) - candidates.indexOf(b));
     const validate = async () => {
         scope.assertCurrent('write');
-        if (apiKey.value !== key || getUserApiKeyGeneration() !== keyGeneration)
+        if (apiKey.value !== key || getUserApiKeyGeneration() !== keyGeneration || (local && !local.current()))
             throw new StaleMemoryError('Credentials changed.');
         const freshPolicy = await readProjectPolicy(scope.db, projectId);
         if (
@@ -323,7 +329,7 @@ export async function captureAutomaticMemories(
     // Admission comes after the snapshot and before any request: a duplicate
     // tab spends nothing, and an interrupted holder leaves the cursor unmoved so
     // the next completed turn forms a superset batch from the same evidence.
-    const release = await claimBatch(await automaticMemoryBatchId(scope.workspaceId, state));
+    const release = await claimBatch(await automaticMemoryBatchId(scope.workspaceId, state, fastModel));
     if (!release) return;
     try {
         await validate();
@@ -333,18 +339,19 @@ export async function captureAutomaticMemories(
         // With no processable fresh user statement the cursor advances without inference.
         if (state.messages.some((message) => message.fresh && message.role === 'user')
             && AutomaticMemoryStateSchema.safeParse(state).success) {
-            if (server) {
+            if (server || isOpenAiModel(local!.fastModel)) {
                 const response = await fetch('/api/openrouter/classify-memory', {
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: {
                         'Content-Type': 'application/json',
                         'x-or3-cloud-intent': 'mutation',
-                        ...(key ? { 'x-or3-openrouter-key': key } : {}),
+                        ...(local ? { 'x-or3-openai-key': local.apiKey } : key ? { 'x-or3-openrouter-key': key } : {}),
                     },
                     body: JSON.stringify({
                         workspaceId: scope.workspaceId,
                         capture: state,
+                        ...(local ? { model: local.fastModel } : {}),
                     }),
                     signal: AbortSignal.any([
                         scope.signal,
@@ -355,13 +362,7 @@ export async function captureAutomaticMemories(
                     throw inferenceHttpError('Automatic memory inference unavailable.', response);
                 result = AutomaticMemoryOutputSchema.parse(await response.json());
             } else
-                result = await analyzeAutomaticMemory(
-                    state,
-                    key!,
-                    scope.signal,
-                    (useRuntimeConfig().public as { openRouter?: { baseUrl?: string } }).openRouter?.baseUrl,
-                    validate,
-                );
+                result = await analyzeAutomaticMemory(state, local!, scope.signal, validate);
         }
         const prepared = await Promise.all(
             result.memories.map(async (candidate) => {

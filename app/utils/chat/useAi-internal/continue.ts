@@ -3,6 +3,11 @@ import { readRequestUsage, type RequestUsage } from '~~/shared/chat/compaction';
 import { resolveThreadProjection } from '~/utils/chat/compaction/history';
 import { ChatContextAdmissionError, contextAdmissionFailureReason, type ContextRequestPolicy } from '~~/shared/chat/context-budget';
 import { BackgroundTrackerConflict } from './background-tracker-conflict';
+import { resolveOpenRouterLegacySelection } from '~~/shared/openrouter/selection';
+import { isOpenAiModel } from '~~/shared/openai/models';
+import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
+import type { OpenRouterModel } from '~~/shared/openrouter/types';
+import { acceptsImageInput } from '~/utils/modelCatalog';
 /**
  * @module app/utils/chat/useAi-internal/continue.ts
  *
@@ -120,8 +125,8 @@ export type ContinueMessageContext = {
     getSystemPromptContent: () => Promise<string | null>;
     useAiSettings: () => { settings: Ref<ChatSettings | undefined> };
     resolveContextPolicy?: (modelId: string, signal: AbortSignal) => Promise<ContextRequestPolicy>;
-    /** False only when catalog metadata says the model cannot read images. */
-    acceptsImageInput?: (modelId: string) => boolean;
+    /** Catalog facts for a selected model; absent metadata keeps the permissive defaults. */
+    catalogModel?: (modelId: string) => Pick<OpenRouterModel, 'architecture' | 'reasoning' | 'supported_parameters'> | undefined;
     resetStream: () => void;
     backgroundStreamingAllowed?: boolean;
     workspaceId?: string;
@@ -227,7 +232,9 @@ export async function continueMessageImpl(
 ): Promise<void> {
     if (ctx.request.phase.value !== 'admitted' || !ctx.threadIdRef.value)
         return;
-    const hasKey = ctx.hasUserKey.value || Boolean(ctx.effectiveApiKey.value) || ctx.hasInstanceKey.value;
+    // OpenAI models need no OpenRouter key; the server checks their own key.
+    const hasKey = isOpenAiModel(modelOverride || ctx.defaultModelId)
+        || ctx.hasUserKey.value || Boolean(ctx.effectiveApiKey.value) || ctx.hasInstanceKey.value;
     if (!hasKey) return;
     // Request scoping: capture ownership before the first await. Every later
     // stage re-verifies it so a thread switch during setup cannot resume the
@@ -396,6 +403,7 @@ export async function continueMessageImpl(
             );
         });
 
+        const selection = resolveOpenRouterLegacySelection({ model: modelOverride || ctx.defaultModelId });
         let orMessages = await buildOpenRouterMessagesForSend({
             signal: continuationAbortController.signal,
             effectiveMessages: sanitizedEffectiveMessages,
@@ -406,7 +414,7 @@ export async function continueMessageImpl(
             fileHashes: [],
             maxImageInputs: 5,
             imageInclusionPolicy: 'all',
-            acceptsImageInput: ctx.acceptsImageInput?.(modelOverride || ctx.defaultModelId) ?? true,
+            acceptsImageInput: acceptsImageInput(ctx.catalogModel?.(selection.requestModel)),
         });
 
         const filteredMessages = await ctx.hooks.applyFilters(
@@ -428,12 +436,14 @@ export async function continueMessageImpl(
 
         const modelCandidate = await ctx.hooks.applyFilters(
             'ai.chat.model:filter:select',
-            modelOverride || ctx.defaultModelId
+            selection.requestModel
         );
         const modelId =
             (typeof modelCandidate === 'string' && modelCandidate) ||
-            modelOverride ||
-            ctx.defaultModelId;
+            selection.requestModel;
+        // As in send, the filtered model's metadata owns the reasoning options.
+        const reasoning = selection.thinking
+            ? resolveReasoningConfig({ model: ctx.catalogModel?.(modelId), enabled: true }) : undefined;
         if (!ownsThread()) return;
         const resolvedPolicy = await ctx.resolveContextPolicy?.(modelId, continuationAbortController.signal);
         if (!resolvedPolicy) throw new ChatContextAdmissionError({ ok: false, code: 'model_metadata_unavailable' });
@@ -463,7 +473,7 @@ export async function continueMessageImpl(
             modalities[0] === 'text' &&
             Boolean(ctx.workspaceId && ctx.userId && ctx.attachBackgroundJob);
         await prepareOpenRouterRequest({ projectContext, model: modelId, orMessages,
-            modalities, contextPolicy, signal: continuationAbortController.signal });
+            modalities, reasoning, contextPolicy, signal: continuationAbortController.signal });
         if (!ownsThread()) return;
 
         const newStreamId = newId();
@@ -590,6 +600,7 @@ export async function continueMessageImpl(
                 model: modelId,
                 orMessages: orMessages as Parameters<typeof startBackgroundStream>[0]['orMessages'],
                 modalities,
+                reasoning,
                 contextPolicy,
                 threadId: originThreadId,
                 messageId: target.id,
@@ -694,6 +705,7 @@ export async function continueMessageImpl(
             model: modelId,
             orMessages: orMessages as Parameters<typeof openRouterStreamWithRetry>[0]['orMessages'],
             modalities,
+            reasoning,
             contextPolicy,
             threadId: ctx.threadIdRef.value,
             messageId: target.id,

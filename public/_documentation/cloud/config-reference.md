@@ -559,6 +559,11 @@ bunx convex env set OR3_ADMIN_JWT_SECRET=<your-admin-jwt-secret>
 - Env: `OR3_OPENROUTER_BASE_URL`
 - Purpose: OpenRouter-compatible base URL for proxy setups.
 
+#### Direct OpenAI (environment only)
+
+- Env: `OR3_OPENAI_API_KEY` (optional instance key, Cloud only) and `OR3_OPENAI_BASE_URL` (default `https://api.openai.com/v1`).
+- Purpose: OpenAI models listed as `@openai/<model>` and billed to the OpenAI key. Users can save their own key under **AI Settings → OpenAI**; it is stored in the account secret vault (Cloud) or this device's local-only KV (local mode) and is preferred over the instance key. See [OpenAI keys](/documentation/auth/reference#direct-openai-keys).
+
 ### `limits`
 
 These are instance-level usage limits (mostly for SSR / hosted deployments).

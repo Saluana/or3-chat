@@ -1,5 +1,6 @@
 import { DELEGATE_CHAT_TIMEOUT_MS, DELEGATE_CHAT_TOOL } from '~~/shared/chat/delegation';
-import { stripModelVariantSuffix, type OpenRouterModelVariant } from '~~/shared/openrouter/model-variants';
+import type { OpenRouterModelVariant } from '~~/shared/openrouter/model-variants';
+import { splitOpenRouterVariant } from '~~/shared/openrouter/selection';
 import { selectDelegationModel, searchDelegationModels } from '~~/shared/openrouter/delegation-model-catalog';
 export { modelSearchDefinition } from '~~/shared/openrouter/delegation-model-catalog';
 import { useModelStore } from '~/composables/chat/useModelStore';
@@ -130,8 +131,7 @@ export async function delegateChat(args: Record<string, unknown>, context: ToolE
     await context.assertToolAuthorized?.();
     if (await resolveChatProject(scope.db, context.threadId) !== projectId ||
         (projectId && await resolveChatProject(scope.db, threadId) !== projectId)) throw new Error('Chat project changed during delegation.');
-    await setKvByName(`chat-model:${threadId}`, JSON.stringify({ model: stripModelVariantSuffix(choice.model),
-        variant: choice.model.slice(stripModelVariantSuffix(choice.model).length + 1) || 'off' }), scope.db,
+    await setKvByName(`chat-model:${threadId}`, JSON.stringify(splitOpenRouterVariant(choice.model)), scope.db,
         { signal: context.abortSignal, isValid: valid });
     await assertTargetAvailable();
     scope.assertCurrent('write');

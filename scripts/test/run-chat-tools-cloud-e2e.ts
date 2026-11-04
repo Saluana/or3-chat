@@ -93,7 +93,7 @@ const provider = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request
         return Response.json({ requests: delegationRequests, restartCount, modelOutcomes: delegationModelOutcomes,
             parentToolResults: delegationParentToolResults, searchedModelIds, childModel, checkpoint });
     }
-    if (draftDelegation && request.method === 'GET' && url.pathname === '/api/v1/models') {
+    if (request.method === 'GET' && url.pathname === '/api/v1/models') {
         const model = { id: 'fixture/model', canonical_slug: 'fixture/model', name: 'Fixture', created: 0,
             context_length: 100_000, default_parameters: null, per_request_limits: null, supported_voices: null,
             links: { details: 'https://example.test/fixture' }, pricing: { prompt: '0', completion: '0' },
@@ -106,7 +106,7 @@ const provider = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request
     }
     if (request.method !== 'POST' || new URL(request.url).pathname !== '/api/v1/chat/completions')
         return Response.json({ data: [] });
-    const body = await request.json() as { model: string; stream?: boolean; messages: { role: string; content: string | { type: string; text?: string }[] }[]; tools: { function: { name: string } }[] };
+    const body = await request.json() as { model: string; stream?: boolean; messages: { role: string; content: string | { type: string; text?: string }[] }[]; tools: { type: string; function: { name: string } }[] };
     if (draftDelegation) {
         if (body.stream === false) return Response.json({ choices: [{ message: { content: 'Research' }, finish_reason: 'stop' }] });
         const content = body.messages.find(message => message.role === 'user')?.content;
@@ -154,6 +154,10 @@ const provider = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request
         return new Response('Unexpected draft fixture request', { status: 400 });
     }
     const [, mode, id] = (body.messages.find(message => message.role === 'user')!.content as string).split(':');
+    if (mode === 'online' && (body.model !== 'fixture/model'
+        || body.tools.filter(tool => tool.type === 'openrouter:web_search').length !== 1)) {
+        return Response.json({ error: { message: 'Search provider projection was not preserved.' } }, { status: 400 });
+    }
     const toolResults = body.messages.filter(message => message.role === 'tool').length;
     captured.push({ mode: mode!, toolResults });
     const needsReplay = (mode === 'duplicate' || mode === 'conflict') && toolResults === 1;

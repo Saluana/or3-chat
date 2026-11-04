@@ -16,6 +16,8 @@ export async function qualifyCompactionHistory(current: string) {
     const parent = child?.parent_thread_id && await db.threads.get(child.parent_thread_id);
     const root = parent && parent.parent_thread_id;
     if (!child || !parent || !root) throw new Error('Two real rolling compactions are required.');
+    await setKvByName(`chat-tools:${current}`, JSON.stringify({ enabled: true,
+        tools: { get_message: true, search_parent: true } }), db);
     const call = async (name: string, args: Record<string, unknown>, signal = new AbortController().signal) => {
         const result = await registry.executeTool(name, JSON.stringify(args), { subject: 'disposable-qualification',
             workspaceId: getActiveWorkspaceId() ?? 'local', threadId: current, messageId: null,

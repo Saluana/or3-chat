@@ -1,6 +1,8 @@
 import { readPackageManifest } from '../../../admin/plugins/package-operation-support';
 import { evaluateReviewedPluginGrant } from '~~/shared/plugins/grant-review';
 import { resolveOpenRouterCredential } from '../../../secrets/openrouter';
+import { resolveOpenAiCredential } from '../../../secrets/openai';
+import { isOpenAiModel } from '~~/shared/openai/models';
 /**
  * Authenticated capability bridge for portable plugins.
  *
@@ -536,9 +538,13 @@ async function buildCapabilityMethods(input: {
     const aiGrant = trusted ? 'ai.provider' : 'network.http';
     const mayComplete = input.method === PLUGIN_AI_COMPLETE_METHOD
         && evaluateReviewedPluginGrant(record.grants, aiGrant).allowed;
-    const apiKey = mayComplete ? (await resolveOpenRouterCredential(input.event)).apiKey : undefined;
+    // The OpenAI router lends its key only when the operator's allowlist names an OpenAI model.
+    const allowedModels = resolveAllowedModels(config);
+    const openRouterKey = mayComplete ? (await resolveOpenRouterCredential(input.event)).apiKey : undefined;
+    const openAiKey = mayComplete && allowedModels.some(isOpenAiModel)
+        ? (await resolveOpenAiCredential(input.event)).apiKey : undefined;
     let aiComplete: HostRpcMethodSpec;
-    if (!apiKey) {
+    if (!openRouterKey && !openAiKey) {
         aiComplete = {
             method: PLUGIN_AI_COMPLETE_METHOD,
             grant: 'network.http',
@@ -570,14 +576,15 @@ async function buildCapabilityMethods(input: {
         } else {
             const governed = createPluginAiCompleteMethod({
                 provider: createOpenRouterPluginProvider({
-                    apiKey,
+                    apiKey: openRouterKey,
                     baseUrl:
                         config.openrouterBaseUrl ||
                         'https://openrouter.ai/api/v1',
+                    openAi: { apiKey: openAiKey, baseUrl: config.openaiBaseUrl },
                     prices: resolveHostModelPrices(config),
                 }),
                 prices: resolveHostModelPrices(config),
-                allowedModels: resolveAllowedModels(config),
+                allowedModels,
                 initialSpendUsd: budget.budget.spendUsd,
                 reserveSpend: async ({ amountUsd }) => {
                     const result = await reservePersistentPluginAiSpend({

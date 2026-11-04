@@ -3,6 +3,8 @@ import { nextTick, onMounted, onBeforeUnmount, ref } from 'vue';
 import { liveQuery, type Subscription } from 'dexie';
 import { useRoute } from '#imports';
 import ChatContainer from '~/components/chat/ChatContainer.vue';
+import ChatSettingsPopover from '~/components/chat/ChatSettingsPopover.vue';
+import ModelVariantSelect from '~/components/chat/ModelVariantSelect.vue';
 import AiPage from '~/components/dashboard/AiPage.vue';
 import { getKvRecordByName, setKvByName } from '~/db/kv';
 import { getDb, setActiveWorkspaceDb, type Or3DB } from '~/db/client';
@@ -11,6 +13,7 @@ import { ensureThreadHistoryLoaded } from '~/utils/chat/history';
 import { persistUserApiKey } from '~/core/auth/useUserApiKey';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
+import { useHooks } from '~/core/hooks/useHooks';
 import type { ChatMessage } from '~/utils/chat/types';
 import type { ToolCallInfo } from '~/utils/chat/uiMessages';
 import { parseToolResultArtifact, readToolResultStorage } from '~~/shared/chat/tool-result-artifact';
@@ -20,6 +23,13 @@ const showAiDefaults = ref(false);
 const ready = ref(false), threadId = ref(''), history = ref<ChatMessage[]>([]);
 const navigationPending = ref(false);
 const snapshot = ref('{}'), inspector = ref('{}'), selectedId = ref('');
+const adapterConformance = ref('{}');
+const fixtureRouterOption = ref('fixture:standard');
+const fixtureRouterOptions = [
+    { value: 'fixture:standard', label: 'Fixture standard', description: 'Default fixture routing', kind: 'default' },
+    { value: 'fixture:fast', label: 'Fixture fast', description: 'Fixture fast routing', kind: 'routing' },
+] as const;
+const hookTrace = ref<string[]>([]);
 const calls = ref<ToolCallInfo[]>([]);
 const handles: { dispose(): unknown }[] = [];
 let subscription: Subscription | undefined;
@@ -138,6 +148,24 @@ onMounted(async () => {
         top_provider: { max_completion_tokens: 65536 }, supported_parameters: ['tools'],
         architecture: { input_modalities: ['text'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' },
     });
+    if (scenario === 'thinking-collision') {
+        const metadata = { context_length: 1000000, top_provider: { max_completion_tokens: 65536 },
+            supported_parameters: ['tools', 'reasoning'], architecture: { input_modalities: ['text'], output_modalities: ['text'] },
+            pricing: { prompt: '0', completion: '0' } };
+        await useModelStore().addFavoriteModel({ ...metadata, id: 'fixture/collision', name: 'Collision base',
+            reasoning: { supported_efforts: ['high'] } });
+        await useModelStore().addFavoriteModel({ ...metadata, id: 'fixture/collision:thinking', name: 'Collision catalog model',
+            reasoning: { supported_efforts: ['low'] } });
+        localStorage.setItem('last_selected_model', 'fixture/collision:thinking');
+    }
+    if (scenario === 'free-identity') {
+        const metadata = { context_length: 1000000, top_provider: { max_completion_tokens: 65536 },
+            supported_parameters: ['tools'], architecture: { input_modalities: ['text'], output_modalities: ['text'] },
+            pricing: { prompt: '0', completion: '0' } };
+        await useModelStore().addFavoriteModel({ ...metadata, id: 'fixture/identity', name: 'Paid identity' });
+        await useModelStore().addFavoriteModel({ ...metadata, id: 'fixture/identity:free', name: 'Free identity' });
+        localStorage.setItem('last_selected_model', 'fixture/identity:free');
+    }
     const key = 'or3:e2e:chat-tools-thread';
     originThread = localStorage.getItem(key) ?? '';
     if (!originThread) {
@@ -152,6 +180,24 @@ onMounted(async () => {
     otherThread = (await createThread({ title: 'Other conversation' })).id;
     threadId.value = originThread;
     await ensureThreadHistoryLoaded(threadId, ref(null), history);
+    if (scenario === 'hook-order') {
+        const hooks = useHooks();
+        for (const name of ['ui.chat.message:filter:outgoing', 'ai.chat.model:filter:select',
+            'ai.chat.messages:filter:input', 'ai.chat.send:filter:prepare', 'ai.chat.messages:filter:before_send'] as const) {
+            const callback = (value: any) => { hookTrace.value.push(name); return value; };
+            hooks.addFilter(name, callback);
+            handles.push({ dispose: () => hooks.removeFilter(name, callback) });
+        }
+        const before = async () => { hookTrace.value.push(`before:${await originDb.messages.where('thread_id').equals(originThread).count()}`); };
+        const complete = () => { hookTrace.value.push('complete'); };
+        const after = () => { hookTrace.value.push('after'); };
+        hooks.addAction('ai.chat.send:action:before', before);
+        hooks.addAction('ai.chat.stream:action:complete', complete);
+        hooks.addAction('ai.chat.send:action:after', after);
+        handles.push({ dispose: () => hooks.removeAction('ai.chat.send:action:before', before) },
+            { dispose: () => hooks.removeAction('ai.chat.stream:action:complete', complete) },
+            { dispose: () => hooks.removeAction('ai.chat.send:action:after', after) });
+    }
     if (scenario === 'persistence-failure') {
         const failWrite = (_key: unknown, row: { role: string }) => {
             if (row.role === 'tool') throw new Error('Fixture tool-result database write failed');
@@ -172,6 +218,10 @@ onMounted(async () => {
         snapshot.value = JSON.stringify({ threadId: originThread, executions, results, calls: calls.value, foreignResults });
         updateInspector();
     });
+    if (scenario === 'adapter-conformance') {
+        const { exerciseAdapterConformance } = await import('./ai-adapter-conformance');
+        adapterConformance.value = JSON.stringify(await exerciseAdapterConformance(originDb, originThread));
+    }
     ready.value = true;
 });
 function updateInspector() {
@@ -211,6 +261,17 @@ onBeforeUnmount(() => { subscription?.unsubscribe(); handles.forEach(handle => h
         </nav>
         <AiPage v-if="ready && showAiDefaults" class="overflow-auto" />
         <ChatContainer v-else-if="ready" :thread-id="threadId || undefined" :message-history="history" pane-id="chat-tools-journey" class="flex-1 min-h-0" />
+        <div v-if="ready && scenario === 'adapter-conformance'" hidden>
+            <div data-empty-router-selector><ModelVariantSelect :options="[]" aria-label="Unavailable router options" /></div>
+            <div data-empty-router-settings><ChatSettingsPopover :variant-options="[]" /></div>
+        </div>
+        <div v-if="ready && scenario === 'custom-router-options'" data-custom-router-options>
+            <div data-custom-router-selector><ModelVariantSelect v-model="fixtureRouterOption" :options="fixtureRouterOptions" aria-label="Fixture router options" /></div>
+            <div data-custom-router-settings><ChatSettingsPopover v-model:model-variant="fixtureRouterOption" :variant-options="fixtureRouterOptions" /></div>
+            <output data-custom-router-selection>{{ fixtureRouterOption }}</output>
+        </div>
         <output data-fixture-snapshot hidden>{{ snapshot }}</output>
+        <output data-adapter-conformance hidden>{{ adapterConformance }}</output>
+        <output data-hook-trace hidden>{{ JSON.stringify(hookTrace) }}</output>
     </main>
 </template>

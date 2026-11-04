@@ -77,7 +77,7 @@
                     "category": "Development",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Find feature owners, extension registries, and lifecycle rules without a copied API catalog."
+                    "summary": "Find feature owners, including AI runtime and chat lifecycle boundaries, extension registries, and lifecycle rules without a copied API catalog."
                 }
             ]
         },
@@ -347,7 +347,7 @@
                     "category": "Developer reference",
                     "categoryOrder": 1,
                     "order": 0,
-                    "summary": "Component setup, persistent key lifecycle, PKCE callback, and one-shot exchange contracts."
+                    "summary": "Component setup, host-owned credentials, persistent key lifecycle, PKCE callback, and one-shot exchange contracts."
                 },
                 {
                     "name": "models-service.md",
@@ -356,7 +356,7 @@
                     "category": "Developer reference",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Fetch and filter metadata, defer disconnected catalog loading, and understand workspace caches and pricing."
+                    "summary": "Fetch and filter metadata, understand OpenRouter selection and catalog ownership, defer disconnected loading, and preserve workspace cache provenance and pricing."
                 },
                 {
                     "name": "openrouter-build.md",
@@ -365,7 +365,7 @@
                     "category": "Developer reference",
                     "categoryOrder": 1,
                     "order": 2,
-                    "summary": "Translate internal content, preserve valid tool calls, omit empty call arrays, select images, hydrate files, and handle attachment failures."
+                    "summary": "Translate shared message content into the compatible OpenRouter hook format, preserve tool calls, select images, hydrate files, and handle attachment failures."
                 }
             ]
         },
@@ -416,7 +416,7 @@
                     "category": "Source integration",
                     "categoryOrder": 1,
                     "order": 2,
-                    "summary": "Understand foreground SSE, cancellation, background execution, provider routing, and connectivity-safe server-route discovery and fallback."
+                    "summary": "Understand OpenRouter adapter decoding, complete-body admission, foreground SSE, cancellation, host job transport, and server-route fallback."
                 },
                 {
                     "name": "file-handling.md",
@@ -467,7 +467,7 @@
                     "category": "Reference",
                     "categoryOrder": 1,
                     "order": 0,
-                    "summary": "Internal content, durable send results, web search compatibility, tools with chat preference authorization and KV transaction scope, and stream events."
+                    "summary": "Shared message and event types, compatible chat imports, durable send results, web search, and tools with chat preference authorization."
                 },
                 {
                     "name": "database.md",

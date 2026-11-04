@@ -34,6 +34,8 @@ export interface ProviderInfo {
  */
 const PROVIDER_REGISTRY: Record<string, ProviderInfo> = {
     openai: { slug: 'openai', name: 'OpenAI', icon: 'openai', color: null },
+    // Direct OpenAI models billed to the configured OpenAI key, not OpenRouter.
+    '@openai': { slug: '@openai', name: 'OpenAI (your key)', icon: 'openai', color: null },
     anthropic: {
         slug: 'anthropic',
         name: 'Anthropic',

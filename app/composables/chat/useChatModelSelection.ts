@@ -31,18 +31,13 @@ import {
     DEFAULT_MODEL_VARIANT,
     appendModelVariant,
     sanitizeModelVariant,
-    stripModelVariantSuffix,
     type OpenRouterModelVariant,
 } from '~~/shared/openrouter/model-variants';
 
+import { splitOpenRouterVariant, stripLegacyThinkingSuffix as stripThinkingSuffix } from '~~/shared/openrouter/selection';
+
 const DEFAULT_MODEL = '~openai/gpt-luna-latest';
 const LAST_MODEL_KEY = 'last_selected_model';
-
-function stripThinkingSuffix(modelId: string): string {
-    return modelId.endsWith(':thinking')
-        ? modelId.slice(0, -':thinking'.length)
-        : modelId;
-}
 
 export function useChatModelSelection(options: {
     threadId: () => string | undefined;
@@ -160,9 +155,9 @@ export function useChatModelSelection(options: {
                     return;
                 }
                 if (!preference.row && !preference.revision && typeof delegatedModel === 'string' && delegatedModel.trim() && delegatedModel.length <= 200) {
-                    const base = stripModelVariantSuffix(delegatedModel);
+                    const selection = splitOpenRouterVariant(delegatedModel);
                     modelInherited.value = false;
-                    applySelection(base, sanitizeModelVariant(delegatedModel.slice(base.length + 1)));
+                    applySelection(selection.model, selection.variant);
                     return;
                 }
                 modelInherited.value = true;
@@ -208,8 +203,8 @@ export function useChatModelSelection(options: {
         selectionRevision++;
         modelInherited.value = false;
         stopPolicySubscription();
-        const base = stripModelVariantSuffix(model);
-        applySelection(base, sanitizeModelVariant(model.slice(base.length + 1)));
+        const selection = splitOpenRouterVariant(model);
+        applySelection(selection.model, selection.variant);
     }, { immediate: true, flush: 'sync' });
     let disposed = false;
     watch(() => options.shouldFetchCatalog?.(), (enabled) => {
