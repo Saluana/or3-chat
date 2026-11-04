@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "99d7987b8567d0246b3f8bbf70939a5af36463772c8a15303291d9a14ccc7774",
+      "apiSha256": "ea95fd42474cf08c2934237120b5196f00ab20d14d912fa04a8893f5c006fcf9",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2935,7 +2935,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 94,
+              "line": 95,
               "syntaxKind": "VariableDeclaration",
               "text": "AI_SETTINGS_STORAGE_KEY = LEGACY_STORAGE_KEY"
             }
@@ -2951,7 +2951,7 @@
               "source": "app/composables/chat/useAiSettings.ts",
               "line": 68,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface AiSettingsV1 {\n    version: 1;\n    titleGenerationModel: string;\n    masterSystemPrompt: string;\n    defaultModelMode: 'lastSelected' | 'fixed';\n    fixedModelId: string | null;\n    defaultModelVariant: OpenRouterModelVariant;\n    /** Null means the full advertised model capacity; values remain independent of model selection. */\n    maxContextTokens: number | null;\n    defaultToolsEnabled: boolean;\n    autoCompactContext: boolean;\n    /** Estimated context usage that triggers automatic compaction, in 10% steps. */\n    autoCompactThresholdPercent: number;\n}"
+              "text": "export interface AiSettingsV1 {\n    version: 1;\n    /** The fast model for titles, editor autocomplete and project memory; named for its original use. */\n    titleGenerationModel: string;\n    masterSystemPrompt: string;\n    defaultModelMode: 'lastSelected' | 'fixed';\n    fixedModelId: string | null;\n    defaultModelVariant: OpenRouterModelVariant;\n    /** Null means the full advertised model capacity; values remain independent of model selection. */\n    maxContextTokens: number | null;\n    defaultToolsEnabled: boolean;\n    autoCompactContext: boolean;\n    /** Estimated context usage that triggers automatic compaction, in 10% steps. */\n    autoCompactThresholdPercent: number;\n}"
             }
           ]
         },
@@ -3003,7 +3003,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 84,
+              "line": 85,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface CapturedContextPreference {\n    readonly db: Or3DB;\n    readonly workspaceGeneration: number;\n    readonly maxContextTokens: number | null;\n}"
             }
@@ -3277,9 +3277,9 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 96,
+              "line": 97,
               "syntaxKind": "VariableDeclaration",
-              "text": "DEFAULT_AI_SETTINGS: AiSettingsV1 = {\n    version: 1,\n    titleGenerationModel: DEFAULT_TITLE_MODEL,\n    masterSystemPrompt: '',\n    defaultModelMode: 'lastSelected',\n    fixedModelId: null,\n    defaultModelVariant: DEFAULT_MODEL_VARIANT,\n    maxContextTokens: null,\n    defaultToolsEnabled: false,\n    autoCompactContext: false,\n    autoCompactThresholdPercent: 80,\n}"
+              "text": "DEFAULT_AI_SETTINGS: AiSettingsV1 = {\n    version: 1,\n    titleGenerationModel: DEFAULT_FAST_MODEL,\n    masterSystemPrompt: '',\n    defaultModelMode: 'lastSelected',\n    fixedModelId: null,\n    defaultModelVariant: DEFAULT_MODEL_VARIANT,\n    maxContextTokens: null,\n    defaultToolsEnabled: false,\n    autoCompactContext: false,\n    autoCompactThresholdPercent: 80,\n}"
             }
           ]
         },
@@ -4141,7 +4141,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 92,
+              "line": 93,
               "syntaxKind": "VariableDeclaration",
               "text": "LEGACY_STORAGE_KEY = 'or3.ai.settings.v1'"
             }
@@ -5735,7 +5735,7 @@
               "resolvedReturnType": "AiSettingsV1",
               "declaration": {
                 "source": "app/composables/chat/useAiSettings.ts",
-                "line": 133,
+                "line": 134,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function sanitizeAiSettings(\n    input: unknown,\n    defaults: AiSettingsV1 = DEFAULT_AI_SETTINGS\n): AiSettingsV1;"
               }
@@ -5744,7 +5744,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 133,
+              "line": 134,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function sanitizeAiSettings(\n    input: unknown,\n    defaults: AiSettingsV1 = DEFAULT_AI_SETTINGS\n): AiSettingsV1;"
             }
@@ -6683,7 +6683,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAiSettings.ts",
-                "line": 296,
+                "line": 297,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAiSettings();"
               }
@@ -6692,7 +6692,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 296,
+              "line": 297,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAiSettings();"
             }
@@ -6735,7 +6735,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAi.ts",
-                "line": 246,
+                "line": 75,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[]; toolDraftId?: () => string | undefined } = {}\n);"
               }
@@ -6744,7 +6744,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAi.ts",
-              "line": 246,
+              "line": 75,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[]; toolDraftId?: () => string | undefined } = {}\n);"
             }
@@ -12011,7 +12011,7 @@
     },
     {
       "source": "app/utils/chat/tools-public.ts",
-      "apiSha256": "ff4cbaa6171e4897ba5fba5e5113a74e9d9550d35a4fe0639013f7da27e18176",
+      "apiSha256": "3efe2f03fd11739ea9bf6cd6b6b8f00d6a8edff179cfe1866daa00a680a3bdfa",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tools-public"
@@ -12083,10 +12083,10 @@
           "signatures": [],
           "declarations": [
             {
-              "source": "app/utils/chat/types.ts",
-              "line": 129,
+              "source": "shared/ai/types.ts",
+              "line": 16,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface ToolCall {\n    id: string;\n    type: 'function';\n    function: {\n        name: string;\n        arguments: string; // JSON string, parsed by consumer\n    };\n}"
+              "text": "export interface ToolCall {\n    id: string;\n    type: 'function';\n    function: { name: string; arguments: string };\n}"
             }
           ]
         },
@@ -12098,7 +12098,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 174,
+              "line": 145,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolDefinition {\n    type: 'function';\n    function: {\n        name: string;\n        description: string;\n        parameters: import('~~/shared/chat/tool-schema').JsonSchemaObject;\n    };\n    ui?: {\n        label?: string;\n        icon?: string;\n        descriptionHint?: string;\n        defaultEnabled?: boolean;\n        category?: string;\n    };\n    runtime?: ToolRuntime;\n}"
             }
@@ -12112,7 +12112,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 141,
+              "line": 112,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolExecutionContext {\n    /** Recheck captured registry/project authority inside a host mutation transaction. */\n    assertToolAuthorized?: () => Promise<void>;\n    projectId?: string | null;\n    subject: string | null;\n    workspaceId: string | null;\n    threadId: string | null;\n    messageId: string | null;\n    callId: string;\n    requestId: string;\n    abortSignal: AbortSignal;\n    /** Model settings captured from the request that admitted this tool call. */\n    parentModel?: { model: string; thinking: boolean; reasoningEffort?: string | null };\n}"
             }
@@ -12140,7 +12140,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 138,
+              "line": 109,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolRuntime = 'hybrid' | 'client' | 'server';"
             }
