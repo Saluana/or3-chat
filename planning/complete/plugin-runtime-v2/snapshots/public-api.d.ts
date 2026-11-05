@@ -690,7 +690,7 @@ export declare function useDashboardNavigation(options?: UseDashboardNavigationO
  */
 import type { Post } from '~/db';
 import { type HistoryActionRegistryItem } from '../history/createHistoryActionRegistry';
-/** Definition for an extendable chat message action button. */
+/** Definition for an extendable document history action. */
 export interface DocumentHistoryAction extends HistoryActionRegistryItem<Post> {
 }
 /**
@@ -3785,6 +3785,7 @@ export type CoreHookPayloadMap = {
     'ai.chat.messages:filter:before_send': [
         {
             messages: OpenRouterMessage[];
+            editorDoc?: Record<string, unknown> | null;
         } | {
             messages: OpenRouterMessage[];
         }[]
