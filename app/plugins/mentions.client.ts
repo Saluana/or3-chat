@@ -5,18 +5,12 @@
 import { defineNuxtPlugin } from '#app';
 import { useAppConfig, useHooks } from '#imports';
 import { useOr3Config, isMentionSourceEnabled } from '~/composables/useOr3Config';
-import type {
-    OpenRouterMessage,
-    DbCreatePayload,
-    DbUpdatePayload,
-    DbDeletePayload,
-    DocumentEntity,
-    ThreadEntity,
-} from '~/core/hooks/hook-types';
+import type { OpenRouterMessage } from '~/core/hooks/hook-types';
 import type * as MentionIndexApi from './ChatMentions/useChatMentions';
+import { resetIndex, setMentionsConfig } from './ChatMentions/useChatMentions';
 import type { createMentionSuggestion } from './ChatMentions/suggestions';
 import type MentionExtension from '@tiptap/extension-mention';
-import { getDb, subscribeActiveWorkspaceDb } from '~/db/client';
+import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { registerBuiltinMentionFilter } from '~/utils/chat/mention-filter-identity';
 
 type MentionsConfig = {
@@ -32,19 +26,13 @@ type MentionsModule = {
     searchMentions: typeof MentionIndexApi.searchMentions;
     collectMentions: typeof MentionIndexApi.collectMentions;
     resolveMention: typeof MentionIndexApi.resolveMention;
-    upsertDocument: typeof MentionIndexApi.upsertDocument;
-    upsertThread: typeof MentionIndexApi.upsertThread;
-    removeDocument: typeof MentionIndexApi.removeDocument;
-    removeThread: typeof MentionIndexApi.removeThread;
     resetIndex: typeof MentionIndexApi.resetIndex;
     createMentionSuggestion: typeof createMentionSuggestion;
 };
 
 type MessagesPayload =
-    | { messages: OpenRouterMessage[] }
+    | { messages: OpenRouterMessage[]; editorDoc?: Record<string, unknown> | null }
     | { messages: OpenRouterMessage[] }[];
-
-// DB payload types imported from hook-types
 
 function isNonNullObject(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null;
@@ -61,19 +49,6 @@ function normalizeMessagesPayload(
         return payload.messages;
     }
     return [];
-}
-
-function safeId(payload: {
-    entity?: { id?: string };
-    updated?: { id?: string };
-    id?: string;
-}): string | null {
-    if (typeof payload.id === 'string') return payload.id;
-    if (payload.entity && typeof payload.entity.id === 'string')
-        return payload.entity.id;
-    if (payload.updated && typeof payload.updated.id === 'string')
-        return payload.updated.id;
-    return null;
 }
 
 export default defineNuxtPlugin((nuxtApp) => {
@@ -103,6 +78,16 @@ export default defineNuxtPlugin((nuxtApp) => {
         ((appConfig as Record<string, unknown>)?.mentions as MentionsConfig) ||
         {};
 
+    // Apply application defaults once.
+    setMentionsConfig({
+        maxPerGroup: mentionsConfig?.maxPerGroup || 5,
+        maxContextBytes: mentionsConfig?.maxContextBytes || 50_000,
+        enabledSources: {
+            documents: documentsEnabled,
+            conversations: conversationsEnabled,
+        },
+    });
+
     const hooks = useHooks();
     let indexRequested = false;
     let mentionsModule: MentionsModule | null = null;
@@ -110,24 +95,26 @@ export default defineNuxtPlugin((nuxtApp) => {
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     let stopMentionFilter: (() => void) | undefined;
     const refreshDisposers: Array<() => void> = [];
+    let disposed = false;
     const refreshMentions = () => {
-        if (!mentionsModule) return;
-        mentionsModule.resetIndex();
+        resetIndex();
         if (!indexRequested) return;
         clearTimeout(refreshTimer);
-        refreshTimer = setTimeout(() => { void mentionsModule?.initMentionsIndex(); }, 120);
+        refreshTimer = setTimeout(() => { if (!disposed) void mentionsModule?.initMentionsIndex(); }, 120);
     };
     const stopWorkspace = subscribeActiveWorkspaceDb(refreshMentions);
     const disposeRefresh = () => {
+        disposed = true;
+        resetIndex();
         clearTimeout(refreshTimer); stopWorkspace(); stopMentionFilter?.(); stopMentionFilter = undefined;
         for (const off of refreshDisposers.splice(0)) off();
     };
     nuxtApp.vueApp.onUnmount(disposeRefresh);
-    let lastEditorContent: Record<string, unknown> | null = null; // captured TipTap JSON before send
     let extensionsRegistered = false; // Prevent duplicate registrations
 
     // Lazy load the mentions module
     function loadMentionsModule(): Promise<MentionsModule | null> {
+        if (disposed) return Promise.resolve(null);
         if (mentionsModule) return Promise.resolve(mentionsModule);
         if (mentionsModulePromise) return mentionsModulePromise;
 
@@ -160,40 +147,23 @@ export default defineNuxtPlugin((nuxtApp) => {
                 searchMentions,
                 collectMentions,
                 resolveMention,
-                upsertDocument,
-                upsertThread,
-                removeDocument,
-                removeThread,
                 resetIndex,
-                setMentionsConfig,
             } = mentionsIndexModule.default;
 
-            // Apply runtime configuration (requirement 8.1)
-            setMentionsConfig({
-                maxPerGroup: mentionsConfig?.maxPerGroup || 5,
-                maxContextBytes: mentionsConfig?.maxContextBytes || 50_000,
-                enabledSources: {
-                    documents: documentsEnabled,
-                    conversations: conversationsEnabled,
-                },
-            });
+            if (disposed) return null;
 
             mentionsModule = {
                 Mention: MentionModule.default,
                 initMentionsIndex,
                 async searchMentions(query) {
                     indexRequested = true;
-                    const origin = getDb();
+                    const generation = getWorkspaceGeneration();
                     await initMentionsIndex();
-                    if (origin !== getDb()) return [];
+                    if (disposed || generation !== getWorkspaceGeneration()) return [];
                     return searchMentions(query);
                 },
                 collectMentions,
                 resolveMention,
-                upsertDocument,
-                upsertThread,
-                removeDocument,
-                removeThread,
                 resetIndex,
                 createMentionSuggestion,
             };
@@ -205,23 +175,8 @@ export default defineNuxtPlugin((nuxtApp) => {
         }
     }
 
-    // 1) Capture editor JSON before send (avoids string-only later)
-    hooks.on(
-        'ui.chat.editor:action:before_send',
-        (editorJson: unknown) => {
-            try {
-                lastEditorContent = isNonNullObject(editorJson)
-                    ? editorJson
-                    : null;
-            } catch {
-                lastEditorContent = null;
-            }
-        },
-        { kind: 'action' }
-    );
-
-    // 2) Lazy load and provide extension when editor requests it
-    hooks.on(
+    // Lazy load and provide the extension when an editor requests it
+    refreshDisposers.push(hooks.on(
         'editor:request-extensions',
         async () => {
             const module = await loadMentionsModule();
@@ -257,25 +212,26 @@ export default defineNuxtPlugin((nuxtApp) => {
                 },
                 suggestion: module.createMentionSuggestion(
                     module.searchMentions,
-                    mentionsConfig?.debounceMs || 120
+                    mentionsConfig?.debounceMs ?? 120
                 ),
             });
 
             // Provide the Mention extension via extensions filter
-            hooks.on('ui.chat.editor:filter:extensions', (existing) => {
+            refreshDisposers.push(hooks.on('ui.chat.editor:filter:extensions', (existing) => {
                 const list = Array.isArray(existing) ? existing : [];
                 return [...list, MentionExtension];
-            });
+            }));
         },
         { kind: 'action' }
-    );
+    ));
 
-    // 3) Inject context via filter before send (registered once at plugin init)
+    // Inject current context from the request-owned editor snapshot.
     stopMentionFilter = registerBuiltinMentionFilter(
         hooks,
         async (payload: MessagesPayload) => {
+            const generation = getWorkspaceGeneration();
             const module = mentionsModule || (await loadMentionsModule());
-            if (!module) return payload;
+            if (!module || disposed || generation !== getWorkspaceGeneration()) return payload;
 
             const originalMessages = normalizeMessagesPayload(payload);
 
@@ -287,13 +243,13 @@ export default defineNuxtPlugin((nuxtApp) => {
                 .reverse()
                 .find((m) => m.role === 'user');
 
-            const editorContent =
-                lastUser &&
+            const editorContent = !Array.isArray(payload) && 'editorDoc' in payload
+                ? payload.editorDoc
+                : lastUser &&
                 isNonNullObject(lastUser) &&
                 'editorContent' in lastUser
-                    ? (lastUser as Record<string, unknown>).editorContent ??
-                      lastEditorContent
-                    : lastEditorContent;
+                    ? (lastUser as Record<string, unknown>).editorContent
+                    : null;
             if (!editorContent) {
                 return { messages: originalMessages };
             }
@@ -310,11 +266,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             const resolved = await Promise.all(
                 mentions.map(module.resolveMention)
             );
-            const contextBlocks = resolved.filter(
-                (c): c is string => c !== null
-            );
-
-            if (contextBlocks.length === 0) {
+            if (disposed || generation !== getWorkspaceGeneration() || !resolved.some(Boolean)) {
                 return { messages: originalMessages };
             }
 
@@ -331,10 +283,9 @@ export default defineNuxtPlugin((nuxtApp) => {
                 .map((m, idx): OpenRouterMessage | null => {
                     const content = resolved[idx];
                     if (!content) return null;
-                    const label = m.label || '';
                     const xml = `<context type="mention" source="${
                         m.source
-                    }" id="${m.id}" label="${escapeXml(label)}">\n${escapeXml(
+                    }" id="${escapeXml(m.id)}">\n${escapeXml(
                         content
                     )}\n</context>`;
                     return {
@@ -343,9 +294,6 @@ export default defineNuxtPlugin((nuxtApp) => {
                     };
                 })
                 .filter((m): m is OpenRouterMessage => m !== null);
-
-            // Clear captured content after use to avoid stale data
-            lastEditorContent = null;
 
             const merged: OpenRouterMessage[] = [
                 ...contextMessages,
@@ -356,137 +304,26 @@ export default defineNuxtPlugin((nuxtApp) => {
         }
     );
 
-    for (const name of ['sync.bootstrap:action:complete', 'sync.pull:action:applied', 'sync.rescan:action:completed'] as const) {
+    // Reconcile title sources lazily after local writes or sync. Invalidation
+    // also refreshes an already-open picker without requiring another keystroke.
+    for (const name of [
+        'sync.bootstrap:action:complete', 'sync.pull:action:applied', 'sync.rescan:action:completed',
+        'db.posts.create:action:after', 'db.posts.upsert:action:after',
+        'db.posts.delete:action:soft:after', 'db.posts.delete:action:hard:after',
+        'db.documents.create:action:after', 'db.documents.update:action:after',
+        'db.documents.delete:action:soft:after', 'db.documents.delete:action:hard:after',
+        'db.threads.create:action:after', 'db.threads.upsert:action:after', 'db.threads.fork:action:after',
+        'db.threads.delete:action:soft:after', 'db.threads.delete:action:hard:after',
+        'db.files.create:action:after', 'db.files.restore:action:after',
+        'db.files.delete:action:soft:after', 'db.files.delete:action:hard:after',
+    ] as const) {
         refreshDisposers.push(hooks.on(name, refreshMentions, { kind: 'action' }));
     }
-    // 4) Wire DB hooks for incremental index updates (registered once at plugin init)
-    // These are intentionally fire-and-forget async operations
-    /* eslint-disable @typescript-eslint/no-floating-promises */
-    // Documents
-    refreshDisposers.push(hooks.on('db.posts.upsert:action:after', (payload) => {
-        const origin = getDb();
-        void (async () => {
-            const id = safeId(payload);
-            if (!id) return;
-            const row = await origin.posts.get(id);
-            if (origin !== getDb()) return;
-            const module = mentionsModule || (await loadMentionsModule());
-            if (origin !== getDb() || !module || !row || !['doc', 'or3:file'].includes(row.postType)) return;
-            await module.upsertDocument(row);
-        })();
-    }, { kind: 'action' }));
-    for (const name of ['db.files.create:action:after', 'db.files.restore:action:after',
-        'db.files.delete:action:soft:after', 'db.files.delete:action:hard:after'] as const) {
-        refreshDisposers.push(hooks.on(name, refreshMentions, { kind: 'action' }));
-    }
-    hooks.on(
-        'db.documents.create:action:after',
-        (payload: DbCreatePayload<DocumentEntity>) => {
-            void (async () => {
-                const module = mentionsModule || (await loadMentionsModule());
-                const id = safeId(payload);
-                if (module && id && payload.entity) {
-                    module.upsertDocument(payload.entity);
-                }
-            })();
-        },
-        { kind: 'action' }
-    );
-
-    hooks.on(
-        'db.documents.update:action:after',
-        (payload: DbUpdatePayload<DocumentEntity>) => {
-            void (async () => {
-                const module = mentionsModule || (await loadMentionsModule());
-                if (module && payload.updated)
-                    module.upsertDocument(payload.updated);
-            })();
-        },
-        { kind: 'action' }
-    );
-    hooks.on(
-        'db.documents.delete:action:soft:after',
-        (payload: DbDeletePayload<DocumentEntity>) => {
-            void (async () => {
-                const module = mentionsModule || (await loadMentionsModule());
-                if (module) module.removeDocument(payload);
-            })();
-        },
-        { kind: 'action' }
-    );
-
-    hooks.on(
-        'db.documents.delete:action:hard:after',
-        (payload: DbDeletePayload<DocumentEntity>) => {
-            void (async () => {
-                const module = mentionsModule || (await loadMentionsModule());
-                if (module) module.removeDocument(payload);
-            })();
-        },
-        { kind: 'action' }
-    );
-
-    // Threads
-    hooks.on(
-        'db.threads.create:action:after',
-        (payload: DbCreatePayload<ThreadEntity>) => {
-            void (async () => {
-                const module = mentionsModule || (await loadMentionsModule());
-                if (module && payload.entity) {
-                    // Normalize title: convert null to undefined to match ThreadRow type
-                    const threadRow = { ...payload.entity, title: payload.entity.title ?? undefined };
-                    module.upsertThread(threadRow);
-                }
-            })();
-        },
-        { kind: 'action' }
-    );
-
-    hooks.on(
-        'db.threads.upsert:action:after',
-        (payload: DbCreatePayload<ThreadEntity>) => {
-            void (async () => {
-                const module = mentionsModule || (await loadMentionsModule());
-                if (module && payload.entity) {
-                    // Normalize title: convert null to undefined to match ThreadRow type
-                    const threadRow = { ...payload.entity, title: payload.entity.title ?? undefined };
-                    module.upsertThread(threadRow);
-                }
-            })();
-        },
-        { kind: 'action' }
-    );
-
-    hooks.on(
-        'db.threads.delete:action:soft:after',
-        (payload: DbDeletePayload<ThreadEntity>) => {
-            void (async () => {
-                const module = mentionsModule || (await loadMentionsModule());
-                if (module) module.removeThread(payload);
-            })();
-        },
-        { kind: 'action' }
-    );
-
-    hooks.on(
-        'db.threads.delete:action:hard:after',
-        (payload: DbDeletePayload<ThreadEntity>) => {
-            void (async () => {
-                const module = mentionsModule || (await loadMentionsModule());
-                if (module) module.removeThread(payload);
-            })();
-        },
-        { kind: 'action' }
-    );
-    /* eslint-enable @typescript-eslint/no-floating-promises */
 
     // HMR cleanup
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
             disposeRefresh();
-            if (mentionsModule) {
-                mentionsModule.resetIndex();
-            }
             if (typeof window !== 'undefined') {
                 delete (window as { __MENTIONS_EXTENSION__?: unknown })
                     .__MENTIONS_EXTENSION__;

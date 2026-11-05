@@ -62,10 +62,10 @@ describe('mentions index initialization', () => {
         await db.posts.put({ id: 'saved-file', postType: 'or3:file', title: 'Saved file', content: 'text',
             file_hashes: JSON.stringify([hash]), clock: 1, created_at: 1, updated_at: 1, deleted: false });
         await initMentionsIndex();
-        expect(mocks.buildIndex.mock.calls.at(-1)?.[1]).toContainEqual(expect.objectContaining({ id: 'saved-file', source: 'file' }));
+        expect(mocks.buildIndex.mock.calls.at(-1)?.[1]).toContainEqual(expect.objectContaining({ recordId: 'saved-file', source: 'file' }));
         await db.file_meta.update(hash, { deleted: true });
         resetIndex(); await initMentionsIndex();
-        expect(mocks.buildIndex.mock.calls.at(-1)?.[1]).not.toContainEqual(expect.objectContaining({ id: 'saved-file' }));
+        expect(mocks.buildIndex.mock.calls.at(-1)?.[1]).not.toContainEqual(expect.objectContaining({ recordId: 'saved-file' }));
     });
 
     it.each(['sync.pull:action:applied', 'sync.bootstrap:action:complete', 'sync.rescan:action:completed'] as const)
@@ -92,7 +92,7 @@ describe('mentions index initialization', () => {
             await getDb().posts.put({ id: 'remote-file', postType: 'or3:file', title: 'Remote', content: 'text',
                 file_hashes: JSON.stringify([hash]), clock: 1, created_at: 1, updated_at: 1, deleted: false });
             await useHooks().doAction(event, { scope: { workspaceId } } as never);
-            await vi.waitFor(() => expect(mocks.buildIndex.mock.calls.at(-1)?.[1]).toContainEqual(expect.objectContaining({ id: 'remote-file', source: 'file' })));
+            await vi.waitFor(() => expect(mocks.buildIndex.mock.calls.at(-1)?.[1]).toContainEqual(expect.objectContaining({ recordId: 'remote-file', source: 'file' })));
         } finally { dispose?.(); setHookEngine(null); }
     });
 

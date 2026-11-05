@@ -24,7 +24,7 @@ See [API and types](/documentation/hooks/reference) for engine semantics, lifecy
 | `ui.chat.message:filter:incoming`     | filter | `[text: string, threadId?: string]`              | `string`                           |
 | `ai.chat.model:filter:select`         | filter | `[modelId: string]`                              | `string` (new model id)            |
 | `ai.chat.messages:filter:input`       | filter | `[messages: ChatMessage[]]`                              | `ChatMessage[]`                    |
-| `ai.chat.messages:filter:before_send` | filter | `[payload: { messages: OpenRouterMessage[] } \| { messages: OpenRouterMessage[] }[]]`                 | `{ messages: OpenRouterMessage[] } \| { messages: OpenRouterMessage[] }[]` |
+| `ai.chat.messages:filter:before_send` | filter | `[payload: { messages: OpenRouterMessage[]; editorDoc?: Record<string, unknown> \| null } \| { messages: OpenRouterMessage[] }[]]`                 | `{ messages: OpenRouterMessage[] } \| { messages: OpenRouterMessage[] }[]` |
 | `ai.chat.send:filter:prepare` | filter | `[candidate: ChatSendPreparation]` | `ChatSendPreparation` |
 | `ai.chat.send:filter:commit` | filter | `[commit: ChatSendCommit]` | `ChatSendCommit` |
 | `ai.chat.send:action:before`          | action | `[payload: AiSendBeforePayload]`                 | —                                  |

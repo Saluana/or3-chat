@@ -46,7 +46,8 @@ Document AI preferences are scoped to the originating workspace database.
 Preference updates merge into the latest durable row and reject concurrent
 changes during the write instead of overwriting another tab's preferences.
 Disposing an AI controller retires its public handles and queued approvals;
-resetting it also prevents pending reference reads from refilling its cache.
+resetting it also invalidates pending reference reads. Estimates and sends resolve
+references afresh instead of retaining stale text across requests.
 
 Document storage built on the shared `posts` table (`postType: 'doc'`) with TipTap JSON payloads and hook integration.
 

@@ -27,6 +27,16 @@ snippet under each row, so you can tell *why* something matched.
 Changing the query immediately retires the previous results. During the search
 debounce, Enter cannot execute a command belonging to the old query.
 
+Renames, edits, replacements, and deletions refresh search even when record counts
+or timestamps stay the same. The selected preview refreshes with its source.
+Workspace changes retire previous results and pending reads.
+
+Chat and Document AI mention pickers refresh while open. Their search field queries
+the workspace, including items outside the initial suggestions. AI references are
+read again at send time using current titles and visible content; deleted sources
+and deleted chat messages are excluded. A workspace switch cancels pending reference
+reads, and each chat request uses its own editor snapshot.
+
 Search includes content as well as titles. Coverage depends on the source:
 
 | Category | What is searched |

@@ -567,7 +567,7 @@ export type CoreHookPayloadMap = {
     'ai.chat.send:filter:prepare': [ChatSendPreparation];
     'ai.chat.send:filter:commit': [ChatSendCommit];
     'ai.chat.messages:filter:before_send': [
-        { messages: OpenRouterMessage[] } | { messages: OpenRouterMessage[] }[]
+        { messages: OpenRouterMessage[]; editorDoc?: Record<string, unknown> | null } | { messages: OpenRouterMessage[] }[]
     ];
 
     // Branching lifecycle

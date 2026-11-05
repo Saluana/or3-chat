@@ -84,6 +84,16 @@ it('does not reuse a reference that finished loading after reset', async () => {
     expect(controls.tokens.mock.lastCall?.[0]).not.toContain('Obsolete reference');
 });
 
+it('estimates current reference content again after a previous estimate', async () => {
+    const { agent } = makeAgent();
+    const request = { ...submission, references: [{ id: 'reference', source: 'document' as const, label: 'Reference' }] };
+    await agent.estimate(request);
+    controls.reference.mockResolvedValue('Edited reference');
+    await agent.estimate(request);
+    expect(controls.tokens.mock.lastCall?.[0]).toContain('Edited reference');
+    expect(controls.tokens.mock.lastCall?.[0]).not.toContain('Current reference');
+});
+
 it('refuses offline inference while preserving local estimates and existing suggestions', async () => {
     const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
     const { agent } = makeAgent();

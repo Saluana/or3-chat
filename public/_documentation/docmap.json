@@ -32,7 +32,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 2,
-                    "summary": "Search workspace sources and saved-file excerpts with resource-level chunk results, bounded cancellable initial chat reads, incremental conversation refresh, keyboard navigation, previews, coverage, and workspace-scoped action feedback."
+                    "summary": "Search workspace sources and saved-file excerpts with resource-level chunk results, bounded cancellable initial chat reads, current previews and mentions, request-owned AI references, incremental conversation refresh, keyboard navigation, previews, coverage, and workspace-scoped action feedback."
                 },
                 {
                     "name": "projects.md",
@@ -215,7 +215,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "Create, edit, sync, recover, and manage native documents with workspace-owned navigation, editor sessions, and safe AI preference updates."
+                    "summary": "Create, edit, sync, recover, and manage native documents with workspace-owned navigation, editor sessions, and safe AI preference updates and fresh reference estimates."
                 },
                 {
                     "name": "prompts.md",

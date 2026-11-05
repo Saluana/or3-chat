@@ -133,7 +133,7 @@ export function createTurnDispatch(ports: {
                 hooks.hasOnlyFilter('ai.chat.messages:filter:before_send', mentionFilter) ? JSON.stringify(orMessages) : undefined;
             const filteredMessages = await hooks.applyFilters(
                 'ai.chat.messages:filter:before_send',
-                { messages: orMessages }
+                { messages: orMessages, editorDoc: sendMessagesParams.editorDoc ?? null }
             );
             if (isRequestCancelled(requestScope) || !ownsAdmission())
                 throw new DOMException('Chat request cancelled', 'AbortError');

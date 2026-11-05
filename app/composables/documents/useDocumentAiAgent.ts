@@ -344,8 +344,7 @@ export function useDocumentAiAgent(options: {
     const { catalog, fetchModels } = useModelStore();
     const { countTokens } = useTokenizer();
     const hooks = useHooks();
-    const referenceContextCache = new Map<string, string>();
-    let referenceCacheRevision = 0;
+    let referenceRevision = 0;
 
     const stale = computed(() => Boolean(
         proposal.value && (
@@ -696,14 +695,13 @@ export function useDocumentAiAgent(options: {
 
     async function referenceContext(
         references: readonly DocumentAiContextReference[],
-        fresh = false,
     ) {
-        const revision = referenceCacheRevision;
+        const revision = referenceRevision;
         const db = getDb();
         const generation = getWorkspaceGeneration();
         const account = getCachedSessionContext()?.user?.id;
         const documentId = options.documentId.value;
-        const current = () => !disposed && revision === referenceCacheRevision
+        const current = () => !disposed && revision === referenceRevision
             && getDb() === db && getWorkspaceGeneration() === generation
             && getCachedSessionContext()?.user?.id === account && options.documentId.value === documentId;
         const unique = uniqueDocumentAiReferences(references);
@@ -715,12 +713,10 @@ export function useDocumentAiAgent(options: {
         }
 
         const resolved = await Promise.all(unique.map(async (reference) => {
-            const key = `${reference.source}:${reference.id}`;
-            const cached = fresh ? undefined : referenceContextCache.get(key);
-            const content = cached ?? await resolveDocumentAiReference(reference);
-            if (content && current()) referenceContextCache.set(key, content);
+            const content = await resolveDocumentAiReference(reference);
             return content ? { reference, content } : null;
         }));
+        if (!current()) throw new Error('Referenced context changed while loading. Try again.');
         const missing = unique.filter((_, index) => !resolved[index]);
         if (missing.length) {
             const labels = missing.map((reference) => `“${reference.label}”`).join(', ');
@@ -865,7 +861,7 @@ export function useDocumentAiAgent(options: {
                 scope,
                 settings.value.chunkWordLimit,
             );
-            const references = await referenceContext(submission.references, true);
+            const references = await referenceContext(submission.references);
             if (!ownsRun()) return;
             const model = await resolveModel(attachments, abortController.signal);
             if (!ownsRun()) return;
@@ -1212,8 +1208,7 @@ export function useDocumentAiAgent(options: {
         status.value = 'idle';
         agentStatus.value = '';
         checkpointCreated.value = false;
-        referenceCacheRevision++;
-        referenceContextCache.clear();
+        referenceRevision++;
         syncEditorLock();
         clearScopeHighlight();
     }

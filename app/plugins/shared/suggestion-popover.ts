@@ -102,8 +102,6 @@ export function createSuggestionRenderLifecycle<TItem>(
         props: SuggestionProps<TItem>
     ) => Record<string, unknown>
 ) {
-    let renderer: VueRenderer | null = null;
-
     function buildDefaultProps(props: SuggestionProps<TItem>) {
         return {
             items: props.items,
@@ -123,52 +121,53 @@ export function createSuggestionRenderLifecycle<TItem>(
         };
     }
 
-    return () => ({
-        onStart(props: SuggestionProps<TItem>) {
-            renderer = new VueRenderer(component, {
-                editor: props.editor,
-                props: getComponentProps?.(props) ?? buildDefaultProps(props),
-            });
+    return () => {
+        let renderer: VueRenderer | null = null;
+        let focusTimer: ReturnType<typeof setTimeout> | undefined;
+        return {
+            onStart(props: SuggestionProps<TItem>) {
+                renderer = new VueRenderer(component, {
+                    editor: props.editor,
+                    props: getComponentProps?.(props) ?? buildDefaultProps(props),
+                });
 
-            if (renderer.element) {
-                document.body.appendChild(renderer.element);
-            }
+                if (renderer.element) {
+                    document.body.appendChild(renderer.element);
+                }
 
-            try {
-                setTimeout(() => {
-                    props.editor?.commands?.focus?.();
-                }, 0);
-            } catch {}
-        },
+                try {
+                    focusTimer = setTimeout(() => {
+                        if (renderer && !props.editor.isDestroyed) props.editor.commands.focus();
+                    }, 0);
+                } catch {}
+            },
 
-        onUpdate(props: SuggestionProps<TItem>) {
-            if (!renderer) {
-                return;
-            }
+            onUpdate(props: SuggestionProps<TItem>) {
+                if (!renderer) {
+                    return;
+                }
 
-            renderer.updateProps(
-                getComponentProps?.(props) ?? buildDefaultProps(props)
-            );
+                renderer.updateProps(
+                    getComponentProps?.(props) ?? buildDefaultProps(props)
+                );
 
-            try {
-                setTimeout(() => {
-                    props.editor?.commands?.focus?.();
-                }, 0);
-            } catch {}
-        },
+                // Async results must preserve focus in the popover's search field.
+            },
 
-        onKeyDown(props: { event: KeyboardEvent }) {
-            return (renderer?.ref as SuggestionListInstance | undefined)?.onKeyDown?.(
-                props
-            ) ?? false;
-        },
+            onKeyDown(props: { event: KeyboardEvent }) {
+                return (renderer?.ref as SuggestionListInstance | undefined)?.onKeyDown?.(
+                    props
+                ) ?? false;
+            },
 
-        onExit() {
-            if (renderer?.element?.parentNode) {
-                renderer.element.parentNode.removeChild(renderer.element);
-            }
-            renderer?.destroy();
-            renderer = null;
-        },
-    });
+            onExit() {
+                clearTimeout(focusTimer);
+                if (renderer?.element?.parentNode) {
+                    renderer.element.parentNode.removeChild(renderer.element);
+                }
+                renderer?.destroy();
+                renderer = null;
+            },
+        };
+    };
 }

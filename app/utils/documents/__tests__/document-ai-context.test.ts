@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { getDb } from '~/db/client';
+import { getDb, getActiveWorkspaceId, setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import {
     searchDocumentAiMentions,
     formatDocumentAiReferenceContext,
@@ -21,6 +21,19 @@ describe('Document AI reference context', () => {
         expect(await searchDocumentAiMentions('', { currentDocumentId: 'self', documentsEnabled: true, conversationsEnabled: true }))
             .toEqual([{ id: 'doc', source: 'document', label: 'Other document' }, { id: 'chat', source: 'chat', label: 'Conversation' }]);
     });
+    it('discards a pending suggestion search after switching workspaces', async () => {
+        const original = getActiveWorkspaceId();
+        const other = `document-mention-scope-${crypto.randomUUID()}`;
+        let release!: (items: unknown[]) => void;
+        mentions.search.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+        const pending = searchDocumentAiMentions('', { currentDocumentId: 'self', documentsEnabled: true, conversationsEnabled: true });
+        await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+        setActiveWorkspaceDb(other);
+        release([{ id: 'old', source: 'document', label: 'Old workspace secret' }]);
+        try { expect(await pending).toEqual([]); }
+        finally { setActiveWorkspaceDb(original); evictWorkspaceDb(other); }
+    });
+
     it('excludes Trash and unsupported item state when indexed mention search is unavailable', async () => {
         mentions.search.mockRejectedValueOnce(new Error('Index unavailable'));
         const db = getDb();
@@ -52,7 +65,7 @@ describe('Document AI reference context', () => {
         }]);
         expect(value).toContain('type="reference"');
         expect(value).toContain('id="doc&amp;1"');
-        expect(value).toContain('label="Q4 &lt;Plan&gt;"');
+        expect(value).not.toContain('label=');
         expect(value).toContain('Use &quot;safe&quot; evidence &amp; facts.');
     });
 });

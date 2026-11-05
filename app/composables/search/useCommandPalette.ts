@@ -154,6 +154,7 @@ function scheduleCoordinatorIdleDispose(): void {
 }
 
 function applySnapshot(snapshot: PaletteCoordinatorSnapshot): void {
+    const previousActive = activeResult.value;
     results.value = snapshot.results;
     statuses.value = snapshot.statuses;
     parsedCategoryId.value = snapshot.categoryId;
@@ -166,6 +167,10 @@ function applySnapshot(snapshot: PaletteCoordinatorSnapshot): void {
         if (hoverLock.value === 'pointer') hoverLock.value = 'keyboard';
     }
     reconcileActiveKey();
+    if (isOpen.value && previousActive?.key === activeResult.value?.key
+        && previousActive !== activeResult.value) {
+        void hydrateActivePreview();
+    }
 }
 
 async function ensureCoordinator(): Promise<PaletteCoordinator> {
@@ -418,6 +423,7 @@ function setQuery(next: string): void {
     pointerArmedKey.value = null;
     void (async () => {
         const instance = coordinator ?? (await ensureCoordinator());
+        if (instance !== coordinator || query.value !== next) return;
         instance.setQuery(next);
     })();
 }
