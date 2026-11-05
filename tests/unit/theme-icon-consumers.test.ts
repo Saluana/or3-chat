@@ -20,7 +20,7 @@ vi.mock('~/core/search/useModelSearch', () => ({
     useModelSearch: () => ({ query: ref(''), results: ref([]), ready: ref(true) }),
 }));
 vi.mock('~/composables/chat/useModelStore', () => ({
-    useModelStore: () => ({ favoriteModels: ref([]), catalog: ref([]), fetchModels: async () => {}, getFavoriteModels: async () => [], refreshModels: async () => {}, addFavoriteModel: vi.fn(), removeFavoriteModel: vi.fn() }),
+    useModelStore: () => ({ recentModelIds: ref([]), platformStatus: ref({}), loadRecentModels: async () => {}, recordRecentModel: async () => {}, favoriteModels: ref([]), catalog: ref([]), fetchModels: async () => {}, getFavoriteModels: async () => [], refreshModels: async () => {}, addFavoriteModel: vi.fn(), removeFavoriteModel: vi.fn() }),
 }));
 
 const iconStub = defineComponent({ props: { name: String }, setup: (props) => () => h('i', { 'data-icon': props.name }) });
@@ -29,7 +29,7 @@ const stubs = {
     AppModal: defineComponent({ setup: (_, { slots }) => () => h('main', slots.default?.()) }),
     UButton: defineComponent({ props: { icon: String }, setup: (props, { slots }) => () => h('button', [props.icon ? h('i', { 'data-icon': props.icon }) : null, slots.default?.()]) }),
     UInput: defineComponent({ props: { modelValue: String, icon: String }, emits: ['update:modelValue'], setup: (props, { emit }) => () => h('label', [h('i', { 'data-icon': props.icon }), h('input', { value: props.modelValue, onInput: (event: Event) => emit('update:modelValue', (event.target as HTMLInputElement).value) })]) }),
-    USelect: true, USelectMenu: true, UPopover: true, UTooltip: true, UColorPicker: true,
+    UKbd: true, USelect: true, USelectMenu: true, UPopover: true, UTooltip: true, UColorPicker: true,
     ModelCatalogSidebar: true, ModelCatalogCard: true, ModelCatalogDetail: true, Or3Scroll: true,
 };
 

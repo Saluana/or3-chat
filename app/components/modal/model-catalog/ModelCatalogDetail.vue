@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { modelIdentity, modelInfoUrl, modelPricingUrl } from '~~/shared/ai/model-catalog';
 import { computed } from 'vue';
 import type { OpenRouterModel } from '~/core/auth/models-service';
 import { useIcon } from '~/composables/useIcon';
@@ -10,7 +11,6 @@ import {
     formatPerMillion,
     formatReleaseDate,
     formatTokenCount,
-    getBestForTags,
     getCapabilities,
     getContextLength,
     getModelBadges,
@@ -31,15 +31,14 @@ const emit = defineEmits<{
 const provider = computed(() => getModelProvider(props.model));
 const capabilities = computed(() => getCapabilities(props.model));
 const badges = computed(() => getModelBadges(props.model, 3));
-const bestFor = computed(() => getBestForTags(props.model));
 const contextLength = computed(() => getContextLength(props.model));
 const maxOutput = computed(
     () => props.model.top_provider?.max_completion_tokens ?? 0
 );
 const released = computed(() => formatReleaseDate(props.model.created));
-const openRouterUrl = computed(
-    () => `https://openrouter.ai/${props.model.id}`
-);
+const modelUrl = computed(() => modelInfoUrl(props.model));
+const pricingUrl = computed(() => modelPricingUrl(props.model));
+const platform = computed(() => modelIdentity(props.model));
 
 const cacheRead = computed(() => props.model.pricing?.input_cache_read);
 const cacheWrite = computed(() => props.model.pricing?.input_cache_write);
@@ -98,7 +97,6 @@ const capabilityChips = computed<CapabilityChip[]>(() => {
 
 const starIcon = useIcon('catalog.star');
 const starFilledIcon = useIcon('catalog.star.filled');
-const infoIcon = useIcon('catalog.info');
 const externalIcon = useIcon('catalog.external');
 const contextIcon = useIcon('catalog.context');
 const calendarIcon = useIcon('catalog.calendar');
@@ -157,6 +155,7 @@ const rowValueClass =
                                 ? 'text-amber-400 hover:text-amber-500'
                                 : 'text-[var(--md-on-surface-variant)] opacity-50 hover:opacity-100'
                         "
+                        :aria-label="favorite ? 'Remove from favorites' : 'Add to favorites'"
                         :aria-pressed="favorite"
                         :title="
                             favorite
@@ -174,7 +173,7 @@ const rowValueClass =
                 <div
                     class="text-[13px] text-[var(--md-on-surface-variant)] mt-0.5"
                 >
-                    {{ provider.name }}
+                    {{ platform.platformName }}
                 </div>
                 <div v-if="badges.length" class="flex flex-wrap gap-1 mt-1.5">
                     <UBadge
@@ -197,25 +196,6 @@ const rowValueClass =
         >
             {{ model.description }}
         </p>
-
-        <!-- Best for -->
-        <div>
-            <div
-                class="text-xs font-semibold uppercase tracking-wider text-[var(--md-on-surface-variant)] mb-2"
-            >
-                Best for
-            </div>
-            <div class="flex flex-wrap gap-1.5">
-                <span
-                    v-for="tag in bestFor"
-                    :key="tag"
-                    class="inline-flex items-center px-2.5 py-1 rounded-full text-xs bg-[var(--md-surface-container-high)] text-[var(--md-on-surface)]"
-                    >{{ tag }}</span
-                >
-            </div>
-        </div>
-
-        <div class="h-px bg-[var(--md-border-color)] opacity-50" />
 
         <!-- Specs -->
         <div class="flex flex-col gap-3">
@@ -287,7 +267,8 @@ const rowValueClass =
                     >Per 1M tokens</span
                 >
             </div>
-            <div class="grid grid-cols-2 gap-x-4 gap-y-3">
+            <p v-if="!model.pricing" class="text-sm text-[var(--md-on-surface-variant)]">Price unavailable</p>
+            <div v-else class="grid grid-cols-2 gap-x-4 gap-y-3">
                 <div>
                     <div
                         class="text-xs text-[var(--md-on-surface-variant)] mb-0.5"
@@ -339,31 +320,16 @@ const rowValueClass =
                     </div>
                 </template>
             </div>
+            <a v-if="platform.platform === 'openai'" :href="pricingUrl" target="_blank" rel="noopener noreferrer" class="block mt-2 text-xs text-[var(--md-primary)]">{{ platform.platformName }} pricing</a>
             <a
-                :href="openRouterUrl"
+                :href="modelUrl"
                 target="_blank"
                 rel="noopener noreferrer"
                 class="inline-flex items-center gap-1 mt-3 text-[13px] text-[var(--md-primary)] hover:underline"
             >
-                Learn more
+                {{ platform.platform === 'openai' ? 'Learn more' : 'OpenRouter pricing' }}
                 <UIcon :name="externalIcon" class="h-3.5 w-3.5" />
             </a>
-        </div>
-
-        <!-- Note -->
-        <div
-            class="flex gap-2.5 items-start rounded-[var(--md-border-radius)] bg-[var(--md-surface-container-low)] px-3 py-2.5"
-        >
-            <UIcon
-                :name="infoIcon"
-                class="h-4 w-4 mt-px shrink-0 text-[var(--md-primary)]"
-            />
-            <p
-                class="text-xs leading-relaxed text-[var(--md-on-surface-variant)] m-0"
-            >
-                You pay only for the tokens you use. Prices are updated
-                regularly from OpenRouter.
-            </p>
         </div>
 
         <!-- Actions -->

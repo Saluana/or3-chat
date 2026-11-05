@@ -110,6 +110,7 @@ function buildDelegationChildAdmission(parent: BackgroundJob, ids: ReturnType<ty
         execution: { version: 1, body, workspaceId: execution.workspaceId, referer: execution.referer,
             apiKeyCiphertext: execution.apiKeyCiphertext, credentialSource: execution.credentialSource,
             chatLimits: execution.chatLimits,
+            workspaceModels: execution.workspaceModels,
             history, contentBase: '', reasoningBase: '', checkpointedToolCallIds: [], delegationRecoveryPolicy: 'v1' },
     };
 }

@@ -16,7 +16,9 @@
                     <ModelCatalogSidebar
                         v-model:scope="scope"
                         :total-count="baseModels.length"
-                        :favorites-count="favoriteModels.length"
+                        :favorites-count="baseModels.filter(model => isFavorite(model)).length"
+                        :recent-count="baseModels.filter(model => recentModelIds.includes(model.id)).length"
+                        :pinned-count="baseModels.filter(model => workspaceModels.policy.value.pinned.includes(model.id)).length"
                         :providers="providerCounts"
                         :selected-provider="selectedProvider"
                         :categories="categoryEntries"
@@ -44,6 +46,7 @@
                                     variant="modal"
                                     class="model-catalog-search-input w-full"
                                     autofocus
+                                    @keydown.down.prevent="focusModel(0)"
                                 >
                                     <template #trailing>
                                         <button
@@ -162,11 +165,16 @@
                             </UPopover>
                         </div>
 
+                        <p v-if="policyError" role="status" class="text-xs text-[var(--md-on-surface-variant)]">{{ policyError }}</p>
+                        <p v-for="(status, platform) in platformStatus" v-show="status === 'unavailable' || status === 'stale' || status === 'loading'" :key="platform" role="status" class="text-xs text-[var(--md-on-surface-variant)]">
+                            {{ platform === 'openai' ? 'OpenAI' : 'OpenRouter' }}: {{ status === 'loading' ? 'Loading models…' : status === 'stale' ? 'Showing saved models. Refresh to try again.' : 'Models unavailable. Refresh to try again.' }}
+                        </p>
                         <!-- Count + sort -->
                         <div class="flex items-center justify-between gap-2">
                             <span
                                 class="text-xs text-[var(--md-on-surface-variant)] tabular-nums"
                             >
+                                <span class="lg:hidden">{{ scope === 'recent' ? 'Recently used · ' : scope === 'favorites' ? 'Favorites · ' : scope === 'pinned' ? 'Workspace picks · ' : '' }}</span>
                                 {{ visibleModels.length }}
                                 {{ visibleModels.length === 1 ? 'model' : 'models' }}
                             </span>
@@ -188,16 +196,17 @@
                     </div>
 
                     <!-- List -->
-                    <div class="model-catalog-list flex-1 min-h-0 relative">
+                    <div ref="listElement" class="model-catalog-list flex-1 min-h-0 relative" role="list" aria-label="Models" @keydown="onListKeydown">
                         <div
                             v-if="!searchReady"
                             class="p-6 text-sm text-[var(--md-on-surface-variant)]"
                         >
-                            Indexing models…
+                            Loading models…
                         </div>
                         <template v-else>
                             <ClientOnly v-if="visibleModels.length">
                                 <Or3Scroll
+                                    ref="modelScroller"
                                     :key="listKey"
                                     :items="visibleModels"
                                     :item-key="(model) => model.id"
@@ -213,6 +222,7 @@
                                                 :selected="selectedId === m.id"
                                                 :favorite="isFavorite(m)"
                                                 @select="onSelectModel(m)"
+                                                @use="useSelectedModel(m)"
                                                 @toggle-favorite="toggleFavorite(m)"
                                             />
                                         </div>
@@ -300,7 +310,9 @@
         <ModelCatalogSidebar
             v-model:scope="scope"
             :total-count="baseModels.length"
-            :favorites-count="favoriteModels.length"
+            :favorites-count="baseModels.filter(model => isFavorite(model)).length"
+            :recent-count="baseModels.filter(model => recentModelIds.includes(model.id)).length"
+            :pinned-count="baseModels.filter(model => workspaceModels.policy.value.pinned.includes(model.id)).length"
             :providers="providerCounts"
             :selected-provider="selectedProvider"
             :categories="categoryEntries"
@@ -321,7 +333,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { modelIdentity } from '~~/shared/ai/model-catalog';
+import { isModelHidden } from '~~/shared/ai/workspace-models';
+import { useWorkspaceModels } from '~/composables/chat/useWorkspaceModels';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from 'vue';
 import { useMediaQuery } from '@vueuse/core';
 import { Or3Scroll } from 'or3-scroll';
 import 'or3-scroll/style.css';
@@ -332,8 +347,8 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
 import AppModal from '~/components/ui/AppModal.vue';
 import {
-    countByProvider,
-    getProviderSlug,
+    countByPlatform,
+    isChatModel,
     matchesCapability,
     sortModels,
     type CapabilityFilter,
@@ -392,7 +407,7 @@ const searchInputProps = computed(() => {
         .trim();
     return {
         icon: useIcon('ui.search').value,
-        placeholder: 'Search models by name, provider, or capability…',
+        placeholder: 'Search models by name, platform, or capability…',
         size: 'sm' as const,
         ...restOverrides,
         ui: {
@@ -498,6 +513,7 @@ const capabilityIcons: Record<CapabilityFilter, string> = reactive({
 
 const {
     favoriteModels,
+    platformStatus, recentModelIds, loadRecentModels, recordRecentModel,
     getFavoriteModels,
     catalog: modelCatalog,
     fetchModels,
@@ -515,10 +531,12 @@ const {
 // Filter / sort state
 // ---------------------------------------------------------------------------
 
+const workspaceModels = useWorkspaceModels();
+const policyError = ref('');
 const scope = ref<CatalogScope>('all');
 const selectedProvider = ref<string | null>(null);
 const capability = ref<CapabilityFilter>('all');
-const sort = ref<CatalogSort>('recommended');
+const sort = ref<CatalogSort>('newest');
 const filtersOpen = ref(false);
 const moreOpen = ref(false);
 const detailSheetOpen = ref(false);
@@ -552,11 +570,6 @@ const mainChips = computed<ChipDef[]>(() => [
 
 const moreChips = computed<ChipDef[]>(() => [
     {
-        key: 'embedding',
-        label: 'Embedding',
-        icon: capabilityIcons.embedding,
-    },
-    {
         key: 'long-context',
         label: 'Long context',
         icon: capabilityIcons['long-context'],
@@ -570,31 +583,32 @@ const moreChips = computed<ChipDef[]>(() => [
 ]);
 
 const sortItems: { label: string; value: CatalogSort }[] = [
-    { label: 'Recommended', value: 'recommended' },
+    { label: 'Newest first', value: 'newest' },
     { label: 'Name A–Z', value: 'name' },
-    { label: 'Price: low to high', value: 'price-asc' },
-    { label: 'Price: high to low', value: 'price-desc' },
+    { label: 'Input price: lowest', value: 'input-price' },
+    { label: 'Output price: lowest', value: 'output-price' },
     { label: 'Context: high to low', value: 'context-desc' },
-    { label: 'Newest', value: 'newest' },
 ];
 
 // Pipeline: search → scope → provider → capability → sort
 const baseModels = computed<OpenRouterModel[]>(() =>
-    searchQuery.value.trim() ? searchResults.value : modelCatalog.value
+    (searchQuery.value.trim() ? searchResults.value : modelCatalog.value).filter(model => isChatModel(model) && !isModelHidden(workspaceModels.policy.value, model.id))
 );
 
 const scopedModels = computed<OpenRouterModel[]>(() => {
+    if (scope.value === 'recent') return baseModels.value.filter(model => recentModelIds.value.includes(model.id));
+    if (scope.value === 'pinned') return baseModels.value.filter(model => workspaceModels.policy.value.pinned.includes(model.id));
     if (scope.value !== 'favorites') return baseModels.value;
     const favIds = new Set(favoriteModels.value.map((f) => f.id));
     return baseModels.value.filter((m) => favIds.has(m.id));
 });
 
-const providerCounts = computed(() => countByProvider(scopedModels.value));
+const providerCounts = computed(() => countByPlatform(scopedModels.value));
 
 const providerFiltered = computed<OpenRouterModel[]>(() => {
     if (!selectedProvider.value) return scopedModels.value;
     const slug = selectedProvider.value;
-    return scopedModels.value.filter((m) => getProviderSlug(m) === slug);
+    return scopedModels.value.filter((m) => modelIdentity(m).platform === slug);
 });
 
 const categoryEntries = computed<CatalogCategoryEntry[]>(() => {
@@ -603,7 +617,6 @@ const categoryEntries = computed<CatalogCategoryEntry[]>(() => {
         { key: 'vision', label: 'Vision' },
         { key: 'tools', label: 'Tools' },
         { key: 'reasoning', label: 'Reasoning' },
-        { key: 'embedding', label: 'Embedding' },
         { key: 'long-context', label: 'Long context' },
         { key: 'free', label: 'Free' },
         { key: 'image-output', label: 'Image output' },
@@ -625,13 +638,13 @@ const visibleModels = computed<OpenRouterModel[]>(() => {
             : providerFiltered.value.filter((m) =>
                   matchesCapability(m, capability.value)
               );
-    return sortModels(filtered, sort.value);
+    return scope.value === 'recent' ? filtered.slice().sort((a, b) => recentModelIds.value.indexOf(a.id) - recentModelIds.value.indexOf(b.id)) : sortModels(filtered, sort.value);
 });
 
 /** Remounts the scroller so a new result set starts measured from the top. */
 const listKey = computed(
     () =>
-        `${searchQuery.value.trim()}|${scope.value}|${selectedProvider.value ?? ''}|${capability.value}|${sort.value}`
+        `${searchQuery.value.trim()}|${scope.value}|${selectedProvider.value ?? ''}|${capability.value}|${sort.value}|${rowEstimateHeight.value}`
 );
 
 const selectedModel = computed<OpenRouterModel | undefined>(() => {
@@ -697,6 +710,28 @@ function toggleFavorite(m: OpenRouterModel) {
     }
 }
 
+const listElement = ref<HTMLElement | null>(null);
+const modelScroller = ref<{ scrollToIndex: (index: number, options: { align: 'center' }) => void } | null>(null);
+async function focusModel(index: number) {
+    const model = visibleModels.value[index];
+    if (!model) return;
+    modelScroller.value?.scrollToIndex(index, { align: 'center' });
+    // The virtualizer publishes its new visible window on the next frame.
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    await nextTick();
+    listElement.value?.querySelector<HTMLElement>(`[data-model-id="${CSS.escape(model.id)}"] button`)?.focus({ preventScroll: true });
+}
+function onListKeydown(event: KeyboardEvent) {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    const row = (event.target as HTMLElement).closest<HTMLElement>('[data-model-id]');
+    if (!row) return;
+    const current = visibleModels.value.findIndex(model => model.id === row.dataset.modelId);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? visibleModels.value.length - 1
+        : current + (event.key === 'ArrowDown' ? 1 : -1);
+    event.preventDefault();
+    void focusModel(Math.max(0, Math.min(visibleModels.value.length - 1, next)));
+}
+
 function onSelectModel(m: OpenRouterModel) {
     selectedId.value = m.id;
     if (!isDesktop.value) {
@@ -707,6 +742,7 @@ function onSelectModel(m: OpenRouterModel) {
 const LAST_MODEL_KEY = 'last_selected_model';
 
 function useSelectedModel(m: OpenRouterModel) {
+    void recordRecentModel(m.id).catch(() => {});
     if (process.client) {
         try {
             localStorage.setItem(LAST_MODEL_KEY, m.id);
@@ -736,12 +772,15 @@ watch(
             selectedId.value = visibleModels.value[0]?.id ?? null;
         }
     },
-    { flush: 'post' }
+    { flush: 'post', immediate: true }
 );
 
 // Reset transient overlay state when the modal closes.
 watch(open, (value) => {
-    if (!value) {
+    if (value) {
+        void loadRecentModels().catch(() => {});
+        void workspaceModels.load().catch(() => { policyError.value = 'Could not load workspace choices. Try again.'; });
+    } else {
         detailSheetOpen.value = false;
         filtersOpen.value = false;
         moreOpen.value = false;
@@ -794,7 +833,7 @@ async function doRefresh() {
     if (refreshing.value) return;
     refreshing.value = true;
     try {
-        await refreshModels();
+        await Promise.all([refreshModels(), workspaceModels.load().then(() => { policyError.value = ''; })]);
     } catch (e) {
         console.warn('[ModelCatalog] model refresh failed', e);
     } finally {
@@ -805,6 +844,8 @@ async function doRefresh() {
 onMounted(() => {
     void fetchModels().catch((error) => console.warn('[ModelCatalog] model fetch failed', error));
 
+    void loadRecentModels().catch(() => {});
+    void workspaceModels.load().catch(() => { policyError.value = 'Could not load workspace choices. Try again.'; });
     getFavoriteModels().then((models) => {
         favoriteModels.value = models;
     });

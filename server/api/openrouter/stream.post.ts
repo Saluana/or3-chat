@@ -1,3 +1,4 @@
+import { readWorkspaceModels, requireWorkspaceModel } from '../../utils/chat/workspace-models';
 import { openChatUpstream, resolveChatCredential } from '../../utils/ai/chat-router';
 import { readChatLimits } from '../../utils/chat/chat-limits';
 import { publicErrorEnvelope, parseRetryAfter } from '~~/shared/errors';
@@ -133,6 +134,9 @@ export default defineEventHandler(async (event) => {
         return cachedSession ??= await resolveSessionContext(event);
     };
     if (isSsrAuthEnabled(event)) requireCloudMutation(event);
+    const modelSession = await getSession();
+    if (modelSession?.authenticated && modelSession.workspace?.id && typeof body.model === 'string')
+        await requireWorkspaceModel(event, modelSession.workspace.id, body.model);
     const selected = await resolveChatCredential(event, body.model, await getSession());
     // Credential guidance names the router that owns the selected model.
     const router = isOpenAiModel(body.model) ? 'openai' as const : undefined;
@@ -288,6 +292,7 @@ export default defineEventHandler(async (event) => {
                 body,
                 contextPolicy,
                 chatLimits: (await readChatLimits(event, workspaceId)).effective,
+                workspaceModels: await readWorkspaceModels(event, workspaceId),
                 apiKey,
                 credentialSource: selected.source,
                 userId,

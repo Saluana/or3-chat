@@ -1,3 +1,4 @@
+import { isModelHidden } from '~~/shared/ai/workspace-models';
 import { z } from 'zod';
 import { createOpenRouterClient, fetchOpenRouterCatalog } from '~~/shared/openrouter';
 import { DelegationModelSelectionError, selectDelegationModel, resolveDelegationModel } from '~~/shared/openrouter/delegation-model-catalog';
@@ -82,6 +83,8 @@ export async function prepareDelegationWait(parent: BackgroundJob, input: {
         const item = parsedTask.data;
         try {
             const selected = selectDelegationModel(catalog, item.model ?? '', item.reasoningEffort, parentModel, item.variant);
+            if (execution.workspaceModels && isModelHidden(execution.workspaceModels, selected.model))
+                throw new DelegationPreparationError('This model is not available in this workspace.');
             const model = resolveDelegationModel(catalog, selected.model);
             if (!model.architecture?.input_modalities?.includes('text') ||
                 !model.architecture.output_modalities?.includes('text') ||

@@ -258,6 +258,11 @@ describe('formatting', () => {
         }
     });
 
+    it('never displays a positive price as free', () => {
+        expect(formatPerMillion('0.000000004')).toBe('$0.004');
+        expect(formatPerMillion('0.0000000000001')).not.toBe('$0.00');
+    });
+
     it('formatTokenCount', () => {
         expect(formatTokenCount(200_000)).toBe('200K');
         expect(formatTokenCount(1_000_000)).toBe('1M');

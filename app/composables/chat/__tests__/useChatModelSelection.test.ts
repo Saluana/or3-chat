@@ -1,9 +1,10 @@
-import { defineComponent, h, nextTick, ref } from 'vue';
+import { defineComponent, h, nextTick, ref, type Ref } from 'vue';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OpenRouterModel } from '~~/shared/openrouter/types';
 import { getDb } from '~/db/client';
 import { setKvByName } from '~/db/kv';
+import { emptyWorkspaceModels } from '~~/shared/ai/workspace-models';
 import { useChatModelSelection } from '../useChatModelSelection';
 
 const modelStore = vi.hoisted(() => ({
@@ -11,6 +12,7 @@ const modelStore = vi.hoisted(() => ({
     favoriteModels: undefined as
         | ReturnType<typeof ref<OpenRouterModel[]>>
         | undefined,
+    policy: undefined as Ref<ReturnType<typeof emptyWorkspaceModels>> | undefined,
     fetchModels: vi.fn(),
     getFavoriteModels: vi.fn(),
 }));
@@ -23,6 +25,8 @@ vi.mock('../useModelStore', () => ({
         getFavoriteModels: modelStore.getFavoriteModels,
     }),
 }));
+
+vi.mock('../useWorkspaceModels', () => ({ useWorkspaceModels: () => ({ policy: modelStore.policy, load: async () => {} }) }));
 
 vi.mock('../useAiSettings', () => ({
     useAiSettings: () => ({
@@ -70,13 +74,15 @@ function mountModelSelection(onChange = vi.fn()) {
     return { selection, wrapper };
 }
 
+beforeEach(() => {
+    modelStore.policy = ref(emptyWorkspaceModels());
+    modelStore.catalog = ref([]);
+    modelStore.favoriteModels = ref([]);
+    modelStore.fetchModels.mockReset().mockResolvedValue([]);
+    modelStore.getFavoriteModels.mockReset().mockResolvedValue([]);
+});
+
 describe('useChatModelSelection', () => {
-    beforeEach(() => {
-        modelStore.catalog = ref([]);
-        modelStore.favoriteModels = ref([]);
-        modelStore.fetchModels.mockReset().mockResolvedValue([]);
-        modelStore.getFavoriteModels.mockReset().mockResolvedValue([]);
-    });
 
     it('propagates the effective route and variant-only changes without synthetic thinking suffixes', async () => {
         const onChange = vi.fn();
@@ -90,6 +96,19 @@ describe('useChatModelSelection', () => {
         await nextTick();
         expect(onChange).toHaveBeenLastCalledWith('provider/model:floor');
         expect(selection.selectedModel.value).toBe('provider/model:thinking');
+        wrapper.unmount();
+    });
+
+    it('skips non-chat models when replacing a hidden default', async () => {
+        modelStore.policy!.value.hidden = ['~openai/gpt-luna-latest'];
+        modelStore.catalog!.value = [
+            model({ id: 'fixture/embedding', architecture: { output_modalities: ['embeddings'] } }),
+            model({ id: 'fixture/chat', architecture: { output_modalities: ['text'] } }),
+        ];
+        const { selection, wrapper } = mountModelSelection();
+        await selection.useInheritedModel();
+        await flushPromises();
+        expect(selection.selectedModel.value).toBe('fixture/chat');
         wrapper.unmount();
     });
 

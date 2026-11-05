@@ -47,6 +47,7 @@ export type HostSettingKeyClass =
 const AUTHORITY_KEYS: ReadonlySet<string> = new Set([
     'admin.guest_access.enabled',
     'plugins.enabled',
+    'chat.models',
 ]);
 
 const AUTHORITY_PREFIXES: readonly string[] = [

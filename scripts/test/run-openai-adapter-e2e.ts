@@ -206,6 +206,8 @@ const environment: Record<string, string> = {
     AUTH_PROVIDER: 'basic-auth', OR3_AUTH_PROVIDER: 'basic-auth', OR3_AUTH_REGISTRATION_MODE: 'invite_only',
     OR3_AUTH_INVITE_TOKEN_SECRET: crypto.randomUUID() + crypto.randomUUID(),
     OR3_AUTH_AUTO_PROVISION: 'false', OR3_GUEST_ACCESS_ENABLED: 'false',
+    // Independent browser scenarios share one loopback IP. Auth throttling has its own suite.
+    OR3_RATE_LIMIT_OVERRIDES_JSON: JSON.stringify({ 'auth:session': { maxRequests: 240 } }),
     OR3_BASIC_AUTH_DB_PATH: join(data, 'auth.sqlite'), OR3_BASIC_AUTH_JWT_SECRET: crypto.randomUUID() + crypto.randomUUID(),
     OR3_BASIC_AUTH_REFRESH_SECRET: crypto.randomUUID() + crypto.randomUUID(),
     OR3_BASIC_AUTH_BOOTSTRAP_EMAIL: 'openai-adapter@example.test', OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD: 'DisposableOpenAiAdapter!123',

@@ -460,6 +460,9 @@ import { useChatToolPreferences } from '~/composables/chat/useChatToolPreference
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { OPENROUTER_OPTION_DESCRIPTORS } from '~~/shared/openrouter/model-variants';
 import type { ModelOptionDescriptor } from '~~/shared/ai/types';
+import { useWorkspaceModels } from '~/composables/chat/useWorkspaceModels';
+import { isModelHidden } from '~~/shared/ai/workspace-models';
+import { modelIdentity } from '~~/shared/ai/model-catalog';
 import { formatModelName, getProviderSlug } from '~/utils/modelCatalog';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useModelVariantItems } from '~/composables/chat/useModelVariantItems';
@@ -685,9 +688,11 @@ const closeButtonProps = computed(() => {
 
 // Favorites model dropdown (narrow composers). Rows open the menu directly.
 const { favoriteModels, catalog } = useModelStore();
+const { policy: workspaceModels } = useWorkspaceModels();
 const selectedModelLabel = computed(() => {
     const model = catalog.value.find(row => row.id === selectedModel.value || row.canonical_slug === selectedModel.value);
-    return formatModelName(model?.name || selectedModel.value?.split('/').at(-1) || 'Choose a model');
+    if (!selectedModel.value) return 'Choose a model';
+    return `${formatModelName(model?.name || selectedModel.value.split('/').at(-1) || selectedModel.value)} · ${modelIdentity({ id: selectedModel.value }).platformName}`;
 });
 
 function providerSlugFor(modelId: string): string {
@@ -695,11 +700,11 @@ function providerSlugFor(modelId: string): string {
 }
 
 const modelItems = computed(() =>
-    (favoriteModels.value ?? [])
+    (favoriteModels.value ?? []).filter(model => !isModelHidden(workspaceModels.value, model.id))
         .map((model) => {
             const value = model.canonical_slug ?? model.id;
             if (!value) return null;
-            return { label: formatModelName(model.name || value), value, slug: providerSlugFor(value) };
+            return { label: `${formatModelName(model.name || value)} · ${modelIdentity(model).platformName}`, value, slug: providerSlugFor(value) };
         })
         .filter(
             (

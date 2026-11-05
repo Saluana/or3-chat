@@ -226,6 +226,7 @@ export interface BackgroundStreamParams {
     /** Internal, independently resolved facts; never accepted from the wire or persisted as authority. */
     contextPolicy?: ContextRequestPolicy;
     chatLimits?: import('~~/shared/chat/chat-limits').ChatLimits;
+    workspaceModels?: import('~~/shared/ai/workspace-models').WorkspaceModels;
 }
 
 function normalizeStreamedFieldMode(value: unknown): StreamedFieldMode {
@@ -437,6 +438,7 @@ export async function startBackgroundStream(
         version: 1,
         credentialSource: params.credentialSource,
         ...(params.chatLimits ? { chatLimits: params.chatLimits } : {}),
+        ...(params.workspaceModels ? { workspaceModels: params.workspaceModels } : {}),
         body: executionBody,
         workspaceId: params.workspaceId,
         referer: params.referer,

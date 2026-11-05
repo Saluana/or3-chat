@@ -39,6 +39,13 @@
                     </div>
                 </details>
             </div>
+            <div v-if="modelCompatibilityMessage" role="status" class="space-y-2 text-xs">
+                <p>{{ modelCompatibilityMessage }}</p>
+                <div class="flex gap-2">
+                    <UButton size="xs" variant="ghost" color="neutral" @click.stop="showModelCatalog = true">Choose model</UButton>
+                    <UButton v-if="!modelCannotReadAttachments" size="xs" variant="soft" color="neutral" @click.stop="toolsAcknowledged = true">Continue without tools</UButton>
+                </div>
+            </div>
             <ChatProjectChoice :thread-id="props.threadId" />
             <!-- Main Input Area -->
             <div class="relative">
@@ -385,6 +392,9 @@
 </template>
 
 <script setup lang="ts">
+import { acceptsImageInput } from '~/utils/modelCatalog';
+import { useChatToolPreferences } from '~/composables/chat/useChatToolPreferences';
+import { openRouterCatalogLookupId, openRouterToolCapability, stripLegacyThinkingSuffix } from '~~/shared/openrouter/selection';
 import { presentError } from '~~/shared/errors';
 import { claimAutomaticCompaction, CompactionError } from '~/db/compaction';
 import { useContextPreview } from '~/composables/chat/useContextPreview';
@@ -392,7 +402,6 @@ import { useModelStore } from '~/composables/chat/useModelStore';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
 import { appendModelVariant } from '~~/shared/openrouter/model-variants';
-import { stripLegacyThinkingSuffix } from '~~/shared/openrouter/selection';
 import { isOpenAiModel } from '~~/shared/openai/models';
 import { reportError } from '~/utils/errors';
 import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
@@ -1314,6 +1323,21 @@ onBeforeUnmount(stopContextWorkspace);
 // would also invalidate when a dependency republishes an unchanged value.
 const invalidateContextDecision = () => { sendBlock.value = undefined; lossyPreview.value = undefined; };
 const contextTools = useToolRegistry();
+const toolsAcknowledged = ref(false);
+const compatibilityTools = useChatToolPreferences({ threadId: () => props.threadId, draftId: () => promptOwnerId.value });
+const compatibilityModel = computed(() => previewModels.catalog.value.find(model => model.id === openRouterCatalogLookupId(selectedModel.value)));
+const modelCannotReadAttachments = computed(() => {
+    return !acceptsImageInput(compatibilityModel.value) && attachments.value.some(file => file.kind === 'image');
+});
+const modelCompatibilityMessage = computed(() => {
+    if (modelCannotReadAttachments.value) return 'This model cannot read these attachments. Choose another model or remove the attachments.';
+    if (!toolsAcknowledged.value && openRouterToolCapability(compatibilityModel.value) === 'unsupported'
+        && compatibilityTools.preferences.value.enabled
+        && contextTools.listTools.value.some(tool => compatibilityTools.preferences.value.tools[tool.definition.function.name] !== false))
+        return 'This model cannot use tools. Choose another model or continue without tools.';
+    return '';
+});
+watch([selectedModel, () => props.threadId], () => { toolsAcknowledged.value = false; });
 watch([() => props.threadId, () => props.contextRevision, selectedModel, modelVariant,
     thinkingEnabled, reasoningEffort, promptText, stagedPromptId, promptSelectionRevision, aiSettings,
     () => contextTools.listTools.value.map((tool) => [tool.definition, tool.enabled.value])], invalidateContextDecision);
@@ -1330,6 +1354,7 @@ async function handleSend(decision: { inspectLossyRequest?: boolean; lossyConfir
 }
 const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfirmation?: import('~/utils/chat/lossy-request').LossyRequestPreview }): Promise<SendResult> => {
     if (props.loading) return { status: 'rejected', reason: 'busy' };
+    if (modelCompatibilityMessage.value) return { status: 'rejected', reason: 'client_limit', error: modelCompatibilityMessage.value };
     if (viewOnly.value) return { status: 'rejected', reason: 'unavailable' };
     // Account first: a signed-out visitor cannot use any key, so never ask for one.
     if (signInRequired.value) {
@@ -1465,6 +1490,7 @@ const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfi
         if (getWorkspaceGeneration() !== submittedWorkspaceGeneration || submittedScope.key !== tabDrafts.scope().key) {
             return await sendResult;
         }
+        void previewModels.recordRecentModel(submittedSettings.model).catch(() => {});
         const sameView = props.tabId === submittedTabId && (!submittedThreadId || props.threadId === submittedThreadId);
         if (!sameView || composerRevision !== submittedRevision) {
             if (!submittedTabId || (tabContentRevisions.get(submittedTabId) ?? 0) !== submittedTabRevision) return await sendResult;

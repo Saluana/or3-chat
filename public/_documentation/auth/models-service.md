@@ -1,6 +1,29 @@
 # Model catalog
 
-Direct OpenAI models appear after their independent catalog request completes.
+The catalog opens newest first. **Platforms** are connections such as OpenRouter
+and direct OpenAI; the model maker is separate from that connection. Existing
+saved route IDs remain valid, including `@openai/` IDs. Models appear as each
+platform completes, so a slow or unavailable platform does not delay another.
+
+Choose **Use** on a row to select immediately, or open its details. Favorites,
+Recently used, and Workspace picks narrow the same list. Recent selections are
+saved per workspace. Search accepts names, IDs, platforms and capability terms
+such as “tools” and “vision”. Embedding-only models are excluded from chat.
+Input and output price sorts are separate, with unknown prices last. Arrow keys
+move between rows; Home/End reach the first/last result, and Enter opens details.
+Use and favorite actions also work with the keyboard.
+
+Workspace admins can set a default, pin picks and hide models in **Workspace
+settings → Workspace models**. Hidden routes cannot start new chat responses;
+OpenRouter routing variants share their base route's restriction. Existing
+history stays intact. Delegated children inherit the admitted workspace policy.
+Personal fixed preferences and explicit chat/project selections retain their
+normal precedence; a hidden selection is refused rather than rerouted silently.
+
+When switching models, unsupported attachments stay in the draft. The composer
+asks the user to choose another model or remove them. Unsupported tools require
+an explicit choice to continue without tools; reasoning remains independent.
+Normal response recovery keeps the ordinary reply/loading presentation.
 Because OpenAI's model-list endpoint does not report capacity, OR3 shows only
 models whose limits are in its host table; newly released models require a table update.
 Direct OpenAI chat uses the Responses API, preserving supported sampling,
@@ -47,7 +70,7 @@ Filtering metadata does not guarantee that a particular account can use a model,
 | Function | Contract |
 | --- | --- |
 | `fetchModels({ force?, ttlMs? })` | Returns `OpenRouterModel[]`; defaults to a one-hour cache TTL. |
-| `fetchModelCatalog({ force?, ttlMs? })` | Returns `{ data, source, fetchedAt, openAiPending? }`. OpenRouter results are available independently; when present, `openAiPending` resolves to the additional direct OpenAI models. `fetchModels` waits for both lists. The shared model store publishes OpenAI models when ready and waits for them when resolving a selected OpenAI model. If OpenRouter is unavailable, OpenAI models are returned alone. |
+| `fetchModelCatalog({ force?, ttlMs? })` | Returns `{ data, source, fetchedAt, openAiPending?, openRouterPending?, stale? }`. The first usable platform is returned immediately. `openAiPending` or `openRouterPending` resolves to the remaining platform models. `fetchModels` waits for both lists. The optional `onPlatformStatus(platform, status, provenance?)` callback reports loading, ready, stale, unavailable or disconnected independently for each platform. Successful status notifications include the platform's source and original fetch time. The shared model store resolves a selected model as soon as its own metadata is ready, without waiting for unrelated platforms. If OpenRouter is unavailable, OpenAI models are returned alone. |
 | `filterByText(models, query)` | Case-insensitive substring match over ID, name, and description. Empty query returns the input list. |
 | `filterByModalities(models, { input?, output? })` | Requires every requested input/output modality in the advertised arrays. |
 | `filterByContextLength(models, min)` | Uses top-provider context length, then model context length, then zero. |
@@ -77,6 +100,8 @@ Fetching uses the shared SDK client and collects its paginated model results, th
 
 Before constructing the catalog SDK client, the service awaits `hydrateUserApiKeyFromKv()` and reads the current `useUserApiKey()` value. Persist user keys through [the key APIs](/documentation/auth/reference). A successful catalog fetch is not proof that a saved personal key was validated.
 
+Merged catalogs preserve each platform's source and fetch time. Cache reloads report `openai-cache` or `openrouter-cache` and retain those timestamps; rewriting a cache record does not renew metadata freshness. Legacy lists keep an unknown fetch time.
+
 ## Prices and capability checks
 
 Prompt and completion prices are numeric strings **per token**. To display a per-million-token value, parse a finite number and multiply by 1,000,000; OR3's `app/utils/modelCatalog.ts` contains its display helpers. Other price fields represent their own billing units; do not apply that multiplier indiscriminately.
@@ -90,6 +115,42 @@ Price buckets use the larger of prompt and completion prices:
 | `medium` | Greater than 0.000002 and at most 0.00001 per token. |
 | `any` | No price filter. |
 
-Missing or invalid prices become zero in this helper, so `free` can include unknown pricing. These buckets are not a price quote or cost estimate. There is no “high” bucket, and `medium` does not include everything above “low.”
+Missing, empty, invalid or negative prices stay unknown and never match a price bucket. The shared parser in `shared/ai/model-catalog.ts` owns this rule for UI and service filters. Small nonzero prices retain precision instead of rounding to free. Direct OpenAI entries show “Price unavailable” when no rate is supplied; details link to the relevant platform pricing source. These buckets are not a price quote or cost estimate. There is no “high” bucket, and `medium` does not include everything above “low.”
 
 For capability checks, inspect `architecture.input_modalities`, `architecture.output_modalities`, `supported_parameters`, and context limits. Preserve unknown values rather than treating absent metadata as a supported capability. See [chat types](/documentation/types/chat-types) and [provider message preparation](/documentation/auth/openrouter-build).
+
+
+## Adding a platform adapter
+
+Use the existing `shared/ai` contracts and execution paths; a catalog entry alone
+does not add an integration. `ModelRef` separates the runtime router ID from the
+model ID. `modelIdentity()` in `shared/ai/model-catalog.ts` presents the platform,
+route and maker without changing persisted route IDs. Its maker-qualified `modelId`
+matches the same named model across platforms; aliases and snapshots remain distinct. Add any new platform's
+identity mapping alongside its real adapter, credentials and transport.
+
+- Normalize the catalog at its platform boundary. Preserve unknown prices and
+  capabilities; do not invent model capacity. Supply verified limits before
+  enabling sends. Model capabilities, application support and account access
+  are distinct.
+- Use the existing credential policy. Never return a key with a catalog entry.
+  Publish catalog failures independently, preserving usable platform results.
+- Map request history, reasoning and tool results through the adapter, and emit
+  the shared stream events and usage shape. Keep cancellation and resume behavior
+  consistent with the existing chat lifecycle.
+- Keep public links platform-specific. Prices are per token internally; source
+  links and display precision must not imply unknown or tiny rates are free.
+- Extend the existing browser journeys with realistic fixtures: missing prices,
+  duplicate names on different platforms, new IDs, stale data, partial outages,
+  unsupported attachments and tools, and cross-platform conversation history.
+  Capture screenshots/receipts. Run the targeted suites and typecheck before
+  considering an adapter ready.
+
+Workspace curation uses the existing private `WorkspaceSettingsStore`, key
+`chat.models`, with `{ hidden: string[], pinned: string[], defaultModel: string | null }`.
+The admin GET/POST endpoint is `/api/admin/workspace/models`; POST requires the
+existing admin mutation protections. `/api/workspaces/models` returns only the
+current authorized workspace's choices. Curation governs chat, not the separate
+plugin AI allowlist. User-writable synced KV is never policy authority.
+
+`GET /api/admin/workspace/model-catalog?workspaceId=…` supplies the admin picker under the same workspace authorization as curation. Deployment admins can use it without a chat login. It uses instance credentials unless the administrator has a chat session for the target workspace, where their own credential policy applies; it never borrows another workspace's personal keys. It returns `{ data, unavailable }`, retaining healthy platforms and reporting failed platform names for retry. No credentials are returned.
