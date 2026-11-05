@@ -153,7 +153,7 @@ export function reduceNormalizedStreamEvent(
     state: NormalizedStreamState,
     event: AiEvent
 ): NormalizedStreamState {
-    if (state.terminal !== 'active' || event.type === 'done') return state;
+    if (state.terminal !== 'active' || event.type === 'done' || event.type === 'provider_state') return state;
     if (event.type === 'usage') {
         const measurement = normalizeProviderRequestUsage(event.usage);
         if (!measurement) return state;

@@ -183,6 +183,7 @@ describe('POST /api/openrouter/stream credential authorization', () => {
             openrouterBaseUrl: 'https://openrouter.test/api/v1',
             openrouterAllowUserOverride: true,
             openrouterRequireUserKey: false,
+            public: {},
             limits: {
                 enabled: false,
                 requestsPerMinute: 0,

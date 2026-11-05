@@ -1,17 +1,14 @@
 import type { AiAdapter } from '../ai/runtime';
-import type { AiEvent } from '../ai/events';
 import type { AiCompletion, AiCompletionRequest } from '../ai/types';
-import { parseOpenRouterSSE, type StreamedFieldMode } from '../openrouter/parseOpenRouterSSE';
-import { withIdleWatchdog } from '../openrouter/deadlines';
 import { createOpenRouterCompletionAdapter, decodeChatCompletion } from '../openrouter/adapter';
 import { openAiApiModel, openAiReasoningEfforts } from './models';
 
 // Chat Completions accepts no OpenRouter routing, plugin, usage or search options.
 const REQUEST_KEYS = ['stream', 'tool_choice', 'parallel_tool_calls', 'temperature', 'top_p', 'stop', 'seed',
-    'response_format', 'frequency_penalty', 'presence_penalty', 'logit_bias', 'user'];
-const MESSAGE_KEYS = ['role', 'content', 'name', 'tool_calls', 'tool_call_id'];
+    'response_format', 'frequency_penalty', 'presence_penalty', 'logit_bias', 'user', 'reasoning_effort'];
+const MESSAGE_KEYS = ['role', 'content', 'name', 'tool_calls', 'tool_call_id', '_openai_reasoning'];
 
-const EFFORT_ORDER = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'];
+const EFFORT_ORDER = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
 
 /** The nearest effort the model accepts, rounding up; OpenAI refuses any effort outside a family's list. */
 function reasoningEffort(model: string, reasoning: { effort?: unknown; enabled?: unknown } | undefined): string | undefined {
@@ -45,7 +42,9 @@ export function encodeOpenAiRequest(body: Record<string, unknown>): Record<strin
     else delete request.tool_choice;
     const limit = body.max_completion_tokens ?? body.max_tokens;
     if (typeof limit === 'number') request.max_completion_tokens = limit;
-    const effort = reasoningEffort(request.model as string, body.reasoning as { effort?: unknown; enabled?: unknown } | undefined);
+    const effort = reasoningEffort(request.model as string, (body.reasoning ??
+        (body.reasoning_effort !== undefined ? { effort: body.reasoning_effort } : undefined)) as { effort?: unknown; enabled?: unknown } | undefined);
+    delete request.reasoning_effort;
     if (effort) request.reasoning_effort = effort;
     if (request.stream === true) request.stream_options = { include_usage: true };
     return request;
@@ -61,22 +60,5 @@ export function createOpenAiCompletionAdapter(): AiAdapter<AiCompletionRequest, 
             return encodeOpenAiRequest(await shared.prepare({ ...request, model: { routerId: 'openrouter', modelId: request.model.modelId } }));
         },
         decodeCompletion: decodeChatCompletion,
-    };
-}
-
-/** OpenAI's chunk format is the subset OR3's SSE decoder already reads. */
-export function createOpenAiStreamAdapter(options: {
-    signal?: AbortSignal;
-    idleTimeoutMs?: number;
-    streamedFieldMode?: StreamedFieldMode;
-} = {}): AiAdapter<Record<string, unknown>, Record<string, unknown>, AiEvent> {
-    return {
-        id: 'openai',
-        prepare: encodeOpenAiRequest,
-        async *decodeStream(response) {
-            if (!response.body) throw new Error('OpenAI response has no stream');
-            yield* parseOpenRouterSSE(withIdleWatchdog(response.body, { signal: options.signal, timeoutMs: options.idleTimeoutMs }),
-                { streamedFieldMode: options.streamedFieldMode });
-        },
     };
 }

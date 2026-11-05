@@ -49,19 +49,19 @@ The code snippets below run in application source with `useHooks`, `getDb`, and 
 
 **Symptoms:** After clicking admin logout, admin grants still exist and some privileged non-panel operations may still succeed.
 
-**Cause:** In Clerk + Convex mode, admin grants are persisted in `admin_users` and are separate from the super-admin cookie.
+**Cause:** Deployment-admin grants are persisted by the selected admin store and are separate from the super-admin cookie.
 
-`POST /api/admin/auth/logout` clears only `or3_admin`. It does not sign out Clerk and does not revoke deployment admin grants.
+`POST /api/admin/auth/logout` clears only `or3_admin`. It does not sign out the application account or revoke deployment-admin grants.
 
 Note:
-- `/admin/*` pages are super-admin-only. A deployment-admin grant alone should not open the admin panel.
+- A granted workspace owner can still open workspace-scoped admin pages; super-admin routes require the separate super-admin login.
 
 **Checks:**
 - Open `/admin/admin-users` as super admin and verify whether the user has a grant.
 
 **Fix:**
 - Revoke the user in `/admin/admin-users` if they should not have deployment admin.
-- Optionally sign out Clerk from the main app session too.
+- Optionally sign out the main app account too.
 
 See: [Deployment administration](/documentation/cloud/auth-system#deployment-administration)
 

@@ -97,6 +97,8 @@ export function createTurnPreparation(ports: {
         };
         const workspaceGeneration = getWorkspaceGeneration();
         const toolDraftId = options.toolDraftId?.();
+        const newPromptSelection = pendingPromptIdRef.value || DEFAULT_PROMPT_SELECTION;
+        const taskPrompt = ports.taskPrompt();
         const preparationHookNames = delegationPreparationFilters;
         const ownsFilterChain = hooks.captureFilterChain(preparationHookNames);
         let hadPreparationAction = typeof hooks.hasAction === 'function' && Boolean(hooks.hasAction('ai.chat.send:action:before'));
@@ -114,6 +116,13 @@ export function createTurnPreparation(ports: {
         const { resolveChatProject, readProjectWorkspace, moveChatToProject } = await import('~/db/project-workspace');
         const initialProjectId = requestScope.threadId ? await resolveChatProject(requestScope.originDb, requestScope.threadId) : null;
         requestScope.expectedProjectId = initialProjectId;
+        // Project intake is tied to the active pane. A pending navigation must
+        // not allow that intake to write after the pane has changed.
+        if (initialProjectId && requestScope.navigationPendingBeforeSave) {
+            requestScope.cancelled = true;
+            requestScope.abortController?.abort();
+            return early({ status: 'aborted', requestId, reason: 'aborted' });
+        }
         let projectAttachmentScope: WorkspaceOperationScope | undefined;
         let projectExtractionScope: WorkspaceOperationScope | undefined;
         if (requestScope.threadId && initialProjectId) {
@@ -129,7 +138,6 @@ export function createTurnPreparation(ports: {
         const projectState = initialProjectId ? await readProjectWorkspace(requestScope.originDb, initialProjectId) : undefined;
         const capturedPreference = await useAiSettings().captureContextPreference();
         if (!ownsPreparation()) return early({ status: 'aborted', requestId, reason: 'aborted' });
-        const newPromptSelection = pendingPromptIdRef.value || DEFAULT_PROMPT_SELECTION;
         const masterPrompt = useAiSettings().settings.value.masterSystemPrompt;
 
         // OpenAI models use the server's OpenAI credential, which the stream route checks.
@@ -432,7 +440,7 @@ export function createTurnPreparation(ports: {
             userMaxContextTokens: capturedPreference.maxContextTokens, source: readiness.source,
             requestedCompletionTokens: sendMessagesParams.maxCompletionTokens, measuredUsage });
         const systemMessage = await buildSystemPromptMessage({ threadId: preparationThreadId,
-            promptSelection: newPromptSelection, activePromptContent: ports.taskPrompt(),
+            promptSelection: newPromptSelection, activePromptContent: taskPrompt,
             masterPrompt });
         const candidateUser: ChatMessage = { role: 'user', content: parts,
             file_hashes: file_hashes.length ? serializeFileHashes(file_hashes) : undefined };
@@ -515,11 +523,11 @@ export function createTurnPreparation(ports: {
         if (!ownsPreparation()) return early({ status: 'aborted', requestId, reason: 'aborted' });
         if (JSON.stringify(currentToolPreferences) !== JSON.stringify(chatToolPreferences)
             || !ownsFilterChain() || useAiSettings().settings.value.masterSystemPrompt !== masterPrompt
-            || (!preparationThreadId && (pendingPromptIdRef.value || DEFAULT_PROMPT_SELECTION) !== newPromptSelection)
+            || (!preparationThreadId && !requestScope.navigationPendingBeforeSave && (pendingPromptIdRef.value || DEFAULT_PROMPT_SELECTION) !== newPromptSelection)
             || JSON.stringify(filterProjectTools(modelSupportsTools ? toolRegistry.getEnabledDefinitions({ workspaceId: requestScope.workspaceId,
                 threadId: admissionThreadId }, currentToolPreferences).filter(tool => !options.excludedTools?.includes(tool.function.name)) : [])) !== JSON.stringify(advertisedToolDefs))
             return early({ status: 'rejected', requestId, reason: 'unavailable', error: 'Request configuration changed during preparation. Retry the request.' });
-        if (!preparationThreadId && options.toolDraftId?.() !== toolDraftId)
+        if (!preparationThreadId && !requestScope.navigationPendingBeforeSave && options.toolDraftId?.() !== toolDraftId)
             return early({ status: 'rejected', requestId, reason: 'unavailable', error: 'The active draft changed. Retry the request.' });
         if (lossyPreview) return early({ status: 'rejected', requestId, reason: 'context_full', lossyPreview,
             error: 'Review the listed omissions before sending this one request.' });

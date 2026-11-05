@@ -249,6 +249,8 @@ export default defineNuxtConfig({
         ...applicationPlan.runtimeConfig,
         public: {
             ...applicationPlan.runtimeConfig.public,
+            chatToolIterations: 10,
+            chatGeneratedImages: 6,
             devTools:
                 process.env.NODE_ENV !== 'production' &&
                 process.env.OR3_DEV_TOOLS === 'true',

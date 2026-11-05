@@ -6,8 +6,11 @@
             'chat-container-root flex w-full flex-1 h-full min-h-0 flex-col overflow-hidden relative [container:chat-pane/size]',
             containerProps?.class ?? '',
             { 'chat-container--empty': Boolean(emptyAppearance) },
+            { 'chat-container--rebinding': paneRebinding },
         ]"
+        :aria-busy="paneRebinding || undefined"
     >
+        <div v-if="paneRebinding" class="chat-rebinding-status" role="status">Loading…</div>
         <!-- Virtualized messages (Req 3.1) -->
         <!-- Or3Scroll is now the scroll container -->
         <!-- Virtualized messages (Req 3.1) -->
@@ -344,13 +347,13 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-    (e: 'thread-selected', id: string): void;
+    (e: 'thread-selected', id: string, originTabId?: string): void;
     (e: 'compaction-committed', target: { threadId: string; messageId: string; originThreadId: string; generation: number }): void;
     (e: 'view-compaction-source', target: { threadId: string; messageId: string; originThreadId: string; scrollMessageId?: string; generation: number }): void;
     (e: 'view-related-thread', target: { threadId: string; originThreadId: string; anchorMessageId: string; generation: number }): void;
     (e: 'reached-top'): void;
     (e: 'reached-bottom'): void;
-    (e: 'tab-status', status: WorkspaceTabStatus): void;
+    (e: 'tab-status', status: WorkspaceTabStatus, tabId?: string): void;
 }>();
 
 // ── First-run welcome card ──────────────────────────────────────────────
@@ -472,27 +475,33 @@ let deferredHistory: {
 // Reset the scroller when the shown conversation changes, together with its
 // rows; resetting on the binding alone re-renders the outgoing history.
 const scrollContentKey = ref(props.tabId ?? props.threadId ?? 'new-thread');
+const paneRebinding = ref(false);
+let paneRebindRevision = 0;
 
 // Watch the thread and its history together. A pane replaces both at once when
 // it switches conversations; that loaded history seeds the switch, so the list
 // never empties while the composable reads the same rows again.
 watch(
-    [() => props.threadId, () => props.messageHistory],
-    async ([newId, mh], [oldId, oldHistory]) => {
+    [() => props.threadId, () => props.messageHistory, () => props.tabId],
+    async ([newId, mh, newTabId], [oldId, oldHistory, oldTabId]) => {
         const historyChanged = mh !== oldHistory;
-        if (newId === oldId) {
+        if (newId === oldId && (newTabId === oldTabId || Boolean(newId))) {
             syncMessageHistory(mh);
             return;
         }
+        const rebindRevision = ++paneRebindRevision;
         scrollContentKey.value = props.tabId ?? newId ?? 'new-thread';
         deferredHistory = undefined;
         const currentId = chat.value?.threadId?.value;
         // Avoid re-initializing if the composable already set the same id (first-send case)
         if (newId && currentId && newId === currentId) {
+            if (paneRebinding.value) void chat.value?.switchThread?.(newId);
+            paneRebinding.value = false;
             if (historyChanged) syncMessageHistory(mh);
             return;
         }
         // Rebind in place — never call useChat() outside setup (inject warning).
+        paneRebinding.value = true;
         try {
             await chat.value?.switchThread?.(newId, {
                 pendingPromptId: pendingPromptId.value || undefined,
@@ -507,6 +516,8 @@ watch(
                     e
                 );
             }
+        } finally {
+            if (rebindRevision === paneRebindRevision) paneRebinding.value = false;
         }
     }
 );
@@ -564,13 +575,16 @@ watch(() => chat.value.loading.value, loading => {
 });
 
 // When a new thread id is created internally (first send), propagate upward once
+let newThreadOriginTabId: string | undefined;
 watch(
     () => chat.value?.threadId?.value,
     (id, prev) => {
         if (!prev && id) {
-            emit('thread-selected', id);
+            if (newThreadOriginTabId) emit('thread-selected', id, newThreadOriginTabId);
+            else emit('thread-selected', id);
             // Clear pending prompt (and pane-level cached) since it's applied
-            if (promptOwnerId.value) clearPanePendingPrompt(promptOwnerId.value);
+            if (newThreadOriginTabId ?? promptOwnerId.value) clearPanePendingPrompt((newThreadOriginTabId ?? promptOwnerId.value)!);
+            newThreadOriginTabId = undefined;
             pendingPromptId.value = null;
         }
     }
@@ -1261,6 +1275,8 @@ onBeforeUnmount(() => {
     flushCardState();
 });
 
+const tabSendTokens = new Map<string, object>();
+
 function onSend(payload: ChatInputSendPayload) {
     if (loading.value || retryPending.value || compaction.active.value) return;
     model.value = appendModelVariant(stripLegacyThinkingSuffix(payload.model || model.value), payload.modelVariant ?? 'off');
@@ -1319,6 +1335,10 @@ function onSend(payload: ChatInputSendPayload) {
     // Send message via useChat composable
     const activeChat = chat.value;
     if (!activeChat) return;
+    const originTabId = props.tabId;
+    const sendToken = {};
+    if (originTabId) tabSendTokens.set(originTabId, sendToken);
+    if (!activeChat.threadId.value) newThreadOriginTabId = originTabId;
     const result = activeChat.send({
         editorDoc: payload.editorDoc,
         content: payload.text,
@@ -1337,12 +1357,17 @@ function onSend(payload: ChatInputSendPayload) {
         result,
         waitForDurableSendAcceptance(activeChat, result)
     );
+    const finishTabSend = () => {
+        if (!originTabId || tabSendTokens.get(originTabId) !== sendToken) return;
+        tabSendTokens.delete(originTabId);
+        if (props.tabId !== originTabId) emit('tab-status', 'idle', originTabId);
+    };
     void result
         .then(() => {
+            finishTabSend();
             // Ensure layout is stable after sending (input shrink + new message)
             nextTick(() => scroller.value?.refreshMeasurements?.());
-        })
-        .catch(() => {});
+        }, finishTabSend);
 }
 
 async function onRetry(messageId: string, options: { afterEdit?: boolean } = {}) {
@@ -1587,6 +1612,14 @@ defineExpose({ captureViewState, restoreViewState, scrollToMessage, compactThrea
 </script>
 
 <style>
+.chat-container--rebinding > :not(.chat-rebinding-status) { visibility: hidden; }
+.chat-rebinding-status {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: var(--md-on-surface-variant);
+}
 /* Host layout must load even when a theme replaces ChatEmptyState. */
 .chat-container--empty .chat-empty-background {
     position: absolute;

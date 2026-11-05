@@ -199,7 +199,7 @@ describe('openrouterStream', () => {
             undefined,
             { ...backgroundMeasurement, prompt_tokens: 0, completion_tokens: 0 },
         ];
-        const statuses = payloads.map((usage) => ({ id: 'job-1', status: 'complete', threadId: 'thread',
+        const statuses = payloads.map((usage) => ({ id: 'job-1', status: 'streaming', threadId: 'thread',
             messageId: 'assistant', model: 'model-1', chunksReceived: 1, startedAt: 1,
             content: 'answer', usage }));
         const accepted: BackgroundJobStatus[] = [];

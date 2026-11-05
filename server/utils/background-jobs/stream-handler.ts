@@ -3,6 +3,7 @@ import { getChatJobExecution } from './types';
 import { serializeError, normalizeError, presentError, parseRetryAfter } from '~~/shared/errors';
 import { OpenRouterStreamError, normalizeProviderResponseError } from '~~/shared/openrouter/errors';
 import { attachRequestUsage, captureUsagePrefix, type UsagePrefix } from '~~/shared/chat/request-usage';
+import { normalizeOpenAiUsage } from '~~/shared/ai/events';
 import { readRequestUsage } from '~~/shared/chat/compaction';
 import type { CountableChatMessage, ContextRequestPolicy } from '~~/shared/chat/context-budget';
 import { captureContextEnvelope } from '~~/shared/chat/context-budget';
@@ -67,6 +68,7 @@ import { executeServerTool, getServerTool } from '../chat/tool-registry';
 import { createOpenRouterClient, fetchOpenRouterCatalog } from '~~/shared/openrouter';
 import { MAX_TOOL_ITERATIONS } from '~/utils/chat/constants';
 import { decodeOpenRouterStream } from '~~/shared/openrouter/adapter';
+import { decodeOpenAiResponseStream } from '~~/shared/openai/responses';
 import { openChatUpstream } from '../ai/chat-router';
 import { isOpenAiModel } from '~~/shared/openai/models';
 import { encodeProviderRequest } from '~~/shared/ai/provider-body';
@@ -223,6 +225,7 @@ export interface BackgroundStreamParams {
     attempt?: number;
     /** Internal, independently resolved facts; never accepted from the wire or persisted as authority. */
     contextPolicy?: ContextRequestPolicy;
+    chatLimits?: import('~~/shared/chat/chat-limits').ChatLimits;
 }
 
 function normalizeStreamedFieldMode(value: unknown): StreamedFieldMode {
@@ -433,6 +436,7 @@ export async function startBackgroundStream(
     const execution: BackgroundJobExecution = {
         version: 1,
         credentialSource: params.credentialSource,
+        ...(params.chatLimits ? { chatLimits: params.chatLimits } : {}),
         body: executionBody,
         workspaceId: params.workspaceId,
         referer: params.referer,
@@ -667,9 +671,10 @@ export async function consumeBackgroundStream(params: {
     };
 
     try {
-        for await (const evt of decodeOpenRouterStream(params.stream, params.streamedFieldMode)) {
-            const measuredEvent = evt.type === 'usage'
-                ? { ...evt, requestUsage: attachRequestUsage(usagePrefix, evt.usage, {
+        for await (const evt of isOpenAiModel(params.context.body.model) ? decodeOpenAiResponseStream(params.stream) : decodeOpenRouterStream(params.stream, params.streamedFieldMode)) {
+            const usage = evt.type === 'usage' ? normalizeOpenAiUsage(evt.usage, usagePrefix?.model ?? '') : undefined;
+            const measuredEvent = evt.type === 'usage' && usage
+                ? { ...evt, usage, requestUsage: attachRequestUsage(usagePrefix, usage, {
                     requestId: usageRequestId, iteration: normalizedState.iteration, measuredAt: Date.now(),
                 }) } : evt;
             const normalizedEvent =
@@ -960,6 +965,7 @@ export async function consumeBackgroundStreamWithTools(params: {
     streamedFieldMode?: StreamedFieldMode;
     contextPolicy?: ContextRequestPolicy;
 }): Promise<void> {
+    const toolIterationLimit = params.context.execution?.chatLimits?.toolIterations ?? MAX_TOOL_ITERATIONS;
     const historyAdmission = params.context.execution?.history;
     const historyJob = historyAdmission ? await params.provider.getJob(params.jobId, params.context.userId) : null;
     const contentBase = params.context.execution?.contentBase ?? '';
@@ -1391,7 +1397,7 @@ export async function consumeBackgroundStreamWithTools(params: {
         }
         normalizedState = finishNormalizedIteration(
             normalizedState,
-            MAX_TOOL_ITERATIONS
+            toolIterationLimit
         ).state;
         await persistToolCheckpoint(undefined, undefined);
         return false;
@@ -1413,7 +1419,7 @@ export async function consumeBackgroundStreamWithTools(params: {
             if (parked) return;
             normalizedState = finishNormalizedIteration(
                 normalizedState,
-                MAX_TOOL_ITERATIONS
+                toolIterationLimit
             ).state;
         }
         for (;;) {
@@ -1421,7 +1427,7 @@ export async function consumeBackgroundStreamWithTools(params: {
             // prior tool iteration before opening another paid model request.
             normalizedState = finishNormalizedIteration(
                 normalizedState,
-                MAX_TOOL_ITERATIONS
+                toolIterationLimit
             ).state;
             normalizedState = beginNormalizedIteration(normalizedState);
             const loopIteration = normalizedState.iteration;
@@ -1491,14 +1497,17 @@ export async function consumeBackgroundStreamWithTools(params: {
             const guardedBody = withIdleWatchdog(upstream.body, {
                 signal: params.abortSignal,
             });
-            for await (const evt of decodeOpenRouterStream(guardedBody, params.streamedFieldMode)) {
+            let providerState: Record<string, unknown>[] = [];
+            for await (const evt of isOpenAiModel(params.body.model) ? decodeOpenAiResponseStream(guardedBody) : decodeOpenRouterStream(guardedBody, params.streamedFieldMode)) {
+                if (evt.type === 'provider_state') { providerState = evt.items; continue; }
                 await assertJobNotAborted({
                     provider: params.provider,
                     jobId: params.jobId,
                     abortSignal: params.abortSignal,
                 });
-                const measuredEvent = evt.type === 'usage'
-                    ? { ...evt, requestUsage: attachRequestUsage(usagePrefix, evt.usage, {
+                const usage = evt.type === 'usage' ? normalizeOpenAiUsage(evt.usage, usagePrefix?.model ?? '') : undefined;
+                const measuredEvent = evt.type === 'usage' && usage
+                    ? { ...evt, usage, requestUsage: attachRequestUsage(usagePrefix, usage, {
                         requestId: usageRequestId, iteration: loopIteration, measuredAt: Date.now(),
                     }) } : evt;
                 normalizedState = reduceNormalizedStreamEvent(normalizedState, measuredEvent);
@@ -1574,7 +1583,7 @@ export async function consumeBackgroundStreamWithTools(params: {
             if (normalizedState.iterationToolCallIds.length === 0) {
                 normalizedState = finishNormalizedIteration(
                     normalizedState,
-                    MAX_TOOL_ITERATIONS
+                    toolIterationLimit
                 ).state;
                 break;
             }
@@ -1582,6 +1591,7 @@ export async function consumeBackgroundStreamWithTools(params: {
             orMessages.push({
                 role: 'assistant',
                 content: [{ type: 'text', text: loopContent || '' }],
+                ...(providerState.length ? { _openai_reasoning: providerState } : {}),
                 tool_calls: pendingToolCalls.map((toolCall) => ({
                     id: toolCall.id,
                     type: 'function' as const,
@@ -1604,7 +1614,7 @@ export async function consumeBackgroundStreamWithTools(params: {
 
             normalizedState = finishNormalizedIteration(
                 normalizedState,
-                MAX_TOOL_ITERATIONS
+                toolIterationLimit
             ).state;
 
         }

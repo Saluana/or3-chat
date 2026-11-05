@@ -120,11 +120,6 @@ test('a nonshipping router reaches the shared text and tool consumer with opaque
     expect(await page.locator('[data-empty-router-selector] button').count()).toBe(0);
     expect(await page.locator('[data-empty-router-settings] [aria-label="Model variant"]').count()).toBe(0);
     await info.attach('adapter-conformance', { contentType: 'application/json', body: JSON.stringify(result) });
-});
-
-test('a nonshipping router drives the real foreground tool loop and durable transcript', async ({ page }, info) => {
-    await open(page, [], 'adapter-conformance');
-    const result = JSON.parse(await page.locator('[data-adapter-conformance]').textContent() ?? '{}');
     expect(result.loopError).toBeUndefined();
     expect(result.loop.models).toEqual(['vendor/model:online:free', 'vendor/model:online:free']);
     expect(result.loop.toolExecutions).toBe(1);

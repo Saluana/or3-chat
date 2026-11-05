@@ -114,6 +114,10 @@ export type ChatRequest = {
     readonly settled: Promise<void>;
     resolveSettled: () => void;
     ownsView: () => boolean;
+    /** A saved native turn may finish admission after its view changes. */
+    ownsDetachedAdmission?: () => boolean;
+    detachAdmissionOnNavigation?: boolean;
+    navigationPendingBeforeSave?: boolean;
     projectTerminal: (result: RequestFinalization) => void;
     finalization?: Promise<RequestFinalization>;
     stopConfirmation?: Promise<boolean>;

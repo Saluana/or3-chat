@@ -496,22 +496,20 @@ const capabilityIcons: Record<CapabilityFilter, string> = reactive({
 // Data & search
 // ---------------------------------------------------------------------------
 
-const modelCatalog = ref<OpenRouterModel[]>([]);
-const {
-    query: searchQuery,
-    results: searchResults,
-    ready: searchReady,
-} = useModelSearch(modelCatalog);
-
 const {
     favoriteModels,
     getFavoriteModels,
-    catalog,
+    catalog: modelCatalog,
     fetchModels,
     refreshModels,
     addFavoriteModel,
     removeFavoriteModel,
 } = useModelStore();
+const {
+    query: searchQuery,
+    results: searchResults,
+    ready: searchReady,
+} = useModelSearch(modelCatalog);
 
 // ---------------------------------------------------------------------------
 // Filter / sort state
@@ -797,7 +795,6 @@ async function doRefresh() {
     refreshing.value = true;
     try {
         await refreshModels();
-        modelCatalog.value = catalog.value.slice();
     } catch (e) {
         console.warn('[ModelCatalog] model refresh failed', e);
     } finally {
@@ -806,9 +803,7 @@ async function doRefresh() {
 }
 
 onMounted(() => {
-    fetchModels().then(() => {
-        modelCatalog.value = catalog.value;
-    });
+    void fetchModels().catch((error) => console.warn('[ModelCatalog] model fetch failed', error));
 
     getFavoriteModels().then((models) => {
         favoriteModels.value = models;

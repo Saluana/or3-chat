@@ -8,9 +8,12 @@ import { normalizeError, presentError, parseRetryAfter } from '~~/shared/errors'
 import type { ORStreamEvent } from '~~/shared/openrouter/parseOpenRouterSSE';
 import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
 import { createOpenRouterStreamAdapter } from '~~/shared/openrouter/adapter';
+import { decodeOpenAiResponseStream } from '~~/shared/openai/responses';
+import { withIdleWatchdog } from '~~/shared/openrouter/deadlines';
 import { isOpenAiModel } from '~~/shared/openai/models';
 import { openAiKeyHeaders } from '~/core/auth/useOpenAiKey';
 import { createAiRuntime } from '~~/shared/ai/runtime';
+import { normalizeOpenAiUsage } from '~~/shared/ai/events';
 import { OpenRouterStreamError, normalizeProviderResponseError } from '~~/shared/openrouter/errors';
 import { sensitiveValueMetadata } from '~~/shared/logging/sensitive-metadata';
 import { abortableDelay, fetchWithResponseDeadline, OpenRouterTimeoutError,
@@ -126,9 +129,16 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
         };
     }
     const providerSnapshot = JSON.parse(JSON.stringify(providerBody)) as OpenRouterRequestBody;
-    const runtime = createAiRuntime(createOpenRouterStreamAdapter<typeof providerSnapshot>({
+    const streamAdapter = isOpenAiModel(providerSnapshot.model) ? {
+        id: 'openai', prepare: (request: typeof providerSnapshot) => request,
+        async *decodeStream(response: Response) {
+            if (!response.body) throw new Error('OpenAI response has no stream');
+            yield* decodeOpenAiResponseStream(withIdleWatchdog(response.body, { signal, timeoutMs: params.idleTimeoutMs }));
+        },
+    } : createOpenRouterStreamAdapter<typeof providerSnapshot>({
         signal, idleTimeoutMs: params.idleTimeoutMs, streamedFieldMode: params.streamedFieldMode,
-    }), openPreparedProvider);
+    });
+    const runtime = createAiRuntime(streamAdapter, openPreparedProvider);
     const { messages: _messages, ...providerConfiguration } = providerSnapshot;
     const usagePrefix = await captureUsagePrefix({ model: providerSnapshot.model, messages: providerSnapshot.messages,
         tools: providerSnapshot.tools, modalities: providerSnapshot.modalities, configuration: providerConfiguration,
@@ -177,8 +187,10 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
     };
     const measuredEvent = (event: ORStreamEvent): ORStreamEvent => {
         acceptProvider();
-        return event.type === 'usage' ? { ...event, requestUsage: attachRequestUsage(usagePrefix, event.usage,
-            { requestId: usageRequestId, iteration: 1, measuredAt: Date.now() }) } : event;
+        if (event.type !== 'usage') return event;
+        const usage = normalizeOpenAiUsage(event.usage, providerSnapshot.model);
+        return { ...event, usage, requestUsage: attachRequestUsage(usagePrefix, usage,
+            { requestId: usageRequestId, iteration: 1, measuredAt: Date.now() }) };
     };
 
     let streamCredentialSource: 'server' | 'personal' | undefined;

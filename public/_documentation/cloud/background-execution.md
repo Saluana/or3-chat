@@ -45,6 +45,28 @@ Eligibility on the client requires all of the following:
 Eligible chat turns start as server-side background jobs whenever background
 streaming is enabled. There is no separate start-mode setting.
 
+The outgoing user message and its pending assistant response are saved
+together before server admission. If the browser closes before admission, the
+pending response becomes retryable after its foreground lease expires (up to
+30 seconds). A retry is explicit so an uncertain attempt is not sent twice.
+
+## Chat limits
+
+In **Admin → Workspace → Chat limits**, instance administrators can set the
+default and maximum tool iterations (1–100, default 10) and generated images
+saved per response (0–24, default 6). An owner of the active workspace with a
+deployment administrator grant can set lower limits for that workspace or
+choose **Use instance limits** when the sync provider supports those grants.
+If an instance
+limit is lowered below a saved workspace override, the lower instance limit
+applies. Changes apply to new responses; a background job keeps the limits it
+captured when admitted.
+
+The image setting limits images saved by the app, not images a provider may
+already have generated. Foreground tool limits are enforced by the app, so
+these settings are operational controls, not a spending or security quota for
+provider credentials.
+
 Background chat admission requires a coherent job-provider capability set:
 `claimJob`, `claimNextJob`, `renewJobLease`, `updateJobExecution`,
 `saveTerminalSnapshot`, `setHistoryPhase`, and `getPendingHistoryJobs`. A

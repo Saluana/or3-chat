@@ -54,6 +54,24 @@ afterEach(async () => {
 // Distinct catalog contract: real service/store/cache and SDK normalization.
 // Only external transport is scripted. No readiness operation is mocked.
 describe('existing catalog context readiness', () => {
+    it('publishes a cached OpenRouter catalog while OpenAI discovery is still pending', async () => {
+        testRuntimeConfig.value.public.ssrAuthEnabled = true;
+        browserCache(Date.now());
+        let release!: (response: Response) => void;
+        vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { release = resolve; })));
+        try {
+            const pending = service.fetchModelCatalog();
+            const outcome = await Promise.race([pending.then(() => 'ready'), new Promise<string>(resolve => setTimeout(() => resolve('blocked'), 250))]);
+            expect(outcome).toBe('ready');
+            const result = await pending;
+            expect(result.data[0]!.id).toBe('catalog/model');
+            expect(result.openAiPending).toBeDefined();
+            release(Response.json([]));
+            expect(await result.openAiPending).toEqual([]);
+        } finally {
+            vi.unstubAllGlobals();
+        }
+    });
     it('does not relabel stale browser cache as a fresh store fetch', async () => {
         const fetchedAt = Date.now() - 3_600_001;
         browserCache(fetchedAt);

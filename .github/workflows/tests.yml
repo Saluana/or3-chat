@@ -159,6 +159,8 @@ jobs:
         run: bun run test:e2e:chat-tools
       - name: Verify authenticated Cloud tools and claim settlement
         run: bun run test:e2e:chat-tools:cloud
+      - name: Verify OpenAI adapter and provider credential isolation
+        run: bun run test:e2e:openai-adapter
       - uses: actions/upload-artifact@v7
         if: always() && (steps.chat_tools.outcome == 'success' || steps.chat_tools.outcome == 'failure')
         with:
@@ -166,6 +168,7 @@ jobs:
           path: |
             test-results/chat-tools
             test-results/chat-tools-cloud
+            output/openai-adapter-e2e
           if-no-files-found: error
 
   contracts:

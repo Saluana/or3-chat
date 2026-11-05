@@ -9,8 +9,8 @@
  * Responsibilities:
  * - Consume a selected router stream for foreground (non-background) mode
  * - Handle tool calls and execute them via ToolRegistry
- * - Support multi-turn tool loops (up to 10 iterations)
- * - Persist assistant content with throttled cadence (500ms or 50 chunks)
+ * - Support bounded multi-turn tool loops
+ * - Persist assistant content with a throttled cadence
  * - Process reasoning text and image generation separately
  * - Update UI assistant state and track tool call status
  * - Convert generated images to hash references for storage
@@ -28,9 +28,8 @@
  * - Image blobs stored via createOrRefFile with hash placeholders
  *
  * Invariants:
- * - Tool execution capped at 10 iterations to prevent infinite loops
- * - Every 50 chunks or 500ms triggers a persist (whichever comes first)
- * - Generated images limited to 6 per response
+ * - Tool iterations and saved generated images use the effective chat limits
+ * - Stream writes are coalesced by event count, bytes, and elapsed time
  * - Tool calls always tracked in activeToolCalls Map
  */
 
@@ -51,7 +50,7 @@ import {
     openRouterStreamWithRetry,
     type OpenRouterReasoningConfig,
 } from '~/utils/chat/openrouterStream';
-import { MAX_TOOL_ITERATIONS } from '~/utils/chat/constants';
+import { DEFAULT_CHAT_LIMITS, type ChatLimits } from '~~/shared/chat/chat-limits';
 import type { ToolCallInfo } from '~/utils/chat/uiMessages';
 import type {
     AssistantPersister,
@@ -199,6 +198,7 @@ function createStreamHookDispatcher(hooks: HooksLike): StreamHookDispatcher {
  * - activeToolCalls is mutated during tool execution
  */
 export type ForegroundStreamContext = {
+    chatLimits?: ChatLimits;
     expectedProjectId?: string | null;
     projectContext?: import('~/utils/projects/context').ProjectContextSnapshot | null;
     apiKey: string | null;
@@ -352,6 +352,7 @@ export function createForegroundStreamLoop(routerId: string, streamInference: Fo
 
 async function runForegroundWithRouter(ctx: ForegroundStreamContext, routerId: string,
     streamInference: ForegroundInference): Promise<void> {
+    const chatLimits = ctx.chatLimits ?? DEFAULT_CHAT_LIMITS;
     const imageOwner = captureChatMediaScope(ctx.originDb, ctx.abortSignal, 'write');
     const admittedTools = snapshotToolDefinitions(ctx.tools);
     const admittedByName = new Map(
@@ -411,6 +412,7 @@ async function runForegroundWithRouter(ctx: ForegroundStreamContext, routerId: s
             onIdleFlush: () => flushProgress(),
         });
         const pendingToolCalls: ToolCall[] = [];
+        let providerState: Record<string, unknown>[] = [];
 
         const flushProgress = async () => {
             await writeCoalescer.flush(async () => {
@@ -429,6 +431,7 @@ async function runForegroundWithRouter(ctx: ForegroundStreamContext, routerId: s
         try {
             for await (const ev of stream) {
                 ctx.abortSignal.throwIfAborted();
+                if (ev.type === 'provider_state') { providerState = ev.items; continue; }
                 normalizedState = reduceNormalizedStreamEvent(normalizedState, ev);
                 if (ev.type === 'usage') {
                     if (normalizedState.requestUsage) writeCoalescer.markDirty();
@@ -496,7 +499,7 @@ async function runForegroundWithRouter(ctx: ForegroundStreamContext, routerId: s
                     writeCoalescer.markDirty(utf8Bytes(delta));
                 } else if (ev.type === 'image') {
                     if (current.pending) current.pending = false;
-                    if (ctx.assistantFileHashes.length < 6) {
+                    if (ctx.assistantFileHashes.length < chatLimits.generatedImages) {
                         imageOwner.assertCurrent();
                         const blob = ev.url.startsWith('data:image/') ? dataUrlToBlob(ev.url)
                             : /^https?:/.test(ev.url) ? await fetchImageBlob(ev.url, ctx.abortSignal) : null;
@@ -756,6 +759,7 @@ async function runForegroundWithRouter(ctx: ForegroundStreamContext, routerId: s
                 ctx.orMessages.push({
                     role: 'assistant',
                     content: [{ type: 'text', text: normalizedState.iterationText }],
+                    ...(providerState.length ? { _openai_reasoning: providerState } : {}),
                     tool_calls: pendingToolCalls.map((toolCall) => ({
                         id: toolCall.id,
                         type: 'function' as const,
@@ -778,14 +782,14 @@ async function runForegroundWithRouter(ctx: ForegroundStreamContext, routerId: s
                 pendingToolCalls.length = 0;
                 const iterationResult = finishNormalizedIteration(
                     normalizedState,
-                    MAX_TOOL_ITERATIONS
+                    chatLimits.toolIterations
                 );
                 normalizedState = iterationResult.state;
                 continue;
             }
             normalizedState = finishNormalizedIteration(
                 normalizedState,
-                MAX_TOOL_ITERATIONS
+                chatLimits.toolIterations
             ).state;
         } catch (streamError) {
             // A malformed/interrupted stream may have exposed loading tool

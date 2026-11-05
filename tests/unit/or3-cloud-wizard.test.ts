@@ -328,15 +328,11 @@ describe('or3 cloud wizard validation', () => {
             cloudSetupEntry: true,
         };
         const presetStep = getStepById(getWizardSteps(answers), 'target');
-        const labels = (presetStep.fields[0]?.options ?? []).map(
-            (option) => option.label
+        const values = (presetStep.fields[0]?.options ?? []).map(
+            (option) => option.value
         );
-        expect(labels).not.toContain(
-            'This device only — private, offline, and no account'
-        );
-        expect(labels).toContain(
-            'Self-hosted OR3 — accounts and storage on your server'
-        );
+        expect(values).not.toContain('personal-local');
+        expect(values).toContain('preset-local');
     });
 
     it('requires a real administrator identity for legacy fast defaults', () => {

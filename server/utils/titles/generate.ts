@@ -4,7 +4,7 @@ import { getOpenRouterChatCompletionsUrl } from '~~/shared/openrouter/url';
 import { DEFAULT_HEADERS } from '~~/shared/openrouter/request-options';
 import { createOpenRouterCompletionAdapter } from '~~/shared/openrouter/adapter';
 import { createOpenAiCompletionAdapter } from '~~/shared/openai/adapter';
-import { isOpenAiModel, openAiApiUrl } from '~~/shared/openai/models';
+import { isOpenAiModel, openAiApiModel, openAiApiUrl, openAiReasoningEfforts } from '~~/shared/openai/models';
 import { createAiRuntime } from '~~/shared/ai/runtime';
 import type { AiCompletionRequest } from '~~/shared/ai/types';
 import { cleanGeneratedTitle, TITLE_TIMEOUT_MS, titlePrompt, type TitleRequest } from '~~/shared/titles/title';
@@ -14,7 +14,8 @@ export async function generateTitle(event: H3Event, input: TitleRequest, model: 
     const openAi = isOpenAiModel(model);
     const config = useRuntimeConfig(event);
     const request: AiCompletionRequest = { model: { routerId: openAi ? 'openai' : 'openrouter', modelId: model },
-        maxOutputTokens: 48, reasoning: { kind: 'disabled' },
+        maxOutputTokens: openAi && openAiReasoningEfforts(openAiApiModel(model))?.includes('none') === false ? 2048 : 48,
+        reasoning: { kind: 'disabled' },
         // Delimit the source and restate the task after it: a bare request such as
         // "write 60 lines" is otherwise carried out and truncated at max_tokens.
         messages: [{ role: 'system', content: titlePrompt(input.type) },

@@ -11,18 +11,21 @@
  *   implementations of the `DeploymentAdminChecker` interface.
  * - **Sync-Linked**: The choice of checker depends on the configured sync provider
  *   (e.g., Convex), as global admin status is usually stored in the primary backend.
- * - **Cached**: Uses a short-lived internal cache (1 minute TTL) to minimize redundant
- *   backend queries for the same provider.
+ * - **Cached**: Reuses dedicated checker instances; store-backed grant decisions
+ *   are rechecked when a shared session is reused.
  */
 import type { H3Event } from 'h3';
 import { CONVEX_PROVIDER_ID } from '~~/shared/cloud/provider-ids';
 import { useRuntimeConfig } from '#imports';
+import { getAdminStoreProvider } from '../admin/stores/registry';
 
 /**
  * Purpose:
  * Contract for checking deployment-level admin status.
  */
 export interface DeploymentAdminChecker {
+    /** A store-backed grant must be rechecked even on a cached session. */
+    revalidateCachedSession?: boolean;
     /**
      * Purpose:
      * Evaluates if a specific user identity has been granted deployment admin status.
@@ -48,12 +51,12 @@ export function registerDeploymentAdminChecker(
 /**
  * Purpose:
  * Whether the active sync provider honors deployment-admin grants. Providers
- * without a registered checker fall back to deny-all, so a stored grant has
- * no effect there.
+ * with neither a registered checker nor a grant-capable admin store deny access.
  */
 export function hasDeploymentAdminChecker(event?: H3Event): boolean {
     const config = useRuntimeConfig(event);
-    return registry.has(config.sync.provider || CONVEX_PROVIDER_ID);
+    const id = config.sync.provider || config.public.sync.provider || CONVEX_PROVIDER_ID;
+    return registry.has(id) || getAdminStoreProvider(id)?.getCapabilities?.().supportsDeploymentAdminGrants === true;
 }
 
 function getRegistryChecker(providerId: string): DeploymentAdminChecker | null {
@@ -70,9 +73,17 @@ const CACHE_TTL_MS = 60000; // 1 minute
  * Factory method to retrieve the appropriate deployment admin checker
  * for the current server configuration.
  */
-export function getDeploymentAdminChecker(event?: H3Event): DeploymentAdminChecker {
+export function getDeploymentAdminChecker(event?: H3Event, userId?: string): DeploymentAdminChecker {
     const config = useRuntimeConfig(event);
-    const syncProviderId = config.sync.provider || CONVEX_PROVIDER_ID;
+    const syncProviderId = config.sync.provider || config.public.sync.provider || CONVEX_PROVIDER_ID;
+    const storeProvider = getAdminStoreProvider(syncProviderId);
+    // The session has already resolved this internal user ID through the
+    // canonical auth store. Use the provider's own grant store as the fallback
+    // only when it explicitly declares support for deployment-admin grants.
+    if (!registry.has(syncProviderId) && storeProvider?.getCapabilities?.().supportsDeploymentAdminGrants === true && event && userId) {
+        return { revalidateCachedSession: true,
+            checkDeploymentAdmin: () => storeProvider.createAdminUserStore(event).isAdmin({ userId }) };
+    }
     const now = Date.now();
 
     // Return cached checker if valid and provider hasn't changed

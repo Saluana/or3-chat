@@ -51,6 +51,7 @@ export function createNativeExecution(ports: {
     hooks: TypedHookEngine;
     nativeRecoveryCandidates: ReturnType<typeof createNativeRecoveryCandidates>;
     effectiveApiKey: Readonly<Ref<string | null>>;
+    resolveChatLimits: (workspaceId: string) => Promise<import('~~/shared/chat/chat-limits').ChatLimits>;
     taskPrompt: () => unknown;
     canonicalOutputLimitBytes: number | undefined;
     ownsCurrentView: (request: ChatRequest) => boolean;
@@ -70,6 +71,8 @@ export function createNativeExecution(ports: {
     return async function runPreparedNative(input: NativeExecutionInput): Promise<SendResult> {
         const { requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy, enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt, reviewedLossyMessages, delegationDefaults, durableDelegation, recoveryInput, projectQuery, advertisedToolDefs } = input;
         const requestId = requestScope.requestId; const requestThreadId = requestScope.threadId!;
+        const ownsAdmission = () => ownsCurrentView(requestScope) || (requestScope.detachAdmissionOnNavigation === true
+            && requestScope.ownsDetachedAdmission?.() === true);
         const preparationSignal = requestScope.abortController!.signal;
         const toolRegistry = useToolRegistry(); const activeToolCalls = new Map<string, ToolCallInfo>();
         const assistantFileHashes: string[] = []; const persistAssistant = makeAssistantPersister(requestScope.originDb, assistantDbMsg, assistantFileHashes, requestId);
@@ -102,7 +105,7 @@ export function createNativeExecution(ports: {
                 }));
                 return { status: 'aborted', requestId, reason: 'aborted', userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id };
             }
-            if (!ownsCurrentView(requestScope)) {
+            if (!ownsAdmission()) {
                 requestScope.attached.value = false;
                 return { status: 'detached', requestId, reason: 'detached', userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id };
             }
@@ -118,7 +121,7 @@ export function createNativeExecution(ports: {
             });
 
             if (allowBackgroundStreaming) {
-                backgroundJobMode.value = 'background';
+                if (ownsCurrentView(requestScope)) backgroundJobMode.value = 'background';
                 logBgStream('send-message-background-start', {
                     threadId: requestThreadId,
                     messageId: assistantDbMsg.id,
@@ -133,16 +136,18 @@ export function createNativeExecution(ports: {
                     reasoning_text: null,
                 };
 
-                rawMessages.value.push(rawAssistant);
                 const uiAssistant = ensureUiMessage(rawAssistant);
                 uiAssistant.pending = true;
-                tailAssistant.value = uiAssistant;
+                if (ownsCurrentView(requestScope)) {
+                    rawMessages.value.push(rawAssistant);
+                    tailAssistant.value = uiAssistant;
+                }
                 requestScope.message = uiAssistant;
 
                 // Background admission can block before a job ID exists. Keep it
                 // cancellable through the same request-scoped controller as foreground.
                 requestScope.abortController ??= new AbortController();
-                abortController.value = requestScope.abortController;
+                if (ownsCurrentView(requestScope)) abortController.value = requestScope.abortController;
 
                 // Stable per-send admission identity. Persisted on the request
                 // scope before the start request so Stop can target the
@@ -200,7 +205,7 @@ export function createNativeExecution(ports: {
                     // authority. The pending turn uses normal interruption recovery.
                     if (isRequestCancelled(requestScope) || requestScope.abortController.signal.aborted)
                         throw new DOMException('Chat request cancelled.', 'AbortError');
-                    if (!ownsCurrentView(requestScope)) {
+                    if (!ownsAdmission()) {
                         requestScope.attached.value = false;
                         return { status: 'detached', requestId, reason: 'detached',
                             userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id };
@@ -465,6 +470,9 @@ export function createNativeExecution(ports: {
                 requestScope.originDb, assistantDbMsg.id, requestId,
                 requestScope.abortController.signal
             );
+            input.stopAcceptanceHeartbeat?.();
+            const chatLimits = await ports.resolveChatLimits(requestScope.workspaceId);
+            preparationSignal.throwIfAborted();
             const streamApiKey = effectiveApiKey.value;
             const streamGeneration = getWorkspaceGeneration();
             const { runForegroundStreamLoop } = await import('~/utils/chat/useAi-internal/foregroundStream');
@@ -476,6 +484,7 @@ export function createNativeExecution(ports: {
                     userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id };
             }
             await runForegroundStreamLoop({
+                chatLimits,
                 apiKey: streamApiKey,
                 modelId,
                 orMessages,

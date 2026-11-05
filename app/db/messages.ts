@@ -591,7 +591,30 @@ export async function appendMessageToDb(
     input: MessageCreate,
     options: { replace?: readonly MessageRevision[] } = {},
 ): Promise<Message> {
+    return (await appendMessageGroupToDb(db, input, undefined, options))[0];
+}
+
+/** Commit a user turn and its pending assistant together, including retry supersession. */
+export async function appendTurnMessagesToDb(
+    db: Or3DB,
+    user: MessageCreate,
+    assistant: MessageCreate,
+    options: { replace?: readonly MessageRevision[]; onCommitted?: (user: Message, assistant: Message) => void } = {},
+): Promise<[Message, Message]> {
+    const result = await appendMessageGroupToDb(db, user, assistant, options);
+    return [result[0], result[1]!];
+}
+
+async function appendMessageGroupToDb(
+    db: Or3DB,
+    input: MessageCreate,
+    companion: MessageCreate | undefined,
+    options: { replace?: readonly MessageRevision[]; onCommitted?: (user: Message, assistant: Message) => void },
+): Promise<[Message, Message?]> {
     const prepared = await prepareMessageAppend(input);
+    const preparedCompanion = companion ? await prepareMessageAppend(companion) : undefined;
+    if (preparedCompanion && preparedCompanion.value.thread_id !== prepared.value.thread_id)
+        throw new Error('Turn messages must belong to the same thread.');
     const hooks = useHooks();
     const replacements: { expected: MessageRevision; row: Message }[] = [];
     for (const expected of options.replace ?? []) {
@@ -607,7 +630,7 @@ export async function appendMessageToDb(
         await hooks.doAction('db.messages.upsert:action:before', { entity: toMessageEntity(row), tableName: 'messages' });
         replacements.push({ expected, row });
     }
-    const message = await db.transaction(
+    const [message, assistant] = await db.transaction(
         'rw', getWriteTxTableNames(db, 'messages', { include: ['threads'] }), async () => {
             // Validate the complete selected revision before any writes. All old
             // rows and the admitted replacement share one outbox transaction.
@@ -618,15 +641,19 @@ export async function appendMessageToDb(
                     throw new Error('Retry target changed; reload the conversation.');
             }
             for (const { row } of replacements) await db.messages.put(row);
-            return appendMessageRows(db, prepared.value);
+            const first = await appendMessageRows(db, prepared.value);
+            const second = preparedCompanion ? await appendMessageRows(db, preparedCompanion.value) : undefined;
+            return [first, second] as [Message, Message?];
         },
     );
+    if (assistant) options.onCommitted?.(message, assistant);
     await prepared.afterCommit(message);
+    if (assistant) await preparedCompanion!.afterCommit(assistant);
     for (const { row } of replacements) {
         try { await hooks.doAction('db.messages.upsert:action:after', { entity: toMessageEntity(row), tableName: 'messages' }); }
         catch (error) { console.warn('[messages] Retry committed; notification failed', error); }
     }
-    return message;
+    return [message, assistant];
 }
 
 /** Prepare hooks outside the caller's write transaction. */

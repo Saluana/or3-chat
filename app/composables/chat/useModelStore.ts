@@ -49,6 +49,8 @@
  */
 
 import { kv } from '~/db';
+import { getWorkspaceGeneration } from '~/db/client';
+import { isOpenAiModel } from '~~/shared/openai/models';
 import { ref } from 'vue';
 
 import modelsService, {
@@ -70,6 +72,7 @@ let latestCatalogRequest: Promise<OpenRouterModel[]> | null = null;
 // a cache read is held. Capture live publication too before awaiting KV.
 let catalogPublication = 0;
 let inFlightForced = false;
+let openAiInFlight: Promise<void> | null = null;
 let catalogSource: 'openrouter-live' | 'openrouter-cache' = 'openrouter-cache';
 let catalogFetchedAt: number | null = null;
 
@@ -220,6 +223,8 @@ export function useModelStore() {
     }
 
     async function invalidate() {
+        latestCatalogRequest = null;
+        openAiInFlight = null;
         if (import.meta.dev) {
             console.info(
                 '[models-cache] invalidate called — clearing memory + Dexie (if available)'
@@ -280,6 +285,7 @@ export function useModelStore() {
         }
 
         const fetchPromise = (async () => {
+            const workspaceGeneration = getWorkspaceGeneration();
             if (import.meta.dev) {
                 console.info('[models-cache] loading model catalog');
             }
@@ -298,7 +304,14 @@ export function useModelStore() {
                 }
                 // Removed network source console.log
                 // persist async (don't block response)
-                saveToDexie(list, result.fetchedAt).catch(() => {});
+                if (!result.openAiPending) void saveToDexie(list, result.fetchedAt).catch(() => {});
+                if (result.openAiPending) openAiInFlight = result.openAiPending.then(models => {
+                    if (latestCatalogRequest !== pending || getWorkspaceGeneration() !== workspaceGeneration) return;
+                    const merged = [...list, ...models];
+                    catalogPublication += 1;
+                    catalog.value = merged;
+                    void saveToDexie(merged, result.fetchedAt).catch(() => {});
+                });
                 return list;
             } catch (err) {
                 console.warn('[models-cache] network fetch failed', err);
@@ -418,9 +431,11 @@ export function useModelStore() {
         if (known) return known;
         try {
             await waitForCatalog(fetchModels(), signal);
+            if (isOpenAiModel(lookupId) && openAiInFlight) await waitForCatalog(openAiInFlight, signal);
             checkCanceled(); known = lookup();
             if (known) return known;
             await waitForCatalog(fetchModels({ force: true }), signal);
+            if (isOpenAiModel(lookupId) && openAiInFlight) await waitForCatalog(openAiInFlight, signal);
         } catch {
             checkCanceled();
             // Failed refresh can still leave valid last-known metadata.

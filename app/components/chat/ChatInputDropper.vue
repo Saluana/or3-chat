@@ -648,6 +648,7 @@ async function initializeEditor(replaceExisting = false) {
             },
             onUpdate: ({ editor: ed }) => {
                 composerRevision++;
+                if (props.tabId) tabContentRevisions.set(props.tabId, (tabContentRevisions.get(props.tabId) ?? 0) + 1);
                 const nextText = ed.getText();
                 if (nextText.trim() || promptText.value.trim()) noteDraftEdit();
                 promptText.value = nextText;
@@ -943,6 +944,8 @@ let draftRestoreNoticeId: string | undefined;
 // only the revision it submitted, so text typed while it was being prepared
 // survives even if it later matches the submitted text.
 let composerRevision = 0;
+const tabContentRevisions = new Map<string, number>();
+const restoringDraft = ref(false);
 // Empty editor bookkeeping must not compete with a saved buffer being restored.
 let draftEditRevision = 0;
 let draftRestoreFailed = false;
@@ -953,6 +956,7 @@ function noteDraftEdit(): void {
 watch([promptText, () => attachments.value.slice(), () => largeTextBlocks.value.slice()],
     ([text, files, blocks], [previousText, previousFiles, previousBlocks]) => {
         composerRevision++;
+        if (!restoringDraft.value && props.tabId) tabContentRevisions.set(props.tabId, (tabContentRevisions.get(props.tabId) ?? 0) + 1);
         if (text.trim() || previousText.trim() || files.length || previousFiles.length || blocks.length || previousBlocks.length) noteDraftEdit();
     }, { flush: 'sync' });
 const { settings: aiSettings, ensureLoaded: ensureAiSettingsLoaded } =
@@ -992,7 +996,6 @@ async function compactFromSettings() {
     clearDraftCaptureTimer(); captureDraft();
     await props.compactThread?.();
 }
-const restoringDraft = ref(false);
 let draftContentLoading = false;
 let draftRestoreRevision = 0;
 let draftCaptureTimer: ReturnType<typeof setTimeout> | undefined;
@@ -1392,6 +1395,10 @@ const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfi
         const submittedLargeTexts = largeTextBlocks.value.slice();
         const submittedTabId = props.tabId; const submittedThreadId = props.threadId;
         const submittedRevision = composerRevision;
+        const submittedTabRevision = submittedTabId ? tabContentRevisions.get(submittedTabId) ?? 0 : 0;
+        const submittedScope = draftScope;
+        const submittedContent = JSON.stringify({ text: submittedText, editorJson: submittedEditorDoc,
+            attachments: submittedAttachments, largeTextBlocks: submittedLargeTexts });
         const submittedWorkspaceGeneration = getWorkspaceGeneration();
         const submittedSettings = {
             model: selectedModel.value,
@@ -1453,15 +1460,26 @@ const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfi
             };
         }
         if (!hasDurableSendAcceptance(acceptance) || acceptance.status === 'failed' || acceptance.status === 'aborted') return acceptance;
-        // Admission can await model/server preparation while the user edits or
-        // navigates. Clear only the exact submitted draft in its owning view.
-        if (getWorkspaceGeneration() !== submittedWorkspaceGeneration || props.tabId !== submittedTabId
-            || submittedThreadId && props.threadId !== submittedThreadId
-            || composerRevision !== submittedRevision || draftScope.key !== tabDrafts.scope().key) {
+        // Admission can finish after the composer has moved to another tab.
+        // Clear the saved original only if it still matches the submitted turn.
+        if (getWorkspaceGeneration() !== submittedWorkspaceGeneration || submittedScope.key !== tabDrafts.scope().key) {
             return await sendResult;
         }
+        const sameView = props.tabId === submittedTabId && (!submittedThreadId || props.threadId === submittedThreadId);
+        if (!sameView || composerRevision !== submittedRevision) {
+            if (!submittedTabId || (tabContentRevisions.get(submittedTabId) ?? 0) !== submittedTabRevision) return await sendResult;
+            const saved = tabDrafts.read(submittedTabId, submittedScope);
+            const currentContent = sameView
+                ? { text: promptText.value, editorJson: editor.value?.getJSON(), attachments: attachments.value, largeTextBlocks: largeTextBlocks.value }
+                : saved && { text: saved.text, editorJson: saved.editorJson, attachments: saved.attachments, largeTextBlocks: saved.largeTextBlocks };
+            if (!currentContent || JSON.stringify(currentContent) !== submittedContent) return await sendResult;
+            if (!sameView) {
+                tabDrafts.discard(submittedTabId, submittedScope);
+                return await sendResult;
+            }
+        }
         clearDraftCaptureTimer();
-        tabDrafts.discard(props.tabId, draftScope);
+        tabDrafts.discard(submittedTabId, submittedScope);
         // Reset local state and editor content so placeholder shows again
         promptText.value = '';
         try {

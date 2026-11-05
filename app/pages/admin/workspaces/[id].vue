@@ -107,6 +107,7 @@
                 />
             </div>
 
+            <ChatLimitsSettings v-if="!workspace.deleted" :workspace-id="workspace.id" />
             <FileCacheSettings v-if="!workspace.deleted" :workspace-id="workspace.id" />
 
             <!-- Members Card -->
@@ -248,6 +249,7 @@
 <script setup lang="ts">
 import { formatDate } from '~/utils/date';
 import FileCacheSettings from '~/components/admin/FileCacheSettings.vue';
+import ChatLimitsSettings from '~/components/admin/ChatLimitsSettings.vue';
 import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
 import type { WorkspaceSummary, WorkspaceMemberInfo } from '~/types/global';
 

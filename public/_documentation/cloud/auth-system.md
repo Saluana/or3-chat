@@ -97,11 +97,11 @@ Managed-key streaming and background admission require `Content-Type: applicatio
 
 ## Deployment administration
 
-The `/admin/*` panel requires the super-admin `or3_admin` cookie obtained from the admin login credentials. A workspace owner is not automatically a deployment admin. A persisted `deploymentAdmin` grant permits deployment-level `admin.access` checks but does not, on its own, unlock super-admin panel routes.
+Super-admin panel routes require the `or3_admin` cookie obtained from the admin login credentials. A workspace owner is not automatically a deployment admin. An account with a persisted deployment-admin grant can access workspace-scoped admin pages when it owns the active workspace; the grant does not unlock super-admin routes or settings for other workspaces.
 
 Instance settings, Administrators, Registration, and the Plugins **Instance** tab require no Chat account or selected workspace. The Plugins **Workspace** tab targets its URL-selected workspace; switching Chat workspaces does not retarget it. Removing a workspace member removes that membership, not their account or membership elsewhere.
 
-Admin APIs resolve `WorkspaceAccessStore`, `WorkspaceSettingsStore`, and `AdminUserStore` from the selected sync backend. SQLite and Convex implement the shared bridge. Unsupported providers fail explicitly rather than borrowing another backend's admin data.
+Admin APIs resolve `WorkspaceAccessStore`, `WorkspaceSettingsStore`, and `AdminUserStore` from the selected sync backend. SQLite and Convex implement the shared bridge. For providers that declare deployment-admin grant support without a dedicated checker, the host checks the canonical user's grant in that provider's admin store and rechecks it on cached sessions. SQLite supports grants on its local, Bun, and Turso runtimes; D1 does not. Unsupported providers fail explicitly rather than borrowing another backend's admin data.
 
 For Clerk + Convex, signing into the super-admin panel while also signed into Clerk can persist a deployment-admin grant through the signed bridge. `OR3_ADMIN_JWT_SECRET` must match between Nuxt and Convex. Inspect and revoke persistent grants at `/admin/admin-users`.
 

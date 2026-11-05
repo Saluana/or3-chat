@@ -1,5 +1,7 @@
 /** Public app settings that can be applied to each newly loaded page. */
 export const siteSettingPaths = {
+    OR3_CHAT_TOOL_ITERATIONS: ['chatToolIterations'],
+    OR3_CHAT_GENERATED_IMAGES: ['chatGeneratedImages'],
     OR3_SITE_NAME: ['or3', 'site', 'name'],
     OR3_SITE_DESCRIPTION: ['or3', 'site', 'description'],
     OR3_LOGO_URL: ['or3', 'site', 'logoUrl'],

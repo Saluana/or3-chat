@@ -290,11 +290,19 @@ async function resolveSessionContextAttempt(
     const sharedCached = sharedSessionCache.get(sharedCacheKey);
     if (sharedCached) {
         if (sharedCached.expiresAtMs > Date.now()) {
-            recordSessionResolution(true);
-            event.context[cacheKey] = sharedCached.session;
-            return sharedCached.session;
+            const checker = getDeploymentAdminChecker(event, sharedCached.session.user?.id);
+            const revision = getAuthorizationRevision(providerSession.provider, providerSession.user.id, storeId);
+            const currentAdmin = checker.revalidateCachedSession
+                ? await checker.checkDeploymentAdmin(providerSession.user.id, providerSession.provider)
+                : sharedCached.session.deploymentAdmin;
+            if (revision === getAuthorizationRevision(providerSession.provider, providerSession.user.id, storeId)
+                && currentAdmin === sharedCached.session.deploymentAdmin) {
+                recordSessionResolution(true);
+                event.context[cacheKey] = sharedCached.session;
+                return sharedCached.session;
+            }
         }
-        sharedSessionCache.delete(sharedCacheKey);
+        if (sharedSessionCache.get(sharedCacheKey) === sharedCached) sharedSessionCache.delete(sharedCacheKey);
     }
 
     // Capture before any store reads. An invalidation must not bless in-flight
@@ -490,7 +498,7 @@ async function resolveSessionContextAttempt(
         }
 
         // Check if user has deployment admin access using the provider-agnostic checker
-        const adminChecker = getDeploymentAdminChecker(event);
+        const adminChecker = getDeploymentAdminChecker(event, userId);
         const deploymentAdmin = await adminChecker.checkDeploymentAdmin(
             providerSession.user.id,
             providerSession.provider
