@@ -50,7 +50,7 @@ import { getKvRecordByName, setKvByName } from '~/db/kv';
  */
 
 import { kv } from '~/db';
-import { getWorkspaceGeneration, getDb } from '~/db/client';
+import { getWorkspaceGeneration, getDb, subscribeActiveWorkspaceDb, type Or3DB } from '~/db/client';
 import { ref } from 'vue';
 
 import modelsService, {
@@ -161,7 +161,35 @@ const filters = ref<{
 // Reactive timestamp (ms) of when catalog was last loaded into memory
 const lastLoadedAt = ref<number | undefined>(undefined);
 
+let favoriteRevision = 0;
+let favoriteWrites = Promise.resolve();
+let stopWorkspace: (() => void) | undefined;
+function resetCatalog() {
+    catalogPublication++;
+    latestCatalogRequest = null;
+    inFlight = null;
+    inFlightForced = false;
+    remainingModelsInFlight = null;
+    catalog.value = [];
+    platformStatus.value = {};
+    lastLoadedAt.value = undefined;
+    catalogOrigins = {};
+}
+function resetMemory() {
+    resetCatalog();
+    favoriteModels.value = [];
+    favoriteRevision++;
+    favoriteWrites = Promise.resolve();
+    recentModelIds.value = [];
+    recentRevision++;
+    recentWrites = Promise.resolve();
+}
+if (import.meta.hot) import.meta.hot.dispose(() => { stopWorkspace?.(); resetMemory(); });
+
 export function useModelStore() {
+    if (typeof window !== 'undefined' && !stopWorkspace) {
+        stopWorkspace = subscribeActiveWorkspaceDb(resetMemory);
+    }
     function isFresh(ts: number | undefined, ttl: number) {
         if (!ts) return false;
         return Date.now() - ts < ttl;
@@ -171,10 +199,14 @@ export function useModelStore() {
         ttl: number
     ): Promise<OpenRouterModel[] | null> {
         if (!canUseDexie()) return null;
+        const db = getDb();
+        const generation = getWorkspaceGeneration();
+        const current = () => db === getDb() && generation === getWorkspaceGeneration();
         const requestOwner = latestCatalogRequest;
         const publication = catalogPublication;
         try {
-            const rec = await kv.get(MODELS_CACHE_KEY);
+            const rec = await kv.get(MODELS_CACHE_KEY, db);
+            if (!current()) return null;
             if (requestOwner !== latestCatalogRequest || publication !== catalogPublication) return inFlight ?? catalog.value;
             if (!rec) return null;
             // rec.updated_at is seconds in Kv schema; convert to ms
@@ -208,7 +240,6 @@ export function useModelStore() {
                             count: validated.data.length,
                         }
                     );
-                // Removed dexie source console.log
                 return validated.data;
             } catch (parseErr) {
                 console.warn(
@@ -217,7 +248,7 @@ export function useModelStore() {
                 );
                 // best-effort cleanup
                 try {
-                    await kv.delete(MODELS_CACHE_KEY);
+                    await kv.delete(MODELS_CACHE_KEY, db, { isValid: current });
                 } catch {
                     /* intentionally empty */
                 }
@@ -229,10 +260,10 @@ export function useModelStore() {
         }
     }
 
-    async function saveToDexie(list: OpenRouterModel[], origins: CatalogOrigins) {
+    async function saveToDexie(list: OpenRouterModel[], origins: CatalogOrigins, db: Or3DB, isValid: () => boolean) {
         if (!canUseDexie()) return;
         try {
-            await kv.set(MODELS_CACHE_KEY, JSON.stringify({ version: 1, data: list, fetchedAt: oldestFetch(list, origins), origins }));
+            await kv.set(MODELS_CACHE_KEY, JSON.stringify({ version: 1, data: list, fetchedAt: oldestFetch(list, origins), origins }), db, { isValid });
             if (import.meta.dev)
                 console.debug('[models-cache] saved catalog to Dexie', {
                     count: list.length,
@@ -243,22 +274,15 @@ export function useModelStore() {
     }
 
     async function invalidate() {
-        latestCatalogRequest = null;
-        remainingModelsInFlight = null;
-        if (import.meta.dev) {
-            console.info(
-                '[models-cache] invalidate called — clearing memory + Dexie (if available)'
-            );
-        }
-        catalog.value = [];
-        platformStatus.value = {};
+        const db = getDb();
+        const generation = getWorkspaceGeneration();
+        const current = () => db === getDb() && generation === getWorkspaceGeneration();
+        resetCatalog();
         recentModelIds.value = [];
         recentRevision++;
-        lastLoadedAt.value = undefined;
-        catalogOrigins = {};
         if (!canUseDexie()) return;
         try {
-            await kv.delete(MODELS_CACHE_KEY);
+            await kv.delete(MODELS_CACHE_KEY, db, { isValid: current });
             if (import.meta.dev)
                 console.debug('[models-cache] Dexie record deleted');
         } catch (e) {
@@ -268,6 +292,9 @@ export function useModelStore() {
 
     async function fetchModels(opts?: { force?: boolean; ttlMs?: number }): Promise<OpenRouterModel[]> {
         const ttl = opts?.ttlMs ?? MODELS_TTL_MS;
+        const db = getDb();
+        const workspaceGeneration = getWorkspaceGeneration();
+        const current = () => db === getDb() && workspaceGeneration === getWorkspaceGeneration();
 
         // Memory fast-path
         if (
@@ -283,13 +310,13 @@ export function useModelStore() {
                         count: catalog.value.length,
                     }
                 );
-            // Removed memory source console.log
             return catalog.value;
         }
 
         // Try Dexie if available and not forced
         if (!opts?.force) {
             const dexieHit = await loadFromDexie(ttl);
+            if (!current()) return [];
             if (dexieHit) return dexieHit;
             if (import.meta.dev)
                 console.debug(
@@ -303,12 +330,11 @@ export function useModelStore() {
             // A forced refresh must not inherit a normal service cache hit.
             // Wait for that owner, then coalesce one genuinely forced refresh.
             await inFlight.catch(() => undefined);
-            return fetchModels(opts);
+            return current() ? fetchModels(opts) : [];
         }
 
         const fetchPromise = (async () => {
-            const workspaceGeneration = getWorkspaceGeneration();
-            const ownsRequest = () => getWorkspaceGeneration() === workspaceGeneration && latestCatalogRequest === pending;
+            const ownsRequest = () => current() && latestCatalogRequest === pending;
             if (import.meta.dev) {
                 console.info('[models-cache] loading model catalog');
             }
@@ -333,9 +359,8 @@ export function useModelStore() {
                         source: result.source, fetchedAt: result.fetchedAt,
                     });
                 }
-                // Removed network source console.log
                 // persist async (don't block response)
-                if (!result.openAiPending && !result.openRouterPending) void saveToDexie(list, catalogOrigins).catch(() => {});
+                if (!result.openAiPending && !result.openRouterPending) void saveToDexie(list, catalogOrigins, db, ownsRequest).catch(() => {});
                 if (result.openAiPending || result.openRouterPending) remainingModelsInFlight = (result.openAiPending ?? result.openRouterPending)!.then(models => {
                     if (!ownsRequest()) return;
                     const merged = [...list, ...models];
@@ -343,17 +368,19 @@ export function useModelStore() {
                     catalog.value = merged;
                     catalogOrigins = { ...origins };
                     lastLoadedAt.value = oldestFetch(merged, catalogOrigins) ?? undefined;
-                    void saveToDexie(merged, catalogOrigins).catch(() => {});
+                    void saveToDexie(merged, catalogOrigins, db, ownsRequest).catch(() => {});
                 });
                 return list;
             } catch (err) {
+                if (!ownsRequest()) return [];
                 console.warn('[models-cache] network fetch failed', err);
                 // On network failure, attempt to serve stale Dexie record (even if expired)
                 // BUT: max stale age is 7 days to prevent serving extremely outdated data
                 const MAX_STALE_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
                 if (canUseDexie()) {
                     try {
-                        const rec = await kv.get(MODELS_CACHE_KEY);
+                        const rec = await kv.get(MODELS_CACHE_KEY, db);
+                        if (!ownsRequest()) return [];
                         const raw = rec?.value;
                         const updatedAtMs = rec?.updated_at
                             ? rec.updated_at * 1000
@@ -391,7 +418,7 @@ export function useModelStore() {
                             } catch {
                                 // corrupted; best-effort delete
                                 try {
-                                    await kv.delete(MODELS_CACHE_KEY);
+                                    await kv.delete(MODELS_CACHE_KEY, db, { isValid: ownsRequest });
                                 } catch (deleteErr: unknown) {
                                     if (import.meta.dev) {
                                         console.warn(
@@ -481,48 +508,51 @@ export function useModelStore() {
         return lookup() ?? { ok: false, code: 'model_metadata_unavailable' };
     }
 
-    async function persist() {
-        try {
-            await kv.set(
-                'favorite_models',
-                JSON.stringify(favoriteModels.value)
-            );
-        } catch (e) {
-            console.warn('[useModelStore] persist favorites failed', e);
-        }
+    function persistFavorites(): Promise<void> {
+        const db = getDb();
+        const generation = getWorkspaceGeneration();
+        const value = JSON.stringify(favoriteModels.value);
+        favoriteRevision++;
+        const current = () => db === getDb() && generation === getWorkspaceGeneration();
+        const write = favoriteWrites.then(async () => {
+            if (!current()) return;
+            await kv.set('favorite_models', value, db, { isValid: current });
+        });
+        favoriteWrites = write.catch(error => { console.warn('[useModelStore] persist favorites failed', error); });
+        return favoriteWrites;
     }
 
     async function addFavoriteModel(model: OpenRouterModel) {
-        if (favoriteModels.value.some((m) => m.id === model.id)) return; // dedupe
+        if (favoriteModels.value.some(entry => entry.id === model.id)) return;
         favoriteModels.value.push(model);
-        await persist();
+        await persistFavorites();
     }
 
     async function removeFavoriteModel(model: OpenRouterModel) {
-        favoriteModels.value = favoriteModels.value.filter(
-            (m) => m.id !== model.id
-        );
-        await persist();
+        favoriteModels.value = favoriteModels.value.filter(entry => entry.id !== model.id);
+        await persistFavorites();
     }
 
     async function clearFavoriteModels() {
         favoriteModels.value = [];
-        await persist();
+        await persistFavorites();
     }
 
     async function getFavoriteModels() {
+        const db = getDb();
+        const generation = getWorkspaceGeneration();
+        const revision = favoriteRevision;
+        const current = () => db === getDb() && generation === getWorkspaceGeneration() && revision === favoriteRevision;
         try {
-            const record = await kv.get('favorite_models');
-            const raw = record?.value;
-            if (raw && typeof raw === 'string') {
-                const parsed: unknown = JSON.parse(raw);
-                const validated = openRouterModelListSchema.safeParse(parsed);
-                favoriteModels.value = validated.success ? validated.data : [];
-            } else {
-                favoriteModels.value = [];
-            }
+            await favoriteWrites;
+            if (!current()) return favoriteModels.value;
+            const record = await kv.get('favorite_models', db);
+            if (!current()) return favoriteModels.value;
+            const parsed: unknown = record?.value ? JSON.parse(record.value) : [];
+            const validated = openRouterModelListSchema.safeParse(parsed);
+            favoriteModels.value = validated.success ? validated.data : [];
         } catch {
-            favoriteModels.value = [];
+            if (current()) favoriteModels.value = [];
         }
         return favoriteModels.value;
     }

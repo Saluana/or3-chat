@@ -225,7 +225,7 @@ export function useChatModelSelection(options: {
         await getFavoriteModels();
         if (!process.client || disposed) return;
         if (revision === selectionRevision) await applyChatDefault();
-        window.addEventListener('or3:model-selected', onCatalogModelSelected);
+        if (!disposed) window.addEventListener('or3:model-selected', onCatalogModelSelected);
         await catalogHydration;
     });
     const stopWorkspace = subscribeActiveWorkspaceDb(() => {
@@ -256,11 +256,18 @@ export function useChatModelSelection(options: {
     function armNewChatSelection(): void {
         if (!options.threadId() && !modelInherited.value) newChatSentAt = Date.now();
     }
-    watch(options.threadId, async (id, previous) => {
+    watch(options.threadId, async (id, previous, onCleanup) => {
+        const db = getDb();
+        const generation = getWorkspaceGeneration();
+        let cancelled = false;
+        onCleanup(() => { cancelled = true; });
+        const current = () => !disposed && !cancelled && db === getDb()
+            && generation === getWorkspaceGeneration() && id === options.threadId();
         const sentAt = newChatSentAt;
         newChatSentAt = undefined;
         if (id && !previous && sentAt !== undefined && !modelInherited.value) {
-            const thread = await getDb().threads.get(id);
+            const thread = await db.threads.get(id);
+            if (!current()) return;
             // The thread must have been created by that send, not merely opened afterwards.
             if (thread && thread.created_at * 1000 >= sentAt - 1000 && id === options.threadId()) {
                 persistChoice(id, selectedModel.value, modelVariant.value);

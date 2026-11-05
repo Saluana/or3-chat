@@ -224,7 +224,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 6,
-                    "summary": "Saved prompt APIs, workspace-scoped default preference updates, and modal library loading and close behavior."
+                    "summary": "Saved prompt APIs, workspace-owned active selections, default preference updates, and modal library loading and close behavior."
                 },
                 {
                     "name": "document-revisions.md",
@@ -356,7 +356,7 @@
                     "category": "Developer reference",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Browse platforms, preserve catalog freshness, and manage workspace picks with scoped admin discovery."
+                    "summary": "Browse platforms, preserve catalog freshness and workspace ownership, and save favorites in selection order."
                 },
                 {
                     "name": "openrouter-build.md",
@@ -859,7 +859,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Understand chat admission, persistence, streaming, recovery, and view updates."
+                    "summary": "Understand chat admission, persistence, streaming, recovery, navigation ownership, and attachment resource cleanup."
                 },
                 {
                     "name": "ai-preferences.md",
@@ -868,7 +868,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 2,
-                    "summary": "Use model limit, custom context maximum, validation and workspace persistence; current admission boundaries."
+                    "summary": "Use model limit, custom context maximum, validation, workspace persistence, and recoverable settings migration; current admission boundaries."
                 }
             ]
         },

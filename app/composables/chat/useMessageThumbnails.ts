@@ -69,9 +69,9 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
         expanded.value = !expanded.value;
     }
 
-    async function ensureThumb(hash: string) {
+    async function ensureThumb(hash: string, owner: symbol) {
         const generation = getWorkspaceGeneration();
-        const current = () => isComponentActive && generation === getWorkspaceGeneration();
+        const current = () => isComponentActive && generation === getWorkspaceGeneration() && currentHashes.get(hash) === owner;
         if (pdfMeta[hash]) return;
 
         const meta = await getFileMeta(hash).catch(() => undefined);
@@ -125,45 +125,27 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
         }
     }
 
-    const currentHashes = new Set<string>();
+    const currentHashes = new Map<string, symbol>();
     let isComponentActive = true;
 
-    async function syncHashes(list: string[]) {
-        const generation = getWorkspaceGeneration();
+    function syncHashes(list: string[]) {
         const nextSet = new Set(list);
-        const newHashes: string[] = [];
-
+        for (const hash of currentHashes.keys()) {
+            if (nextSet.has(hash)) continue;
+            currentHashes.delete(hash);
+            releaseThumb(hash);
+            delete thumbnails[hash];
+            delete pdfMeta[hash];
+            delete imageNames[hash];
+        }
         for (const hash of nextSet) {
-            if (!currentHashes.has(hash)) {
-                if (!thumbnails[hash]) {
-                    thumbnails[hash] = { status: 'loading' };
-                    newHashes.push(hash);
-                } else if (thumbnails[hash].status === 'loading') {
-                    newHashes.push(hash);
-                }
-            }
-        }
-
-        if (newHashes.length > 0) {
-            await Promise.all(newHashes.map((hash) => ensureThumb(hash)));
-        }
-        if (!isComponentActive || generation !== getWorkspaceGeneration()) return;
-
-        for (const hash of nextSet) {
-            if (!currentHashes.has(hash)) {
-                const state = thumbnails[hash];
-                if (state?.status === 'ready') {
-                    retainThumb(hash);
-                    currentHashes.add(hash);
-                }
-            }
-        }
-
-        for (const hash of Array.from(currentHashes)) {
-            if (!nextSet.has(hash)) {
-                currentHashes.delete(hash);
-                releaseThumb(hash);
-            }
+            if (currentHashes.has(hash)) continue;
+            const owner = Symbol(hash);
+            currentHashes.set(hash, owner);
+            // Own the URL while loading, not only after its decode completes.
+            retainThumb(hash);
+            thumbnails[hash] = { status: 'loading' };
+            void ensureThumb(hash, owner);
         }
     }
     // Assistant inline images all use this cache. User attachment rows own
@@ -181,7 +163,7 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
     onBeforeUnmount(() => {
         stopWorkspace();
         isComponentActive = false;
-        for (const hash of currentHashes) releaseThumb(hash);
+        for (const hash of currentHashes.keys()) releaseThumb(hash);
         currentHashes.clear();
     });
 

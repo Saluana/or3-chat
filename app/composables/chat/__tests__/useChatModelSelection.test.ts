@@ -1,3 +1,4 @@
+import Dexie from 'dexie';
 import { defineComponent, h, nextTick, ref, type Ref } from 'vue';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -308,6 +309,25 @@ describe('new-chat model choice', () => {
             expect(JSON.parse(row!.value as string)).toEqual({ model: 'provider/explicit', variant: 'online' });
         });
         wrapper.unmount();
+    });
+
+    it('does not save a new-chat choice after its composer unmounts during the thread read', async () => {
+        const { selection, threadId, wrapper } = mountWithThread();
+        await flushPromises();
+        selection.selectedModel.value = 'provider/retired'; selection.armNewChatSelection();
+        let release!: () => void; let entered = false;
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        const get = vi.spyOn(db.threads, 'get').mockImplementation(() => {
+            entered = true;
+            return Dexie.Promise.resolve(gate).then(() => thread('retired-chat', Math.floor(Date.now() / 1000)));
+        });
+        try {
+            threadId.value = 'retired-chat';
+            await vi.waitFor(() => expect(entered).toBe(true));
+            wrapper.unmount(); release(); await flushPromises();
+            await new Promise(resolve => setTimeout(resolve, 50));
+            expect(await db.kv.where('name').equals('chat-model:retired-chat').first()).toBeUndefined();
+        } finally { release(); get.mockRestore(); wrapper.unmount(); }
     });
 
     it('does not apply a new-chat choice to an older chat that is opened afterwards', async () => {

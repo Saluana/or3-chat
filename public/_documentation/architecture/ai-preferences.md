@@ -20,3 +20,14 @@ checkpoints retain the captured maximum during tool iterations and reconnect.
 A settings change applies to the next generation, not an already admitted
 foreground or background loop. See [chat lifecycle](/documentation/architecture/chat-lifecycle)
 and [model catalog](/documentation/auth/models-service) for those boundaries.
+
+## Workspace loading and migration recovery
+
+Existing settings consumers clear their former workspace values and load the
+selected workspace when it changes. Failed or missing-row loads remain retryable.
+Preference updates read the durable row strictly before merging, so a failed
+read cannot silently turn an existing preference set into defaults.
+
+Legacy browser settings are removed only after their guarded KV migration
+commits. A failed write preserves the legacy copy for a subsequent load; a
+concurrent replacement of that browser value is never removed by the old load.

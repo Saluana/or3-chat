@@ -17,7 +17,7 @@ A send moves through admission, durable user-message persistence, response strea
 
 The native composer clears submitted text and attachments once the matching request saves its user turn, without waiting for the provider, with a comparison that preserves edits made while preparation was pending. A refusal before that save, such as `context_full` or unavailable model metadata during admission, keeps the draft. After the save, a final filter or the provider can still refuse the request; Retry on the saved turn owns that recovery, so the composer is not restored. Accepted, completed, failed, aborted and detached remain distinct outcomes. See [send-result types](/documentation/types/chat-types#sending-and-request-state).
 
-Create `useChat()` during component setup and dispose it on unmount. Reuse the existing `ChatContainer.vue` send and acceptance handling when extending product actions: it watches the matching request's `persisted` or `streaming` state, then the terminal result, and fences draft clearing against text edits and navigation. `hasDurableSendAcceptance()` identifies the same saved user row.
+Create `useChat()` during component setup and dispose it on unmount. A disposed controller rejects new sends and retries and ignores continuation requests. Thread switching waits for foreground settlement but applies only if that navigation still owns the controller, account and workspace. Saved retry recovery checks the same origin again after reading its assistant row. Reuse the existing `ChatContainer.vue` send and acceptance handling when extending product actions: it watches the matching request's `persisted` or `streaming` state, then the terminal result, and fences draft clearing against text edits and navigation. `hasDurableSendAcceptance()` identifies the same saved user row.
 
 History synchronization and background-job recovery use browser-local storage.
 They must remain client-only even when a native chat route renders its shell on
@@ -90,6 +90,11 @@ attached to the response body even when prefetch has filled the wrapper queue.
 
 Generated-image placeholders enter the same live text accumulator as provider
 text, including during Continue, so later text retains their order and visibility.
+Thumbnail prefetch keeps one pending load per hash across repeated range updates.
+Mounted message thumbnails retain URLs during loading, release removed hashes
+immediately, and ignore late results for removed attachments. Re-adding an evicted
+attachment resolves a fresh URL instead of reusing a revoked one.
+
 Inline thumbnail hydration retains a bounded trailing check when readiness
 arrives during a quiet stream; unmount cancels that check. Delayed continuation
 image intake rechecks request ownership before publishing content after Stop or

@@ -45,6 +45,20 @@ describe('message media prefetch controller', () => {
         expect(cache.ensure.mock.calls.map(call => call[0])).toEqual(role === 'assistant' ? hashes : hashes.slice(0, 4));
     });
 
+    // Virtual-range updates may repeat before the first metadata read finishes.
+    it('keeps one pending load per image across repeated range updates', async () => {
+        const cache = createCache();
+        let release!: () => void;
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        const loadMeta = vi.fn(async () => { await gate; return { kind: 'image' }; });
+        const controller = createController({ cache, loadMeta,
+            loadBlob: async () => new Blob(['image'], { type: 'image/png' }) });
+        for (let i = 0; i < 10; i++) controller.updateRange([{ file_hashes: ['shared'] }], { startIndex: 0, endIndex: 0 });
+        release(); await controller.whenIdle();
+        expect(loadMeta).toHaveBeenCalledOnce();
+        expect(cache.ensure).toHaveBeenCalledOnce();
+    });
+
     it('limits image work to four concurrent loads', async () => {
         const cache = createCache();
         let active = 0;

@@ -32,12 +32,9 @@ export function useContextPreview(options: {
     const workspaceRevision = shallowRef(getWorkspaceGeneration());
     let sequence = 0; let timer: ReturnType<typeof setTimeout> | undefined; let controller: AbortController | undefined;
     const memo = new Map<string, number>();
-    const countText = async (text: string) => {
-        const cached = memo.get(text); if (cached !== undefined) return cached;
-        const count = await countTokensApprox(text); memo.set(text, count); return count;
-    };
+    let disposed = false;
     const unsubscribe = subscribeActiveWorkspaceDb(() => { memo.clear(); workspaceRevision.value = getWorkspaceGeneration(); });
-    const stop = watch(() => [toValue(options.threadId), toValue(options.model), toValue(options.text),
+    const stop = watch(() => [toValue(options.threadId), toValue(options.draftId), toValue(options.model), toValue(options.text),
         toValue(options.extraText), toValue(options.attachments)?.map((file) => [file.kind, file.hash, file.meta?.width, file.meta?.height]), toValue(options.promptSelection),
         toValue(options.revision), toValue(options.reasoning), tools.listTools.value.map((tool) => [tool.definition, tool.enabled.value]),
         preferences.settings.value, chatTools.preferences.value, workspaceRevision.value, toValue(options.enabled)], () => {
@@ -48,15 +45,22 @@ export function useContextPreview(options: {
             return;
         }
         state.value = { ...state.value, pending: true };
-        timer = setTimeout(() => { void refresh(token); }, 120);
+        timer = setTimeout(() => { timer = undefined; void refresh(token); }, 120);
     }, { immediate: true });
     async function refresh(token: number) {
+        if (disposed || token !== sequence || toValue(options.enabled) === false) return;
         const db = getDb(); const generation = getWorkspaceGeneration();
         const threadId = toValue(options.threadId); const model = toValue(options.model);
         const text = [toValue(options.text), toValue(options.extraText)].filter(Boolean).join('\n\n');
         const attachments = toValue(options.attachments) ?? []; const promptSelection = toValue(options.promptSelection);
         controller = new AbortController(); const signal = controller.signal;
         const current = () => !signal.aborted && sequence === token && getDb() === db && getWorkspaceGeneration() === generation;
+        const countText = async (text: string) => {
+            const cached = memo.get(text); if (cached !== undefined) return cached;
+            const count = await countTokensApprox(text);
+            if (current()) memo.set(text, count);
+            return count;
+        };
         try {
             const [{ resolveThreadProjection }, { storedMessagesToCanonicalTranscript, projectTranscriptForOpenRouter },
                 { buildSystemPromptMessage }, { estimateMeasuredChatRequest },
@@ -130,6 +134,7 @@ export function useContextPreview(options: {
                 inputTokens: estimate.input_tokens, estimate, userMaxContextTokens: settings.maxContextTokens, source: readiness.source }) };
             // Evict prior revisions, preserving all contributions used by the current estimate.
             // No conversation-length limit is applied: the memo is merely a reusable text-count cache.
+            if (!current()) return;
             const used = new Set(messages.flatMap((row) => typeof row.content === 'string' ? [row.content]
                 : (row.content ?? []).flatMap((part) => typeof part.text === 'string' ? [part.text] : [])));
             for (const key of memo.keys()) if (!used.has(key)) memo.delete(key);
@@ -137,8 +142,10 @@ export function useContextPreview(options: {
             if (current()) state.value = { pending: false, unavailable: 'Context estimate unavailable. Refresh models or retry when this conversation has synced.' };
         }
     }
-    onScopeDispose(() => { sequence++; controller?.abort(); if (timer) clearTimeout(timer); stop(); unsubscribe(); memo.clear(); });
+    onScopeDispose(() => { disposed = true; sequence++; controller?.abort(); if (timer) clearTimeout(timer); stop(); unsubscribe(); memo.clear(); });
     return { state, refresh: async () => {
+        if (disposed || toValue(options.enabled) === false) return;
+        if (timer) { clearTimeout(timer); timer = undefined; }
         const token = ++sequence; controller?.abort(); state.value = { ...state.value, pending: true };
         try { await models.refreshModels(); } catch { /* Readiness below supplies the recoverable state. */ }
         if (sequence === token) await refresh(token);

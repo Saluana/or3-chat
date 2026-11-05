@@ -829,6 +829,31 @@ describe('useChat background detach race', () => {
 
         } finally { scope.stop(); activeDb = dbMock; origin.close(); await origin.delete(); }
     });
+    it('does not replay a saved recovery into a different conversation after a held row read', async () => {
+        runtimeConfigRef.value.public.backgroundStreaming.enabled = false;
+        recoveryStore.set('thread-1', { version: 1, thread_id: 'thread-1', request_id: 'old-request',
+            user_message_id: 'recovery-user', assistant_message_id: 'recovery-assistant',
+            input: { content: 'Origin recovery text', model: 'test-model' } });
+        let release!: () => void; let entered = false;
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        const original = dbMock.messages.get;
+        const get = vi.spyOn(dbMock.messages, 'get').mockImplementation(async id => {
+            if (id === 'recovery-assistant') { entered = true; await gate; return { id, pending: true }; }
+            return original(id);
+        });
+        vi.resetModules();
+        const { useChat } = await import('~/composables/chat/useAi');
+        const chat = useChat([], 'thread-1', undefined, { historyAlreadyLoaded: true });
+        try {
+            const retry = chat.retryMessage('recovery-user');
+            await vi.waitFor(() => expect(entered).toBe(true));
+            await chat.switchThread('thread-2', { seedMessages: [], historyAlreadyLoaded: true });
+            release();
+            await expect(retry).resolves.toMatchObject({ status: 'rejected', reason: 'unavailable' });
+            expect(appendMessageMock).not.toHaveBeenCalled();
+        } finally { release(); get.mockRestore(); chat.dispose(); }
+    });
+
     it('abandons a public retry after switching away and back while its preparation hook waits', async () => {
         runtimeConfigRef.value.public.backgroundStreaming.enabled = false;
         const rows = [
@@ -1595,7 +1620,19 @@ describe('useChat background detach race', () => {
             chat.dispose();
         });
 
-    it('settles a foreground stream before switching threads', async () => {
+    // A retained plugin/controller reference must not admit work after teardown.
+    it('rejects sends after disposal without preparing or persisting a turn', async () => {
+        vi.resetModules();
+        const { useChat } = await import('~/composables/chat/useAi');
+        const chat = useChat([], 'thread-1');
+        chat.dispose();
+        startBackgroundStreamMock.mockRejectedValueOnce(new Error('Disposed send reached transport'));
+        await expect(chat.sendMessage('late send', { model: 'test-model' })).resolves.toMatchObject({ status: 'rejected', reason: 'unavailable' });
+        expect(appendMessageMock).not.toHaveBeenCalled();
+        expect(startBackgroundStreamMock).not.toHaveBeenCalled();
+    });
+
+    it.each(['switch', 'superseded', 'disposed'] as const)('settles a foreground stream before switching threads (%s)', async navigation => {
         runtimeConfigRef.value.public.backgroundStreaming = {
             enabled: false,
         };
@@ -1640,6 +1677,8 @@ describe('useChat background detach race', () => {
         // The old callbacks still own the shared reactive refs until abort
         // cleanup has persisted their terminal state.
         expect(chat.threadId.value).toBe('thread-1');
+        const newerSwitch = navigation === 'superseded' ? chat.switchThread('thread-1') : undefined;
+        if (navigation === 'disposed') chat.dispose();
         expect(foregroundAbort.reject).not.toBeNull();
         if (!foregroundAbort.reject) {
             throw new Error('Foreground abort handler was not installed');
@@ -1652,9 +1691,9 @@ describe('useChat background detach race', () => {
             status: 'aborted',
             reason: 'aborted',
         });
-        await switchPromise;
+        await Promise.all([switchPromise, newerSwitch]);
 
-        expect(chat.threadId.value).toBe('thread-2');
+        expect(chat.threadId.value).toBe(navigation === 'switch' ? 'thread-2' : 'thread-1');
         expect(appendMessageMock.mock.calls).toHaveLength(2);
         expect(
             appendMessageMock.mock.calls.every(

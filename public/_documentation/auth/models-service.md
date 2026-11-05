@@ -90,6 +90,13 @@ The service stores `{ data, fetchedAt }` under `openrouter_model_catalog_v1` in 
 
 The existing model store retains the fetch timestamp when saving its `MODELS_CATALOG` KV cache as `{ version: 1, data, fetchedAt }`. It also reads legacy lists, whose actual fetch time is unknown. These are the same existing caches, not another catalog. Forced store refreshes wait for an ordinary in-flight network load and then coalesce a genuinely forced request. A delayed KV hydration cannot publish over a newer network request; it returns the currently owned catalog/request instead.
 
+Catalog, favorites, and recent-model memory are scoped to the active workspace.
+Switching workspaces clears them immediately; old reads and pending refreshes
+cannot publish or save into the destination workspace. Favorite changes save in
+selection order, and an older hydration cannot replace a newer local choice.
+New-chat model persistence stops if its composer is removed or navigates while
+checking the newly created thread.
+
 ## Capacity readiness foundation
 
 `useModelStore().resolveContextModel(selectedModelId, { signal? })` returns a captured metadata result or `{ ok: false, code: 'model_metadata_unavailable' }`. It validates capacity through the shared policy, keeps the original selected ID, prefers exact IDs across catalog/favorites before canonical-slug fallback after removing recognized routing/thinking suffixes for lookup, and freezes copied capacity facts. Valid catalog/favorite metadata can be used without transport. A missing or invalid record tries the normal cache path and one coalesced forced refresh; a later explicit call can recover. Favorite or legacy-cache records have cache provenance and an unknown fetch time.
