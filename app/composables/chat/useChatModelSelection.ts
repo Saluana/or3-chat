@@ -69,7 +69,7 @@ export function useChatModelSelection(options: {
     const modelVariant = ref<OpenRouterModelVariant>(DEFAULT_MODEL_VARIANT);
     const thinkingEnabled = ref(true);
     const reasoningEffort = ref<string>();
-    const persistedModel = useLocalStorage(LAST_MODEL_KEY, DEFAULT_MODEL);
+    const persistedModel = useLocalStorage<string | null | undefined>(LAST_MODEL_KEY, DEFAULT_MODEL);
     const modelInherited = ref(true);
     let inheritedProjectModel: string | null = null;
     let policySubscription: Subscription | undefined;

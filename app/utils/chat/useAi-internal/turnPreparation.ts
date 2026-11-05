@@ -107,9 +107,9 @@ export function createTurnPreparation(ports: {
             hadPreparationFilter ||= typeof hooks.hasFilter === 'function' && hasUnsafeDelegationFilter(hooks, name);
         };
         const preparationErrors = preparationHookNames.map((name) => hooks._diagnostics.errors[name] ?? 0);
-        requestScope.abortController ??= new AbortController();
-        abortController.value = requestScope.abortController;
-        const preparationSignal = requestScope.abortController.signal;
+        const preparationController = requestScope.abortController ??= new AbortController();
+        abortController.value = preparationController;
+        const preparationSignal = preparationController.signal;
         const ownsPreparation = () => !isRequestCancelled(requestScope) && !preparationSignal.aborted
             && requestScope.ownsView() && getDb() === requestScope.originDb
             && getWorkspaceGeneration() === workspaceGeneration;
@@ -120,7 +120,7 @@ export function createTurnPreparation(ports: {
         // not allow that intake to write after the pane has changed.
         if (initialProjectId && requestScope.navigationPendingBeforeSave) {
             requestScope.cancelled = true;
-            requestScope.abortController?.abort();
+            preparationController.abort();
             return early({ status: 'aborted', requestId, reason: 'aborted' });
         }
         let projectAttachmentScope: WorkspaceOperationScope | undefined;
