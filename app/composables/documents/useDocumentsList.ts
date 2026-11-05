@@ -67,6 +67,7 @@ export function useDocumentsList(limit = 200) {
                         // Sidebar entries do not retain document bodies.
                         content: null,
                     }));
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Hook callbacks can invalidate the list while its read awaits.
                 } while (refreshAgain);
             } catch (e) {
                 if (!current()) return;

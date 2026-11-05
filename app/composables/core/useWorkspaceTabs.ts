@@ -339,6 +339,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
             reuseActiveBlank?: boolean;
         } = {}
     ): Promise<WorkspaceNavigationResult> {
+        if (disposed) return NO_TAB;
         const finishMeasure = measureWorkspaceTabAction('open');
         try {
         if (options_.target === 'split') return openInSplit(resource, options_);
@@ -361,6 +362,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
     }
 
     async function newTab(): Promise<WorkspaceNavigationResult> {
+        if (disposed) return NO_TAB;
         const finishMeasure = measureWorkspaceTabAction('new');
         try {
         // A user explicitly pressed New tab: do not reuse the current blank
@@ -375,6 +377,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
     }
 
     async function newSplit(): Promise<WorkspaceNavigationResult> {
+        if (disposed) return NO_TAB;
         const paneId = options.host.addPane();
         if (!paneId) return NO_TAB;
         const opened = newBlankTab(state.value, { reuseActiveBlank: false });
@@ -384,6 +387,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
     }
 
     async function openTabInSplit(tabId: string): Promise<WorkspaceNavigationResult> {
+        if (disposed) return NO_TAB;
         if (!state.value.tabs.some((tab) => tab.id === tabId)) return NO_TAB;
         // Visible tabs already own a pane; focus it without duplicating the tab.
         if (paneShowing(tabId)) {
@@ -399,6 +403,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
         resource: WorkspaceResource,
         options_: { allowDuplicate?: boolean } = {}
     ): Promise<WorkspaceNavigationResult> {
+        if (disposed) return NO_TAB;
         const opened = openTab(state.value, resource, {
             allowDuplicate: options_.allowDuplicate ?? false,
             reuseActiveBlank: false,
@@ -414,6 +419,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
     }
 
     async function closeTab(tabId: string): Promise<boolean> {
+        if (disposed) return false;
         const finishMeasure = measureWorkspaceTabAction('close');
         try {
         const generation = scopeGeneration;
@@ -476,7 +482,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
     }
 
     async function closeSplit(paneId = state.value.activePaneId): Promise<boolean> {
-        if (!paneId || options.host.paneIds().length <= 1) return false;
+        if (disposed || !paneId || options.host.paneIds().length <= 1) return false;
         const tabId = state.value.paneBindings.get(paneId);
         const generation = scopeGeneration;
         const activation = coordinator.begin(paneId);
@@ -497,6 +503,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
     }
 
     async function reopenClosedTab(): Promise<WorkspaceNavigationResult> {
+        if (disposed) return NO_TAB;
         const previous = state.value;
         if (!previous.recentlyClosed.length) return NO_TAB;
         const next = transitionReopenClosedTab(previous);
@@ -618,6 +625,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
     }
 
     async function restore(): Promise<boolean> {
+        if (disposed) return false;
         const finishMeasure = measureWorkspaceTabAction('restore');
         const generation = ++scopeGeneration;
         try {
@@ -638,6 +646,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
         workspaceId: string | null | undefined,
         profileId: string | null | undefined
     ): Promise<boolean> {
+        if (disposed) return false;
         const generation = ++scopeGeneration;
         persistenceSuspensions += 1;
         try {
@@ -681,6 +690,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
             replaceCurrent?: boolean;
         } = {}
     ): string | null {
+        if (disposed) return null;
         const currentTabId = state.value.paneBindings.get(paneId);
         const current = currentTabId ? tabById(currentTabId) : undefined;
         if (current && boundResourceMatches(current.resource, resource)) return current.id;

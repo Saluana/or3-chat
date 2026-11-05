@@ -285,7 +285,7 @@ export async function saveDocumentRecoveryCopy(
     if (!conflict && (title !== draft.title || JSON.stringify(content) !== JSON.stringify(draft.content))) {
         throw new Error('The draft changed. Your edits are still retained.');
     }
-    st.debouncedSave?.cancel?.();
+    st.debouncedSave?.cancel();
     pendingSaves.delete(st);
     const copy = await createDocumentInDb(db, { title: `${draft.title || 'Untitled'} (recovered copy)`, content: draft.content });
     const latest = await getDocumentInDb(db, id);

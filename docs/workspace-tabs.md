@@ -64,3 +64,6 @@ Opening an existing tab or undoing a close captures the outgoing view before reb
 Slow app initialization cannot replace newer chat/document selections or publish into a different workspace or a disposed shell. `setPaneApp` accepts an optional `isCurrent` guard for callers that own a navigation transaction and rejects a current initialization failure. A failed final document save leaves its pane open; tab/split closes retain their bindings when the host cannot close. Restore stops when a host declines a close instead of retrying indefinitely.
 
 Pending layout changes flush when their scope is disposed. Active pane positions count only bound panes, and removing an unavailable saved resource preserves focus on the surviving active tab. The manifest accepts sessions larger than 100 tabs, matching live tab creation. Queued resize work is cancelled when the pane count changes or its owner is disposed.
+
+After a tab session is disposed, retained navigation commands fail without
+creating or closing panes, restoring layouts, or rebinding workspace resources.

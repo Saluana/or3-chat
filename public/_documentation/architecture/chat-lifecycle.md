@@ -262,6 +262,8 @@ saves keep the pane open.
 Pending layout changes save on scope disposal. Saved layouts support more than
 100 open tabs and preserve active-tab identity when unavailable resources are
 removed. Resize work is cancelled when its pane arrangement or owner disappears.
+Retained commands on a disposed tab session fail without adding or closing panes,
+restoring layouts, or switching workspace resources in a replacement shell.
 
 ### Draft storage and recovery
 

@@ -48,6 +48,43 @@ function createHost(): {
 }
 
 describe('useWorkspaceTabs', () => {
+    // Delayed menu/plugin callbacks can retain the API after the shell unmounts.
+    // Retirement must protect the host too, not just suppress manifest commits.
+    it.each(['new-split', 'open-split', 'split-hidden', 'background', 'close-tab', 'close-split', 'restore', 'switch-scope'] as const)(
+        'does not mutate panes through a disposed %s command', async command => {
+            const fake = createHost();
+            const scope = effectScope();
+            const data = new Map<string, string>();
+            const tabs = scope.run(() => useWorkspaceTabs({ host: fake.host, paneLimit: ref(4), isMobile: ref(false),
+                workspaceId: () => 'local', profileId: () => 'standard',
+                storage: { getItem: key => data.get(key) ?? null, setItem: (key, value) => { data.set(key, value); } } }))!;
+            await tabs.restore();
+            const hidden = await tabs.openResource({ kind: 'document', documentId: 'hidden' }, { target: 'background' });
+            const visible = await tabs.newSplit();
+            const state = tabs.state.value;
+            const paneIds = [...fake.panes];
+            tabs.flushPersistence();
+            scope.stop();
+            // A replacement shell can now own the same host panes.
+            fake.bindings.set('pane-a', { kind: 'document', documentId: 'replacement-owner' });
+            const bindings = new Map(fake.bindings);
+            let result: Awaited<ReturnType<typeof tabs.newSplit>> | boolean;
+            if (command === 'new-split') result = await tabs.newSplit();
+            else if (command === 'open-split') result = await tabs.openInSplit({ kind: 'document', documentId: 'late' });
+            else if (command === 'split-hidden') result = await tabs.openTabInSplit(hidden.tabId!);
+            else if (command === 'background') result = await tabs.openResource({ kind: 'document', documentId: 'late' }, { target: 'background' });
+            else if (command === 'close-tab') result = await tabs.closeTab(visible.tabId!);
+            else if (command === 'close-split') result = await tabs.closeSplit();
+            else if (command === 'restore') result = await tabs.restore();
+            else result = await tabs.switchScope('another-workspace', 'standard');
+            expect(fake.panes).toEqual(paneIds);
+            expect(fake.bindings).toEqual(bindings);
+            expect(tabs.state.value).toBe(state);
+            if (typeof result === 'boolean') expect(result).toBe(false);
+            else expect(['failed', 'superseded']).toContain(result.status);
+        },
+    );
+
     // Open/Undo must capture the mounted outgoing view before changing hosts;
     // background opens must never change that view or consume its blank tab.
     it.each(['existing', 'undo'] as const)('captures the outgoing draft when opening an %s tab', async (operation) => {

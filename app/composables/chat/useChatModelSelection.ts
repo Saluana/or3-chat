@@ -111,7 +111,7 @@ export function useChatModelSelection(options: {
         const preferred = settings.value.defaultModelMode === 'fixed' &&
             settings.value.fixedModelId
             ? settings.value.fixedModelId
-            : workspaceModels.policy.value.defaultModel ?? persistedModel.value ?? DEFAULT_MODEL;
+            : workspaceModels.policy.value.defaultModel ?? persistedModel.value;
         return isModelHidden(workspaceModels.policy.value, preferred)
             ? workspaceModels.policy.value.defaultModel ?? catalog.value.find(model => isChatModel(model) && !isModelHidden(workspaceModels.policy.value, model.id))?.id ?? preferred
             : preferred;
@@ -225,6 +225,7 @@ export function useChatModelSelection(options: {
         await getFavoriteModels();
         if (!process.client || disposed) return;
         if (revision === selectionRevision) await applyChatDefault();
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Unmount can run while applyChatDefault awaits.
         if (!disposed) window.addEventListener('or3:model-selected', onCatalogModelSelected);
         await catalogHydration;
     });

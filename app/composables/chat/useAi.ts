@@ -961,10 +961,12 @@ export function useChat(
         if (disposed) return { status: 'rejected' as const, reason: 'unavailable' as const };
         const retryRevision = navigationRevision;
         const retryDb = getDb(); const retryGeneration = getWorkspaceGeneration();
+        const ownsRetry = () => !disposed && retryRevision === navigationRevision
+            && getDb() === retryDb && getWorkspaceGeneration() === retryGeneration;
         if (threadIdRef.value) {
-            const db = getDb(); const generation = getWorkspaceGeneration(); const threadId = threadIdRef.value;
+            const db = retryDb; const threadId = threadIdRef.value;
             const checkpoint = await db.chat_request_recoveries.get(threadId);
-            if (disposed || retryRevision !== navigationRevision || getDb() !== db || generation !== getWorkspaceGeneration() || threadIdRef.value !== threadId)
+            if (!ownsRetry() || threadIdRef.value !== threadId)
                 return { status: 'rejected' as const, reason: 'unavailable' as const };
             if (options.afterEdit) {
                 if (checkpoint?.user_message_id === messageId) {
@@ -979,13 +981,13 @@ export function useChat(
                     return { status: 'rejected' as const, reason: 'unavailable' as const,
                         error: 'This saved attempt uses an unsupported recovery version. Update the app or edit the draft to prepare a new request.' };
                 const discarded = await discardStaleRecovery(db, checkpoint);
-                if (disposed || retryRevision !== navigationRevision || getDb() !== db || generation !== getWorkspaceGeneration())
+                if (!ownsRetry())
                     return { status: 'rejected' as const, reason: 'unavailable' as const };
                 if (!discarded) return sendMessage({ ...checkpoint.input, model: modelOverride || checkpoint.input.model });
             }
         }
         const { retryMessageImpl } = await import('~/utils/chat/useAi-internal/retry');
-        if (disposed || retryRevision !== navigationRevision || getDb() !== retryDb || getWorkspaceGeneration() !== retryGeneration)
+        if (!ownsRetry())
             return { status: 'rejected' as const, reason: 'unavailable' as const };
         return await retryMessageImpl(
             {
