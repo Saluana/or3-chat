@@ -82,7 +82,7 @@ async function extract(
             finish();
             resolve({
                 ok: false,
-                error: 'The extraction worker failed. Retry this file.',
+                error: 'Could not read this file. Try adding it again.',
             });
         };
         worker.postMessage({ bytes, name }, [bytes]);

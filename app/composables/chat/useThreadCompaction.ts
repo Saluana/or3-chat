@@ -47,15 +47,18 @@ async function prepareCapture(options: Omit<Parameters<typeof captureCompaction>
     if (options.signal?.aborted) throw new CompactionError('cancelled', 'Compaction was cancelled.');
     if (options.isCurrent?.() === false) throw new CompactionError('stale_source', 'The initiating conversation, model or workspace changed.');
     const anchor = options.anchorMessageId ?? projection?.segments.find((segment) => segment.thread.id === options.sourceThreadId)?.visible.at(-1)?.id;
-    if (!anchor) throw new CompactionError('not_eligible', 'This conversation has no local persisted anchor. Open the original conversation for inherited-only history.');
+    if (!anchor) throw new CompactionError('not_eligible', 'Open the original saved conversation to summarize these messages.');
     return captureCompaction({ ...options, anchorMessageId: anchor });
 }
 function boundaryError(error: unknown): { code: ErrorCode; message: string } {
     const code = error instanceof CompactionError ? error.code : error instanceof CompactionHistoryError ? 'scope_incomplete' : 'generation_failed';
     // Provider/DB errors can contain request bodies or credentials. Only
     // host-authored finite boundary errors may supply display text.
-    const message = error instanceof CompactionError || error instanceof CompactionHistoryError
-        ? error.message : 'Unable to prepare a compaction summary. Retry explicitly when the source and model are available.';
+    const message = code === 'cancelled' ? 'Summarizing was cancelled.'
+        : code === 'source_busy' ? 'Wait for the current reply or action to finish.'
+        : code === 'stale_source' ? 'The conversation changed. Try summarizing again.'
+        : code === 'not_eligible' ? 'Open a saved conversation with completed replies to summarize it.'
+        : 'Could not summarize this conversation. Please try again.';
     if (import.meta.dev) console.warn('[compaction] boundary failure', { ...errorDiagnostics(error), compactionCode: code, message });
     return { code, message };
 }
@@ -85,7 +88,7 @@ export function useThreadCompaction(options: ControllerOptions) {
         if (!toValue(options.threadId)) return 'Start a conversation first.';
         if (!toValue(options.model)) return 'Choose a chat model.';
         if (toValue(options.isBusy)) return 'Wait for the reply to finish.';
-        if (active.value || getSourceLocks(getDb()).has(`${workspaceRevision.value}:${toValue(options.threadId)}`)) return 'Compaction is already active.';
+        if (active.value || getSourceLocks(getDb()).has(`${workspaceRevision.value}:${toValue(options.threadId)}`)) return 'Summarizing is already active. Please wait.';
         return undefined;
     });
     function failure(code: ErrorCode, message: string, publish = true): ThreadCompactionResult {
@@ -95,29 +98,29 @@ export function useThreadCompaction(options: ControllerOptions) {
     async function inspect(anchorMessageId?: string): Promise<ThreadCompactionEligibility> {
         if (isDisposed()) return { eligible: false, code: 'cancelled', message: 'The initiating pane is no longer available.' };
         const source = toValue(options.threadId); const model = toValue(options.model);
-        if (!source || !model) return { eligible: false, code: 'not_eligible', message: 'Open a persisted conversation and choose its model first.' };
+        if (!source || !model) return { eligible: false, code: 'not_eligible', message: 'Open a saved conversation and choose a model first.' };
         const db = getDb(); const generation = getWorkspaceGeneration(); const revision = viewRevision; const sequence = ++inspectionSequence;
         const isBusy = () => toValue(options.isBusy) || active.value || getSourceLocks(db).has(`${generation}:${source}`);
-        if (isBusy()) return { eligible: false, code: 'source_busy', message: 'Wait for chat generation, tools and active compaction to settle.' };
+        if (isBusy()) return { eligible: false, code: 'source_busy', message: 'Wait for the current reply or action to finish.' };
         const sameView = () => !disposed && getDb() === db && getWorkspaceGeneration() === generation && revision === viewRevision && sequence === inspectionSequence
             && toValue(options.threadId) === source && toValue(options.model) === model && (!options.isCurrent || options.isCurrent());
         const current = () => sameView() && !isBusy();
         try {
             const capture = await prepareCapture({ sourceThreadId: source, model, db, anchorMessageId, isCurrent: current });
-            if (!current()) throw new CompactionError('stale_source', 'Compaction eligibility changed while checking the source.');
+            if (!current()) throw new CompactionError('stale_source', 'The conversation changed. Please try again.');
             return { eligible: true, source_thread_id: source, anchor_message_id: capture.anchorMessageId, model };
         } catch (error) {
-            if (!sameView()) return { eligible: false, code: disposed ? 'cancelled' : 'stale_source', message: 'Compaction eligibility changed while checking the source.' };
-            if (isBusy()) return { eligible: false, code: 'source_busy', message: 'Wait for chat generation, tools and active compaction to settle.' };
+            if (!sameView()) return { eligible: false, code: disposed ? 'cancelled' : 'stale_source', message: 'The conversation changed. Please try again.' };
+            if (isBusy()) return { eligible: false, code: 'source_busy', message: 'Wait for the current reply or action to finish.' };
             return { eligible: false, ...boundaryError(error) };
         }
     }
     async function start(anchorMessageId?: string): Promise<ThreadCompactionResult> {
-        if (operation) return failure('source_busy', 'A compaction is already active for this pane.', false);
+        if (operation) return failure('source_busy', 'Summarizing is already active. Please wait.', false);
         if (disposed) return failure('cancelled', 'The initiating pane is no longer available.');
         const source = toValue(options.threadId); const model = toValue(options.model);
-        if (!source || !model) return failure('not_eligible', 'Open a persisted conversation and choose its model first.');
-        if (toValue(options.isBusy)) return failure('source_busy', 'Wait for chat generation and tools to settle.');
+        if (!source || !model) return failure('not_eligible', 'Open a saved conversation and choose a model first.');
+        if (toValue(options.isBusy)) return failure('source_busy', 'Wait for the current reply or action to finish.');
         const db = getDb(); const generation = getWorkspaceGeneration(); const key = `${generation}:${source}`;
         const locks = getSourceLocks(db);
         if (locks.has(key)) return failure('source_busy', 'A compaction is already active for this conversation.');

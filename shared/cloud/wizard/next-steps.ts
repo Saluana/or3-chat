@@ -68,5 +68,5 @@ export function buildApplyOnlySuccessBody(
     const connectMessage = connectEnabled
         ? ' After OR3 is running publicly, connect a computer with npx @or3/connect.'
         : '';
-    return `Your .env and provider modules were written. Start the app with ${formatStartCommand(packageManager)} when you are ready. Authenticated source launches prompt for secret-store setup in the terminal; run ${packageManager} run setup:secrets to configure it first.${connectMessage}`;
+    return `Your settings were saved. Start the app with ${formatStartCommand(packageManager)} when you are ready. Authenticated source launches prompt for secret-store setup in the terminal; run ${packageManager} run setup:secrets to configure it first.${connectMessage}`;
 }

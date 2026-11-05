@@ -214,13 +214,13 @@ async function reviewUpdate(entry: MarketplaceUpdateCheckPlugin): Promise<void> 
         updateNote.value = {
             ...updateNote.value,
             [entry.pluginId]: {
-                message: 'The complete signed authority descriptor is unavailable, so this update cannot be approved safely.',
+                message: 'The full list of permissions is unavailable, so this update cannot be approved safely.',
                 retryable: false,
             },
         };
         toast.add({
-            title: 'Complete authority review unavailable',
-            description: 'Ask the publisher to republish the release with its signed authority descriptor.',
+            title: 'Permission review unavailable',
+            description: 'Ask the publisher to provide the full list of permissions for this update.',
             color: 'warning',
         });
         return;
@@ -662,7 +662,7 @@ async function activate(entry: {
                             {{ accessChangeLabel(change.kind) }}: {{ change.detail }}
                         </li>
                     </ul>
-                    <p v-else>At least one enabled workspace or this admin workspace has not approved this signed authority.</p>
+                    <p v-else>At least one enabled workspace or this admin workspace has not approved this verified permissions.</p>
                 </div>
                 <p v-else class="text-xs text-(--ui-text-muted)">No new access approval is needed for enabled workspaces.</p>
                 <details v-if="entry.release?.authority" class="rounded-lg border border-(--ui-border) p-3 text-xs">
@@ -690,7 +690,7 @@ async function activate(entry: {
                     </div>
                 </details>
                 <p v-else-if="entry.release?.requestedGrants.length" class="text-xs text-(--ui-text-error)">
-                    The complete signed authority descriptor is unavailable; this update cannot be approved safely.
+                    The complete verified permissions descriptor is unavailable; this update cannot be approved safely.
                 </p>
                 <label
                     v-if="entry.release?.approvalRequired"
@@ -703,7 +703,7 @@ async function activate(entry: {
                         :false-value="''"
                         data-testid="marketplace-update-grant-approve"
                     />
-                    I approve this release's access for every enabled workspace and this admin workspace for the canary. Disabled workspaces stay disabled.
+                    I approve this release's access for every enabled workspace and this admin workspace for the compatibility check. Disabled workspaces stay disabled.
                 </label>
                 <div class="flex flex-wrap gap-2">
                     <UButton
@@ -729,7 +729,7 @@ async function activate(entry: {
                 {{ entry.pluginId }}: {{ entry.reason ?? 'no update information available' }}
             </p>
         </div>
-        <h3 class="text-sm font-medium">Staged candidates</h3>
+        <h3 class="text-sm font-medium">Updates awaiting approval</h3>
         <div v-if="installed.loading.value" class="text-sm text-(--ui-text-muted)">Loading…</div>
         <div v-else-if="candidates.length === 0" class="text-sm text-(--ui-text-muted)">
             No reviewed release is staged right now. Use “Check for updates” to look for a newer
@@ -746,7 +746,7 @@ async function activate(entry: {
                     <span
                         class="font-medium inline-flex items-center text-xs px-2 py-1 gap-1 rounded-md ring ring-inset bg-info text-[var(--md-on-info)] ring-[var(--md-info)]/25"
                     >
-                        Update being checked: {{ entry.display?.candidateVersion ?? entry.display?.candidateDigest }}
+                        Update being checked: {{ entry.display?.candidateVersion ?? 'Version pending' }}
                     </span>
                     <span class="text-xs text-(--ui-text-muted)">
                         Current {{ entry.display?.version ?? 'none' }}
@@ -757,8 +757,7 @@ async function activate(entry: {
                     View plugin details
                 </UButton>
                 <p class="text-xs text-(--ui-text-muted)">
-                    The update activates only after a health check of the exact reviewed bytes; expanded
-                    authority needs fresh consent first.
+                    The update is applied after its checks pass. You must approve any additional access first.
                 </p>
                 <p v-if="canaryNote[entry.pluginId]" class="text-xs text-(--ui-text-muted)">
                     Update check: {{ canaryNote[entry.pluginId] }}
@@ -774,7 +773,7 @@ async function activate(entry: {
                     <p>{{ workspaceBlocks[entry.pluginId]?.total }} workspace(s) need setup, permissions, or state repair before this version can be selected.</p>
                     <ul class="mt-2 max-h-48 space-y-2 overflow-y-auto">
                         <li v-for="block in workspaceBlocks[entry.pluginId]?.items" :key="`${block.workspaceId}:${block.code}`" class="flex flex-wrap items-center gap-2 break-all">
-                            <span>{{ block.workspaceId }} · {{ block.code }}</span>
+                            <span>Workspace needs attention</span><details><summary>Technical details</summary>{{ block.workspaceId }} · {{ block.code }}</details>
                             <UButton size="xs" color="neutral" variant="soft" :to="repairWorkspaceLink(entry.pluginId, entry.display?.candidateVersion ?? null, block.workspaceId, block.code)">
                                 {{ block.code.startsWith('setup-') ? 'Open workspace setup' : 'Open workspace review' }}
                             </UButton>

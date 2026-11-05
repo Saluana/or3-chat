@@ -714,7 +714,7 @@ async function forwardUiEvent(payload: PortableUiEvent): Promise<void> {
             <div v-if="!surface" class="flex items-center gap-2 text-xs text-(--ui-text-muted)">
                 <UBadge color="neutral" variant="subtle">{{ statusLabel }}</UBadge>
                 <span>v{{ activation.version }}</span>
-                <span v-if="activation.crashed" class="text-red-500">containment violation</span>
+                <span v-if="activation.crashed" class="text-red-500">a safety check failed</span>
             </div>
 
             <div

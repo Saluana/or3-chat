@@ -441,6 +441,7 @@
     </resizable-sidebar-layout>
 </template>
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
 // Generic PageShell merging chat + docs functionality.
 // Props allow initializing with a thread OR a document and choosing default mode.
@@ -725,9 +726,7 @@ const workspaceTabs = useWorkspaceTabs({
                 workspaceTabs.updateRuntime(tabId, {
                     status: 'error',
                     errorMessage:
-                        error instanceof Error
-                            ? error.message
-                            : 'Document changes could not be saved locally',
+                        presentError(error, { fallbackMessage: 'Document changes could not be saved locally' }).message,
                 });
                 throw error;
             }
@@ -803,7 +802,7 @@ const workspaceTabs = useWorkspaceTabs({
         console.error(`[workspace-tabs] ${context.action} failed`, error);
         toast.add({
             title: context.action === 'close' ? 'Could not close tab' : 'Tab switch failed',
-            description: 'Your current content remains open. ' + (error instanceof Error ? error.message : 'Please try again.'),
+            description: 'Your current content remains open. ' + (presentError(error, { fallbackMessage: 'Please try again.' }).message),
             color: 'error',
         });
     },
@@ -1281,7 +1280,7 @@ async function onWorkspaceCreateTab(
     } catch (error) {
         toast.add({
             title: `Could not create ${app.label.toLowerCase()}`,
-            description: error instanceof Error ? error.message : 'Unknown error',
+            description: presentError(error, { fallbackMessage: 'Could not complete this action. Please try again.' }).message,
             color: 'error',
         });
     }

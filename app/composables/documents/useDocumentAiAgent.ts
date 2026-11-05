@@ -640,7 +640,7 @@ export function useDocumentAiAgent(options: {
     function onAgentStatus(event: DocumentAiAgentStatusEvent) {
         switch (event.type) {
             case 'iteration':
-                agentStatus.value = `Thinking (step ${event.iteration}/${event.maxIterations})…`;
+                agentStatus.value = 'Thinking…';
                 break;
             case 'tool_start':
                 agentStatus.value = `${documentAiToolStatusLabel(event.name)}…`;

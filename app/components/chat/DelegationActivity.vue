@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { liveQuery, type Subscription } from 'dexie';
 import { getActiveWorkspaceId, getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb, type Or3DB } from '~/db/client';
@@ -186,7 +187,7 @@ async function openChat(threadId?: string) {
             if (!result || !result.ok) throw new Error('Could not open another pane.');
         }
         if (current() && epoch === subscriptionEpoch) error.value = '';
-    } catch (cause) { if (current() && epoch === subscriptionEpoch) error.value = cause instanceof Error ? cause.message : 'Chat is unavailable.'; }
+    } catch (cause) { if (current() && epoch === subscriptionEpoch) error.value = presentError(cause, { fallbackMessage: 'Chat is unavailable.' }).message; }
 }
 </script>
 <template>

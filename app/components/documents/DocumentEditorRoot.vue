@@ -6,7 +6,7 @@
             <UButton color="neutral" variant="soft" label="Save local copy and reload" :loading="restoring" @click="recoverLocalCopy" />
         </div>
         <div v-if="documentLoaded && checkpointError" class="document-status-banner" role="alert">
-            <p>Saved version could not be created. Retry to save a history checkpoint.</p>
+            <p>Saved version could not be created. Retry to save this version.</p>
             <UButton color="neutral" variant="soft" label="Retry saved version" :loading="checkpointBusy" @click="retryAutomaticRevision" />
         </div>
         <div v-if="documentLoaded && tooLargeToSync" class="document-status-banner" role="status">
@@ -319,6 +319,7 @@
 </template>
 
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import { shouldLockDocumentAiEditor } from '~/composables/documents/documentAiLifecycle';
 import AppModal from '~/components/ui/AppModal.vue';
 import { formatShortcut, isApplePlatform } from '~/utils/keyboard-shortcuts';
@@ -626,7 +627,7 @@ async function recoverLocalCopy() {
         }
         if (editorDb.value === origin.db && props.documentId === origin.id) recoveryMessage.value = `Your local edits were saved as “${copy.title}” in Files. The original has been reloaded.`;
     } catch (caught) {
-        if (origin.isCurrent()) recoveryMessage.value = caught instanceof Error ? caught.message : 'The copy could not be saved. Your draft is still retained.';
+        if (origin.isCurrent()) recoveryMessage.value = presentError(caught, { fallbackMessage: 'The copy could not be saved. Your draft is still retained.' }).message;
     } finally {
         restoring.value = false;
     }

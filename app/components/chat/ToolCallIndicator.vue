@@ -51,7 +51,7 @@
                     :key="call.id || `tool-detail-${index}`"
                     class="tool-call-detail min-w-0 text-xs"
                 >
-                    <div class="flex min-w-0 items-center gap-2">
+                    <div v-if="toolCalls.length > 1" class="flex min-w-0 items-center gap-2">
                         <UIcon
                             :name="iconForCall(call)"
                             class="size-3.5 shrink-0 text-[var(--md-on-surface-variant)]"
@@ -62,7 +62,8 @@
                             {{ toolLabel(call) }}
                         </span>
                     </div>
-                    <code class="ml-5 text-xs opacity-60">{{ call.name }}</code>
+                    <details class="ml-5 mt-1"><summary class="cursor-pointer">Technical details</summary>
+                    <code v-if="call.name !== toolLabel(call)" class="text-xs opacity-60">{{ call.name }}</code>
                     <pre
                         v-if="call.args"
                         class="tool-call-detail-value ml-5 mt-1 max-h-56 max-w-full overflow-auto whitespace-pre-wrap break-all rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface-container-low)] px-2.5 py-2 font-mono text-[11px] leading-5 text-[var(--md-on-surface)]"
@@ -80,6 +81,7 @@
                         class="tool-call-detail-value ml-5 mt-1 max-h-56 max-w-full overflow-auto whitespace-pre-wrap break-all font-sans text-xs leading-5 text-[var(--md-error)]"
                         >{{ call.error }}</pre
                     >
+                    </details>
                 </div>
             </div>
         </component>
@@ -115,6 +117,7 @@
 </template>
 
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useButtonOverrides } from '~/composables/useTypedThemeOverrides';
@@ -197,7 +200,7 @@ async function openSource(receipt: WorkspaceSourceReceipt) {
         const { openWorkspaceSource } = await import('~/utils/chat/workspace-source-receipts');
         await openWorkspaceSource(receipt);
     } catch (error) {
-        sourceError.value = error instanceof Error ? error.message : 'This source is unavailable.';
+        sourceError.value = presentError(error, { fallbackMessage: 'This source is unavailable.' }).message;
     }
 }
 

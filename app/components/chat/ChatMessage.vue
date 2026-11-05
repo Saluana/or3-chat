@@ -1244,7 +1244,7 @@ async function onBranch() {
         });
     } catch (e: unknown) {
         const message =
-            e instanceof Error ? e.message : 'Error creating branch';
+            presentError(e, { fallbackMessage: 'Error creating branch' }).message;
         toast.add({
             title: 'Branch failed',
             description: message,
@@ -1272,7 +1272,7 @@ async function runExtraAction(action: ChatMessageAction) {
         await action.handler(messageActionContext());
     } catch (e: unknown) {
         const description =
-            e instanceof Error ? e.message : 'Error running action';
+            presentError(e, { fallbackMessage: 'Error running action' }).message;
         try {
             toast.add({
                 title: 'Action failed',

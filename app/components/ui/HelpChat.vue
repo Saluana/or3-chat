@@ -194,6 +194,7 @@
 </template>
 
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import { StreamMarkdown, streamMarkdownComponents } from '~/utils/stream-markdown';
 import { openRouterStream } from '~/utils/chat/openrouterStream';
 import type { ToolDefinition } from '~/utils/chat/types';
@@ -463,9 +464,7 @@ async function getDocumentation(path: string) {
         toast.add({
             title: 'Docs error',
             description:
-                error instanceof Error
-                    ? error.message
-                    : 'Something went wrong while fetching the docs.',
+                presentError(error, { fallbackMessage: 'Something went wrong while fetching the docs.' }).message,
             color: 'error',
         });
     }
@@ -818,7 +817,7 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
     } catch (error) {
         console.error('[HelpChat] Error in sendMessage:', error);
         const errorMsg =
-            error instanceof Error ? error.message : 'Unknown error';
+            presentError(error, { fallbackMessage: 'Could not complete this action. Please try again.' }).message;
 
         await pushMessage(
             {

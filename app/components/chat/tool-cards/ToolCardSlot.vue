@@ -363,9 +363,10 @@ onBeforeUnmount(() => {
   >
     <template v-if="failure"
       ><ToolCallIndicator :tool-calls="[call]" />
-      <p class="text-xs opacity-60">
-        {{ label }} card unavailable ({{ failure }})
-      </p></template
+      <div class="text-xs opacity-60">
+        {{ label }} preview unavailable.
+        <details><summary>Technical details</summary>{{ failure }}</details>
+      </div></template
     >
     <template v-else-if="near">
       <ToolCardPageHost

@@ -110,7 +110,7 @@ test('transforms the selection offline and previews the result without writing',
     const flat = flatNodes(host);
     const preview = flat.find((node) => node.type === 'markdown');
     expect(preview.markdown).toContain('Outline (offline): Release checklist');
-    expect(flat.some((node) => node.type === 'text' && node.text.includes('offline'))).toBe(true);
+    expect(flat.some((node) => node.type === 'text' && node.text.includes('without using AI'))).toBe(true);
     // Nothing is written until a host action button is used.
     expect(host.calls.some((call) => call.method.startsWith('documents.'))).toBe(false);
 });

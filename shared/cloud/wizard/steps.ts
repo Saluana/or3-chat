@@ -244,7 +244,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                                   },
                               ]),
                         {
-                            label: 'Self-hosted OR3 — accounts, SQLite, and filesystem storage',
+                            label: 'Self-hosted OR3 — accounts and storage on your server',
                             value: 'preset-local',
                             description:
                                 'Recommended. Only asks for your admin email; secrets and paths are filled automatically.',
@@ -256,7 +256,7 @@ export function getWizardSteps(answers: WizardAnswers): WizardStep[] {
                                 'For deployments already using Clerk and Convex.',
                         },
                         {
-                            label: 'Custom — manually choose auth/sync/storage providers',
+                            label: 'Custom — manually choose sign-in, sync, and file storage services',
                             value: 'custom',
                             description:
                                 'Choose each backend and advanced deployment setting yourself.',

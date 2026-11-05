@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import type { OpenRouterModel } from '~/core/auth/models-service';
 import { useIcon } from '~/composables/useIcon';
 import {
+    formatModelName,
     formatPerMillion,
     formatTokenCount,
     getContextLength,
@@ -52,7 +53,7 @@ const starFilledIcon = useIcon('catalog.star.filled');
                 <span
                     class="font-medium text-sm min-w-0 max-sm:line-clamp-2 sm:truncate break-words text-[var(--md-on-surface)]"
                     :title="model.name"
-                    >{{ model.name }}</span
+                    >{{ formatModelName(model.name) }}</span
                 >
                 <UBadge
                     v-for="badge in badges"

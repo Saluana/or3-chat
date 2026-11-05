@@ -212,7 +212,7 @@ test('explains an unconfigured host instead of offering a run', async () => {
     const handle = createPortablePlugin(definition, { client: host.client, bootstrap: host.bootstrap });
     await handle.ready;
     const { flat } = lastView(host);
-    expect(flat.some((node) => node.type === 'text' && node.text.includes('no approved models'))).toBe(true);
+    expect(flat.some((node) => node.type === 'text' && node.text.includes('No models are available'))).toBe(true);
     expect(flat.some((node) => node.type === 'button' && node.action === 'compare.run')).toBe(false);
 });
 

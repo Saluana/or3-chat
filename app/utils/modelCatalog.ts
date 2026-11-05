@@ -7,6 +7,11 @@ import type { OpenRouterModel } from '~/core/auth/models-service';
  * both the catalog modal and any future surfaces (model pickers, dashboards).
  */
 
+/** Remove a repeated publisher prefix from a model's display name. */
+export function formatModelName(name: string): string {
+    return name.replace(/^([^:]+):\s*(?=\1(?:\s|$))/i, '');
+}
+
 // ---------------------------------------------------------------------------
 // Providers
 // ---------------------------------------------------------------------------

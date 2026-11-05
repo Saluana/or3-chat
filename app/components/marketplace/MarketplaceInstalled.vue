@@ -351,7 +351,6 @@ async function apiGet<T>(url: string): Promise<T> {
         </div>
 
         <section v-if="!installed.error.value || installed.packages.value.length > 0" class="flex flex-col gap-4" data-testid="marketplace-installed">
-            <h3 class="text-base font-medium">Installed</h3>
             <p class="text-sm text-(--ui-text-muted)">Packages are installed once for this OR3 site. Enable or disable each plugin for the current workspace.</p>
             <div v-if="installed.loading.value" class="text-sm text-(--ui-text-muted)">Loading…</div>
             <div v-else-if="!installed.error.value && installed.packages.value.length === 0" class="text-sm text-(--ui-text-muted)">
@@ -380,26 +379,21 @@ async function apiGet<T>(url: string): Promise<T> {
                             color="warning"
                             variant="subtle"
                         >
-                            Blocked: {{ selectedActivationFor(entry)?.blockCode }}
+                            Needs attention
                         </UBadge>
                     </div>
                     <p class="text-xs text-(--ui-text-muted) break-words">{{ lifecycleBadge(entry).reason }}</p>
-                    <div v-if="healthFor(entry)" class="rounded-md border border-(--ui-border) p-3 text-xs space-y-1" role="status">
-                        <p>Checked {{ healthFor(entry)?.checkedAt }} for workspace {{ healthFor(entry)?.workspaceId }}.</p>
-                        <p>Selected package: {{ entry.startup.status === 'ready' ? 'ready' : 'blocked' }}</p>
-                        <p>Workspace: {{ isEnabled(entry.pluginId) ? 'enabled' : 'disabled' }}; permissions: {{ entry.grantReview ?? 'unknown' }}; setup: {{ entry.setup ?? 'unknown' }}</p>
-                        <p>Browser activation: {{ healthFor(entry)?.activation === 'not-observed' ? 'Enabled; browser check pending' : healthFor(entry)?.activation === 'unavailable' ? 'Check unavailable' : healthFor(entry)?.activation }}<span v-if="healthFor(entry)?.observedAt"> at {{ healthFor(entry)?.observedAt }}</span></p>
-                        <p v-if="healthFor(entry)?.reason" class="break-words">{{ healthFor(entry)?.reason }}</p>
+                    <div v-if="healthFor(entry)" class="text-xs text-(--ui-text-muted) space-y-1" role="status">
+                        <p>Checked {{ healthFor(entry)?.checkedAt }}.</p>
+                        <p v-if="healthFor(entry)?.reason && healthFor(entry)?.reason !== lifecycleBadge(entry).reason" class="break-words">{{ healthFor(entry)?.reason }}</p>
                     </div>
                     <UButton v-if="installed.canManageSitePlugins.value && (lifecycleBadge(entry).action === 'approve-site' || lifecycleBadge(entry).action === 'review-permissions')"
                         size="xs" color="neutral" variant="soft" :to="`/admin/plugins?plugin=${encodeURIComponent(entry.pluginId)}`">
                         {{ lifecycleBadge(entry).action === 'approve-site' ? 'Review site approval' : 'Review permissions' }}
                     </UButton>
                     <details class="text-xs text-(--ui-text-muted)">
-                        <summary class="cursor-pointer">Package identities</summary>
+                        <summary class="cursor-pointer">Technical details</summary>
                         <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
-                            <dt>Selected version</dt>
-                            <dd class="break-all">{{ entry.display?.version ?? 'none' }}</dd>
                             <dt>Selected digest</dt>
                             <dd class="break-all">{{ entry.display?.selectedDigest ?? entry.startup.selectedDigest ?? 'none' }}</dd>
                             <dt>Running version</dt>
@@ -407,6 +401,12 @@ async function apiGet<T>(url: string): Promise<T> {
                             <dt>Running digest</dt>
                             <dd class="break-all">{{ activationFor(entry.pluginId)?.packageDigest ?? trustedActivationFor(entry.pluginId)?.packageDigest ?? 'not running here' }}</dd>
                         </dl>
+                        <div v-if="healthFor(entry)" class="mt-3 space-y-1">
+                            <p>Workspace: {{ healthFor(entry)?.workspaceId }}</p>
+                            <p>Selected package: {{ entry.startup.status === 'ready' ? 'ready' : 'blocked' }}</p>
+                            <p>Enabled: {{ isEnabled(entry.pluginId) ? 'yes' : 'no' }}; permissions: {{ entry.grantReview ?? 'unknown' }}; setup: {{ entry.setup ?? 'unknown' }}</p>
+                            <p>Browser activation: {{ healthFor(entry)?.activation === 'not-observed' ? 'Enabled; browser check pending' : healthFor(entry)?.activation === 'unavailable' ? 'Check unavailable' : healthFor(entry)?.activation }}<span v-if="healthFor(entry)?.observedAt"> at {{ healthFor(entry)?.observedAt }}</span></p>
+                        </div>
                         <p class="mt-2">Running means this browser observed the exact selected package; a matching version with a different digest never counts.</p>
                     </details>
                     <div class="flex flex-wrap gap-2">

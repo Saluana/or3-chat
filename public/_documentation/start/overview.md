@@ -46,3 +46,10 @@ creation and upload controls belong to the active Files view.
 Open **Workspace Backup** from the dashboard to export the active workspace as a JSONL backup. Keep the downloaded file somewhere safe. Import validates a backup and defaults to **Append & merge** with conflict overwrite off, preserving existing records. Choose **Replace workspace** explicitly to remove the active workspace's existing data. Export before restoring or resetting browser storage.
 
 Local data belongs to this browser profile and site origin. Private browsing, clearing site data, and changing the host or port can make the original workspace unavailable. Cloud sync and backups serve different purposes: sync shares changes, while a saved backup gives you a recovery point.
+
+
+## Clear labels and technical details
+
+Conversation memory can summarize earlier messages to make room for new replies. Review which messages will be left out before sending a reply with a shorter history. Saved conversations and the original messages remain available.
+
+Settings show each choice once. Raw identifiers that repeat a model or workflow selection are omitted. Tool activity and plugin checks retain **Technical details** only for additional troubleshooting information. Approval dialogs still show the information an action will use, and connection, access, and recovery controls work as before.

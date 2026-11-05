@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 /**
  * Dashboard > Library.
  *
@@ -193,7 +194,7 @@ async function requestInstall(release: PurchasedRelease): Promise<void> {
         });
         if (request !== requestInstallGeneration || identity !== purchaseIdentity.value) return;
         requestedReleaseIds.value = new Set([...requestedReleaseIds.value, release.releaseId]);
-        toast.add({ title: 'Install request sent', description: `An administrator can review request ${result.request.id} in this server’s Library.`, color: 'success' });
+        toast.add({ title: 'Install request sent', description: 'An administrator can review your request in the Library.', color: 'success' });
     } catch {
         if (request === requestInstallGeneration && identity === purchaseIdentity.value) toast.add({ title: 'Could not request installation', description: 'Try again or ask an administrator to check this server’s Library.', color: 'warning' });
     } finally {
@@ -282,7 +283,7 @@ const terminalReason = computed(() => {
     if (reason === 'account-unavailable') return 'The marketplace account was deleted or restricted.';
     if (reason === 'link-expired') return 'This link reached its fixed 90-day expiry.';
     if (reason === 'binding-undecryptable') {
-        return 'The stored credential can no longer be decrypted (the encryption key changed). Connect again.';
+        return 'Your saved connection is no longer available. Connect your account again.';
     }
     if (reason === 'canceled') return 'This pairing attempt was canceled.';
     return 'This link is no longer active.';
@@ -570,7 +571,7 @@ const terminalReason = computed(() => {
             class="mt-4 text-sm text-red-700"
             aria-live="polite"
         >
-            {{ library.failure.value.message }}
+            {{ presentError(library.failure.value, { fallbackMessage: 'Could not load your Library. Check your connection and try again.' }).message }}
         </p>
     </section>
 </template>

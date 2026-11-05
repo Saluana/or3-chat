@@ -40,11 +40,13 @@ export interface PaletteMetaRow {
 
 const META_ROW_LIMIT = 6;
 const META_LABELS: Record<string, string> = {
+    messageCount: 'Messages',
     mime_type: 'Type',
     size_bytes: 'Size',
 };
 // Folded into a single "Dimensions" row, so they are never listed on their own.
 const META_MERGED_KEYS = new Set(['width', 'height']);
+const META_INTERNAL_KEYS = new Set(['pluginId', 'pageId', 'textCoverage', 'ephemeral', 'kind', 'incomplete']);
 
 /**
  * Metadata rows for the preview panel. Raw source keys are technical
@@ -62,7 +64,7 @@ export function paletteMetaRows(
     for (const [key, value] of Object.entries(metadata)) {
         if (rows.length >= META_ROW_LIMIT) break;
         if (value === null || value === '') continue;
-        if (META_MERGED_KEYS.has(key)) continue;
+        if (META_MERGED_KEYS.has(key) || META_INTERNAL_KEYS.has(key)) continue;
         rows.push({
             key,
             label: META_LABELS[key] ?? paletteMetaLabel(key),

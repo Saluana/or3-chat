@@ -142,7 +142,7 @@ export function createPromptWorkbench(options = {}) {
         if (!state.catalogConfigured) {
             children.push({
                 type: 'text',
-                text: 'This host has no approved models for plugins yet; preview works, running needs an approved model.',
+                text: 'You can preview prompts now. Ask an administrator to choose a model before running them.',
             });
         }
 
@@ -335,7 +335,7 @@ export function createPromptWorkbench(options = {}) {
             return;
         }
         if (!state.model) {
-            state.failures = [{ message: 'No approved model is available on this host.' }];
+            state.failures = [{ message: 'No models are available for this app yet.' }];
             render();
             return;
         }

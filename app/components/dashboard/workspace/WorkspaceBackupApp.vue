@@ -324,7 +324,7 @@ const canImport = computed(
 
 const exportStatusText = computed(() => {
     if (exporting.value)
-        return `Streaming backup… ${Math.round(state.progress.value)}%`;
+        return `Creating backup… ${Math.round(state.progress.value)}%`;
     if (lastExportStatus.value === 'done' && lastExportAt.value)
         return `Last export ${formatDate(lastExportAt.value)}`;
     if (lastExportStatus.value === 'error')
@@ -335,7 +335,7 @@ const exportStatusText = computed(() => {
 const importStatusText = computed(() => {
     if (importing.value)
         return `Applying backup… ${Math.round(state.progress.value)}%`;
-    if (peeking.value) return 'Validating backup metadata…';
+    if (peeking.value) return 'Checking backup…';
     if (lastImportStatus.value === 'done' && lastImportAt.value)
         return `Last import ${formatDate(lastImportAt.value)}`;
     // The error alert above the button carries the details.
@@ -384,7 +384,7 @@ const fileDescription = computed(() => {
     if (!backupMeta.value) return size;
     if (cloud || !tables.length) return `${size} · Valid backup`;
     const rows = tables.reduce((total, table) => total + table.rowCount, 0);
-    return `${size} · ${formatNumber(tables.length)} tables · ${formatNumber(rows)} rows`;
+    return `${size} · ${formatNumber(rows)} saved items`;
 });
 
 const exportStatusFormatter = new Intl.DateTimeFormat(undefined, {
@@ -577,7 +577,7 @@ watch(
         }
 
         if (pendingAction.value === 'peek' && step === 'confirm') {
-            announce('Backup metadata validated successfully.');
+            announce('Backup checked successfully.');
             pendingAction.value = null;
             peekError.value = null;
             return;

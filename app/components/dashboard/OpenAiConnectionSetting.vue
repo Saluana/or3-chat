@@ -17,6 +17,7 @@
     </section>
 </template>
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import { computed, onMounted, ref } from 'vue';
 import { useOpenAiKey } from '~/core/auth/useOpenAiKey';
 import { useModelStore } from '~/composables/chat/useModelStore';
@@ -38,10 +39,10 @@ async function run(action: () => Promise<void>) {
         // The picker gains or loses the OpenAI models.
         await refreshModels().catch(() => undefined);
     } catch (caught) {
-        error.value = caught instanceof Error ? caught.message : 'The OpenAI key could not be changed.';
+        error.value = presentError(caught, { fallbackMessage: 'The OpenAI key could not be changed.' }).message;
     } finally { busy.value = false; }
 }
 const save = () => run(async () => { await saveKey(key.value); key.value = ''; });
 const remove = () => run(removeKey);
-onMounted(() => { refresh().catch((caught: unknown) => { error.value = caught instanceof Error ? caught.message : ''; }); });
+onMounted(() => { refresh().catch((caught: unknown) => { error.value = presentError(caught, { fallbackMessage: 'Could not check your OpenAI connection. Please try again.' }).message; }); });
 </script>

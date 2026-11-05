@@ -1,15 +1,15 @@
 <template>
-    <section aria-label="Context & compaction" class="chat-memory-card">
+    <section aria-label="Conversation memory" class="chat-memory-card">
         <div class="chat-memory-header">
             <button type="button" class="chat-memory-toggle" :aria-expanded="expanded" :aria-controls="detailsId" @click="expanded = !expanded">
                 <span class="chat-memory-icon" aria-hidden="true"><UIcon name="i-lucide-database" class="size-4" /></span>
                 <span class="min-w-0 flex-1">
-                    <span class="chat-memory-title block truncate">Context &amp; compaction</span>
-                    <span class="chat-memory-description block truncate">{{ expanded ? 'Manage context and automatic compaction.' : usageLabel }}</span>
+                    <span class="chat-memory-title block truncate">Conversation memory</span>
+                    <span v-if="!expanded" class="chat-memory-description block truncate">{{ usageLabel }}</span>
                 </span>
             </button>
             <UButton v-if="inProgress" size="xs" color="neutral" variant="soft" class="chat-memory-compact shrink-0 w-auto! max-md:min-h-0! max-md:px-2! max-md:text-xs! max-md:leading-4!" @click="emit('cancel')">Cancel</UButton>
-            <UButton v-else size="xs" color="neutral" variant="soft" class="chat-memory-compact shrink-0 w-auto! max-md:min-h-0! max-md:px-2! max-md:text-xs! max-md:leading-4!" :disabled="Boolean(blockedReason)" :title="blockedReason" @click="emit('compact')">Compact</UButton>
+            <UButton v-else size="xs" color="neutral" variant="soft" class="chat-memory-compact shrink-0 w-auto! max-md:min-h-0! max-md:px-2! max-md:text-xs! max-md:leading-4!" :disabled="Boolean(blockedReason)" :title="blockedReason" @click="emit('compact')">Summarize</UButton>
         </div>
         <div v-show="expanded" :id="detailsId" class="chat-memory-details">
             <div data-context-indicator :aria-busy="state.pending">
@@ -21,12 +21,12 @@
                 </div>
             </div>
             <div class="mt-3 flex items-center justify-between gap-3">
-                <label :for="switchId" class="text-[0.8125rem]">Auto-compact when context is high</label>
-                <USwitch :id="switchId" class="chat-settings-control" :model-value="settings.autoCompactContext" color="primary" size="sm" aria-label="Auto-compact when context is high" :disabled="saving" @update:model-value="setAutomatic" />
+                <label :for="switchId" class="text-[0.8125rem]">Summarize automatically</label>
+                <USwitch :id="switchId" class="chat-settings-control" :model-value="settings.autoCompactContext" color="primary" size="sm" aria-label="Summarize automatically" :disabled="saving" @update:model-value="setAutomatic" />
             </div>
             <div v-if="settings.autoCompactContext" class="chat-memory-threshold">
                 <div class="mb-3 flex items-center justify-between gap-3">
-                    <span :id="thresholdLabelId" class="text-xs">Compact at context usage</span>
+                    <span :id="thresholdLabelId" class="text-xs">Summarize when memory reaches</span>
                     <span class="chat-memory-threshold-value">{{ thresholdPercent }}%</span>
                 </div>
                 <USlider
@@ -38,13 +38,11 @@
                     color="primary"
                     :ui="{ track: 'rounded-full! bg-(--md-surface-container)!', range: 'rounded-full!', thumb: 'rounded-full!' }"
                     :aria-labelledby="thresholdLabelId"
-                    :aria-describedby="thresholdDescriptionId"
                     :aria-valuetext="`${thresholdPercent}% context usage`"
                     :disabled="saving"
                     @change="saveThreshold"
                 />
                 <div class="mt-2 flex justify-between text-[0.6875rem] text-(--md-on-surface-variant)" aria-hidden="true"><span>10%</span><span>100%</span></div>
-                <p :id="thresholdDescriptionId" class="chat-memory-description mt-2">Compacts when estimated context reaches this level.</p>
             </div>
             <div class="chat-memory-history-section">
                 <UPopover v-model:open="historyOpen" :content="{ align: 'start', sideOffset: 8 }" @update:open="(open: boolean) => open && loadVersions()">
@@ -52,7 +50,7 @@
                         <span class="chat-memory-icon" aria-hidden="true"><UIcon name="i-lucide-history" class="size-4" /></span>
                         <span class="min-w-0 flex-1 text-left">
                             <span class="chat-memory-title block">Version history</span>
-                            <span class="chat-memory-description block">View previous compacted versions.</span>
+                            <span class="chat-memory-description block">View earlier conversation summaries.</span>
                         </span>
                         <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0" aria-hidden="true" />
                     </button>
@@ -66,7 +64,7 @@
                                     <UIcon :name="version.id === rootId ? 'i-lucide-message-circle' : 'i-lucide-fold-vertical'" class="chat-memory-version-icon" aria-hidden="true" />
                                     <span class="min-w-0 flex-1">
                                         <span class="chat-memory-version-title block truncate">{{ version.title || 'Untitled chat' }}</span>
-                                        <span class="chat-memory-version-description block">{{ version.id === rootId ? 'Original conversation' : version.branch_mode === 'compacted' ? version.id === latestId ? 'Latest compacted version' : 'Earlier compacted version' : 'Branch' }}</span>
+                                        <span class="chat-memory-version-description block">{{ version.id === rootId ? 'Original conversation' : version.branch_mode === 'compacted' ? version.id === latestId ? 'Latest summary' : 'Earlier summary' : 'Branch' }}</span>
                                     </span>
                                     <UIcon v-if="version.id === threadId" name="i-lucide-check" class="size-3.5 shrink-0 text-(--md-primary)" aria-hidden="true" />
                                 </button>
@@ -78,7 +76,7 @@
             </div>
             <p v-if="saveError" role="alert" class="mt-2 text-xs text-error">{{ saveError }}</p>
         </div>
-        <p v-if="inProgress" role="status" aria-live="polite" class="chat-memory-progress">Compacting…</p>
+        <p v-if="inProgress" role="status" aria-live="polite" class="chat-memory-progress">Summarizing…</p>
     </section>
 </template>
 
@@ -96,7 +94,7 @@ const emit = defineEmits<{ (e: 'compact' | 'cancel' | 'close'): void }>();
 const { settings, set } = useAiSettings();
 const expanded = ref(false);
 const detailsId = useId();
-const thresholdLabelId = useId(); const thresholdDescriptionId = useId();
+const thresholdLabelId = useId();
 const thresholdPercent = ref(settings.value.autoCompactThresholdPercent);
 watch(() => settings.value.autoCompactThresholdPercent, value => { thresholdPercent.value = value; });
 const switchId = useId(); const saving = ref(false); const saveError = ref('');

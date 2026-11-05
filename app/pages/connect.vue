@@ -18,8 +18,8 @@
                 <h1 class="text-2xl font-semibold">Remote Connect unavailable</h1>
                 <p class="mt-3! leading-6 text-[var(--md-on-surface-variant)]">
                     This Cloud instance does not offer remote Connect. An
-                    administrator must configure and prove the managed flow
-                    before it can be enabled. Use a local Intern host through
+                    administrator must set up Remote Connect
+                    before it can be enabled. Use a local agent connection through
                     Agents → Connection settings instead.
                 </p>
                 <UButton to="/" block size="xl" class="mt-8!">
@@ -70,8 +70,7 @@
                             background service.
                         </template>
                         <template v-else>
-                            Your computer received its credential and is starting the
-                            OR3 service and secure tunnel.
+                            Your computer is setting up its secure connection to OR3.
                         </template>
                     </p>
                     <div class="mt-7! space-y-3! rounded-[var(--md-border-radius)] bg-[var(--md-surface-container)] p-5!">
@@ -93,14 +92,14 @@
                                         : 'text-[var(--md-primary)]'
                                 "
                             />
-                            <span class="text-sm font-medium">Credential received by computer</span>
+                            <span class="text-sm font-medium">Starting the connection</span>
                         </div>
                         <div class="flex items-center gap-3">
                             <UIcon
                                 name="i-lucide-loader-circle"
                                 class="size-5 animate-spin text-[var(--md-on-surface-variant)]"
                             />
-                            <span class="text-sm font-medium">Waiting for the protected online check</span>
+                            <span class="text-sm font-medium">Checking the connection</span>
                         </div>
                     </div>
                     <p class="mt-5! text-center text-sm text-[var(--md-on-surface-variant)]">
@@ -111,8 +110,7 @@
                 <template v-else-if="state === 'timed_out'">
                     <h1 ref="stateHeading" tabindex="-1" class="text-2xl font-semibold outline-none">Still waiting for your computer</h1>
                     <p class="mt-3! leading-6 text-[var(--md-on-surface-variant)]">
-                        Approval succeeded, but OR3 could not confirm the protected
-                        service and an available agent before the setup window ended.
+                        Approval succeeded, but OR3 could not confirm the connection and find an available agent before the setup window ended.
                     </p>
                     <div class="mt-6! rounded-[var(--md-border-radius)] bg-[var(--md-surface-container)] p-5!">
                         <p class="text-sm font-medium">Check the terminal first.</p>
@@ -281,7 +279,7 @@
                 {{
                     connectEnabled
                         ? 'The computer stays local-first. Remote access can be revoked from either device at any time.'
-                        : 'Local Intern hosts stay on the computer until you explicitly add one in Connection settings.'
+                        : 'Local agent connections stay on the computer until you explicitly add one in Connection settings.'
                 }}
             </p>
         </div>

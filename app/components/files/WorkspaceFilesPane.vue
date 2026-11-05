@@ -532,7 +532,7 @@ async function removeCatalog() {
         const { removeWorkspaceFile } = await import('~/db/workspace-files');
         await removeWorkspaceFile(origin, row.id, await workspaceRevision(row));
         remove.value = false; actionTarget.value = null;
-        feedback.value = 'Catalog entry removed. Shared original bytes are retained.';
+        feedback.value = 'Removed from Files. Copies used elsewhere are still available.';
     }, 'The item could not be removed. Try again.');
 }
 async function associateItem(remove = false) {
@@ -748,8 +748,8 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
                 <UButton size="workspace" label="Add to project" :disabled="busy || readOnly || !associationProject" @click="associateItem()" />
             </template>
         </AppModal>
-        <AppModal v-model:open="remove" :title="actionTarget?.postType === 'doc' ? 'Remove document?' : 'Remove catalog entry?'" close-label="Cancel">
-            <p>{{ actionTarget?.title }} will be removed from Files. Chat attachments and other retained references keep their original bytes.</p>
+        <AppModal v-model:open="remove" :title="actionTarget?.postType === 'doc' ? 'Remove document?' : 'Remove from Files?'" close-label="Cancel">
+            <p>{{ actionTarget?.title }} will be removed from Files. Copies used by chats and other saved work will remain available.</p>
             <UAlert v-if="error" role="alert" color="error" variant="soft" title="Could not remove item" :description="error" class="mt-4" />
             <template #footer><UButton size="workspace" :label="actionTarget?.postType === 'doc' ? 'Remove document' : 'Remove catalog entry'" color="error" :disabled="busy || readOnly" @click="removeCatalog" /></template>
         </AppModal>

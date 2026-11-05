@@ -111,7 +111,7 @@ export function createDocumentUtilities(options = {}) {
         if (active?.usesModel && !state.catalogConfigured) {
             children.push({
                 type: 'text',
-                text: 'This host has no approved models, so model transformations are unavailable; the offline outline still works.',
+                text: 'AI editing is unavailable until an administrator chooses a model. You can still create an outline on this device.',
             });
         }
         // Its own form: the transform button stays outside every form, so the
@@ -235,7 +235,7 @@ export function createDocumentUtilities(options = {}) {
             state.output = local.ok
                 ? {
                       text: local.value.text,
-                      provenance: 'Computed offline in the plugin worker; no model was called.',
+                      provenance: 'Created on this device without using AI.',
                       preview: formatTransformPreview({
                           transform: definition.id,
                           title: selection.value.title,
@@ -250,7 +250,7 @@ export function createDocumentUtilities(options = {}) {
         }
 
         if (!state.catalogConfigured || !state.model) {
-            state.failures = [{ message: 'No approved model is available on this host.' }];
+            state.failures = [{ message: 'No models are available for this app yet.' }];
             render();
             return;
         }

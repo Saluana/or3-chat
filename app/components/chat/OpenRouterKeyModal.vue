@@ -7,7 +7,7 @@
         <template #default>
             <div class="space-y-4">
                 <p class="text-sm text-[var(--md-on-surface-variant)]">
-                    {{ cloud ? 'Your key is stored securely on the server for your account and works across devices.' : 'Your key is stored in this browser (IndexedDB) and sent to OpenRouter when used.' }}
+                    {{ cloud ? 'Your key is stored securely on the server for your account and works across devices.' : 'Your key is stored in this browser (browser storage) and sent to OpenRouter when used.' }}
                 </p>
                 <UFormField
                     label="API key"

@@ -339,11 +339,13 @@ test("legacy placement, crashing card fallback and timer sends stay isolated", a
   await expect(
     page.getByRole("group", { name: "End card", exact: true }),
   ).toContainText("End placed card");
-  await expect(
-    page.getByText("Broken plugin card unavailable (mount-error)", {
-      exact: true,
-    }),
-  ).toBeVisible();
+  const fallback = page.getByText("Broken plugin preview unavailable.");
+  await expect(fallback).toBeVisible();
+  const diagnostic = fallback.locator("details");
+  await expect(diagnostic).not.toHaveAttribute("open");
+  await diagnostic.getByText("Technical details", { exact: true }).click();
+  await expect(diagnostic).toHaveAttribute("open");
+  await expect(diagnostic).toContainText("mount-error");
   await page.waitForTimeout(7500);
   await expect(page.locator("[data-guard-result]")).toContainText(
     "no-user-activation",

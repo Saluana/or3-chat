@@ -93,6 +93,7 @@
 </template>
 
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import { reactive, computed, ref, watch } from 'vue';
 import { useToast } from '#imports';
 import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
@@ -485,7 +486,7 @@ async function handleLayerUpload(file: File, which: LayerKey) {
             );
         }
     } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : 'Please try again.';
+        const message = presentError(e, { fallbackMessage: 'Please try again.' }).message;
         showUploadError(message);
         console.error('[BackgroundLayersSection] Upload failed:', message);
     }

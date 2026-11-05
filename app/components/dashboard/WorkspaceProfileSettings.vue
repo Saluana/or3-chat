@@ -50,7 +50,8 @@
       v-if="draftResolved.diagnostics.length"
       class="profile-diagnostics"
     >
-      <strong>Compatibility notes</strong>
+      <p>Some settings are unavailable and will use the closest supported option.</p>
+      <details><summary>Technical details</summary>
       <ul class="mt-1 list-disc space-y-1 pl-4">
         <li
           v-for="diagnostic in draftResolved.diagnostics"
@@ -58,7 +59,7 @@
         >
           {{ diagnostic.message }}
         </li>
-      </ul>
+      </ul></details>
     </div>
 
     <div class="flex flex-wrap items-center justify-between gap-3">
@@ -129,6 +130,7 @@
 </template>
 
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import { computed, ref, watch } from "vue";
 import { useToast } from "#imports";
 import type { WorkspaceProfileSource } from "~/core/workspace-profiles";
@@ -251,7 +253,7 @@ async function save() {
   } catch (error) {
     toast.add({
       title: "Unable to apply profile",
-      description: error instanceof Error ? error.message : "Please try again.",
+      description: presentError(error, { fallbackMessage: "Please try again." }).message,
       color: "error",
     });
   } finally {
@@ -274,7 +276,7 @@ async function reset() {
   } catch (error) {
     toast.add({
       title: "Unable to reset profile",
-      description: error instanceof Error ? error.message : "Please try again.",
+      description: presentError(error, { fallbackMessage: "Please try again." }).message,
       color: "error",
     });
   } finally {

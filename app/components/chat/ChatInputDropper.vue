@@ -24,14 +24,14 @@
                 <div class="flex flex-wrap gap-2">
                     <UButton v-if="sendBlock.reason !== 'unsupported_input'" size="xs" variant="soft" color="neutral" @click.stop="settingsPopoverOpen = true">Chat memory</UButton>
                     <UButton size="xs" variant="ghost" color="neutral" @click.stop="showModelCatalog = true">Choose model</UButton>
-                    <UButton v-if="sendBlock.reason === 'context_full' && !('userMessageId' in sendBlock && sendBlock.userMessageId)" size="xs" variant="ghost" color="neutral" :disabled="loading" @click.stop="handleSend({ inspectLossyRequest: true })">Inspect lossy send</UButton>
+                    <UButton v-if="sendBlock.reason === 'context_full' && !('userMessageId' in sendBlock && sendBlock.userMessageId)" size="xs" variant="ghost" color="neutral" :disabled="loading" @click.stop="handleSend({ inspectLossyRequest: true })">Review messages to leave out</UButton>
                 </div>
                 <details v-if="lossyPreview" open>
-                    <summary class="cursor-pointer py-2">Omit {{ lossyPreview.omitted_turn_count }} old turns ({{ lossyPreview.omitted_message_count }} messages) for this request</summary>
-                    <p>Estimated input after omissions {{ lossyPreview.input_tokens.toLocaleString() }} / {{ lossyPreview.effective_context_tokens.toLocaleString() }} · reply available {{ lossyPreview.reply_tokens.toLocaleString() }}</p>
+                    <summary class="cursor-pointer py-2">Leave out {{ lossyPreview.omitted_message_count }} earlier messages for this reply</summary>
+                    <p>Estimated memory use after leaving out messages: {{ lossyPreview.input_tokens.toLocaleString() }} / {{ lossyPreview.effective_context_tokens.toLocaleString() }} · tokens available for the reply: {{ lossyPreview.reply_tokens.toLocaleString() }}</p>
                     <p>The original history stays saved. This request excludes only the entries below.</p>
                     <ul class="max-h-40 overflow-y-auto space-y-1 py-2" aria-label="Messages omitted from this request">
-                        <li v-for="row in lossyPreview.omitted_messages" :key="row.position">{{ row.position + 1 }} · {{ row.role }} · {{ row.excerpt }}</li>
+                        <li v-for="row in lossyPreview.omitted_messages" :key="row.position">{{ row.position + 1 }} · {{ row.role === 'user' ? 'You' : row.role === 'assistant' ? 'Assistant' : 'Instructions' }} · {{ row.excerpt }}</li>
                     </ul>
                     <div class="flex gap-2">
                         <UButton size="xs" variant="soft" color="warning" :disabled="loading" @click.stop="handleSend({ lossyConfirmation: lossyPreview })">Send with these omissions</UButton>
@@ -385,6 +385,7 @@
 </template>
 
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import { claimAutomaticCompaction, CompactionError } from '~/db/compaction';
 import { useContextPreview } from '~/composables/chat/useContextPreview';
 import { useModelStore } from '~/composables/chat/useModelStore';
@@ -1545,7 +1546,7 @@ async function attachMentionImage(id: string): Promise<void> {
         await attachFile(new File([blob], meta.name, { type: meta.mime_type }));
     } catch (error) {
         if (!componentDisposed && props.tabId === initiatingTab) {
-            toast.add({ title: 'Could not attach image', description: error instanceof Error ? error.message : 'Try again.', color: 'error' });
+            toast.add({ title: 'Could not attach image', description: presentError(error, { fallbackMessage: 'Try again.' }).message, color: 'error' });
         }
     }
 }
