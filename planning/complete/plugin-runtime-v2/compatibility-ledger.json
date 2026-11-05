@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "142db786909271900bb60974b98a093d88721608e28287cc4cb64ca244132c87",
+      "apiSha256": "7da0278173ddab3d36fd1596e06b4e8b88246ff292c8028d6e2677a8e62f083e",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -3139,7 +3139,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useModelStore.ts",
-              "line": 76,
+              "line": 79,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ContextModelReadiness =\n    | { ok: false; code: 'model_metadata_unavailable' }\n    | { ok: true; selectedModelId: string; modelId: string; source: ModelCatalogResult['source'];\n        fetchedAt: number | null; metadata: ContextModelMetadata };"
             }
@@ -4691,7 +4691,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useModelStore.ts",
-              "line": 109,
+              "line": 112,
               "syntaxKind": "VariableDeclaration",
               "text": "MODELS_CACHE_KEY = 'MODELS_CATALOG'"
             }
@@ -4705,7 +4705,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useModelStore.ts",
-              "line": 110,
+              "line": 113,
               "syntaxKind": "VariableDeclaration",
               "text": "MODELS_TTL_MS = 48 * 60 * 60 * 1000"
             }
@@ -6735,7 +6735,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAi.ts",
-                "line": 75,
+                "line": 76,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[]; toolDraftId?: () => string | undefined } = {}\n);"
               }
@@ -6744,7 +6744,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAi.ts",
-              "line": 75,
+              "line": 76,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[]; toolDraftId?: () => string | undefined } = {}\n);"
             }
@@ -7269,7 +7269,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useModelStore.ts",
-                "line": 140,
+                "line": 143,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useModelStore();"
               }
@@ -7278,7 +7278,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useModelStore.ts",
-              "line": 140,
+              "line": 143,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useModelStore();"
             }
