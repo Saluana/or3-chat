@@ -251,7 +251,7 @@
                     "category": "Files",
                     "categoryOrder": 2,
                     "order": 0,
-                    "summary": "Hash-addressed blob storage, deterministic catalog ownership, bounded text, retained references, and sync admission."
+                    "summary": "Hash-addressed blobs, captured workspace ownership, provisional reference cleanup, and transaction-safe delete/restore hooks."
                 },
                 {
                     "name": "message-files.md",
@@ -260,7 +260,7 @@
                     "category": "Files",
                     "categoryOrder": 2,
                     "order": 1,
-                    "summary": "Attach and detach files while reconciling references and serialized hashes."
+                    "summary": "Workspace-consistent reads, atomic attachment relationships, reference reconciliation, and serialized hashes."
                 },
                 {
                     "name": "files-select.md",
@@ -278,7 +278,7 @@
                     "category": "Files",
                     "categoryOrder": 2,
                     "order": 3,
-                    "summary": "Legacy URL metadata; separate from persisted file blobs."
+                    "summary": "Legacy URL metadata with workspace-guarded deletion and callbacks outside write transactions."
                 },
                 {
                     "name": "client.md",

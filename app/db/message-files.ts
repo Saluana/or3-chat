@@ -58,11 +58,12 @@ export type AddableFile =
  * - Does not ensure blobs are available locally.
  */
 export async function filesForMessage(messageId: string): Promise<FileMeta[]> {
-    const msg = await getDb().messages.get(messageId);
+    const db = getDb();
+    const msg = await db.messages.get(messageId);
     if (!msg) return [];
     const hashes = parseFileHashes(msg.file_hashes);
     if (!hashes.length) return [];
-    return getDb().file_meta.where('hash').anyOf(hashes).toArray();
+    return db.file_meta.where('hash').anyOf(hashes).toArray();
 }
 
 /**

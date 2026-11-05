@@ -7,7 +7,7 @@ import {
 } from '~/db/client';
 import { useDropZone, useFileDialog } from '@vueuse/core';
 import { useToast } from '#imports';
-import { reportError, err } from '~/utils/errors';
+import { reportError } from '~/utils/errors';
 import {
     getMaxFileBytes,
     validateFile,
@@ -60,6 +60,7 @@ export function useChatInputAttachments(
 
     let disposed = false;
     let intakeController = new AbortController();
+    const attachmentControllers = new WeakMap<UploadedImage, AbortController>();
     function invalidateIntake() {
         intakeController.abort();
         intakeController = new AbortController();
@@ -166,13 +167,26 @@ export function useChatInputAttachments(
 
         attachments.value.push(attachment);
         options.onImageAdd(attachment);
-        await persistAttachment(attachment, owner);
+        const controller = new AbortController();
+        attachmentControllers.set(attachment, controller);
+        const abort = () => controller.abort();
+        owner.signal.addEventListener('abort', abort, { once: true });
+        const attachmentOwner: AttachmentIntakeOwner = {
+            signal: controller.signal,
+            assertCurrent() {
+                controller.signal.throwIfAborted();
+                owner.assertCurrent();
+            },
+        };
         try {
-            owner.assertCurrent();
-        } catch {
-            return;
+            await persistAttachment(attachment, attachmentOwner);
+            attachmentOwner.assertCurrent();
+            return attachment;
+        } catch (error) {
+            if (!controller.signal.aborted) throw error;
+        } finally {
+            owner.signal.removeEventListener('abort', abort);
         }
-        return attachment;
     }
 
     async function processFiles(files: FileList | File[] | null) {
@@ -201,7 +215,10 @@ export function useChatInputAttachments(
 
     function removeImage(index: number) {
         const [removed] = attachments.value.splice(index, 1);
-        if (removed) releaseAttachment(removed);
+        if (removed) {
+            attachmentControllers.get(removed)?.abort();
+            releaseAttachment(removed);
+        }
         options.onImageRemove(index);
     }
 

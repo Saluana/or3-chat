@@ -1,13 +1,14 @@
 import 'fake-indexeddb/auto';
+import Dexie from 'dexie';
 import { Blob as NodeBlob } from 'node:buffer';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { restoreMany, softDeleteFile, softDeleteMany, hardDeleteMany } from '../files';
 import { commitDraftVersion, listDraftVersions, removeDraftVersion } from '../workspace-draft-recovery';
-import { getDb } from '../client';
+import { evictWorkspaceDb, getDb, setActiveWorkspaceDb } from '../client';
 import type { FileMeta } from '../schema';
 
 const mocks = vi.hoisted(() => ({
-    doAction: vi.fn(async () => {}),
+    doAction: vi.fn(async (_name: string) => {}),
     applyFilters: vi.fn(async (_: string, val: any) => val),
     nowSec: 1234567890,
 }));
@@ -36,7 +37,52 @@ describe('restoreMany', () => {
         await db.tombstones.clear();
         await db.workspace_tab_drafts.clear();
         await db.workspace_draft_versions.clear();
-        mocks.doAction.mockClear();
+        mocks.doAction.mockReset();
+    });
+
+    // Timed extension callbacks must not expire write transactions; after-hook
+    // failures cannot roll back a committed deletion or invite duplicate retries.
+    it.each(['soft', 'batch', 'hard', 'restore'] as const)('keeps %s lifecycle hooks outside the durable write', async operation => {
+        const db = getDb();
+        await db.file_meta.put({ hash: 'lifecycle', name: 'file.txt', kind: 'file', mime_type: 'text/plain',
+            size_bytes: 3, deleted: operation === 'restore', clock: 1, created_at: 1, updated_at: 1, ref_count: 0 });
+        mocks.doAction.mockImplementation(async name => {
+            await new Promise(resolve => setTimeout(resolve, 0));
+            if (name.endsWith(':after')) throw new Error('Notification unavailable');
+        });
+        const result = operation === 'soft' ? softDeleteFile('lifecycle') : operation === 'batch'
+            ? softDeleteMany(['lifecycle']) : operation === 'hard' ? hardDeleteMany(['lifecycle']) : restoreMany(['lifecycle']);
+        await expect(result).resolves.not.toThrow();
+        const stored = await db.file_meta.get('lifecycle');
+        if (operation === 'hard') expect(stored).toBeUndefined();
+        else expect(stored?.deleted).toBe(operation !== 'restore');
+    });
+
+    it('rejects deletion if metadata changes during its before hook', async () => {
+        const db = getDb();
+        await db.file_meta.put({ hash: 'changed-file', name: 'before.txt', kind: 'file', mime_type: 'text/plain',
+            size_bytes: 3, deleted: false, clock: 1, created_at: 1, updated_at: 1, ref_count: 0 });
+        mocks.doAction.mockImplementation(async name => {
+            if (name.endsWith(':before')) await db.file_meta.update('changed-file', { name: 'newer.txt', clock: 2 });
+        });
+        await expect(softDeleteMany(['changed-file'])).rejects.toThrow(/changed/i);
+        expect(await db.file_meta.get('changed-file')).toMatchObject({ name: 'newer.txt', deleted: false, clock: 2 });
+    });
+
+    it('does not delete after a workspace switch in its before hook', async () => {
+        const db = getDb();
+        await db.file_meta.put({ hash: 'scope-file', name: 'scoped.txt', kind: 'file', mime_type: 'text/plain',
+            size_bytes: 3, deleted: false, clock: 1, created_at: 1, updated_at: 1, ref_count: 0 });
+        const destination = `delete-destination-${crypto.randomUUID()}`;
+        mocks.doAction.mockImplementation(async name => { if (name.endsWith(':before')) setActiveWorkspaceDb(destination); });
+        try {
+            await expect(hardDeleteMany(['scope-file'])).rejects.toThrow(/workspace/i);
+            expect(await db.file_meta.get('scope-file')).toBeDefined();
+        } finally {
+            setActiveWorkspaceDb(null);
+            evictWorkspaceDb(destination);
+            await Dexie.delete(`or3-db-${destination}`);
+        }
     });
 
     it('protects recovery-only attachment bytes through every deletion API until the exact version is discarded', async () => {

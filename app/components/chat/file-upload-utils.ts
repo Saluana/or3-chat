@@ -1,6 +1,6 @@
 import { presentError } from '~~/shared/errors';
 import { reportError, err } from '~/utils/errors';
-import { createOrRefFile } from '~/db/files';
+import { changeRefCount, createOrRefFile } from '~/db/files';
 import { useHooks } from '~/core/hooks/useHooks';
 import { useRuntimeConfig } from '#imports';
 import type { FilesAttachInputPayload } from '~/core/hooks/hook-types';
@@ -139,18 +139,35 @@ export async function persistAttachment(att: AttachmentLike, owner?: AttachmentI
 
         // Use filtered values (in case hook transformed them)
         const meta = await createOrRefFile(filtered.file, filtered.name, { assertCurrent: assertLocalOrigin });
-        assertLocalOrigin();
-        scope?.assertCurrent('write');
-        if (catalogEnabled) {
-            if (!workspaceFilesAvailable()) throw new Error('Files access changed. Refresh and try again.');
-            const { catalogWorkspaceFile } = await import('~/db/workspace-files');
+        try {
             assertLocalOrigin();
-        scope?.assertCurrent('write');
-            await catalogWorkspaceFile(scope!, meta.hash, { restore: true });
+            scope?.assertCurrent('write');
+            if (meta.kind !== 'image' && meta.kind !== 'pdf') {
+                throw err('ERR_FILE_VALIDATION', 'This file is not a supported image or PDF.', {
+                    tags: { domain: 'files', stage: 'persist', name: att.name },
+                });
+            }
+            if (catalogEnabled) {
+                if (!workspaceFilesAvailable()) throw new Error('Files access changed. Refresh and try again.');
+                const { catalogWorkspaceFile } = await import('~/db/workspace-files');
+                assertLocalOrigin();
+                scope?.assertCurrent('write');
+                await catalogWorkspaceFile(scope!, meta.hash, { restore: true });
+            }
+            assertLocalOrigin();
+            scope?.assertCurrent('write');
+            att.hash = meta.hash;
+            att.meta = meta;
+            att.name = meta.name;
+            att.mime = meta.mime_type;
+            att.kind = meta.kind;
+            att.error = undefined;
+            att.status = 'ready';
+        } catch (error) {
+            // Failed intake never transfers its temporary reference to the composer.
+            await changeRefCount(meta.hash, -1, originDb);
+            throw error;
         }
-        att.hash = meta.hash;
-        att.meta = meta;
-        att.status = 'ready';
     };
     try {
         await persist();

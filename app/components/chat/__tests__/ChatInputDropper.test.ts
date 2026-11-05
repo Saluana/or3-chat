@@ -202,7 +202,7 @@ describe('ChatInputDropper', () => {
             for (const id of [workspace, other]) { evictWorkspaceDb(id); await Dexie.delete(`or3-db-${id}`); }
         }
     });
-    it.each(['workspace', 'unmount', 'draft-discard', 'tab'] as const)('stops selected-file intake on %s while the first filter is pending', async (transition) => {
+    it.each(['workspace', 'unmount', 'draft-discard', 'tab', 'remove'] as const)('stops selected-file intake on %s while the first filter is pending', async (transition) => {
         const workspace = `attachment-source-${crypto.randomUUID()}`;
         const other = `attachment-destination-${crypto.randomUUID()}`;
         const source = setActiveWorkspaceDb(workspace); await source.open();
@@ -229,6 +229,9 @@ describe('ChatInputDropper', () => {
             expect(wrapper.emitted('image-add')).toHaveLength(1);
             if (transition === 'workspace') setActiveWorkspaceDb(other);
             else if (transition === 'tab') await wrapper.setProps({ tabId: 'destination-tab' });
+            else if (transition === 'remove') {
+                await wrapper.get('button[aria-label="Remove image"]').trigger('click');
+            }
             else {
                 wrapper.unmount();
                 if (transition === 'draft-discard') {
@@ -237,8 +240,13 @@ describe('ChatInputDropper', () => {
                 }
             }
             gate.resolve(); await persisted.promise; await flushPromises();
-            expect(create).toHaveBeenCalledTimes(1);
-            expect(persistAttachment).toHaveBeenCalledTimes(1);
+            expect(create).toHaveBeenCalledTimes(transition === 'remove' ? 2 : 1);
+            expect(persistAttachment).toHaveBeenCalledTimes(transition === 'remove' ? 2 : 1);
+            if (transition === 'remove') {
+                await vi.waitFor(async () => expect(await getDb().file_meta.count()).toBe(1));
+                expect((await getDb().file_meta.toArray())[0]?.name).toBe('second.pdf');
+                return;
+            }
             expect(await getDb().file_meta.count()).toBe(0);
             expect(await getDb().posts.count()).toBe(0);
             if (transition === 'unmount' || transition === 'draft-discard') expect(revoke).toHaveBeenCalledWith('blob:owned-preview');

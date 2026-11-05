@@ -62,7 +62,7 @@ vi.mock('../client', () => {
             else rows.push(meta);
         },
     };
-    const mockDb = { file_meta: table };
+    const mockDb = { file_meta: table, transaction: async (_mode: string, _tables: unknown, work: () => Promise<void>) => work() };
     return { db: mockDb, getDb: () => mockDb };
 });
 

@@ -29,7 +29,7 @@
  * @see docs/core-hook-map.md for hook conventions
  */
 import Dexie from 'dexie';
-import { getDb } from './client';
+import { getDb, getWorkspaceGeneration } from './client';
 import { useHooks } from '../core/hooks/useHooks';
 import { parseOrThrow, nowSec, nextClock, getWriteTxTableNames } from './util';
 import { FileMetaCreateSchema, FileMetaSchema, type FileMeta } from './schema';
@@ -52,6 +52,23 @@ import { parseDocumentFileHashes } from '~/utils/documents/document-content';
 import { STATIC_FILE_CEILING } from '~~/shared/storage/file-policy';
 import { isCloudFileStorageEnabled, loadFilePolicy } from '~/core/storage/file-policy';
 import { touchFileCache } from '~/core/storage/file-cache';
+
+/** Capture the owner before extension callbacks can yield or switch workspaces. */
+function captureFileWrite() {
+    const db = getDb();
+    const generation = getWorkspaceGeneration();
+    return { db, assertCurrent() {
+        if (getDb() !== db || getWorkspaceGeneration() !== generation) {
+            throw new Error('The workspace changed while updating files.');
+        }
+    } };
+}
+
+function assertFileUnchanged(current: FileMeta | undefined, expected: FileMeta | undefined): void {
+    if (JSON.stringify(current) !== JSON.stringify(expected)) {
+        throw new Error('This file changed. Read it again before updating it.');
+    }
+}
 
 /** Derived counts cannot authorize deletion; live ownership rows are authoritative. */
 async function assertFilesUnreferenced(db: ReturnType<typeof getDb>, hashes: string[]): Promise<void> {
@@ -234,14 +251,19 @@ export async function createOrRefFile(
     name: string,
     owner?: { assertCurrent(): void }
 ): Promise<FileMeta> {
-    const db = getDb();
+    const { db, assertCurrent } = captureFileWrite();
     const assertCurrentDb = () => {
         owner?.assertCurrent();
-        if (getDb() !== db) {
-            throw new Error('workspace changed while creating file');
-        }
+        assertCurrent();
     };
     assertCurrentDb();
+    async function releaseIfOwnerChanged(meta: FileMeta): Promise<void> {
+        try { assertCurrentDb(); }
+        catch (error) {
+            await changeRefCount(meta.hash, -1, db);
+            throw error;
+        }
+    }
     const dev = import.meta.dev;
     const hasPerf = typeof performance !== 'undefined';
     const markId =
@@ -306,7 +328,7 @@ export async function createOrRefFile(
         if (changed) await notifyFileRefChanges([changed.notification]);
         const incremented = changed?.row;
         if (incremented) {
-            assertCurrentDb();
+            await releaseIfOwnerChanged(incremented);
             if (import.meta.dev) {
                 console.debug('[files] ref existing', {
                     hash: hash.slice(0, 8),
@@ -397,7 +419,7 @@ export async function createOrRefFile(
             assertCurrentDb();
             return;
         }
-        // Parallel writes for ~20% faster file creation
+        // Commit metadata and original bytes together.
         assertCurrentDb();
         await Promise.all([
             db.file_meta.put(mergedMeta),
@@ -417,7 +439,7 @@ export async function createOrRefFile(
         try { await hooks.doAction('db.files.create:action:after', actionPayload); }
         catch (error) { console.warn('[files] File committed; notification failed', error); }
     }
-    assertCurrentDb();
+    await releaseIfOwnerChanged(storedMeta!);
     // storedMeta is always set within the transaction, but TypeScript doesn't track this
     // Use non-null assertion since the transaction guarantees the value is set
     const finalMeta = storedMeta!;
@@ -536,28 +558,7 @@ export async function ensureFileBlob(
  * - Does not remove blobs from storage.
  */
 export async function softDeleteFile(hash: string): Promise<void> {
-    const hooks = useHooks();
-    const db = getDb();
-    await db.transaction(
-        'rw',
-        getWriteTxTableNames(db, 'file_meta', { include: ['posts', 'messages', 'workspace_tab_drafts', 'workspace_draft_versions'], includeTombstones: true }),
-        async () => {
-        const meta = await db.file_meta.get(hash);
-        if (!meta) return;
-        const payload = createFileDeletePayload(meta, hash);
-        await hooks.doAction('db.files.delete:action:soft:before', payload);
-        await assertFilesUnreferenced(db, [hash]);
-        const now = nowSec();
-        await db.file_meta.put({
-            ...meta,
-            deleted: true,
-            deleted_at: now,
-            updated_at: now,
-            clock: nextClock(meta.clock),
-        });
-        await hooks.doAction('db.files.delete:action:soft:after', payload);
-        }
-    );
+    await softDeleteMany([hash]);
 }
 
 /**
@@ -579,46 +580,32 @@ export async function softDeleteMany(hashes: string[]): Promise<string[]> {
     const unique = Array.from(new Set(hashes.filter(Boolean)));
     if (!unique.length) return [];
     const hooks = useHooks();
-    const db = getDb();
-    return db.transaction(
-        'rw',
-        getWriteTxTableNames(db, 'file_meta', { include: ['posts', 'messages', 'workspace_tab_drafts', 'workspace_draft_versions'], includeTombstones: true }),
-        async () => {
-        const metas = await db.file_meta.bulkGet(unique);
-        const updates: FileMeta[] = [];
-        const payloads: DbDeletePayload<FileEntity>[] = [];
-        const removed: string[] = [];
-
-        for (let i = 0; i < unique.length; i++) {
-            const hash = unique[i]!;
-            const meta = metas[i];
-            if (!meta || meta.deleted) continue;
-            const payload = createFileDeletePayload(meta, hash);
-            await hooks.doAction('db.files.delete:action:soft:before', payload);
-
-            const now = nowSec();
-            updates.push({
-                ...meta,
-                deleted: true,
-                deleted_at: now,
-                updated_at: now,
-                clock: nextClock(meta.clock),
-            });
-            payloads.push(payload);
-            removed.push(hash);
-        }
-
+    const { db, assertCurrent } = captureFileWrite();
+    const metas = (await db.file_meta.bulkGet(unique)).filter((meta): meta is FileMeta => !!meta && !meta.deleted);
+    const payloads = metas.map(meta => createFileDeletePayload(meta, meta.hash));
+    for (const payload of payloads) {
+        assertCurrent();
+        await hooks.doAction('db.files.delete:action:soft:before', payload);
+    }
+    assertCurrent();
+    const removed = metas.map(meta => meta.hash);
+    await db.transaction('rw', getWriteTxTableNames(db, 'file_meta', {
+        include: ['posts', 'messages', 'workspace_tab_drafts', 'workspace_draft_versions'], includeTombstones: true,
+    }), async () => {
+        const current = await db.file_meta.bulkGet(removed);
+        assertCurrent();
+        for (const [index, meta] of metas.entries()) assertFileUnchanged(current[index], meta);
         await assertFilesUnreferenced(db, removed);
-        if (updates.length > 0) {
-            await db.file_meta.bulkPut(updates);
-        }
-
-        for (const payload of payloads) {
-            await hooks.doAction('db.files.delete:action:soft:after', payload);
-        }
-        return removed;
-        }
-    );
+        const now = nowSec();
+        await db.file_meta.bulkPut(metas.map(meta => ({ ...meta, deleted: true,
+            deleted_at: now, updated_at: now, clock: nextClock(meta.clock) })));
+        assertCurrent();
+    });
+    for (const payload of payloads) {
+        try { await hooks.doAction('db.files.delete:action:soft:after', payload); }
+        catch (error) { console.warn('[files] Deletion committed; notification failed', error); }
+    }
+    return removed;
 }
 
 /**
@@ -640,42 +627,35 @@ export async function restoreMany(hashes: string[]): Promise<string[]> {
     const unique = Array.from(new Set(hashes.filter(Boolean)));
     if (!unique.length) return [];
     const hooks = useHooks();
-    const db = getDb();
-    return db.transaction('rw', getWriteTxTableNames(db, 'file_meta'), async () => {
-        const metas = await db.file_meta.bulkGet(unique);
+    const { db, assertCurrent } = captureFileWrite();
+    const metas = (await db.file_meta.bulkGet(unique)).filter((meta): meta is FileMeta => !!meta && meta.deleted === true);
+    for (const meta of metas) {
+        assertCurrent();
+        await hooks.doAction('db.files.restore:action:before', toFileEntity(meta));
+    }
+    assertCurrent();
+    const updates = await db.transaction('rw', getWriteTxTableNames(db, 'file_meta'), async () => {
         const updates: FileMeta[] = [];
-        const restored: string[] = [];
-
-        for (let i = 0; i < unique.length; i++) {
-            const meta = metas[i];
-            if (!meta || meta.deleted !== true) continue;
-            await Dexie.waitFor(
-                hooks.doAction('db.files.restore:action:before', toFileEntity(meta))
-            );
+        for (const meta of metas) {
+            const current = await db.file_meta.get(meta.hash);
+            assertCurrent();
+            assertFileUnchanged(current, meta);
             const tombstone = await db.tombstones.get(`file_meta:${meta.hash}`);
-            updates.push({
-                ...meta,
-                deleted: false,
-                updated_at: nowSec(),
-                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Older stored rows can lack a clock.
+            updates.push({ ...meta, deleted: false, updated_at: nowSec(),
+                // Older stored rows can lack a clock.
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
                 clock: nextClock(Math.max(meta.clock ?? 0, tombstone?.clock ?? 0)),
-            } as FileMeta);
-            restored.push(unique[i]!);
+            });
         }
-
-        if (updates.length > 0) {
-            await db.file_meta.bulkPut(updates);
-            for (const updatedMeta of updates) {
-                await Dexie.waitFor(
-                    hooks.doAction(
-                        'db.files.restore:action:after',
-                        toFileEntity(updatedMeta)
-                    )
-                );
-            }
-        }
-        return restored;
+        await db.file_meta.bulkPut(updates);
+        assertCurrent();
+        return updates;
     });
+    for (const meta of updates) {
+        try { await hooks.doAction('db.files.restore:action:after', toFileEntity(meta)); }
+        catch (error) { console.warn('[files] Restore committed; notification failed', error); }
+    }
+    return updates.map(meta => meta.hash);
 }
 
 /**
@@ -697,27 +677,31 @@ export async function hardDeleteMany(hashes: string[]): Promise<string[]> {
     const unique = Array.from(new Set(hashes.filter(Boolean)));
     if (!unique.length) return [];
     const hooks = useHooks();
-    const db = getDb();
-    await db.transaction(
-        'rw',
-        getWriteTxTableNames(db, 'file_meta', {
-            include: ['file_blobs', 'posts', 'messages', 'workspace_tab_drafts', 'workspace_draft_versions'],
-            includeTombstones: true,
-        }),
-        async () => {
-        const metas = await db.file_meta.bulkGet(unique);
-        for (let i = 0; i < unique.length; i++) {
-            const hash = unique[i]!;
-            const meta = metas[i];
-            const payload = createFileDeletePayload(meta ?? undefined, hash);
-            await hooks.doAction('db.files.delete:action:hard:before', payload);
-            await assertFilesUnreferenced(db, [hash]);
+    const { db, assertCurrent } = captureFileWrite();
+    const metas = await db.file_meta.bulkGet(unique);
+    const payloads = unique.map((hash, index) => createFileDeletePayload(metas[index], hash));
+    for (const payload of payloads) {
+        assertCurrent();
+        await hooks.doAction('db.files.delete:action:hard:before', payload);
+    }
+    assertCurrent();
+    await db.transaction('rw', getWriteTxTableNames(db, 'file_meta', {
+        include: ['file_blobs', 'posts', 'messages', 'workspace_tab_drafts', 'workspace_draft_versions'], includeTombstones: true,
+    }), async () => {
+        const current = await db.file_meta.bulkGet(unique);
+        assertCurrent();
+        for (let index = 0; index < unique.length; index++) assertFileUnchanged(current[index], metas[index]);
+        await assertFilesUnreferenced(db, unique);
+        for (const hash of unique) {
             await db.file_meta.delete(hash);
             await db.file_blobs.delete(hash);
-            await hooks.doAction('db.files.delete:action:hard:after', payload);
         }
-        }
-    );
+        assertCurrent();
+    });
+    for (const payload of payloads) {
+        try { await hooks.doAction('db.files.delete:action:hard:after', payload); }
+        catch (error) { console.warn('[files] Deletion committed; notification failed', error); }
+    }
     return unique;
 }
 

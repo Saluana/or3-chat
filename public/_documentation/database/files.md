@@ -69,6 +69,14 @@ not create a transaction or emit hooks itself. Catalog, prepared post batch and
 message attachment callers use this same boundary. `changeRefCount` owns a
 standalone transaction and delivers its notification afterward. File creation
 also prepares hooks before writing metadata/blob rows and notifies after commit.
+If creation loses its originating workspace or intake owner after commit, it
+releases the provisional reference before rejecting; the stored bytes remain.
+
+Delete and restore callbacks also run outside the write transaction. The write
+rechecks the workspace generation and observed metadata before changing rows;
+deletion also rechecks retained references. A concurrent metadata change rejects the operation rather
+than overwriting it. After-hook failures are logged without undoing a committed
+operation or reporting it as a failed write.
 
 ---
 

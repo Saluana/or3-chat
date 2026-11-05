@@ -205,7 +205,8 @@ export async function listImagePage(input: {
     }
 
     const spec = PAGE_SORT_INDEX[input.sort];
-    const collection = getDb().file_meta.where(spec.index);
+    const db = getDb();
+    const collection = db.file_meta.where(spec.index);
     // Bound both ends to the requested partition so an empty active/trash
     // view never walks the opposite state's keys.
     const lower = [input.state, Dexie.minKey];
@@ -253,7 +254,7 @@ export async function listImagePage(input: {
 
     const hasMore = scanned.length > limit;
     const selected = hasMore ? scanned.slice(0, limit) : scanned;
-    const rows = await getDb().file_meta.bulkGet(
+    const rows = await db.file_meta.bulkGet(
         selected.map(([, hash]) => hash)
     );
     const items: FileMeta[] = [];
@@ -314,18 +315,9 @@ export async function updateFileName(
     name: string
 ): Promise<void> {
     const db = getDb();
-    const meta = await db.file_meta.get(hash);
-    if (!meta) return;
-    if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
-        await db.file_meta.put({
-            ...meta,
-            name,
-            updated_at: nowSec(),
-            clock: nextClock(meta.clock),
-        });
-        return;
-    }
     await db.transaction('rw', getWriteTxTableNames(db, 'file_meta'), async () => {
+        const meta = await db.file_meta.get(hash);
+        if (!meta) return;
         await db.file_meta.put({
             ...meta,
             name,

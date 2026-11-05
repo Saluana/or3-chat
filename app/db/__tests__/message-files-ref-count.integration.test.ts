@@ -11,6 +11,7 @@ import type { FileMeta, Message } from '../schema';
 import {
     addFilesToMessage,
     removeFileFromMessage,
+    filesForMessage,
 } from '../message-files';
 import { createOrRefFile } from '../files';
 import { parseFileHashes } from '../files-util';
@@ -120,6 +121,31 @@ afterEach(async () => {
 });
 
 describe('message file ref_count integrity', () => {
+    it('reads attachment metadata from the same workspace as the message', async () => {
+        const db = getDb();
+        await db.messages.put(message('read-owner', [TEST_HASH]));
+        await db.file_meta.put(fileMeta());
+        const original = db.messages.get.bind(db.messages);
+        const read = vi.spyOn(db.messages, 'get').mockImplementationOnce((...args) => {
+            return original(...args).then(row => {
+                setActiveWorkspaceDb(null);
+                return row;
+            });
+        });
+        try { expect(await filesForMessage('read-owner')).toMatchObject([{ hash: TEST_HASH }]); }
+        finally { read.mockRestore(); }
+    });
+
+    it('releases the intake reference if its owner expires during the create notification', async () => {
+        const db = getDb();
+        let current = true;
+        hooks.doAction.mockImplementation(async name => { if (name === 'db.files.create:action:after') current = false; });
+        await expect(createOrRefFile(new Blob(['data']), 'file.bin', {
+            assertCurrent() { if (!current) throw new Error('Owner expired'); },
+        })).rejects.toThrow('Owner expired');
+        expect((await db.file_meta.get(TEST_HASH))?.ref_count).toBe(0);
+        expect(await db.file_blobs.get(TEST_HASH)).toBeDefined();
+    });
     // Failure inventory: timed hooks expire catalog/message/batch transactions;
     // failed notifications cannot undo committed ownership or invite a retry.
     it.each(['new-file', 'duplicate', 'attach', 'detach', 'catalog', 'remove', 'batch'] as const)('commits %s before asynchronous file notifications', async path => {

@@ -37,6 +37,7 @@ Helpers for attaching/detaching files to chat messages while maintaining ref cou
 2. **Hooks** — `db.messages.files.validate:filter:hashes` lets extensions prune or reorder known candidate hashes before persistence.
 3. **Reference reconciliation** — Counts are derived from the unique before/after message edge set. Duplicate additions are idempotent, filtered/overflow Blob attempts are dereferenced, and concurrent identical uploads retain one metadata/blob pair with the correct count.
 4. **Serialization** — Uses `serializeFileHashes` so limits/deduping stay consistent with message creation flows.
+5. **Read ownership** — `filesForMessage` captures one workspace database for both the message and its file metadata. Callers discard the result if their displayed workspace changes during the read.
 
 ---
 
