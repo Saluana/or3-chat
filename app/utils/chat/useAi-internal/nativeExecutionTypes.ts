@@ -17,5 +17,6 @@ export type NativeExecutionInput = {
     allowBackgroundStreaming: boolean; startedAt: number; reviewedLossyMessages?: string;
     delegationDefaults?: DelegationDefaults;
     durableDelegation: boolean;
+    stopAcceptanceHeartbeat?: () => void;
     recoveryInput: SendMessageParams & { content: string }; projectQuery?: string; advertisedToolDefs: import('~/utils/chat/types').ToolDefinition[];
 };

@@ -6,20 +6,23 @@ import type { WorkspaceOperationScope } from '~/utils/chat/workspace-access';
 import type { ChatMessage, ContentPart, SendMessageParams, SendResult } from '~/utils/chat/types';
 import type { confirmLossyRequest } from '~/utils/chat/lossy-request';
 import { createThreadInDb, type CreateThreadContext } from '~/db/threads';
-import { appendMessageToDb } from '~/db/messages';
+import { appendTurnMessagesToDb } from '~/db/messages';
 import { getDb, getWorkspaceGeneration } from '~/db/client';
 import { getKvRecordByName, setKvByName } from '~/db/kv';
 import { nowSec, newId } from '~/db/util';
 import { serializeFileHashes } from '~/db/files-util';
 import { chatToolPreferenceKey } from '~/utils/chat/tool-preferences';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
-import { userTranscriptData } from '~/utils/chat/transcript';
+import { assistantTranscriptData, userTranscriptData } from '~/utils/chat/transcript';
+import { createForegroundGenerationLease } from '~/utils/chat/generation-lease';
+import { makeAssistantPersister, startForegroundGenerationHeartbeat } from './persistence';
 import { deriveThreadTitle } from '~/utils/chat/thread-title';
 import { isMeaningfulTitleInput } from '~~/shared/titles/title';
 import { errorDiagnostics } from '~~/shared/errors';
 import { err, reportError } from '~/utils/errors';
 import { publishRequest, type ChatRequest } from './requestController';
 import type { createChatViewProjection } from './viewProjection';
+import type { StoredMessage } from './nativeExecutionTypes';
 
 type GlobalWithPaneApi = typeof globalThis & { __or3MultiPaneApi?: UseMultiPaneApi };
 
@@ -49,7 +52,7 @@ export async function acceptUserTurn(input: {
     hooks: TypedHookEngine;
     limits: CreateThreadContext['limits'];
     getActivePaneContext: () => PaneContext | null;
-}): Promise<{ result: SendResult } | { userDbMsg: Awaited<ReturnType<typeof appendMessageToDb>>; requestThreadId: string }> {
+}): Promise<{ result: SendResult } | { userDbMsg: Awaited<ReturnType<typeof appendTurnMessagesToDb>>[0]; assistantDbMsg: StoredMessage; requestThreadId: string; stopAcceptanceHeartbeat: () => void }> {
     const { requestScope, content, outgoing, sendMessagesParams, admissionThreadId, newPromptSelection,
         toolDraftId, workspaceGeneration, preparationSignal, persistedUserText, parts, files, file_hashes,
         contextOmission, initialProjectId, projectAttachmentScope, projectExtractionScope, resolveChatProject } = input;
@@ -111,7 +114,10 @@ export async function acceptUserTurn(input: {
     }
     const requestThreadId = requestScope.threadId!;
     const nextUserMessageId = newId();
-    const userDbMsg = await appendMessageToDb(requestScope.originDb, {
+    const nextAssistantId = newId();
+    const streamId = newId();
+    let stopAcceptanceHeartbeat = () => {};
+    const [userDbMsg, assistantDbMsg] = await appendTurnMessagesToDb(requestScope.originDb, {
         id: nextUserMessageId,
         thread_id: requestThreadId,
         role: 'user',
@@ -125,7 +131,23 @@ export async function acceptUserTurn(input: {
         file_hashes: file_hashes.length
             ? serializeFileHashes(file_hashes)
             : undefined,
-    }, { replace: sendMessagesParams.retryReplacement }).catch((error: unknown) => {
+    }, {
+        id: nextAssistantId, thread_id: requestThreadId, role: 'assistant', stream_id: streamId, pending: true,
+        data: { ...assistantTranscriptData({ turnId: nextUserMessageId, requestId, generationId: streamId, mode: 'foreground' }),
+            content: '', attachments: [], reasoning_text: null, generation_state: 'streaming', ...createForegroundGenerationLease(requestId) },
+    }, { replace: sendMessagesParams.retryReplacement, onCommitted: (user, assistant) => {
+        requestScope.userMessageId = user.id;
+        requestScope.assistantMessageId = assistant.id;
+        requestScope.assistantRecord = assistant as StoredMessage;
+        requestScope.streamId = streamId;
+        requestScope.persistAssistant = makeAssistantPersister(requestScope.originDb, assistant as StoredMessage, [], requestId);
+        stopAcceptanceHeartbeat = startForegroundGenerationHeartbeat(requestScope.originDb, assistant.id, requestId, preparationSignal);
+        // Project-source bindings still need their existing intake step before
+        // the composer may acknowledge the turn.
+        if (!initialProjectId || !projectAttachmentScope) publishRequest(requestScope, {
+            status: 'persisted', requestId, userMessageId: user.id,
+        });
+    } }).catch((error: unknown) => {
         // A storage transaction abort is a failed save, not a user Stop.
         // Keep app-owned save guidance rather than cancellation copy.
         if (error instanceof Error && error.name === 'AbortError'
@@ -235,5 +257,5 @@ export async function acceptUserTurn(input: {
         }
     }
 
-    return { userDbMsg, requestThreadId };
+    return { userDbMsg, assistantDbMsg: assistantDbMsg as StoredMessage, requestThreadId, stopAcceptanceHeartbeat };
 }

@@ -48,6 +48,8 @@ export interface ModelCatalogResult {
     /** Null means a legacy cache did not retain an actual fetch timestamp. */
     fetchedAt: number | null;
     source: 'openrouter-live' | 'openrouter-cache';
+    /** A second provider can finish independently of the available OpenRouter catalog. */
+    openAiPending?: Promise<OpenRouterModel[]>;
 }
 
 const CACHE_KEY = 'openrouter_model_catalog_v1';
@@ -107,7 +109,8 @@ export async function fetchModels(opts?: {
     force?: boolean;
     ttlMs?: number;
 }): Promise<OpenRouterModel[]> {
-    return (await fetchModelCatalog(opts)).data;
+    const result = await fetchModelCatalog(opts);
+    return result.openAiPending ? [...result.data, ...await result.openAiPending] : result.data;
 }
 
 /** Same catalog/cache path, with transport provenance for capacity preparation. */
@@ -115,16 +118,15 @@ export async function fetchModelCatalog(opts?: {
     force?: boolean;
     ttlMs?: number;
 }): Promise<ModelCatalogResult> {
-    const [openRouter, openAi] = await Promise.all([
-        fetchOpenRouterModelCatalog(opts).then(result => ({ result }), (error: unknown) => ({ error })),
-        fetchOpenAiModels(),
-    ]);
+    const openAi = fetchOpenAiModels().catch(() => []);
+    const openRouter = await fetchOpenRouterModelCatalog(opts).then(result => ({ result }), (error: unknown) => ({ error }));
     // An OpenAI-only setup still has a catalog when OpenRouter is unavailable.
     if ('error' in openRouter) {
-        if (!openAi.length) throw openRouter.error;
-        return { data: openAi, fetchedAt: Date.now(), source: 'openrouter-live' };
+        const models = await openAi;
+        if (!models.length) throw openRouter.error;
+        return { data: models, fetchedAt: Date.now(), source: 'openrouter-live' };
     }
-    return openAi.length ? { ...openRouter.result, data: [...openRouter.result.data, ...openAi] } : openRouter.result;
+    return { ...openRouter.result, openAiPending: openAi };
 }
 
 /** Models for a configured OpenAI key; no key, no server or a failure adds none. */

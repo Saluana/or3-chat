@@ -18,6 +18,11 @@ OpenRouter entry point supplies the current operation and credential closure.
 The surrounding native chat preparation and compatibility messages are still
 OpenRouter-specific.
 
+Instance administrators can configure tool iterations and generated images
+saved per response, with lower workspace overrides. These controls apply to
+both adapters; see [chat limits](../public/_documentation/cloud/background-execution.md#chat-limits)
+for defaults, bounds, and enforcement details.
+
 | Source owner | Contract |
 | --- | --- |
 | [Inference runtime](../shared/ai/runtime.ts) | Composes request preparation and response decoding with host-authorized I/O; shared message and event types live beside it. |
@@ -39,14 +44,15 @@ are not provided by this refactor.
 ## Direct OpenAI adapter
 
 `@openai/<model>` IDs select OpenAI. [Models](../shared/openai/models.ts) maps
-OpenAI's model list to the catalog shape (capacities from a host table) and
-[the adapter](../shared/openai/adapter.ts) projects OR3's request onto Chat
-Completions at dispatch: `max_tokens` becomes `max_completion_tokens`, the
-reasoning effort becomes the nearest `reasoning_effort` the model family accepts
-(gpt-5.1 and later accept `none`…`xhigh`, gpt-5 `minimal`…`high`, o-series
-`low`…`high`; others take none), usage is requested for streams, and OpenRouter
-routing, plugin, search and cache-control options are dropped. OpenAI's stream
-chunks are decoded by the same SSE parser. Keys are resolved per router on the
+OpenAI's model list to the catalog shape (capacities from a host table; unknown
+model IDs are omitted until their limits are verified) and
+[the adapter](../shared/openai/responses.ts) projects chat requests onto the
+Responses API. It maps messages and tools to Responses items, translates output
+limits, supported sampling and structured-output options, and explicit strict
+tool schemas, while preserving the selected reasoning effort with tools. Encrypted
+reasoning items are replayed during tool rounds with OpenAI storage disabled.
+Titles and plugin text completions still use Chat Completions. OpenRouter routing,
+plugin, search and cache-control options are dropped. Keys are resolved per router on the
 server (`server/secrets/openai.ts`).
 
 The workspace **fast model** ([shared/ai/fast-model.ts](../shared/ai/fast-model.ts),

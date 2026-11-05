@@ -197,7 +197,8 @@
 import { StreamMarkdown, streamMarkdownComponents } from '~/utils/stream-markdown';
 import { openRouterStream } from '~/utils/chat/openrouterStream';
 import type { ToolDefinition } from '~/utils/chat/types';
-import { MAX_TOOL_ITERATIONS } from '~/utils/chat/constants';
+import { getActiveWorkspaceId } from '~/db/client';
+import type { ChatLimits } from '~~/shared/chat/chat-limits';
 import { ToolIterationLimitError } from '~~/shared/chat/stream-errors';
 import { useThrottleFn } from '@vueuse/core';
 import { useResponsiveState } from '~/composables/core/useResponsiveState';
@@ -516,6 +517,10 @@ async function sendMessage() {
     );
 
     try {
+        const workspaceId = getActiveWorkspaceId();
+        const toolIterationLimit = runtimeConfig.public.ssrAuthEnabled && runtimeConfig.public.sync.enabled && workspaceId && workspaceId !== 'local'
+            ? (await $fetch<ChatLimits>('/api/chat/limits', { query: { workspaceId } })).toolIterations
+            : runtimeConfig.public.chatToolIterations;
         // Fetch docmap for tool context
         let docmapJson = '';
         if (props.documentationMap) {
@@ -593,7 +598,7 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
         let currentAssistantMessage: HelpChatMessage | null =
             reactiveAssistantMessage ?? null;
 
-        while (continueLoop && loopIteration < MAX_TOOL_ITERATIONS) {
+        while (continueLoop && loopIteration < toolIterationLimit) {
             continueLoop = false;
             loopIteration += 1;
 
@@ -803,8 +808,8 @@ Remember: ALWAYS call search_docs before answering. Never say you don't know wit
                 }
             }
 
-            if (continueLoop && loopIteration >= MAX_TOOL_ITERATIONS) {
-                throw new ToolIterationLimitError(MAX_TOOL_ITERATIONS);
+            if (continueLoop && loopIteration >= toolIterationLimit) {
+                throw new ToolIterationLimitError(toolIterationLimit);
             }
         }
 

@@ -7,6 +7,7 @@
 import { defineEventHandler, readBody, createError } from 'h3';
 import { requireAdminApiContext } from '../../../admin/api';
 import { getAdminUserStore } from '../../../admin/stores/registry';
+import { invalidateSharedSessionCacheForIdentity } from '../../../auth/session';
 import { isAdminEnabled } from '../../../utils/admin/is-admin-enabled';
 import { enforceGenericAdminRateLimit } from '../../../admin/auth/rate-limit';
 
@@ -63,6 +64,8 @@ export default defineEventHandler(async (event) => {
 
     // Revoke admin access
     await store.revokeAdmin({ userId });
+    const config = useRuntimeConfig(event);
+    invalidateSharedSessionCacheForIdentity({ storeId: config.sync.provider || config.public.sync.provider || 'convex' });
 
     return { success: true };
 });

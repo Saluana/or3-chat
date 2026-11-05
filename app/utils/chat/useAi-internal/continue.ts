@@ -5,6 +5,7 @@ import { ChatContextAdmissionError, contextAdmissionFailureReason, type ContextR
 import { BackgroundTrackerConflict } from './background-tracker-conflict';
 import { resolveOpenRouterLegacySelection } from '~~/shared/openrouter/selection';
 import { isOpenAiModel } from '~~/shared/openai/models';
+import { DEFAULT_CHAT_LIMITS, type ChatLimits } from '~~/shared/chat/chat-limits';
 import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
 import type { OpenRouterModel } from '~~/shared/openrouter/types';
 import { acceptsImageInput } from '~/utils/modelCatalog';
@@ -124,6 +125,7 @@ export type ContinueMessageContext = {
     defaultModelId: string;
     getSystemPromptContent: () => Promise<string | null>;
     useAiSettings: () => { settings: Ref<ChatSettings | undefined> };
+    resolveChatLimits?: () => Promise<ChatLimits>;
     resolveContextPolicy?: (modelId: string, signal: AbortSignal) => Promise<ContextRequestPolicy>;
     /** Catalog facts for a selected model; absent metadata keeps the permissive defaults. */
     catalogModel?: (modelId: string) => Pick<OpenRouterModel, 'architecture' | 'reasoning' | 'supported_parameters'> | undefined;
@@ -689,6 +691,8 @@ export async function continueMessageImpl(
             return;
         }
 
+        const chatLimits = await (ctx.resolveChatLimits?.() ?? Promise.resolve(DEFAULT_CHAT_LIMITS));
+        continuationAbortController.signal.throwIfAborted();
         stopHeartbeat = startForegroundGenerationHeartbeat(
             originDb, messageId, newStreamId, ctx.abortController.value.signal
         );
@@ -772,7 +776,7 @@ export async function continueMessageImpl(
                     appendTextDelta(continuationNormalizer.push(ev.text));
                 } else if (ev.type === 'image') {
                     if (current.pending) current.pending = false;
-                    if (assistantFileHashes.length < 6) {
+                    if (assistantFileHashes.length < chatLimits.generatedImages) {
                         imageOwner.assertCurrent();
                         continuationAbortController.signal.throwIfAborted();
                         const blob = ev.url.startsWith('data:image/') ? dataUrlToBlob(ev.url)

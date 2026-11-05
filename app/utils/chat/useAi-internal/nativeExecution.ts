@@ -51,6 +51,7 @@ export function createNativeExecution(ports: {
     hooks: TypedHookEngine;
     nativeRecoveryCandidates: ReturnType<typeof createNativeRecoveryCandidates>;
     effectiveApiKey: Readonly<Ref<string | null>>;
+    resolveChatLimits: (workspaceId: string) => Promise<import('~~/shared/chat/chat-limits').ChatLimits>;
     taskPrompt: () => unknown;
     canonicalOutputLimitBytes: number | undefined;
     ownsCurrentView: (request: ChatRequest) => boolean;
@@ -465,6 +466,9 @@ export function createNativeExecution(ports: {
                 requestScope.originDb, assistantDbMsg.id, requestId,
                 requestScope.abortController.signal
             );
+            input.stopAcceptanceHeartbeat?.();
+            const chatLimits = await ports.resolveChatLimits(requestScope.workspaceId);
+            preparationSignal.throwIfAborted();
             const streamApiKey = effectiveApiKey.value;
             const streamGeneration = getWorkspaceGeneration();
             const { runForegroundStreamLoop } = await import('~/utils/chat/useAi-internal/foregroundStream');
@@ -476,6 +480,7 @@ export function createNativeExecution(ports: {
                     userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id };
             }
             await runForegroundStreamLoop({
+                chatLimits,
                 apiKey: streamApiKey,
                 modelId,
                 orMessages,

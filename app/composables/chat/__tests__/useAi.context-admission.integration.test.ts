@@ -171,6 +171,40 @@ describe('canonical history presentation at the controller boundary', () => {
 // hooks and actual foreground transport remain production code; external
 // catalog/network inference and credential UI alone are scripted.
 describe('native context admission at the actual durable boundary', () => {
+    // Failure inventory: background reconciliation changes sync bookkeeping
+    // while preparation is in flight; a real transcript edit must still stop
+    // the stale request before the provider is contacted.
+    it.each(['background metadata', 'message content'] as const)(
+        'distinguishes %s updates during request preparation', async change => {
+            const owner = chat();
+            await expect(owner.sendMessage('First message', { model: 'fixture/model' }))
+                .resolves.toMatchObject({ status: 'complete' });
+            const db = getDb();
+            const assistant = (await db.messages.toArray()).find(row => row.role === 'assistant')!;
+            const requestCount = external.bodies.length;
+            useHooks().addFilter('ai.chat.send:filter:prepare', async preparation => {
+                const current = (await db.messages.get(assistant.id))!;
+                const data = current.data as Record<string, unknown>;
+                await db.messages.put(change === 'background metadata'
+                    ? { ...current, clock: current.clock + 1, hlc: 'sync-hlc', op_id: 'sync-operation',
+                        order_key: 'synced-order', data: { ...data, background_job_id: 'job', background_job_attempt: 2 } }
+                    : { ...current, data: { ...data, content: 'Edited reply from another tab' } });
+                return preparation;
+            });
+
+            const result = await owner.sendMessage('Next message', { model: 'fixture/model' });
+            if (change === 'background metadata') {
+                expect(result).toMatchObject({ status: 'complete' });
+                expect(external.bodies).toHaveLength(requestCount + 1);
+                expect(JSON.stringify(external.bodies.at(-1))).toContain('Scripted answer');
+            } else {
+                expect(result).toMatchObject({ status: 'rejected', reason: 'unavailable' });
+                expect(external.bodies).toHaveLength(requestCount);
+            }
+            owner.dispose();
+        },
+    );
+
     it.each([false, true])('finishes a main reply independently of pending naming and saves the title once (provider failure: %s)', async providerFailure => {
         let finishTitle!: (response: Response) => void;
         const naming = new Promise<Response>(done => { finishTitle = done; });
@@ -1058,7 +1092,9 @@ describe('native context admission at the actual durable boundary', () => {
             await vi.waitFor(() => expect(useToolRegistry().getEnabledDefinitions({ workspaceId: workspace, threadId: child.thread.id }).map(tool => tool.function.name)).toContain('get_message'));
             const readiness = vi.fn(async (url: string, options: { query: { thread_id: string } }) => {
                 expect(url).toBe('/api/chat/history-readiness'); expect(options.query.thread_id).toBe(child.thread.id); return { ready: scenario.ready };
-            }); vi.stubGlobal('$fetch', readiness);
+            });
+            vi.stubGlobal('$fetch', (url: string, options: { query: { thread_id: string } }) =>
+                url === '/api/chat/limits' ? Promise.resolve({ toolIterations: 10, generatedImages: 6 }) : readiness(url, options));
             let bridgeChecks = 0;
             vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
                 if (url === '/api/openrouter/models') return scriptedCloudCatalog();

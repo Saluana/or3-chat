@@ -1301,7 +1301,8 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
         } catch (err) {
             if (!isActive() || tracker.pollRunId !== runId || pollAbortController.signal.aborted) break;
             const error = err instanceof Error ? err.message : 'Unknown error';
-            bgStreamWarn('poll-status-failed', {
+            const logFailure = typeof navigator !== 'undefined' && navigator.onLine === false ? bgStreamLog : bgStreamWarn;
+            logFailure('poll-status-failed', {
                 jobId: tracker.jobId,
                 runId,
                 error,
@@ -1622,7 +1623,8 @@ function startBackgroundJobTracking(
                         closeStream();
                         return;
                     }
-                    bgStreamWarn('sse-error-fallback-poll', {
+                    const logFailure = typeof navigator !== 'undefined' && navigator.onLine === false ? bgStreamLog : bgStreamWarn;
+                    logFailure('sse-error-fallback-poll', {
                         jobId: tracker.jobId,
                         error: error.message,
                     });

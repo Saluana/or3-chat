@@ -137,17 +137,17 @@ export interface AdminUserInfo {
 }
 
 /**
- * Interface for managing global deployment administrators (Super Admins).
- * These users have access to the Admin Dashboard and all system-wide operations.
+ * Interface for managing deployment-admin grants. Grants authorize admin.access;
+ * super-admin routes still require the separately authenticated super-admin.
  */
 export interface AdminUserStore {
-    /** Retrieves the list of all users with system-level administrator privileges. */
+    /** Retrieves users with deployment-admin grants. */
     listAdmins(): Promise<AdminUserInfo[]>;
-    /** Promotes a standard user to a system-level administrator. */
+    /** Grants deployment-admin access to a user. */
     grantAdmin(input: { userId: string; createdByUserId?: string }): Promise<void>;
-    /** Removes system-level administrator privileges from a user. */
+    /** Removes a user's deployment-admin grant. */
     revokeAdmin(input: { userId: string }): Promise<void>;
-    /** Checks if a specific user has system-level administrator access. */
+    /** Checks whether the canonical user has a deployment-admin grant. */
     isAdmin(input: { userId: string }): Promise<boolean>;
     /** Searches for users across the deployment to identify potential admin candidates. */
     searchUsers(input: {

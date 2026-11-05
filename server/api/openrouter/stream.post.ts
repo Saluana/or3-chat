@@ -1,4 +1,5 @@
 import { openChatUpstream, resolveChatCredential } from '../../utils/ai/chat-router';
+import { readChatLimits } from '../../utils/chat/chat-limits';
 import { publicErrorEnvelope, parseRetryAfter } from '~~/shared/errors';
 /**
  * @module server/api/openrouter/stream.post
@@ -286,6 +287,7 @@ export default defineEventHandler(async (event) => {
             const result = await startBackgroundStream({
                 body,
                 contextPolicy,
+                chatLimits: (await readChatLimits(event, workspaceId)).effective,
                 apiKey,
                 credentialSource: selected.source,
                 userId,

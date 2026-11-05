@@ -215,6 +215,13 @@ vi.mock('~/db/messages', async (importOriginal) => ({
     messagesByThread: messagesByThreadMock,
     appendMessageToDb: (_db: unknown, payload: unknown) =>
         appendMessageMock(payload),
+    appendTurnMessagesToDb: async (_db: unknown, user: unknown, assistant: unknown,
+        options?: { onCommitted?: (user: unknown, assistant: unknown) => void }) => {
+        const userRow = await appendMessageMock(user);
+        const assistantRow = await appendMessageMock(assistant);
+        options?.onCommitted?.(userRow, assistantRow);
+        return [userRow, assistantRow];
+    },
 }));
 
 vi.mock('~/db/threads', () => ({
@@ -471,6 +478,10 @@ describe('useChat background detach race', () => {
                 limits: { enabled: false },
             },
         };
+        vi.stubGlobal('$fetch', async (url: string) => {
+            if (url === '/api/chat/limits') return { toolIterations: 10, generatedImages: 6 };
+            throw new Error(`Unexpected fixture request: ${url}`);
+        });
 
         hookOnMock.mockImplementation(() => hookDisposeMock);
         hookDoActionMock.mockResolvedValue(undefined);

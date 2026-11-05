@@ -14,6 +14,7 @@ import { chatToolPreferenceKey } from '~/utils/chat/tool-preferences';
 import { reportError, err } from '~/utils/errors';
 import { errorDiagnostics } from '~~/shared/errors';
 import { ToolIterationLimitError } from '~~/shared/chat/stream-errors';
+import { DEFAULT_CHAT_LIMITS } from '~~/shared/chat/chat-limits';
 import { MAX_CANONICAL_MESSAGE_OUTPUT_BYTES } from '~~/shared/chat/tool-limits';
 import { ChatContextAdmissionError, contextAdmissionFailureReason } from '~~/shared/chat/context-budget';
 import { redactDiagnosticDetails } from '~~/shared/logging/sensitive-metadata';
@@ -85,8 +86,10 @@ export function useChat(
     const backgroundRequestScopes = shallowReactive(
         new Map<string, ChatRequestScope>()
     );
+    const activeRequestId = ref<string | null>(null);
     const loading = computed(
         () =>
+            activeRequestId.value !== null ||
             Boolean(
                 visibleRequest.value?.attached.value &&
                 visibleRequest.value.phase.value !== 'terminal'
@@ -99,13 +102,17 @@ export function useChat(
     const requestState = computed<ChatRequestState>(
         () => visibleRequest.value?.publicState.value ?? { status: 'idle' }
     );
-    let activeRequestId: string | null = null;
     const abortController = ref<AbortController | null>(null);
     // Cancellation may change while an awaited operation is pending.
     const isRequestCancelled = (scope: ChatRequestScope): boolean => scope.cancelled;
     const aborted = ref<boolean>(false);
     const { apiKey, connected, setKey } = useUserApiKey();
     const runtimeConfig = useRuntimeConfig();
+    const publicChatConfig: { chatToolIterations?: number; chatGeneratedImages?: number } = runtimeConfig.public;
+    const resolveChatLimits = async (workspaceId: string) => runtimeConfig.public.ssrAuthEnabled === true && runtimeConfig.public.sync.enabled && workspaceId !== 'local'
+        ? await $fetch<import('~~/shared/chat/chat-limits').ChatLimits>('/api/chat/limits', { query: { workspaceId } })
+        : { toolIterations: publicChatConfig.chatToolIterations ?? DEFAULT_CHAT_LIMITS.toolIterations,
+            generatedImages: publicChatConfig.chatGeneratedImages ?? DEFAULT_CHAT_LIMITS.generatedImages };
     // Nuxt UI resolves its toast service through Vue injection. Capture it
     // while useChat is still running inside setup; calling useToast() later
     // from an async send handler triggers Vue's "inject() can only be used
@@ -744,11 +751,11 @@ export function useChat(
         contentOrParams: string | (SendMessageParams & { content: string }),
         maybeParams?: SendMessageParams
     ): Promise<SendResult> {
-        if (activeRequestId || loading.value)
+        if (activeRequestId.value || loading.value)
             return { status: 'rejected', reason: 'busy' };
         const requestScope = admitRequest('send');
         const requestId = requestScope.requestId;
-        activeRequestId = requestId;
+        activeRequestId.value = requestId;
         activeRequestScope = requestScope;
         requestScope.accumulator.reset();
         let result: SendResult = {
@@ -811,13 +818,14 @@ export function useChat(
                             : 'error' in result
                               ? result.error
                               : undefined,
+                    deleteEmpty: result.status === 'aborted',
                     persistence: requestScope.jobId ? 'tracker' : 'request',
                     failureReason: 'reason' in result ? result.reason : undefined,
                 });
                 reportFinalization(finalization);
             }
             if (nativeRecoveryCandidates.shouldCleanup(requestScope, result)) await nativeRecoveryCandidates.cleanup(requestScope, result);
-            if (activeRequestId === requestId) activeRequestId = null;
+            if (activeRequestId.value === requestId) activeRequestId.value = null;
             if (activeRequestScope === requestScope) {
                 activeRequestScope = null;
                 abortController.value = null;
@@ -859,9 +867,9 @@ export function useChat(
             getActivePaneContext,
         });
         if ('result' in accepted) return accepted.result;
-        const { userDbMsg, requestThreadId } = accepted;
-
-        return await dispatchTurn(requestScope, preparation, userDbMsg, requestThreadId);
+        const { userDbMsg, assistantDbMsg, requestThreadId, stopAcceptanceHeartbeat } = accepted;
+        try { return await dispatchTurn(requestScope, preparation, userDbMsg, assistantDbMsg, requestThreadId, stopAcceptanceHeartbeat); }
+        finally { stopAcceptanceHeartbeat(); }
     }
 
     const prepareTurn = createTurnPreparation({
@@ -887,7 +895,7 @@ export function useChat(
         background: { backgroundStreamingAllowed, serverNotificationsEnabled, backgroundJobId,
             backgroundJobMode, backgroundJobInfo, attachBackgroundJobToUi, ensureScopedBackgroundTracker,
             normalizeBackgroundToolCalls, notifyBackgroundAdmissionUncertain, logBgStream, warnBgStream },
-        hooks, nativeRecoveryCandidates, effectiveApiKey, taskPrompt: () => activePromptContent.value,
+        hooks, nativeRecoveryCandidates, effectiveApiKey, resolveChatLimits, taskPrompt: () => activePromptContent.value,
         canonicalOutputLimitBytes, ownsCurrentView, reportFinalization, isStaleDevModuleError,
         warnDelegation: () => toast.add({ title: 'Keep this page open for delegated chats',
             description: 'If this response starts another chat, it needs this browser to stay open.',
@@ -994,7 +1002,7 @@ export function useChat(
     let activeContinuationScope: ChatRequestScope | null = null;
     function getContinuationScope(): ChatRequestScope | null { return activeContinuationScope; }
     async function continueMessage(messageId: string, modelOverride?: string) {
-        if (loading.value || activeRequestId) return;
+        if (loading.value || activeRequestId.value) return;
         const request = admitRequest('continue');
         const requestId = request.requestId;
         activeContinuationScope = request;
@@ -1023,6 +1031,7 @@ export function useChat(
                     defaultModelId: DEFAULT_AI_MODEL,
                     getSystemPromptContent,
                     useAiSettings,
+                    resolveChatLimits: () => resolveChatLimits(request.workspaceId),
                     resolveContextPolicy: async (selectedModelId, signal) => {
                         const preference = await useAiSettings().captureContextPreference();
                         const model = await useModelStore().resolveContextModel(selectedModelId, { signal });
@@ -1270,7 +1279,7 @@ export function useChat(
 
         visibleRequest.value = null;
         if (!isForegroundStreamActive) {
-            activeRequestId = null;
+            activeRequestId.value = null;
             activeRequestScope = null;
         }
         aborted.value = false;
@@ -1379,8 +1388,8 @@ export function useChat(
      */
     function notifyBackgroundAdmissionUncertain(): void {
         toast.add({
-            title: 'Response status unknown',
-            description: 'The server may still be running this response. Wait for it to reconnect before sending again.',
+            title: 'Still working',
+            description: 'Your reply may take a little longer. Please wait before sending again.',
             color: 'warning',
             duration: 8000,
         });

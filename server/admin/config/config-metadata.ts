@@ -64,6 +64,8 @@ export type ConfigGroup = (typeof CONFIG_GROUPS)[number];
  * intended for editing via the admin dashboard should be registered here.
  */
 export const CONFIG_METADATA: Record<string, ConfigMetadata> = {
+    OR3_CHAT_TOOL_ITERATIONS: { label: 'Instance tool iterations', description: 'Maximum model tool rounds per response.', group: 'Limits & Security', valueType: 'number' },
+    OR3_CHAT_GENERATED_IMAGES: { label: 'Instance generated images', description: 'Maximum generated images saved per response.', group: 'Limits & Security', valueType: 'number' },
     // Auth
     'SSR_AUTH_ENABLED': {
         label: 'Enable Server-Side Auth',

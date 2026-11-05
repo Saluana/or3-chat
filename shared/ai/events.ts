@@ -1,6 +1,11 @@
 import type { RequestUsage } from '../chat/compaction';
 import type { ToolCall } from './types';
 
+/** Preserve routed identity for prefix accounting; provider snapshots are not router IDs. */
+export function normalizeOpenAiUsage(usage: ProviderRequestUsage, model: string): ProviderRequestUsage {
+    return model.startsWith('@openai/') ? { ...usage, model } : usage;
+}
+
 export interface ProviderRequestUsage {
     prompt_tokens: number;
     completion_tokens: number;
@@ -36,6 +41,7 @@ export function normalizeProviderRequestUsage(value: unknown): ProviderRequestUs
 }
 
 export type AiEvent =
+    | { type: 'provider_state'; items: Record<string, unknown>[] }
     | { type: 'usage'; usage: ProviderRequestUsage; requestUsage?: RequestUsage }
     | { type: 'text'; text: string }
     | { type: 'image'; url: string; final?: boolean; index?: number }

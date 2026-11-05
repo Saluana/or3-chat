@@ -16,6 +16,23 @@ import { isServerRouteAvailable, isMissingServerRoute, setServerRouteAvailable, 
 import { prepareOpenRouterRequest, type ORMessage, type OpenRouterRequestBody } from './openrouter-request';
 import { openAiKeyHeaders } from '~/core/auth/useOpenAiKey';
 
+/** Keep an uncertain admission in progress while the browser is offline. */
+async function waitForOnline(signal?: AbortSignal): Promise<void> {
+    if (typeof window === 'undefined' || navigator.onLine !== false) return;
+    await new Promise<void>((resolve, reject) => {
+        const cleanup = () => {
+            window.removeEventListener('online', onOnline);
+            signal?.removeEventListener('abort', onAbort);
+        };
+        const onOnline = () => { cleanup(); resolve(); };
+        const onAbort = () => { cleanup(); reject(new DOMException('Admission cancelled', 'AbortError')); };
+        window.addEventListener('online', onOnline);
+        signal?.addEventListener('abort', onAbort);
+        if (signal?.aborted) onAbort();
+        else if (navigator.onLine) onOnline();
+    });
+}
+
 function parseRetryAfterSeconds(value: string): number {
     const seconds = Number(value);
     if (Number.isFinite(seconds) && seconds > 0) return seconds;
@@ -315,6 +332,7 @@ export async function startBackgroundStream(params: {
     let result: BackgroundStreamResult | null = null;
     let lastError: unknown;
     for (let attempt = 0; attempt < 3; attempt += 1) {
+        await waitForOnline(params.signal);
         await assertDispatchOwner(params);
         try {
             const resp = await fetchWithResponseDeadline('/api/openrouter/stream', {
@@ -809,11 +827,17 @@ export function subscribeBackgroundJobStream(params: {
     const url = `/api/jobs/${params.jobId}/stream${suffix}`;
 
     const es = new EventSource(url);
+    let receivedTerminal = false;
 
     es.onmessage = (event) => {
         try {
             const parsed = JSON.parse(event.data) as BackgroundJobStreamEvent;
-            params.onStatus(normalizeBackgroundJobUsage(parsed.status));
+            const status = normalizeBackgroundJobUsage(parsed.status);
+            if (status.status !== 'streaming') {
+                receivedTerminal = true;
+                es.close();
+            }
+            params.onStatus(status);
         } catch (err) {
             if (params.onError) {
                 params.onError(
@@ -824,7 +848,7 @@ export function subscribeBackgroundJobStream(params: {
     };
 
     es.onerror = () => {
-        if (params.onError) {
+        if (!receivedTerminal && params.onError) {
             params.onError(new Error('Background SSE connection failed'));
         }
     };

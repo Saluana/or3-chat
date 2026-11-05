@@ -1,5 +1,12 @@
 # Model catalog
 
+Direct OpenAI models appear after their independent catalog request completes.
+Because OpenAI's model-list endpoint does not report capacity, OR3 shows only
+models whose limits are in its host table; newly released models require a table update.
+Direct OpenAI chat uses the Responses API, preserving supported sampling,
+structured-output formats, and explicit strict tool schemas while allowing supported models to reason
+while calling tools.
+
 The host model service fetches OpenRouter model metadata and supplies small, pure filters. Import it from `~/core/auth/models-service`. It does not manage login, persist keys, send chat requests, or build a search index.
 
 `shared/openrouter/catalog.ts` owns SDK pagination and mapping; the model service
@@ -40,7 +47,7 @@ Filtering metadata does not guarantee that a particular account can use a model,
 | Function | Contract |
 | --- | --- |
 | `fetchModels({ force?, ttlMs? })` | Returns `OpenRouterModel[]`; defaults to a one-hour cache TTL. |
-| `fetchModelCatalog({ force?, ttlMs? })` | Uses the same path and returns `{ data, source, fetchedAt }`. Source is live only after an SDK catalog response; cache fallback retains its original fetch time. When an OpenAI key is available (Cloud account, or a local device key with the OR3 server), `@openai/…` models from `/api/openai/models` are appended; if OpenRouter is unavailable they are returned alone. |
+| `fetchModelCatalog({ force?, ttlMs? })` | Returns `{ data, source, fetchedAt, openAiPending? }`. OpenRouter results are available independently; when present, `openAiPending` resolves to the additional direct OpenAI models. `fetchModels` waits for both lists. The shared model store publishes OpenAI models when ready and waits for them when resolving a selected OpenAI model. If OpenRouter is unavailable, OpenAI models are returned alone. |
 | `filterByText(models, query)` | Case-insensitive substring match over ID, name, and description. Empty query returns the input list. |
 | `filterByModalities(models, { input?, output? })` | Requires every requested input/output modality in the advertised arrays. |
 | `filterByContextLength(models, min)` | Uses top-provider context length, then model context length, then zero. |

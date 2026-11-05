@@ -170,6 +170,7 @@ export interface BackgroundJobExecution {
     referer: string;
     apiKeyCiphertext: string;
     credentialSource?: 'personal' | 'server';
+    chatLimits?: import('~~/shared/chat/chat-limits').ChatLimits;
     /** Durable Stop intent. The live worker settles its buffered aborted snapshot. */
     cancellationRequestedAt?: number;
     /** Immutable canonical-history admission captured before paid execution. */

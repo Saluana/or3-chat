@@ -356,7 +356,7 @@
                     "category": "Developer reference",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Fetch and filter metadata, understand OpenRouter selection and catalog ownership, defer disconnected loading, and preserve workspace cache provenance and pricing."
+                    "summary": "Fetch and filter metadata, understand OpenRouter and OpenAI catalog loading, defer disconnected loading, and preserve workspace cache provenance and pricing."
                 },
                 {
                     "name": "openrouter-build.md",
@@ -416,7 +416,7 @@
                     "category": "Source integration",
                     "categoryOrder": 1,
                     "order": 2,
-                    "summary": "Understand OpenRouter adapter decoding, complete-body admission, foreground SSE, cancellation, host job transport, and server-route fallback."
+                    "summary": "Understand provider request projection and decoding, complete-body admission, foreground SSE, cancellation, host job transport, and server-route fallback."
                 },
                 {
                     "name": "file-handling.md",
@@ -620,7 +620,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Direct provider sign-in dialogs from signed-out chat cards and sends, auth UI adapter entry points, Registration Settings and Invitations, saved versus active modes, Restart now, invitation setup and codes, account identities, team membership, credentials, admin sessions, workspace discovery, readable roles, and guest access. Includes coordinated auth provider dependencies."
+                    "summary": "Direct provider sign-in dialogs from signed-out chat cards and sends, auth UI adapter entry points, Registration Settings and Invitations, saved versus active modes, Restart now, invitation setup and codes, account identities, team membership, credentials, SQLite and Convex deployment-admin grants, workspace-scoped admin sessions, workspace discovery, readable roles, and guest access. Includes coordinated auth provider dependencies."
                 },
                 {
                     "name": "background-execution.md",
@@ -629,7 +629,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers authorization, browser delegation and tool retry fences, the durable admission contract, child saving and uncertain outcomes, checkpoint diagnostics, polling and SSE, canonical reattachment and edit protection, durable recovery, call-bound tool-result storage, retention, persisted delegation across dashboard restarts, and opt-in live delegation testing."
+                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers instance and workspace chat limits, authorization, browser delegation and tool retry fences, the durable admission contract, child saving and uncertain outcomes, checkpoint diagnostics, polling and SSE, canonical reattachment and edit protection, durable recovery, call-bound tool-result storage, retention, persisted delegation across dashboard restarts, and opt-in live delegation testing."
                 },
                 {
                     "name": "notifications.md",

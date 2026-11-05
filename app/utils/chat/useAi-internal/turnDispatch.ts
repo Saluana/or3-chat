@@ -3,10 +3,7 @@ import type { useToast } from '#imports';
 import type { TypedHookEngine } from '~/core/hooks/typed-hooks';
 import type { ChatMessage, SendResult } from '~/utils/chat/types';
 import { appendMessageToDb } from '~/db/messages';
-import { newId } from '~/db/util';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
-import { assistantTranscriptData } from '~/utils/chat/transcript';
-import { createForegroundGenerationLease } from '~/utils/chat/generation-lease';
 import { makeAssistantPersister } from './persistence';
 import { getBuiltinMentionFilter } from '~/utils/chat/mention-filter-identity';
 import { consumeChatSendHandled } from '~/utils/chat/send-interception';
@@ -56,7 +53,8 @@ export function createTurnDispatch(ports: {
     const isRequestCancelled = (scope: ChatRequest): boolean => scope.cancelled;
     const runPreparedNative = ports.executeNative;
     return async function dispatchTurn(requestScope: ChatRequest, preparation: PreparedTurn,
-        userDbMsg: Awaited<ReturnType<typeof appendMessageToDb>>, requestThreadId: string): Promise<SendResult> {
+        userDbMsg: Awaited<ReturnType<typeof appendMessageToDb>>, assistantDbMsg: StoredMessage, requestThreadId: string,
+        stopAcceptanceHeartbeat: () => void): Promise<SendResult> {
         const { requestId, content, sendMessagesParams, workspaceGeneration, preparationSignal, ownsPreparation,
             outgoing, persistedUserText } = preparation.turn;
         const { preparationHookNames, ownsFilterChain, preparationErrors, recordPreparationFilter } = preparation.hookState;
@@ -64,44 +62,18 @@ export function createTurnDispatch(ports: {
             advertisedToolDefs, enabledToolDefs, browserToolCapability, allowBackgroundStreaming,
             foregroundToolDefs, reviewedLossyMessages } = preparation.model;
         let { orMessages } = preparation.model;
-        requestScope.streamId = undefined;
         streamId.value = undefined;
         backgroundJobId.value = null;
         detached.value = false;
 
         let currentModelId: string | undefined;
         let terminalResult: SendResult | undefined;
-        let stopForegroundHeartbeat: (() => void) | undefined;
         try {
             currentModelId = modelId;
 
-            const newStreamId = newId();
+            const newStreamId = requestScope.streamId!;
             requestScope.streamId = newStreamId;
             streamId.value = newStreamId;
-            const nextAssistantId = newId();
-            const assistantDbMsg = (await appendMessageToDb(
-                requestScope.originDb,
-                {
-                    id: nextAssistantId,
-                    thread_id: requestThreadId,
-                    role: 'assistant',
-                    stream_id: newStreamId,
-                    pending: true, // Mark as streaming - HookBridge will skip sync until finalized
-                    data: {
-                        ...assistantTranscriptData({
-                            turnId: userDbMsg.id,
-                            requestId,
-                            generationId: newStreamId,
-                            mode: 'foreground',
-                        }),
-                        content: '',
-                        attachments: [],
-                        reasoning_text: null,
-                        generation_state: 'streaming',
-                        ...createForegroundGenerationLease(requestId),
-                    },
-                }
-            )) as StoredMessage;
             requestScope.assistantMessageId = assistantDbMsg.id;
             requestScope.assistantRecord = assistantDbMsg;
             publishRequest(requestScope, {
@@ -291,9 +263,8 @@ export function createTurnDispatch(ports: {
             }
             const durableDelegation = canUseDurableDelegation(enabledToolDefs, delegationDefaults,
                 allowBackgroundStreaming && browserToolCapability?.durableDelegation === true);
-            return await runPreparedNative({ requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy, enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt, reviewedLossyMessages, delegationDefaults, durableDelegation, recoveryInput: { ...sendMessagesParams, content }, projectQuery: persistedUserText, advertisedToolDefs });
+            return await runPreparedNative({ requestScope, userDbMsg, assistantDbMsg, newStreamId, modelId, orMessages, modalities, reasoning, contextPolicy, enabledToolDefs, foregroundToolDefs, allowBackgroundStreaming, startedAt, reviewedLossyMessages, delegationDefaults, durableDelegation, recoveryInput: { ...sendMessagesParams, content }, projectQuery: persistedUserText, advertisedToolDefs, stopAcceptanceHeartbeat });
         } catch (err) {
-            stopForegroundHeartbeat?.();
             if (err instanceof Error && err.name === 'AbortError') {
                 if (isDetached()) {
                     return {
@@ -409,7 +380,6 @@ export function createTurnDispatch(ports: {
                 );
             }
         } finally {
-            stopForegroundHeartbeat?.();
             // CRITICAL: Ensure abort controller is cleaned up to prevent memory leak
             if (ports.view.activeRequest() === requestScope) {
                 if (abortController.value) {

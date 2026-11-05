@@ -48,6 +48,12 @@ function parseValue(key: SiteSettingKey, raw: string) {
         return value === 'true';
     }
     if (metadata.valueType === 'number') {
+        if (key === 'OR3_CHAT_TOOL_ITERATIONS' || key === 'OR3_CHAT_GENERATED_IMAGES') {
+            const minimum = key === 'OR3_CHAT_TOOL_ITERATIONS' ? 1 : 0;
+            const maximum = key === 'OR3_CHAT_TOOL_ITERATIONS' ? 100 : 24;
+            if (!/^\d+$/.test(value) || Number(value) < minimum || Number(value) > maximum) invalid(key, `${metadata.label}: enter a whole number from ${minimum} to ${maximum}.`);
+            return Number(value);
+        }
         const maximum = key === 'OR3_DEFAULT_PANE_COUNT' ? 4 : 8;
         if (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > maximum) invalid(key, `${metadata.label}: enter a whole number from 1 to ${maximum}.`);
         return Number(value);
