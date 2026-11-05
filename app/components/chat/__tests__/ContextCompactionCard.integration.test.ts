@@ -37,7 +37,7 @@ async function card(threadId = 'child') {
 it('renders a collapsed summary from durable canonical reload with truthful counts and manual landmarks', async () => {
     const wrapper = await card();
     expect(wrapper.get('details').attributes('open')).toBeUndefined();
-    expect(wrapper.get('summary').text()).toContain('6 messages · 1 landmark');
+    expect(wrapper.get('summary').text()).toContain('6 messages · 1 reference');
     expect(wrapper.get('[data-compaction-summary]').text()).toContain('Continue exact work.');
     expect(wrapper.text()).toContain('chosen-model:exact-route');
     expect(wrapper.text()).toContain('Historical reference');

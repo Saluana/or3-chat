@@ -154,7 +154,7 @@ it('does not commit a note when its project knowledge binding is refused', async
     await wrapper.get('textarea[aria-label="Note text"]').setValue('Keep on failure');
     useHooks().addFilter('db.posts.upsert:filter:input', value => 'postType' in value && value.postType === 'or3:project-source' ? { ...value, id: 'redirected' } : value);
     await wrapper.get('form').trigger('submit');
-    await vi.waitFor(() => expect(wrapper.get('[role="alert"]').text()).toContain('filter'));
+    await vi.waitFor(() => expect(wrapper.get('[role="alert"]').text()).toContain('Project operation failed'));
     expect(await db.posts.where('postType').equals('doc').count()).toBe(0);
     expect((await db.projects.get('a'))?.data).toEqual([]);
     expect((wrapper.get('textarea[aria-label="Note text"]').element as HTMLTextAreaElement).value).toBe('Keep on failure');
