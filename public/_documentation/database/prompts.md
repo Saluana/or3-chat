@@ -67,6 +67,12 @@ persistence. Failed writes propagate without publishing an uncommitted value. A
 write finishing in a previous workspace generation does not emit the UI update
 hook; returning to its DB refreshes the current cache from its canonical row.
 
+`useActivePrompt()` shares an ephemeral selection within the active workspace.
+Selecting another prompt or clearing it invalidates pending selections; only the
+latest successful selection emits `chat.systemPrompt.select:action:after`.
+Workspace changes immediately clear both its ID and content, including an
+away-and-back transition while a prompt read is pending.
+
 `getDefaultPromptId()` reads the DB captured at invocation directly. Callers that
 continue asynchronously remain responsible for their own workspace lifetime.
 

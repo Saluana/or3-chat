@@ -13,6 +13,29 @@ import { evictWorkspaceDb, getDb, setActiveWorkspaceDb } from '../client';
 import { testRuntimeConfig } from '~~/tests/setup';
 
 describe('files.attach:filter:input hook', () => {
+    it('rejects declared images whose bytes were classified as a generic file', async () => {
+        const att = attachment();
+        att.file = new NativeFile(['not an image'], 'fake.png', { type: 'image/png' }) as unknown as File;
+        att.name = 'fake.png'; att.mime = 'image/png'; att.kind = 'image';
+        await persistAttachment(att);
+        expect(att.status).toBe('error');
+        expect((await getDb().file_meta.toArray())[0]).toMatchObject({ kind: 'file', ref_count: 0 });
+        expect(await getDb().posts.count()).toBe(0);
+    });
+    it('releases a failed intake reference and clears the error when retried', async () => {
+        let reject = true;
+        useHooks().addFilter('workspace.files:filter:policy', () => !reject);
+        const att = attachment();
+        await persistAttachment(att);
+        expect(att.status).toBe('error');
+        expect((await getDb().file_meta.toArray())[0]?.ref_count).toBe(0);
+        reject = false;
+        att.status = 'pending';
+        await persistAttachment(att);
+        expect(att.status).toBe('ready');
+        expect(att.error).toBeUndefined();
+        expect((await getDb().file_meta.toArray())[0]?.ref_count).toBe(2);
+    });
     let originalAuth: boolean;
     let workspace: string;
 
@@ -78,6 +101,7 @@ describe('files.attach:filter:input hook', () => {
         expect(att.status).toBe('ready');
         expect(att.error).toBeUndefined();
         expect(att.hash).toBeDefined();
+        expect(att.name).toBe(rename ? 'renamed.pdf' : 'original.pdf');
         const saved = await getDb().file_meta.get(att.hash!);
         expect(saved).toMatchObject({
             name: rename ? 'renamed.pdf' : 'original.pdf',

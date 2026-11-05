@@ -30,6 +30,7 @@ describe('useAiSettings', () => {
         dispose?.(); dispose = undefined;
         const name = getDb().name;
         setActiveWorkspaceDb(null);
+        await useAiSettings().ensureLoaded();
         evictWorkspaceDb(workspace);
         await Dexie.delete(name);
         setHookEngine(null);
@@ -67,6 +68,34 @@ describe('useAiSettings', () => {
         const row = await getKvByName('ai_settings');
         expect(sanitizeAiSettings(JSON.parse(row!.value!)).titleGenerationModel).toBe('other/model:nitro');
         expect(sanitizeAiSettings({ titleGenerationModel: 'other/model:online' }).titleGenerationModel).toBe('deepseek/deepseek-v4.1-flash:nitro');
+    });
+
+    // Migration must survive quota/write failure and a later retry. A settings
+    // consumer also survives workspace navigation without calling the API again.
+    it('retains legacy preferences until migration commits and retries a failed load', async () => {
+        const key = 'or3.ai.settings.v1';
+        const legacy = JSON.stringify({ masterSystemPrompt: 'Recovered legacy prompt' });
+        localStorage.setItem(key, legacy);
+        const put = vi.spyOn(getDb().kv, 'put').mockImplementation(() => { throw new Error('Synthetic disk failure'); });
+        const api = useAiSettings();
+        try {
+            await api.ensureLoaded();
+            expect(localStorage.getItem(key)).toBe(legacy);
+            put.mockRestore();
+            await api.ensureLoaded();
+            expect(JSON.parse((await getKvByName('ai_settings'))!.value!).masterSystemPrompt).toBe('Recovered legacy prompt');
+            expect(localStorage.getItem(key)).toBeNull();
+        } finally { put.mockRestore(); localStorage.removeItem(key); }
+    });
+
+    it('refreshes an existing settings consumer when the active workspace changes', async () => {
+        const api = useAiSettings(); await api.set({ masterSystemPrompt: 'Origin' });
+        const otherId = `settings-navigation-${crypto.randomUUID()}`;
+        const other = setActiveWorkspaceDb(otherId);
+        try {
+            await vi.waitFor(() => expect(api.settings.value.masterSystemPrompt).toBe(''));
+            await api.ensureLoaded();
+        } finally { setActiveWorkspaceDb(workspace); evictWorkspaceDb(otherId); await Dexie.delete(other.name); }
     });
 
     it('persists and loads settings', async () => {

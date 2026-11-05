@@ -61,7 +61,7 @@ import { getContributionSurfaceSelection } from '~/composables/plugins/contribut
 import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
 import { getPluginGateDecision } from '~/utils/plugins/access-gate';
 
-/** Definition for an extendable chat message action button. */
+/** Definition for an extendable document history action. */
 export interface DocumentHistoryAction
     extends HistoryActionRegistryItem<Post> {}
 

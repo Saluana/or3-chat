@@ -18,7 +18,7 @@ categories and individual tools. Turning the main switch off suspends tools
 without changing that selection; turning it back on restores the same setup.
 Each chat remembers its switch and selection after reopening or reloading.
 
-In **Dashboard → AI → Chat tools**, use **Enable all tools by default** to choose
+In **Dashboard → AI → Tools**, use **Enable all tools by default** to choose
 whether chats start with all tools on or off. This workspace preference applies
 until a chat saves its own choice. Sending a message captures that chat's current
 preference; later changes to the dashboard default leave saved choices intact.
@@ -131,15 +131,17 @@ Supported UTF-8 files have bounded text pages and explicit continuations;
 filename-only formats return their content limitation. See
 [saved Files](/documentation/utils/file-handling#saved-files).
 
-The Files navigation and catalog upload UI currently run in local mode. Cloud
-exposure remains gated until provider preservation and lifecycle qualification
-is complete. The new provider contracts require matching backend updates;
-installing the host alone does not qualify cloud support.
+Files is available in local mode. In Cloud, its navigation and catalog require
+workspace read access and a sync provider that advertises the workspace-item
+`v1` capability. Upload and management actions also require write access; see
+[saved Files](/documentation/utils/file-handling#saved-files).
 
 ## Availability and execution
 
-All built-ins start enabled, while a saved user choice to disable one takes
-precedence. Document AI has its own independent tool toggles. Models known not
+Individual built-in tools are selected by default, but the chat-level Tools
+switch starts off unless the workspace default or the chat's saved choice turns
+it on. A saved choice to disable an individual tool takes precedence. Document
+AI has its own independent tool toggles. Models known not
 to support tool calls do not receive these definitions. If other background
 eligibility checks pass, background execution can use the browser-tool bridge
 for client tools; when the bridge is unavailable, that turn stays in foreground

@@ -83,34 +83,34 @@ export async function searchDocumentAiMentions(
     query: string,
     options: DocumentAiMentionSearchOptions,
 ): Promise<MentionItem[]> {
+    const generation = getWorkspaceGeneration();
+    const current = () => generation === getWorkspaceGeneration();
     const mentionApi = await import('~/plugins/ChatMentions/useChatMentions');
-    mentionApi.setMentionsConfig({
-        maxPerGroup: options.maxPerGroup,
-        maxContextBytes: options.maxContextBytes,
-        enabledSources: {
-            documents: options.documentsEnabled,
-            conversations: options.conversationsEnabled,
-        },
-    });
+    if (!current()) return [];
 
     try {
         await mentionApi.initMentionsIndex();
-        const indexed = (await mentionApi.searchMentions(query)).filter(
+        if (!current()) return [];
+        const indexed = (await mentionApi.searchMentions(query, options)).filter(
             (item) => (item.source === 'document' && options.documentsEnabled && item.id !== options.currentDocumentId)
                 || (item.source === 'chat' && options.conversationsEnabled),
         );
+        if (!current()) return [];
         if (indexed.length) return indexed;
     } catch {
         // Fall through to the workspace-scoped Dexie search.
     }
 
+    if (!current()) return [];
     return fallbackSearch(query, options);
 }
 
 export async function resolveDocumentAiReference(
     reference: DocumentAiContextReference,
 ): Promise<string | null> {
+    const generation = getWorkspaceGeneration();
     const { resolveMention } = await import('~/plugins/ChatMentions/useChatMentions');
+    if (generation !== getWorkspaceGeneration()) return null;
     return resolveMention(reference);
 }
 
@@ -128,7 +128,7 @@ export function formatDocumentAiReferenceContext(
 ) {
     return entries
         .map(({ reference, content }) =>
-            `<context type="reference" source="${reference.source}" id="${escapeXml(reference.id)}" label="${escapeXml(reference.label)}">\n${escapeXml(content)}\n</context>`,
+            `<context type="reference" source="${reference.source}" id="${escapeXml(reference.id)}">\n${escapeXml(content)}\n</context>`,
         )
         .join('\n');
 }

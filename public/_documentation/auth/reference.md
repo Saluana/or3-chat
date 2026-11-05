@@ -25,18 +25,18 @@ const { startLogin, logoutOpenRouter, isLoggingIn } = useOpenRouterAuth();
 
 | Member | Behavior |
 | --- | --- |
-| `startLogin()` | Checks required Cloud sign-in, creates verifier/state, records PKCE method, and navigates to authorization. |
+| `startLogin()` | Checks required Cloud sign-in and starts authorization. Local mode creates and stores the PKCE verifier and state; Cloud starts an account-bound server transaction. |
 | `isLoggingIn` | Reactive ref used to prevent duplicate attempts and show progress. |
-| `logoutOpenRouter()` | Clears personal key state, persisted KV, and legacy localStorage; dispatches the connection-change signal. |
+| `logoutOpenRouter()` | Removes the Cloud vault connection or clears the local key and legacy localStorage; dispatches the connection-change signal. |
 
-The login helper always uses S256. It hashes with Web Crypto when available and loads the SHA-256 fallback when Web Crypto is unavailable. The callback uses the saved challenge method. Configuration comes from public runtime values `openRouterAuthUrl`, `openRouterRedirectUri`, and `openRouterClientId`; the API base URL is `public.openRouter.baseUrl`. Use the source configuration rather than adding a second redirect implementation.
+The login helper uses S256. In local mode it hashes with Web Crypto when available and loads the SHA-256 fallback when Web Crypto is unavailable. The local callback uses the saved challenge method. Configuration comes from public runtime values `openRouterAuthUrl`, `openRouterRedirectUri`, and `openRouterClientId`; the API base URL is `public.openRouter.baseUrl`. Use the source configuration rather than adding a second redirect implementation.
 
 ## Persist or clear a personal key
 
 ```ts
 import {
   persistUserApiKey,
-  clearPersistedUserApiKey,
+  disconnectOpenRouterConnection,
   isValidOpenRouterKeyFormat,
   useUserApiKey,
 } from '~/core/auth/useUserApiKey';
@@ -47,24 +47,24 @@ export async function savePersonalKey(input: string): Promise<void> {
 }
 
 export async function removePersonalKey(): Promise<void> {
-  await clearPersistedUserApiKey();
+  await disconnectOpenRouterConnection();
 }
 
 // Call during client component setup.
 const { apiKey } = useUserApiKey();
 ```
 
-`persistUserApiKey` trims and validates the key, awaits the KV write under `openrouter_api_key`, updates global reactive state, and dispatches `openrouter:connected`. Use it for paste inputs and successful callbacks. Do not set the global state directly or write credentials to localStorage.
+`persistUserApiKey` trims and validates the key. Local mode writes `openrouter_api_key` to KV and updates reactive state; Cloud saves the credential in the account vault. Both dispatch `openrouter:connected`. Use it for paste inputs and successful callbacks. Do not set the global state directly or write credentials to localStorage.
 
-`clearPersistedUserApiKey` invalidates in-flight hydration, clears memory immediately, and awaits deleting the KV entry. It can reject if deletion fails. `logoutOpenRouter` wraps that behavior for UI use and handles storage failure; a failed deletion can leave persisted data, so storage errors matter even when the visible state is disconnected.
+In local mode, `clearPersistedUserApiKey` invalidates in-flight hydration, clears memory immediately, and awaits deletion of the current KV entry. It can reject if deletion fails. In Cloud mode it clears local state only; use `disconnectOpenRouterConnection` to remove the server credential or `logoutOpenRouter` for the UI flow.
 
-`useUserApiKey()` exposes a readonly `apiKey` ref, plus `setKey` and `clearKey` for memory-only changes. Those two methods do not persist. Client initialization starts hydration from KV. `hydrateUserApiKeyFromKv()` is also exported; its generation guard prevents an older read overwriting a newer save or clear. Never depend on browser key state as server authorization.
+`useUserApiKey()` exposes a readonly `apiKey` ref, plus `setKey` and `clearKey` for memory-only changes. Those two methods do not persist. In local mode, client initialization starts hydration from KV. In Cloud mode `apiKey` stays null; use connection status instead. `hydrateUserApiKeyFromKv()` is also exported; its generation guard prevents an older read overwriting a newer save or clear. Never depend on browser key state as server authorization.
 
 Format validation requires the trimmed `sk-or-` prefix and more than eight characters after it. It performs no provider request and verifies neither balance nor validity. Read key values only when making an authorized request; never log them.
 
 ## Callback and code exchange
 
-The callback page `app/pages/openrouter-callback.vue` reads the returned code, verifies state against the saved value when present, retrieves the verifier and method, and calls `exchangeOpenRouterCode` from `~/core/auth/openrouter-auth`. It persists a successful key with `persistUserApiKey` before returning to the app.
+In local mode, the callback page `app/pages/openrouter-callback.vue` reads the returned code, verifies state against the saved value when present, retrieves the verifier and method, and calls `exchangeOpenRouterCode` from `~/core/auth/openrouter-auth`. It persists a successful key with `persistUserApiKey` before returning to the app. In Cloud mode, the server validates the account-bound transaction and performs the exchange and vault save.
 
 | Input | Meaning |
 | --- | --- |
@@ -79,7 +79,7 @@ The implementation lives in `app/core/auth/useOpenrouter.ts`, `useUserApiKey.ts`
 
 ## Direct OpenAI keys
 
-OpenAI models are listed as `@openai/<model>`; the prefix keeps them apart from OpenRouter's `openai/…` routes. They are billed to an OpenAI key. Chat always runs through the OR3 server; on a local install, project-memory inference for an OpenAI fast model calls OpenAI from the browser with the device key, as OpenRouter memory inference does.
+OpenAI models are listed as `@openai/<model>`; the prefix keeps them apart from OpenRouter's `openai/…` routes. They are billed to an OpenAI key. Chat always runs through the OR3 server; on a local install, project-memory inference for an OpenAI fast model also goes through the OR3 server with the device key. Local OpenRouter memory inference runs in the browser.
 
 ```ts
 import { useOpenAiKey } from '~/core/auth/useOpenAiKey';
@@ -97,7 +97,7 @@ export const disconnectOpenAi = remove;
 ```
 
 - **Cloud:** `POST /api/openai/credentials` with `{ operation: 'status' | 'save' | 'delete' }` stores the key in the account secret vault (consumer `@or3.openai`) and never returns it. It needs the same `x-or3-cloud-intent` and `x-or3-account` headers as the OpenRouter route. A saved personal key wins over `OR3_OPENAI_API_KEY`.
-- **Local mode:** the key is kept in the local-only KV entry `openai_api_key`, which never syncs, and is sent to this OR3 server as `x-or3-openai-key` only with OpenAI-model requests.
+- **Local mode:** the key is kept in the local-only KV entry `openai_api_key`, which never syncs, and is sent to this OR3 server as `x-or3-openai-key` with OpenAI-model requests, including project-memory inference.
 - `POST /api/openai/models` returns the caller's chat models in the catalog shape, or `[]` without a key. OpenAI's list reports no limits, so context and output capacities come from a host table in `shared/openai/models.ts`.
 
 Chat, tools, background jobs and context admission work as for OpenRouter. Choose an OpenAI **Fast Model** in AI Settings and titles, editor autocomplete and project memories (OpenAI Decisions with `gpt-6-luna`) use the OpenAI key too, so no OpenRouter key is needed. Plugin completions, delegation and model search still use OpenRouter credentials.

@@ -106,6 +106,33 @@ describe('mounted thumbnail workspace consumers', () => {
         expect(files.blob.mock.calls.map(call => call[0])).toEqual([hash, laterHash]);
     });
 
+    // Same-workspace removal can race a pending metadata read; re-adding a
+    // released hash must reload its object URL after cache eviction.
+    it('drops removed pending thumbnails and reloads evicted attachments', async () => {
+        let finish!: (meta: typeof originMeta) => void;
+        files.meta.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+        const message = ref({ file_hashes: [hash] });
+        let state!: ReturnType<typeof useMessageThumbnails>;
+        wrappers.push(mount(defineComponent({ setup() {
+            state = useMessageThumbnails(message); return () => h('div');
+        } })));
+        message.value.file_hashes = []; await nextTick();
+        finish(originMeta); await flushPromises();
+        expect(state.thumbnails[hash]).toBeUndefined();
+        expect(files.blob).not.toHaveBeenCalled();
+        message.value.file_hashes = [hash];
+        await vi.waitFor(() => expect(state.thumbnails[hash]?.status).toBe('ready'));
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        try {
+            message.value.file_hashes = []; await nextTick();
+            await vi.advanceTimersByTimeAsync(30_001);
+            expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:consumer-origin');
+            vi.mocked(URL.createObjectURL).mockReturnValue('blob:reloaded');
+            message.value.file_hashes = [hash]; await nextTick(); await flushPromises();
+            await vi.waitFor(() => expect(state.thumbnails[hash]).toMatchObject({ status: 'ready', url: 'blob:reloaded' }));
+        } finally { vi.useRealTimers(); }
+    });
+
     // A collapsed message must not spend bandwidth decoding hidden originals.
     // Existing workspace cases exercise one image and cannot catch this fan-out.
     it('loads only the four displayed image originals in a collapsed message', async () => {

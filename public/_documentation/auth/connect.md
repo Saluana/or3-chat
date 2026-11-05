@@ -2,7 +2,7 @@
 
 OpenRouter provides access to AI models. Model usage may cost money, depending on the model; creating an API key does not make paid models free. Check pricing in OpenRouter before chatting.
 
-A local-first OR3 session needs an OpenRouter key to generate responses. A Cloud operator can supply an instance key instead, and controls whether users can override it with their own keys. Connecting OpenRouter does not sign you into OR3 Cloud.
+OpenRouter models need an OpenRouter key. A Cloud operator can supply an instance key instead, and controls whether users can override it with their own keys. Connecting OpenRouter does not sign you into OR3 Cloud. OR3 also supports [direct OpenAI keys](/documentation/auth/reference#direct-openai-keys) when an OR3 server is available.
 
 ## Connect through OpenRouter
 
@@ -11,13 +11,13 @@ A local-first OR3 session needs an OpenRouter key to generate responses. A Cloud
 3. Complete the OpenRouter authorization flow in the browser.
 4. Return through OR3's callback page, then select a model and send a message.
 
-OR3 uses S256 PKCE to exchange the returned code for a key, including on HTTP development origins where Web Crypto is unavailable. The verifier is kept in browser session storage, with a localStorage fallback for redirect recovery. Use the same browser and OR3 origin throughout the flow.
+OR3 uses S256 PKCE to exchange the returned code for a key. In local mode, this also works on HTTP development origins where Web Crypto is unavailable; the verifier is kept in browser session storage, with a localStorage fallback for redirect recovery. In Cloud mode, the server owns the transaction. Use the same browser and OR3 origin throughout the flow.
 
 ## Paste an existing key
 
-Expand **Use an existing API key** on the welcome card to enter a key starting with `sk-or-`. OR3 checks its format and saves it in the browser's Dexie KV table before updating the connected state. Format validation does not prove that the key is active, funded, or permitted to use a particular model; the model request can still fail.
+Expand **Use an existing API key** on the welcome card to enter a key starting with `sk-or-`. OR3 checks its format before saving it: local mode uses the browser's Dexie KV table, while Cloud stores it in the account secret vault. Format validation does not prove that the key is active, funded, or permitted to use a particular model; the model request can still fail.
 
-Use **How your API key is handled** on the welcome card for a short explanation of storage and requests. The saved personal key is excluded from workspace sync. AI requests still send it to OpenRouter: the browser first tries the OR3 server route, which receives the key and forwards it to OpenRouter when user keys are allowed. If that route is unavailable, requests with a personal key can go directly to OpenRouter. Browser storage does not mean the key never leaves the browser.
+Use **How your API key is handled** on the welcome card for a short explanation of storage and requests. The saved personal key is excluded from workspace sync. In local mode, requests can send it through the OR3 server or directly to OpenRouter if that route is unavailable. In Cloud mode, the server retrieves the account credential from the vault and forwards requests to OpenRouter.
 
 When background streaming is enabled, the server can also keep encrypted credentials for the job. Storage and retention depend on the configured provider.
 
@@ -25,7 +25,7 @@ IndexedDB persistence is browser storage, not an encrypted credential vault. Kee
 
 ## Disconnect
 
-Use the sidebar's **Disconnect** control to clear the personal key from OR3's persisted storage and reactive state. It also removes the legacy localStorage key. Disconnect does not revoke the key at OpenRouter, sign out of OR3 Cloud, or delete conversations. On an instance with server credentials, those credentials may still provide model access.
+Use the sidebar's **Disconnect** control to remove the personal connection. In local mode this clears the browser key and legacy localStorage key; in Cloud it requests removal from the account vault and reports a failure if the server cannot confirm it. Disconnect does not revoke the key at OpenRouter, sign out of OR3 Cloud, or delete conversations. On an instance with server credentials, those credentials may still provide model access.
 
 ## Troubleshooting
 

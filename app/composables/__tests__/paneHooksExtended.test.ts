@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
+import { getDb, setActiveWorkspaceDb } from '~/db/client';
 import { createHookEngine } from '../../core/hooks/hooks';
 
 const hookEngine = createHookEngine();
@@ -28,6 +29,40 @@ describe('extended pane hooks coverage', () => {
         for (const key of Object.keys(docState)) delete docState[key];
         releaseDocumentMock.mockClear();
         toastAddMock.mockClear();
+    });
+
+    // Async plugin filters may finish after a newer selection or a workspace
+    // switch. Neither completion may replace the currently owned pane.
+    it.each(['newer selection', 'workspace'] as const)('retires a document selection after %s', async transition => {
+        const panes = ref([{ id: 'p1', mode: 'chat', threadId: '', messages: [], validating: false } as any]);
+        let release!: () => void;
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        let entered = false;
+        hookEngine.addFilter('ui.pane.doc:filter:select', async requested => {
+            if (requested === 'slow') { entered = true; await gate; }
+            return requested;
+        });
+        const api = usePaneDocuments({ panes, activePaneIndex: ref(0), createNewDoc: vi.fn(), flushDocument: vi.fn() });
+        docState.latest = { status: 'saved' };
+        const pending = api.selectDocumentInActive('slow');
+        await vi.waitFor(() => expect(entered).toBe(true));
+        try {
+            if (transition === 'workspace') setActiveWorkspaceDb('pane-document-target');
+            else await api.selectDocumentInActive('latest');
+            release(); await pending;
+            expect(panes.value[0]!.documentId).toBe(transition === 'workspace' ? undefined : 'latest');
+        } finally { release(); setActiveWorkspaceDb(null); }
+    });
+
+    it('flushes the current document when a selection filter redirects it elsewhere', async () => {
+        const panes = ref([{ id: 'p1', mode: 'doc', documentId: 'current', threadId: '', messages: [], validating: false } as any]);
+        docState.current = { pendingTitle: 'Unsaved title', status: 'saved' };
+        const flushDocument = vi.fn().mockResolvedValue(undefined);
+        hookEngine.addFilter('ui.pane.doc:filter:select', () => 'redirected');
+        const api = usePaneDocuments({ panes, activePaneIndex: ref(0), createNewDoc: vi.fn(), flushDocument });
+        await api.selectDocumentInActive('current');
+        expect(flushDocument).toHaveBeenCalledWith('current');
+        expect(panes.value[0]!.documentId).toBe('redirected');
     });
 
     it('emits the changed thread and respects selection vetoes', async () => {
@@ -175,7 +210,7 @@ describe('extended pane hooks coverage', () => {
         expect(flushDocument).toHaveBeenCalledWith('doc-old');
         expect(releaseDocumentMock).toHaveBeenCalledWith('doc-old', {
             flush: false,
-        });
+        }, getDb());
         expect(panes.value[0]!.documentId).toBe('doc-next');
         expect(panes.value[0]!.mode).toBe('doc');
     });

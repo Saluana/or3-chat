@@ -14,7 +14,7 @@
  * - Uploading or downloading attachment binaries
  * - Server-side storage lifecycle management
  */
-import { getDb } from './client';
+import { getDb, getWorkspaceGeneration } from './client';
 import { dbTry, dbRequired } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import { parseOrThrow, nowSec, getWriteTxTableNames } from './util';
@@ -113,31 +113,7 @@ export async function upsertAttachment(value: Attachment): Promise<void> {
  * - Does not remove the row permanently.
  */
 export async function softDeleteAttachment(id: string): Promise<void> {
-    const db = getDb();
-    const hooks = useHooks();
-    await db.transaction('rw', db.attachments, async () => {
-        const a = await dbRequired(() => db.attachments.get(id), {
-            op: 'read',
-            entity: 'attachments',
-            action: 'get',
-        });
-        if (!a) return;
-        await hooks.doAction('db.attachments.delete:action:soft:before', {
-            entity: a,
-            id: a.id,
-            tableName: 'attachments',
-        });
-        await db.attachments.put({
-            ...a,
-            deleted: true,
-            updated_at: nowSec(),
-        });
-        await hooks.doAction('db.attachments.delete:action:soft:after', {
-            entity: a,
-            id: a.id,
-            tableName: 'attachments',
-        });
-    });
+    await deleteAttachment(id, 'soft');
 }
 
 /**
@@ -154,31 +130,42 @@ export async function softDeleteAttachment(id: string): Promise<void> {
  * - Does not cascade deletes to related tables.
  */
 export async function hardDeleteAttachment(id: string): Promise<void> {
+    await deleteAttachment(id, 'hard');
+}
+
+async function deleteAttachment(id: string, kind: 'soft' | 'hard'): Promise<void> {
     const db = getDb();
+    const generation = getWorkspaceGeneration();
     const hooks = useHooks();
+    const assertCurrent = () => {
+        if (db !== getDb() || generation !== getWorkspaceGeneration()) {
+            throw new Error('The workspace changed while deleting the attachment.');
+        }
+    };
+    const existing = await dbRequired(() => db.attachments.get(id), {
+        op: 'read', entity: 'attachments', action: 'get',
+    });
+    if (!existing) return;
+    assertCurrent();
+    const payload = { entity: existing, id, tableName: 'attachments' as const };
+    await hooks.doAction(`db.attachments.delete:action:${kind}:before`, payload);
+    assertCurrent();
     await db.transaction(
         'rw',
         getWriteTxTableNames(db, 'attachments', { includePendingOps: false }),
         async () => {
-            const existing = await dbRequired(() => db.attachments.get(id), {
-                op: 'read',
-                entity: 'attachments',
-                action: 'get',
-            });
-            if (!existing) return;
-            await hooks.doAction('db.attachments.delete:action:hard:before', {
-                entity: existing,
-                id,
-                tableName: 'attachments',
-            });
-            await db.attachments.delete(id);
-            await hooks.doAction('db.attachments.delete:action:hard:after', {
-                entity: existing,
-                id,
-                tableName: 'attachments',
-            });
+            const current = await db.attachments.get(id);
+            assertCurrent();
+            if (JSON.stringify(current) !== JSON.stringify(existing)) {
+                throw new Error('This attachment changed while deleting it. Try again.');
+            }
+            if (kind === 'hard') await db.attachments.delete(id);
+            else await db.attachments.put({ ...existing, deleted: true, updated_at: nowSec() });
+            assertCurrent();
         }
     );
+    try { await hooks.doAction(`db.attachments.delete:action:${kind}:after`, payload); }
+    catch (error) { console.warn('[attachments] Deletion committed; notification failed', error); }
 }
 
 /**

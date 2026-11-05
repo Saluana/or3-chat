@@ -33,7 +33,7 @@ These actions and the `WorkspaceResourceNavigationApi` bridge return `{ status }
 
 The persisted manifest is `WorkspaceTabsSnapshotV1` in local storage, scoped by workspace/deployment and workspace profile. It contains ordered resource descriptors, cached titles, active tab, visible tab order, and active visible index. It never contains runtime pane UUIDs, messages, document bodies, editor internals, or attachment blobs.
 
-Runtime state is tab-keyed and in memory only. Composer drafts and object URLs survive tab switches and the short Undo-close window, but do not survive a full restart. Chat scroll state uses keyed message anchors from `or3-scroll`; document view state is restored only after the editor session registers.
+Runtime state is tab-keyed and in memory only. Composer drafts survive tab switches, the short Undo-close window, and reloads through local draft storage. Attachment object URLs are recreated from saved file references after a reload. Chat scroll state uses keyed message anchors from `or3-scroll`; document view state is restored only after the editor session registers.
 
 ## Custom apps, extensions, and actions
 
@@ -55,4 +55,15 @@ Theme overrides use the `shell` context. Workspace identifiers are `shell.worksp
 
 `features.workspaceTabs.enabled` controls the workspace chrome and orchestration while retaining the legacy chrome path. The legacy path should remain for one stable release after default enablement, then be removed with its flag and dead markup. Do not fork chat or document business logic between these paths.
 
-First-release non-goals include cloud-synced tab sessions, groups, pinned/vertical tabs, public tab lifecycle hooks, full-restart attachment persistence, and mobile drag reordering.
+First-release non-goals include cloud-synced tab sessions, groups, pinned/vertical tabs, public tab lifecycle hooks, and mobile drag reordering.
+
+## Navigation and teardown guarantees
+
+Opening an existing tab or undoing a close captures the outgoing view before rebinding its pane. Opening in the background keeps the active tab and blank composer untouched. Failed incoming view restoration restores the outgoing resource as well as its tab binding.
+
+Slow app initialization cannot replace newer chat/document selections or publish into a different workspace or a disposed shell. `setPaneApp` accepts an optional `isCurrent` guard for callers that own a navigation transaction and rejects a current initialization failure. A failed final document save leaves its pane open; tab/split closes retain their bindings when the host cannot close. Restore stops when a host declines a close instead of retrying indefinitely.
+
+Pending layout changes flush when their scope is disposed. Active pane positions count only bound panes, and removing an unavailable saved resource preserves focus on the surviving active tab. The manifest accepts sessions larger than 100 tabs, matching live tab creation. Queued resize work is cancelled when the pane count changes or its owner is disposed.
+
+After a tab session is disposed, retained navigation commands fail without
+creating or closing panes, restoring layouts, or rebinding workspace resources.

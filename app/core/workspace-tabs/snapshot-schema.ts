@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import type { WorkspaceTabsSnapshotV1 } from './types';
 
-const MAX_TABS = 100;
 const MAX_VISIBLE_TABS = 12;
 const BoundedId = z.string().trim().min(1).max(512);
 const Timestamp = z.number().int().nonnegative().finite();
@@ -47,7 +46,7 @@ function rejectDuplicates(values: string[], label: string, ctx: z.RefinementCtx)
 export const WorkspaceTabsSnapshotV1Schema = z
     .object({
         schemaVersion: z.literal(1),
-        tabs: z.array(WorkspaceTabSchema).min(1).max(MAX_TABS),
+        tabs: z.array(WorkspaceTabSchema).min(1),
         activeTabId: BoundedId,
         visibleTabIds: z.array(BoundedId).max(MAX_VISIBLE_TABS),
         activeVisibleIndex: z.number().int().min(0).max(MAX_VISIBLE_TABS),

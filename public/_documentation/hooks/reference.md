@@ -130,7 +130,11 @@ The acknowledgement handles only its own request. Updated delegates must not
 set the legacy global handled marker, which can affect another pane.
 
 The existing real-ID `ai.chat.send:action:before` action and side-effecting
-`ai.chat.messages:filter:before_send` remain post-write and run once. Old hosts
+`ai.chat.messages:filter:before_send` remain post-write and run once. Normal chat
+sends include `editorDoc` (TipTap JSON or `null`) alongside `messages`, captured
+from that request's composer. The built-in mention filter uses this snapshot;
+it does not retain the last editor action globally. References resolve current
+source titles and content without changing the saved mention chip. Old hosts
 and old plugins retain that ordering. Such legacy final filters cannot provide
 universal zero-write final-payload admission. Updated Workflows source selects
 the paired contract only when the host advertises full support. Source tests

@@ -91,11 +91,14 @@ export function createMessageMediaPrefetchController(
         while (!disposed && activeLoads < concurrency && queue.length) {
             const task = queue.shift();
             if (!task) break;
-            queuedTokens.delete(task.token);
-            if (task.epoch !== epoch || !desiredHashes.has(task.hash)) continue;
+            if (task.epoch !== epoch || !desiredHashes.has(task.hash)) {
+                queuedTokens.delete(task.token);
+                continue;
+            }
             activeLoads++;
             void load(task.hash, task.epoch).finally(() => {
                 activeLoads--;
+                queuedTokens.delete(task.token);
                 pump();
                 notifyIdle();
             });

@@ -12,6 +12,17 @@ const controls = vi.hoisted(() => ({ stream: vi.fn(), execute: vi.fn() }));
 vi.mock('~/utils/chat/openrouterStream', () => ({ openRouterStreamWithRetry: controls.stream }));
 vi.mock('~/utils/documents/document-ai-registry-tools', () => ({ executeDocumentAiRegistryTool: controls.execute }));
 
+it('announces one completion when the provider finishes without tool calls', async () => {
+    controls.stream.mockReset().mockImplementation(async function* () { yield { type: 'text', text: 'Finished' }; });
+    const editor = new Editor({ extensions: [StarterKit], content: '<p>Original</p>' });
+    const onStatus = vi.fn();
+    try {
+        await runDocumentAiAgentLoop({ apiKey: null, modelId: 'audit-model', orMessages: [], maxIterations: 2, onStatus,
+            toolContext: { editor, snapshot: freezeDocumentForAi(editor), scope: 'document', allowedRefs: new Set(['b1']), chunkWordLimit: 2000 } });
+        expect(onStatus.mock.calls.filter(([event]) => event.type === 'done')).toHaveLength(1);
+    } finally { editor.destroy(); }
+});
+
 it.each(['after response', 'during tool'] as const)('stops scheduling tools and turns when disconnected %s', async phase => {
     const controller = new AbortController();
     const editor = new Editor({ extensions: [StarterKit], content: '<p>Original</p>' });

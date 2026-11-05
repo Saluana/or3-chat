@@ -49,7 +49,12 @@ export function createPaneActivationCoordinator() {
         generations.set(paneId, (generations.get(paneId) ?? 0) + 1);
     }
 
-    return { begin, cancel };
+    function cancelAll(): void {
+        for (const paneId of controllers.keys()) cancel(paneId);
+        generations.clear();
+    }
+
+    return { begin, cancel, cancelAll };
 }
 
 /**
@@ -111,6 +116,7 @@ export function useWorkspaceTabHost(multiPane: UseMultiPaneApi): WorkspaceTabHos
 
         await multiPane.setPaneApp(index, resource.appId, {
             recordId: resource.recordId,
+            isCurrent: activation.isCurrent,
         });
     }
 

@@ -4,11 +4,13 @@ This guide starts from an OR3 instance already open in your browser. To run one 
 
 ## 1. Connect a model provider
 
-OpenRouter provides access to the AI models you chat with. Model usage may cost money, depending on the model; creating an API key does not make paid models free. Check the model's pricing in OpenRouter before chatting.
+OR3 supports OpenRouter and, when an OR3 server is available, direct OpenAI models. Model usage may cost money; check pricing with the chosen provider before chatting.
 
 For local-first use, choose **Connect with OpenRouter** on the empty chat welcome card, or expand **Use an existing API key** to paste a key you already have. The sidebar also has a **Connect** control.
 
-On a Cloud instance, sign in if requested. The operator may supply an instance key or allow your own OpenRouter key. When an instance key is provided, a personal key may be unnecessary or disallowed. See [OpenRouter connection and troubleshooting](/documentation/auth/connect).
+To use a direct OpenAI key instead, open **Dashboard → AI → OpenAI key**, save the key, and choose a model marked **OpenAI key** in the catalog. These requests are billed to your OpenAI account.
+
+On a Cloud instance, sign in if requested. The operator may supply instance credentials or restrict personal keys. See [OpenRouter connection and troubleshooting](/documentation/auth/connect) and [direct OpenAI keys](/documentation/auth/reference#direct-openai-keys).
 
 ## 2. Choose a model and send a message
 
@@ -21,7 +23,7 @@ Choose the system prompt for this chat in **Settings**. For an unsent chat, the 
 Tools start off. Turn on the switch beside **Settings → Tools** to enable them,
 and select the **Tools** row to choose individual tools. The switch remembers
 your selection when you turn it off and back on. Each chat keeps its own setup.
-Change the starting default in **Dashboard → AI → Chat tools**.
+Change the starting default using **Dashboard → AI → Tools**.
 
 Choose a model with the capabilities your request needs. For an image or file, use the attachment control and select a compatible model. A text-only model cannot be assumed to understand an image. If an attachment cannot be prepared, remove it or reattach the original file and try again.
 

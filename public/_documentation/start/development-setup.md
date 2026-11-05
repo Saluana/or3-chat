@@ -1,14 +1,5 @@
 # Develop OR3 from source
 
-Run `bun run test:e2e:ui-audit` for the focused UI audit browser regressions.
-It starts an isolated local server on port 3131, blocks AI generation, and saves
-repeatable model-selection, touch-control, prompt-editor, and draft-restoration screenshots across
-Blank, Retro, and Cyberpunk in `test-results/ui-audit`.
-Browser suites normally start their own server and fail if their port is
-occupied, so they cannot silently test another checkout. To target a server you
-deliberately manage, set `PW_SKIP_WEB_SERVER=true` and verify that server's
-configuration and `PW_PORT` before running the suite.
-
 Use this path to change OR3 itself or work on a trusted source extension. To run a managed deployment, use [Cloud setup](/documentation/cloud/setup). To build a portable plugin, start with [your first plugin](/documentation/plugins/first-plugin).
 
 ## Install and start
@@ -22,7 +13,7 @@ bun install
 bun run dev
 ```
 
-Open the URL printed by the startup banner. Local-first development needs no account or environment file; connect OpenRouter through the app when you want to generate a response.
+Open the URL printed by the startup banner. Local-first development needs no account or environment file; connect a model provider through the app when you want to generate a response.
 
 Installation applies the checked-in dependency fixes in `patches/` before
 preparing Nuxt. If you deliberately install with `--ignore-scripts`, run
@@ -200,6 +191,23 @@ authenticated behavior after starting the server.
 
 ## Find the right files
 
+Nuxt's source directory is `app/`: `~/` and `@/` refer there, while `~~/` refers to the repository root.
+
+| Directory | Responsibility |
+| --- | --- |
+| `app/pages/`, `app/components/` | Routes and UI. |
+| `app/core/`, `app/composables/` | Feature logic, hooks, and registries. |
+| `app/db/` | Browser persistence and entity helpers. |
+| `server/` | SSR endpoints and server integrations. |
+| `shared/` | Contracts shared across runtimes. |
+| `public/_documentation/` | Documentation pages and navigation map. |
+
+The [source contributor map](/documentation/start/source-map) identifies feature controllers and extension registries.
+
+Use [hooks](/documentation/hooks/overview) and registries for extension points. Use existing Nuxt UI variants in `app.config.ts` and the [theme system](/documentation/themes/overview) for UI changes. Keep server SDKs under server boundaries and browser storage in client paths.
+
+## Loading and production behavior
+
 Production builds share one KaTeX renderer across Markdown and diagrams. The
 document extraction worker loads when a file is extracted, and the trusted
 plugin UI kit loads when a plugin activates. The production asset gate checks
@@ -262,7 +270,7 @@ to its original artwork.
 A closed mobile drawer mounts its page on first opening and retains it afterward.
 The first-run welcome starts its key and dismissal reads together, shares an
 in-flight key read with other startup consumers, and remains hidden until mount
-and the existing authentication checks complete. Credentials stay in Dexie.
+and the existing authentication checks complete. Local credentials stay in Dexie; Cloud credentials use the configured account vault.
 Desktop sidebar width stays bounded during loading; malformed persisted widths
 are ignored in favor of the normal default. The default app shell reads its saved
 width and collapse preference in a small inline head script, reserving the final
@@ -290,21 +298,6 @@ checks a production preview on port 3110 with JavaScript bundles held back, then
 compares the initial and hydrated geometry in all bundled themes and both color
 modes. Each case saves screenshots and `startup-geometry.json` in its test output.
 
-Nuxt's source directory is `app/`: `~/` and `@/` refer there, while `~~/` refers to the repository root.
-
-| Directory | Responsibility |
-| --- | --- |
-| `app/pages/`, `app/components/` | Routes and UI. |
-| `app/core/`, `app/composables/` | Feature logic, hooks, and registries. |
-| `app/db/` | Browser persistence and entity helpers. |
-| `server/` | SSR endpoints and server integrations. |
-| `shared/` | Contracts shared across runtimes. |
-| `public/_documentation/` | Documentation pages and navigation map. |
-
-The [source contributor map](/documentation/start/source-map) identifies feature controllers and extension registries.
-
-Use [hooks](/documentation/hooks/overview) and registries for extension points. Use existing Nuxt UI variants in `app.config.ts` and the [theme system](/documentation/themes/overview) for UI changes. Keep server SDKs under server boundaries and browser storage in client paths.
-
 ## Work with sibling packages
 
 The dev wrapper can rebuild available sibling provider repositories. Missing siblings or build failures fall back to installed packages with a warning. Use `OR3_LOCAL_PROVIDERS=false bun run dev` to use installed provider packages. See [provider development](/documentation/cloud/providers#local-provider-development).
@@ -314,6 +307,15 @@ Development can also alias the adjacent Scroll checkout when valid. Use `OR3_USE
 ## Verify a change
 
 Run the narrowest affected existing test files, or `bun run test:changed`. `bun run test` runs the fast core lane; integration, scripts, release policy, and plugin compatibility have separate lanes. Use the named E2E harness for browser journeys rather than a broad command that also runs credential or paid-network suites.
+
+Run `bun run test:e2e:ui-audit` for the focused UI audit browser regressions.
+It starts an isolated local server on port 3131, blocks AI generation, and saves
+repeatable model-selection, touch-control, prompt-editor, and draft-restoration screenshots across
+Blank, Retro, and Cyberpunk in `test-results/ui-audit`.
+Browser suites normally start their own server and fail if their port is
+occupied, so they cannot silently test another checkout. To target a server you
+deliberately manage, set `PW_SKIP_WEB_SERVER=true` and verify that server's
+configuration and `PW_PORT` before running the suite.
 
 CI runs `bun run lint:changed -- <changed files>`. TypeScript audit runners under
 `audit-evidence/` use `tsconfig.eslint.audit.json`, with pinned Bun types and the

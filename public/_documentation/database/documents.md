@@ -43,6 +43,11 @@ headings, paragraph spacing, lists and inline marks. Long changes collapse
 visually and expand without flattening or truncating their formatting.
 Autocomplete retires timed-out requests so later typing can request suggestions.
 Document AI preferences are scoped to the originating workspace database.
+Preference updates merge into the latest durable row and reject concurrent
+changes during the write instead of overwriting another tab's preferences.
+Disposing an AI controller retires its public handles and queued approvals;
+resetting it also invalidates pending reference reads. Estimates and sends resolve
+references afresh instead of retaining stale text across requests.
 
 Document storage built on the shared `posts` table (`postType: 'doc'`) with TipTap JSON payloads and hook integration.
 
@@ -101,7 +106,7 @@ Document storage built on the shared `posts` table (`postType: 'doc'`) with TipT
 ## Implementation notes
 
 1. **Title normalization** — `normalizeTitle` trims empty strings to `'Untitled'`, then passes through the `db.documents.title:filter` hook with phase/id/raw context. The mounted editor presents the fallback title as a placeholder instead of selected text, and focuses the empty title field when a document was just created.
-2. **Content safety** — `parseContent` guards against malformed JSON, returning an empty doc structure on error.
+2. **Content safety** — Empty content becomes an empty document. Malformed JSON or an invalid top-level document shape throws while preserving the stored content; the editor offers recovery instead of replacing it with an empty document.
 3. **Update payloads** — Build `DbUpdatePayload` objects so hooks receive full `existing`, `updated`, and `patch` context.
 4. **File hashes** — `file_hashes` is derived from embedded file nodes in the content via `serializeDocumentFileHashes` on create and update.
 5. **Reference index** — Active document rows receive a sparse `[file_hashes, id]` key at the Dexie write boundary; soft deletion removes it and restore recomputes it. `listDocumentFileHashes` enumerates only those keys and deduplicates with `parseDocumentFileHashes`.
@@ -131,6 +136,13 @@ The document cache and staged writes belong to the originating workspace databas
 Mounted editors capture and flush against their own DB before switching workspace presentation or unmounting. A retained same-ID pane loads the new workspace's title and content, while late loads are rejected by workspace and load generation. Its history panel clears any selected checkpoint and refreshes for the new workspace. Store helpers `loadDocument`, `flush`, `useDocumentState`, `setDocumentTitle`, and `setDocumentContent` accept an optional final DB argument for operations bound to an editor; existing calls default to the active DB. Checkpoint creation, history reads, pruning, and orphan repair likewise capture their DB before async work, and accept an optional final DB argument.
 
 Resolve the exact mounted editor through `app/composables/documents/useDocumentEditorSessions.ts`. Modern sessions use pane/tab identity, so a split view can select the intended editor. Session capture and local-durability methods serve different purposes. An inactive document generally supplies saved read-only content rather than a live editor snapshot.
+
+Editor lookup and lazy-registration waits are scoped to the active workspace;
+an outgoing editor with the same document, pane or tab ID cannot supply the
+destination's live context. Document lists clear on workspace changes and rerun
+when a document changes during an in-flight read. Pane document operations retire
+after newer navigation, scope disposal or workspace changes. Selection filters
+that redirect the current document still flush its edits before navigation.
 
 Mounted editors retain a shared cache lease in their originating DB. Closing or
 switching the final pane releases its cached document after saving; another split

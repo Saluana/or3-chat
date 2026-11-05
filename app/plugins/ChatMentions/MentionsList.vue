@@ -181,9 +181,11 @@ interface MentionItem {
 const props = defineProps<{
     items: MentionItem[];
     command: (item: MentionItem) => void;
+    search?: (query: string) => void;
 }>();
 
 const searchTerm = ref('');
+watch(searchTerm, value => props.search?.(value));
 const activeTab = ref<'all' | 'chat' | 'document'>('all');
 const selectedIndex = ref(0);
 const searchInputRef = ref<HTMLInputElement | null>(null);
@@ -208,11 +210,7 @@ const filteredItems = computed(() => {
 
 const recommendedItems = computed(() => {
     if (!isSearching.value) return [];
-    const scored = filteredItems.value.filter(
-        (item) => typeof item.score === 'number'
-    );
-    if (!scored.length) return [];
-    return [...scored]
+    return [...filteredItems.value]
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
         .slice(0, 5);
 });

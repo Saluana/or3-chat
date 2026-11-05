@@ -53,9 +53,9 @@ deduplicates and applies the configured per-message limit. Use
 file references together.
 
 `file_meta.ref_count` is derived local state, not an LWW-synced counter. The
-message-file helpers maintain it from unique live message-to-file edges; do
-not increment/decrement it separately or treat a hash list as proof that a
-blob is available. See [file storage](/documentation/database/files) and
+owning helpers maintain it for references including message edges and catalog
+or project ownership. Do not adjust it separately or treat a hash list as proof
+that a blob is available. See [file storage](/documentation/database/files) and
 [message attachments](/documentation/database/message-files) for upload,
 download, transaction, and deletion behavior.
 
@@ -81,6 +81,13 @@ Composer file selections, drops and pastes retain one originating workspace and
 composer lifetime across the whole batch. Workspace/tab changes and disposal
 cancel pending intake before later files or preview URLs are allocated. Draft
 transfer preserves existing previews; draft discard owns their revocation.
+Removing a pending attachment cancels that file's intake while allowing the
+remaining selected files to continue. Failed or cancelled intake releases its
+temporary reference. Successful retries clear the previous error and publish
+the stored name, MIME, and kind, including changes made by attachment filters.
+Chat rejects uploads classified as generic files at persistence time instead
+of leaving an invisible image attachment in the draft. Document AI size checks
+count decoded base64 bytes, excluding padding, against the attachment limit.
 
 New regular chat uploads also create a catalog entry. Supported UTF-8 `.txt`,
 `.md`, and `.csv` uploads insert a removable chat reference. Images and PDFs use

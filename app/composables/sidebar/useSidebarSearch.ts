@@ -1,406 +1,165 @@
-/**
- * @module app/composables/sidebar/useSidebarSearch
- *
- * Purpose:
- * Provides a unified sidebar search across threads, projects, and documents.
- *
- * Responsibilities:
- * - Builds and maintains a client-side Orama index
- * - Executes debounced searches with substring fallback
- *
- * Non-responsibilities:
- * - Does not render search UI
- * - Does not provide server-side search
- */
-import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
-import { ref, watch, onBeforeUnmount, type Ref } from 'vue';
-import { useDebounceFn, watchDebounced } from '@vueuse/core';
+import { computed, onScopeDispose, ref, watch, type Ref } from 'vue';
 import type { Thread, Project, Post } from '~/db';
-import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
-import {
-    createDb,
-    buildIndex as buildOramaIndex,
-    searchWithIndex,
-} from '~/core/search/orama';
+import { subscribeActiveWorkspaceDb } from '~/db/client';
+import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
+import { createDb, buildIndex, searchWithIndex } from '~/core/search/orama';
 
-/**
- * Interface for documents stored in the search index.
- *
- * Normalizes different entity types (threads, projects, docs) into a common format.
- */
 interface IndexDoc {
-    /** Unique identifier for the entity */
     id: string;
-    /** Type of entity being indexed */
+    recordId: string;
     kind: 'thread' | 'project' | 'doc';
-    /** Title used for search matching */
     title: string;
-    /** Timestamp for sorting and change detection */
     updated_at: number;
 }
 
-/**
- * Type alias for Orama database instance.
- *
- * Uses unknown since the exact Orama type isn't needed for this composable.
- */
-type OramaInstance = unknown;
+const isDocPost = (post: Post) => post.postType === 'doc' && isVisibleWorkspaceItem(post);
 
-/**
- * Debounce delay for rebuilding the search index when data changes (in milliseconds).
- */
-const SEARCH_DEBOUNCE_MS = 300;
-
-/**
- * Debounce delay for running searches when the query changes (in milliseconds).
- */
-const QUERY_DEBOUNCE_MS = 120;
-
-/**
- * Type guard to check if a post is a document post.
- *
- * Filters out non-doc posts and deleted posts.
- *
- * @param post - The post to check.
- * @returns True if the post is a document and not deleted.
- */
-function isDocPost(post: Post): boolean {
-    const record = post as Record<string, unknown>;
-    return record.postType === 'doc' && isVisibleWorkspaceItem(post);
-}
-
-/**
- * Converts threads, projects, and documents into normalized IndexDoc format.
- *
- * Handles title fallbacks and ensures consistent data structure for indexing.
- *
- * @param threads - Array of thread entities.
- * @param projects - Array of project entities.
- * @param documents - Array of document entities.
- * @returns Array of normalized documents ready for indexing.
- */
-function toDocs(
-    threads: Thread[],
-    projects: Project[],
-    documents: Post[]
-): IndexDoc[] {
-    const threadDocs: IndexDoc[] = threads.map((t) => ({
-        id: t.id,
-        kind: 'thread' as const,
-        title: (t.title || 'Untitled Thread').trim() || 'Untitled Thread',
-        updated_at: t.updated_at,
-    }));
-    const projectDocs: IndexDoc[] = projects.map((p) => ({
-        id: p.id,
-        kind: 'project' as const,
-        title: (p.name || 'Untitled Project').trim() || 'Untitled Project',
-        updated_at: p.updated_at,
-    }));
-    const docDocs: IndexDoc[] = documents.filter(isDocPost).map((d) => {
-        const record = d as Record<string, unknown>;
-        return {
-            id: d.id,
-            kind: 'doc' as const,
-            title: (record.title as string | undefined) || 'Untitled',
-            updated_at: (record.updated_at as number) || 0,
-        };
-    });
-    return [...threadDocs, ...projectDocs, ...docDocs];
-}
-
-/**
- * Builds an Orama search index from normalized documents.
- *
- * Creates the database schema and indexes all documents.
- *
- * @param docs - Normalized documents to index.
- * @returns Orama database instance or null if creation failed.
- */
-async function buildIndex(docs: IndexDoc[]) {
-    const instance = await createDb({
-        id: 'string',
-        kind: 'string',
-        title: 'string',
-        updated_at: 'number',
-    });
-    if (!instance) return null;
-    if (docs.length) await buildOramaIndex(instance, docs);
-
-    return instance;
-}
-
-/**
- * Computes a signature string to detect when the search index needs rebuilding.
- *
- * Includes each indexed identity and field so unrelated newer records cannot hide changes.
- *
- * @param docs - Normalized documents the index is built from.
- * @returns Signature string representing the current data state.
- */
-function computeSignature(docs: IndexDoc[]) {
-    // Counts plus the maximum timestamp miss replacements and updates to older
-    // imported/synced rows. Compare exactly the fields the index consumes.
-    return JSON.stringify(docs);
-}
-
-/**
- * `useSidebarSearch`
- *
- * Purpose:
- * Supplies reactive search state and results for sidebar entities.
- *
- * Behavior:
- * Builds an Orama index, debounces rebuild and search, and falls back to
- * substring matching when indexing is unavailable or yields no matches.
- *
- * Constraints:
- * - Runs on the client where Orama and IndexedDB data are available
- * - Index rebuild is based on a signature of every indexed field
- *
- * Non-Goals:
- * - Does not persist search state across sessions
- * - Does not perform server-side search
- */
+/** Title search with an instance-owned index and immediate stale-result retirement. */
 export function useSidebarSearch(
     threads: Ref<Thread[]>,
     projects: Ref<Project[]>,
     documents: Ref<Post[]>
 ) {
-    let dbInstance: OramaInstance | null = null;
-    let lastQueryToken = 0;
-    let warnedFallback = false;
     const query = ref('');
     const threadResults = ref<Thread[]>([]);
     const projectResults = ref<Project[]>([]);
     const documentResults = ref<Post[]>([]);
     const ready = ref(false);
     const busy = ref(false);
-    const lastIndexedSignature = ref('');
-    const cleanupFns: Array<() => void> = [];
+    let dbInstance: unknown = null;
+    let indexedSignature = '';
+    let revision = 0;
+    let queryToken = 0;
+    let disposed = false;
+    let warnedFallback = false;
+    let pendingBuild: Promise<void> | null = null;
+    let rebuildTimer: ReturnType<typeof setTimeout> | undefined;
+    let queryTimer: ReturnType<typeof setTimeout> | undefined;
+    // Owners replace these arrays when the new workspace loads. Until then,
+    // neither a pending timer nor a manual search may expose their previous rows.
+    const retiredInputs = ref<[Thread[] | null, Project[] | null, Post[] | null]>([null, null, null]);
+    watch([threads, projects, documents], ([nextThreads, nextProjects, nextDocuments]) => {
+        const retired = retiredInputs.value;
+        if (retired[0] && retired[0] !== nextThreads) retired[0] = null;
+        if (retired[1] && retired[1] !== nextProjects) retired[1] = null;
+        if (retired[2] && retired[2] !== nextDocuments) retired[2] = null;
+    }, { flush: 'sync' });
+    const visibleThreads = computed(() => threads.value === retiredInputs.value[0] ? [] : threads.value.filter(t => !t.deleted));
+    const visibleProjects = computed(() => projects.value === retiredInputs.value[1] ? [] : projects.value.filter(p => !p.deleted));
+    const visibleDocuments = computed(() => documents.value === retiredInputs.value[2] ? [] : documents.value.filter(isDocPost));
+    const docs = computed<IndexDoc[]>(() => [
+        ...visibleThreads.value.map(t => ({ id: `thread:${t.id}`, recordId: t.id, kind: 'thread' as const,
+            title: t.title?.trim() || 'Untitled Thread', updated_at: t.updated_at })),
+        ...visibleProjects.value.map(p => ({ id: `project:${p.id}`, recordId: p.id, kind: 'project' as const,
+            title: p.name?.trim() || 'Untitled Project', updated_at: p.updated_at })),
+        ...visibleDocuments.value.map(d => ({ id: `doc:${d.id}`, recordId: d.id, kind: 'doc' as const,
+            title: d.title?.trim() || 'Untitled', updated_at: d.updated_at })),
+    ]);
 
-    cleanupFns.push(subscribeActiveWorkspaceDb(() => {
-        lastQueryToken += 1;
-        dbInstance = null;
-        lastIndexedSignature.value = '';
-        ready.value = false;
-        busy.value = false;
-        threadResults.value = [];
-        projectResults.value = [];
-        documentResults.value = [];
-    }));
-
-    /**
-     * Ensures the search index is built and up-to-date.
-     *
-     * Rebuilds the index only when data has changed based on signature comparison.
-     * Updates ID maps for result mapping and sets ready/busy states.
-     */
-    async function ensureIndex() {
-        const generation = getWorkspaceGeneration();
-        if (busy.value) return;
-        const docs = toDocs(threads.value, projects.value, documents.value);
-        const sig = computeSignature(docs);
-        if (sig === lastIndexedSignature.value && dbInstance) return;
-        busy.value = true;
-        try {
-            const nextIndex = await buildIndex(docs);
-            if (generation !== getWorkspaceGeneration()) return;
-            dbInstance = nextIndex;
-            lastIndexedSignature.value = sig;
-            ready.value = true;
-        } catch {
-            if (generation !== getWorkspaceGeneration()) return;
-            dbInstance = null;
-            ready.value = false;
-            substringFallback(query.value.trim(), true);
-        } finally {
-            if (generation === getWorkspaceGeneration()) busy.value = false;
-        }
-        // A rebuild requested during this build was skipped as busy. If the data
-        // changed meanwhile, schedule another so the change is not left unindexed.
-        if (
-            computeSignature(
-                toDocs(threads.value, projects.value, documents.value)
-            ) !== sig
-        ) {
-            void debouncedRebuild();
-        }
-    }
-
-    /**
-     * Fallback search using substring matching when Orama search fails or returns no results.
-     *
-     * Provides basic search functionality without requiring the index.
-     * Warns once when an index failure requires fallback.
-     *
-     * @param raw - The raw search query string.
-     */
-    function substringFallback(raw: string, indexFailed = false) {
-        const ql = raw.toLowerCase();
-        const threadHits = threads.value.filter((t) =>
-            (t.title || '').toLowerCase().includes(ql)
-        );
-        const projectHits = projects.value.filter((p) =>
-            (p.name || '').toLowerCase().includes(ql)
-        );
-        const docHits = documents.value.filter((d) => {
-            if (!isDocPost(d)) return false;
-            const record = d as Record<string, unknown>;
-            const title = (record.title as string | undefined) || '';
-            return title.toLowerCase().includes(ql);
-        });
-        threadResults.value = threadHits;
-        projectResults.value = projectHits;
-        documentResults.value = docHits;
-        if (indexFailed && !warnedFallback) {
-            console.warn('[useSidebarSearch] fallback substring search used');
+    function fallback(raw: string, failed = false) {
+        const needle = raw.toLowerCase();
+        threadResults.value = visibleThreads.value.filter(t => (t.title?.trim() || 'Untitled Thread').toLowerCase().includes(needle));
+        projectResults.value = visibleProjects.value.filter(p => (p.name?.trim() || 'Untitled Project').toLowerCase().includes(needle));
+        documentResults.value = visibleDocuments.value.filter(d => (d.title?.trim() || 'Untitled').toLowerCase().includes(needle));
+        if (failed && !warnedFallback) {
             warnedFallback = true;
+            console.warn('[useSidebarSearch] fallback substring search used');
         }
     }
 
-    /**
-     * Executes the search using the Orama index.
-     *
-     * Handles empty queries, result mapping, and automatic fallback to substring search.
-     * Uses token-based cancellation to prevent stale results from overriding newer searches.
-     */
-    async function runSearch() {
-        const generation = getWorkspaceGeneration();
-        const token = ++lastQueryToken;
-        const raw = query.value.trim();
-        const isCurrent = () => generation === getWorkspaceGeneration()
-            && token === lastQueryToken && raw === query.value.trim();
-        if (!dbInstance) await ensureIndex();
-        if (!isCurrent()) return;
-        if (!dbInstance) {
-            substringFallback(raw);
-            return;
-        }
-        if (!raw) {
-            threadResults.value = threads.value;
-            projectResults.value = projects.value;
-            documentResults.value = documents.value.filter(isDocPost);
-            return;
-        }
-        try {
-            const res = await searchWithIndex(dbInstance, raw, 500);
-            if (!isCurrent()) return;
-            const hits = Array.isArray(res.hits) ? res.hits : [];
-            const byKind: Record<'thread' | 'project' | 'doc', Set<string>> = {
-                thread: new Set(),
-                project: new Set(),
-                doc: new Set(),
-            };
-            for (const h of hits) {
-                const doc =
-                    (h as { document?: IndexDoc }).document || (h as IndexDoc);
-                const kind = doc.kind as 'thread' | 'project' | 'doc' | undefined;
-                if (kind && doc.id) {
-                    byKind[kind].add(doc.id);
+    async function ensureIndex(): Promise<void> {
+        if (import.meta.server || disposed) return;
+        if (pendingBuild) return pendingBuild;
+        const build = (async () => {
+            busy.value = true;
+            try {
+                while (!disposed) {
+                    const snapshot = docs.value;
+                    const signature = JSON.stringify(snapshot);
+                    if (signature === indexedSignature && dbInstance) { ready.value = true; return; }
+                    const version = revision;
+                    let next: unknown = null;
+                    try {
+                        next = await createDb({ id: 'string', recordId: 'string', kind: 'string', title: 'string', updated_at: 'number' });
+                        if (next) await buildIndex(next, snapshot);
+                    } catch {
+                        next = null;
+                        if (!disposed && version === revision) fallback(query.value.trim(), true);
+                    }
+                    if (disposed) return;
+                    if (version !== revision) continue;
+                    dbInstance = next;
+                    indexedSignature = next ? signature : '';
+                    ready.value = Boolean(next);
+                    return;
                 }
-            }
-            // Apply sets
-            if (
-                !byKind.thread.size &&
-                !byKind.project.size &&
-                !byKind.doc.size
-            ) {
-                // Nothing matched -> fallback substring to provide any partials
-                substringFallback(raw);
-                return;
-            }
-            threadResults.value = threads.value.filter((t) =>
-                byKind.thread.has(t.id)
-            );
-            projectResults.value = projects.value.filter((p) =>
-                byKind.project.has(p.id)
-            );
-            documentResults.value = documents.value.filter((d) =>
-                byKind.doc.has(d.id)
-            );
-            // If a project contains matching threads/docs but project name itself didn't match, UI can choose to retain by containment; we leave that logic to integration to keep composable lean.
-        } catch {
-            if (isCurrent()) {
-                substringFallback(raw, true);
-            }
-        }
+            } finally { busy.value = false; }
+        })();
+        pendingBuild = build;
+        try { await build; }
+        finally { if (pendingBuild === build) pendingBuild = null; }
     }
 
-    // Rebuild index & rerun search on data change with debounce
-    const debouncedRebuild = useDebounceFn(async () => {
+    async function runSearch(): Promise<void> {
+        if (disposed) return;
+        const token = ++queryToken;
+        const version = revision;
+        const raw = query.value.trim();
+        const isCurrent = () => !disposed && token === queryToken && version === revision && raw === query.value.trim();
+        if (!raw) { fallback(raw); return; }
         await ensureIndex();
-        await runSearch();
-    }, SEARCH_DEBOUNCE_MS);
-    const cancelDebouncedRebuild = () => {
-        (
-            debouncedRebuild as unknown as {
-                cancel?: () => void;
-            }
-        ).cancel?.();
-    };
-
-    const stopDataWatch = watch(
-        [threads, projects, documents],
-        () => {
-            void debouncedRebuild();
-        },
-        { deep: false }
-    );
-    cleanupFns.push(stopDataWatch);
-
-    // Debounce query changes
-    const stopQueryWatch = watchDebounced(
-        query,
-        () => void runSearch(),
-        { debounce: QUERY_DEBOUNCE_MS }
-    );
-    cleanupFns.push(stopQueryWatch);
-
-    // Initial population (pass-through until first build completes)
-    threadResults.value = threads.value;
-    projectResults.value = projects.value;
-    documentResults.value = documents.value.filter(isDocPost);
-
-    // Cleanup on component unmount
-    onBeforeUnmount(() => {
-        lastQueryToken++;
-        cancelDebouncedRebuild();
-        while (cleanupFns.length) {
-            const stop = cleanupFns.pop();
-            stop?.();
-        }
-    });
-
-    // HMR cleanup: clear timers on module disposal
-    if (import.meta.hot) {
-        import.meta.hot.dispose(() => {
-            lastQueryToken++;
-            cancelDebouncedRebuild();
-            while (cleanupFns.length) {
-                const stop = cleanupFns.pop();
-                stop?.();
-            }
-        });
+        if (!isCurrent()) return;
+        if (!dbInstance) { fallback(raw); return; }
+        try {
+            const response = await searchWithIndex(dbInstance, raw, 500, { properties: ['title'] });
+            if (!isCurrent()) return;
+            const hits = new Set(response.hits.map(hit => {
+                const row = hit as { document?: IndexDoc; id?: string };
+                return row.document?.id ?? row.id;
+            }));
+            if (!hits.size) { fallback(raw); return; }
+            threadResults.value = visibleThreads.value.filter(t => hits.has(`thread:${t.id}`));
+            projectResults.value = visibleProjects.value.filter(p => hits.has(`project:${p.id}`));
+            documentResults.value = visibleDocuments.value.filter(d => hits.has(`doc:${d.id}`));
+        } catch { if (isCurrent()) fallback(raw, true); }
     }
 
-    return {
-        /** Reactive search query string */
-        query,
-        /** Reactive array of matching threads */
-        threadResults,
-        /** Reactive array of matching projects */
-        projectResults,
-        /** Reactive array of matching documents */
-        documentResults,
-        /** Whether the search index is ready for use */
-        ready,
-        /** Whether the index is currently being built */
-        busy,
-        /** Function to manually rebuild the search index */
-        rebuild: ensureIndex,
-        /** Function to manually run a search with current query */
-        runSearch,
-    };
+    watch(docs, () => {
+        revision += 1;
+        queryToken += 1;
+        ready.value = false;
+        // Retire stale hits synchronously; substring results remain usable while
+        // rebuilding, including edits that leave IDs and timestamps unchanged.
+        fallback(query.value.trim());
+        clearTimeout(rebuildTimer);
+        rebuildTimer = setTimeout(() => { void runSearch(); }, 300);
+    }, { flush: 'sync' });
+    watch(query, () => {
+        queryToken += 1;
+        clearTimeout(queryTimer);
+        // A cleared query is pass-through immediately. Other queries keep their
+        // previous display until debounce, but cannot receive old completions.
+        if (!query.value.trim()) { fallback(''); return; }
+        queryTimer = setTimeout(() => { void runSearch(); }, 120);
+    }, { flush: 'sync' });
+    const stopWorkspace = subscribeActiveWorkspaceDb(() => {
+        revision += 1;
+        queryToken += 1;
+        dbInstance = null;
+        indexedSignature = '';
+        ready.value = false;
+        retiredInputs.value = [threads.value, projects.value, documents.value];
+        fallback(query.value.trim());
+    });
+    fallback('');
+    onScopeDispose(() => {
+        disposed = true;
+        queryToken += 1;
+        clearTimeout(rebuildTimer);
+        clearTimeout(queryTimer);
+        stopWorkspace();
+    });
+    return { query, threadResults, projectResults, documentResults, ready, busy, rebuild: ensureIndex, runSearch };
 }
 
 export default useSidebarSearch;

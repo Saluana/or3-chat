@@ -271,6 +271,69 @@ describe('existing catalog context readiness', () => {
         }
     });
 
+    // A mounted store must not reuse A's memory or publish A's suspended KV
+    // result in B. The same guard covers an A→B→A navigation generation.
+    it.each(['changed', 'returned'] as const)('discards workspace-owned catalog and favorites hydration (%s)', async transition => {
+        const store = useModelStore();
+        const row = sdkModelToLocal(sdkModel(32_000, 'origin/model'));
+        await kv.set(MODELS_CACHE_KEY, JSON.stringify({ version: 1, data: [row], fetchedAt: Date.now() }));
+        await kv.set('favorite_models', JSON.stringify([row]));
+        let release!: () => void;
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        let entered = 0;
+        const hooks = useHooks();
+        const hold: Parameters<typeof hooks.addFilter<'db.kv.getByName:filter:output'>>[1] = async record => {
+            if (record?.name === MODELS_CACHE_KEY || record?.name === 'favorite_models') { entered++; await gate; }
+            return record;
+        };
+        hooks.addFilter('db.kv.getByName:filter:output', hold);
+        const reads = [store.loadCachedModels(), store.getFavoriteModels()];
+        await vi.waitFor(() => expect(entered).toBe(2));
+        const otherId = `catalog-target-${crypto.randomUUID()}`;
+        const other = setActiveWorkspaceDb(otherId);
+        if (transition === 'returned') setActiveWorkspaceDb(workspace);
+        try {
+            release(); await Promise.all(reads);
+            expect(store.catalog.value).toEqual([]);
+            expect(store.favoriteModels.value).toEqual([]);
+        } finally {
+            release(); hooks.removeFilter('db.kv.getByName:filter:output', hold);
+            setActiveWorkspaceDb(workspace); evictWorkspaceDb(otherId); await Dexie.delete(other.name);
+        }
+    });
+
+    it('clears loaded model state on workspace navigation without another consumer call', async () => {
+        const store = useModelStore();
+        const model = sdkModelToLocal(sdkModel());
+        store.catalog.value = [model]; store.favoriteModels.value = [model];
+        const otherId = `catalog-reset-${crypto.randomUUID()}`;
+        const other = setActiveWorkspaceDb(otherId);
+        try { expect(store.catalog.value).toEqual([]); expect(store.favoriteModels.value).toEqual([]); }
+        finally { setActiveWorkspaceDb(workspace); evictWorkspaceDb(otherId); await Dexie.delete(other.name); }
+    });
+
+    // A slow save hook must not overwrite a subsequent unfavorite operation.
+    it('keeps the latest favorites after saves complete out of order', async () => {
+        const store = useModelStore(); const model = sdkModelToLocal(sdkModel());
+        let release!: () => void; let entered = false;
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        const hooks = useHooks();
+        const hold: Parameters<typeof hooks.addFilter<'db.kv.upsertByName:filter:input'>>[1] = async row => {
+            if (!entered && row.name === 'favorite_models') { entered = true; await gate; }
+            return row;
+        };
+        hooks.addFilter('db.kv.upsertByName:filter:input', hold);
+        try {
+            const add = store.addFavoriteModel(model);
+            await vi.waitFor(() => expect(entered).toBe(true));
+            const remove = store.removeFavoriteModel(model);
+            await new Promise(resolve => setTimeout(resolve, 20));
+            release(); await Promise.all([add, remove]);
+            expect(JSON.parse((await kv.get('favorite_models'))!.value!)).toEqual([]);
+            expect(store.favoriteModels.value).toEqual([]);
+        } finally { release(); hooks.removeFilter('db.kv.upsertByName:filter:input', hold); }
+    });
+
     it('keeps legacy KV catalogs usable with an unknown actual fetch time', async () => {
         await kv.set(MODELS_CACHE_KEY, JSON.stringify([sdkModelToLocal(sdkModel())]));
         expect(await useModelStore().resolveContextModel('catalog/model')).toMatchObject({

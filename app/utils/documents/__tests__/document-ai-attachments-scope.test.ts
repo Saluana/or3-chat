@@ -9,6 +9,15 @@ import {
 import { resolveDocumentAiScopeRange } from '../document-ai-scope';
 
 describe('document AI attachment revalidation', () => {
+    it.each([['aA==', 1], ['aGk=', 2], ['aGV5', 3]] as const)(
+        'counts decoded bytes at the size limit for %s', (payload, bytes) => {
+            const attachment = { name: 'file.pdf', mime: 'application/pdf', kind: 'pdf',
+                dataUrl: `data:application/pdf;base64,${payload}` };
+            expect(() => validateDocumentAiAttachment(attachment, bytes)).not.toThrow();
+            expect(() => validateDocumentAiAttachment(attachment, bytes - 1)).toThrow(/too large/iu);
+        },
+    );
+
     it('accepts well-formed image and pdf data URLs', () => {
         expect(() => validateDocumentAiAttachment({
             name: 'shot.png',

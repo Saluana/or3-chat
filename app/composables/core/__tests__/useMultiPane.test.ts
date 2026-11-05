@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { ref } from 'vue';
+import { effectScope, ref } from 'vue';
 
 // Store original require/import
 let originalDb: any;
@@ -375,6 +375,64 @@ describe('useMultiPane - newPaneForApp', () => {
 });
 
 describe('useMultiPane - async ownership', () => {
+    // Initializing an app or loading chat history must not replace a newer
+    // selection, resurrect a disposed pane, or report failed creation as success.
+    it.each(['chat', 'document', 'dispose', 'cancel'] as const)('ignores app initialization superseded by %s', async (operation) => {
+        const { useMultiPane } = await import('../useMultiPane');
+        const { usePaneApps } = await import('../usePaneApps');
+        let finish!: (record: { id: string }) => void;
+        const handle = usePaneApps().registerPaneApp({ id: 'delayed-navigation', label: 'Delayed', component: {},
+            createInitialRecord: () => new Promise(resolve => { finish = resolve; }) });
+        const scope = effectScope();
+        const panes = scope.run(() => useMultiPane({ loadMessagesFor: async () => [] }))!;
+        let current = true;
+        const pending = panes.setPaneApp(0, 'delayed-navigation', { isCurrent: () => current });
+        if (operation === 'chat') await panes.setPaneThread(0, 'newer-chat');
+        if (operation === 'document') panes.updatePane(0, { mode: 'doc', documentId: 'newer-doc' });
+        if (operation === 'dispose') scope.stop();
+        if (operation === 'cancel') current = false;
+        const before = { ...panes.panes.value[0] };
+        finish({ id: 'late-record' });
+        await pending;
+        expect(panes.panes.value[0]).toEqual(before);
+        scope.stop(); handle.dispose();
+    });
+
+    it('does not replace a document with an older history load', async () => {
+        const { useMultiPane } = await import('../useMultiPane');
+        let finish!: (messages: []) => void;
+        const loadMessagesFor = vi.fn(() => new Promise<[]>(resolve => { finish = resolve; }));
+        const panes = useMultiPane({ loadMessagesFor });
+        const pending = panes.setPaneThread(0, 'slow-chat');
+        await vi.waitFor(() => expect(loadMessagesFor).toHaveBeenCalledOnce());
+        panes.updatePane(0, { mode: 'doc', documentId: 'newer-doc', threadId: '' });
+        finish([]);
+        await expect(pending).resolves.toBe(false);
+        expect(panes.panes.value[0]).toMatchObject({ mode: 'doc', documentId: 'newer-doc' });
+    });
+
+    it('reports initialization failure without changing the pane', async () => {
+        const { useMultiPane } = await import('../useMultiPane');
+        const { usePaneApps } = await import('../usePaneApps');
+        const handle = usePaneApps().registerPaneApp({ id: 'rejected-navigation', label: 'Rejected', component: {},
+            createInitialRecord: async () => { throw new Error('Cannot create record'); } });
+        const panes = useMultiPane({ loadMessagesFor: async () => [] });
+        await expect(panes.setPaneApp(0, 'rejected-navigation')).rejects.toThrow('Cannot create record');
+        expect(panes.panes.value[0]?.mode).toBe('chat');
+        handle.dispose();
+    });
+
+    it('preserves a document pane when its final save fails', async () => {
+        const { useMultiPane } = await import('../useMultiPane');
+        const panes = useMultiPane({ loadMessagesFor: async () => [],
+            onFlushDocument: async () => { throw new Error('Storage full'); } });
+        panes.addPane();
+        panes.updatePane(1, { mode: 'doc', documentId: 'unsaved-doc' });
+        await expect(panes.closePane(1)).rejects.toThrow('Storage full');
+        expect(panes.panes.value).toHaveLength(2);
+        expect(panes.panes.value[1]?.documentId).toBe('unsaved-doc');
+    });
+
     it('ignores a stale thread history load after a newer selection', async () => {
         let resolveFirst!: (value: any[]) => void;
         let resolveSecond!: (value: any[]) => void;

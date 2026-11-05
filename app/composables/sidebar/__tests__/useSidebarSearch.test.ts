@@ -42,6 +42,18 @@ function setup() {
 }
 
 describe('sidebar search index invalidation', () => {
+    it('retires in-place renamed and deleted matches before a rebuild completes', async () => {
+        const { threads, search } = setup();
+        search.query.value = 'orchid'; await search.runSearch();
+        expect(search.threadResults.value.map(row => row.id)).toEqual(['newer']);
+        threads.value[0]!.title = 'cobalt';
+        await vi.waitFor(() => expect(search.threadResults.value).toEqual([]));
+        threads.value[1]!.title = 'orchid';
+        await vi.waitFor(() => expect(search.threadResults.value.map(row => row.id)).toEqual(['older']));
+        threads.value[1]!.deleted = true;
+        await vi.waitFor(() => expect(search.threadResults.value).toEqual([]));
+    });
+
     it('does not warn when an ordinary search has no matches', async () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         const { search } = setup();

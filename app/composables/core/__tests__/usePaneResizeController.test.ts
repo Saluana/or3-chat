@@ -7,6 +7,31 @@ describe('usePaneResizeController', () => {
 
     afterEach(() => {
         for (const scope of scopes.splice(0)) scope.stop();
+        vi.restoreAllMocks();
+    });
+
+    // Deferred movement belongs to the original pane arrangement and owner.
+    it.each(['dispose', 'pane-change'] as const)('cancels a queued drag on %s', async (operation) => {
+        const frames = new Map<number, FrameRequestCallback>();
+        vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => { frames.set(1, callback); return 1; });
+        vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(id => { frames.delete(id); });
+        const scope = effectScope(); scopes.push(scope);
+        const paneCount = ref(3);
+        const resize = vi.fn();
+        const controller = scope.run(() => usePaneResizeController({
+            paneCount: () => paneCount.value, paneWidths: ref([400, 400, 400]), isMobile: ref(false),
+            minPaneWidth: 280, recalculateWidths: vi.fn(), resize, persist: vi.fn(),
+        }))!;
+        controller.onPaneResizeStart({ button: 0, isPrimary: true, pointerId: 1, clientX: 100,
+            currentTarget: document.createElement('div') } as unknown as PointerEvent, 0);
+        const move = new Event('pointermove');
+        Object.defineProperties(move, { pointerId: { value: 1 }, clientX: { value: 120 } });
+        window.dispatchEvent(move);
+        if (operation === 'dispose') scope.stop();
+        else { paneCount.value = 2; await nextTick(); }
+        for (const frame of frames.values()) frame(1);
+        expect(resize).not.toHaveBeenCalled();
+        expect(controller.isResizing.value).toBe(false);
     });
 
     it('recalculates from the container when the pane count changes', async () => {

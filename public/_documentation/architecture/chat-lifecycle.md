@@ -17,11 +17,13 @@ A send moves through admission, durable user-message persistence, response strea
 
 The native composer clears submitted text and attachments once the matching request saves its user turn, without waiting for the provider, with a comparison that preserves edits made while preparation was pending. A refusal before that save, such as `context_full` or unavailable model metadata during admission, keeps the draft. After the save, a final filter or the provider can still refuse the request; Retry on the saved turn owns that recovery, so the composer is not restored. Accepted, completed, failed, aborted and detached remain distinct outcomes. See [send-result types](/documentation/types/chat-types#sending-and-request-state).
 
-Create `useChat()` during component setup and dispose it on unmount. Reuse the existing `ChatContainer.vue` send and acceptance handling when extending product actions: it watches the matching request's `persisted` or `streaming` state, then the terminal result, and fences draft clearing against text edits and navigation. `hasDurableSendAcceptance()` identifies the same saved user row.
+Create `useChat()` during component setup and dispose it on unmount. A disposed controller rejects new sends and retries and ignores continuation requests. Thread switching waits for foreground settlement but applies only if that navigation still owns the controller, account and workspace. Saved retry recovery checks the same origin again after reading its assistant row. Reuse the existing `ChatContainer.vue` send and acceptance handling when extending product actions: it watches the matching request's `persisted` or `streaming` state, then the terminal result, and fences draft clearing against text edits and navigation. `hasDurableSendAcceptance()` identifies the same saved user row.
 
 History synchronization and background-job recovery use browser-local storage.
 They must remain client-only even when a native chat route renders its shell on
 the server. Server rendering must never start IndexedDB reads or stream recovery.
+
+### Live history and message edits
 
 Open chat panes observe their indexed conversation rows in the active workspace's
 Dexie database. Incoming user turns, completed replies, edits, and deletes update
@@ -62,6 +64,8 @@ history until selection succeeds, and rolls back a rejected activation.
 Pending selection cleanup follows the stable pane ID across split reordering and
 runs on cancellation. An older activation cannot clear a newer activation's intent.
 
+### Retry and continuation
+
 Retry captures the selected turn's revisions. Admitting its replacement user row
 supersedes every selected row in the same Dexie/outbox transaction. A changed
 revision or failed write rejects the replacement without partially hiding the old
@@ -86,10 +90,17 @@ attached to the response body even when prefetch has filled the wrapper queue.
 
 Generated-image placeholders enter the same live text accumulator as provider
 text, including during Continue, so later text retains their order and visibility.
+Thumbnail prefetch keeps one pending load per hash across repeated range updates.
+Mounted message thumbnails retain URLs during loading, release removed hashes
+immediately, and ignore late results for removed attachments. Re-adding an evicted
+attachment resolves a fresh URL instead of reusing a revoked one.
+
 Inline thumbnail hydration retains a bounded trailing check when readiness
 arrives during a quiet stream; unmount cancels that check. Delayed continuation
 image intake rechecks request ownership before publishing content after Stop or
 navigation.
+
+### Rendering and scrolling
 
 The default message renderer loads through the theme registry when a message
 row mounts. Empty chats keep Markdown and highlighting out of the initial
@@ -159,6 +170,8 @@ Layout following keeps its existing next-tick path and checks active browsing,
 without adding another animation frame. Row-height and anchor formulas are
 unchanged. Wheel input on a following scroller can wait for a busy main thread;
 reducing that work remains part of performance qualification.
+
+### Cancellation and terminal writes
 
 `abort()` requests cancellation. `dispose()` releases view listeners/subscriptions and can leave admitted generation tracking detached. It does not delete saved messages. `clearConversation({ persistence: 'preserve' })` clears in-memory projections and preserves durable rows. Do not use teardown as a destructive conversation operation or report it as a completed cancellation.
 
@@ -239,6 +252,21 @@ The tab session owns the open-tab manifest and active bindings. The pane adapter
 
 Tab manifests persist to localStorage by workspace and profile. A failed read keeps the original manifest protected even if writes later work: scheduled saves, Retry and unload cannot publish the temporary layout until a successful restore has read that scope. Reload after storage becomes readable restores the original tab IDs and their drafts. Storage failures never break the workspace: blocked storage (even a throwing `window.localStorage` getter), quota errors and failed debounced writes keep the unsaved layout pending, expose `persistenceStatus` (`ok`, `unavailable`, `write_failed`, `corrupt`), and raise one persistent "Tab layout could not be saved" toast per failure episode with Retry. Draft restoration depends on the saved tab IDs: before browser unload, a failed layout is retried synchronously and an unresolved layout or draft save failure requests the browser's unsaved-change confirmation. This is best effort; browsers can suppress confirmations and users can accept them. A saved layout that is invalid JSON or fails the schema is reported as corrupt rather than missing: the original is copied to `<key>:corrupt` (latest only) before a fresh layout can replace it, and is never overwritten while that copy cannot be made. The persistent "Saved tab layout was unreadable" notice offers **Download original** (`or3-tab-layout-backup.txt`) and **Discard original**; each closes the notice, and the copy stays until it is discarded. The buttons act on the layout key the notice was raised for, so switching workspace or profile first cannot make them touch another layout's copy (`getCorruptLayoutBackup(key)` / `discardCorruptLayoutBackup(key)` take that key). No buttons are shown when the copy could not be made. `useWorkspaceTabs` exposes `getCorruptLayoutBackup()` and `discardCorruptLayoutBackup()` for the same purpose. `flushPersistence()` always saves the current layout, which pane swaps rely on; the debounce, `pagehide` and scope switches write only pending changes.
 
+Existing-tab opens and Undo-close capture the outgoing view before switching.
+Background opens preserve the current composer. If restoring the incoming view
+fails, navigation restores the outgoing pane content and binding together.
+Slow pane-app initialization cannot overwrite a newer selection, cross a
+workspace switch, or publish after its shell is disposed. Failed final document
+saves keep the pane open.
+
+Pending layout changes save on scope disposal. Saved layouts support more than
+100 open tabs and preserve active-tab identity when unavailable resources are
+removed. Resize work is cancelled when its pane arrangement or owner disappears.
+Retained commands on a disposed tab session fail without adding or closing panes,
+restoring layouts, or switching workspace resources in a replacement shell.
+
+### Draft storage and recovery
+
 Composer drafts persist in local-only `workspace_tab_drafts` and
 `workspace_draft_versions` tables, scoped by physical workspace database,
 account, app tab and a fresh page writer identity. Each set/discard has a
@@ -287,6 +315,8 @@ Concurrent draft flushes can finish out of order. A successful write clears only
 
 An inactive workspace's database handle can close while its unsaved buffer remains in memory. After that workspace/account is restored, retries may use its already-loaded replacement handle only when the database name also matches. A late callback retains its captured destination; the active workspace never becomes an implicit fallback, and the closed handle is not reopened.
 
+### Tab activation and stored tool results
+
 The pane loader reconciles separate canonical tool-result rows into their assistant calls before seeding a chat controller. Tool evidence remains visible after tab activation or reload, while plugin-owned message metadata and stored rows remain intact. Tool-call presentation metadata is retained by stable call ID; canonical status, result and error override stale embedded execution fields. Consumers should use this loader rather than treating raw assistant rows as a complete tool transcript.
 
 A newer activation supersedes older work. Editor sessions are resolved by pane/tab identity, which matters when a document appears in more than one split. Capture outgoing edits and verify local durability before rebinding; do not assume the saved database snapshot contains everything currently visible in an editor.
@@ -296,6 +326,8 @@ Tab commands resolve to a status (`activated`, `created`, `failed`, or `supersed
 See [source map](/documentation/start/source-map), [documents](/documentation/database/documents), and [workspace-safe writes](/documentation/database/safe-changes#workspace-safe-operations).
 
 Chat settings and their nested selectors use fade transitions to keep anchor widths stable while Floating UI measures them. Scale transitions can create repeated resize notifications when a nested menu opens before its parent settles.
+
+### Interrupted draft reads and saves
 
 Interrupted draft reads reject restoration instead of reporting an absent draft. The composer keeps the existing saved row, prevents its untouched empty editor from replacing that unread copy, and shows a persistent "Draft could not be restored" notice with **Retry restore**. The retry is scoped to the originating account, workspace and tab.
 
@@ -358,6 +390,8 @@ physical database and check fresh ownership inside each write, including deleted
 superseded and tracker-takeover states. They never replay a provider or tool.
 Preparation effects run once; completion effects run once following the durable
 write. Canonical/tracker failures remain with their existing recovery owners.
+
+### Generated images and attachment hydration
 
 Generated-image intake captures its workspace database, generation and account
 before waiting for provider output. File creation rechecks that owner through

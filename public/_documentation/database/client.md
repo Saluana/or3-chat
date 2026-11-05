@@ -8,7 +8,7 @@ Dexie database client that defines the `Or3DB` schema, typed tables, and version
 
 -   Establishes the IndexedDB database named `or3-db`.
 -   Declares typed `Dexie.Table` instances for every entity.
--   Applies the current version `28` schema while preserving explicit upgrade paths for older installs.
+-   Applies the current version `30` schema while preserving explicit upgrade paths for older installs.
 -   Installs deterministic local derived-index hooks on every database instance, including workspace DBs.
 -   Provides workspace-scoped database instances named `or3-db-${workspaceId}` held in a bounded LRU cache.
 
@@ -16,22 +16,27 @@ Dexie database client that defines the `Or3DB` schema, typed tables, and version
 
 ## Tables & indexes
 
-| Table           | Primary key | Secondary indexes                                                                                                                                                                                                                                                                                                                        |
+| Table | Primary key | Secondary indexes |
 | --------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `projects`      | `id`        | `name`, `clock`, `created_at`, `updated_at`                                                                                                                                                                                                                                                                                              |
-| `threads`       | `id`        | `project_id`, `[project_id+updated_at]`, `parent_thread_id`, `[parent_thread_id+anchor_index]`, `status`, `pinned`, `deleted`, `last_message_at`, `clock`, `created_at`, `updated_at`                                                                                                                                                    |
-| `messages`      | `id`        | `[thread_id+index+order_key]`, `[thread_id+index]`, `thread_id`, `index`, `role`, `deleted`, `stream_id`, `clock`, `created_at`, `updated_at`, `data.type`, `[data.type+data.executionState]`                                                                                                                                            |
-| `kv`            | `id`        | `&name`, `clock`, `created_at`, `updated_at`                                                                                                                                                                                                                                                                                             |
-| `attachments`   | `id`        | `type`, `name`, `clock`, `created_at`, `updated_at`                                                                                                                                                                                                                                                                                      |
-| `file_meta`     | `hash`      | `[kind+deleted]`, `mime_type`, `clock`, `created_at`, `updated_at`, `gallery_state`, `[gallery_state+created_at+hash]`, `[gallery_state+size_bytes+hash]`, `[gallery_state+name+mime_type+created_at+size_bytes+hash]`                                                                                                                   |
-| `file_blobs`    | `hash`      | (none)                                                                                                                                                                                                                                                                                                                                   |
-| `posts`         | `id`        | `title`, `postType`, `[postType+title]`, `document_reference_key`, `deleted`, `created_at`, `updated_at`                                                                                                                                                                                                                                 |
-| `pending_ops`   | `id`        | `status`, `[status+readyAt+createdAt+id]`                                                                                                                                                                                                                                                    |
-| `tombstones`    | `id`        | `[tableName+pk]`, `deletedAt`                                                                                                                                                                                                                                                                                                            |
-| `sync_state`    | `id`        | (none)                                                                                                                                                                                                                                                                                                                                   |
-| `sync_runs`     | `id`        | `startedAt`, `status`                                                                                                                                                                                                                                                                                                                    |
-| `file_transfers`| `id`        | `hash`, `direction`, `state`, `workspace_id`, `created_at`, `updated_at`, `retry_at`, `lease_owner`, `lease_expires_at`, `[hash+direction]`, `[state+created_at]`, `[state+workspace_id]`, `[state+workspace_id+created_at]`, `[state+lease_expires_at]`, `[state+workspace_id+lease_expires_at]`, `[state+workspace_id+retry_at]`    |
-| `notifications` | `id`        | `user_id`, `[user_id+read_at]`, `[user_id+created_at]`, `[user_id+thread_id]`, `type`, `deleted`, `clock`, `created_at`, `updated_at`                                                                                                                                                                                                   |
+| `projects` | `id` | `name`, `clock`, `created_at`, `updated_at`, `*chat_ids` |
+| `threads` | `id` | `project_id`, `[project_id+updated_at]`, `parent_thread_id`, `[parent_thread_id+anchor_index]`, `[parent_thread_id+anchor_message_id+created_at+id]`, `root_thread_id`, `[root_thread_id+updated_at+id]`, `[root_thread_id+updated_at+created_at+id]`, `[root_thread_id+branch_mode+created_at+id]`, `[updated_at+created_at+id]`, `status`, `pinned`, `deleted`, `last_message_at`, `clock`, `created_at`, `updated_at` |
+| `messages` | `id` | `[thread_id+index+order_key+id]`, `[thread_id+index+order_key]`, `[thread_id+index]`, `thread_id`, `index`, `role`, `deleted`, `stream_id`, `clock`, `created_at`, `updated_at`, `data.type`, `[data.type+data.executionState]` |
+| `kv` | `id` | `&name`, `clock`, `created_at`, `updated_at` |
+| `attachments` | `id` | `type`, `name`, `clock`, `created_at`, `updated_at` |
+| `file_meta` | `hash` | `[kind+deleted]`, `mime_type`, `clock`, `created_at`, `updated_at`, `gallery_state`, `[gallery_state+created_at+hash]`, `[gallery_state+size_bytes+hash]`, `[gallery_state+name+mime_type+created_at+size_bytes+hash]` |
+| `file_blobs` | `hash` | `cache_accessed_at`, `[cache_accessed_at+cache_bytes+hash]` |
+| `posts` | `id` | `title`, `postType`, `[postType+title]`, `document_reference_key`, `deleted`, `created_at`, `updated_at`, `[updated_at+created_at+id]` |
+| `pending_ops` | `id` | `status`, `[status+readyAt+createdAt+id]`, `[tableName+pk]` |
+| `tombstones` | `id` | `[tableName+pk]`, `deletedAt` |
+| `sync_state` | `id` | (none) |
+| `sync_runs` | `id` | `startedAt`, `status` |
+| `file_transfers`| `id` | `hash`, `direction`, `state`, `workspace_id`, `created_at`, `updated_at`, `retry_at`, `lease_owner`, `lease_expires_at`, `[hash+direction]`, `[state+created_at]`, `[state+workspace_id]`, `[state+workspace_id+created_at]`, `[state+lease_expires_at]`, `[state+workspace_id+lease_expires_at]`, `[state+workspace_id+retry_at]` |
+| `notifications` | `id` | `user_id`, `[user_id+read_at]`, `[user_id+created_at]`, `[user_id+thread_id]`, `type`, `deleted`, `clock`, `created_at`, `updated_at` |
+| `snapshot_staging` | `id` | `[generation+sequence]` |
+| `chat_request_recoveries` | `thread_id` | (none) |
+| `sync_quarantine` | `id` | `status`, `[tableName+pk]`, `quarantinedAt` |
+| `workspace_tab_drafts` | `id` | `account_key`, `updated_at` |
+| `workspace_draft_versions` | `id` | `account_key`, `[account_key+tab_id]`, `kind` |
 
 -   `pending_ops`, `tombstones`, `sync_state`, and `sync_runs` are sync tables added in version 7.
 -   `file_transfers` is a local-only transfer queue added in version 8, with durable leases and retry scheduling added in version 13.
@@ -70,7 +75,8 @@ and due-range indexes, reducing index maintenance during capture and draining.
 
 Version 20 removes the unused standalone `snapshot_staging.generation` index.
 Staged rows and the active-generation sentinel are preserved; page reads keep
-using `[generation+sequence]`.
+using `[generation+sequence]`. Version 21 restores `[tableName+pk]` on the
+outbox for Files cloud-state queries.
 
 Version 27 adds two local-only recovery tables that are never synchronized or
 captured: `sync_quarantine` (corrupt outbox operations set aside with

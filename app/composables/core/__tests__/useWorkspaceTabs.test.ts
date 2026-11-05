@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue';
+import { computed, effectScope, ref } from 'vue';
 import { describe, expect, it, vi } from 'vitest';
 import type { WorkspaceResource } from '~/core/workspace-tabs/types';
 import type { PaneActivation, WorkspaceTabHost } from '../useWorkspaceTabHost';
@@ -48,6 +48,121 @@ function createHost(): {
 }
 
 describe('useWorkspaceTabs', () => {
+    // Delayed menu/plugin callbacks can retain the API after the shell unmounts.
+    // Retirement must protect the host too, not just suppress manifest commits.
+    it.each(['new-split', 'open-split', 'split-hidden', 'background', 'close-tab', 'close-split', 'restore', 'switch-scope'] as const)(
+        'does not mutate panes through a disposed %s command', async command => {
+            const fake = createHost();
+            const scope = effectScope();
+            const data = new Map<string, string>();
+            const tabs = scope.run(() => useWorkspaceTabs({ host: fake.host, paneLimit: ref(4), isMobile: ref(false),
+                workspaceId: () => 'local', profileId: () => 'standard',
+                storage: { getItem: key => data.get(key) ?? null, setItem: (key, value) => { data.set(key, value); } } }))!;
+            await tabs.restore();
+            const hidden = await tabs.openResource({ kind: 'document', documentId: 'hidden' }, { target: 'background' });
+            const visible = await tabs.newSplit();
+            const state = tabs.state.value;
+            const paneIds = [...fake.panes];
+            tabs.flushPersistence();
+            scope.stop();
+            // A replacement shell can now own the same host panes.
+            fake.bindings.set('pane-a', { kind: 'document', documentId: 'replacement-owner' });
+            const bindings = new Map(fake.bindings);
+            let result: Awaited<ReturnType<typeof tabs.newSplit>> | boolean;
+            if (command === 'new-split') result = await tabs.newSplit();
+            else if (command === 'open-split') result = await tabs.openInSplit({ kind: 'document', documentId: 'late' });
+            else if (command === 'split-hidden') result = await tabs.openTabInSplit(hidden.tabId!);
+            else if (command === 'background') result = await tabs.openResource({ kind: 'document', documentId: 'late' }, { target: 'background' });
+            else if (command === 'close-tab') result = await tabs.closeTab(visible.tabId!);
+            else if (command === 'close-split') result = await tabs.closeSplit();
+            else if (command === 'restore') result = await tabs.restore();
+            else result = await tabs.switchScope('another-workspace', 'standard');
+            expect(fake.panes).toEqual(paneIds);
+            expect(fake.bindings).toEqual(bindings);
+            expect(tabs.state.value).toBe(state);
+            if (typeof result === 'boolean') expect(result).toBe(false);
+            else expect(['failed', 'superseded']).toContain(result.status);
+        },
+    );
+
+    // Open/Undo must capture the mounted outgoing view before changing hosts;
+    // background opens must never change that view or consume its blank tab.
+    it.each(['existing', 'undo'] as const)('captures the outgoing draft when opening an %s tab', async (operation) => {
+        const fake = createHost();
+        const captureOutgoing = vi.fn(async () => undefined);
+        const tabs = useWorkspaceTabs({ host: fake.host, paneLimit: ref(3), isMobile: ref(false),
+            workspaceId: () => 'local', profileId: () => 'standard', storage: null, captureOutgoing });
+        const resource = { kind: 'chat', threadId: 'saved-chat' } as const;
+        const opened = await tabs.openResource(resource);
+        const outgoing = (await tabs.newTab()).tabId!;
+        if (operation === 'undo') await tabs.closeTab(opened.tabId!);
+        captureOutgoing.mockClear();
+        if (operation === 'undo') await tabs.reopenClosedTab();
+        else await tabs.openResource(resource);
+        expect(captureOutgoing).toHaveBeenCalledWith(outgoing, 'pane-a', expect.anything());
+        expect(fake.bindings.get('pane-a')).toEqual(resource);
+    });
+
+    it('leaves the active blank and its binding untouched for new and existing background resources', async () => {
+        const fake = createHost();
+        const tabs = useWorkspaceTabs({ host: fake.host, paneLimit: ref(3), isMobile: ref(false),
+            workspaceId: () => 'local', profileId: () => 'standard', storage: null });
+        const active = tabs.activeTabId.value;
+        const resource = { kind: 'document', documentId: 'background-doc' } as const;
+        const opened = await tabs.openResource(resource, { target: 'background' });
+        await tabs.openResource(resource, { target: 'background' });
+        expect(opened.tabId).not.toBe(active);
+        expect(tabs.tabs.value).toHaveLength(2);
+        expect(tabs.activeTabId.value).toBe(active);
+        expect(tabs.state.value.paneBindings.get('pane-a')).toBe(active);
+        expect(tabs.tabs.value.find(tab => tab.id === active)?.resource).toEqual({ kind: 'chat', threadId: null });
+        expect(fake.bindings.get('pane-a')).toEqual({ kind: 'chat', threadId: null });
+    });
+
+    it('cancels pending navigation when its owner is disposed', async () => {
+        const fake = createHost();
+        let finish!: () => void;
+        fake.host.bindResourceToPane = async (id, resource, activation) => {
+            await new Promise<void>(resolve => { finish = resolve; });
+            if (activation.isCurrent()) fake.bindings.set(id, resource);
+        };
+        const scope = effectScope();
+        const tabs = scope.run(() => useWorkspaceTabs({ host: fake.host, paneLimit: ref(3), isMobile: ref(false),
+            workspaceId: () => 'local', profileId: () => 'standard', storage: null }))!;
+        const pending = tabs.openResource({ kind: 'document', documentId: 'late' });
+        scope.stop();
+        finish();
+        expect((await pending).status).toBe('superseded');
+        expect(fake.bindings.get('pane-a')).toEqual({ kind: 'chat', threadId: null });
+    });
+
+    it.each(['tab', 'split'] as const)('keeps the tab and pane binding when closing a %s fails', async (operation) => {
+        const fake = createHost();
+        const onError = vi.fn();
+        const tabs = useWorkspaceTabs({ host: fake.host, paneLimit: ref(3), isMobile: ref(false),
+            workspaceId: () => 'local', profileId: () => 'standard', storage: null, onError });
+        const opened = await tabs.newSplit();
+        fake.host.closePane = async () => { throw new Error('Document save failed'); };
+        const result = operation === 'tab' ? tabs.closeTab(opened.tabId!) : tabs.closeSplit('pane-b');
+        await expect(result).resolves.toBe(false);
+        expect(tabs.state.value.paneBindings.get('pane-b')).toBe(opened.tabId);
+        expect(tabs.tabs.value.some(tab => tab.id === opened.tabId)).toBe(true);
+        expect(onError).toHaveBeenCalledOnce();
+    });
+
+    it('stops resetting a scope when the host declines to remove a pane', async () => {
+        const fake = createHost();
+        const tabs = useWorkspaceTabs({ host: fake.host, paneLimit: ref(3), isMobile: ref(false),
+            workspaceId: () => 'local', profileId: () => 'standard', storage: null });
+        await tabs.newSplit();
+        const close = vi.fn(async () => {
+            if (close.mock.calls.length > 1) throw new Error('Repeated refused close');
+        });
+        fake.host.closePane = close;
+        await expect(tabs.switchScope('next', 'standard')).resolves.toBe(false);
+        expect(close).toHaveBeenCalledOnce();
+    });
+
     it('persists a fresh scope only after checking for a saved layout', async () => {
         vi.useFakeTimers(); const fake = createHost(); const data = new Map<string, string>();
         const tabs = useWorkspaceTabs({ host: fake.host, paneLimit: computed(() => 3), isMobile: ref(false),
@@ -495,6 +610,32 @@ function workspaceBStorage() {
 }
 
 describe('tab restoration lookup ownership', () => {
+    it('keeps focus on the same saved tab when an earlier visible resource is deleted', async () => {
+        const fake = createHost();
+        const snapshot = { schemaVersion: 1, tabs: ['gone', 'active', 'other'].map(id => ({
+            id, resource: { kind: 'chat', threadId: id }, cachedTitle: id, createdAt: 1, lastActivatedAt: 1, ephemeral: false,
+        })), activeTabId: 'active', visibleTabIds: ['gone', 'active', 'other'], activeVisibleIndex: 1, savedAt: 1 };
+        const tabs = createTabs(fake, { storage: { getItem: () => JSON.stringify(snapshot), setItem: vi.fn() },
+            filterRestoredTabs: async entries => entries.filter(tab => tab.id !== 'gone').map(tab => tab.id) });
+        await tabs.restore();
+        expect(tabs.activeTabId.value).toBe('active');
+        expect(fake.bindings.get(fake.host.activePaneId()!)).toEqual({ kind: 'chat', threadId: 'active' });
+    });
+
+    it('restores both the binding and mounted resource when incoming view restoration fails', async () => {
+        const fake = createHost();
+        let failRestore = false;
+        const tabs = createTabs(fake, { restoreIncoming: async tabId => {
+            if (failRestore && tabId !== outgoing) throw new Error('Draft storage unavailable');
+        } });
+        const outgoing = (await tabs.openResource({ kind: 'chat', threadId: 'previous' })).tabId!;
+        failRestore = true;
+        const result = await tabs.openResource({ kind: 'document', documentId: 'next' });
+        expect(result.status).toBe('failed');
+        expect(tabs.activeTabId.value).toBe(outgoing);
+        expect(fake.bindings.get('pane-a')).toEqual({ kind: 'chat', threadId: 'previous' });
+    });
+
     function snapshot(id: string) {
         return JSON.stringify({
             schemaVersion: 1,

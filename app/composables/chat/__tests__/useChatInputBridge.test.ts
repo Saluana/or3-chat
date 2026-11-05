@@ -33,6 +33,20 @@ describe('useChatInputBridge', () => {
         expect(setText).not.toHaveBeenCalled();
         expect(triggerSend).not.toHaveBeenCalled();
     });
+    // Replacement can happen while attachment validation/storage is pending.
+    it('does not focus a replacement composer after an old attachment finishes', async () => {
+        let finish!: (ready: boolean) => void;
+        const oldFocus = vi.fn(); const newFocus = vi.fn();
+        registerPaneInput('pane-1', { setText: vi.fn(), focus: oldFocus, triggerSend: vi.fn(),
+            attachFile: () => new Promise(resolve => { finish = resolve; }) });
+        const pending = programmaticAttachFile('pane-1', new File(['image'], 'image.png'));
+        registerPaneInput('pane-1', { setText: vi.fn(), focus: newFocus, triggerSend: vi.fn() });
+        finish(true);
+        await expect(pending).resolves.toEqual({ status: 'unavailable' });
+        expect(oldFocus).not.toHaveBeenCalled();
+        expect(newFocus).not.toHaveBeenCalled();
+    });
+
     it('inserts a reference through the composer without replacing its draft or sending', () => {
         const setText = vi.fn();
         const triggerSend = vi.fn();

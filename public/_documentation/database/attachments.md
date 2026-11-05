@@ -24,3 +24,7 @@ Import the helpers from `~/db/attachments`. They validate input and emit attachm
 Unlike newer entity helpers, these legacy writes do not automatically allocate a new clock on every mutation. Do not describe them as a complete sync-safe file lifecycle. Use the dedicated file helpers for uploaded bytes and [message files](/documentation/database/message-files) for attaching those bytes to messages.
 
 Hooks include `db.attachments.create:filter:input`, create/upsert before and after actions, soft/hard delete actions, and `db.attachments.get:filter:output`. An output URL filter does not authorize the remote resource; authorization belongs to its serving endpoint.
+
+Soft/hard delete hooks run outside the write transaction. Deletion rejects if
+the workspace generation or observed attachment changes before the write.
+After-hook failures are logged after commit and cannot roll back the deletion.

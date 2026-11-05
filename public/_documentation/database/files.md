@@ -69,6 +69,14 @@ not create a transaction or emit hooks itself. Catalog, prepared post batch and
 message attachment callers use this same boundary. `changeRefCount` owns a
 standalone transaction and delivers its notification afterward. File creation
 also prepares hooks before writing metadata/blob rows and notifies after commit.
+If creation loses its originating workspace or intake owner after commit, it
+releases the provisional reference before rejecting; the stored bytes remain.
+
+Delete and restore callbacks also run outside the write transaction. The write
+rechecks the workspace generation and observed metadata before changing rows;
+deletion also rechecks retained references. A concurrent metadata change rejects the operation rather
+than overwriting it. After-hook failures are logged without undoing a committed
+operation or reporting it as a failed write.
 
 ---
 
@@ -84,7 +92,7 @@ also prepares hooks before writing metadata/blob rows and notifies after commit.
 ## Usage tips
 
 -   Use [message-file helpers](/documentation/database/message-files) to remove a reference. They decrement counts themselves; do not call `derefFile` again afterward.
--   `ref_count` represents unique live message edges, not upload attempts. Use the message-file helpers so duplicate or hook-pruned attachments are reconciled automatically.
+-   `ref_count` is local derived reference state and can include catalog and project ownership as well as message edges. Use the owning helpers so duplicate or hook-pruned attachments are reconciled automatically.
 -   Hook into `db.files.create:filter:input` to enforce custom size caps or rename files.
 -   Local soft/hard deletion refuses hashes retained by live messages, posts, catalog entries, or revisions, including logically trashed items. It rechecks canonical edges inside the write transaction after before-delete hooks. A zero `ref_count` is insufficient authority to delete bytes.
 
@@ -112,4 +120,4 @@ must reject old-writer omission against incoming **and stored** posts/projects
 before mutation. Old readers receive an explicit update boundary for affected
 pages. SQLite native support and Convex template/provider updates are separate
 publication dependencies; D1 does not advertise transactional workspace-item
-admission. Cloud UI remains gated pending full provider/live qualification.
+admission. Cloud Files is enabled only when the authenticated session reports the provider capability; unsupported providers keep it unavailable.

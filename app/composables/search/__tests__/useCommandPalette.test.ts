@@ -264,6 +264,17 @@ describe('useCommandPalette', () => {
         expect(executePaletteAction).toHaveBeenCalledTimes(1);
     });
 
+    it('refreshes the selected preview when its result changes without changing identity', async () => {
+        const palette = useCommandPalette(); palette.open(); await Promise.resolve();
+        emitSnapshot({ results: [result()] }); await nextTick(); await nextTick();
+        expect(palette.preview.value?.title).toBe('Thread one');
+        hydratePreview.mockResolvedValue({ title: 'Renamed', categoryId: 'chat', snippet: 'Edited body' });
+        emitSnapshot({ results: [result({ title: 'Renamed' })] });
+        await nextTick(); await nextTick();
+        expect(palette.preview.value?.title).toBe('Renamed');
+        expect(palette.preview.value?.snippet).toBe('Edited body');
+    });
+
     it('hydrates a preview for the active result without navigating', async () => {
         const palette = useCommandPalette();
         palette.open();

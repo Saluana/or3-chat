@@ -56,8 +56,8 @@ import { DEFAULT_FAST_MODEL, FastModelSchema } from '~~/shared/ai/fast-model';
  * Includes migration from legacy localStorage storage.
  */
 import { ref, computed } from 'vue';
-import { getDb, getWorkspaceGeneration, type Or3DB } from '~/db/client';
-import { setKvByName, getKvByName, getKvRecordByName } from '~/db/kv';
+import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb, type Or3DB } from '~/db/client';
+import { setKvByName, getKvRecordByName } from '~/db/kv';
 import {
     DEFAULT_MODEL_VARIANT,
     sanitizeModelVariant,
@@ -166,35 +166,18 @@ export function sanitizeAiSettings(
     };
 }
 
-/**
- * Migrate from legacy localStorage to KV (one-time)
- */
-async function migrateFromLocalStorage(): Promise<AiSettingsV1 | null> {
-    if (typeof localStorage === 'undefined') return null;
-    
-    const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
-    if (!raw) return null;
-    
-    try {
-        const parsed: unknown = JSON.parse(raw);
-        const settings = sanitizeAiSettings(parsed);
-        
-        // Mark as migrated by removing from localStorage
-        localStorage.removeItem(LEGACY_STORAGE_KEY);
-        if (import.meta.dev) {
-            console.log('[useAiSettings] Migrated settings from localStorage to KV');
-        }
-        
-        return settings;
-    } catch {
-        return null;
-    }
+let stopWorkspace: (() => void) | undefined;
+function ensureWorkspaceListener() {
+    if (typeof window === 'undefined' || stopWorkspace) return;
+    stopWorkspace = subscribeActiveWorkspaceDb(() => { void loadSettings(); });
 }
+if (import.meta.hot) import.meta.hot.dispose(() => { stopWorkspace?.(); _loadGeneration++; });
 
 /**
  * Load settings from KV, with localStorage migration fallback
  */
 async function loadSettings(): Promise<void> {
+    ensureWorkspaceListener();
     const targetDb = getDb();
     const workspaceGeneration = getWorkspaceGeneration();
     const sameOrigin = _loadedDb === targetDb && _loadedWorkspaceGeneration === workspaceGeneration;
@@ -204,26 +187,40 @@ async function loadSettings(): Promise<void> {
     _loadedDb = targetDb;
     _loadedWorkspaceGeneration = workspaceGeneration;
     _loaded = false;
-    _settings.value = { ...DEFAULT_AI_SETTINGS };
+    if (!sameOrigin) _settings.value = { ...DEFAULT_AI_SETTINGS };
     const current = () => generation === _loadGeneration && getDb() === targetDb && getWorkspaceGeneration() === workspaceGeneration;
     _loadPromise = (async () => {
         try {
-            const kvRecord = await getKvByName(AI_SETTINGS_KV_KEY, targetDb);
+            const { row: kvRecord } = await getKvRecordByName(AI_SETTINGS_KV_KEY, targetDb);
             if (!current()) return;
             let next = kvRecord?.value ? sanitizeAiSettings(JSON.parse(kvRecord.value) as unknown) : null;
             if (!next) {
-                next = await migrateFromLocalStorage();
-                if (!current()) return;
-                if (next) await setKvByName(AI_SETTINGS_KV_KEY, JSON.stringify(next), targetDb, { isValid: current });
+                const legacy = typeof localStorage === 'undefined' ? null : localStorage.getItem(LEGACY_STORAGE_KEY);
+                if (legacy) {
+                    try { next = sanitizeAiSettings(JSON.parse(legacy) as unknown); }
+                    catch { /* Invalid legacy data cannot supply preferences. */ }
+                    if (next) {
+                        await setKvByName(AI_SETTINGS_KV_KEY, JSON.stringify(next), targetDb, { isValid: current, ifClock: null });
+                        // Keep the only durable copy on write failure, navigation,
+                        // or when another tab changed the legacy value meanwhile.
+                        if (current() && localStorage.getItem(LEGACY_STORAGE_KEY) === legacy) localStorage.removeItem(LEGACY_STORAGE_KEY);
+                    }
+                }
             }
             if (!current()) return;
-            _settings.value = next ?? { ...DEFAULT_AI_SETTINGS };
-            _loaded = true;
+            const loaded = next ?? DEFAULT_AI_SETTINGS;
+            // Missing-row retries must not invalidate context preview when the
+            // effective preferences are unchanged (otherwise it reloads forever).
+            if (Object.entries(loaded).some(([key, value]) => _settings.value[key as keyof AiSettingsV1] !== value)) {
+                _settings.value = { ...loaded };
+            }
+            // A missing row can arrive through sync after workspace activation.
+            // Leave it retryable on the next explicit settings preparation.
+            _loaded = next !== null;
         } catch (error) {
             if (!current()) return;
             console.error('[useAiSettings] Failed to load settings:', error);
-            _settings.value = { ...DEFAULT_AI_SETTINGS };
-            _loaded = true;
+            _loaded = false;
         } finally {
             if (generation === _loadGeneration) _loadPromise = null;
         }
@@ -274,7 +271,7 @@ function persistSettings(patch: Partial<AiSettingsV1> | null): Promise<void> {
         assertSettingsOrigin(targetDb, generation);
         // Merge from the current durable row. CAS also refuses a separate tab's write
         // arriving during the hooks, rather than silently overwriting its preferences.
-        const existing = await getKvByName(AI_SETTINGS_KV_KEY, targetDb);
+        const { row: existing } = await getKvRecordByName(AI_SETTINGS_KV_KEY, targetDb);
         assertSettingsOrigin(targetDb, generation);
         let base = { ...DEFAULT_AI_SETTINGS };
         if (existing?.value) {
@@ -286,6 +283,7 @@ function persistSettings(patch: Partial<AiSettingsV1> | null): Promise<void> {
             { isValid: current, ifClock: existing?.clock ?? null });
         assertSettingsOrigin(targetDb, generation);
         _settings.value = next;
+        _loaded = true;
     });
     mutationTails.set(generation, operation);
     const clean = () => { if (mutationTails.get(generation) === operation) mutationTails.delete(generation); };

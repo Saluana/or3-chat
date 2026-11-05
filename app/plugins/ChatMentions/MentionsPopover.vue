@@ -15,6 +15,7 @@
                 ref="listRef"
                 :items="items"
                 :command="handleCommand"
+                :search="search"
             />
         </template>
     </UPopover>
@@ -35,6 +36,7 @@ interface MentionItem {
 const props = defineProps<{
     items: MentionItem[];
     command: (item: MentionItem) => void;
+    search?: (query: string) => void;
     // TipTap suggestion provides a function returning DOMRect to anchor the popup
     getReferenceClientRect?: () => DOMRect | null;
     open: boolean;

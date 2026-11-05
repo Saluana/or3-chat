@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
+import { getDb, setActiveWorkspaceDb } from '~/db/client';
 import {
     captureDocumentEditor,
     ensureDocumentEditorLocalDurability,
     getDocumentEditorSession,
+    getActiveDocumentEditorSession,
     hasActiveDocumentEditor,
     registerDocumentEditorSession,
     waitForDocumentEditorSession,
@@ -29,6 +31,29 @@ function makeSession(
 }
 
 describe('document editor sessions', () => {
+    // Same document/tab IDs can coexist while the outgoing workspace unmounts.
+    it('never returns an outgoing workspace editor as the current live document', () => {
+        const origin = makeSession();
+        const unregister = registerDocumentEditorSession(origin);
+        try {
+            setActiveWorkspaceDb('session-target');
+            expect(getActiveDocumentEditorSession('doc-a', 'tab-a')).toBeUndefined();
+            expect(getDocumentEditorSession({ paneId: 'pane-a', tabId: 'tab-a' })).toBeUndefined();
+            expect(hasActiveDocumentEditor('doc-a')).toBe(false);
+        } finally { unregister(); setActiveWorkspaceDb(null); }
+    });
+
+    it('ignores a late origin registration while waiting for the destination editor', async () => {
+        const originDb = getDb();
+        setActiveWorkspaceDb('session-wait-target');
+        const pending = waitForDocumentEditorSession({ paneId: 'pane-a', tabId: 'tab-a' });
+        const old = registerDocumentEditorSession(makeSession({ originDb }));
+        const target = makeSession();
+        const current = registerDocumentEditorSession(target);
+        try { expect((await pending) === target).toBe(true); }
+        finally { old(); current(); setActiveWorkspaceDb(null); }
+    });
+
     it('selects duplicate-document sessions by pane and tab', () => {
         const first = makeSession();
         const second = makeSession({ paneId: 'pane-b', tabId: 'tab-b' });

@@ -13,17 +13,18 @@ export interface DocumentAiAttachment {
     dataUrl: string;
 }
 
-const DATA_URL_PATTERN = /^data:([^;,]+)?((?:;[^;,=]+)*)?(;base64)?,([\s\S]*)$/iu;
+const DATA_URL_PATTERN = /^data:([^;,]+)?((?:;[^;,=]+)*),([\s\S]*)$/iu;
 
 function approxDataUrlBytes(dataUrl: string): number {
     const match = DATA_URL_PATTERN.exec(dataUrl);
     if (!match) return -1;
-    const payload = match[4] ?? '';
-    const isBase64 = Boolean(match[3]);
+    const payload = match[3] ?? '';
+    const isBase64 = (match[2] ?? '').toLowerCase().split(';').includes('base64');
     if (!payload) return 0;
     if (!isBase64) return payload.length;
-    // Base64 expands 3 bytes → 4 chars; ignore padding noise.
-    return Math.floor((payload.length * 3) / 4);
+    // Padding represents no bytes and must not count against the limit.
+    const padding = payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0;
+    return Math.floor((payload.length * 3) / 4) - padding;
 }
 
 /**

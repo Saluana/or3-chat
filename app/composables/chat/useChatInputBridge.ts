@@ -111,8 +111,9 @@ function find(paneId: string) {
  * @param api - Imperative API (setText, triggerSend)
  */
 export function registerPaneInput(paneId: string, api: ChatInputImperativeApi) {
-    const existing = find(paneId);
-    if (existing) existing.api = api; // HMR / re-mount
+    const index = registry.value.findIndex(entry => entry.paneId === paneId);
+    // Replacement must retire the old registration's asynchronous work.
+    if (index >= 0) registry.value.splice(index, 1, { paneId, api });
     else registry.value.push({ paneId, api });
 }
 

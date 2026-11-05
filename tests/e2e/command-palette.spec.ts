@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { writeFile } from 'node:fs/promises';
 
 const palette = (page: Page) => page.locator('[data-test="command-palette"]');
 const query = (page: Page) =>
@@ -359,4 +360,94 @@ test('a palette-selected prompt applies to and survives reload of a blank chat',
     while (await welcomeDismiss.count()) await welcomeDismiss.last().click();
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await expect(page.getByRole('button', { name: 'System prompt for this chat' })).toContainText('Palette prompt QA');
+});
+
+test('search and open mentions follow renames, content edits, deletion, and workspace changes', async ({ page }, info) => {
+    // Exercise the normal mounted editors and DB mutation owners in a disposable
+    // browser profile. Module imports are test-side; no production test API.
+    const seed = await page.evaluate(async () => {
+        const db = await import(/* @vite-ignore */ String('/_nuxt/db/documents.ts'));
+        const document = await db.createDocument({ title: 'Orchid reference', content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'First evidence' }] }] } });
+        return document.id;
+    });
+    await openPalette(page);
+    await query(page).fill('doc: Orchid');
+    await expect(page.getByRole('option', { name: /Orchid reference/ })).toBeVisible();
+    await expect(page.locator('.or3-palette-preview')).toContainText('First evidence');
+    await page.evaluate(async id => {
+        const db = await import(/* @vite-ignore */ String('/_nuxt/db/documents.ts'));
+        await db.updateDocument(id, { title: 'Orchid renamed', content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Edited evidence' }] }] } });
+    }, seed);
+    await expect(page.getByRole('option', { name: /Orchid renamed/ })).toBeVisible();
+    await expect(page.locator('.or3-palette-preview')).toContainText('Edited evidence');
+    await expect(page.locator('.or3-palette-preview')).not.toContainText('First evidence');
+    await page.keyboard.press('Escape');
+    await page.goto('/chat');
+    const input = page.getByRole('textbox', { name: 'Message input', exact: true });
+    await input.fill('@Orchid');
+    const mentions = page.locator('[data-context="mentions"]');
+    await expect(mentions.getByRole('option', { name: /Orchid renamed/ })).toBeVisible();
+    await page.evaluate(async id => {
+        const db = await import(/* @vite-ignore */ String('/_nuxt/db/documents.ts'));
+        await db.updateDocument(id, { title: 'Cobalt renamed' });
+    }, seed);
+    await expect(mentions.getByRole('option', { name: /Orchid/ })).toHaveCount(0);
+    await input.fill('@');
+    await mentions.getByPlaceholder('Search mentions…').fill('Cobalt');
+    await expect(mentions.getByPlaceholder('Search mentions…')).toBeFocused();
+    await expect(mentions.getByRole('option', { name: /Cobalt renamed/ })).toBeVisible();
+    await expect(mentions.getByPlaceholder('Search mentions…')).toBeFocused();
+    await page.evaluate(async id => {
+        const db = await import(/* @vite-ignore */ String('/_nuxt/db/documents.ts'));
+        await db.softDeleteDocument(id);
+    }, seed);
+    await expect(mentions.getByRole('option')).toHaveCount(0);
+    await page.evaluate(async () => {
+        const db = await import(/* @vite-ignore */ String('/_nuxt/db/documents.ts'));
+        await db.createDocument({ title: 'Cobalt workspace A', content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Private to workspace A' }] }] } });
+    });
+    await expect(mentions.getByRole('option', { name: /Cobalt workspace A/ })).toBeVisible();
+    await page.evaluate(async () => {
+        const { setActiveWorkspaceDb } = await import(/* @vite-ignore */ String('/_nuxt/db/client.ts'));
+        setActiveWorkspaceDb(`freshness-browser-${crypto.randomUUID()}`);
+    });
+    await expect(mentions.getByRole('option')).toHaveCount(0);
+    const proof = info.outputPath('search-mentions-freshness.png');
+    await page.screenshot({ path: proof, animations: 'disabled' });
+    await info.attach('search-mentions-freshness', { path: proof, contentType: 'image/png' });
+    await info.attach('search-mentions-checks', { body: JSON.stringify({ documentId: seed,
+        checks: ['palette rename', 'selected preview edit', 'open picker rename', 'picker search', 'open picker deletion', 'workspace switch retires results'] }), contentType: 'application/json' });
+});
+
+test('AI receives current mention title and content after editing a selected reference', async ({ page }, info) => {
+    test.skip(process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS !== 'true', 'Uses the deterministic production chat transport.');
+    await page.goto('/__or3-chat-journey-test?workspace=1&model=plain');
+    const input = page.getByRole('textbox', { name: 'Message input', exact: true });
+    await expect(input).toBeVisible({ timeout: 30_000 });
+    const id = await page.evaluate(async () => {
+        const db = await import(/* @vite-ignore */ String('/_nuxt/db/documents.ts'));
+        return (await db.createDocument({ title: 'Orchid AI original', content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Original reference body' }] }] } })).id;
+    });
+    await input.fill('@Orchid');
+    await page.locator('[data-context="mentions"]').getByRole('option', { name: /Orchid AI original/ }).click();
+    await expect(input).toContainText('Orchid AI original');
+    await page.evaluate(async id => {
+        const db = await import(/* @vite-ignore */ String('/_nuxt/db/documents.ts'));
+        await db.updateDocument(id, { title: 'Renamed AI reference', content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Edited reference body' }] }] } });
+    }, id);
+    await page.getByRole('button', { name: 'Send message', exact: true }).click();
+    const requests = () => page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:plain-requests') ?? '[]') as Array<{ text: string[] }>);
+    await expect.poll(async () => (await requests()).length).toBe(1);
+    const sent = (await requests())[0]!;
+    const reference = sent.text.find(text => text.includes('type="mention"'));
+    expect(reference).toContain('Referenced Document: Renamed AI reference');
+    expect(reference).toContain('Edited reference body');
+    expect(reference).not.toContain('Original reference body');
+    expect(reference).not.toContain('Orchid AI original');
+    const receipt = info.outputPath('current-mention-model-request.json');
+    await writeFile(receipt, JSON.stringify(sent, null, 2));
+    await info.attach('current-mention-model-request', { path: receipt, contentType: 'application/json' });
+    const proof = info.outputPath('current-mention-model-request.png');
+    await page.screenshot({ path: proof, animations: 'disabled' });
+    await info.attach('current-mention-model-request', { path: proof, contentType: 'image/png' });
 });

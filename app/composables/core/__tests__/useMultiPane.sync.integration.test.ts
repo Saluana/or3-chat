@@ -4,6 +4,7 @@ import { effectScope, nextTick, watch, type EffectScope } from 'vue';
 import Dexie from 'dexie';
 import { evictWorkspaceDb, setActiveWorkspaceDb } from '~/db/client';
 import { useMultiPane } from '../useMultiPane';
+import { usePaneApps } from '../usePaneApps';
 import { useWorkspaceTabMetadata } from '../useWorkspaceTabMetadata';
 import type { WorkspaceTab } from '~/core/workspace-tabs/types';
 import { createHookEngine } from '~/core/hooks/hooks';
@@ -26,6 +27,24 @@ afterEach(async () => {
 });
 
 describe('open workspace views receiving synced rows', () => {
+    it.each(['new', 'existing'] as const)('does not publish a %s app pane after switching workspaces', async (target) => {
+        const workspaceId = `pane-app-${crypto.randomUUID()}`;
+        workspaces.push(workspaceId);
+        setActiveWorkspaceDb(workspaceId);
+        let finish!: (record: { id: string }) => void;
+        const handle = usePaneApps().registerPaneApp({ id: 'workspace-delayed', label: 'Delayed', component: {},
+            createInitialRecord: () => new Promise(resolve => { finish = resolve; }) });
+        scope = effectScope();
+        const panes = scope.run(() => useMultiPane())!;
+        const pending = target === 'new' ? panes.newPaneForApp('workspace-delayed') : panes.setPaneApp(0, 'workspace-delayed');
+        setActiveWorkspaceDb(null);
+        finish({ id: 'old-workspace-record' });
+        await pending;
+        expect(panes.panes.value).toHaveLength(1);
+        expect(panes.panes.value[0]?.mode).toBe('chat');
+        handle.dispose();
+    });
+
     it('keeps unrelated histories idle while shared conversation views update and detach', async () => {
         const workspaceId = `pane-observers-${crypto.randomUUID()}`;
         workspaces.push(workspaceId);

@@ -1,4 +1,4 @@
-import { onScopeDispose, readonly, ref, type Ref } from 'vue';
+import { getCurrentScope, onScopeDispose, readonly, ref, type Ref } from 'vue';
 import {
     migrateWorkspaceTabsSnapshot,
 } from '~/core/workspace-tabs/snapshot-schema';
@@ -65,7 +65,9 @@ export function createWorkspaceTabsSnapshot(
     });
     const activeVisibleIndex = Math.max(
         0,
-        state.activePaneId ? paneIds.indexOf(state.activePaneId) : 0
+        state.activePaneId
+            ? visibleTabIds.indexOf(state.paneBindings.get(state.activePaneId) ?? '')
+            : 0
     );
     return {
         schemaVersion: 1,
@@ -193,6 +195,7 @@ export function useWorkspaceTabPersistence(options: {
         }
     };
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let disposed = false;
     let activeStorageKey = getWorkspaceTabsStorageKey(
         options.workspaceId(),
         options.profileId()
@@ -232,6 +235,7 @@ export function useWorkspaceTabPersistence(options: {
 
     /** Writes only a pending change, so a stale or in-between layout is never saved. */
     function flushPending(): boolean {
+        if (disposed) return false;
         if (timer) {
             clearTimeout(timer);
             timer = undefined;
@@ -264,6 +268,7 @@ export function useWorkspaceTabPersistence(options: {
     }
 
     function schedule(): void {
+        if (disposed) return;
         dirty = true;
         if (!getStorage()) return;
         if (timer) clearTimeout(timer);
@@ -343,14 +348,15 @@ export function useWorkspaceTabPersistence(options: {
         return loadScope();
     }
 
+    const onPageHide = () => flushPending();
     if (import.meta.client) {
-        const onPageHide = () => flushPending();
         window.addEventListener('pagehide', onPageHide);
-        onScopeDispose(() => {
-            if (timer) clearTimeout(timer);
-            window.removeEventListener('pagehide', onPageHide);
-        });
     }
+    if (getCurrentScope()) onScopeDispose(() => {
+        flushPending();
+        disposed = true;
+        if (import.meta.client) window.removeEventListener('pagehide', onPageHide);
+    });
 
     const retry = flush;
 

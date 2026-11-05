@@ -67,6 +67,11 @@ Timestamp/size pages scan keys only and hydrate at most `limit` full rows. Name
 ordering sorts the compact corpus with `localeCompare(..., { sensitivity: 'base' })`
 and a deterministic hash tie-breaker; it does not rely on IndexedDB string order.
 
+Key selection and metadata hydration use the same captured workspace database.
+Callers must still discard results after their workspace changes. Renaming reads
+the latest metadata inside its write transaction, preserving concurrent reference,
+storage, and deletion updates.
+
 ---
 
 ## Usage tips

@@ -752,6 +752,7 @@ export function useChat(
         contentOrParams: string | (SendMessageParams & { content: string }),
         maybeParams?: SendMessageParams
     ): Promise<SendResult> {
+        if (disposed) return { status: 'rejected', reason: 'unavailable' };
         if (activeRequestId.value || loading.value)
             return { status: 'rejected', reason: 'busy' };
         const requestScope = admitRequest('send');
@@ -957,12 +958,15 @@ export function useChat(
      * - No-op if message or thread context is missing
      */
     async function retryMessage(messageId: string, modelOverride?: string, options: { afterEdit?: boolean } = {}) {
+        if (disposed) return { status: 'rejected' as const, reason: 'unavailable' as const };
         const retryRevision = navigationRevision;
         const retryDb = getDb(); const retryGeneration = getWorkspaceGeneration();
+        const ownsRetry = () => !disposed && retryRevision === navigationRevision
+            && getDb() === retryDb && getWorkspaceGeneration() === retryGeneration;
         if (threadIdRef.value) {
-            const db = getDb(); const generation = getWorkspaceGeneration(); const threadId = threadIdRef.value;
+            const db = retryDb; const threadId = threadIdRef.value;
             const checkpoint = await db.chat_request_recoveries.get(threadId);
-            if (disposed || retryRevision !== navigationRevision || getDb() !== db || generation !== getWorkspaceGeneration() || threadIdRef.value !== threadId)
+            if (!ownsRetry() || threadIdRef.value !== threadId)
                 return { status: 'rejected' as const, reason: 'unavailable' as const };
             if (options.afterEdit) {
                 if (checkpoint?.user_message_id === messageId) {
@@ -976,12 +980,14 @@ export function useChat(
                 if (checkpoint.version !== 1)
                     return { status: 'rejected' as const, reason: 'unavailable' as const,
                         error: 'This saved attempt uses an unsupported recovery version. Update the app or edit the draft to prepare a new request.' };
-                if (!await discardStaleRecovery(db, checkpoint))
-                    return sendMessage({ ...checkpoint.input, model: modelOverride || checkpoint.input.model });
+                const discarded = await discardStaleRecovery(db, checkpoint);
+                if (!ownsRetry())
+                    return { status: 'rejected' as const, reason: 'unavailable' as const };
+                if (!discarded) return sendMessage({ ...checkpoint.input, model: modelOverride || checkpoint.input.model });
             }
         }
         const { retryMessageImpl } = await import('~/utils/chat/useAi-internal/retry');
-        if (disposed || retryRevision !== navigationRevision || getDb() !== retryDb || getWorkspaceGeneration() !== retryGeneration)
+        if (!ownsRetry())
             return { status: 'rejected' as const, reason: 'unavailable' as const };
         return await retryMessageImpl(
             {
@@ -1017,7 +1023,7 @@ export function useChat(
     let activeContinuationScope: ChatRequestScope | null = null;
     function getContinuationScope(): ChatRequestScope | null { return activeContinuationScope; }
     async function continueMessage(messageId: string, modelOverride?: string) {
-        if (loading.value || activeRequestId.value) return;
+        if (disposed || loading.value || activeRequestId.value) return;
         const request = admitRequest('continue');
         const requestId = request.requestId;
         activeContinuationScope = request;
@@ -1217,6 +1223,11 @@ export function useChat(
         }
 
         const switchRevision = ++threadSwitchRevision;
+        const switchDb = getDb();
+        const switchGeneration = getWorkspaceGeneration();
+        const switchAccount = accountRevision;
+        const ownsSwitch = () => !disposed && switchRevision === threadSwitchRevision
+            && switchDb === getDb() && switchGeneration === getWorkspaceGeneration() && switchAccount === accountRevision;
         const currentId = threadIdRef.value;
         if (nextThreadId && currentId && nextThreadId === currentId) {
             if (activeRequestScope) activeRequestScope.navigationPendingBeforeSave = false;
@@ -1246,7 +1257,7 @@ export function useChat(
                 if (preparing.userMessageId || preparing.phase.value === 'terminal'
                     || accountRevision !== startingAccount) finish();
             });
-            if (switchRevision !== threadSwitchRevision) return;
+            if (!ownsSwitch()) return;
             preparing.navigationPendingBeforeSave = false;
             if (accountRevision !== startingAccount || getWorkspaceGeneration() !== startingWorkspace) return;
         }
@@ -1320,6 +1331,7 @@ export function useChat(
             clearBackgroundJobSubscriptions({ keepTracking: false });
         }
 
+        if (!ownsSwitch()) return;
         threadIdRef.value = nextThreadId;
         if (switchOptions.pendingPromptId !== undefined) {
             setPendingPrompt(switchOptions.pendingPromptId);
