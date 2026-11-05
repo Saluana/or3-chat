@@ -1,4 +1,4 @@
-import { computed, shallowRef, type ComputedRef, type Ref } from 'vue';
+import { computed, getCurrentScope, onScopeDispose, shallowRef, type ComputedRef, type Ref } from 'vue';
 import type {
     WorkspaceNavigationResult,
     WorkspaceResource,
@@ -138,6 +138,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
     const outgoingActivations = new Map<string, Promise<void>>();
     let scopeGeneration = 0;
     let persistenceSuspensions = 0;
+    let disposed = false;
     const persistence = useWorkspaceTabPersistence({
         state,
         paneIds: options.host.paneIds,
@@ -147,7 +148,14 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
         onIssue: options.onPersistenceIssue,
     });
 
+    if (getCurrentScope()) onScopeDispose(() => {
+        disposed = true;
+        scopeGeneration++;
+        coordinator.cancelAll();
+    });
+
     function commit(next: WorkspaceTabsState): void {
+        if (disposed) return;
         state.value = next;
         if (!persistenceSuspensions) persistence.schedule();
     }
@@ -160,7 +168,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
         tabId: string,
         patch: Partial<WorkspaceTabRuntime>
     ): void {
-        if (!tabById(tabId)) return;
+        if (disposed || !tabById(tabId)) return;
         const runtime = new Map(state.value.runtime);
         runtime.set(tabId, {
             status: 'idle',
@@ -222,6 +230,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
     ): Promise<ActivationOutcome> {
         const finishMeasure = measureWorkspaceTabAction('activate');
         try {
+            if (disposed) return 'superseded';
             const before = state.value;
             const target = before.tabs.find((tab) => tab.id === tabId);
             if (!target) return 'failed';
@@ -241,6 +250,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
             const outgoingTabId = before.paneBindings.get(paneId);
             let settleOutgoing: (() => void) | undefined;
             let outgoingSettled: Promise<void> | undefined;
+            let boundIncoming = false;
             if (outgoingTabId && outgoingTabId !== tabId) {
                 // The manifest already points at the incoming tab, but the
                 // outgoing view is still mounted until its save/bind finishes.
@@ -260,6 +270,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
                     activation
                 );
                 if (!activation.isCurrent()) return abandonActivation(tabId);
+                boundIncoming = true;
                 await options.restoreIncoming?.(tabId, paneId, activation);
                 if (!activation.isCurrent()) return abandonActivation(tabId);
                 updateRuntime(tabId, { status: 'idle' });
@@ -271,6 +282,20 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
                 // Other operations may have committed while this one awaited,
                 // so undo only this pane's binding and focus.
                 commit(revertActivation(state.value, before, next, paneId));
+                if (state.value.activePaneId) options.host.focusPane(state.value.activePaneId);
+                const outgoing = before.tabs.find(tab => tab.id === outgoingTabId);
+                if (boundIncoming && outgoing && outgoing.id !== tabId) {
+                    try {
+                        await bindResourceToPane(paneId, outgoing.resource, activation);
+                        if (!activation.isCurrent()) return abandonActivation(tabId);
+                        await options.restoreIncoming?.(outgoing.id, paneId, activation);
+                    } catch (restoreError) {
+                        if (activation.isCurrent()) {
+                            options.onError?.(restoreError, { tabId: outgoing.id, action: 'restore-outgoing' });
+                        }
+                    }
+                    if (!activation.isCurrent()) return abandonActivation(tabId);
+                }
                 updateRuntime(tabId, {
                     status: 'error',
                     errorMessage:
@@ -319,10 +344,12 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
         if (options_.target === 'split') return openInSplit(resource, options_);
         const opened = openTab(state.value, resource, {
             allowDuplicate: options_.allowDuplicate,
-            reuseActiveBlank: options_.reuseActiveBlank !== false &&
+            reuseActiveBlank: options_.target !== 'background' && options_.reuseActiveBlank !== false &&
                 options.canReuseActiveBlank?.(state.value.activeTabId) !== false,
         });
-        commit(opened.state);
+        // The activation transaction must still see the outgoing binding.
+        // Deduplication's pure transition has already selected the existing tab.
+        if (!opened.existing) commit(opened.state);
         if (!opened.tabId) return NO_TAB;
         if (options_.target === 'background') {
             return { status: 'created', tabId: opened.tabId };
@@ -415,12 +442,22 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
         const livePaneId = paneShowing(tabId);
         const closed = transitionCloseTab(state.value, tabId);
         if (!closed.closed) return false;
-        commit(closed.state);
         if (closed.paneToClose) {
+            try {
+                await options.host.closePane(closed.paneToClose);
+            } catch (error) {
+                if (generation === scopeGeneration && !isAbortError(error)) {
+                    options.onError?.(error, { tabId, action: 'close' });
+                }
+                return false;
+            }
+            if (generation !== scopeGeneration || options.host.paneIds().includes(closed.paneToClose)) return false;
             coordinator.cancel(closed.paneToClose);
-            await options.host.closePane(closed.paneToClose);
+            // Host close hooks can update bindings while the save awaits.
+            commit(transitionCloseTab(state.value, tabId).state);
             return true;
         }
+        commit(closed.state);
         if (livePaneId) {
             const replacementId = closed.state.paneBindings.get(livePaneId);
             const replacement = replacementId
@@ -441,16 +478,18 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
     async function closeSplit(paneId = state.value.activePaneId): Promise<boolean> {
         if (!paneId || options.host.paneIds().length <= 1) return false;
         const tabId = state.value.paneBindings.get(paneId);
+        const generation = scopeGeneration;
         const activation = coordinator.begin(paneId);
         try {
             if (tabId) await options.captureOutgoing?.(tabId, paneId, activation);
             if (!activation.isCurrent()) return false;
+            await options.host.closePane(paneId);
+            if (generation !== scopeGeneration || options.host.paneIds().includes(paneId)) return false;
             commit(transitionCloseSplit(state.value, paneId));
             coordinator.cancel(paneId);
-            await options.host.closePane(paneId);
             return true;
         } catch (error) {
-            if (!isAbortError(error) && tabId) {
+            if (generation === scopeGeneration && !isAbortError(error) && tabId) {
                 options.onError?.(error, { tabId, action: 'close-split' });
             }
             return false;
@@ -463,7 +502,10 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
         const next = transitionReopenClosedTab(previous);
         const tabId = next.activeTabId;
         if (next === previous || !next.tabs.some((tab) => tab.id === tabId)) return NO_TAB;
-        commit(next);
+        // Restore the tab and its runtime first; activation captures the view
+        // currently mounted before changing any pane binding.
+        commit({ ...next, activeTabId: previous.activeTabId,
+            activePaneId: previous.activePaneId, paneBindings: previous.paneBindings });
         return navigated(tabId, await activate(tabId, 'command', true));
     }
 
@@ -506,9 +548,9 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
                                 ? snapshot.activeTabId
                                 : tabs[0]?.id ?? snapshot.activeTabId,
                         visibleTabIds,
-                        activeVisibleIndex: Math.min(
-                            snapshot.activeVisibleIndex,
-                            Math.max(0, visibleTabIds.length - 1)
+                        activeVisibleIndex: Math.max(
+                            0,
+                            visibleTabIds.indexOf(snapshot.visibleTabIds[snapshot.activeVisibleIndex] ?? '')
                         ),
                     };
                 }
@@ -535,7 +577,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
             if (!paneId) break;
             coordinator.cancel(paneId);
             await options.host.closePane(paneId);
-            if (generation !== scopeGeneration) return false;
+            if (generation !== scopeGeneration || options.host.paneIds().includes(paneId)) return false;
         }
         while (options.host.paneIds().length < wantedPaneCount) {
             if (!options.host.addPane()) break;
@@ -563,7 +605,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
             if (!paneId) break;
             coordinator.cancel(paneId);
             await options.host.closePane(paneId);
-            if (generation !== scopeGeneration) return false;
+            if (generation !== scopeGeneration || options.host.paneIds().includes(paneId)) return false;
         }
         const paneId = options.host.paneIds()[0] ?? options.host.addPane();
         if (!paneId || generation !== scopeGeneration) return false;

@@ -92,6 +92,35 @@ function changeLayout(env: ReturnType<typeof setup>, activeTabId: string): void 
 }
 
 describe('workspace tab persistence', () => {
+    // An unbound split can exist briefly between host creation and tab binding.
+    it('round-trips the active position with an unbound pane before it', () => {
+        const saved = createWorkspaceTabsSnapshot(state(), ['unbound', 'pane-a', 'pane-b']);
+        const memory = memoryStorage();
+        writeWorkspaceTabsSnapshot(memory.storage, KEY, saved);
+        expect(readWorkspaceTabsSnapshot(memory.storage, KEY)).toMatchObject({
+            status: 'ok', snapshot: { activeVisibleIndex: 1, visibleTabIds: ['tab-1', 'tab-2'] },
+        });
+    });
+
+    it('saves a scheduled layout before its owning scope is disposed', () => {
+        const memory = memoryStorage();
+        const env = setup(memory.storage);
+        env.persistence.restore();
+        changeLayout(env, 'tab-1');
+        scopes.at(-1)!.stop();
+        expect(readWorkspaceTabsSnapshot(memory.storage, KEY)).toMatchObject({ status: 'ok', snapshot: { activeTabId: 'tab-1' } });
+    });
+
+    it('round-trips sessions with more than one hundred open tabs', () => {
+        const live = state();
+        live.tabs.push(...Array.from({ length: 100 }, (_, index) => ({ ...live.tabs[0]!, id: `extra-${index}` })));
+        const memory = memoryStorage();
+        writeWorkspaceTabsSnapshot(memory.storage, KEY, createWorkspaceTabsSnapshot(live, ['pane-a', 'pane-b']));
+        const restored = readWorkspaceTabsSnapshot(memory.storage, KEY);
+        expect(restored.status).toBe('ok');
+        if (restored.status === 'ok') expect(restored.snapshot.tabs).toHaveLength(102);
+    });
+
     beforeEach(() => {
         vi.useFakeTimers();
     });

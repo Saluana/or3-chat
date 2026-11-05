@@ -859,7 +859,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Understand chat admission, persistence, streaming, recovery, navigation ownership, and attachment resource cleanup."
+                    "summary": "Understand chat admission, persistence, streaming, recovery, tab and pane navigation ownership, durable layouts, and attachment resource cleanup."
                 },
                 {
                     "name": "ai-preferences.md",

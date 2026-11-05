@@ -51,6 +51,7 @@ describe('useWorkspaceTabHost', () => {
         );
         expect(setPaneApp).toHaveBeenCalledWith(0, 'kanban', {
             recordId: 'record-a',
+            isCurrent: activation.isCurrent,
         });
     });
 

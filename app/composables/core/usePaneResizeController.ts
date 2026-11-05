@@ -1,4 +1,4 @@
-import { nextTick, ref, watch, type Ref } from 'vue';
+import { getCurrentScope, nextTick, onScopeDispose, ref, watch, type Ref } from 'vue';
 import {
     useDebounceFn,
     useEventListener,
@@ -22,9 +22,10 @@ export function usePaneResizeController(options: {
     let previousX = 0;
     let pendingFrame: number | null = null;
     let pendingDelta = 0;
+    let disposed = false;
 
     const recalculate = useDebounceFn((width: number) => {
-        if (width > 0) {
+        if (!disposed && width > 0) {
             options.recalculateWidths(width);
         }
     }, 100);
@@ -41,7 +42,9 @@ export function usePaneResizeController(options: {
         options.paneCount,
         async (paneCount, previousPaneCount) => {
             if (paneCount === previousPaneCount) return;
+            cancelResize();
             await nextTick();
+            if (disposed) return;
             const containerWidth = paneContainerRef.value?.clientWidth ?? 0;
             if (containerWidth > 0) {
                 options.recalculateWidths(containerWidth);
@@ -63,6 +66,8 @@ export function usePaneResizeController(options: {
     ): void {
         if (
             options.isMobile.value ||
+            disposed ||
+            isResizing.value ||
             event.button !== 0 ||
             event.isPrimary === false
         ) {
@@ -104,12 +109,19 @@ export function usePaneResizeController(options: {
 
     function onPaneResizeEnd(event: PointerEvent): void {
         if (pointerId !== event.pointerId) return;
+        flushPendingResize();
+        cancelResize();
+        options.persist();
+    }
+
+    function cancelResize(): void {
         if (pendingFrame !== null) {
             cancelAnimationFrame(pendingFrame);
             pendingFrame = null;
         }
-        flushPendingResize();
+        pendingDelta = 0;
         if (
+            pointerId !== null &&
             typeof pointerCaptureTarget?.hasPointerCapture === 'function' &&
             typeof pointerCaptureTarget.releasePointerCapture === 'function' &&
             pointerCaptureTarget.hasPointerCapture(pointerId)
@@ -120,8 +132,12 @@ export function usePaneResizeController(options: {
         pointerId = null;
         paneIndex = null;
         isResizing.value = false;
-        options.persist();
     }
+
+    if (getCurrentScope()) onScopeDispose(() => {
+        disposed = true;
+        cancelResize();
+    });
 
     // Keep the listeners stable for the composable's lifetime. Registering
     // only after `isResizing` changes can miss the terminating pointer event

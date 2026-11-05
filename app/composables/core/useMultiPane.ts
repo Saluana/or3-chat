@@ -97,7 +97,7 @@ export interface UseMultiPaneApi {
     setPaneApp: (
         index: number,
         appId: string,
-        opts?: { recordId?: string }
+        opts?: { recordId?: string; isCurrent?: () => boolean }
     ) => Promise<void>;
     updatePane: (index: number, updates: Partial<PaneState>) => void;
     getPaneIndexById: (paneId: string) => number;
@@ -306,8 +306,9 @@ export function useMultiPane(
         () => panes.value[activePaneIndex.value]?.id ?? null
     );
     const hooks = useHooks();
-    const threadLoadGenerations = new Map<string, number>();
+    const paneLoadGenerations = new Map<string, number>();
     let workspaceReadGeneration = 0;
+    let disposed = false;
     const closingPaneIds = new Set<string>();
     const pendingPaneCreations = ref(0);
 
@@ -422,7 +423,6 @@ export function useMultiPane(
             { immediate: true }
         );
         onScopeDispose(() => {
-            workspaceReadGeneration++;
             stopWatching();
             stopWorkspace();
             releaseHistories();
@@ -696,11 +696,11 @@ export function useMultiPane(
 
     async function setPaneThread(index: number, threadId: string, options: { isCurrent?: () => boolean } = {}): Promise<boolean> {
         const pane = panes.value[index];
-        if (!pane) return false;
+        if (disposed || !pane) return false;
         const workspaceGeneration = workspaceReadGeneration;
         const loadGeneration =
-            (threadLoadGenerations.get(pane.id) ?? 0) + 1;
-        threadLoadGenerations.set(pane.id, loadGeneration);
+            (paneLoadGenerations.get(pane.id) ?? 0) + 1;
+        paneLoadGenerations.set(pane.id, loadGeneration);
         const oldId = pane.threadId;
         let requested: string | false = threadId;
         if (import.meta.dev) {
@@ -725,7 +725,7 @@ export function useMultiPane(
         } catch {
             /* intentionally empty */
         }
-        if (threadLoadGenerations.get(pane.id) !== loadGeneration || workspaceGeneration !== workspaceReadGeneration || options.isCurrent?.() === false) return false;
+        if (!panes.value.includes(pane) || paneLoadGenerations.get(pane.id) !== loadGeneration || workspaceGeneration !== workspaceReadGeneration || options.isCurrent?.() === false) return false;
         if (requested === false) return false; // veto
         // Clear association
         if (requested === '') {
@@ -738,7 +738,7 @@ export function useMultiPane(
                     pane,
                     oldThreadId: oldId,
                     newThreadId: '',
-                    paneIndex: index,
+                    paneIndex: panes.value.indexOf(pane),
                     messageCount: 0,
                 });
             if (import.meta.dev) {
@@ -755,7 +755,7 @@ export function useMultiPane(
         }
         const loadedMessages = await loadMessagesFor(requested);
         if (
-            threadLoadGenerations.get(pane.id) !== loadGeneration ||
+            paneLoadGenerations.get(pane.id) !== loadGeneration ||
             workspaceGeneration !== workspaceReadGeneration ||
             pane.threadId !== oldId || options.isCurrent?.() === false ||
             !panes.value.includes(pane)
@@ -773,7 +773,7 @@ export function useMultiPane(
                 pane,
                 oldThreadId: oldId,
                 newThreadId: requested,
-                paneIndex: index,
+                paneIndex: panes.value.indexOf(pane),
                 messageCount: pane.messages.length,
             });
         if (import.meta.dev) {
@@ -887,7 +887,10 @@ export function useMultiPane(
     async function closePane(i: number) {
         if (panes.value.length <= 1) return; // never close last
         const closing = panes.value[i];
-        if (!closing) return;
+        if (disposed || !closing) return;
+        const workspaceGeneration = workspaceReadGeneration;
+        const closingMode = closing.mode;
+        const closingDocumentId = closing.documentId;
         if (closingPaneIds.has(closing.id)) return;
         closingPaneIds.add(closing.id);
         try {
@@ -901,13 +904,11 @@ export function useMultiPane(
                 closing.documentId &&
                 options.onFlushDocument
             ) {
-                try {
-                    await options.onFlushDocument(closing.documentId);
-                } catch {
-                    /* intentionally empty */
-                }
+                await options.onFlushDocument(closing.documentId);
             }
 
+            if (workspaceGeneration !== workspaceReadGeneration ||
+                closing.mode !== closingMode || closing.documentId !== closingDocumentId) return;
             const closingIndex = panes.value.indexOf(closing);
             if (closingIndex === -1 || panes.value.length <= 1) return;
 
@@ -932,7 +933,7 @@ export function useMultiPane(
 
             const wasActive = closingIndex === activePaneIndex.value;
             panes.value.splice(closingIndex, 1);
-            threadLoadGenerations.delete(closing.id);
+            paneLoadGenerations.delete(closing.id);
             normalizeStoredWidths(panes.value.length);
             void hooks.doAction('ui.pane.close:action:after', {
                 pane: closing,
@@ -1002,7 +1003,7 @@ export function useMultiPane(
         opts: { initialRecordId?: string } = {}
     ): Promise<void> {
         // Guard: check pane limit
-        if (!canAddPane.value) {
+        if (disposed || !canAddPane.value) {
             if (import.meta.dev) {
                 console.warn(
                     `[multiPane] newPaneForApp: Cannot add pane, limit reached (${maxPanes.value})`
@@ -1034,6 +1035,7 @@ export function useMultiPane(
         )
             return;
         pendingPaneCreations.value++;
+        const workspaceGeneration = workspaceReadGeneration;
 
         // Create pane skeleton
         const pane: PaneState = {
@@ -1057,7 +1059,8 @@ export function useMultiPane(
             }
 
             // Synchronous pane additions may have consumed the reserved slot.
-            if (panes.value.length >= maxPanes.value) return;
+            if (workspaceGeneration !== workspaceReadGeneration ||
+                !multiplePanesAllowed.value || panes.value.length >= maxPanes.value) return;
 
             // Push pane and activate
             const prevIndex = activePaneIndex.value;
@@ -1106,10 +1109,10 @@ export function useMultiPane(
     async function setPaneApp(
         index: number,
         appId: string,
-        opts: { recordId?: string } = {}
+        opts: { recordId?: string; isCurrent?: () => boolean } = {}
     ): Promise<void> {
         const pane = panes.value[index];
-        if (!pane) {
+        if (disposed || !pane || opts.isCurrent?.() === false) {
             if (import.meta.dev) {
                 console.warn(
                     `[multiPane] setPaneApp: Pane at index ${index} not found`
@@ -1117,6 +1120,15 @@ export function useMultiPane(
             }
             return;
         }
+
+        // App factories share the same ownership as chat loads and direct
+        // document updates. Only the latest selection can publish its result.
+        const workspaceGeneration = workspaceReadGeneration;
+        const loadGeneration = (paneLoadGenerations.get(pane.id) ?? 0) + 1;
+        paneLoadGenerations.set(pane.id, loadGeneration);
+        const isCurrent = () => !disposed && workspaceGeneration === workspaceReadGeneration &&
+            paneLoadGenerations.get(pane.id) === loadGeneration && panes.value.includes(pane) &&
+            opts.isCurrent?.() !== false;
 
         // Get pane app getter (module is already bundled statically)
         const getPaneApp = ensurePaneAppGetter();
@@ -1141,8 +1153,6 @@ export function useMultiPane(
 
         // Store old values for hooks
         const oldMode = pane.mode;
-        // oldDocumentId preserved for potential future hook use
-        void pane.documentId;
 
         // If no recordId provided and app has createInitialRecord, create new record
         let recordId = opts.recordId;
@@ -1161,14 +1171,17 @@ export function useMultiPane(
                         error
                     );
                 }
+                if (isCurrent()) throw error;
                 return;
             }
         }
 
+        if (!isCurrent()) return;
         // Update pane to app mode
         pane.mode = appId;
         pane.documentId = recordId;
         pane.threadId = '';
+        pane.pendingThreadId = undefined;
         pane.messages = [];
 
         // Fire hook if mode changed
@@ -1176,8 +1189,8 @@ export function useMultiPane(
             try {
                 void hooks.doAction('ui.pane.open:action:after', {
                     pane,
-                    index,
-                    previousIndex: index, // Same pane, just mode changed
+                    index: panes.value.indexOf(pane),
+                    previousIndex: panes.value.indexOf(pane), // Same pane, just mode changed
                 });
             } catch (e) {
                 // Hook errors should not abort pane switch
@@ -1207,7 +1220,11 @@ export function useMultiPane(
      */
     function updatePane(index: number, updates: Partial<PaneState>) {
         const pane = panes.value[index];
-        if (!pane) return;
+        if (disposed || !pane) return;
+
+        if ('mode' in updates || 'threadId' in updates || 'documentId' in updates) {
+            paneLoadGenerations.set(pane.id, (paneLoadGenerations.get(pane.id) ?? 0) + 1);
+        }
 
         // Update properties while maintaining Vue reactivity
         Object.assign(pane, updates);
@@ -1264,6 +1281,9 @@ export function useMultiPane(
     // Clean up global reference on scope disposal to prevent memory leaks
     if (getCurrentScope()) {
         onScopeDispose(() => {
+            disposed = true;
+            workspaceReadGeneration++;
+            paneLoadGenerations.clear();
             if (getGlobalMultiPaneApi() === api) {
                 setGlobalMultiPaneApi(undefined);
             }

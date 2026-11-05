@@ -252,6 +252,17 @@ The tab session owns the open-tab manifest and active bindings. The pane adapter
 
 Tab manifests persist to localStorage by workspace and profile. A failed read keeps the original manifest protected even if writes later work: scheduled saves, Retry and unload cannot publish the temporary layout until a successful restore has read that scope. Reload after storage becomes readable restores the original tab IDs and their drafts. Storage failures never break the workspace: blocked storage (even a throwing `window.localStorage` getter), quota errors and failed debounced writes keep the unsaved layout pending, expose `persistenceStatus` (`ok`, `unavailable`, `write_failed`, `corrupt`), and raise one persistent "Tab layout could not be saved" toast per failure episode with Retry. Draft restoration depends on the saved tab IDs: before browser unload, a failed layout is retried synchronously and an unresolved layout or draft save failure requests the browser's unsaved-change confirmation. This is best effort; browsers can suppress confirmations and users can accept them. A saved layout that is invalid JSON or fails the schema is reported as corrupt rather than missing: the original is copied to `<key>:corrupt` (latest only) before a fresh layout can replace it, and is never overwritten while that copy cannot be made. The persistent "Saved tab layout was unreadable" notice offers **Download original** (`or3-tab-layout-backup.txt`) and **Discard original**; each closes the notice, and the copy stays until it is discarded. The buttons act on the layout key the notice was raised for, so switching workspace or profile first cannot make them touch another layout's copy (`getCorruptLayoutBackup(key)` / `discardCorruptLayoutBackup(key)` take that key). No buttons are shown when the copy could not be made. `useWorkspaceTabs` exposes `getCorruptLayoutBackup()` and `discardCorruptLayoutBackup()` for the same purpose. `flushPersistence()` always saves the current layout, which pane swaps rely on; the debounce, `pagehide` and scope switches write only pending changes.
 
+Existing-tab opens and Undo-close capture the outgoing view before switching.
+Background opens preserve the current composer. If restoring the incoming view
+fails, navigation restores the outgoing pane content and binding together.
+Slow pane-app initialization cannot overwrite a newer selection, cross a
+workspace switch, or publish after its shell is disposed. Failed final document
+saves keep the pane open.
+
+Pending layout changes save on scope disposal. Saved layouts support more than
+100 open tabs and preserve active-tab identity when unavailable resources are
+removed. Resize work is cancelled when its pane arrangement or owner disappears.
+
 ### Draft storage and recovery
 
 Composer drafts persist in local-only `workspace_tab_drafts` and
