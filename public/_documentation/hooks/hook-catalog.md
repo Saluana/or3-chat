@@ -25,6 +25,8 @@ See [API and types](/documentation/hooks/reference) for engine semantics, lifecy
 | `ai.chat.model:filter:select`         | filter | `[modelId: string]`                              | `string` (new model id)            |
 | `ai.chat.messages:filter:input`       | filter | `[messages: ChatMessage[]]`                              | `ChatMessage[]`                    |
 | `ai.chat.messages:filter:before_send` | filter | `[payload: { messages: OpenRouterMessage[] } \| { messages: OpenRouterMessage[] }[]]`                 | `{ messages: OpenRouterMessage[] } \| { messages: OpenRouterMessage[] }[]` |
+| `ai.chat.send:filter:prepare` | filter | `[candidate: ChatSendPreparation]` | `ChatSendPreparation` |
+| `ai.chat.send:filter:commit` | filter | `[commit: ChatSendCommit]` | `ChatSendCommit` |
 | `ai.chat.send:action:before`          | action | `[payload: AiSendBeforePayload]`                 | —                                  |
 | `ai.chat.send:action:after`           | action | `[payload: AiSendAfterPayload]`                  | —                                  |
 | `ai.chat.stream:action:delta`         | action | `[chunk: string, ctx: AiStreamDeltaPayload]`     | —                                  |
@@ -39,6 +41,8 @@ See [API and types](/documentation/hooks/reference) for engine semantics, lifecy
 | `ai.document.edit:action:error`       | action | `[result: DocumentAiEditResultPayload]`          | —                                  |
 
 ---
+
+The preparation and commit filters have different side-effect and ownership rules; see [native chat preparation and delegated commit](/documentation/hooks/reference#native-chat-preparation-and-delegated-commit).
 
 ## Pane lifecycle
 
@@ -166,15 +170,15 @@ Emitted by `app/composables/core/useWorkspaceBackup.ts`. Telemetry payloads carr
 
 | Key                                        | Kind   | Args (tuple)                                                                                  | Returns |
 | ------------------------------------------ | ------ | --------------------------------------------------------------------------------------------- | ------- |
-| `workspace.backup.export:action:before`    | action | `[{ format: 'stream'; filenameBase: string; suggestedName: string }]`                         | —       |
-| `workspace.backup.export:action:after`     | action | `[{ format: 'stream'; filenameBase: string; suggestedName: string; durationMs: number }]`    | —       |
-| `workspace.backup.export:action:error`     | action | `[{ format: 'stream'; filenameBase: string; suggestedName: string; durationMs: number; error: unknown }]` | — |
-| `workspace.backup.export:action:cancelled` | action | `[{ format: 'stream'; filenameBase: string; suggestedName: string; durationMs: number }]`    | —       |
-| `workspace.backup.import:action:before`    | action | `[{ fileName: string \| null; mode: 'replace' \| 'append'; overwrite: boolean; format: 'stream' \| 'dexie' \| 'unknown' }]` | — |
-| `workspace.backup.import:action:after`     | action | `[same as before, with format: 'stream' \| 'dexie' + durationMs: number]`                     | —       |
-| `workspace.backup.import:action:error`     | action | `[same as before, with format: 'stream' \| 'dexie' + durationMs: number + error: unknown]`    | —       |
+| `workspace.backup.export:action:before`    | action | `[{ format: 'stream' \| 'cloud'; filenameBase: string; suggestedName: string }]`                         | —       |
+| `workspace.backup.export:action:after`     | action | `[{ format: 'stream' \| 'cloud'; filenameBase: string; suggestedName: string; durationMs: number }]`    | —       |
+| `workspace.backup.export:action:error`     | action | `[{ format: 'stream' \| 'cloud'; filenameBase: string; suggestedName: string; durationMs: number; error: unknown }]` | — |
+| `workspace.backup.export:action:cancelled` | action | `[{ format: 'stream' \| 'cloud'; filenameBase: string; suggestedName: string; durationMs: number }]`    | —       |
+| `workspace.backup.import:action:before`    | action | `[{ fileName: string \| null; mode: 'replace' \| 'append'; overwrite: boolean; format: 'stream' \| 'dexie' \| 'cloud' \| 'unknown' }]` | — |
+| `workspace.backup.import:action:after`     | action | `[same as before, with format: 'stream' \| 'dexie' \| 'cloud' + durationMs: number]`                     | —       |
+| `workspace.backup.import:action:error`     | action | `[same as before, with format: 'stream' \| 'dexie' \| 'cloud' \| 'unknown' + durationMs: number + error: unknown]`    | —       |
 | `workspace.backup.peek:action:before`      | action | `[{ fileName: string \| null }]`                                                              | —       |
-| `workspace.backup.peek:action:after`       | action | `[{ fileName: string \| null; format: 'stream' \| 'dexie'; metadata: ImportMetadata; durationMs: number }]` | — |
+| `workspace.backup.peek:action:after`       | action | `[{ fileName: string \| null; format: 'stream' \| 'dexie' \| 'cloud'; metadata: ImportMetadata; durationMs: number }]` | — |
 | `workspace.backup.peek:action:error`       | action | `[{ fileName: string \| null; error: unknown; durationMs: number }]`                          | —       |
 | `workspace:reloaded`                       | action | `[]`                                                                                          | —       |
 
@@ -318,7 +322,7 @@ Nitro webhook events fire on `nitroApp.hooks` via `emitWebhookSystemHook` and fe
 
 ## DX tips
 
--   Use `typedOn(hooks)` from `hook-keys` to get argument inference for known keys.
+-   Use `typedOn(useHooks()._engine).on` from `hook-keys` for inference on curated keys, or prefer `useHooks().on` for normal registration.
 -   Filters: always return the next value. For veto-capable filters, return `false` to cancel and `''` to clear where supported.
 -   For DB hooks, check the specific module under `app/db/` to see exactly which ops emit hooks and with which shapes.
 

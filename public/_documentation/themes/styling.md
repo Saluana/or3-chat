@@ -364,7 +364,7 @@ For a local stylesheet, create `styles.css` first, then declare
 `"stylesheets": ["./styles.css"]`. Scope raw rules yourself:
 
 ```css
-[data-theme="ocean-theme"] .monaco-editor {
+html[data-theme="ocean-theme"] .monaco-editor {
   border-radius: var(--md-border-radius);
 }
 ```

@@ -14,7 +14,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Find work, restore app tabs, distinguish chat drafts, create documents inline without a naming form, navigate the fixed-height Dashboard with dismissible deep links and Files/Trash, and preserve existing records when importing backups. Conversation memory labels, concise settings, and optional troubleshooting details."
+                    "summary": "Learn the basics of conversations, documents, projects, workspaces, and local-first storage."
                 },
                 {
                     "name": "first-chat.md",
@@ -50,7 +50,7 @@
                     "category": "Development",
                     "categoryOrder": 1,
                     "order": 0,
-                    "summary": "Run and verify source builds on Node.js 24.22.1+ (24.x), interactive secret-store setup before authenticated launches, safe stale-vault-socket recovery with serialized launchers and awaited signal cleanup, bounded readiness probes that preserve the launcher, phone development over LAN or Tailscale, bare --host argument handling, native development HTTPS, module-loading and VueUse dependency troubleshooting, isolated browser harnesses, cold-start dependency prebundling for installed scroll, Markdown, backup and marketplace, typed audit-runner lint and reviewed plugin compatibility checks, and production loading boundaries for document conversion, Cloud sync, welcome hydration, mobile navigation and composer first paint, theme activation, negotiated HTML compression and parsed stylesheet reuse, responsive artwork and SSR preloads, deferred palette/mention indexing, saved color schemes, bounded sidebar layout with saved geometry before hydration, stable CSS cascade layers, gated plugin and storage startup, on-demand history/SDK execution, and cold-cache PDF/DOCX knowledge extraction."
+                    "summary": "Install dependencies, run OR3 from source, verify changes, and troubleshoot development."
                 },
                 {
                     "name": "plugin-quickstart.md",
@@ -92,7 +92,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Hooks let features cooperate without importing each other's implementation. An action announces an event; a filter transforms a value before the caller uses it. Start with your first hook, then use the catalog to choose a hook that the appl"
+                    "summary": "Learn how actions and filters connect features, and choose the right hook integration."
                 },
                 {
                     "name": "first-hook.md",
@@ -101,7 +101,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "This tutorial adds a source extension that removes trailing spaces from outgoing chat text. It runs in an editable OR3 checkout, using the application engine. For installable packages, start with Build your first plugin and check SDK runtim"
+                    "summary": "Build a source extension that filters outgoing chat text using the application hook engine."
                 },
                 {
                     "name": "chat-editor-extensions.md",
@@ -197,7 +197,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Project CRUD, atomic family membership, concurrent edit and deletion guards, validated knowledge images, live memory capacity, server delivery authorization, and provider qualification. Internal notifications wait for the outer transaction; server execution requires resolved canonical ownership. Classified memory prepares hooks before atomic memory/cursor commits and rechecks live source bindings around decoding."
+                    "summary": "Manage projects, membership, knowledge, and memory using the database APIs."
                 },
                 {
                     "name": "posts.md",
@@ -215,7 +215,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "Native editing and custom schemas, live remote title/body refresh, credential-gated autocomplete, synchronized split panes and retained conflicting drafts, literal format-aware find/replace, read-only controls, cached and deferred statistics, editor-owned cache cleanup, title-only rename capture, inline Untitled title placeholders for new documents, captured workspace history, review/Undo, recoverable Files Trash and selection toolbar restoration, failed-save retry, unsaved-change guards, and scoped image delivery and intake recovery. Immediate message document creation with heading reuse, asynchronous titles and idempotent message snapshots. Read-only raw/schema recovery, non-destructive conflict copies, size-ceiling warnings, embedded-image exports, frozen AI snapshot ownership, ordered acceptance and retryable durability. Shared chat/document table styling with visible cell grids across themes. Visible inserted dividers independent of subtle border settings. Image-only selection controls, labeled resizing and persisted/exported alignment. Native rich-text AI review previews and retryable worker checkpoint acceptance. Autocomplete pauses offline, retires active/queued requests, and resumes on new typing after reconnect. Document AI cancels interrupted preparation/generation, retains drafts for manual retry, supports local review and approximate token estimates offline, and refreshes cached models on reconnect."
+                    "summary": "Create, edit, sync, recover, and manage native documents."
                 },
                 {
                     "name": "prompts.md",
@@ -314,18 +314,18 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 3,
-                    "summary": "Export complete streamed Cloud archives with checksummed originals including retained SQLite and Convex Trash, restore into fresh workspaces with verified revisions and Trash state, and recover local-only JSONL backups with transactional limits."
+                    "summary": "Export and restore workspace backups, including Cloud archives and local JSONL backups."
                 }
             ]
         },
         {
-            "title": "OpenRouter",
+            "title": "Model providers",
             "path": "/auth",
             "files": [
                 {
                     "name": "overview.md",
                     "path": "/auth/overview",
-                    "title": "OpenRouter overview",
+                    "title": "Model provider overview",
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 0,
@@ -380,7 +380,7 @@
                     "category": "Using tools",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Enable default-off tools per chat, use OpenRouter web search, preserve selections across suspension and reload, configure the dashboard default, use scoped workspace tools, search models, delegate independent tasks in parallel, open child chats on mobile or desktop, review edits, and download verified full results."
+                    "summary": "Configure chat tools, web search, workspace tools, and delegated tasks."
                 },
                 {
                     "name": "chat-tool-reliability.md",
@@ -403,7 +403,7 @@
                 {
                     "name": "manual-context-compaction.md",
                     "path": "/utils/manual-context-compaction",
-                    "title": "Manual context compaction",
+                    "title": "Summarize a conversation",
                     "category": "Using tools",
                     "categoryOrder": 0,
                     "order": 1,
@@ -518,7 +518,7 @@
                     "category": "Building themes",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Style components with tokens, locally bundled built-in theme glyphs and Material Symbols, theme-aware tab and dashboard icons, Blank's Solar icons with heavier strokes and duotone category badges, sidebar project settings, Knowledge and Memory controls, shared responsive modal headers and customizable frame borders, CSS and scoped theme rules. Shared action-menu typography and density variables, Blank's type, radius and control scale, scale-aware sidebar pointer tracking, and the `html[data-theme]` selector convention. Empty-pane layout remains stable beneath the first-run welcome dialog. Blank keyboard focus uses a consistent inset outline, full-row primary sidebar indicators, and the user focus-width preference without scroll clipping."
+                    "summary": "Style OR3 components using theme tokens, icons, and shared UI conventions."
                 },
                 {
                     "name": "package-install.md",
@@ -575,7 +575,7 @@
                     "name": "editor.md",
                     "path": "/workflows/editor",
                     "category": "Start here",
-                    "summary": "Browse, build, validate, and run workflows with explicit agent dataflow, tool selection, generated-image persistence, stop, interrupted-run recovery, and checkpoint resume. The editor is supplied by the separately installed Workflows package.",
+                    "summary": "Browse, build, validate, and run workflows with the separately installed Workflows package.",
                     "title": "Build and run a workflow",
                     "categoryOrder": 0,
                     "order": 0
@@ -593,7 +593,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "OR3 Cloud adds accounts, shared workspaces, cross-device sync, server-side file storage, and background execution to the local-first app. Your browser still stores workspace data in Dexie and queues local changes while offline. Cloud featur"
+                    "summary": "Learn what Cloud adds, choose a setup path, and understand supported providers."
                 },
                 {
                     "name": "setup.md",
@@ -620,7 +620,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Direct provider sign-in dialogs from signed-out chat cards and sends, auth UI adapter entry points, Registration Settings and Invitations, saved versus active modes, Restart now, invitation setup and codes, account identities, team membership, credentials, SQLite and Convex deployment-admin grants, workspace-scoped admin sessions, workspace discovery, readable roles, and guest access. Includes coordinated auth provider dependencies."
+                    "summary": "Configure sign-in, registration, invitations, accounts, and workspace access."
                 },
                 {
                     "name": "background-execution.md",
@@ -629,7 +629,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "SSR chat, tool and workflow jobs continue after detachment. Covers instance and workspace chat limits, authorization, browser delegation and tool retry fences, the durable admission contract, child saving and uncertain outcomes, checkpoint diagnostics, polling and SSE, canonical reattachment and edit protection, durable recovery, call-bound tool-result storage, retention, persisted delegation across dashboard restarts, and opt-in live delegation testing."
+                    "summary": "Understand server-side jobs, admission, recovery, and work that continues after detachment."
                 },
                 {
                     "name": "notifications.md",
@@ -647,7 +647,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 6,
-                    "summary": "Signed webhook delivery with guarded JSON mutations, current membership checks, atomic provider registration quotas, deferred rate limits, bounded response streams, retries, and SSRF protection. Private-address blocking also denies IPv6 translation and tunnel prefixes at admission and connection."
+                    "summary": "Configure signed webhook delivery and understand authorization, retries, and network protections."
                 },
                 {
                     "name": "providers.md",
@@ -674,7 +674,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 9,
-                    "summary": "SQLite auth/sync, structured background recovery errors, backup inspection qualified with filesystem provider 0.0.16, owner-bound notification deletion, atomic native/D1 Files and Trash admission, bounded snapshots, exact commit retries, quotas, maintenance controls and D1 support limits."
+                    "summary": "Set up and operate the SQLite provider for authentication and synchronization."
                 },
                 {
                     "name": "provider-fs.md",
@@ -701,7 +701,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 12,
-                    "summary": "Convex setup, matching backend template deployment, structured background recovery errors, strict canonical sync admission, truthful winner/replay receipts, legacy snapshot recovery, account-scoped cursors, bounded retention, and explicit file restoration after deletion."
+                    "summary": "Set up the Convex provider and understand synchronization and recovery."
                 },
                 {
                     "name": "provider-s3.md",
@@ -764,7 +764,7 @@
                     "category": "Reference",
                     "categoryOrder": 4,
                     "order": 18,
-                    "summary": "This is the normative authorization inventory for public OR3 Cloud operations. Authorization is derived from a verified provider identity and the canonical workspace membership. Request bodies may identify resources, content, and desired op"
+                    "summary": "Review the authorization rules for Cloud operations and workspace access."
                 },
                 {
                     "name": "sync-layer.md",
@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Durable snapshot replay, principal-scoped feed coverage, fenced multi-tab outboxes, indefinite outage recovery, request cancellation, bounded gateway bodies, real Chromium crash verification, foreground progress across snapshot replacement, active-database capture during route pauses, call-bound immutable tool-result KV chunks, and structured provider recovery failures."
+                    "summary": "Understand how workspace records synchronize, recover from outages, and handle conflicts."
                 },
                 {
                     "name": "storage-layer.md",
@@ -791,7 +791,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 21,
-                    "summary": "Plugin gating controls which plugins, dashboard items, and sidebar surfaces a user can see and interact with. It has two distinct jobs that must both work correctly:"
+                    "summary": "Understand how instance and workspace policies control plugin access."
                 },
                 {
                     "name": "or3-cloud-wizard.md",
@@ -800,7 +800,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 22,
-                    "summary": "Advanced source CLI and browser setup with first-launch local-vault/manual-attachment guidance, private atomic persistence, concurrent preset safety, bounded OR3 health verification with early exit reporting, provider selection, and deployment."
+                    "summary": "Use the source setup wizard to select providers and configure a deployment."
                 },
                 {
                     "name": "or3-connect.md",
@@ -809,7 +809,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 23,
-                    "summary": "> Managed Cloud status: withheld. Remote Connect is not part of the > supported managed Cloud launch. Its Cloudflare/domain/attestation flow and a > disposable staging lifecycle must pass before the production UI or beginner > docs can offe"
+                    "summary": "Review the current status and requirements of OR3 Connect for Cloud."
                 },
                 {
                     "name": "operations.md",
@@ -826,7 +826,7 @@
                     "title": "Cloud credentials and secret store",
                     "category": "Providers",
                     "order": 10,
-                    "summary": "Default single-host vault, authenticated health probes without audit writes, source provisioning and manual attachment, watched-plugin automatic vault isolation, legacy custody preservation and instance-only connection status, custody-preserving upgrades, account-bound OAuth, billing policy, browser migration, governed plugin AI, and encrypted recovery. Pending operations are fenced by authorization invalidation; device secrets clear before account teardown."
+                    "summary": "Configure credential custody, the local vault, account connections, and recovery."
                 }
             ]
         },
@@ -859,7 +859,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Preserve durable sends, native admission, tool policy, conversation-scoped history and unchanged presentation rows across refreshes, tabs and quiet draft autosave, with stream-safe guards, generated images retained in live text, trailing inline hydration and owned continuation intake, stable lazy row handlers, unchanged display projections and bottom-follow controls that respect overtaking native movement, owned syntax workers, math styles ready with the lazy renderer, shared lazy grammars, draft recovery, isolated journal failures, and tab-scoped storage notices and retries. Shared backend automatic chat/document titles, administrator model selection, conditional rename protection, one-shot lifecycle and bounded inference costs. Owned wheel handling acknowledges native input before layout following when maintainBottom is enabled, keeps other lists passive, preserves default scrolling and avoids an extra follow frame; busy-main-thread wheel latency remains a qualification limit. Message edits preserve fresh metadata, literal Markdown and math, and check originating access and live parents before committing. Continuations publish ownership after admission; cancelled tab intent follows stable pane identity. Generated-image intake and attachment hydration retain originating access, live metadata, cancellable bounded downloads and visible save failures."
+                    "summary": "Understand chat admission, persistence, streaming, recovery, and view updates."
                 },
                 {
                     "name": "ai-preferences.md",
@@ -946,7 +946,7 @@
                     "category": "Reference",
                     "categoryOrder": 3,
                     "order": 1,
-                    "summary": "SDK contracts, trusted UI and records, originating-chat authorization, scoped storage, governed networking, saved Files catalog methods, lifecycle hooks, menu actions, and cutover requirements. File byte reads follow activation lifetime across workspace switches. File actions revalidate current rows, metadata, grants and disposal after asynchronous revision hashing."
+                    "summary": "Use the SDK to build plugins with host UI, storage, networking, hooks, and other capabilities."
                 },
                 {
                     "name": "plugin-sdk-cli.md",
@@ -973,7 +973,7 @@
                     "category": "Advanced",
                     "categoryOrder": 4,
                     "order": 0,
-                    "summary": "Operator configuration, watched-plugin secret-custody isolation and legacy preservation, plugin settings and current-package first-action authorization, installed-package policy restrictions, active document asset containment, batched host access checks, package verification, permission review, containment, budgets, safe mode, and recovery. Server activations and capabilities enforce operator safe mode, runtime loaders and workspace rollout policy."
+                    "summary": "Configure plugin execution, permissions, credential custody, containment, and recovery."
                 },
                 {
                     "name": "admin-plugins.md",
@@ -991,7 +991,7 @@
                     "category": "Building plugins",
                     "categoryOrder": 2,
                     "order": 3,
-                    "summary": "Build source and trusted tool cards, explicitly register reference examples to try them, and understand portable authoring and its containment qualification gate. Inherited cards persist state on the source message while sends use the current branch. Unchanged text projections and persisted card state do not notify card subscribers. Disposed cards stop their pending notification batch. Workspace changes immediately retire old card subscriptions, observers and snapshots. Lazy mounting validates current card geometry against the existing preload range."
+                    "summary": "Build interactive tool cards and understand current support and security limits."
                 }
             ]
         }

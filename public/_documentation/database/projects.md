@@ -19,7 +19,7 @@ Project family headers use an original chat's title and actions only when that o
 ## What does it do?
 
 -   Validates incoming project objects with `ProjectSchema`.
--   Wraps persistence in `dbTry` for consistent error handling.
+-   Reports database failures; required writes throw, while `getProject` uses a best-effort read.
 -   Emits hook actions/filters for create, upsert, delete, and read flows.
 
 ---

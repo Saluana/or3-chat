@@ -1,11 +1,10 @@
 # Deployment and Operations Guide
 
-The current filesystem backup inspector qualifies SQLite 0.0.21 and filesystem
-0.0.14. It accepts completed migration histories through 024 (previous published
-backups), 026 (retained quota accounting), or 028 (verified upload accounting and
-user-scoped device cursors), and refuses incomplete upgrades.
-
-Operational runbook for OR3 Cloud SSR deployments.
+Operational runbook for OR3 Cloud SSR deployments. For the managed profile,
+the backup inspector qualifies SQLite `0.0.26` and filesystem `0.0.16`.
+It accepts complete migration histories through `031_storage_generation_uploads`
+and selected earlier histories through 024, 026, 028, and 029. An incomplete or
+unknown history is refused; see [SQLite operations](/documentation/cloud/provider-sqlite).
 
 ## Start with the right operator
 

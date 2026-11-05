@@ -98,7 +98,7 @@ configure lower or higher limits and permitted extensions.
 ## Install and select
 
 1. Sign in to the global admin panel and open **Themes**.
-2. Use **Install .zip** to upload the package, or **Import from URL** with a
+2. Use **Upload .zip** to upload the package, or **Import from link** with a
    direct HTTPS ZIP URL.
 3. Review the result. An existing extension requires an explicit overwrite;
    an unmanaged source/built-in folder with the same ID blocks installation.

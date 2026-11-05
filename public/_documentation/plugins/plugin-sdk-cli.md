@@ -15,7 +15,7 @@ For a standalone authoring workspace, pack a local SDK checkout:
 cd /absolute/path/to/or3-chat/packages/plugin-sdk
 bun pm pack --destination /absolute/path/to/sdk-artifacts
 cd /absolute/path/to/authoring-workspace
-bun add /absolute/path/to/sdk-artifacts/or3-plugin-sdk-2.0.0.tgz
+bun add /absolute/path/to/sdk-artifacts/or3-plugin-sdk-2.2.0.tgz
 ```
 
 Create the destination directories first and use the tarball filename printed
@@ -55,7 +55,7 @@ keep it available, or relink it if the project moves.
 
 ```sh
 ./node_modules/.bin/or3-plugin create --id my-tools.greeting \
-    --dir ./greeting --sdk-source /absolute/path/to/sdk-artifacts/or3-plugin-sdk-2.0.0.tgz
+    --dir ./greeting --sdk-source /absolute/path/to/sdk-artifacts/or3-plugin-sdk-2.2.0.tgz
 cd greeting
 bun install
 ./node_modules/.bin/or3-plugin validate .

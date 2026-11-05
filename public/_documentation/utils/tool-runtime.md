@@ -56,8 +56,8 @@ export default defineNuxtPlugin(() => {
 Handlers return strings; JSON-encode structured results. Both registries
 validate definitions and arguments against the shared JSON Schema validator,
 enforce byte limits on arguments/results, pass an `AbortSignal`, and apply a
-10-second default timeout. The server registration can set its own
-`timeoutMs`.
+10-second default timeout. Source registrations can set `timeoutMs`; client
+registrations owned by a plugin use the default timeout.
 
 Stopping a call before its handler starts prevents invocation. Once a handler
 starts, it must honor its `AbortSignal`; cancellation cannot undo external side

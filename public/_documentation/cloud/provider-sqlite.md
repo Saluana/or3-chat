@@ -165,7 +165,7 @@ Card descriptions wrap fully, including on narrow screens.
 
 Persistent Projects stores version-1 settings, explicit memories, and source bindings as opaque internal posts with the existing workspace-item marker. Preserve their content, metadata, and all `file_hashes`, including original/extraction history; no separate project database is needed. Workspace capability checks still apply to viewers, old clients, and revoked members.
 
-The project-aware canonical reader returns `project_ownership: resolved | conflict` with explicit or legacy ownership resolved in the authorized SQLite snapshot, and the adapter declares `capabilities.projectOwnership: 'v1'`. The host always refuses server-owned execution for project-bound or conflicting chats. With a declaring provider it also refuses an absent field; with an older provider ordinary chats keep server execution and the host logs once that legacy folder membership is not enforced server-side. This reader change is in the Projects review branch and must be released to enforce legacy membership with a registry provider; normal browser project chat can be tested independently.
+The project-aware canonical reader returns `project_ownership: resolved | conflict` with explicit or legacy ownership resolved in the authorized SQLite snapshot, and the adapter declares `capabilities.projectOwnership: 'v1'`. The host always refuses server-owned execution for project-bound or conflicting chats. With a declaring provider it also refuses an absent field; with an older provider ordinary chats keep server execution and the host logs once that legacy folder membership is not enforced server-side. The installed provider must include this reader contract to enforce legacy membership; normal browser project chat can be tested independently.
 
 - `:memory:` mode is for tests/dev only; production local-file setups should use persistent disk.
 - Back up the SQLite file before schema or provider upgrades; use managed
@@ -184,7 +184,7 @@ Managed Cloud backup inspection qualifies `or3-provider-sqlite@0.0.26` with file
 
 SQLite provider `0.0.24` reports structured validation, authorization, conflict,
 and supersession errors for background history. Unknown database failures remain
-retryable. This version does not include the unreleased generation migrations.
+retryable. Version 0.0.24 predates the generation migrations included in 0.0.26.
 
 ## Related
 

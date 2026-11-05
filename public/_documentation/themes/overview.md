@@ -22,7 +22,7 @@ apply these choices; no restart is needed. Installing or removing theme code sti
 requires the supported build/update workflow. See [site configuration](/documentation/cloud/configure).
 
 On source installations that allow theme uploads, use **Import from link** for
-a complete HTTP or HTTPS ZIP download link, or **Upload .zip** for a local file.
+a direct HTTPS ZIP download link, or **Upload .zip** for a local file.
 Only install from publishers you trust: some themes contain code with access to
 your server and its data. Installation still requires the appropriate development
 restart or production build. Managed installations show their included themes

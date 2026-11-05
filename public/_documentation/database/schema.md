@@ -7,7 +7,7 @@ Central Zod schemas and inferred TypeScript types for core entity rows. Sync que
 ## What does it do?
 
 -   Defines runtime validation for every entity (`Project`, `Thread`, `Message`, etc.).
--   Supplies create-specific schemas that auto-populate IDs/timestamps via transforms.
+-   Supplies create-specific schemas; defaults vary by entity. For example, attachment callers provide an ID and clock.
 -   Exports inferred TypeScript types to keep DB modules strongly typed.
 
 ---

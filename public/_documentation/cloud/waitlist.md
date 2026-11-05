@@ -33,7 +33,7 @@ the registration dialog, including invites carried inside a `next` URL.
 The toggle changes the welcome page only. Registration restrictions still come
 from `auth.registration`/`OR3_AUTH_REGISTRATION_MODE`; keep `invite_only` or
 `disabled` while restricting access. Joining the waitlist creates no account,
-grants no access and sends no email. Use **Signup invites** to invite people later.
+grants no access and sends no email. Use **Admin → Registration → Invitations** to invite people later.
 
 ## Storage and privacy
 

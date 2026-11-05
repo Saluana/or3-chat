@@ -1,10 +1,10 @@
 # AI preferences
 
-Dashboard → AI preferences controls workspace defaults through the existing `useAiSettings` API and `ai_settings` KV record. Every setting saves automatically and shows a small status (Saving, Saved, or Not saved with a Retry). Model defaults save immediately; the master prompt saves after a short pause, when the field loses focus, and when the page closes. The Context section exposes the optional maximum used by native admission and the composer meter.
+**Dashboard → AI Settings** controls workspace defaults through the `useAiSettings` API and `ai_settings` KV record. Model defaults save when selected. The master prompt saves after a short pause or when the field loses focus; the page also attempts to flush pending edits when it unmounts. Save status and retry controls appear where applicable. Open **Context limit** under Advanced to set the optional maximum used by native admission and the composer meter.
 
 ## Maximum context tokens
 
-Leave the field blank for **Use model limit**. New, legacy and reset preferences have no numeric default. Enter a positive whole integer; it saves when the field loses focus or you press Enter (not while you type, so a half-typed number is never stored), and when the page closes. Zero, negative, fractional, nonfinite, unsafe integer and malformed text are rejected with an inline validation message; a failed save leaves the input editable for retry.
+Leave the field blank for **Use model limit**. New, legacy and reset preferences have no numeric default. Enter a positive whole integer; it saves when the field loses focus or you press Enter (not while you type, so a half-typed number is never stored), with a pending save also attempted when the page unmounts. Zero, negative, fractional, nonfinite, unsafe integer and malformed text are rejected with an inline validation message; a failed save leaves the input editable for retry.
 
 Clear the field to restore Use model limit. Reset to defaults also clears it along with the other AI preferences. A saved maximum larger than one model's window stays saved when the default model changes; it cannot authorize exceeding that model's actual capacity. Preferences reload with the active workspace, and an old workspace's pending save cannot change the current page's input or error.
 
@@ -13,7 +13,7 @@ The persisted setting is `maxContextTokens: number | null`. This is a context-wi
 **Current implementation boundary:** Dashboard handlers, KV persistence and
 immutable preference capture are implemented. Native initial send, retry,
 continuation and foreground tool iterations apply the captured value without
-fallback capacity, reply reserves or automatic trimming. The composer meter and Compact action use this setting; final provider rollout
+fallback capacity, reply reserves or automatic trimming. The composer meter and Summarize action use this setting; final provider rollout
 and full model-quality qualification remain tracked in the compaction checklist.
 Native server admission resolves capacity independently and durable job
 checkpoints retain the captured maximum during tool iterations and reconnect.

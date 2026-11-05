@@ -440,7 +440,7 @@ When tools are included in the background request, the server switches to `consu
   browser-storage clearing or storage destruction removes replay evidence and
   remains outside these at-most-once recovery guarantees.
 - Tool outputs are appended as tool messages for follow-on turns.
-- Safety cap: max 10 tool loop iterations per job.
+- The effective instance and workspace chat limits cap tool-loop iterations. The default is 10; administrators can configure a different limit.
 
 ## Background Workflow Execution
 
@@ -448,12 +448,12 @@ Workflow execution requires the installed and enabled `or3-plugin-workflows`
 package. Its server routes are dispatched through the host's authorized plugin
 API; there are no core `/api/workflows/*` routes.
 
-The client bridge in `app/composables/plugins/workflow-host-bridge.ts` starts
-work with `POST /api/plugins/or3-workflows/workflows/background`. The package
-owns canonical workflow lookup, the execution engine, node transitions, output,
-and HITL coordination. The host supplies auth, sync, model/tool, job, and
-notification ports through `server/utils/workflows/plugin-server-bridge.ts`.
-That bridge requires SSR auth, enforces `can('workspace.write')`, and checks
+The workflow package starts work with
+`POST /api/plugins/or3-workflows/workflows/background` and owns canonical
+workflow lookup, execution, node transitions, output, and HITL coordination.
+The host supplies auth, sync, model/tool, job, and notification services through
+`server/utils/background-jobs/plugin-server-services.ts`. Those services require
+SSR auth, enforce `can('workspace.write')`, and check
 the `workflow:background` rate limit before execution. Workflow jobs use
 `kind: 'workflow'` and publish `workflow_state` snapshots.
 

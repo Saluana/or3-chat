@@ -7,7 +7,7 @@ Key-value helpers for storing small preference or credential blobs in the Dexie 
 ## What does it do?
 
 -   Validates KV payloads with `KvCreateSchema`/`KvSchema`.
--   Wraps reads/writes in `dbTry` with detailed error tagging.
+-   Uses `dbRequired` for critical writes and `dbTry` for best-effort reads, with error tagging.
 -   Integrates with the hook system for before/after actions and output filters.
 -   Provides name-based helpers for common flows like OpenRouter token storage.
 

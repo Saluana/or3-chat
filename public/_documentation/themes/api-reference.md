@@ -210,7 +210,7 @@ for user uploads.
 ### ThemeBackgrounds
 
 ```ts
-export interface ThemeBackgrounds {
+export interface ThemeBackgroundSlots {
   content?: {
     base?: ThemeBackgroundLayer;
     overlay?: ThemeBackgroundLayer;
@@ -218,6 +218,10 @@ export interface ThemeBackgrounds {
   sidebar?: ThemeBackgroundLayer;
   headerGradient?: ThemeBackgroundLayer;
   bottomNavGradient?: ThemeBackgroundLayer;
+}
+
+export interface ThemeBackgrounds extends ThemeBackgroundSlots {
+  dark?: ThemeBackgroundSlots;
 }
 ```
 
@@ -571,7 +575,7 @@ chatEmptyState: {
 - Omitted `actions` means the three standard actions. An array defines visible IDs and their order; omitted IDs are hidden and `[]` hides all actions. Each entry can override `label`, `description` (or `false`), and a semantic `icon` token. Unknown or duplicate IDs fail validation.
 - Dark fields override base fields by top-level property. Image/background objects and action arrays replace whole values. Omitted dark fields inherit base values; explicit `false` or `[]` remains disabled. `dark: false` disables the entire surface in dark mode. Set dark image fields explicitly to avoid inheriting light artwork.
 - Card layouts respond to each pane’s dimensions, including desktop splits: wide panes show three cards, narrower panes use readable rows, and short panes collapse decoration to keep actions and the composer visible. Cards grow with their text instead of inheriting fixed button heights.
-- Start a chat focuses the existing composer, preserving its draft and attachments. Creation opens the shared naming forms and existing stores. Documents open in a new tab, preserving the blank chat tab. Legacy layouts without workspace tabs defer document opening so the draft stays visible. Projects open the existing project workspace in the sidebar.
+- Start a chat focuses the existing composer, preserving its draft and attachments. Start a project opens its naming form. Create a document immediately creates an Untitled document and focuses its title for inline editing. Documents open in a new tab, preserving the blank chat tab. Legacy layouts without workspace tabs defer document opening so the draft stays visible. Projects open the existing project workspace in the sidebar.
 - Signed-out visitors see the configured actions; account-required actions open the provider's sign-in dialog directly when clicked. Deployment settings still hide disabled features, and signed-in read-only users cannot create projects or documents. Theme configuration cannot grant capabilities. Stale pane/workspace requests cannot redirect another pane. A saved item with failed navigation offers Open without creating it again.
 
 Use `bun run theme:validate <theme>` and `bun run theme:build-css` after authoring changes. Declarative installation validates the same schema. Custom layout/spacing belongs in the styling hooks below or a trusted `chat-empty-state` replacement.

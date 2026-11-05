@@ -53,9 +53,9 @@ deduplicates and applies the configured per-message limit. Use
 file references together.
 
 `file_meta.ref_count` is derived local state, not an LWW-synced counter. The
-message-file helpers maintain it from unique live message-to-file edges; do
-not increment/decrement it separately or treat a hash list as proof that a
-blob is available. See [file storage](/documentation/database/files) and
+owning helpers maintain it for references including message edges and catalog
+or project ownership. Do not adjust it separately or treat a hash list as proof
+that a blob is available. See [file storage](/documentation/database/files) and
 [message attachments](/documentation/database/message-files) for upload,
 download, transaction, and deletion behavior.
 

@@ -1,10 +1,11 @@
-# OpenRouter
+# Model provider connections
 
-OR3 uses OpenRouter for model discovery and AI requests. This section covers connecting an account, persisting a user key, reading model capabilities, and preparing request messages.
+OR3 supports OpenRouter and direct OpenAI connections for model discovery and chat. This section covers connecting accounts and keys, reading model capabilities, and preparing provider messages. Direct OpenAI chat requires an OR3 server.
 
 | Task | Guide |
 | --- | --- |
-| Connect or troubleshoot your account | [Connect OpenRouter](/documentation/auth/connect) |
+| Connect or troubleshoot OpenRouter | [Connect OpenRouter](/documentation/auth/connect) |
+| Connect a direct OpenAI key | [Direct OpenAI keys](/documentation/auth/reference#direct-openai-keys) |
 | Add connection controls to OR3 source UI | [Connection and key APIs](/documentation/auth/reference) |
 | Fetch or filter model metadata | [Model catalog](/documentation/auth/models-service) |
 | Convert internal messages and attachments | [Build provider messages](/documentation/auth/openrouter-build) |

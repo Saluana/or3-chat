@@ -43,7 +43,7 @@ The retention target is 5 MiB of encoded revision content per document (`DOCUMEN
 | `readDocumentRevision(manifest)`      | Loads chunks and decodes the snapshot in a worker; null when incomplete. |
 | `listCompleteDocumentRevisions(documentId)` | Returns decoded revisions for a document, newest first.           |
 | `createDocumentRevision(input)`       | Encodes a snapshot, writes manifest plus chunks, prunes; null when unchanged. |
-| `selectRevisionIdsForRetention(manifests, now?, budgetBytes?)` | Picks revisions to keep: 20 newest, one daily checkpoint per day over 14 days, always the newest. |
+| `selectRevisionIdsForRetention(manifests, now?, budgetBytes?)` | Prefers the 20 newest and one daily checkpoint per day over 14 days; drops older preferences if needed to meet the budget, but keeps the newest. |
 | `pruneDocumentRevisions(documentId)`  | Deletes revisions outside the retention set; returns `{ removed, overBudget }`. |
 | `repairOrphanRevisionChunks(options)` | Deletes chunks older than 7 days whose manifest row is missing.          |
 

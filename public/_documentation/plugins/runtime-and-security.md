@@ -126,9 +126,13 @@ the currently selected version.
 
 Client packages require exact-package browser evidence before promotion.
 Portable checks activate the candidate in the contained runtime. Trusted-host
-checks verify entry bytes, host Vue ABI/import mapping, and import without
-running `setup`; normal activation runs `setup` after promotion and enablement.
-A server check alone does not prove client startup.
+checks verify entry bytes, the host Vue ABI and import mapping, then run `setup`
+with live host services denied. A limited command-registration check is allowed;
+other host operations during setup block qualification. This runs trusted code in
+the host browser and is not a sandbox. Normal activation runs `setup` again after
+promotion and enablement. A server check alone does not prove client startup.
+See [trusted-host browser checks](/documentation/plugins/install-and-manage#trusted-host-browser-checks)
+for the limits of this check.
 
 The live host Vue render proof loads a precompiled same-origin module through
 the host import map. It runs under the managed production CSP without `blob:`

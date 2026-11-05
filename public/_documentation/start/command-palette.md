@@ -1,9 +1,9 @@
 # Command Palette
 
 The command palette is the fastest way to move around OR3. It searches the full
-contents of your workspace — chats, documents, projects, system prompts, images,
-dashboard pages, and plugin records — and it runs commands without leaving the
-keyboard.
+workspace — chats, documents, projects, system prompts, images, saved files,
+dashboard pages, and plugin records — and runs commands without leaving the
+keyboard. Saved-file text coverage is bounded and shown in the results.
 
 ## Opening it
 
@@ -27,7 +27,7 @@ snippet under each row, so you can tell *why* something matched.
 Changing the query immediately retires the previous results. During the search
 debounce, Enter cannot execute a command belonging to the old query.
 
-Search runs over full content, not just titles:
+Search includes content as well as titles. Coverage depends on the source:
 
 | Category | What is searched |
 | --- | --- |

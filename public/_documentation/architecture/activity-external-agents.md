@@ -25,10 +25,10 @@ OpenClaw and Hermes use the Sessions/Runs protocol.
 
 The installed `or3-plugin-external-agents` package owns the browser session
 client, UI, and `@or3/intern-client` dependency. Credentials stay in headers,
-errors are redacted, requests time out, and SSE reconnects with a stable
-cursor and replay deduplication. Established streams also enforce a 60-second
-inactivity deadline that resets on every byte (including heartbeat comments);
-callers can override or explicitly disable it with `inactivityTimeoutMs`.
+errors are redacted, request setup has a timeout, and SSE reconnects with a stable
+cursor and replay deduplication. The installed package uses `@or3/intern-client`
+0.1.3; its stream timeout covers connection setup, not an idle deadline after
+the response is established.
 The host mediates HTTP and SSE requests to the selected host's saved URL.
 Adding a host temporarily permits its URL during verification. Requests to
 other destinations and redirects are rejected; HTTP responses are bounded.
@@ -49,13 +49,14 @@ unless the user explicitly remembers it with PIN encryption. After a reload,
 opening a conversation from a locked host shows a PIN prompt in that pane,
 unlocks the host encoded in the session reference, reconnects it, and restores
 the conversation automatically. This keeps multiple saved hosts distinct.
-Deployments can instead inject a platform secure vault with
-`registerExternalAgentCredentialVault`. Tokens never enter workspace KV, URLs,
-logs, or session references.
+The package stores remembered encrypted vault data through the Plugin SDK secret
+store. Tokens never enter workspace KV, URLs, logs, or session references.
 
 Remembered credentials use AES-256-GCM with a non-exportable key derived from
 the PIN using PBKDF2-SHA-256, a random salt, and 600,000 iterations. Only
-ciphertext, salt, IVs, and KDF parameters enter device-local storage. The PIN
+ciphertext, salt, IVs, and KDF parameters enter the SDK secret store. Static
+mode keeps remembered plugin secrets on the device; Cloud uses its configured
+secret provider. The PIN
 must contain at least six digits; it is not equivalent to an OS keychain and
 copied ciphertext permits offline guessing. Forgotten PINs cannot be recovered;
 remove the saved ciphertext and re-enter the service token.
@@ -184,4 +185,5 @@ or subagent orchestrator.
 
 ## Installed package capabilities
 
-External Agents 0.2 uses the public trusted SDK 2.1 UI, pane, Connect, profile, scoped storage/secret and governed transport clients. The package owns agent staging protocols. Saved origins require one host-owned access prompt. The legacy connection/vault migration is retired after the Cloud 0.1.77 cutover; installations with 0.1.1 data must activate External Agents 0.2.0 on Cloud 0.1.77 before upgrading beyond that cutover. Disable resets Agent panes and retains workspace connection data. Sign-out clears device-local plugin credentials.
+External Agents 0.2 uses the public trusted SDK 2.1 UI, pane, Connect, profile, scoped storage/secret and governed transport clients. The package owns agent staging protocols. Saved origins require one host-owned access prompt. The legacy connection/vault migration is retired after the Cloud 0.1.77 cutover; installations with 0.1.1 data must activate External Agents 0.2.0 on Cloud 0.1.77 before upgrading beyond that cutover. Disable resets Agent panes and retains workspace connection data. Sign-out clears device-local plugin credentials; Cloud secret custody follows the
+[secret-store policy](/documentation/cloud/secret-store).

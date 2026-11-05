@@ -39,6 +39,16 @@ live output; its result should be a concise summary of the text you supplied.
 After the run, select the workflow from **Workflows** again to edit and reuse
 it.
 
+## Troubleshooting a run
+
+If sending the prefilled command starts an ordinary chat instead of a workflow,
+check that the Workflows package is enabled and that workflow execution is
+allowed. Installed Workflows 0.2.1 still has an open qualification issue: a
+no-model run fell back to ordinary chat in historical and current-host tests.
+The cause may be in the package or its test harness, and run/resume for that
+case has not been established. Check the installed package and qualification
+results before relying on that path.
+
 ## Toolbar
 
 - **Pan / Select** switches between dragging the canvas and marquee-selecting nodes. In Pan mode, hold Shift while dragging to marquee-select. In Select mode, switch back to Pan or hold Space while dragging to move the canvas.

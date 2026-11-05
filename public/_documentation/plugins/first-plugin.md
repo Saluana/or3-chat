@@ -7,9 +7,9 @@ account is needed.
 
 ## Before you start
 
-Use Bun 1.3.6 or newer, an OR3 Chat source checkout with dependencies installed,
-and the sibling `or3-provider-basic-auth` checkout used by the local host. Use a
-Chromium browser. This is the source developer workflow; ordinary users install
+Use Node.js 24.22.1 or newer on the 24.x line, Bun 1.3.6 or newer,
+an OR3 Chat source checkout with dependencies installed, and the sibling
+`or3-provider-basic-auth` checkout used by the local host. Use a Chromium browser. This is the source developer workflow; ordinary users install
 plugins through [Marketplace](/documentation/plugins/install-and-manage).
 
 Choose a new, empty directory and a stable lowercase plugin ID. If you intend
@@ -189,4 +189,4 @@ Continue with [Add features](/documentation/plugins/add-features), or look up a 
 
 ## Trusted UI packages
 
-For reviewed Vue UI packages, use SDK 2.1 and declare the trusted feature IDs and grants described in [SDK reference](/documentation/plugins/plugin-sdk). Build adapters from public clients; keep domain protocols and data interpretation in the package. Register record types before reconciliation, dispose listeners with activation, and handle `stale-context` on workspace changes.
+For reviewed Vue UI packages, use SDK 2.1 or newer and declare the trusted feature IDs and grants described in [SDK reference](/documentation/plugins/plugin-sdk). Build adapters from public clients; keep domain protocols and data interpretation in the package. Register record types before reconciliation, dispose listeners with activation, and handle `stale-context` on workspace changes.
