@@ -91,7 +91,7 @@ export async function acceptUserTurn(input: {
         try {
             const mpApi = (globalThis as GlobalWithPaneApi)
                 .__or3MultiPaneApi;
-            if (mpApi?.panes.value && mpApi.activePaneIndex.value >= 0) {
+            if (!requestScope.navigationPendingBeforeSave && mpApi?.panes.value && mpApi.activePaneIndex.value >= 0) {
                 const pane = mpApi.panes.value[mpApi.activePaneIndex.value];
                 if (pane && pane.mode === 'chat' && !pane.threadId) {
                     if (typeof mpApi.setPaneThread === 'function') {

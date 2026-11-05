@@ -336,7 +336,8 @@ export function useChat(
     }
     // Account switches invalidate in-flight view ownership even when the
     // workspace database and thread happen to stay the same.
-    watch(notificationUserId, () => bumpNavigationRevision(), { flush: 'sync' });
+    let accountRevision = 0;
+    watch(notificationUserId, () => { accountRevision++; bumpNavigationRevision(); }, { flush: 'sync' });
     /**
      * True only while this request still owns the visible conversation. Used to
      * guard every asynchronous mutation of shared UI state (loading, tail,
@@ -848,6 +849,20 @@ export function useChat(
     ): Promise<SendResult> {
         const preparation = await prepareTurn(requestScope, contentOrParams, maybeParams);
         if (preparation.done) return preparation.result;
+        // Only a fully prepared native background turn can outlive navigation.
+        // Account/workspace changes still fence admission, even if they change
+        // away and back before the asynchronous work resumes.
+        const admittedAccountRevision = accountRevision;
+        const admittedWorkspaceGeneration = getWorkspaceGeneration();
+        if (preparation.model.allowBackgroundStreaming && !preparation.model.prepared.delegation
+            && !preparation.project.initialProjectId) {
+            requestScope.ownsDetachedAdmission = () => !disposed && !requestScope.cancelled
+                && !requestScope.abortController?.signal.aborted
+                && accountRevision === admittedAccountRevision
+                && notificationUserId.value === requestScope.originUserId
+                && getDb() === requestScope.originDb
+                && getWorkspaceGeneration() === admittedWorkspaceGeneration;
+        }
         const { content, sendMessagesParams, workspaceGeneration, toolDraftId, preparationSignal,
             newPromptSelection, outgoing, admissionThreadId, files, file_hashes, parts,
             persistedUserText, contextOmission } = preparation.turn;
@@ -1186,6 +1201,7 @@ export function useChat(
      * Rebind this instance to another thread without re-entering setup-only
      * composables (useToast/useHooks/useSessionContext).
      */
+    let threadSwitchRevision = 0;
     async function switchThread(
         nextThreadId: string | undefined,
         switchOptions: {
@@ -1200,12 +1216,39 @@ export function useChat(
             );
         }
 
+        const switchRevision = ++threadSwitchRevision;
         const currentId = threadIdRef.value;
         if (nextThreadId && currentId && nextThreadId === currentId) {
+            if (activeRequestScope) activeRequestScope.navigationPendingBeforeSave = false;
             if (switchOptions.pendingPromptId !== undefined) {
                 setPendingPrompt(switchOptions.pendingPromptId);
             }
             return;
+        }
+
+        const preparing = activeRequestScope;
+        if (preparing?.kind === 'send' && !preparing.userMessageId
+            && !preparing.cancelled && !preparing.expectedProjectId && backgroundStreamingAllowed.value) {
+            // Keep the originating controller alive until the atomic turn is
+            // saved. Its request-scoped admission can then detach normally.
+            const startingAccount = accountRevision;
+            const startingWorkspace = getWorkspaceGeneration();
+            preparing.navigationPendingBeforeSave = true;
+            await new Promise<void>((resolve) => {
+                let finished = false;
+                let stop = () => {};
+                const finish = () => { if (!finished) { finished = true; stop(); resolve(); } };
+                stop = watch([preparing.phase, notificationUserId], () => {
+                    if (preparing.userMessageId || preparing.phase.value === 'terminal'
+                        || accountRevision !== startingAccount) finish();
+                }, { flush: 'sync' });
+                void preparing.settled.then(finish);
+                if (preparing.userMessageId || preparing.phase.value === 'terminal'
+                    || accountRevision !== startingAccount) finish();
+            });
+            if (switchRevision !== threadSwitchRevision) return;
+            preparing.navigationPendingBeforeSave = false;
+            if (accountRevision !== startingAccount || getWorkspaceGeneration() !== startingWorkspace) return;
         }
 
         // Invalidate in-flight navigation-scoped work (e.g. reattachment)
@@ -1221,7 +1264,18 @@ export function useChat(
             backgroundJobMode.value === 'none' &&
             Boolean(abortController.value);
 
-        if (isBackgroundActive) {
+        const canDetachAdmission = Boolean(activeRequestScope?.userMessageId
+            && activeRequestScope.ownsDetachedAdmission?.());
+        if (canDetachAdmission && activeRequestScope) {
+            // The turn is already durable and has a captured request body.
+            // Its remaining admission uses request-scoped ownership, not the
+            // newly selected conversation's view or controls.
+            activeRequestScope.detachAdmissionOnNavigation = true;
+            activeRequestScope.attached.value = false;
+            if (abortController.value === activeRequestScope.abortController)
+                abortController.value = null;
+            clearBackgroundJobSubscriptions({ keepTracking: true });
+        } else if (isBackgroundActive) {
             // Background jobs are durable, so detach only their UI bindings.
             detached.value = true;
             if (visibleRequest.value)
@@ -1278,14 +1332,14 @@ export function useChat(
         backgroundJobMode.value = 'none';
 
         visibleRequest.value = null;
-        if (!isForegroundStreamActive) {
+        if (!isForegroundStreamActive || canDetachAdmission) {
             activeRequestId.value = null;
             activeRequestScope = null;
         }
         aborted.value = false;
         streamId.value = undefined;
         tailAssistant.value = null;
-        if (!isForegroundStreamActive) streamAcc.reset();
+        if (!isForegroundStreamActive || canDetachAdmission) streamAcc.reset();
         detached.value = false;
 
         if (switchOptions.seedMessages) {

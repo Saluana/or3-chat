@@ -507,3 +507,130 @@ test('reloading after a user turn is saved leaves a recoverable response', async
     await page.screenshot({ path: resolve(process.env.OR3_OPENAI_E2E_OUTPUT!, 'early-reload-recovered.png') });
     await writeFile(resolve(process.env.OR3_OPENAI_E2E_OUTPUT!, 'early-reload-receipt.json'), JSON.stringify({ modelRequests: calls.length }, null, 2));
 });
+
+test('switching tabs while a saved turn is preparing does not lose its reply', async ({ page }, info) => {
+    test.setTimeout(120_000);
+    const origin = new URL(info.project.use.baseURL!).origin;
+    expect((await page.request.post('/api/basic-auth/sign-in', { headers: { origin }, data: {
+        email: process.env.OR3_OPENAI_E2E_EMAIL, password: process.env.OR3_OPENAI_E2E_PASSWORD,
+    } })).ok()).toBe(true);
+    await page.goto('/chat');
+    await chooseModel(page, 'Fixture Router');
+    await send(page, 'establish chat');
+    await expect(page.getByText('OpenRouter fixture reply')).toBeVisible({ timeout: 45_000 });
+    const originalTabId = await page.getByRole('tab', { selected: true }).getAttribute('id');
+    expect(originalTabId).toBeTruthy();
+    await page.evaluate(async () => {
+        const importModule = new Function('path', 'return import(path)') as (path: string) => Promise<{ useHooks: () => { addAction: (name: string, handler: (row: { role?: string; data?: { content?: string } }) => Promise<void>) => void } }>;
+        const url = performance.getEntriesByType('resource').map(entry => entry.name).find(name => name.includes('/core/hooks/useHooks.ts'));
+        if (!url) throw new Error('Hook module was not loaded by the application.');
+        const { useHooks } = await importModule(url);
+        useHooks().addAction('db.messages.append:action:after', async row => {
+            if (row.role !== 'user' || row.data?.content !== 'switch-before-admission') return;
+            sessionStorage.setItem('switch-before-admission-committed', 'yes');
+            await new Promise<void>(resolve => { (window as any).releaseSwitchPreparation = resolve; });
+        });
+    });
+    await send(page, 'switch-before-admission');
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('switch-before-admission-committed'))).toBe('yes');
+    await page.locator('.workspace-tab-new').click();
+    await send(page, 'separate conversation');
+    await expect(page.getByText('OpenRouter fixture reply')).toHaveCount(1, { timeout: 30_000 });
+    await page.evaluate(() => (window as any).releaseSwitchPreparation());
+    await page.locator(`[id="${originalTabId}"]`).click();
+    await expect(page.getByText('separate conversation', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('OpenRouter fixture reply')).toHaveCount(2, { timeout: 30_000 });
+    await page.reload();
+    await expect(page.getByText('OpenRouter fixture reply')).toHaveCount(2, { timeout: 30_000 });
+    await page.screenshot({ path: resolve(process.env.OR3_OPENAI_E2E_OUTPUT!, 'early-switch-recovered.png') });
+});
+
+test('switching tabs before a send is saved still sends the original message', async ({ page }, info) => {
+    test.setTimeout(120_000);
+    const origin = new URL(info.project.use.baseURL!).origin;
+    expect((await page.request.post('/api/basic-auth/sign-in', { headers: { origin }, data: {
+        email: process.env.OR3_OPENAI_E2E_EMAIL, password: process.env.OR3_OPENAI_E2E_PASSWORD,
+    } })).ok()).toBe(true);
+    await page.goto('/chat');
+    await chooseModel(page, 'Fixture Router');
+    await send(page, 'establish chat');
+    await expect(page.getByText('OpenRouter fixture reply')).toBeVisible({ timeout: 45_000 });
+    const originalTabId = await page.getByRole('tab', { selected: true }).getAttribute('id');
+    expect(originalTabId).toBeTruthy();
+    await page.evaluate(async () => {
+        const importModule = new Function('path', 'return import(path)') as (path: string) => Promise<{ useHooks: () => { addFilter: (name: string, handler: (text: string) => Promise<string>) => void } }>;
+        const url = performance.getEntriesByType('resource').map(entry => entry.name).find(name => name.includes('/core/hooks/useHooks.ts'));
+        if (!url) throw new Error('Hook module was not loaded by the application.');
+        const { useHooks } = await importModule(url);
+        useHooks().addFilter('ui.chat.message:filter:outgoing', async text => {
+            if (text !== 'switch-before-save') return text;
+            sessionStorage.setItem('switch-before-save-started', 'yes');
+            await new Promise<void>(resolve => { (window as any).releaseUnpersistedSend = resolve; });
+            return text;
+        });
+    });
+    const input = page.getByRole('textbox', { name: 'Message input' });
+    await input.fill('switch-before-save');
+    await input.press('Enter');
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('switch-before-save-started'))).toBe('yes');
+    await page.locator('.workspace-tab-new').click();
+    const otherTabId = await page.getByRole('tab', { selected: true }).getAttribute('id');
+    await page.evaluate(() => (window as any).releaseUnpersistedSend());
+    await expect(page.getByRole('region', { name: 'New chat' })).toBeVisible({ timeout: 30_000 });
+    await page.getByRole('textbox', { name: 'Message input' }).fill('other tab draft');
+    await page.locator(`[id="${originalTabId}"]`).click();
+    await expect(page.getByText('switch-before-save', { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('OpenRouter fixture reply')).toHaveCount(2, { timeout: 30_000 });
+    await expect(page.getByRole('textbox', { name: 'Message input' })).not.toContainText('switch-before-save');
+    await page.locator(`[id="${otherTabId}"]`).click();
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toContainText('other tab draft');
+    await page.locator(`[id="${originalTabId}"]`).click();
+    await page.reload();
+    await expect(page.getByText('OpenRouter fixture reply')).toHaveCount(2, { timeout: 30_000 });
+    await page.screenshot({ path: resolve(process.env.OR3_OPENAI_E2E_OUTPUT!, 'switch-before-save-recovered.png') });
+});
+
+test('switching away during the first send keeps the new conversation', async ({ page }, info) => {
+    test.setTimeout(120_000);
+    const origin = new URL(info.project.use.baseURL!).origin;
+    const fixture = process.env.OR3_OPENAI_E2E_FIXTURE_URL!;
+    expect((await page.request.post('/api/basic-auth/sign-in', { headers: { origin }, data: {
+        email: process.env.OR3_OPENAI_E2E_EMAIL, password: process.env.OR3_OPENAI_E2E_PASSWORD,
+    } })).ok()).toBe(true);
+    await page.goto('/chat');
+    await chooseModel(page, 'Fixture Router');
+    const before = ((await (await page.request.get(`${fixture}/__capture`)).json()).requests as Captured[])
+        .filter(request => request.path === '/api/v1/chat/completions' && request.stream === true).length;
+    const originalTabId = await page.getByRole('tab', { selected: true }).getAttribute('id');
+    expect(originalTabId).toBeTruthy();
+    await page.evaluate(async () => {
+        const importModule = new Function('path', 'return import(path)') as (path: string) => Promise<{ useHooks: () => { addFilter: (name: string, handler: (text: string) => Promise<string>) => void } }>;
+        const url = performance.getEntriesByType('resource').map(entry => entry.name).find(name => name.includes('/core/hooks/useHooks.ts'));
+        if (!url) throw new Error('Hook module was not loaded by the application.');
+        const { useHooks } = await importModule(url);
+        useHooks().addFilter('ui.chat.message:filter:outgoing', async text => {
+            if (text !== 'first-send-before-switch') return text;
+            sessionStorage.setItem('first-send-started', 'yes');
+            await new Promise<void>(resolve => { (window as any).releaseFirstSend = resolve; });
+            return text;
+        });
+    });
+    const input = page.getByRole('textbox', { name: 'Message input' });
+    await input.fill('first-send-before-switch');
+    await input.press('Enter');
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('first-send-started'))).toBe('yes');
+    await page.locator('.workspace-tab-new').click();
+    await page.evaluate(() => (window as any).releaseFirstSend());
+    await expect.poll(async () => ((await (await page.request.get(`${fixture}/__capture`)).json()).requests as Captured[])
+        .filter(request => request.path === '/api/v1/chat/completions' && request.stream === true).length,
+        { timeout: 30_000 }).toBe(before + 1);
+    await expect(page.getByRole('region', { name: 'New chat' })).toBeVisible();
+    await expect(page.getByRole('tab', { selected: true }).locator('.workspace-tab-status.is-streaming')).toHaveCount(0);
+    await expect(page.locator(`[id="${originalTabId}"] .workspace-tab-status.is-streaming`)).toHaveCount(0, { timeout: 30_000 });
+    await page.locator(`[id="${originalTabId}"]`).click();
+    await expect(page.getByText('OpenRouter fixture reply')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('textbox', { name: 'Message input' })).not.toContainText('first-send-before-switch');
+    await page.reload();
+    await expect(page.getByText('OpenRouter fixture reply')).toBeVisible({ timeout: 30_000 });
+    await page.screenshot({ path: resolve(process.env.OR3_OPENAI_E2E_OUTPUT!, 'first-send-switch-recovered.png') });
+});

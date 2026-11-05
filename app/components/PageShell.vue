@@ -385,16 +385,14 @@
                         :is="resolvePaneComponent(pane)"
                         v-bind="buildPaneProps(pane, i)"
                         class="flex-1 min-h-0"
-                        @thread-selected="
-                            pane.mode === 'chat'
-                                ? (id: string) => onInternalThreadCreated(id, i)
-                                : undefined
-                        "
+                        @thread-selected="(id: string, originTabId?: string) => {
+                            if (pane.mode === 'chat') onInternalThreadCreated(id, i, originTabId);
+                        }"
                         @compaction-committed="onCompactionCommitted($event, i)"
                         @view-compaction-source="onCompactionSourceSelected($event, i)"
                         @view-related-thread="onCompactionSourceSelected({ ...$event, messageId: '' }, i)"
                         @tab-status="
-                            (status: WorkspaceTabStatus) => onPaneTabStatus(pane.id, status)
+                            (status: WorkspaceTabStatus, tabId?: string) => onPaneTabStatus(pane.id, status, tabId)
                         "
                         @tab-title="
                             (title: string) => onPaneTabTitle(pane.id, title)
@@ -1374,9 +1372,9 @@ async function copyWorkspaceTabLink(tabId: string): Promise<void> {
     }
 }
 
-function onPaneTabStatus(paneId: string, status: WorkspaceTabStatus): void {
+function onPaneTabStatus(paneId: string, status: WorkspaceTabStatus, originTabId?: string): void {
     if (!workspaceTabsEnabled.value) return;
-    const tabId = workspaceTabs.state.value.paneBindings.get(paneId);
+    const tabId = originTabId ?? workspaceTabs.state.value.paneBindings.get(paneId);
     if (tabId) workspaceTabs.updateRuntime(tabId, { status });
 }
 
@@ -1958,7 +1956,7 @@ async function onCompactionCommitted(target: { threadId: string; messageId: stri
         toast.add({ title: 'Compacted conversation saved', description: 'The continuation could not be opened. It remains available in conversation history.', color: 'warning' });
     }
 }
-function onInternalThreadCreated(id: string, paneIndex?: number) {
+function onInternalThreadCreated(id: string, paneIndex?: number, originTabId?: string) {
     if (!id) return;
     const idx =
         typeof paneIndex === 'number' ? paneIndex : activePaneIndex.value;
@@ -1966,6 +1964,10 @@ function onInternalThreadCreated(id: string, paneIndex?: number) {
     if (!pane) return;
     if (workspaceTabsEnabled.value) {
         const tabId = workspaceTabs.state.value.paneBindings.get(pane.id);
+        if (originTabId && originTabId !== tabId) {
+            workspaceTabs.promoteBlankChat(originTabId, id);
+            return;
+        }
         if (tabId) workspaceTabs.promoteBlankChat(tabId, id);
         else workspaceTabs.reconcilePaneResource(pane.id, {
             kind: 'chat',

@@ -61,10 +61,14 @@ export function createTurnDispatch(ports: {
         const { startedAt, modelId, reasoning, contextPolicy, systemMessage, effectiveMessages, prepared, modalities,
             advertisedToolDefs, enabledToolDefs, browserToolCapability, allowBackgroundStreaming,
             foregroundToolDefs, reviewedLossyMessages } = preparation.model;
+        const ownsAdmission = () => ownsPreparation() || (requestScope.detachAdmissionOnNavigation === true
+            && requestScope.ownsDetachedAdmission?.() === true);
         let { orMessages } = preparation.model;
-        streamId.value = undefined;
-        backgroundJobId.value = null;
-        detached.value = false;
+        if (requestScope.ownsView()) {
+            streamId.value = undefined;
+            backgroundJobId.value = null;
+            detached.value = false;
+        }
 
         let currentModelId: string | undefined;
         let terminalResult: SendResult | undefined;
@@ -73,7 +77,7 @@ export function createTurnDispatch(ports: {
 
             const newStreamId = requestScope.streamId!;
             requestScope.streamId = newStreamId;
-            streamId.value = newStreamId;
+            if (requestScope.ownsView()) streamId.value = newStreamId;
             requestScope.assistantMessageId = assistantDbMsg.id;
             requestScope.assistantRecord = assistantDbMsg;
             publishRequest(requestScope, {
@@ -116,10 +120,12 @@ export function createTurnDispatch(ports: {
             });
 
 
-            aborted.value = false;
-            backgroundJobId.value = null;
-            backgroundJobMode.value = 'none';
-            backgroundJobInfo.value = null;
+            if (requestScope.ownsView()) {
+                aborted.value = false;
+                backgroundJobId.value = null;
+                backgroundJobMode.value = 'none';
+                backgroundJobInfo.value = null;
+            }
 
             recordPreparationFilter('ai.chat.messages:filter:before_send');
             const mentionFilter = getBuiltinMentionFilter();
@@ -129,7 +135,7 @@ export function createTurnDispatch(ports: {
                 'ai.chat.messages:filter:before_send',
                 { messages: orMessages }
             );
-            if (isRequestCancelled(requestScope) || !requestScope.ownsView())
+            if (isRequestCancelled(requestScope) || !ownsAdmission())
                 throw new DOMException('Chat request cancelled', 'AbortError');
 
             if (
@@ -153,7 +159,7 @@ export function createTurnDispatch(ports: {
                     assistant: { id: assistantDbMsg.id, threadId: requestThreadId, streamId: newStreamId }, status: 'pending' };
                 recordPreparationFilter('ai.chat.send:filter:commit');
                 const acknowledgement = await hooks.applyFilters('ai.chat.send:filter:commit', commit);
-                if (!ownsPreparation()) throw new DOMException('Chat request cancelled', 'AbortError');
+                if (!ownsAdmission()) throw new DOMException('Chat request cancelled', 'AbortError');
                 if (acknowledgement.status !== 'handled'
                     || acknowledgement.requestId !== requestId
                     || acknowledgement.workspaceId !== requestScope.workspaceId
@@ -174,6 +180,7 @@ export function createTurnDispatch(ports: {
 
             // Check if a workflow is handling this request - skip AI call
             if (consumeChatSendHandled() || prepared.delegation) {
+                if (!requestScope.ownsView()) throw new Error('The request was interrupted while changing chats. Retry it.');
                 // Seed UI with assistant placeholder so workflow state can render immediately
                 const workflowAssistant: ChatMessage = {
                     role: 'assistant',
@@ -250,7 +257,7 @@ export function createTurnDispatch(ports: {
                 !hooks.hasAction('ai.chat.send:action:before');
             if (allowBackgroundStreaming && browserToolCapability?.defaultsCapture &&
                 enabledToolDefs.some(tool => tool.function.name === DELEGATE_CHAT_TOOL) && nativePreparation()) {
-                if (!ownsPreparation()) throw new DOMException('Chat request cancelled', 'AbortError');
+                if (!ownsAdmission()) throw new DOMException('Chat request cancelled', 'AbortError');
                 if (nativePreparation()) {
                     const first = orMessages[0];
                     const text = first?.role === 'system' && (typeof first.content === 'string' ? first.content
