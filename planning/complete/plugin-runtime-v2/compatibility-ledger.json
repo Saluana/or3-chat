@@ -2810,7 +2810,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "7da0278173ddab3d36fd1596e06b4e8b88246ff292c8028d6e2677a8e62f083e",
+      "apiSha256": "8ea0e1251e6ad2dff4641fad863cb15f6e480b7fca5dbcd5e9995f5d4596ebe0",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -3139,7 +3139,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useModelStore.ts",
-              "line": 79,
+              "line": 90,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ContextModelReadiness =\n    | { ok: false; code: 'model_metadata_unavailable' }\n    | { ok: true; selectedModelId: string; modelId: string; source: ModelCatalogResult['source'];\n        fetchedAt: number | null; metadata: ContextModelMetadata };"
             }
@@ -4691,7 +4691,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useModelStore.ts",
-              "line": 112,
+              "line": 129,
               "syntaxKind": "VariableDeclaration",
               "text": "MODELS_CACHE_KEY = 'MODELS_CATALOG'"
             }
@@ -4705,7 +4705,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useModelStore.ts",
-              "line": 113,
+              "line": 130,
               "syntaxKind": "VariableDeclaration",
               "text": "MODELS_TTL_MS = 48 * 60 * 60 * 1000"
             }
@@ -7269,7 +7269,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useModelStore.ts",
-                "line": 143,
+                "line": 164,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useModelStore();"
               }
@@ -7278,7 +7278,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useModelStore.ts",
-              "line": 143,
+              "line": 164,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useModelStore();"
             }
