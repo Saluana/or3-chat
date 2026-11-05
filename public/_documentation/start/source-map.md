@@ -22,7 +22,7 @@ The root `repomix.config.json` provides general context; the `repomix.*.config.j
 | Notifications | `app/composables/notifications/useNotifications.ts` and its current service callers | [Notifications](/documentation/cloud/notifications) |
 | Theme resolution and component overrides | `app/composables/useThemeResolver.ts`, `app/composables/useThemeSelection.ts`, `app/theme/` | [Theme reference](/documentation/themes/api-reference) |
 | Search and command-palette sources | `app/core/search/` and the sidebar search callers | [Command palette](/documentation/start/command-palette) |
-| UI token estimates | `app/composables/core/useTokenizer.ts`, `app/workers/tokenizer.worker.ts` | [Context and tools](/documentation/architecture/chat-lifecycle#context-and-tools) |
+| UI token estimates | `app/composables/core/useTokenizer.ts`, `app/utils/chat/tokens.ts` | [Context and tools](/documentation/architecture/chat-lifecycle#context-and-tools) |
 | Gallery preview URL ownership | `app/composables/core/usePreviewCache.ts`, `app/config/preview-cache.ts`, `app/pages/images/` | [Image library queries](/documentation/database/files-select) |
 
 Some names are exported through barrels or Nuxt auto-imports. Confirm the defining module and current call site rather than assuming that the filename matches the export.

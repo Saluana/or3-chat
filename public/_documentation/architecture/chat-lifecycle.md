@@ -219,10 +219,10 @@ mutations are checked before native inference, but that legacy contract cannot
 guarantee zero turn writes. The additive pure preparation and acknowledged
 commit contract is described in the [hook reference](/documentation/hooks/reference#native-chat-preparation-and-delegated-commit).
 
-Source UI token counting uses `app/composables/core/useTokenizer.ts` and a
-shared worker. When the worker is unavailable, including during SSR, it falls
-back to a character heuristic rather than importing the encoder on the main
-thread. A displayed count is not exact provider billing or proof of admission.
+Source UI token estimates use the same local character heuristic as chat via
+`app/composables/core/useTokenizer.ts`. Counts are estimates rather than exact
+provider billing or proof of admission. Document AI reserves additional input
+headroom before checking its model context limit.
 
 Use the admitted tool registry, schema validation, request-scoped authority, and abort signal. Server/client tool execution and background transport are coordinated by the current host implementation. A tool's name or runtime field alone does not authorize execution. [Chat tools](/documentation/utils/chat-tools) preserve frozen editor snapshots and explicit proposal review.
 

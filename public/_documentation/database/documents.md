@@ -183,8 +183,8 @@ request again to retry. Saved/plugin quick actions use this same submission path
 Existing suggestions can still be accepted or rejected offline, including their
 local revision checkpoints and saves. Offline revision reads/writes use the
 already-loaded codec instead of fetching a cold worker. References, settings and token estimates
-remain local; offline estimates use the tokenizer's character approximation
-without downloading tokenizer code. Cached models remain available offline and
+remain local; token estimates use the same character approximation online and
+offline without downloading tokenizer code. Cached models remain available offline and
 the catalog refreshes after reconnecting. Connectivity does not imply provider
 availability: a failed online request keeps its draft for a manual retry.
 

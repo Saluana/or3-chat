@@ -880,8 +880,9 @@ export function useDocumentAiAgent(options: {
                 return;
             }
             const contextLimit = model.top_provider?.context_length ?? model.context_length ?? 32_000;
-            if (tokenEstimate.value + 4096 > contextLimit) {
-                error.value = `This ${scope} is too large for ${model.name}. Choose a larger-context model or a smaller scope.`;
+            // Character estimates vary by model and language; reserve extra input headroom.
+            if (tokenEstimate.value * 2 + 4096 > contextLimit) {
+                error.value = `This ${scope} may be too large for ${model.name} based on an estimate. Choose a larger-context model or a smaller scope.`;
                 status.value = 'error';
                 return;
             }

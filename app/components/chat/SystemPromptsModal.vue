@@ -477,7 +477,7 @@
                                             >{{
                                                 tokenCounts[prompt.id] || 0
                                             }}
-                                            tokens</span
+                                            tokens (est.)</span
                                         >
                                         <template v-if="prompt.tags.length">
                                             <span aria-hidden="true">·</span>
@@ -580,7 +580,7 @@
                                     <dt
                                         class="text-[var(--md-on-surface-variant)]"
                                     >
-                                        Tokens
+                                        Tokens (est.)
                                     </dt>
                                     <dd class="m-0 text-right">
                                         {{

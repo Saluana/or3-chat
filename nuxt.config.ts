@@ -770,7 +770,6 @@ export default defineNuxtConfig({
                 'ajv/dist/2020.js',
                 'dexie',
                 'dexie-export-import',
-                'gpt-tokenizer',
                 'lru-cache',
                 'mammoth',
                 ...(localPackageAliases.length ? [] : ['or3-scroll']),
@@ -817,16 +816,7 @@ export default defineNuxtConfig({
                 // their absolute IDs: relative paths derived from the app entry
                 // root do not resolve from .nuxt/dist/server in clean builds.
                 makeAbsoluteExternalsRelative: false,
-                output: {
-                    codeSplitting: {
-                        groups: [
-                            {
-                                name: 'gpt-tokenizer',
-                                test: /[\\/]node_modules[\\/]gpt-tokenizer[\\/]/,
-                            },
-                        ],
-                    },
-                },
+                output: { codeSplitting: { groups: [] } },
             },
         },
     },
