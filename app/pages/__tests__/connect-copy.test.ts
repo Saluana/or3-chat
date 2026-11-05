@@ -28,7 +28,7 @@ describe('Connect approval recovery', () => {
     it('renders the unavailable state when managed Connect is disabled', () => {
         const wrapper = mountConnect({ enabled: false });
         expect(wrapper.text()).toContain('Remote Connect unavailable');
-        expect(wrapper.text()).toContain('administrator must configure and prove');
+        expect(wrapper.text()).toContain('administrator must set up Remote Connect');
         expect(wrapper.find('form').exists()).toBe(false);
         wrapper.unmount();
     });

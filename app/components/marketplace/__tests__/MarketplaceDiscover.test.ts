@@ -435,7 +435,7 @@ describe('MarketplaceDiscover', () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
         await wrapper.get('[data-testid="marketplace-card"]').trigger('click');
         await new Promise((resolve) => setTimeout(resolve, 0));
-        expect(wrapper.text()).toContain('registry-install-disabled');
+        expect(wrapper.text()).toContain('Registry installation is turned off on this instance.');
         expect(wrapper.text()).toContain('Open instance settings');
     });
 

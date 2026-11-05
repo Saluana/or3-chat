@@ -334,7 +334,10 @@ describe('message transaction and ordering contracts', () => {
                 await vi.waitFor(() => expect(wrapper.text()).toContain('Waiting for persisted update'));
                 await db.messages.update('failed', { data: { tool_cards: { call: { v: 1, state: 1, updated_at: 2 } } } });
             }
-            await vi.waitFor(() => expect(wrapper.text()).toContain('card unavailable (mount-error)'));
+            await vi.waitFor(() => expect(wrapper.text()).toContain('failed_card preview unavailable.'));
+            const diagnostic = wrapper.get('details');
+            expect(diagnostic.attributes('open')).toBeUndefined();
+            expect(diagnostic.text()).toContain('mount-error');
             await vi.waitFor(() => expect(wrapper.get('[data-tool-card="healthy_card"]').text()).toBe('0'));
             await new Promise(resolve => setTimeout(resolve, 100));
             reads.mockClear();

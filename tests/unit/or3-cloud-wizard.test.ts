@@ -335,7 +335,7 @@ describe('or3 cloud wizard validation', () => {
             'This device only — private, offline, and no account'
         );
         expect(labels).toContain(
-            'Self-hosted OR3 — accounts, SQLite, and filesystem storage'
+            'Self-hosted OR3 — accounts and storage on your server'
         );
     });
 
