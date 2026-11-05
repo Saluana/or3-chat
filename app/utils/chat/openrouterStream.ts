@@ -194,7 +194,8 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
     };
 
     let streamCredentialSource: 'server' | 'personal' | undefined;
-    let streamOpened = false;
+    // Set by the openers below; widened so narrowing cannot treat the catch block's check as always false.
+    let streamOpened = false as boolean;
 
     async function openPreparedProvider(preparedBody: typeof providerSnapshot): Promise<Response> {
         // Req 3, 5, 6: Try server route first (/api/openrouter/stream) if available.

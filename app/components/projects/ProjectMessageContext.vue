@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import { computed, ref, watch, useId } from 'vue';
 import { useChatProjectOwner } from '~/composables/projects/useChatProjectOwner';
 import { captureProjectOperation } from '~/utils/projects/operation';
@@ -72,7 +73,7 @@ async function startRemember() {
         remember.value = true;
     } catch (cause) {
         error.value =
-            cause instanceof Error ? cause.message : 'Project unavailable.';
+            presentError(cause, { fallbackMessage: 'Project unavailable.' }).message;
     }
 }
 async function save() {
@@ -104,7 +105,7 @@ async function save() {
         memoryTarget = undefined;
     } catch (cause) {
         error.value =
-            cause instanceof Error ? cause.message : 'Could not save memory.';
+            presentError(cause, { fallbackMessage: 'Could not save memory.' }).message;
     } finally {
         busy.value = false;
     }

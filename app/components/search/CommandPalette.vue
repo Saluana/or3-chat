@@ -141,7 +141,7 @@
                     v-if="errorMessage"
                     class="shrink-0 border-t border-[color:var(--md-error)]/35 bg-[color-mix(in_srgb,var(--md-error)_9%,transparent)] px-3 py-1.5 text-[11.5px] text-[color:var(--md-on-surface)] sm:px-4"
                 >
-                    {{ errorMessage }}
+                    {{ presentError(errorMessage, { fallbackMessage: 'Could not complete this action. Please try again.' }).message }}
                 </p>
 
                 <!-- Footer hints -->
@@ -199,7 +199,7 @@
                             :preview-loading="previewLoading"
                             :categories="categories"
                         />
-                        <p v-if="errorMessage" role="alert" class="shrink-0 px-4 py-2 text-sm text-[color:var(--md-error)]">{{ errorMessage }}</p>
+                        <p v-if="errorMessage" role="alert" class="shrink-0 px-4 py-2 text-sm text-[color:var(--md-error)]">{{ presentError(errorMessage, { fallbackMessage: 'Could not complete this action. Please try again.' }).message }}</p>
                         <CommandPaletteActionTray
                             v-if="activeResult"
                             ref="mobileActionTrayRef"
@@ -218,6 +218,7 @@
 </template>
 
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import { computed, nextTick, onScopeDispose, ref, watch } from 'vue';
 import { useEventListener, useMediaQuery } from '@vueuse/core';
 import { formatShortcut } from '~/utils/keyboard-shortcuts';

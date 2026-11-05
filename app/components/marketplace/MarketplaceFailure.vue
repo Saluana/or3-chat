@@ -31,13 +31,13 @@ async function copyReport() {
             <h4 class="font-semibold">{{ help.title }}</h4>
             <p>{{ help.message }}</p>
         </div>
-        <p class="text-sm">{{ operation.pluginId }} · Version {{ operation.version }} · Workspace {{ operation.workspaceId }}</p>
+        <p class="text-sm">Version {{ operation.version }}</p>
         <p class="text-sm text-(--ui-text-muted)">Installation does not delete your plugin data. Check Installed for the active version and workspace activation status.</p>
         <div v-if="operation.failure?.workspaceBlocks" class="text-sm">
             <p>{{ operation.failure.workspaceBlocks.total }} workspace(s) need attention before this shared version can be selected.</p>
             <ul class="mt-2 max-h-48 space-y-2 overflow-y-auto">
                 <li v-for="block in operation.failure.workspaceBlocks.items" :key="`${block.workspaceId}:${block.code}`" class="flex flex-wrap items-center gap-2 break-all">
-                    <span>{{ block.workspaceId }} · {{ block.code }}</span>
+                    <span>Workspace needs attention</span><details><summary>Technical details</summary>{{ block.workspaceId }} · {{ block.code }}</details>
                     <UButton size="xs" color="neutral" variant="soft" :to="repairLink(block.workspaceId, block.code)">
                         {{ block.code.startsWith('setup-') ? 'Open workspace setup' : 'Open workspace review' }}
                     </UButton>

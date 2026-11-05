@@ -40,7 +40,7 @@
                     color="warning"
                     variant="soft"
                     title="Auth unavailable"
-                    description="No lock page adapter is registered for this deployment."
+                    description="Sign-in is unavailable. Ask your administrator for help."
                 />
                 <UButton
                     v-if="showRetry"

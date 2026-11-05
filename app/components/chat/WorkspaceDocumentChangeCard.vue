@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { liveQuery } from 'dexie';
 import AppModal from '~/components/ui/AppModal.vue';
@@ -73,8 +74,8 @@ async function refresh(review = false) {
         emit('resize');
     } catch (caught) {
         if (disposed || generation !== refreshGeneration) return;
-        error.value = caught instanceof Error ? caught.message : 'This change is unavailable.';
-        stale.value = /document changed|proposal.*new read/iu.test(error.value);
+        error.value = presentError(caught, { fallbackMessage: 'This change is unavailable.' }).message;
+        stale.value = /document changed|proposal.*new read/iu.test(caught instanceof Error ? caught.message : "");
         if (!stale.value) available.value = false;
         emit('resize');
     }
@@ -108,8 +109,8 @@ async function act(action: 'apply' | 'undo' | 'discard') {
         change.value = result;
         open.value = false;
     } catch (caught) {
-        error.value = caught instanceof Error ? caught.message : 'This change could not be saved.';
-        stale.value = /changed|later/iu.test(error.value);
+        error.value = presentError(caught, { fallbackMessage: 'This change could not be saved.' }).message;
+        stale.value = /changed|later/iu.test(caught instanceof Error ? caught.message : "");
         // Re-read host state: a post-commit notification/navigation failure cannot claim unsaved content.
         await refresh();
     } finally { busy.value = false; emit('resize'); }
@@ -120,7 +121,7 @@ async function openDocument() {
         const { openWorkspaceSource } = await import('~/utils/chat/workspace-source-receipts');
         origin.assertCurrent();
         await openWorkspaceSource({ workspaceId: props.receipt.workspaceId, source: props.receipt.source, partial: false });
-    } catch (caught) { error.value = caught instanceof Error ? caught.message : 'This document is unavailable.'; }
+    } catch (caught) { error.value = presentError(caught, { fallbackMessage: 'This document is unavailable.' }).message; }
 }
 async function updateProposal() {
     if (busy.value || requestPrepared.value) return;
@@ -146,7 +147,7 @@ async function updateProposal() {
         if (result.status !== 'ready') throw new Error('Enable document mentions in this chat and retry.');
         requestPrepared.value = true;
         open.value = false;
-    } catch (caught) { error.value = caught instanceof Error ? caught.message : 'This proposal could not be updated.'; }
+    } catch (caught) { error.value = presentError(caught, { fallbackMessage: 'This proposal could not be updated.' }).message; }
     finally { busy.value = false; }
 }
 onMounted(async () => {
@@ -183,7 +184,7 @@ onBeforeUnmount(() => { disposed = true; refreshGeneration += 1; stop?.(); subsc
             <UButton size="touch" v-if="change?.status === 'applied' && stale" label="View history" color="neutral" variant="outline" class="min-h-11" :disabled="busy || !available" @click="historyOpen = true" />
             <UButton size="touch" label="Open document" color="neutral" variant="ghost" class="min-h-11" :disabled="busy || !available" @click="openDocument" />
         </div>
-        <p v-if="error" role="alert" class="mt-2 text-xs text-[var(--md-error)]">{{ error }}</p>
+        <p v-if="error && !open" role="alert" class="mt-2 text-xs text-[var(--md-error)]">{{ error }}</p>
         <AppModal v-model:open="open" title="Review document changes" size="md" close-label="Close review">
             <div class="document-editor-root max-h-[60dvh] space-y-4 overflow-auto" data-context="document">
                 <article v-for="(entry, index) in changes" :key="index" class="document-ai-hunk">

@@ -75,7 +75,7 @@
                         <dd>{{ stats.characters.toLocaleString() }}</dd>
                     </div>
                     <div>
-                        <dt>Blocks</dt>
+                        <dt>Sections</dt>
                         <dd>{{ stats.blocks.toLocaleString() }}</dd>
                     </div>
                     <div v-if="stats.serializedBytes">

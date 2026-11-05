@@ -294,7 +294,7 @@ const summaryGroups = computed(() => [
         rows: [
             { label: 'Project Folder', value: props.answers.instanceDir },
             { label: 'Settings File', value: props.answers.envFile },
-            { label: 'Deployment Target', value: props.answers.deploymentTarget },
+            { label: 'Deployment Target', value: props.answers.deploymentTarget === 'local-dev' ? 'Development on this computer' : props.answers.deploymentTarget === 'docker' ? 'Docker server' : props.answers.deploymentTarget },
         ],
     },
     {

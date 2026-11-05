@@ -294,7 +294,7 @@ describe('CommandPalette overlay', () => {
     it('shows a recoverable error without closing', () => {
         controller.errorMessage.value = 'Pane capacity reached';
         const wrapper = mountPalette();
-        expect(wrapper.text()).toContain('Pane capacity reached');
+        expect(wrapper.text()).toContain('Could not complete this action. Please try again.');
         expect(close).not.toHaveBeenCalled();
         wrapper.unmount();
     });

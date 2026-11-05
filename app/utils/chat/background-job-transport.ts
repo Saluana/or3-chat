@@ -469,10 +469,10 @@ export async function startBackgroundStream(params: {
         throw new BackgroundAdmissionUncertainError(
             body._backgroundAdmissionId, params.history.workspaceId, lastError);
     }
-    
+
     // Mark background streaming as available since it worked
     setBackgroundStreamingAvailable(true);
-    
+
     return result;
 }
 

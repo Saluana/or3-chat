@@ -400,7 +400,7 @@
                         <span class="chat-settings-row-title">
                             {{
                                 tool.definition.ui?.label ||
-                                tool.definition.function.name
+                                tool.definition.function.name.replace(/[_-]+/g, ' ')
                             }}
                         </span>
                         <span
@@ -419,8 +419,7 @@
                                     ? 'Available with OpenRouter models'
                                     : tool.definition.ui
                                           ?.descriptionHint ||
-                                      tool.definition.function
-                                          .description
+                                      'Use this tool in the conversation.'
                             }}
                         </span>
                     </label>
@@ -433,7 +432,7 @@
                         :model-value="tool.enabledValue"
                         :aria-label="`Enable ${
                             tool.definition.ui?.label ||
-                            tool.definition.function.name
+                            tool.definition.function.name.replace(/[_-]+/g, ' ')
                         }`"
                         :aria-describedby="
                             tool.openRouterOnly ||
@@ -461,7 +460,7 @@ import { useChatToolPreferences } from '~/composables/chat/useChatToolPreference
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { OPENROUTER_OPTION_DESCRIPTORS } from '~~/shared/openrouter/model-variants';
 import type { ModelOptionDescriptor } from '~~/shared/ai/types';
-import { getProviderSlug } from '~/utils/modelCatalog';
+import { formatModelName, getProviderSlug } from '~/utils/modelCatalog';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useModelVariantItems } from '~/composables/chat/useModelVariantItems';
 import { isOpenAiModel } from '~~/shared/openai/models';
@@ -688,7 +687,7 @@ const closeButtonProps = computed(() => {
 const { favoriteModels, catalog } = useModelStore();
 const selectedModelLabel = computed(() => {
     const model = catalog.value.find(row => row.id === selectedModel.value || row.canonical_slug === selectedModel.value);
-    return model?.name || selectedModel.value?.split('/').at(-1) || 'Choose a model';
+    return formatModelName(model?.name || selectedModel.value?.split('/').at(-1) || 'Choose a model');
 });
 
 function providerSlugFor(modelId: string): string {
@@ -700,7 +699,7 @@ const modelItems = computed(() =>
         .map((model) => {
             const value = model.canonical_slug ?? model.id;
             if (!value) return null;
-            return { label: model.name || value, value, slug: providerSlugFor(value) };
+            return { label: formatModelName(model.name || value), value, slug: providerSlugFor(value) };
         })
         .filter(
             (

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import { saveClassifiedProjectMemory } from '~/utils/projects/memory';
 import {
     computed,
@@ -633,9 +634,7 @@ function subscribePage() {
             if (!active || captured !== scope || revision !== readRevision)
                 return;
             error.value =
-                cause instanceof Error
-                    ? cause.message
-                    : 'Could not load projects.';
+                presentError(cause, { fallbackMessage: 'Could not load projects.' }).message;
         },
     });
 }
@@ -689,9 +688,7 @@ async function run(action: () => Promise<unknown>) {
     } catch (cause) {
         if (captured !== scope || captured.signal.aborted) return;
         error.value =
-            cause instanceof Error
-                ? cause.message
-                : 'Project operation failed.';
+            presentError(cause, { fallbackMessage: 'Project operation failed.' }).message;
     } finally {
         if (captured === scope) busy.value = false;
     }
@@ -2491,7 +2488,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                                         >
                                             {{
                                                 tool.runtime === 'server'
-                                                    ? 'Server-owned tools cannot run in browser project chats.'
+                                                    ? 'This tool is unavailable in project chats.'
                                                     : 'Turn this tool on in chat settings to use it here.'
                                             }}
                                         </p>

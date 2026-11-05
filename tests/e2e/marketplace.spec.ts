@@ -114,6 +114,9 @@ async function stubMarketplace(
     page: Page,
     options: { readonly role: 'owner' | 'member' }
 ): Promise<void> {
+    await page.route('**/api/plugins/runtime-manifest', (route) => route.fulfill({
+        json: { workspaceId: 'ws_e2e', revision: 'fixture', enabledPluginIds: [], installedPluginIds: [], runtime: {} },
+    }));
     await page.route('**/api/auth/session', (route) =>
         route.fulfill({
             status: 200,
@@ -185,7 +188,7 @@ async function openMarketplace(
     pageTitle = 'Discover'
 ): Promise<void> {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await expect(page.getByRole('button', { name: 'Dashboard' }).first()).toBeVisible();
     const welcome = page.locator('[data-welcome-card]');
     if (await welcome.count()) await welcome.locator('button[aria-label="Dismiss welcome"]').click();
     await page.getByRole('button', { name: 'Dashboard' }).first().click({ timeout: 30_000 });
@@ -251,8 +254,13 @@ test.describe('marketplace journeys', () => {
         await search.press('Enter');
 
         await page.getByTestId('marketplace-card').first().click();
+        const profile = page.getByTestId('marketplace-detail').getByText('or3-portable-client-v1', { exact: true });
+        await expect(profile).not.toBeVisible();
+        await page.getByTestId('marketplace-detail').getByText('Technical details', { exact: true }).click();
+        await expect(profile).toBeVisible();
+        await page.getByTestId('marketplace-detail').getByText('Technical details', { exact: true }).click();
         await expect(page.getByTestId('marketplace-block').first()).toContainText(
-            'registry-install-disabled'
+            'Registry installation is turned off on this instance.'
         );
         // The block carries a recommended fix, not just a code.
         await expect(page.getByTestId('marketplace-block').first()).toContainText(

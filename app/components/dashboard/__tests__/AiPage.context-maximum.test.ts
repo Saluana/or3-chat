@@ -309,13 +309,16 @@ describe('Dashboard context maximum through real KV', () => {
         await openPage();
         await show('fast');
         await vi.waitFor(() => expect(wrapper!.find('#dashboard-title-model').exists()).toBe(true));
-        expect(wrapper!.text()).toContain('deepseek/deepseek-v4.1-flash:nitro');
+        expect(wrapper!.getComponent<typeof FastSelect>('#dashboard-title-model').props('modelValue')).toBe('deepseek/deepseek-v4.1-flash');
+        expect(wrapper!.getComponent<typeof FastSelect>('#dashboard-title-routing').props('modelValue')).toBe('nitro');
+        expect(wrapper!.find('details').exists()).toBe(false);
         wrapper!.getComponent<typeof FastSelect>('#dashboard-title-model').vm.$emit('update:modelValue', 'other/model');
         await vi.waitFor(async () => expect(JSON.parse((await getKvByName('ai_settings'))!.value!).titleGenerationModel).toBe('other/model:nitro'));
         wrapper!.unmount(); wrapper = undefined;
         await openPage();
         await show('fast');
-        await vi.waitFor(() => expect(wrapper!.text()).toContain('other/model:nitro'));
+        await vi.waitFor(() => expect(wrapper!.getComponent<typeof FastSelect>('#dashboard-title-model').props('modelValue')).toBe('other/model'));
+        expect(wrapper!.getComponent<typeof FastSelect>('#dashboard-title-routing').props('modelValue')).toBe('nitro');
         wrapper!.getComponent<typeof FastSelect>('#dashboard-title-routing').vm.$emit('update:modelValue', 'floor');
         await vi.waitFor(async () => expect(JSON.parse((await getKvByName('ai_settings'))!.value!).titleGenerationModel).toBe('other/model:floor'));
     });

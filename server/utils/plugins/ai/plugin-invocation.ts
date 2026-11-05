@@ -102,7 +102,7 @@ export function createPluginAiCompleteMethod(
 
     const handler: HostRpcHandler = async (params, context) => {
         // Other unknown fields stay ignored, as before; only router overrides are refused.
-        if (!params || typeof params !== 'object' || Array.isArray(params) || hasRouterConfiguration(params)) {
+        if (hasRouterConfiguration(params)) {
             throw Object.assign(new Error('Unsupported AI completion parameters'), { rpcCode: 'policy-denied' });
         }
         const raw = params as {

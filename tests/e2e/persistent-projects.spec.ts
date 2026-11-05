@@ -1106,7 +1106,7 @@ test('project backup restores memories and extracted revision bytes', async ({
         .click();
     const downloaded = page.waitForEvent('download');
     await page
-        .getByRole('button', { name: 'Export workspace', exact: true })
+        .getByRole('button', { name: 'Export', exact: true })
         .click();
     const backup = await downloaded;
     const path = info.outputPath('project-backup.or3.jsonl');
@@ -1140,7 +1140,7 @@ test('project backup restores memories and extracted revision bytes', async ({
     await page.locator('input[type=file]').setInputFiles(path);
     await page.getByRole('button', { name: /Replace workspace/ }).click();
     await page
-        .getByRole('button', { name: 'Import workspace', exact: true })
+        .getByRole('button', { name: 'Import', exact: true })
         .click();
     await expect(page.getByText(/Last import/).first()).toBeVisible({
         timeout: 60000,

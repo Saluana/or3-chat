@@ -6,6 +6,7 @@ import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { buildThemeOverrideProps } from '~/composables/ui/themeOverrideProps';
 import {
     formatModalities,
+    formatModelName,
     formatPerMillion,
     formatReleaseDate,
     formatTokenCount,
@@ -146,7 +147,7 @@ const rowValueClass =
                     <h3
                         class="font-semibold text-[15px] leading-tight text-[var(--md-on-surface)] break-words"
                     >
-                        {{ model.name }}
+                        {{ formatModelName(model.name) }}
                     </h3>
                     <button
                         type="button"

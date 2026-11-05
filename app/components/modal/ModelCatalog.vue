@@ -80,7 +80,7 @@
                                 :title="
                                     refreshing
                                         ? 'Refreshing…'
-                                        : 'Force refresh models (bypass cache)'
+                                        : 'Refresh models'
                                 "
                                 @click="doRefresh"
                             >

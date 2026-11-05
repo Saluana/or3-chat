@@ -87,7 +87,7 @@
                         role="alert"
                         class="dashboard-error"
                     >
-                        {{ state.error.message }}
+                        {{ presentError(state.error, { fallbackMessage: 'Could not open this page. Please try again.' }).message }}
                     </div>
 
                     <div
@@ -186,6 +186,7 @@
     </AppModal>
 </template>
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import { computed, nextTick, provide, ref, shallowRef, watch } from 'vue';
 import PluginIcons from './PluginIcons.vue';
 import DashboardListRow from './DashboardListRow.vue';

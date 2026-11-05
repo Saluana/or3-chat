@@ -25,3 +25,6 @@ bun packages/plugin-sdk/bin/or3-plugin.mjs inspect  /tmp/<name>.or3pkg
 
 The packed `.or3pkg` archives are what the publisher lane uploads; the digests
 recorded in `docs/phase-9-official-products-evidence.md` are the review identity.
+
+
+Plugin screens describe model availability and local processing in plain language. Model identifiers, configuration controls, and permission requirements remain available where needed for setup.

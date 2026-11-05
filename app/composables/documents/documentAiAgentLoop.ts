@@ -118,13 +118,13 @@ function statusLabelForTool(name: string, tools: readonly ToolDefinition[]): str
         case 'get_document_outline':
             return 'Reading outline';
         case 'list_document_chunks':
-            return 'Listing chunks';
+            return 'Finding relevant passages';
         case 'read_blocks':
-            return 'Reading blocks';
+            return 'Reading the document';
         case 'search_document':
             return 'Searching document';
         case 'propose_edits':
-            return 'Staging edits';
+            return 'Preparing changes';
         case 'get_proposal_status':
             return 'Checking proposal';
         default: {
@@ -345,7 +345,7 @@ export async function runDocumentAiAgentLoop(
 
     if (iterations >= maxIterations && stagedOperations.length === 0) {
         throw new Error(
-            `Document AI stopped after ${maxIterations} iterations without staging edits. Try a clearer request or raise max iterations.`,
+            'The AI could not prepare changes within the current limit. Try a smaller or more specific request.',
         );
     }
 

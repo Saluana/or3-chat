@@ -266,7 +266,10 @@ function rowDetail(result: PaletteResult): string | undefined {
     if (snippet && snippet.toLowerCase() !== result.title.trim().toLowerCase()) {
         return snippet;
     }
-    return result.subtitle;
+    const subtitle = result.subtitle?.trim();
+    return subtitle && subtitle.toLowerCase() !== result.title.trim().toLowerCase()
+        ? subtitle
+        : undefined;
 }
 
 function imageBytes(result: PaletteResult): number | null {

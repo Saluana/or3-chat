@@ -88,4 +88,3 @@ export async function assertDispatchOwner(params: {
         throw new Error('This chat changed projects before dispatch. Start a new turn.');
     scope.assertCurrent();
 }
-

@@ -9,13 +9,13 @@
             <USelect id="dashboard-title-routing" v-bind="selectProps" :model-value="variant" :items="variants"
                 value-key="value" aria-label="Fast model routing" class="w-full" :disabled="!editable || busy" @update:model-value="pickVariant" />
         </template>
-        <p class="dashboard-list-footnote">A small, quick model for chat and document titles, editor autocomplete and project memories. Its provider also checks whether a saved memory is a decision. Existing titles and memories stay as they are.</p>
-        <p class="dashboard-list-footnote break-all">{{ model }}</p>
+        <p class="dashboard-list-footnote">A small, quick model for chat and document titles, editor autocomplete and project memories. Existing titles and memories stay as they are.</p>
         <p v-if="!editable" class="dashboard-list-footnote">A workspace administrator can change this model.</p>
         <p v-if="error" class="dashboard-list-footnote text-error" role="alert">{{ error }}</p>
     </section>
 </template>
 <script setup lang="ts">
+import { formatModelName } from '~/utils/modelCatalog';
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRuntimeConfig } from '#imports';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
@@ -45,7 +45,7 @@ const variants = [{ label: 'Standard routing', value: 'off' }, { label: 'Nitro â
 const selectProps = useThemeOverrides({ component: 'selectmenu', context: 'dashboard', identifier: 'dashboard.ai.title-model', isNuxtUI: true });
 const items = computed(() => {
     const choices = catalog.value.filter(m => !m.architecture?.output_modalities || m.architecture.output_modalities.includes('text'))
-        .map(m => ({ label: m.name || m.id, value: m.id }));
+        .map(m => ({ label: formatModelName(m.name || m.id), value: m.id }));
     if (!choices.some(m => m.value === baseModel.value)) choices.unshift({ label: baseModel.value === 'deepseek/deepseek-v4.1-flash' ? 'DeepSeek V4.1 Flash' : baseModel.value, value: baseModel.value });
     return choices;
 });

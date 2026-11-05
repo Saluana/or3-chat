@@ -124,7 +124,7 @@ export function createModelCompare(options = {}) {
         } else if (state.catalog && !state.catalog.configured) {
             children.push({
                 type: 'text',
-                text: 'This host has no approved models for plugins yet. Ask the operator to configure the plugin model allowlist.',
+                text: 'No models are available for this app yet. Ask your administrator to choose models for this app.',
             });
         } else {
             const options_ = (state.catalog?.models ?? [])
@@ -137,7 +137,7 @@ export function createModelCompare(options = {}) {
             if (unpriced.length > 0) {
                 children.push({
                     type: 'text',
-                    text: `${unpriced.length} approved model(s) have no host price and cannot be used.`,
+                    text: `${unpriced.length} model(s) are unavailable because their pricing could not be confirmed.`,
                 });
             }
             children.push({

@@ -14,7 +14,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Find work, restore app tabs, distinguish chat drafts, create documents inline without a naming form, navigate the fixed-height Dashboard with dismissible deep links and Files/Trash, and preserve existing records when importing backups."
+                    "summary": "Find work, restore app tabs, distinguish chat drafts, create documents inline without a naming form, navigate the fixed-height Dashboard with dismissible deep links and Files/Trash, and preserve existing records when importing backups. Conversation memory labels, concise settings, and optional troubleshooting details."
                 },
                 {
                     "name": "first-chat.md",
@@ -674,7 +674,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 9,
-                    "summary": "SQLite auth/sync, structured background recovery errors, qualified backup inspection, owner-bound notification deletion, atomic native/D1 Files and Trash admission, bounded snapshots, exact commit retries, quotas, maintenance controls and D1 support limits."
+                    "summary": "SQLite auth/sync, structured background recovery errors, backup inspection qualified with filesystem provider 0.0.16, owner-bound notification deletion, atomic native/D1 Files and Trash admission, bounded snapshots, exact commit retries, quotas, maintenance controls and D1 support limits."
                 },
                 {
                     "name": "provider-fs.md",

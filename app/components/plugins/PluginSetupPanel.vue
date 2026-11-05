@@ -226,8 +226,7 @@ function canConnect(connection: SetupConnectionPlan): boolean {
             class="rounded border border-[var(--md-outline-variant)] p-3 text-xs"
             role="note"
         >
-            Connections on this deployment are held in memory and will not survive a
-            restart. Configure a durable store before relying on them.
+            These connections will be lost when the server restarts. Ask an administrator to enable saved connections.
         </div>
 
         <div
@@ -235,10 +234,10 @@ function canConnect(connection: SetupConnectionPlan): boolean {
             class="rounded border border-[var(--md-outline-variant)] p-3 text-xs"
             role="alert"
         >
-            This deployment has no credential encryption key configured, so connections
-            cannot be stored. An administrator must set
+            Connections cannot be saved securely yet. Ask an administrator to finish setup.
+            <details><summary>Administrator details</summary>Set
             <code>OR3_PLUGIN_CONNECTION_SECRET</code> (or
-            <code>NUXT_ADMIN_PLUGIN_CONNECTION_SECRET</code>) and restart the instance.
+            <code>NUXT_ADMIN_PLUGIN_CONNECTION_SECRET</code>) and restart the instance.</details>
         </div>
 
         <div
@@ -246,11 +245,9 @@ function canConnect(connection: SetupConnectionPlan): boolean {
             class="rounded border border-[var(--md-outline-variant)] p-3 text-xs"
             role="note"
         >
-            Secret settings ({{ secretLabels }}) are stored by host secret custody and are
-            never entered or saved through this form.
+            An administrator manages these private settings: {{ secretLabels }}.
             <template v-if="requiredSecretMissing">
-                This deployment does not provide secret custody, so the plugin stays blocked
-                until its package no longer requires a secret.
+                This app requires private settings that this server cannot save. Ask your administrator for help.
             </template>
         </div>
 

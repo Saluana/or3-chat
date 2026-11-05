@@ -273,7 +273,7 @@ onMounted(async () => {
                 errorMessage.value = 'No key was returned. Start the connection again.';
             } else if (cspViolation.value) {
                 errorMessage.value =
-                    'This browser blocked the OpenRouter connection (Content-Security-Policy). Start the connection again, or check the deployment CSP allows https://openrouter.ai.';
+                    'This site could not connect to OpenRouter. Ask your administrator to check the connection settings.';
             } else {
                 errorMessage.value = 'The connection could not be completed. Start the connection again.';
             }

@@ -57,7 +57,7 @@
                     <UIcon name="i-heroicons-exclamation-triangle" class="w-5 h-5 flex-shrink-0" />
                     <div>
                         <div class="font-semibold text-sm">Restart Required</div>
-                        <div class="text-xs opacity-80">Restart the development server to rescan installed theme modules.</div>
+                        <div class="text-xs opacity-80">Restart the development server to find installed themes.</div>
                     </div>
                 </div>
                 <UButton

@@ -181,6 +181,7 @@
 </template>
 
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import { delegatedChatController } from '~/utils/chat/delegated-chat-runtime';
 import { provideToolCardFrameBudget } from '~/composables/chat/tool-card-frame-budget';
 import {
@@ -843,9 +844,9 @@ const anchorCompactionReasons = computed(() => {
         if (row.role === 'user') pendingUser = true;
         if (row.role === 'assistant' && row.text.trim() && pendingUser) { turns++; pendingUser = false; }
         reasons.set(row.id, compaction.blockedReason.value || (busy ? 'Wait for pending generation and tools to settle.'
-            : !localCompactionIds.value ? 'Checking the persisted source.' : !localCompactionIds.value.has(row.id)
-                ? 'Open the original conversation to compact this inherited message.'
-                : turns < 2 ? 'Compaction requires at least two settled user/assistant turns.' : undefined));
+            : !localCompactionIds.value ? 'Checking saved messages.' : !localCompactionIds.value.has(row.id)
+                ? 'Open the original conversation to summarize this message.'
+                : turns < 2 ? 'Exchange at least two messages and replies before summarizing.' : undefined));
     }
     return reasons;
 });
@@ -867,7 +868,7 @@ function compactionActionFor(message: UiChatMessage) {
 }
 const threadCompactionBlockedReason = computed(() => {
     const anchor = [...allMessages.value].reverse().find((row) => localCompactionIds.value?.has(row.id));
-    return compaction.blockedReason.value ?? (anchor ? anchorCompactionReasons.value.get(anchor.id) : 'Choose a persisted conversation with settled turns.');
+    return compaction.blockedReason.value ?? (anchor ? anchorCompactionReasons.value.get(anchor.id) : 'Choose a saved conversation with completed replies.');
 });
 const rowContentRevision = ref(0);
 let renderedStableSnapshot: UiChatMessage[] | null = null;
@@ -1390,7 +1391,7 @@ async function onRetry(messageId: string, options: { afterEdit?: boolean } = {})
     } catch (error) {
         toast.add({
             title: 'Retry failed',
-            description: error instanceof Error ? error.message : 'Please try again.',
+            description: presentError(error, { fallbackMessage: 'Please try again.' }).message,
             color: 'error',
             duration: 3500,
         });

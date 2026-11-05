@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from '~/utils/date';
 import ToolCardAuthorityReview from '~/components/plugins/ToolCardAuthorityReview.vue';
 import { describePluginGrant } from '~~/shared/plugins/grant-description';
 /**
@@ -933,8 +934,8 @@ function blockActionLabel(block: { action: string }): string | null {
             v-else-if="!catalog.configured.value"
             color="info"
             variant="subtle"
-            title="This instance has no marketplace registry configured"
-            description="An owner can set OR3_MARKETPLACE_REGISTRY_ORIGIN and the trusted release keys, then enable registry installation."
+            title="Marketplace is not set up yet"
+            description="Ask an administrator to connect the marketplace for this site."
             data-testid="marketplace-unconfigured"
         />
         <UAlert
@@ -962,18 +963,20 @@ function blockActionLabel(block: { action: string }): string | null {
             <dl v-if="selectedRelease" class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
                 <dt class="text-(--ui-text-muted)">Version</dt>
                 <dd>{{ selectedRelease.version }}</dd>
-                <dt class="text-(--ui-text-muted)">Profile</dt>
-                <dd>{{ selectedRelease.profile }}</dd>
                 <dt class="text-(--ui-text-muted)">License</dt>
                 <dd>{{ selectedRelease.license }}</dd>
                 <dt class="text-(--ui-text-muted)">Published</dt>
-                <dd>{{ selectedRelease.publishedAt }}</dd>
-                <dt class="text-(--ui-text-muted)">Advisories accepted</dt>
-                <dd>
-                    {{ selectedAdvisories?.acceptedSequence }}
-                    of {{ selectedAdvisories?.latestSequence }}
-                </dd>
+                <dd>{{ formatDate(selectedRelease.publishedAt) }}</dd>
             </dl>
+            <details v-if="selectedRelease" class="text-sm text-(--ui-text-muted)">
+                <summary>Technical details</summary>
+                <dl class="mt-3 grid grid-cols-2 gap-x-6 gap-y-2">
+                    <dt>Profile</dt>
+                    <dd class="break-all">{{ selectedRelease.profile }}</dd>
+                    <dt>Advisories accepted</dt>
+                    <dd>{{ selectedAdvisories?.acceptedSequence }} of {{ selectedAdvisories?.latestSequence }}</dd>
+                </dl>
+            </details>
 
             <div v-if="preflight.loading.value" class="text-sm text-(--ui-text-muted)">
                 Checking this instance…
@@ -993,7 +996,7 @@ function blockActionLabel(block: { action: string }): string | null {
                 :key="block.code"
                 color="warning"
                 variant="subtle"
-                :title="block.code"
+                title="Installation needs attention"
                 :description="`${block.message}${blockActionLabel(block) ? ` (${blockActionLabel(block)})` : ''}`"
                 data-testid="marketplace-block"
             />
@@ -1219,7 +1222,7 @@ function blockActionLabel(block: { action: string }): string | null {
             <div v-if="showInstallStatus && install.status.value" class="flex flex-col gap-3 text-sm" data-testid="marketplace-install-status">
                 <div class="flex items-center gap-2">
                     <UBadge color="neutral" variant="subtle">{{ install.status.value.status }}</UBadge>
-                    <span>{{ install.status.value.stage }} ({{ install.status.value.percentComplete }}%)</span>
+                    <span>Installation progress: {{ install.status.value.percentComplete }}%</span>
                 </div>
                 <p v-if="install.canaryStatus.value" class="text-(--ui-text-muted)">
                     Browser check: {{ install.canaryStatus.value }}

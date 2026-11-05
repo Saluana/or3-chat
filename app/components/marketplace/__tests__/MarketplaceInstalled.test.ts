@@ -310,7 +310,7 @@ describe('MarketplaceInstalled', () => {
         await wrapper.findAll('button').find((button) => button.text() === 'Run check')!.trigger('click');
         await new Promise((resolve) => setTimeout(resolve, 0));
         expect(wrapper.text()).toContain('Selected package: ready');
-        expect(wrapper.text()).toContain('Workspace: enabled');
+        expect(wrapper.text()).toContain('Enabled: yes');
         expect(wrapper.text()).toContain('Browser activation: confirmed');
         expect(wrapper.text()).toContain('2026-09-27T00:00:00.000Z');
         expect(reconcileMock).toHaveBeenCalledOnce();

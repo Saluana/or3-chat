@@ -16,7 +16,7 @@
       color="error"
       variant="soft"
       title="Activity unavailable"
-      :description="error"
+      :description="presentError(error, { fallbackMessage: 'Could not load this activity. Please try again.' }).message"
     >
       <template #actions>
         <UButton size="xs" color="error" variant="soft" @click="load">
@@ -47,7 +47,7 @@
           {{ detail.title }}
         </h2>
         <p
-          v-if="detail.summary"
+          v-if="detail.summary && detail.summary.trim() !== detail.title.trim()"
           class="mt-1 text-sm text-[var(--md-on-surface-variant)]"
         >
           {{ detail.summary }}
@@ -80,10 +80,10 @@
           class="mt-3 text-sm text-[var(--md-error)]"
           role="alert"
         >
-          {{ actionError }}
+          {{ presentError(actionError, { fallbackMessage: 'Could not complete this action. Please try again.' }).message }}
         </p>
         <p v-if="streamError" class="mt-3 text-xs text-[var(--md-error)]">
-          Live updates disconnected: {{ streamError }}
+          {{ presentError(streamError, { fallbackMessage: 'Live updates stopped. Refresh to check the latest progress.' }).message }}
         </p>
         <details class="mt-3 text-xs text-[var(--md-on-surface-variant)]">
           <summary class="w-fit cursor-pointer select-none">
@@ -103,7 +103,7 @@
         color="error"
         variant="soft"
         title="Run failed"
-        :description="detail.error"
+        :description="presentError(detail.error, { fallbackMessage: 'This activity could not finish. Review its details before trying again.' }).message"
       />
 
       <section v-if="detail.approvals?.length" class="space-y-2">
@@ -124,7 +124,7 @@
             </UBadge>
           </div>
           <p
-            v-if="approval.description"
+            v-if="approval.description && approval.description.trim() !== approval.title.trim()"
             class="mt-1 text-sm text-[var(--md-on-surface-variant)]"
           >
             {{ approval.description }}
@@ -146,7 +146,7 @@
             }}</span>
             <span
               class="shrink-0 text-xs uppercase tracking-wide text-[var(--md-on-surface-variant)]"
-              >{{ artifact.kind }}</span
+              >Open</span
             >
           </a>
         </div>
@@ -175,11 +175,6 @@
             class="rounded-[var(--md-border-radius)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-3"
           >
             <div class="flex items-center justify-between gap-3">
-              <span
-                class="text-xs font-semibold uppercase tracking-wide text-[var(--md-on-surface)]"
-              >
-                {{ event.type }}
-              </span>
               <time
                 class="shrink-0 text-xs tabular-nums text-[var(--md-on-surface-variant)]"
                 :datetime="event.occurredAt"
@@ -200,6 +195,7 @@
 </template>
 
 <script setup lang="ts">
+import { presentError } from '~~/shared/errors';
 import { activityStatusLabel } from "~/core/activity/display";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type {
