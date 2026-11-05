@@ -40,7 +40,7 @@ test('disconnected welcome keeps editor history and loads settings on first open
     });
     await page.getByRole('button', { name: 'Model catalog Browse and compare available models.', exact: true }).click();
     const catalog = page.getByRole('dialog', { name: 'Model catalog', exact: true });
-    await expect(catalog.getByRole('option').filter({ hasText: 'GPT-4o mini' })).toBeVisible();
+    await expect(catalog.getByRole('listitem').filter({ hasText: 'GPT-4o mini' })).toBeVisible();
 });
 const fixturePng = { name: 'composer.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=', 'base64') };
 
@@ -2181,16 +2181,23 @@ test.describe('production chat journey', () => {
         await page.getByRole('button', { name: 'Model catalog Browse and compare available models.', exact: true }).click();
         const catalog = page.getByRole('dialog', { name: 'Model catalog', exact: true });
         const query = catalog.getByRole('textbox', { name: 'Search models', exact: true });
+        // Home/End must also focus rows outside the virtualized DOM window.
+        const firstDetails = catalog.getByRole('button', { name: 'Details for OpenAI: GPT-4.1 Mini', exact: true });
+        await firstDetails.focus();
+        await page.keyboard.press('End');
+        await expect(catalog.getByRole('button', { name: 'Details for OpenAI: GPT Other 109', exact: true })).toBeFocused();
+        await page.keyboard.press('Home');
+        await expect(firstDetails).toBeFocused();
         for (const text of ['gpt-4.1 mini', 'openai/gpt-4.1-mini']) {
             await query.fill(text);
-            await expect(catalog.getByRole('option')).toHaveCount(2);
-            await expect(catalog.getByRole('option').filter({ hasText: 'OpenAI: GPT-4.1 Mini' }).first()).toBeVisible();
+            await expect(catalog.getByRole('listitem')).toHaveCount(2);
+            await expect(catalog.getByRole('listitem').filter({ hasText: 'OpenAI: GPT-4.1 Mini' }).first()).toBeVisible();
         }
         const path = info.outputPath('exact-model-search.png');
         await page.screenshot({ path, animations: 'disabled' });
         await info.attach('exact-model-search', { path, contentType: 'image/png' });
         // Selecting closes the catalog and leaves the composer usable immediately.
-        await catalog.getByRole('button', { name: 'Use model', exact: true }).click();
+        await catalog.getByRole('button', { name: 'Use model', exact: true }).last().click();
         await expect(catalog).toHaveCount(0);
         await page.getByRole('textbox', { name: 'Message input' }).fill('journey:model-selection-send');
         await page.getByRole('button', { name: 'Send message', exact: true }).click({ timeout: 1000 });
@@ -3195,4 +3202,84 @@ test('Files review regressions preserve preview identity, native images, project
     const path = info.outputPath('review-files-preview.png');
     await page.screenshot({ path, animations: 'disabled' });
     await info.attach('review-files-preview', { path, contentType: 'image/png' });
+});
+
+
+test('catalog keeps platform identity, honest prices, recent choices and mobile selection', async ({ page }, info) => {
+    const models = [
+        { id: 'openai/catalog-old', name: 'Catalog old', created: 10, supported_parameters: [], architecture: { input_modalities: ['text'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' } },
+        { id: 'openai/catalog-small', name: 'Catalog small', created: 20, pricing: { prompt: '0.000000004', completion: '0.000001' } },
+        { id: '@openai/catalog-new', name: 'Catalog new (OpenAI key)', created: 30, architecture: { input_modalities: ['text', 'image'], output_modalities: ['text'] } },
+        { id: 'openai/catalog-embed', name: 'Catalog embedding', created: 40, architecture: { input_modalities: ['text'], output_modalities: ['embeddings'] } },
+    ].map(m => ({ context_length: 32000, supported_parameters: ['tools', 'reasoning'], ...m }));
+    await page.addInitScript(models => localStorage.setItem('openrouter_model_catalog_v1', JSON.stringify({ data: models, fetchedAt: Date.now() })), models);
+    await page.goto(`${chatPage}?workspace=1`);
+    const input = page.getByRole('textbox', { name: 'Message input' });
+    await expect(input).toBeVisible();
+    await input.fill('Keep my draft');
+    const open = async () => {
+        await page.getByRole('button', { name: 'Settings', exact: true }).click();
+        await page.getByRole('button', { name: /^Model catalog/ }).click();
+    };
+    await open();
+    const catalog = page.getByRole('dialog', { name: 'Model catalog', exact: true });
+    await expect(catalog.getByRole('listitem').first()).toContainText('Catalog new');
+    await expect(catalog.getByText('Catalog embedding', { exact: true })).toHaveCount(0);
+    await expect(catalog.getByRole('listitem').first()).toContainText('Price unavailable');
+    await expect(catalog.locator('[data-model-id="openai/catalog-small"]')).toContainText('$0.004');
+    await expect(catalog.getByRole('link', { name: 'Learn more' })).toHaveAttribute('href', /developers.openai.com/);
+    await catalog.getByRole('button', { name: 'Details for Catalog new', exact: true }).focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(catalog.getByRole('button', { name: 'Details for Catalog small', exact: true })).toBeFocused();
+    await page.keyboard.press('End');
+    await expect(catalog.getByRole('button', { name: 'Details for Catalog old', exact: true })).toBeFocused();
+    await page.keyboard.press('Home');
+    await expect(catalog.getByRole('button', { name: 'Details for Catalog new', exact: true })).toBeFocused();
+    await page.screenshot({ path: info.outputPath('catalog-desktop.png'), animations: 'disabled' });
+    await info.attach('catalog-desktop', { path: info.outputPath('catalog-desktop.png'), contentType: 'image/png' });
+    await catalog.getByRole('textbox', { name: 'Search models' }).fill('openrouter tools');
+    await expect(catalog.getByRole('listitem')).toHaveCount(1);
+    await catalog.getByRole('textbox', { name: 'Search models' }).fill('');
+    await catalog.locator('[data-model-id="openai/catalog-small"]').getByRole('button', { name: 'Use model', exact: true }).click();
+    await expect(catalog).toBeHidden();
+    await expect(input).toHaveText('Keep my draft');
+    await open();
+    await catalog.getByRole('button', { name: /^Recently used/ }).click();
+    await expect(catalog.getByRole('listitem')).toHaveCount(1);
+    await page.setViewportSize({ width: 390, height: 844 });
+    const row = catalog.getByRole('listitem').first();
+    await row.getByRole('button', { name: 'Use model', exact: true }).focus();
+    await expect(row.getByRole('button', { name: 'Use model', exact: true })).toBeInViewport();
+    await page.screenshot({ path: info.outputPath('catalog-mobile.png'), animations: 'disabled' });
+    await info.attach('catalog-mobile', { path: info.outputPath('catalog-mobile.png'), contentType: 'image/png' });
+    await page.keyboard.press('Enter');
+    await expect(catalog).toBeHidden();
+    await expect(input).toHaveText('Keep my draft');
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    const tools = page.getByRole('switch', { name: 'Enable tools for this chat' });
+    if (await tools.getAttribute('aria-checked') !== 'true') await tools.click();
+    await page.getByRole('button', { name: /^Model catalog/ }).click();
+    await catalog.getByRole('button', { name: /^All models/ }).click();
+    await catalog.locator('[data-model-id="openai/catalog-old"]').getByRole('button', { name: 'Use model', exact: true }).click();
+    await expect(page.getByText('This model cannot use tools. Choose another model or continue without tools.')).toBeVisible();
+    await page.getByRole('button', { name: 'Continue without tools' }).click();
+    await expect(page.getByText('This model cannot use tools. Choose another model or continue without tools.')).toHaveCount(0);
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Add attachments' }).click();
+    await (await chooser).setFiles(fixturePng);
+    await expect(page.getByText('This model cannot read these attachments. Choose another model or remove the attachments.')).toBeVisible();
+    await expect(input).toHaveText('Keep my draft');
+    await page.screenshot({ path: info.outputPath('catalog-incompatible-attachment.png'), animations: 'disabled' });
+    await open();
+    await catalog.locator('[data-model-id="@openai/catalog-new"]').getByRole('button', { name: 'Use model', exact: true }).click();
+    await expect(page.getByText('This model cannot read these attachments. Choose another model or remove the attachments.')).toHaveCount(0);
+    await expect(page.locator('.chat-input-attachment-image-container')).toHaveCount(1);
+    await expect(input).toHaveText('Keep my draft');
+    await page.reload();
+    await expect(input).toBeVisible();
+    await open();
+    await catalog.getByRole('button', { name: /^Recently used/ }).click();
+    await expect(catalog.getByRole('listitem')).toHaveCount(3);
+    await expect(catalog.getByRole('listitem').first()).toContainText('Catalog new');
 });

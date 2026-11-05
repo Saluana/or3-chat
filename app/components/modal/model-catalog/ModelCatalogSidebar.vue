@@ -10,7 +10,9 @@ import ModelCatalogProviderLogo from './ModelCatalogProviderLogo.vue';
 
 const props = withDefaults(
     defineProps<{
-        scope: 'all' | 'favorites';
+        scope: 'all' | 'favorites' | 'recent' | 'pinned';
+        recentCount: number;
+        pinnedCount: number;
         totalCount: number;
         favoritesCount: number;
         providers: ProviderCount[];
@@ -22,7 +24,7 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-    (e: 'update:scope', value: 'all' | 'favorites'): void;
+    (e: 'update:scope', value: 'all' | 'favorites' | 'recent' | 'pinned'): void;
     (e: 'selectProvider', slug: string | null): void;
     (e: 'selectCapability', key: CapabilityFilter): void;
 }>();
@@ -81,6 +83,7 @@ function toggleProvider(slug: string) {
         <button
             type="button"
             :class="navItemClass(scope === 'favorites')"
+            :aria-pressed="scope === 'favorites'"
             @click="emit('update:scope', 'favorites')"
         >
             <UIcon :name="starIcon" class="h-4 w-4 shrink-0" />
@@ -88,10 +91,16 @@ function toggleProvider(slug: string) {
             <span :class="countClass">{{ favoritesCount }}</span>
         </button>
 
+        <button type="button" :class="navItemClass(scope === 'recent')" :aria-pressed="scope === 'recent'" @click="emit('update:scope', 'recent')">
+            <span>Recently used</span><span :class="countClass">{{ recentCount }}</span>
+        </button>
+        <button v-if="pinnedCount" type="button" :class="navItemClass(scope === 'pinned')" :aria-pressed="scope === 'pinned'" @click="emit('update:scope', 'pinned')">
+            <span>Workspace picks</span><span :class="countClass">{{ pinnedCount }}</span>
+        </button>
         <div
             class="mt-4 mb-1 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--md-on-surface-variant)]"
         >
-            Providers
+            Platforms
         </div>
         <div class="flex flex-col gap-0.5">
             <button
@@ -99,6 +108,7 @@ function toggleProvider(slug: string) {
                 :key="p.slug"
                 type="button"
                 :class="navItemClass(selectedProvider === p.slug)"
+                :aria-pressed="selectedProvider === p.slug"
                 @click="toggleProvider(p.slug)"
             >
                 <ModelCatalogProviderLogo :slug="p.slug" :size="17" />
@@ -122,7 +132,7 @@ function toggleProvider(slug: string) {
                 <span class="truncate text-[13px]">{{
                     expanded
                         ? 'Show fewer'
-                        : `View all providers (${providers.length})`
+                        : `View all platforms (${providers.length})`
                 }}</span>
             </button>
         </div>
@@ -138,6 +148,7 @@ function toggleProvider(slug: string) {
                 :key="cat.key"
                 type="button"
                 :class="navItemClass(selectedCapability === cat.key)"
+                :aria-pressed="selectedCapability === cat.key"
                 @click="
                     emit(
                         'selectCapability',

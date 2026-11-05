@@ -23,7 +23,7 @@ for (const theme of themes) test(`UI audit: ${theme} phone model selection works
     await expect(catalog.getByRole('textbox', { name: 'Search models' })).toBeVisible();
     await expect(catalog.getByRole('button', { name: 'Sort models' })).toBeVisible();
     if (theme === 'blank') await captureChat(page, info, 'ui-audit-phone-catalog');
-    await catalog.getByRole('option', { name: /GPT-4o mini/ }).click();
+    await catalog.getByRole('button', { name: 'Details for GPT-4o mini', exact: true }).click();
     await page.getByRole('dialog', { name: 'Model details' }).getByRole('button', { name: 'Use model', exact: true }).click();
     await expect(catalog).not.toBeVisible();
     expect(await page.getByText('Model selected', { exact: true }).count()).toBe(0);
@@ -534,11 +534,17 @@ test.describe('responsive modal layouts', () => {
         test(`${theme} model catalog nested dialogs dismiss one layer and retain focus`, async ({ page }, info) => {
             test.setTimeout(180_000);
             await page.setViewportSize({ width: 390, height: 844 });
-            await page.addInitScript(() => localStorage.setItem('openrouter_model_catalog_v1', JSON.stringify({
-                fetchedAt: Date.now(),
-                data: [{ id: 'audit/model', name: 'Audit model', description: 'Long model description '.repeat(70), context_length: 32000, pricing: { prompt: '0', completion: '0' } }],
-            })));
-            await openResponsiveChat(page, theme, 'dark');
+            await page.route('**/api/__or3-e2e/models*', route => route.fulfill({ json: {
+                data: [{ id: 'audit/model', canonical_slug: 'audit/model', name: 'Audit model',
+                    description: 'Long model description '.repeat(70), context_length: 32000, created: 1,
+                    default_parameters: null, per_request_limits: null, supported_voices: null,
+                    links: { details: '/fixture/audit-model' }, supported_parameters: [],
+                    top_provider: { context_length: 32000, max_completion_tokens: 8192, is_moderated: false },
+                    architecture: { modality: 'text->text', input_modalities: ['text'], output_modalities: ['text'] },
+                    pricing: { prompt: '0', completion: '0' } }],
+                links: { next: null }, total_count: 1,
+            } }));
+            await openResponsiveChat(page, theme, 'dark', true, false);
             await page.getByRole('button', { name: 'Settings', exact: true }).last().click();
             await page.getByRole('button', { name: /^Model catalog/ }).click();
             const catalog = page.getByRole('dialog', { name: 'Model catalog', exact: true });
@@ -547,7 +553,7 @@ test.describe('responsive modal layouts', () => {
                 await page.setViewportSize(size);
                 await captureChat(page, info, `modal-${theme}-dark-${size.width}x${size.height}-catalog`);
                 await expectDialogFits(page, 'Model catalog');
-                await expect(catalog.getByRole('option').first()).toBeInViewport();
+                await expect(catalog.getByRole('listitem').first()).toBeInViewport();
             }
             await page.setViewportSize({ width: 390, height: 844 });
             const filterTrigger = catalog.getByRole('button', { name: 'Open filters', exact: true });
@@ -561,7 +567,7 @@ test.describe('responsive modal layouts', () => {
             await expect(page.getByRole('dialog', { name: 'Filters', exact: true })).toBeHidden();
             await expect(catalog).toBeVisible();
             await expect(filterTrigger).toBeFocused();
-            await catalog.getByRole('option').first().click();
+            await catalog.getByRole('listitem').first().click();
             await captureChat(page, info, `modal-${theme}-dark-390x320-catalog-details`);
             await expectDialogFits(page, 'Model details');
             await expectDialogFocusLoop(page, 'Model details');

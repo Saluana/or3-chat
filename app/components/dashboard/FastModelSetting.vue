@@ -15,6 +15,7 @@
     </section>
 </template>
 <script setup lang="ts">
+import { modelIdentity } from '~~/shared/ai/model-catalog';
 import { formatModelName } from '~/utils/modelCatalog';
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRuntimeConfig } from '#imports';
@@ -45,7 +46,7 @@ const variants = [{ label: 'Standard routing', value: 'off' }, { label: 'Nitro â
 const selectProps = useThemeOverrides({ component: 'selectmenu', context: 'dashboard', identifier: 'dashboard.ai.title-model', isNuxtUI: true });
 const items = computed(() => {
     const choices = catalog.value.filter(m => !m.architecture?.output_modalities || m.architecture.output_modalities.includes('text'))
-        .map(m => ({ label: formatModelName(m.name || m.id), value: m.id }));
+        .map(m => ({ label: `${formatModelName(m.name || m.id)} Â· ${modelIdentity(m).platformName}`, value: m.id }));
     if (!choices.some(m => m.value === baseModel.value)) choices.unshift({ label: baseModel.value === 'deepseek/deepseek-v4.1-flash' ? 'DeepSeek V4.1 Flash' : baseModel.value, value: baseModel.value });
     return choices;
 });

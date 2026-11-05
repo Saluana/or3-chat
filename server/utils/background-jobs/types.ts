@@ -171,6 +171,7 @@ export interface BackgroundJobExecution {
     apiKeyCiphertext: string;
     credentialSource?: 'personal' | 'server';
     chatLimits?: import('~~/shared/chat/chat-limits').ChatLimits;
+    workspaceModels?: import('~~/shared/ai/workspace-models').WorkspaceModels;
     /** Durable Stop intent. The live worker settles its buffered aborted snapshot. */
     cancellationRequestedAt?: number;
     /** Immutable canonical-history admission captured before paid execution. */

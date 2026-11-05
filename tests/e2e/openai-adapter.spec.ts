@@ -19,8 +19,8 @@ async function openAiSettings(page: Page, view: 'openai' | 'fast') {
 async function chooseModel(page: Page, name: string) {
     await page.getByRole('button', { name: 'Settings', exact: true }).last().click();
     await page.getByRole('button', { name: 'Current model' }).click();
-    await page.getByText(name, { exact: true }).click();
-    await page.getByRole('button', { name: 'Use model' }).click();
+    const catalog = page.getByRole('dialog', { name: 'Model catalog', exact: true });
+    await catalog.getByRole('listitem').filter({ hasText: name.replace(' (OpenAI key)', '') }).getByRole('button', { name: 'Use model', exact: true }).click();
 }
 
 async function send(page: Page, text: string) {
@@ -83,8 +83,8 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
         data: { username: 'openai-adapter-admin', password: process.env.OR3_OPENAI_E2E_ADMIN_PASSWORD } })).ok()).toBe(true);
     await openAiSettings(page, 'fast');
     await page.getByRole('button', { name: 'Fast Model', exact: true }).click();
-    await page.getByText('gpt-5.4-mini (OpenAI key)', { exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Fast Model', exact: true })).toContainText('gpt-5.4-mini (OpenAI key)');
+    await page.getByText('gpt-5.4-mini · OpenAI', { exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Fast Model', exact: true })).toContainText('gpt-5.4-mini · OpenAI');
     await expect(page.getByRole('combobox', { name: 'Fast model routing' })).toHaveCount(0);
     await expect.poll(async () => (await page.request.get('/api/openrouter/title-model')).json())
         .toEqual({ model: '@openai/gpt-5.4-mini' });
@@ -385,10 +385,12 @@ test('SQLite admin grants apply and revoke to cached workspace sessions', async 
     try {
         expect((await member.request.post('/api/basic-auth/sign-in', { headers: cloudHeaders, data: credentials })).ok()).toBe(true);
         expect((await member.request.get('/api/admin/auth/session')).status()).toBe(401);
+        expect((await member.request.post('/api/admin/workspace/models', { headers: adminHeaders, data: { workspaceId, policy: { hidden: [], pinned: [], defaultModel: null } } })).status()).toBe(401);
         expect((await page.request.post('/api/admin/admin-users/grant', { headers: adminHeaders, data: { userId: account.user.id } })).ok()).toBe(true);
         const adminSession = await member.request.get('/api/admin/auth/session');
         expect(await adminSession.json()).toMatchObject({ authenticated: true, kind: 'workspace_admin', workspace: { id: workspaceId } });
         const settingsPage = await member.newPage();
+        settingsPage.setDefaultTimeout(10_000);
         await settingsPage.goto('/admin/workspace');
         await expect(settingsPage.getByRole('heading', { name: 'Chat limits' })).toBeVisible();
         await expect(settingsPage.getByLabel('Instance tool iterations')).toHaveCount(0);
@@ -398,6 +400,43 @@ test('SQLite admin grants apply and revoke to cached workspace sessions', async 
         await expect(settingsPage.getByText('Workspace chat limits saved.')).toBeVisible();
         await settingsPage.reload();
         await expect(settingsPage.getByLabel('Workspace tool iterations')).toHaveValue('3');
+        // Model curation uses the same workspace authority as chat limits.
+        const policy = { hidden: ['fixture/image'], pinned: ['fixture/router'], defaultModel: 'fixture/router' };
+        expect((await member.request.post('/api/admin/workspace/models', { headers: adminHeaders, data: { workspaceId, policy } })).ok()).toBe(true);
+        expect(await (await member.request.get('/api/workspaces/models')).json()).toEqual(policy);
+        expect((await member.request.post('/api/admin/workspace/models', { headers: adminHeaders, data: { workspaceId: 'other-workspace', policy } })).status()).toBe(403);
+        expect((await member.request.get('/api/admin/workspace/model-catalog?workspaceId=other-workspace')).status()).toBe(403);
+        const availableModels = await member.request.get(`/api/admin/workspace/model-catalog?workspaceId=${encodeURIComponent(workspaceId)}`);
+        expect(availableModels.ok()).toBe(true);
+        expect((await availableModels.json()).data).toContainEqual(expect.objectContaining({ id: 'fixture/router' }));
+        expect((await member.request.post('/api/admin/workspace/models', { headers: { origin }, data: { workspaceId, policy } })).status()).toBe(403);
+        expect((await member.request.post('/api/admin/workspace/models', { headers: adminHeaders, data: { workspaceId, policy: { ...policy, defaultModel: policy.hidden[0] } } })).status()).toBe(400);
+        expect((await member.request.post('/api/openrouter/stream', { headers: cloudHeaders, data: { model: 'fixture/image', messages: [{ role: 'user', content: 'blocked' }] } })).status()).toBe(403);
+        await settingsPage.goto('/chat');
+        await settingsPage.getByRole('button', { name: 'Settings', exact: true }).last().click();
+        await expect(settingsPage.getByRole('button', { name: 'Current model', exact: true })).toContainText('Fixture Router');
+        await settingsPage.getByRole('button', { name: /^Model catalog/ }).click();
+        const workspaceCatalog = settingsPage.getByRole('dialog', { name: 'Model catalog', exact: true });
+        await expect(workspaceCatalog.locator('[data-model-id="fixture/image"]')).toHaveCount(0);
+        await workspaceCatalog.getByRole('button', { name: /^Workspace picks/ }).click();
+        await expect(workspaceCatalog.getByRole('listitem')).toHaveCount(1);
+        await expect(workspaceCatalog.getByRole('listitem')).toContainText('Fixture Router');
+        await settingsPage.screenshot({ path: resolve(process.env.OR3_OPENAI_E2E_OUTPUT!, 'workspace-model-picks.png') });
+        await settingsPage.goto('/admin/workspace');
+        await expect(settingsPage.getByRole('heading', { name: 'Workspace models' })).toBeVisible();
+        const saveModels = settingsPage.getByRole('button', { name: 'Save workspace models', exact: true });
+        await expect(saveModels).toBeVisible();
+        await settingsPage.getByLabel('Workspace default model', { exact: true }).click();
+        await settingsPage.getByRole('option', { name: 'Use personal preference', exact: true }).click();
+        await saveModels.click();
+        await expect(settingsPage.getByText('Workspace models saved.', { exact: true })).toBeVisible();
+        expect(await (await member.request.get('/api/workspaces/models')).json()).toEqual({ ...policy, defaultModel: null });
+        await settingsPage.getByLabel('Workspace default model', { exact: true }).click();
+        await settingsPage.getByRole('option', { name: 'Fixture Router · OpenRouter', exact: true }).click();
+        await saveModels.click();
+        await expect.poll(async () => (await member.request.get('/api/workspaces/models')).json()).toEqual(policy);
+        await settingsPage.screenshot({ path: resolve(process.env.OR3_OPENAI_E2E_OUTPUT!, 'workspace-models.png') });
+        expect((await member.request.post('/api/admin/workspace/models', { headers: adminHeaders, data: { workspaceId, policy: { hidden: [], pinned: [], defaultModel: null } } })).ok()).toBe(true);
         const endpoint = '/api/admin/chat-limits';
         expect((await member.request.post(endpoint, { headers: adminHeaders, data: { scope: 'instance', revision: 'x', limits: { toolIterations: 1, generatedImages: 0 } } })).status()).toBe(403);
         expect((await member.request.get('/api/admin/admin-users')).status()).toBe(403);
@@ -442,6 +481,7 @@ test('SQLite admin grants apply and revoke to cached workspace sessions', async 
             expect(added.ok(), await added.text()).toBe(true);
             expect((await member.request.post('/api/workspaces/active', { headers: cloudHeaders, data: { id: otherWorkspace } })).ok()).toBe(true);
             expect((await member.request.get('/api/admin/auth/session')).status()).toBe(403);
+            expect((await member.request.get('/api/admin/workspace/model-catalog')).status()).toBe(403);
             expect((await member.request.post(endpoint, { headers: adminHeaders, data: { scope: 'workspace', workspaceId: otherWorkspace, limits: { toolIterations: 1, generatedImages: 0 } } })).status()).toBe(403);
             expect((await page.request.post('/api/admin/workspace/members/set-role', { headers: adminHeaders, data: {
                 workspaceId: otherWorkspace, userId: account.user.id, role: 'editor',
@@ -453,11 +493,54 @@ test('SQLite admin grants apply and revoke to cached workspace sessions', async 
         } finally { await other.close(); }
         expect((await page.request.post('/api/admin/admin-users/revoke', { headers: adminHeaders, data: { userId: account.user.id } })).ok()).toBe(true);
         expect((await member.request.get('/api/admin/auth/session')).status()).toBe(401);
+        expect((await member.request.get('/api/admin/workspace/model-catalog')).status()).toBe(401);
         expect((await member.request.post(endpoint, { headers: adminHeaders, data: { scope: 'workspace', workspaceId, limits: { toolIterations: 1, generatedImages: 0 } } })).status()).toBe(401);
         expect((await (await page.request.get(`${endpoint}?workspaceId=${encodeURIComponent(workspaceId)}`)).json()).workspace)
             .toEqual({ toolIterations: 3, generatedImages: 2 });
         await writeFile(resolve(process.env.OR3_OPENAI_E2E_OUTPUT!, 'sqlite-admin-grants-receipt.json'), JSON.stringify({ workspaceId, grant: 'allowed', unavailableStore: 'denied', crossProcessRevocation: 'denied', crossProcessGrant: 'allowed', crossWorkspace: 'denied', viewer: 'denied', editor: 'denied', ungranted: 'denied', instance: 'denied', csrf: 'denied', revoke: 'denied' }, null, 2));
     } finally { await member.close(); }
+});
+
+test('an admin-only browser can curate models and recover catalog failures', async ({ page, browser }, info) => {
+    test.setTimeout(120_000);
+    page.setDefaultTimeout(15_000);
+    const origin = new URL(info.project.use.baseURL!).origin;
+    const headers = { origin, 'x-or3-admin-intent': 'admin' };
+    // Obtain a fixture workspace in a separate account session; the admin browser stays signed out of chat.
+    const account = await browser.newContext({ baseURL: origin });
+    try {
+        expect((await account.request.post('/api/basic-auth/sign-in', { headers: { origin, 'x-or3-cloud-intent': 'mutation' }, data: {
+            email: process.env.OR3_OPENAI_E2E_EMAIL, password: process.env.OR3_OPENAI_E2E_PASSWORD,
+        } })).ok()).toBe(true);
+        const workspaceId = (await (await account.request.get('/api/auth/session')).json()).session.workspace.id as string;
+        const endpoint = `/api/admin/workspace/model-catalog?workspaceId=${encodeURIComponent(workspaceId)}`;
+        const anonymousStatus = (await page.request.get(endpoint)).status();
+        expect((await page.request.post('/api/admin/auth/login', { headers, data: {
+            username: 'openai-adapter-admin', password: process.env.OR3_OPENAI_E2E_ADMIN_PASSWORD,
+        } })).ok()).toBe(true);
+        expect((await page.request.post('/api/openrouter/models', { headers: { origin, 'x-or3-cloud-intent': 'mutation' }, data: {} })).status()).toBe(401);
+        await page.goto(`/admin/workspaces/${encodeURIComponent(workspaceId)}`);
+        await page.getByLabel('Workspace default model', { exact: true }).click();
+        await page.getByRole('option', { name: 'Fixture Router · OpenRouter', exact: true }).click();
+        expect(anonymousStatus).toBe(401);
+        expect((await account.request.get(endpoint)).status()).toBe(401);
+        await page.getByRole('button', { name: 'Save workspace models', exact: true }).click();
+        await expect(page.getByText('Workspace models saved.', { exact: true })).toBeVisible();
+        expect((await (await page.request.get(`/api/admin/workspace/models?workspaceId=${encodeURIComponent(workspaceId)}`)).json()).policy.defaultModel).toBe('fixture/router');
+        await page.route('**/api/admin/workspace/model-catalog?*', route => route.fulfill({ status: 503, json: {} }));
+        await page.reload();
+        await expect(page.getByRole('alert').filter({ hasText: 'Could not load available models.' })).toBeVisible();
+        await page.unroute('**/api/admin/workspace/model-catalog?*');
+        await page.getByRole('button', { name: 'Retry loading models', exact: true }).click();
+        await page.getByLabel('Hidden models', { exact: true }).click();
+        await expect(page.getByRole('option', { name: 'Fixture Images · OpenRouter', exact: true })).toBeVisible();
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('option', { name: 'Fixture Images · OpenRouter', exact: true })).toHaveCount(0);
+        await page.getByRole('region', { name: 'Workspace models', exact: true }).screenshot({ path: resolve(process.env.OR3_OPENAI_E2E_OUTPUT!, 'admin-only-workspace-models.png') });
+        expect((await page.request.post('/api/admin/workspace/models', { headers, data: {
+            workspaceId, policy: { hidden: [], pinned: [], defaultModel: null },
+        } })).ok()).toBe(true);
+    } finally { await account.close(); }
 });
 
 test('reloading after a user turn is saved leaves a recoverable response', async ({ page }, info) => {
@@ -633,4 +716,43 @@ test('switching away during the first send keeps the new conversation', async ({
     await page.reload();
     await expect(page.getByText('OpenRouter fixture reply')).toBeVisible({ timeout: 30_000 });
     await page.screenshot({ path: resolve(process.env.OR3_OPENAI_E2E_OUTPUT!, 'first-send-switch-recovered.png') });
+});
+
+
+test('catalog publishes platforms independently and keeps saved models during an outage', async ({ page }, info) => {
+    test.setTimeout(90_000);
+    const origin = new URL(info.project.use.baseURL!).origin;
+    expect((await page.request.post('/api/basic-auth/sign-in', { headers: { origin }, data: {
+        email: process.env.OR3_OPENAI_E2E_EMAIL, password: process.env.OR3_OPENAI_E2E_PASSWORD,
+    } })).ok()).toBe(true);
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    let stage = 1;
+    const direct = { id: '@openai/gpt-6-luna', name: 'Same model', context_length: 32000, created: 2 };
+    const routed = { id: 'openai/gpt-6-luna', name: 'Same model', context_length: 32000, created: 2, pricing: { prompt: '0.000000004', completion: '0.000001' } };
+    await page.route('**/api/openai/models', route => stage === 1 ? route.fulfill({ json: [direct] }) : route.fulfill({ status: 503, json: {} }));
+    await page.route('**/api/openrouter/models', async route => {
+        if (stage === 1) await held;
+        await route.fulfill(stage === 2 ? { json: [routed] } : { status: 503, json: {} });
+    });
+    await page.goto('/chat');
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 45_000 });
+    await page.getByRole('button', { name: 'Settings', exact: true }).last().click();
+    await page.getByRole('button', { name: /^Model catalog/ }).click();
+    const catalog = page.getByRole('dialog', { name: 'Model catalog', exact: true });
+    await expect(catalog.locator('[data-model-id="@openai/gpt-6-luna"]')).toBeVisible();
+    await expect(catalog.getByText('OpenRouter: Loading models…')).toBeVisible();
+    release();
+    await expect(catalog.getByText('OpenRouter: Models unavailable. Refresh to try again.')).toBeVisible();
+    await expect(catalog.locator('[data-model-id="@openai/gpt-6-luna"]')).toBeVisible();
+    stage = 2;
+    await catalog.getByRole('button', { name: 'Refresh model catalog' }).click();
+    await expect(catalog.locator('[data-model-id="openai/gpt-6-luna"]')).toBeVisible();
+    await expect(catalog.getByText('OpenAI: Models unavailable. Refresh to try again.')).toBeVisible();
+    stage = 3;
+    await catalog.getByRole('button', { name: 'Refresh model catalog' }).click();
+    await expect(catalog.getByText('OpenRouter: Showing saved models. Refresh to try again.')).toBeVisible();
+    await expect(catalog.locator('[data-model-id="openai/gpt-6-luna"]')).toBeVisible();
+    await page.screenshot({ path: resolve(process.env.OR3_OPENAI_E2E_OUTPUT!, 'catalog-platform-recovery.png') });
+    await info.attach('catalog-platform-recovery', { contentType: 'application/json', body: JSON.stringify({ fastPlatformVisibleWhileOtherHeld: true, failuresIsolatedBothWays: true, staleCatalogPreserved: true }) });
 });

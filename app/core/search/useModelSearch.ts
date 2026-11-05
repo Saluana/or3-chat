@@ -1,3 +1,4 @@
+import { modelSearchText } from '~/utils/modelCatalog';
 /**
  * @module app/core/search/useModelSearch
  *
@@ -66,7 +67,7 @@ async function buildIndex(
         id: m.id,
         slug: m.canonical_slug || m.id,
         name: m.name || '',
-        description: m.description || '',
+        description: modelSearchText(m),
         ctx: m.top_provider?.context_length ?? m.context_length ?? 0,
         modalities: [
             ...(m.architecture?.input_modalities || []),
@@ -131,8 +132,8 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
     }
 
     const fallbackSearch = (raw: string) => {
-        const lower = raw.toLowerCase();
-        return models.value.filter(model => `${model.id}\n${model.canonical_slug ?? ''}\n${model.name}\n${model.description ?? ''}`.toLowerCase().includes(lower)).slice(0, 100);
+        const terms = raw.toLowerCase().split(/\s+/).filter(Boolean);
+        return models.value.filter(model => terms.every(term => modelSearchText(model).includes(term))).slice(0, 100);
     };
     async function runSearch(token: number) {
         if (isDisposed() || token !== lastQueryToken) return;
@@ -188,7 +189,8 @@ export function useModelSearch(models: Ref<OpenRouterModel[]>) {
                     (m: OpenRouterModel | undefined): m is OpenRouterModel =>
                         !!m
                 );
-            results.value = mapped.length ? mapped : fallbackSearch(raw);
+            const literal = fallbackSearch(raw);
+            results.value = literal.length ? literal : mapped;
         } catch (err) {
             if (isDisposed() || token !== lastQueryToken) return;
             results.value = fallbackSearch(raw);

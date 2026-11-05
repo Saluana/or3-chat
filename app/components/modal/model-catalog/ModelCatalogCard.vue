@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { modelIdentity, modelPrices } from '~~/shared/ai/model-catalog';
 import { computed } from 'vue';
 import type { OpenRouterModel } from '~/core/auth/models-service';
 import { useIcon } from '~/composables/useIcon';
@@ -20,9 +21,12 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (e: 'select'): void;
+    (e: 'use'): void;
     (e: 'toggleFavorite'): void;
 }>();
 
+const hasPricing = computed(() => { const prices = modelPrices(props.model); return prices.input !== null && prices.output !== null; });
+const identity = computed(() => modelIdentity(props.model));
 const provider = computed(() => getModelProvider(props.model));
 const badges = computed(() => getModelBadges(props.model, 2));
 const contextLength = computed(() => getContextLength(props.model));
@@ -40,15 +44,12 @@ const starFilledIcon = useIcon('catalog.star.filled');
                 : 'border-[var(--md-border-color)] bg-[var(--md-surface)] hover:bg-[var(--md-surface-hover)]'
         "
         :data-model-id="model.id"
-        :aria-selected="selected"
-        role="option"
-        tabindex="0"
+        role="listitem"
         @click="emit('select')"
-        @keydown.enter="emit('select')"
     >
         <ModelCatalogProviderLogo :slug="provider.slug" :size="36" tile />
 
-        <div class="min-w-0 flex-1">
+        <button type="button" class="min-w-0 flex-1 text-left rounded focus-visible:outline focus-visible:outline-[var(--md-primary)]" :aria-label="`Details for ${formatModelName(model.name)}`" :aria-current="selected ? 'true' : undefined" @click.stop="emit('select')">
             <div class="flex items-start gap-1.5 sm:items-center">
                 <span
                     class="font-medium text-sm min-w-0 max-sm:line-clamp-2 sm:truncate break-words text-[var(--md-on-surface)]"
@@ -68,31 +69,22 @@ const starFilledIcon = useIcon('catalog.star.filled');
             <div
                 class="text-xs text-[var(--md-on-surface-variant)] truncate mt-0.5"
             >
-                {{ provider.name }}
+                {{ identity.platformName }}
                 <span class="opacity-60">·</span>
                 {{ formatTokenCount(contextLength) }} context
             </div>
 
-            <!-- Mobile pricing: own line so the model name keeps full width -->
-            <div
-                class="sm:hidden mt-1 text-xs leading-tight tabular-nums text-[var(--md-on-surface)]"
-            >
-                {{ formatPerMillion(model.pricing?.prompt) }}
-                <span class="text-[var(--md-on-surface-variant)] opacity-80"
-                    >/ 1M input</span
-                >
-                <span class="px-1 text-[var(--md-on-surface-variant)] opacity-60"
-                    >·</span
-                >
-                {{ formatPerMillion(model.pricing?.completion) }}
-                <span class="text-[var(--md-on-surface-variant)] opacity-80"
-                    >/ 1M output</span
-                >
+            <p v-if="!hasPricing" class="sm:hidden text-xs text-[var(--md-on-surface-variant)]">Price unavailable</p>
+            <div v-if="hasPricing" class="sm:hidden mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-xs leading-tight tabular-nums text-[var(--md-on-surface)]">
+                <span class="whitespace-nowrap">{{ formatPerMillion(model.pricing?.prompt) }} <span class="text-[var(--md-on-surface-variant)]">/ 1M in</span></span>
+                <span class="whitespace-nowrap">{{ formatPerMillion(model.pricing?.completion) }} <span class="text-[var(--md-on-surface-variant)]">/ 1M out</span></span>
             </div>
-        </div>
+        </button>
 
+        <span v-if="!hasPricing" class="text-xs text-[var(--md-on-surface-variant)] max-sm:hidden">Price unavailable</span>
         <!-- Desktop pricing: compact right column -->
         <div
+            v-if="hasPricing"
             class="hidden sm:block text-right text-xs leading-tight tabular-nums shrink-0 text-[var(--md-on-surface)]"
         >
             <div>
@@ -109,14 +101,16 @@ const starFilledIcon = useIcon('catalog.star.filled');
             </div>
         </div>
 
+        <UButton type="button" color="neutral" variant="soft" size="sm" aria-label="Use model" @click.stop="emit('use')">Use</UButton>
         <button
             type="button"
-            class="shrink-0 p-1 rounded transition self-start sm:self-center"
+            class="shrink-0 min-w-9 min-h-9 flex items-center justify-center rounded transition self-start sm:self-center"
             :class="
                 favorite
                     ? 'text-amber-400 hover:text-amber-500'
                     : 'text-[var(--md-on-surface-variant)] opacity-40 hover:opacity-100 group-hover:opacity-70'
             "
+            :aria-label="favorite ? 'Remove from favorites' : 'Add to favorites'"
             :aria-pressed="favorite"
             :title="favorite ? 'Remove from favorites' : 'Add to favorites'"
             @click.stop="emit('toggleFavorite')"

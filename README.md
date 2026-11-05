@@ -190,6 +190,8 @@ the checks that match it. Start with `bun run test:changed` and
 `bun run type-check`. The [development guide](public/_documentation/start/development-setup.md)
 explains the test lanes and project structure.
 
+Model platform integration, cache provenance, and workspace curation (including admin-only catalog access) are documented in the [model catalog guide](public/_documentation/auth/models-service.md#adding-a-platform-adapter).
+
 ## License
 
 OR3.chat is licensed under [GPL-3.0](LICENSE).

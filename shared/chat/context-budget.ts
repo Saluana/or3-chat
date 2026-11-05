@@ -17,7 +17,7 @@ export interface ContextBudget {
     effective_context_tokens: number;
     requested_completion_tokens: number | null;
     available_completion_tokens: number;
-    source: 'openrouter-live' | 'openrouter-cache';
+    source: 'openrouter-live' | 'openrouter-cache' | 'openai-live' | 'openai-cache';
     limited_by: 'model' | 'user' | 'provider';
 }
 export interface ContextEstimate {

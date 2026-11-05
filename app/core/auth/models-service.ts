@@ -1,3 +1,4 @@
+import { parseModelPrice } from '~~/shared/ai/model-catalog';
 /**
  * @module app/core/auth/models-service
  *
@@ -43,14 +44,22 @@ export interface ModelCatalogCache {
     fetchedAt: number;
 }
 
-export interface ModelCatalogResult {
-    data: OpenRouterModel[];
+export interface CatalogProvenance {
     /** Null means a legacy cache did not retain an actual fetch timestamp. */
     fetchedAt: number | null;
-    source: 'openrouter-live' | 'openrouter-cache';
+    source: 'openrouter-live' | 'openrouter-cache' | 'openai-live' | 'openai-cache';
+}
+
+export interface ModelCatalogResult extends CatalogProvenance {
+    data: OpenRouterModel[];
+    stale?: boolean;
+    openRouterPending?: Promise<OpenRouterModel[]>;
     /** A second provider can finish independently of the available OpenRouter catalog. */
     openAiPending?: Promise<OpenRouterModel[]>;
 }
+
+export type PlatformCatalogStatus = 'loading' | 'ready' | 'stale' | 'unavailable' | 'disconnected';
+export type CatalogOptions = { force?: boolean; ttlMs?: number; onPlatformStatus?: (platform: 'openai' | 'openrouter', status: PlatformCatalogStatus, provenance?: CatalogProvenance) => void };
 
 const CACHE_KEY = 'openrouter_model_catalog_v1';
 
@@ -79,12 +88,6 @@ function loadCache(): Pick<ModelCatalogResult, 'data' | 'fetchedAt'> | null {
     }
 }
 
-function toNumber(x?: string | number | null): number | null {
-    if (x === undefined || x === null) return null;
-    const n = typeof x === 'string' ? Number(x) : x;
-    return Number.isFinite(n) ? n : null;
-}
-
 /**
  * Purpose:
  * Fetches the full OpenRouter model catalog, using localStorage as a
@@ -110,26 +113,33 @@ export async function fetchModels(opts?: {
     ttlMs?: number;
 }): Promise<OpenRouterModel[]> {
     const result = await fetchModelCatalog(opts);
-    return result.openAiPending ? [...result.data, ...await result.openAiPending] : result.data;
+    return [...result.data, ...await (result.openAiPending ?? Promise.resolve([])), ...await (result.openRouterPending ?? Promise.resolve([]))];
 }
 
 /** Same catalog/cache path, with transport provenance for capacity preparation. */
-export async function fetchModelCatalog(opts?: {
-    force?: boolean;
-    ttlMs?: number;
-}): Promise<ModelCatalogResult> {
-    const openAi = fetchOpenAiModels().catch(() => []);
-    const openRouter = await fetchOpenRouterModelCatalog(opts).then(result => ({ result }), (error: unknown) => ({ error }));
-    // An OpenAI-only setup still has a catalog when OpenRouter is unavailable.
-    if ('error' in openRouter) {
-        const models = await openAi;
-        if (!models.length) throw openRouter.error;
-        return { data: models, fetchedAt: Date.now(), source: 'openrouter-live' };
-    }
-    return { ...openRouter.result, openAiPending: openAi };
+export async function fetchModelCatalog(opts?: CatalogOptions): Promise<ModelCatalogResult> {
+    const report = opts?.onPlatformStatus;
+    report?.('openai', 'loading'); report?.('openrouter', 'loading');
+    const openAi = fetchOpenAiModels().then(data => {
+        const result = { data, source: 'openai-live' as const, fetchedAt: Date.now() };
+        report?.('openai', data.length ? 'ready' : 'disconnected', result);
+        return result;
+    }, error => { report?.('openai', 'unavailable'); throw error; });
+    const openRouter = fetchOpenRouterModelCatalog(opts).then(result => {
+        report?.('openrouter', result.stale ? 'stale' : result.data.length ? 'ready' : 'disconnected', result); return result;
+    }, error => { report?.('openrouter', 'unavailable'); throw error; });
+    // Publish the first usable platform immediately; the slower one cannot hold it hostage.
+    const usable = <T extends ModelCatalogResult>(pending: Promise<T>) => pending.then(result => {
+        if (!result.data.length) throw new Error('No models available.');
+        return result;
+    });
+    const first = await Promise.any([usable(openRouter), usable(openAi)]).catch(() => openRouter);
+    return first.source === 'openai-live'
+        ? { ...first, openRouterPending: openRouter.then(result => result.data, () => []) }
+        : { ...first, openAiPending: openAi.then(result => result.data, () => []) };
 }
 
-/** Models for a configured OpenAI key; no key, no server or a failure adds none. */
+/** Models for a configured OpenAI key; no key or no server is disconnected, failures are reported. */
 async function fetchOpenAiModels(): Promise<OpenRouterModel[]> {
     // OpenAI chat runs only through the OR3 server. Local deployments can use only
     // this device's key; Cloud may hold a personal or an instance key for the account.
@@ -137,12 +147,11 @@ async function fetchOpenAiModels(): Promise<OpenRouterModel[]> {
     if (useRuntimeConfig().public.ssrAuthEnabled === true
         ? getCachedSessionPayload()?.session?.authenticated === false
         : !deviceKey['x-or3-openai-key'] || !isServerRouteAvailable()) return [];
-    try {
-        const response = await fetch('/api/openai/models', { method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error',
+    const response = await fetch('/api/openai/models', { method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error',
             signal: AbortSignal.timeout(20_000),
             headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation', ...deviceKey }, body: '{}' });
-        return response.ok ? openRouterModelListSchema.parse(await response.json()) : [];
-    } catch { return []; }
+    if (!response.ok) throw new Error('OpenAI models unavailable.');
+    return openRouterModelListSchema.parse(await response.json());
 }
 
 async function fetchOpenRouterModelCatalog(opts?: {
@@ -174,7 +183,7 @@ async function fetchOpenRouterModelCatalog(opts?: {
             const payload = getCachedSessionPayload();
             if (payload && payload.session?.authenticated !== true)
                 return { ...(loadCache() ?? { data: [], fetchedAt: null }), source: 'openrouter-cache' };
-            const response = await fetch('/api/openrouter/models', { method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error', headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' }, body: '{}' });
+            const response = await fetch('/api/openrouter/models', { signal: AbortSignal.timeout(20_000), method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error', headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' }, body: '{}' });
             if (!response.ok) throw new Error('OpenRouter model catalog unavailable.');
             const data = openRouterModelListSchema.parse(await response.json());
             const fetchedAt = Date.now(); saveCache(data, fetchedAt);
@@ -188,7 +197,7 @@ async function fetchOpenRouterModelCatalog(opts?: {
     } catch (error) {
         // Fallback to cache on any error
         const cached = loadCache();
-        if (cached?.data.length) return { ...cached, source: 'openrouter-cache' };
+        if (cached?.data.length) return { ...cached, source: 'openrouter-cache', stale: true };
 
         const normalized = normalizeSDKError(error);
         const { raw: _raw, ...metadata } = normalized;
@@ -304,8 +313,9 @@ export function filterByPriceBucket(
 ): OpenRouterModel[] {
     if (bucket === 'any') return models;
     return models.filter((m) => {
-        const p = toNumber(m.pricing?.prompt) ?? 0;
-        const c = toNumber(m.pricing?.completion) ?? 0;
+        const p = parseModelPrice(m.pricing?.prompt);
+        const c = parseModelPrice(m.pricing?.completion);
+        if (p === null || c === null) return false;
         const max = Math.max(p, c);
         if (bucket === 'free') return max === 0;
         if (bucket === 'low') return max > 0 && max <= 0.000002; // heuristic

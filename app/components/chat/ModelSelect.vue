@@ -32,6 +32,10 @@
 </template>
 
 <script setup lang="ts">
+import { useWorkspaceModels } from '~/composables/chat/useWorkspaceModels';
+import { isModelHidden } from '~~/shared/ai/workspace-models';
+import { formatModelName } from '~/utils/modelCatalog';
+import { modelIdentity } from '~~/shared/ai/model-catalog';
 import { computed, watch, ref } from 'vue';
 import { isMobile } from '~/state/global';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
@@ -53,6 +57,7 @@ const props = defineProps<{
 const emit = defineEmits<Emits>();
 
 const { favoriteModels } = useModelStore();
+const { policy } = useWorkspaceModels();
 
 // Theme overrides for select menu
 const selectMenuProps = computed(() => {
@@ -138,12 +143,12 @@ const show = computed(
 );
 
 const items = computed(() =>
-    (favoriteModels.value || [])
+    (favoriteModels.value || []).filter(model => !isModelHidden(policy.value, model.id))
         .map((m: OpenRouterModel) => {
             const value = m.canonical_slug ?? m.id;
             if (!value) return null;
             return {
-                label: value,
+                label: `${formatModelName(m.name)} · ${modelIdentity(m).platformName}`,
                 value,
                 slug: providerSlugForModelId(value),
             };

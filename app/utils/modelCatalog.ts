@@ -1,3 +1,4 @@
+import { modelIdentity, parseModelPrice } from '~~/shared/ai/model-catalog';
 import type { OpenRouterModel } from '~/core/auth/models-service';
 
 /**
@@ -9,7 +10,7 @@ import type { OpenRouterModel } from '~/core/auth/models-service';
 
 /** Remove a repeated publisher prefix from a model's display name. */
 export function formatModelName(name: string): string {
-    return name.replace(/^([^:]+):\s*(?=\1(?:\s|$))/i, '');
+    return name.replace(/ \(OpenAI key\)$/, '').replace(/^([^:]+):\s*(?=\1(?:\s|$))/i, '');
 }
 
 // ---------------------------------------------------------------------------
@@ -40,7 +41,7 @@ export interface ProviderInfo {
 const PROVIDER_REGISTRY: Record<string, ProviderInfo> = {
     openai: { slug: 'openai', name: 'OpenAI', icon: 'openai', color: null },
     // Direct OpenAI models billed to the configured OpenAI key, not OpenRouter.
-    '@openai': { slug: '@openai', name: 'OpenAI (your key)', icon: 'openai', color: null },
+    '@openai': { slug: '@openai', name: 'OpenAI', icon: 'openai', color: null },
     anthropic: {
         slug: 'anthropic',
         name: 'Anthropic',
@@ -309,12 +310,7 @@ export function getContextLength(m: OpenRouterModel): number {
     return m.top_provider?.context_length ?? m.context_length ?? 0;
 }
 
-function parsePrice(raw: unknown): number | null {
-    if (typeof raw !== 'number' && typeof raw !== 'string') return null;
-    if (typeof raw === 'string' && !raw.trim()) return null;
-    const price = Number(raw);
-    return Number.isFinite(price) && price >= 0 ? price : null;
-}
+const parsePrice = parseModelPrice;
 
 function totalPrice(model: OpenRouterModel): number | null {
     const input = parsePrice(model.pricing?.prompt);
@@ -455,7 +451,7 @@ export function getBestForTags(m: OpenRouterModel): string[] {
 // Filtering & sorting
 // ---------------------------------------------------------------------------
 
-export type CatalogScope = 'all' | 'favorites';
+export type CatalogScope = 'all' | 'favorites' | 'recent' | 'pinned';
 
 export type CapabilityFilter =
     | 'all'
@@ -474,6 +470,8 @@ export type CatalogSort =
     | 'name'
     | 'price-asc'
     | 'price-desc'
+    | 'input-price'
+    | 'output-price'
     | 'context-desc'
     | 'newest';
 
@@ -525,6 +523,12 @@ export function sortModels(
         case 'price-desc':
             copy.sort((a, b) => comparePrices(a, b, true));
             break;
+        case 'input-price':
+        case 'output-price': {
+            const field = sort === 'input-price' ? 'prompt' : 'completion';
+            copy.sort((a, b) => (parsePrice(a.pricing?.[field]) ?? Infinity) - (parsePrice(b.pricing?.[field]) ?? Infinity));
+            break;
+        }
         case 'context-desc':
             copy.sort((a, b) => getContextLength(b) - getContextLength(a));
             break;
@@ -577,14 +581,15 @@ export function formatPerMillion(raw: unknown, currency = 'USD'): string {
     const perToken = parsePrice(raw);
     if (perToken === null) return '—';
     const perMillion = perToken * 1_000_000;
+    if (perMillion > 0 && perMillion < 0.000001) return '<$0.000001';
     if (!Number.isFinite(perMillion)) return '—';
     try {
         const options: Intl.NumberFormatOptions = {
             style: 'currency',
             currency,
-            maximumFractionDigits: 2,
+            maximumFractionDigits: perMillion > 0 && perMillion < 0.01 ? 6 : 2,
         };
-        const formatter = currency === 'USD'
+        const formatter = currency === 'USD' && options.maximumFractionDigits === 2
             ? usdPriceFormatter ??= new Intl.NumberFormat('en-US', options)
             : new Intl.NumberFormat('en-US', options);
         return formatter.format(perMillion);
@@ -620,4 +625,27 @@ export function formatReleaseDate(created?: number): string | null {
     const d = new Date(created * 1000);
     if (Number.isNaN(d.getTime())) return null;
     return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+/** Platform filters describe the connection, independently of the model maker. */
+export function countByPlatform(models: OpenRouterModel[]): ProviderCount[] {
+    const counts = new Map<string, ProviderCount>();
+    for (const model of models) {
+        const identity = modelIdentity(model);
+        const entry = counts.get(identity.platform) ?? { slug: identity.platform, info: getProviderInfo(identity.platform), count: 0 };
+        entry.count++; counts.set(identity.platform, entry);
+    }
+    return [...counts.values()].sort((a, b) => a.info.name.localeCompare(b.info.name));
+}
+export function modelSearchText(model: OpenRouterModel): string {
+    const identity = modelIdentity(model);
+    const caps = getCapabilities(model);
+    return [model.id, model.canonical_slug, model.name, model.description, identity.platformName,
+        getProviderInfo(identity.maker).name, caps.vision && 'vision images pictures', caps.tools && 'tools function calling',
+        caps.reasoning && 'reasoning thinking', caps.json && 'json structured output', caps.free && 'free']
+        .filter(Boolean).join(' ').toLowerCase();
+}
+export function isChatModel(model: OpenRouterModel): boolean {
+    const output = model.architecture?.output_modalities;
+    return !getCapabilities(model).embedding && (!output || output.includes('text') || output.includes('image'));
 }

@@ -72,6 +72,64 @@ describe('existing catalog context readiness', () => {
             vi.unstubAllGlobals();
         }
     });
+    it.each(['openai', 'openrouter'] as const)('prepares a ready %s model without waiting for the other platform', async platform => {
+        testRuntimeConfig.value.public.ssrAuthEnabled = true;
+        const id = platform === 'openai' ? '@openai/gpt-5.4-mini' : 'catalog/model';
+        let release!: (response: Response) => void;
+        const held = new Promise<Response>(resolve => { release = resolve; });
+        vi.stubGlobal('fetch', vi.fn((url: string) => url === `/api/${platform}/models`
+            ? Promise.resolve(Response.json([sdkModelToLocal(sdkModel(32_000, id))])) : held));
+        try {
+            const ready = useModelStore().resolveContextModel(id);
+            const outcome = await Promise.race([ready, new Promise(resolve => setTimeout(() => resolve('blocked'), 250))]);
+            expect(outcome).toMatchObject({ ok: true, modelId: id, source: `${platform}-live` });
+        } finally {
+            release(Response.json([]));
+            await vi.waitFor(() => expect(useModelStore().platformStatus.value[platform === 'openai' ? 'openrouter' : 'openai']).toBe('disconnected'));
+            vi.unstubAllGlobals();
+        }
+    });
+
+    it('preserves each platform timestamp through a slow stale merge and cache reload', async () => {
+        testRuntimeConfig.value.public.ssrAuthEnabled = true;
+        const fetchedAt = Date.now() - 3_600_001;
+        browserCache(fetchedAt);
+        const direct = sdkModelToLocal(sdkModel(32_000, '@openai/gpt-5.4-mini'));
+        let release!: (response: Response) => void;
+        const held = new Promise<Response>(resolve => { release = resolve; });
+        vi.stubGlobal('fetch', vi.fn((url: string) => url === '/api/openai/models'
+            ? Promise.resolve(Response.json([direct])) : held));
+        try {
+            const store = useModelStore();
+            await store.fetchModels({ force: true });
+            const live = await store.resolveContextModel(direct.id);
+            expect(live).toMatchObject({ ok: true, source: 'openai-live' });
+            release(new Response('', { status: 503 }));
+            await vi.waitFor(() => expect(store.catalog.value).toHaveLength(2));
+            expect(await store.resolveContextModel('catalog/model')).toMatchObject({ ok: true, source: 'openrouter-cache', fetchedAt });
+            expect(await store.resolveContextModel(direct.id)).toEqual(live);
+            expect(store.lastLoadedAt.value).toBe(fetchedAt);
+            let cached = '';
+            await vi.waitFor(async () => {
+                cached = (await kv.get(MODELS_CACHE_KEY))!.value as string;
+                expect(JSON.parse(cached).data).toHaveLength(2);
+            });
+            await store.invalidate();
+            await kv.set(MODELS_CACHE_KEY, cached);
+            await store.loadCachedModels();
+            expect(await store.resolveContextModel('catalog/model')).toMatchObject({ ok: true, source: 'openrouter-cache', fetchedAt });
+            expect(await store.resolveContextModel(direct.id)).toMatchObject({ ok: true, source: 'openai-cache', fetchedAt: live.ok ? live.fetchedAt : null });
+        } finally { release(new Response('', { status: 503 })); vi.unstubAllGlobals(); }
+    });
+
+    it('does not renew expired metadata merely by rewriting its KV record', async () => {
+        const fetchedAt = Date.now() - 3 * 24 * 60 * 60 * 1000;
+        await kv.set(MODELS_CACHE_KEY, JSON.stringify({ version: 1, data: [sdkModelToLocal(sdkModel(32_000))], fetchedAt }));
+        list.mockImplementation(async () => pages());
+        expect((await useModelStore().fetchModels())[0]?.context_length).toBe(1_000_000);
+        expect(list).toHaveBeenCalledOnce();
+    });
+
     it('does not relabel stale browser cache as a fresh store fetch', async () => {
         const fetchedAt = Date.now() - 3_600_001;
         browserCache(fetchedAt);

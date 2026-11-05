@@ -1,3 +1,6 @@
+import { isChatModel } from '~/utils/modelCatalog';
+import { useWorkspaceModels } from './useWorkspaceModels';
+import { isModelHidden } from '~~/shared/ai/workspace-models';
 import {
     computed,
     onBeforeUnmount,
@@ -60,6 +63,8 @@ export function useChatModelSelection(options: {
     const { favoriteModels, getFavoriteModels, catalog, fetchModels, loadCachedModels } =
         useModelStore();
     const { settings } = useAiSettings();
+    const workspaceModels = useWorkspaceModels();
+    void workspaceModels.load().catch(() => {});
     const selectedModel = ref(DEFAULT_MODEL);
     const modelVariant = ref<OpenRouterModelVariant>(DEFAULT_MODEL_VARIANT);
     const thinkingEnabled = ref(true);
@@ -103,10 +108,13 @@ export function useChatModelSelection(options: {
         }
     }
     function chatDefault() {
-        return settings.value.defaultModelMode === 'fixed' &&
+        const preferred = settings.value.defaultModelMode === 'fixed' &&
             settings.value.fixedModelId
             ? settings.value.fixedModelId
-            : persistedModel.value || DEFAULT_MODEL;
+            : workspaceModels.policy.value.defaultModel ?? persistedModel.value ?? DEFAULT_MODEL;
+        return isModelHidden(workspaceModels.policy.value, preferred)
+            ? workspaceModels.policy.value.defaultModel ?? catalog.value.find(model => isChatModel(model) && !isModelHidden(workspaceModels.policy.value, model.id))?.id ?? preferred
+            : preferred;
     }
     const defaultVariant = () => sanitizeModelVariant(settings.value.defaultModelVariant);
     function stopPolicySubscription() {
