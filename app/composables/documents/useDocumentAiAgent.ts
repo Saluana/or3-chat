@@ -309,6 +309,7 @@ export function useDocumentAiAgent(options: {
 }) {
     const status = ref<'idle' | 'estimating' | 'preparing' | 'streaming' | 'preview' | 'error'>('idle');
     const online = useOnline();
+    let disposed = false;
     let estimateGeneration = 0;
     const error = ref('');
     const tokenEstimate = ref(0);
@@ -344,6 +345,7 @@ export function useDocumentAiAgent(options: {
     const { countTokens } = useTokenizer();
     const hooks = useHooks();
     const referenceContextCache = new Map<string, string>();
+    let referenceCacheRevision = 0;
 
     const stale = computed(() => Boolean(
         proposal.value && (
@@ -390,7 +392,7 @@ export function useDocumentAiAgent(options: {
         status.value = 'error';
         syncEditorLock();
     }, { flush: 'sync' });
-    onScopeDispose(abort);
+    onScopeDispose(() => { disposed = true; reset(); });
 
     function retireChatRuns() {
         if (chatPreviewRequestId) retiredChatRequests.add(chatPreviewRequestId);
@@ -405,7 +407,7 @@ export function useDocumentAiAgent(options: {
 
     function chatToolRun(requestId: string, refreshIfChanged = false) {
         const editor = options.editor.value;
-        if (!editor || editor.isDestroyed || options.readOnly?.value) throw new Error('The document editor is unavailable.');
+        if (disposed || !editor || editor.isDestroyed || options.readOnly?.value) throw new Error('The document editor is unavailable.');
         if (retiredChatRequests.has(requestId)) {
             throw new Error('This chat edit was reviewed. Start a new chat turn to edit this document again.');
         }
@@ -566,6 +568,7 @@ export function useDocumentAiAgent(options: {
 
     function enqueueAccept(work: () => Promise<void>): Promise<void> {
         return acceptControl.enqueue(async () => {
+            if (disposed) return;
             error.value = '';
             accepting.value = true;
             syncEditorLock();
@@ -589,7 +592,7 @@ export function useDocumentAiAgent(options: {
         const generation = getWorkspaceGeneration();
         const account = getCachedSessionContext()?.user?.id;
         const id = options.documentId.value;
-        return () => getDb() === db && getWorkspaceGeneration() === generation
+        return () => !disposed && getDb() === db && getWorkspaceGeneration() === generation
             && getCachedSessionContext()?.user?.id === account && options.documentId.value === id
             && options.editor.value === editor && !editor.isDestroyed;
     }
@@ -695,6 +698,14 @@ export function useDocumentAiAgent(options: {
         references: readonly DocumentAiContextReference[],
         fresh = false,
     ) {
+        const revision = referenceCacheRevision;
+        const db = getDb();
+        const generation = getWorkspaceGeneration();
+        const account = getCachedSessionContext()?.user?.id;
+        const documentId = options.documentId.value;
+        const current = () => !disposed && revision === referenceCacheRevision
+            && getDb() === db && getWorkspaceGeneration() === generation
+            && getCachedSessionContext()?.user?.id === account && options.documentId.value === documentId;
         const unique = uniqueDocumentAiReferences(references);
         const currentDocument = unique.find(
             (reference) => reference.source === 'document' && reference.id === options.documentId.value,
@@ -707,7 +718,7 @@ export function useDocumentAiAgent(options: {
             const key = `${reference.source}:${reference.id}`;
             const cached = fresh ? undefined : referenceContextCache.get(key);
             const content = cached ?? await resolveDocumentAiReference(reference);
-            if (content) referenceContextCache.set(key, content);
+            if (content && current()) referenceContextCache.set(key, content);
             return content ? { reference, content } : null;
         }));
         const missing = unique.filter((_, index) => !resolved[index]);
@@ -723,9 +734,9 @@ export function useDocumentAiAgent(options: {
     const isEstimating = (): boolean => status.value === 'estimating';
 
     async function estimate(request: DocumentAiEstimateRequest) {
-        if (options.readOnly?.value) return 0;
+        if (disposed || options.readOnly?.value) return 0;
         const editor = options.editor.value;
-        if (!editor) return 0;
+        if (!editor || editor.isDestroyed) return 0;
         // Never let estimate stomp an in-flight agent run / preview.
         if (status.value === 'preparing' || status.value === 'streaming' || status.value === 'preview' || accepting.value) return tokenEstimate.value;
         const mine = ++estimateGeneration;
@@ -804,9 +815,9 @@ export function useDocumentAiAgent(options: {
     }
 
     async function submit(submission: DocumentAiSubmission) {
-        if (options.readOnly?.value) return;
+        if (disposed || options.readOnly?.value) return;
         const editor = options.editor.value;
-        if (!editor || !submission.prompt.trim() || status.value === 'preparing' || status.value === 'streaming' || accepting.value) return;
+        if (!editor || editor.isDestroyed || !submission.prompt.trim() || status.value === 'preparing' || status.value === 'streaming' || accepting.value) return;
         if (!online.value) {
             error.value = 'You’re offline. Reconnect to send an AI request.';
             if (!proposal.value) status.value = 'error';
@@ -830,7 +841,7 @@ export function useDocumentAiAgent(options: {
         const originDb = getDb();
         const originGeneration = getWorkspaceGeneration();
         const originAccount = getCachedSessionContext()?.user?.id ?? null;
-        const ownsRun = () => runControl.isCurrent(myGeneration)
+        const ownsRun = () => !disposed && runControl.isCurrent(myGeneration)
             && options.editor.value === editor && !editor.isDestroyed
             && options.documentId.value === submitDocumentId && !options.readOnly?.value
             && getDb() === originDb && getWorkspaceGeneration() === originGeneration
@@ -1201,6 +1212,7 @@ export function useDocumentAiAgent(options: {
         status.value = 'idle';
         agentStatus.value = '';
         checkpointCreated.value = false;
+        referenceCacheRevision++;
         referenceContextCache.clear();
         syncEditorLock();
         clearScopeHighlight();
@@ -1224,7 +1236,6 @@ export function useDocumentAiAgent(options: {
     function reset() {
         abort();
         reject();
-        referenceContextCache.clear();
         invalidateEstimateCache();
         lastScope.value = 'section';
         clearScopeHighlight();
@@ -1232,12 +1243,15 @@ export function useDocumentAiAgent(options: {
 
     function focusHunk(hunkId: string) {
         const editor = options.editor.value;
-        if (!editor || !proposal.value) return;
+        const current = proposal.value;
+        if (disposed || !editor || editor.isDestroyed || !current) return;
         focusedHunkId.value = hunkId;
         documentAiCommands(editor).setActiveDocumentAiHunk?.(hunkId);
         // Wait for the decoration refresh to mount the next card/marker before scrolling.
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
+                if (disposed || editor.isDestroyed || options.editor.value !== editor
+                    || proposal.value !== current || focusedHunkId.value !== hunkId) return;
                 const node = editor.view.dom.querySelector(
                     `[data-hunk-id="${CSS.escape(hunkId)}"]`,
                 );

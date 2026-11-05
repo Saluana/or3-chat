@@ -1,7 +1,8 @@
 // Composable to manage per-pane document operations (create/select) abstracted from UI.
 // Assumes panes follow the PaneState contract from useMultiPane.
 
-import type { Ref } from 'vue';
+import { getCurrentScope, onScopeDispose, type Ref } from 'vue';
+import { getDb, getWorkspaceGeneration, type Or3DB } from '~/db/client';
 import type { MultiPaneState } from '~/composables/core/useMultiPane';
 import {
     releaseDocument,
@@ -54,9 +55,10 @@ function reportFlushFailure(
     id: string,
     error: unknown,
     previousError: unknown,
-    toast: ReturnType<typeof useToast>
+    toast: ReturnType<typeof useToast>,
+    db: Or3DB,
 ) {
-    const state = useDocumentState(id);
+    const state = useDocumentState(id, db);
     console.error('[usePaneDocuments] Failed to flush document:', error);
     // The document store already shows a toast when it records a thrown
     // persistence error. Only add feedback when this guard found no new error
@@ -79,19 +81,22 @@ function reportFlushFailure(
 async function flushBeforeNavigation(
     id: string,
     flushDocument: UsePaneDocumentsOptions['flushDocument'],
-    toast: ReturnType<typeof useToast>
+    toast: ReturnType<typeof useToast>,
+    db: Or3DB,
+    isCurrent: () => boolean,
 ): Promise<boolean> {
-    const previousError = useDocumentState(id).lastError;
+    const previousError = useDocumentState(id, db).lastError;
     try {
         await flushDocument(id);
     } catch (error) {
-        reportFlushFailure(id, error, previousError, toast);
+        if (isCurrent()) reportFlushFailure(id, error, previousError, toast, db);
         return false;
     }
 
-    const state = useDocumentState(id);
+    if (!isCurrent()) return false;
+    const state = useDocumentState(id, db);
     if (state.status === 'error') {
-        reportFlushFailure(id, state.lastError, previousError, toast);
+        reportFlushFailure(id, state.lastError, previousError, toast, db);
         return false;
     }
     return true;
@@ -128,22 +133,37 @@ export function usePaneDocuments(
     const { panes, activePaneIndex, createNewDoc, flushDocument } = opts;
     const hooks = useHooks();
     const toast = useToast();
+    const navigations = new WeakMap<MultiPaneState, symbol>();
+    let disposed = false;
+    if (getCurrentScope()) onScopeDispose(() => { disposed = true; });
+
+    function beginNavigation(pane: MultiPaneState) {
+        const token = Symbol();
+        navigations.set(pane, token);
+        const db = getDb();
+        const generation = getWorkspaceGeneration();
+        const { mode, documentId, threadId } = pane;
+        return { db, current: () => !disposed && navigations.get(pane) === token
+            && panes.value[activePaneIndex.value] === pane && getDb() === db && getWorkspaceGeneration() === generation
+            && pane.mode === mode && pane.documentId === documentId && pane.threadId === threadId };
+    }
 
     async function newDocumentInActive(initial?: { title?: string }) {
         const pane = panes.value[activePaneIndex.value];
-        if (!pane) return;
+        if (!pane || disposed) return;
+        const { db, current } = beginNavigation(pane);
         try {
             if (pane.mode === 'doc' && pane.documentId) {
                 // Detect pending changes before flush
                 const previousDocumentId = pane.documentId;
-                const prevState = useDocumentState(previousDocumentId);
+                const prevState = useDocumentState(previousDocumentId, db);
                 const hadPending =
                     prevState.pendingTitle !== undefined ||
                     prevState.pendingContent !== undefined;
-                if (!(await flushBeforeNavigation(previousDocumentId, flushDocument, toast))) {
+                if (!(await flushBeforeNavigation(previousDocumentId, flushDocument, toast, db, current))) {
                     return undefined;
                 }
-                // Emit saved hook if pending changes existed (defensive for test scenarios)
+                // Report the successfully flushed edits before leaving this pane.
                 if (hadPending) {
                     void hooks.doAction('ui.pane.doc:action:saved', {
                         pane,
@@ -153,9 +173,10 @@ export function usePaneDocuments(
                         meta: { reason: 'flushPending' },
                     });
                 }
-                await releaseDocument(previousDocumentId, { flush: false });
             }
+            if (!current()) return;
             const doc = await createNewDoc(initial);
+            if (!current()) return;
             const oldId = pane.documentId || '';
             let newId: string | false = doc.id;
             try {
@@ -166,7 +187,11 @@ export function usePaneDocuments(
                     oldId
                 )) as string | false;
             } catch { /* ignore filter errors */ }
-            if (newId === false) return undefined; // veto
+            if (!current() || newId === false) return undefined;
+            if (pane.mode === 'doc' && oldId) {
+                await releaseDocument(oldId, { flush: false }, db);
+                if (!current()) return;
+            }
             pane.mode = 'doc';
             pane.documentId = newId || undefined;
             pane.threadId = '';
@@ -189,7 +214,8 @@ export function usePaneDocuments(
     async function selectDocumentInActive(id: string) {
         if (!id) return;
         const pane = panes.value[activePaneIndex.value];
-        if (!pane) return;
+        if (!pane || disposed) return;
+        const { db, current } = beginNavigation(pane);
         const oldId = pane.documentId || '';
         let requested: string | false = id;
         try {
@@ -200,17 +226,17 @@ export function usePaneDocuments(
                 oldId
             )) as string | false;
         } catch { /* ignore filter errors */ }
-        if (requested === false) return; // veto
-        if (pane.mode === 'doc' && pane.documentId && pane.documentId !== id) {
+        if (!current() || requested === false) return;
+        if (pane.mode === 'doc' && pane.documentId && pane.documentId !== requested) {
             const previousDocumentId = pane.documentId;
-            const prevState = useDocumentState(previousDocumentId);
+            const prevState = useDocumentState(previousDocumentId, db);
             const hadPending =
                 prevState.pendingTitle !== undefined ||
                 prevState.pendingContent !== undefined;
-            if (!(await flushBeforeNavigation(previousDocumentId, flushDocument, toast))) {
+            if (!(await flushBeforeNavigation(previousDocumentId, flushDocument, toast, db, current))) {
                 return;
             }
-            // Emit saved hook if pending changes existed (defensive for test scenarios)
+            // Report the successfully flushed edits before leaving this pane.
             if (hadPending) {
                 void hooks.doAction('ui.pane.doc:action:saved', {
                     pane,
@@ -220,7 +246,8 @@ export function usePaneDocuments(
                     meta: { reason: 'flushPending' },
                 });
             }
-            await releaseDocument(previousDocumentId, { flush: false });
+            await releaseDocument(previousDocumentId, { flush: false }, db);
+            if (!current()) return;
         }
         pane.mode = 'doc';
         pane.documentId = (requested) || undefined;

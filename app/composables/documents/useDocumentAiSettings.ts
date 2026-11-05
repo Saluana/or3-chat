@@ -165,9 +165,12 @@ export function useDocumentAiSettings() {
         const write = state.writes.then(async () => {
             await loadSettings(db);
             if (!isCurrent()) throw new Error('The workspace changed. Update settings in the active workspace.');
-            const changes = typeof patch === 'function' ? patch(state.value.value) : patch;
-            const next = sanitizeDocumentAiSettings({ ...state.value.value, ...changes });
-            await setKvByName(DOCUMENT_AI_SETTINGS_KEY, JSON.stringify(next), db, { isValid: isCurrent });
+            const { row } = await getKvRecordByName(DOCUMENT_AI_SETTINGS_KEY, db);
+            if (!isCurrent()) throw new Error('The workspace changed. Update settings in the active workspace.');
+            const current = sanitizeDocumentAiSettings(row?.value ? JSON.parse(row.value) : DEFAULT_DOCUMENT_AI_SETTINGS);
+            const changes = typeof patch === 'function' ? patch(current) : patch;
+            const next = sanitizeDocumentAiSettings({ ...current, ...changes });
+            await setKvByName(DOCUMENT_AI_SETTINGS_KEY, JSON.stringify(next), db, { isValid: isCurrent, ifClock: row?.clock ?? null });
             if (isCurrent()) state.value.value = next;
         });
         state.writes = write.catch(() => {});

@@ -1,3 +1,7 @@
+import { getDb, getWorkspaceGeneration, type Or3DB } from '~/db/client';
+import type { TipTapDocument } from '~/types/database';
+import type { Post } from '~/db/schema';
+
 export type DocumentEditorFocusedRegion =
     | 'title'
     | 'content'
@@ -53,7 +57,7 @@ export interface DocumentEditorSessionLookup {
     tabId: string;
 }
 
-type DocumentSessionKey = `${string}:${string}`;
+type DocumentSessionKey = string;
 
 const activeSessions = new Map<
     string,
@@ -77,9 +81,10 @@ const workspaceSessionWaiters = new Map<
 >();
 
 function workspaceKey(
-    lookup: DocumentEditorSessionLookup
+    lookup: DocumentEditorSessionLookup,
+    db = getDb(),
 ): DocumentSessionKey {
-    return `${lookup.paneId}:${lookup.tabId}`;
+    return JSON.stringify([db.name, lookup.paneId, lookup.tabId]);
 }
 
 function isActiveDocumentEditorSession(
@@ -126,7 +131,7 @@ export function registerDocumentEditorSession(
         isActiveDocumentEditorSession(session) &&
         session.paneId &&
         session.tabId
-            ? workspaceKey({ paneId: session.paneId, tabId: session.tabId })
+            ? workspaceKey({ paneId: session.paneId, tabId: session.tabId }, sessionOrigins.get(session)!)
             : undefined;
     if (sessionKey && isActiveDocumentEditorSession(session)) {
         activeSessionsByWorkspaceKey.set(sessionKey, session);
@@ -152,7 +157,8 @@ export function registerDocumentEditorSession(
 export function getDocumentEditorSession(
     lookup: DocumentEditorSessionLookup
 ): ActiveDocumentEditorSession | undefined {
-    return activeSessionsByWorkspaceKey.get(workspaceKey(lookup));
+    const session = activeSessionsByWorkspaceKey.get(workspaceKey(lookup));
+    return session && sessionOrigins.get(session) === getDb() ? session : undefined;
 }
 
 /** Wait briefly for a lazy editor to register its session after a tab bind. */
@@ -162,6 +168,8 @@ export function waitForDocumentEditorSession(
 ): Promise<ActiveDocumentEditorSession | undefined> {
     const existing = getDocumentEditorSession(lookup);
     if (existing) return Promise.resolve(existing);
+    const db = getDb();
+    const generation = getWorkspaceGeneration();
     const key = workspaceKey(lookup);
     return new Promise((resolve) => {
         const waiters = workspaceSessionWaiters.get(key) ?? new Set();
@@ -171,7 +179,9 @@ export function waitForDocumentEditorSession(
             if (!waiters.size) workspaceSessionWaiters.delete(key);
             resolve(session);
         };
-        const onSession = (session: ActiveDocumentEditorSession) => finish(session);
+        const onSession = (session: ActiveDocumentEditorSession) => finish(
+            getDb() === db && getWorkspaceGeneration() === generation && sessionOrigins.get(session) === db ? session : undefined
+        );
         const timeout = setTimeout(() => finish(undefined), Math.max(0, timeoutMs));
         waiters.add(onSession);
         workspaceSessionWaiters.set(key, waiters);
@@ -187,7 +197,9 @@ export async function captureDocumentEditor(documentId: string): Promise<void> {
     if (!sessions?.size) return;
 
     const pending: Promise<void>[] = [];
+    const db = getDb();
     for (const session of sessions) {
+        if (sessionOrigins.get(session) !== db) continue;
         if (isActiveDocumentEditorSession(session)) {
             session.captureContent();
             continue;
@@ -203,9 +215,10 @@ export async function ensureDocumentEditorLocalDurability(
 ): Promise<void> {
     const sessions = activeSessions.get(documentId);
     if (!sessions?.size) return;
+    const db = getDb();
     await Promise.all(
         [...sessions]
-            .filter(isActiveDocumentEditorSession)
+            .filter((session): session is ActiveDocumentEditorSession => isActiveDocumentEditorSession(session) && sessionOrigins.get(session) === db)
             .map((session) => session.ensureLocalDurability())
     );
 }
@@ -274,23 +287,22 @@ export function leaseWorkspaceDocumentEditors(documentId: string, db: Or3DB,
 }
 
 export function hasActiveDocumentEditor(documentId: string): boolean {
-    return Boolean(activeSessions.get(documentId)?.size);
+    const db = getDb();
+    return [...(activeSessions.get(documentId) ?? [])].some(session => sessionOrigins.get(session) === db);
 }
 
 export function getActiveDocumentEditorSession(
     documentId: string,
     tabId?: string,
 ): ActiveDocumentEditorSession | undefined {
+    const db = getDb();
     const mounted = [...activeSessionsByWorkspaceKey.values()].find((session) =>
-        session.documentId === documentId && (!tabId || session.tabId === tabId)
+        sessionOrigins.get(session) === db && session.documentId === documentId && (!tabId || session.tabId === tabId)
     );
     if (mounted || tabId) return mounted;
     const sessions = activeSessions.get(documentId);
     if (!sessions) return undefined;
     return [...sessions].find((session): session is ActiveDocumentEditorSession =>
-        isActiveDocumentEditorSession(session)
+        isActiveDocumentEditorSession(session) && sessionOrigins.get(session) === db
     );
 }
-import { getDb, type Or3DB } from '~/db/client';
-import type { TipTapDocument } from '~/types/database';
-import type { Post } from '~/db/schema';

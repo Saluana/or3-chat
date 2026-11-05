@@ -279,11 +279,6 @@ export async function runDocumentAiAgentLoop(
 
         params.signal?.throwIfAborted();
         if (!pendingToolCalls.length) {
-            params.onStatus?.({
-                type: 'done',
-                totalStaged: stagedOperations.length,
-                iterations,
-            });
             break;
         }
 
@@ -297,7 +292,6 @@ export async function runDocumentAiAgentLoop(
             const name = toolCall.function.name;
             params.onStatus?.({ type: 'tool_start', name, iteration: iterations });
             let resultText = '';
-            let ok = true;
             try {
                 resultText = await executeAgentToolCall({
                     name,
@@ -321,7 +315,6 @@ export async function runDocumentAiAgentLoop(
                 });
             } catch (caught) {
                 params.signal?.throwIfAborted();
-                ok = false;
                 resultText = JSON.stringify({
                     error: caught instanceof Error ? caught.message : String(caught),
                 });
@@ -333,7 +326,6 @@ export async function runDocumentAiAgentLoop(
                     detail: caught instanceof Error ? caught.message : String(caught),
                 });
             }
-            void ok;
             messages.push(buildToolResultMessage({
                 toolCallId: toolCall.id,
                 name,

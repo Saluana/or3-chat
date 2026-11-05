@@ -23,7 +23,7 @@ interface DocState {
     record: Document | null;
     status: 'idle' | 'saving' | 'saved' | 'error' | 'loading' | 'unavailable';
     lastError?: unknown;
-    pendingTitle?: string; // Added this back as it was missing in the diff but used in flush
+    pendingTitle?: string;
     pendingContent?: TipTapDocument | null; // TipTap JSON
     pendingTitleGeneration?: number;
     pendingContentGeneration?: number;
@@ -32,8 +32,7 @@ interface DocState {
     nextGeneration: number;
     readGeneration?: number;
     flushPromise?: Promise<void>; // Track active flush operation
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    debouncedSave?: any;
+    debouncedSave?: ReturnType<typeof useDebounceFn<() => Promise<void>>>;
 }
 
 // A copied/imported document can have the same id in multiple workspaces.

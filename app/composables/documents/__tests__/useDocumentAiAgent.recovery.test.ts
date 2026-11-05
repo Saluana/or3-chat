@@ -9,7 +9,10 @@ import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine } from '~/core/hooks/useHooks';
 
-const controls = vi.hoisted(() => ({ loop: vi.fn(), tokens: vi.fn(), checkpoint: vi.fn(), load: vi.fn() }));
+const controls = vi.hoisted(() => ({ loop: vi.fn(), tokens: vi.fn(), checkpoint: vi.fn(), load: vi.fn(), reference: vi.fn() }));
+vi.mock('~/utils/documents/document-ai-context', async original => ({
+    ...await original<typeof import('~/utils/documents/document-ai-context')>(), resolveDocumentAiReference: controls.reference,
+}));
 vi.mock('~/core/auth/useUserApiKey', () => ({ useUserApiKey: () => ({ apiKey: ref(null) }) }));
 vi.mock('~/composables/chat/useModelStore', () => ({ useModelStore: () => ({
     catalog: ref([{ id: 'audit-model', name: 'Audit', supported_parameters: ['tools'], context_length: 32000 }]),
@@ -34,6 +37,7 @@ beforeEach(() => {
     controls.tokens.mockReset().mockResolvedValue(1);
     controls.checkpoint.mockReset().mockResolvedValue(null);
     controls.load.mockReset().mockResolvedValue(undefined);
+    controls.reference.mockReset().mockResolvedValue('Current reference');
     setHookEngine(createTypedHookEngine(createHookEngine()));
     // Eliminate decoration scrolling from this state/persistence reproduction.
     vi.stubGlobal('requestAnimationFrame', () => 0);
@@ -49,6 +53,36 @@ function makeAgent(persistCurrent = vi.fn(async () => {}), readOnly = false) {
 }
 
 const submission = { prompt: 'Append', scope: 'document' as const, references: [], attachments: [] };
+
+// Disposal retires public handles and queued approvals; reset must also retire
+// pending reference-cache writes so an old estimate cannot poison a new one.
+it('rejects retained chat tools and ignores new submissions after disposal', async () => {
+    const { agent } = makeAgent(); scope.stop();
+    expect(() => agent.getChatContext('late-request')).toThrow();
+    await agent.submit(submission);
+    expect(controls.loop).not.toHaveBeenCalled();
+});
+
+it('does not apply an approval queued immediately before disposal', async () => {
+    const persist = vi.fn(async () => {});
+    const { agent } = makeAgent(persist); await agent.submit(submission);
+    const accepting = agent.accept(); scope.stop(); await accepting;
+    expect(editor.getText()).toBe('Original body');
+    expect(persist).not.toHaveBeenCalled();
+});
+
+it('does not reuse a reference that finished loading after reset', async () => {
+    const gate = deferred<string>();
+    controls.reference.mockReturnValueOnce(gate.promise);
+    const { agent } = makeAgent();
+    const request = { ...submission, references: [{ id: 'reference', source: 'document' as const, label: 'Reference' }] };
+    const first = agent.estimate(request);
+    await vi.waitFor(() => expect(controls.reference).toHaveBeenCalledOnce());
+    agent.reset(); gate.resolve('Obsolete reference'); await first;
+    await agent.estimate(request);
+    expect(controls.tokens.mock.lastCall?.[0]).toContain('Current reference');
+    expect(controls.tokens.mock.lastCall?.[0]).not.toContain('Obsolete reference');
+});
 
 it('refuses offline inference while preserving local estimates and existing suggestions', async () => {
     const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
