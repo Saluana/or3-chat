@@ -458,8 +458,11 @@ export function useModelStore() {
     /** Capture validated catalog facts. This prepares metadata only, never a chat turn. */
     async function resolveContextModel(selectedModelId: string, opts?: { signal?: AbortSignal }): Promise<ContextModelReadiness> {
         const signal = opts?.signal;
+        const originDb = getDb();
+        const generation = getWorkspaceGeneration();
         const checkCanceled = () => {
-            if (signal?.aborted) throw new DOMException('Model preparation canceled.', 'AbortError');
+            if (signal?.aborted || originDb !== getDb() || generation !== getWorkspaceGeneration())
+                throw new DOMException('Model preparation canceled.', 'AbortError');
         };
         checkCanceled();
         const lookupId = openRouterCatalogLookupId(selectedModelId);
@@ -490,6 +493,11 @@ export function useModelStore() {
         let known = lookup();
         if (known) return known;
         try {
+            // Workspace changes clear the in-memory favorites. Recover saved
+            // metadata before requiring a network catalog for admission.
+            await waitForCatalog(getFavoriteModels(), signal);
+            checkCanceled(); known = lookup();
+            if (known) return known;
             await waitForCatalog(fetchModels(), signal);
             checkCanceled(); known = lookup();
             if (known) return known;
