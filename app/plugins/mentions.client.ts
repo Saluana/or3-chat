@@ -96,12 +96,17 @@ export default defineNuxtPlugin((nuxtApp) => {
     let stopMentionFilter: (() => void) | undefined;
     const refreshDisposers: Array<() => void> = [];
     let disposed = false;
+    // Workspace switches and sync batches keep an already-used index warm.
     const refreshMentions = () => {
         resetIndex();
         if (!indexRequested) return;
         clearTimeout(refreshTimer);
         refreshTimer = setTimeout(() => { if (!disposed) void mentionsModule?.initMentionsIndex(); }, 120);
     };
+    // Local item writes (document autosaves, chat and file updates) only
+    // invalidate. The next search, including an open picker, which subscribes
+    // to invalidation, rebuilds instead of rescanning after every edit.
+    const invalidateMentions = () => { resetIndex(); };
     const stopWorkspace = subscribeActiveWorkspaceDb(refreshMentions);
     const disposeRefresh = () => {
         disposed = true;
@@ -304,10 +309,13 @@ export default defineNuxtPlugin((nuxtApp) => {
         }
     );
 
-    // Reconcile title sources lazily after local writes or sync. Invalidation
-    // also refreshes an already-open picker without requiring another keystroke.
+    // Invalidation also refreshes an already-open picker without another keystroke.
     for (const name of [
         'sync.bootstrap:action:complete', 'sync.pull:action:applied', 'sync.rescan:action:completed',
+    ] as const) {
+        refreshDisposers.push(hooks.on(name, refreshMentions, { kind: 'action' }));
+    }
+    for (const name of [
         'db.posts.create:action:after', 'db.posts.upsert:action:after',
         'db.posts.delete:action:soft:after', 'db.posts.delete:action:hard:after',
         'db.documents.create:action:after', 'db.documents.update:action:after',
@@ -317,7 +325,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         'db.files.create:action:after', 'db.files.restore:action:after',
         'db.files.delete:action:soft:after', 'db.files.delete:action:hard:after',
     ] as const) {
-        refreshDisposers.push(hooks.on(name, refreshMentions, { kind: 'action' }));
+        refreshDisposers.push(hooks.on(name, invalidateMentions, { kind: 'action' }));
     }
 
     // HMR cleanup

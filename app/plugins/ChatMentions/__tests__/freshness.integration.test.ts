@@ -107,4 +107,22 @@ describe('mention freshness', () => {
         const result = await useHooks().applyFilters('ai.chat.messages:filter:before_send', payload as never);
         expect(result).toEqual(payload);
     });
+
+    it('invalidates titles on writes but rebuilds the index only for the next search', async () => {
+        await installPlugin();
+        await useHooks().doAction('editor:request-extensions');
+        const extensions = await useHooks().applyFilters('ui.chat.editor:filter:extensions', []);
+        const mention = (extensions as Array<{ name: string; options: {
+            suggestion: { items(input: { query: string }): Promise<Array<{ label: string }>> };
+        } }>).find(extension => extension.name === 'mention')!;
+        const search = (query: string) => mention.options.suggestion.items({ query });
+        expect((await search('Fresh')).map(item => item.label)).toContain('Fresh title');
+        const scan = vi.spyOn(getDb().threads, 'filter');
+        await getDb().posts.update('doc', { title: 'Renamed title', clock: 2 });
+        await useHooks().doAction('db.documents.update:action:after', {} as never);
+        await new Promise(resolve => setTimeout(resolve, 250));
+        expect(scan).not.toHaveBeenCalled();
+        expect((await search('Renamed')).map(item => item.label)).toContain('Renamed title');
+        expect(scan).toHaveBeenCalledTimes(1);
+    });
 });
