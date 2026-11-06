@@ -7,6 +7,7 @@
 import { defineEventHandler, getRouterParam, createError } from 'h3';
 import { requireAdminApiContext } from '../../../admin/api';
 import { getWorkspaceAccessStore } from '../../../admin/stores/registry';
+import { withAdminJournal } from '../../../admin/activity/journal';
 import { isAdminEnabled } from '../../../utils/admin/is-admin-enabled';
 import { enforceGenericAdminRateLimit } from '../../../admin/auth/rate-limit';
 
@@ -55,9 +56,13 @@ export default defineEventHandler(async (event) => {
     const store = getWorkspaceAccessStore(event);
 
     // Soft delete workspace
+    await withAdminJournal({
+        actor: adminCtx.principal.kind === 'super_admin' ? adminCtx.principal.username : adminCtx.principal.userId, action: 'workspace.delete', target: { kind: 'workspace', id: workspaceId },
+    }, async () => {
     await store.softDeleteWorkspace({
         workspaceId,
         deletedAt: Date.now(),
+    });
     });
 
     const actorId = adminCtx.principal.kind === 'super_admin' 

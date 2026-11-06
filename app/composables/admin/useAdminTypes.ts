@@ -17,6 +17,7 @@ export type ProviderStatus = {
     enabled: boolean;
     provider: string;
     details?: Record<string, unknown>;
+    check?: import('~~/server/admin/providers/types').ProviderCheck;
     actions?: ProviderAction[];
 };
 
@@ -31,7 +32,7 @@ export type SystemStatus = {
     auth: ProviderStatus;
     sync: ProviderStatus;
     storage: ProviderStatus;
-    backgroundStreaming: { enabled: boolean; storageProvider: string };
+    backgroundStreaming: { enabled: boolean; storageProvider: string; recovery?: { lastAttemptAt: number | null; lastSuccessAt: number | null; latestFailureAt: number | null; code: string | null; coverage: string } };
     admin?: { allowRestart: boolean; allowRebuild: boolean };
 };
 
@@ -100,7 +101,10 @@ export type ConfigEntry = {
 };
 
 export type EnrichedConfigEntry = ConfigEntry & {
-    application: import('~~/shared/admin/configuration').ConfigurationApplication;
+    application: import('~~/shared/admin/configuration').ConfigurationApplication | 'migration';
+    /** Where the effective value comes from (present on enriched reads). */
+    source?: 'site' | 'environment' | 'default' | 'enforced';
+    lockedReason?: string;
     editable: boolean;
     label: string;
     description: string;

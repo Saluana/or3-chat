@@ -25,6 +25,7 @@ const report: Record<string, unknown> = { mode: 'test', startedAt: new Date().to
 const checks = report.checks as string[];
 const output = resolve('output/hosted-billing/stripe-sandbox.json');
 let clock: Stripe.TestHelpers.TestClock | undefined;
+let nextPriceId: string | undefined;
 const pass = (name: string) => { checks.push(name); console.log(`PASS ${name}`); };
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function advance(time: number) {
@@ -38,6 +39,9 @@ async function advance(time: number) {
     throw new Error('Stripe test clock did not become ready within 60 seconds.');
 }
 try {
+    store.claimTrial('fixture', 'fixture@example.test', '192.0.2.1');
+    store.claimTrial('unrelated', 'unrelated@example.test', '192.0.2.2');
+    const oldTrialDeadline = store.account('unrelated').trial_ends_at;
     await service.validatePrice(); pass('configured annual price');
     clock = await stripe.testHelpers.testClocks.create({ frozen_time: Math.floor(Date.now() / 1000), name: 'OR3 disposable billing qualification' });
     const customer = await stripe.customers.create({ test_clock: clock.id, payment_method: 'pm_card_visa',
@@ -61,6 +65,35 @@ try {
     let status = await service.refresh('fixture');
     assert.equal(status.state, 'active'); assert.equal(status.paidUntil, sub.items.data[0]!.current_period_end * 1000);
     const firstEnd = status.paidUntil; pass('real paid invoice grants its matching period');
+    // Every price created here is test-mode-only and retired during fixture cleanup.
+    const nextPrice = await stripe.prices.create({ product: typeof price.product === 'string' ? price.product : price.product.id,
+        currency: 'usd', unit_amount: 6000, recurring: { interval: 'year' }, metadata: { purpose: 'or3_disposable_offer_qualification' } });
+    assert.equal(nextPrice.livemode, false);
+    nextPriceId = nextPrice.id;
+    await service.changeOffer({ operationId: 'qualification-next-offer', actor: 'qualification', reason: 'Disposable historical offer qualification',
+        expectedRevision: store.offers().revision, command: { kind: 'create_current', priceId: nextPrice.id, amountCents: 6000, paidStorageGb: 75, trialStorageGb: 2, trialDays: 14 } });
+    assert.equal((await service.refresh('fixture')).allowed, true);
+    assert.equal(store.status('fixture').storageLimitBytes, 50_000_000_000);
+    assert.equal(store.status('unrelated').trialEndsAt, oldTrialDeadline);
+    assert.equal(store.status('unrelated').storageLimitBytes, 1_000_000_000);
+    const now = Date.now();
+    store.claimTrial('new-offer-trial', 'next@example.test', '192.0.2.3', now);
+    assert.equal(store.status('new-offer-trial', now).trialEndsAt, now + 14 * 86_400_000);
+    assert.equal(store.status('new-offer-trial', now).storageLimitBytes, 2_000_000_000);
+    const nextCustomer = await stripe.customers.create({ test_clock: clock.id });
+    await store.exclusive('next-offer-checkout', async token => store.update('next-offer-checkout', token, { customer_id: nextCustomer.id }));
+    await service.checkout('next-offer-checkout');
+    const nextSessionId = store.account('next-offer-checkout').checkout_session_id!;
+    const lines = await stripe.checkout.sessions.listLineItems(nextSessionId, { limit: 10 });
+    assert.equal(lines.data[0]!.price!.id, nextPrice.id);
+    await stripe.checkout.sessions.expire(nextSessionId);
+    const historical = store.offers().items.find(offer => offer.priceId === price.id)!;
+    await service.changeOffer({ operationId: 'qualification-retire-offer', actor: 'qualification', reason: 'Retire from sale without removing recognition',
+        expectedRevision: store.offers().revision, command: { kind: 'retire', offerId: historical.id } });
+    assert.equal((await service.refresh('fixture')).allowed, true);
+    report.offerEvidence = { historicalPriceId: price.id, currentPriceId: nextPrice.id, oldTrialDeadline, unchangedTrialDeadline: store.account('unrelated').trial_ends_at };
+    pass('new Checkout uses current price; retired historical invoices and frozen trials remain recognized');
+
     assert.match(await service.checkout('fixture'), /^https:\/\/billing\.stripe\.com\//);
     assert.equal((await stripe.subscriptions.list({ customer: customer.id, status: 'all' })).data.length, 1);
     pass('subscribed account is sent to portal without a duplicate subscription');
@@ -110,9 +143,12 @@ try {
     assert.equal(store.status('fixture').state, 'review'); pass('real partial refund event is idempotent and holds account for review');
     assert.equal(store.status('unrelated').state, 'trial'); pass('refund leaves another account unaffected');
 
-    for (const method of ['pm_card_chargeCustomerFail', 'pm_card_authenticationRequired']) {
-        const user = `initial-${method}`;
-        const failedCustomer = await stripe.customers.create({ test_clock: clock.id });
+    // Stripe allows three customers per test clock. Reuse the current-offer
+    // Checkout customer (whose session is expired) for the declined-payment case.
+    for (const [method, user, failedCustomer] of [
+        ['pm_card_chargeCustomerFail', 'next-offer-checkout', nextCustomer],
+        ['pm_card_authenticationRequired', 'initial-authentication', await stripe.customers.create({ test_clock: clock.id })],
+    ] as const) {
         const paymentMethod = await stripe.paymentMethods.attach(method, { customer: failedCustomer.id });
         await store.exclusive(user, async token => store.update(user, token, { customer_id: failedCustomer.id }));
         store.db.prepare('UPDATE billing_accounts SET trial_ends_at = 0 WHERE user_id = ?').run(user);
@@ -132,6 +168,8 @@ try {
     process.exitCode = 1;
 } finally {
     store.close();
+    try { if (nextPriceId) await stripe.prices.update(nextPriceId, { active: false }); }
+    catch { report.success = false; report.priceCleanupRequired = nextPriceId; process.exitCode = 1; }
     try { if (clock) { await stripe.testHelpers.testClocks.del(clock.id); report.fixturesRemoved = true; } }
     catch { report.success = false; report.fixturesRemoved = false; report.cleanupClockId = clock?.id; process.exitCode = 1; }
     await rm(root, { recursive: true, force: true });

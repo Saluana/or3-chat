@@ -5,6 +5,7 @@ import { checkSyncRateLimit, recordSyncRequest } from '../utils/sync/rate-limite
 import { enforceRateLimit } from '../utils/rate-limit/enforce';
 import { getClientIp, normalizeProxyTrustConfig, type ProxyTrustConfigInput } from '../utils/net/request-identity';
 import { hashInviteToken, hashSignupInviteCode, normalizeSignupInviteCode, verifyInviteToken, type InviteTokenPayload } from './invite-token';
+import { requireNotPaused } from '../admin/pauses';
 
 export type RegistrationMode = 'open' | 'invite_only' | 'disabled';
 
@@ -139,6 +140,10 @@ export async function evaluateUnknownUserRegistration(input: {
         // sign-in provisions their account without requiring an invite.
         return { allowed: true, mode, invite: null };
     }
+
+    // An operator pause refuses new accounts only; existing users never reach this decision.
+    // After the pause ends, the registration mode below still applies.
+    await requireNotPaused(event, 'registrations');
 
     const token = (input.inviteToken ?? getInviteTokenFromEvent(event))?.trim();
     if (mode === 'open' && !token) return { allowed: true, mode, invite: null };

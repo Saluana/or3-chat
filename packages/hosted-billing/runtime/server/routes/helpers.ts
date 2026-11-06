@@ -4,7 +4,7 @@ import { resolveSessionContext } from '~~/server/auth/session';
 import { requireCloudMutation } from '~~/server/utils/security/cloud-mutation';
 import { getRateLimitProvider } from '~~/server/utils/rate-limit/store';
 import { enforceRateLimit } from '~~/server/utils/rate-limit/enforce';
-import { BillingBusyError } from '../store';
+import { BillingBusyError, BillingCommandError } from '../store';
 import { ensureTrial } from '../trial';
 import { useBillingService } from '../runtime';
 
@@ -25,6 +25,7 @@ export async function billingUser(event: H3Event, mutation = false): Promise<str
 export async function billingOperation<T>(event: H3Event, operation: () => Promise<T>): Promise<T> {
     try { return await operation(); }
     catch (error) {
+        if (error instanceof BillingCommandError) throw createError({ statusCode: error.statusCode, statusMessage: error.message, data: { code: error.code } });
         // Stripe errors can contain request details. Never return or log raw provider errors.
         setResponseHeader(event, 'Retry-After', 5);
         throw createError({ statusCode: 503, statusMessage: error instanceof BillingBusyError

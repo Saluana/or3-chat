@@ -719,3 +719,22 @@ test('compose.public.yaml keeps the public proxy wiring intact', () => {
   expect(compose).toContain('caddy-config:/config');
   expect(compose).toContain('restart: unless-stopped');
 });
+
+// Recovery evidence must not be inferred from successful app health. Projection
+// cannot leak pending credentialReset.env, host paths, or arbitrary receipts.
+test('recovery status distinguishes reported snapshots from verified component coverage', async () => {
+  const { projectRecoveryState } = await import('../assets/dashboard-operator.mjs');
+  const state = {
+    appVersion: '0.1.106', updatedAt: '2026-11-06T00:00:00Z',
+    rollback: { backupId: 'backup-safe', createdAt: '2026-11-05T00:00:00Z' },
+    lastReceipt: { checks: [{ code: 'public-health', status: 'passed' }] },
+    incompleteOperation: { id: 'update-1', operation: 'update', startedAt: '2026-11-06T00:00:00Z', credentialReset: { nextEnv: { SECRET: 'private' } } },
+  };
+  const result = projectRecoveryState(state);
+  expect(result.snapshot).toMatchObject({ id: 'backup-safe', verification: 'operator_reported' });
+  expect(result.coverage.every(row => row.status === 'unknown')).toBe(true);
+  expect(result.coverage.map(row => row.component)).toEqual(['canonical', 'auth', 'files', 'configuration', 'billing_trials_support', 'credential_escrow', 'independent_copy']);
+  expect(result.lastRecoveryTestAt).toBeNull();
+  expect(result.incompleteOperation).toMatchObject({ id: 'update-1', operation: 'update' });
+  expect(JSON.stringify(result)).not.toContain('private');
+});

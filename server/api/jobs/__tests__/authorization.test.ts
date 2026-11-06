@@ -8,6 +8,7 @@ import { backgroundJobClientToolIdentity } from '../../../utils/background-jobs/
 import type { RequestUsage } from '../../../../shared/chat/compaction';
 import { emitJobDelta, emitJobStatus, hasJobViewers, resetJobViewersForTests } from '../../../utils/background-jobs/viewers';
 import { createTrustedPluginServerServices } from '../../../utils/background-jobs/plugin-server-services';
+import { registerCloudAccessPolicy } from '../../../cloud/access';
 import { getScopedAdmissionKey } from '../../../utils/background-jobs/admission-cancels';
 import { registerBackgroundJobProvider, resetBackgroundJobProviders } from '../../../utils/background-jobs/registry';
 import { resetSyncRateLimits } from '../../../utils/sync/rate-limiter';
@@ -480,6 +481,19 @@ describe('background job workspace authorization at the HTTP boundary', () => {
         const response = await send(new Request('http://chat.example.test/plugin-service'));
         expect(response.status).toBe(403);
         expect((await memoryJobProvider.getJob(jobId, 'former-member'))?.content).toBe('private workspace content');
+    });
+
+    it('refuses new plugin workflow jobs when account admission is paused', async () => {
+        membership.role = 'editor';
+        identity.session.workspace.id = 'revoked-workspace';
+        const release = registerCloudAccessPolicy(() => ({ enabled: true, expiresAt: 0 }), { backgroundAdmission: () => 'Paused' });
+        try {
+            const admit = h3.toWebHandler(h3.createApp().use(h3.defineEventHandler(async event => {
+                const provider = await createTrustedPluginServerServices(event, new Set(['jobs.background'])).getJobProvider();
+                return provider.createJob({ userId: 'former-member', threadId: 't', messageId: 'm', model: 'workflow', kind: 'workflow' });
+            })));
+            expect((await admit(new Request('http://chat.example.test/workflow'))).status).toBe(503);
+        } finally { release(); }
     });
 
     it('preserves authorized status, stream, and stop for a newly admitted workflow', async () => {

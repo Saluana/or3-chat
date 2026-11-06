@@ -1,3 +1,4 @@
+import { observeSyncRequest } from '../../sync/observations';
 /**
  * @module server/api/sync/update-cursor.post
  *
@@ -62,26 +63,29 @@ export default defineEventHandler(async (event) => {
     });
 
     // Rate limiting (per-user)
-    const rateLimitResult = checkSyncRateLimit(session.user.id, 'sync:cursor');
-    enforceRateLimit(event, rateLimitResult);
+    const userId = session.user.id;
+    return await observeSyncRequest(event, userId, parsed.data.scope.workspaceId, 'cursor', async () => {
+        const rateLimitResult = checkSyncRateLimit(userId, 'sync:cursor');
+        enforceRateLimit(event, rateLimitResult);
 
-    // Add rate limit headers
-    const stats = getSyncRateLimitStats(session.user.id, 'sync:cursor');
-    if (stats) {
-        setResponseHeader(event, 'X-RateLimit-Limit', String(stats.limit));
-        setResponseHeader(event, 'X-RateLimit-Remaining', String(stats.remaining));
-    }
+        // Add rate limit headers
+        const stats = getSyncRateLimitStats(userId, 'sync:cursor');
+        if (stats) {
+            setResponseHeader(event, 'X-RateLimit-Limit', String(stats.limit));
+            setResponseHeader(event, 'X-RateLimit-Remaining', String(stats.remaining));
+        }
 
-    // Get sync gateway adapter from registry
-    const adapter = getActiveSyncGatewayAdapter();
-    if (!adapter) {
-        throw createError({ statusCode: 500, statusMessage: 'Sync adapter not configured' });
-    }
+        // Get sync gateway adapter from registry
+        const adapter = getActiveSyncGatewayAdapter();
+        if (!adapter) {
+            throw createError({ statusCode: 500, statusMessage: 'Sync adapter not configured' });
+        }
 
-    recordSyncRequest(session.user.id, 'sync:cursor');
+        recordSyncRequest(userId, 'sync:cursor');
 
-    // Dispatch to adapter
-    await adapter.updateCursor(event, parsed.data);
+        // Dispatch to adapter
+        await adapter.updateCursor(event, parsed.data);
 
-    return { ok: true };
+        return { ok: true };
+    });
 });

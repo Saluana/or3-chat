@@ -6,11 +6,12 @@ import { getEntitlementResolver, registerEntitlementResolver } from '~~/server/a
 import { readBillingConfig } from './config';
 import { BillingStore } from './store';
 import { BillingService } from './service';
-import { installBillingService } from './runtime';
+import { installAccountQuota, installBillingService } from './runtime';
 import { AccountStorageQuota } from './quota';
 import { registerStorageGatewayDecorator } from '~~/server/storage/gateway/registry';
 import { registerCloudAccessPolicy } from '~~/server/cloud/access';
 import { ensureTrial } from './trial';
+import { pauseActive } from './entitlement';
 
 export default defineNitroPlugin(app => {
     if (import.meta.prerender) return;
@@ -20,12 +21,21 @@ export default defineNitroPlugin(app => {
     const quota = new AccountStorageQuota(config.syncDatabasePath, store);
     const service = new BillingService(store, new Stripe(config.secretKey, { timeout: 15_000, maxNetworkRetries: 1 }), config, userId => quota.usedBytes(userId));
     const uninstall = installBillingService(service);
+    const uninstallQuota = installAccountQuota(quota);
     const releaseAccess = registerCloudAccessPolicy((event, session) => {
         if (!session.user) return { enabled: false, expiresAt: 0 };
         ensureTrial(event, session, store);
         const status = store.status(session.user.id);
         return { enabled: status.allowed, expiresAt: status.accessExpiresAt ?? (status.state === 'active' ? status.paidUntil : status.trialEndsAt) };
-    }, { requirePersonalAiCredentials: true });
+    }, {
+        requirePersonalAiCredentials: true,
+        backgroundAdmission: (_event, session) => {
+            const owner = session.workspace?.id ? quota.workspaceOwner(session.workspace.id) : null;
+            if (!owner) return 'The workspace owner could not be confirmed. Try again later.';
+            return pauseActive(store.support(owner)?.jobPause, Date.now())
+                ? 'New background jobs are paused for this account. Contact support. Foreground chat is still available.' : null;
+        },
+    });
     const undecorate = registerStorageGatewayDecorator(adapter => quota.decorate(adapter));
     const previous = getEntitlementResolver('sqlite') ?? getEntitlementResolver('default');
     const unregister = registerEntitlementResolver('sqlite', async input => {
@@ -40,6 +50,7 @@ export default defineNitroPlugin(app => {
         quota.close();
         unregister();
         uninstall();
+        uninstallQuota();
         store.close();
     });
 });

@@ -48,6 +48,10 @@ function parseValue(key: SiteSettingKey, raw: string) {
         return value === 'true';
     }
     if (metadata.valueType === 'number') {
+        if (key === 'OR3_STORAGE_CAPACITY_WARNING_PERCENT' || key === 'OR3_STORAGE_CAPACITY_CRITICAL_PERCENT') {
+            if (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > 100) invalid(key, `${metadata.label}: enter a whole percentage from 1 to 100.`);
+            return Number(value);
+        }
         if (key === 'OR3_CHAT_TOOL_ITERATIONS' || key === 'OR3_CHAT_GENERATED_IMAGES') {
             const minimum = key === 'OR3_CHAT_TOOL_ITERATIONS' ? 1 : 0;
             const maximum = key === 'OR3_CHAT_TOOL_ITERATIONS' ? 100 : 24;
@@ -127,6 +131,7 @@ export async function saveSiteSettings(config: RuntimeConfig, updates: Array<{ke
             changes[key] = Array.isArray(parsed) ? parsed.join(',') : String(parsed);
             values[key] = changes[key]!;
         }
+        if (Number(values.OR3_STORAGE_CAPACITY_WARNING_PERCENT || 85) >= Number(values.OR3_STORAGE_CAPACITY_CRITICAL_PERCENT || 95)) invalid('OR3_STORAGE_CAPACITY_WARNING_PERCENT', 'Capacity warning must be below the critical threshold.');
         if (Number(values.OR3_DEFAULT_PANE_COUNT) > Number(values.OR3_MAX_PANES)) invalid('OR3_DEFAULT_PANE_COUNT', 'Starting chat panels cannot exceed Maximum chat panels.');
         if (values.OR3_DISABLED_THEMES?.split(',').includes(values.OR3_DEFAULT_THEME!)) invalid('OR3_DISABLED_THEMES', 'The site default theme cannot also be hidden. Choose another default first.');
         const content = JSON.stringify({ ...current.values, ...changes }, null, 2) + '\n';

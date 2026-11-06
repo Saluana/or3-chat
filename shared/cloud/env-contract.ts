@@ -81,6 +81,7 @@ const adminWritableEnvKeys = [
     'OR3_FORWARDED_FOR_HEADER', 'OR3_STRICT_CONFIG', 'OR3_LIMITS_ENABLED',
     'OR3_REQUESTS_PER_MINUTE', 'OR3_MAX_MESSAGES_PER_DAY',
     'OR3_MAX_CONVERSATIONS', 'OR3_LIMITS_STORAGE_PROVIDER',
+    'OR3_STORAGE_CAPACITY_WARNING_PERCENT', 'OR3_STORAGE_CAPACITY_CRITICAL_PERCENT',
     'OR3_RATE_LIMIT_OVERRIDES_JSON', 'OR3_BACKGROUND_STREAMING_ENABLED',
     'OR3_BACKGROUND_STREAMING_PROVIDER', 'OR3_BACKGROUND_MAX_JOBS',
     'OR3_BACKGROUND_MAX_JOBS_PER_USER', 'OR3_BACKGROUND_JOB_TIMEOUT',
@@ -125,7 +126,7 @@ export const ENV_KEY_CONTRACT: Readonly<Record<string, EnvKeyContract>> =
                     {
                         adminWritable: adminWritableSet.has(key),
                         wizardOwned: wizardOwnedSet.has(key),
-                        secret: /(SECRET|KEY|TOKEN|PASSWORD|ATTESTATION)/i.test(key),
+                        secret: key !== 'OR3_OPENROUTER_REQUIRE_USER_KEY' && /(SECRET|KEY|TOKEN|PASSWORD|ATTESTATION)/i.test(key),
                     },
                 ],
             ),

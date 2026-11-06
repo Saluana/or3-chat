@@ -1,3 +1,4 @@
+import { recordBackgroundRecovery } from '../utils/background-jobs/recovery';
 import { randomUUID } from 'node:crypto';
 import { defineNitroPlugin } from 'nitropack/runtime';
 import {
@@ -46,6 +47,7 @@ export default defineNitroPlugin((nitroApp) => {
                 try { return await work(); }
                 catch {
                     phaseFailed = true;
+                    recordBackgroundRecovery('failure');
                     // Provider errors may contain request or credential data.
                     console.warn(`[background-jobs] ${label} failed; recovery will retry.`);
                     return 0;
@@ -79,10 +81,12 @@ export default defineNitroPlugin((nitroApp) => {
                 },
                 getJobConfig().maxConcurrentJobs
             ));
+            if (!hasPhaseFailed()) recordBackgroundRecovery('success');
             delay = hasPhaseFailed() || delivered || coordinated || claimed ? RECONCILE_INTERVAL_MS
                 : Math.min(delay * 2, MAX_IDLE_INTERVAL_MS);
         } catch {
             delay = RECONCILE_INTERVAL_MS;
+            recordBackgroundRecovery('failure');
             console.warn('[background-jobs] Recovery scan failed; recovery will retry.');
         } finally {
             scanning = false;

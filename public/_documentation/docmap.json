@@ -829,6 +829,15 @@
                     "summary": "Configure credential custody, the local vault, account connections, and recovery."
                 },
                 {
+                    "name": "admin-customer-operations.md",
+                    "path": "/cloud/admin-customer-operations",
+                    "title": "Customer support and operations",
+                    "category": "Advanced",
+                    "categoryOrder": 5,
+                    "order": 25,
+                    "summary": "Customer support, validated offer changes and historical terms, storage and capacity policy, completed-sync observations, provider checks, recovery coverage and audited activity."
+                },
+                {
                     "name": "hosted-billing.md",
                     "path": "/cloud/hosted-billing",
                     "title": "Optional hosted billing",

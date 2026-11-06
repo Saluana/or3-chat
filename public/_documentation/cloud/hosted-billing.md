@@ -12,7 +12,7 @@ SDK requirement or payment checks.
   and trial/paid deadline, subscribe, or open Stripe's customer portal to manage
   payment details and cancellation. The same page remains available at `/billing`
   for direct links and Stripe return URLs. No administrator access is needed.
-- Eligible accounts receive one **7-day trial**, starting on their first
+- Eligible accounts receive one trial (**7 days for the initial offer**), starting on their first
   authenticated session/billing check or hosted request. Trial eligibility is
   limited to one per normalized email and network. Existing billing accounts
   retain their original trial or paid access; their historical trials do not
@@ -23,18 +23,22 @@ SDK requirement or payment checks.
   expires, even in an open tab without waiting for the next status poll.
 - No payment information is collected for the trial, and it never automatically
   charges a card. Its original deadline survives restarts and workspace changes.
-- **Subscribe** opens Stripe Checkout for **USD $40/year**. Choosing to subscribe
+- **Subscribe** opens Stripe Checkout for the current offer (**USD $40/year initially**). Choosing to subscribe
   charges immediately and starts a paid year; it does not create a second Stripe
   trial. AI usage is separate, using the customer's own OpenRouter or OpenAI key.
 - The initial storage allowances are **1 GB during trial** and **50 GB when paid**.
   GB means 1,000,000,000 bytes.
 - **Admin → Hosted billing** (`/admin/extensions/hosted-billing`) lets a global
-  administrator change both storage allowances. Changes persist in the billing
+  administrator change both storage allowances for the current offer cohort. Historical cohorts retain their accepted allowances. Changes persist in the billing
   database and apply to subsequent upload requests without rebuilding/restarting.
   Concurrent edits use a revision check. Lowering a limit never deletes files.
-- Price and trial duration are fixed in this initial module. Changing the Stripe
-  Price alone does not change the advertised plan: Checkout validates an active,
-  fixed, licensed USD 4,000-cent yearly Price with quantity one.
+- **Accepted offers** retains historical and retired Stripe prices. New offers
+  validate an existing active, fixed, licensed annual USD price with quantity
+  one, explicit cents/storage/trial terms, an impact preview, reason and revision.
+  Existing subscriber terms and trial deadlines remain recognized; unknown or
+  ambiguous price matches create review holds without erasing paid dates.
+  See [Customer support and operations](./admin-customer-operations.md#accepted-historical-offers).
+
 
 The paid storage allowance is account-wide across workspaces whose canonical
 `owner_user_id` is that account. Shared uploads use the workspace owner's budget;
@@ -109,10 +113,17 @@ anchored to the last paid period, never extended by polling, and removed on a
 failed collection, cancellation, or review hold. Initial unpaid subscriptions
 receive no grace. Immediate cancellation revokes hosted access. Refund, dispute
 and early-fraud-warning events place the account on a conservative manual-review
-hold. Partial refunds also require review. A later paid event does not clear a
-hold automatically: inspect the customer in Stripe and resolve it with the host
-operator before clearing `billing_accounts.review_required` in the private
-billing database. Never clear a hold through client-syncable settings.
+hold. Partial refunds also require review. Each hold is a recorded review with
+its source (refund total, dispute, fraud warning or conflicting subscriptions),
+so a redelivered identical event never reopens a resolved review while a new
+refund amount does. A later paid event does not clear a hold automatically.
+Resolve it from **Admin → Customers → account → Resolve review**: OR3 refreshes
+the account from Stripe, refuses the decision if the facts or open reviews
+changed or more than one live subscription exists, and then removes only those
+holds with your reason in the same database transaction. Holds that predate
+review records appear as "Legacy review — reason unavailable". Do not edit
+`billing_accounts.review_required` by hand; see
+[Customer support and operations](./admin-customer-operations.md).
 
 ## Cloud access extension
 
@@ -233,7 +244,8 @@ The installed providers retain deleted originals and do not yet implement a safe
 physical purge and quota-release operation. Deleted files (including emptied
 Trash and deleted workspaces) therefore continue to count. The billing page and
 admin controls disclose this; raising the allowance is the supported interim
-remedy. Do not reset usage counters independently of provider-owned retained
+remedy, together with a per-account storage bonus or temporary access from the
+account page. Do not reset usage counters independently of provider-owned retained
 objects and active reservations. A reclaim operation must preserve those
 contracts and needs separate provider work before advertising reusable storage.
 
@@ -262,6 +274,17 @@ The local billing database is temporary; the host's account databases are not
 used. This does not submit the hosted Checkout form or prove that a deployed
 Stripe webhook destination is reachable. Qualify those two deployment steps
 separately before switching to live mode.
+
+For the automated admin offer editor flow, use the same private test configuration:
+
+```sh
+bun scripts/test/run-workspace-cloud-e2e.ts --billing --stripe-env /path/to/private-test.env --grep 'accepted offers'
+```
+
+It verifies rejected price mismatches, preview/confirmation, stale revisions,
+historical retirement, unchanged account facts and atomic audit through the real
+HTTP/UI path. It uses temporary application databases, creates a test-only price,
+and archives that price afterward. It never modifies the configured Stripe price.
 
 For manual Chrome qualification with disposable local databases and real test-mode
 Stripe Checkout, start the watch profile with a private environment file containing

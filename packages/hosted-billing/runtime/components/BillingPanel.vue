@@ -12,7 +12,9 @@ const mounted = ref(false);
 onMounted(() => { mounted.value = true; });
 const date = (value: number) => new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 const paid = computed(() => status.value?.state === 'active');
+const subscribed = computed(() => paid.value || (status.value?.state === 'paused' && (status.value.source === 'paid' || status.value.source === 'renewal_grace')));
 const trial = computed(() => status.value?.state === 'trial');
+const paidCapacity = computed(() => (status.value?.storageLimitBytes ?? 0) / 1_000_000_000);
 const allowance = computed(() => (status.value?.paidStorageLimitBytes ?? 50_000_000_000) / 1_000_000_000);
 const used = computed(() => status.value?.storageUsedBytes ?? 0);
 const storage = (bytes: number) => bytes < 1_000_000_000
@@ -29,10 +31,10 @@ watch(userId, id => { if (id && route.query.checkout === 'success') void refresh
         <header class="billing-hero">
             <div class="billing-hero-text">
                 <component :is="embedded ? 'h3' : 'h1'">
-                    <template v-if="paid">Your Cloud plan</template>
+                    <template v-if="subscribed">Your Cloud plan</template>
                     <template v-else>Keep your <br>workspace in sync.</template>
                 </component>
-                <p>{{ paid ? 'Manage your storage and subscription.' : 'Work locally for free. Add Cloud to pick up on any device.' }}</p>
+                <p>{{ subscribed ? 'Manage your storage and subscription.' : 'Work locally for free. Add Cloud to pick up on any device.' }}</p>
             </div>
             <div class="billing-hero-art" aria-hidden="true">
                 <img src="../assets/bird-devices-web.webp" alt="" width="1536" height="864" decoding="async">
@@ -52,12 +54,14 @@ watch(userId, id => { if (id && route.query.checkout === 'success') void refresh
         <p v-if="!mounted" role="status">Loading your plan…</p>
         <div v-else-if="!userId" class="plan-card"><p>Sign in to view your plan.</p><UButton to="/chat" class="mt-4">Go to sign in</UButton></div>
         <template v-else-if="status">
-            <p v-if="trial" class="trial-status" role="status"><span class="status-dot" />Cloud trial · Ends {{ date(status.trialEndsAt) }}</p>
+            <p v-if="trial" class="trial-status" role="status"><span class="status-dot" />Cloud trial · Ends {{ date(status.accessExpiresAt || status.trialEndsAt) }}</p>
+            <UAlert v-else-if="status.state === 'grant'" color="info" title="Complimentary Cloud access" :description="`Provided by support until ${date(status.accessExpiresAt ?? 0)}. This is not a paid subscription.`" class="mb-5" />
+            <UAlert v-else-if="status.state === 'paused'" color="warning" title="Cloud is paused for your account" description="Contact support. You can keep working locally, export your data and manage billing." class="mb-5" />
             <UAlert v-else-if="status.state === 'review'" color="warning" title="Contact support about your subscription" description="You can continue working locally while we help." class="mb-5" />
             <UAlert v-else-if="status.state === 'payment_required'" color="warning" title="Cloud is paused" description="Update your subscription to resume syncing. You can keep working locally." class="mb-5" />
             <UAlert v-else-if="status.state === 'expired' && !status.trialEndsAt" color="neutral" title="Cloud trial unavailable" description="Contact support if you think this is a mistake. You can still use Free Local or subscribe to Cloud." class="mb-5" />
-            <div class="plan-grid" :class="{ 'plan-grid--paid': paid }">
-                <article v-if="!paid" class="plan-card">
+            <div class="plan-grid" :class="{ 'plan-grid--paid': subscribed }">
+                <article v-if="!subscribed" class="plan-card">
                     <div class="plan-head">
                         <img class="plan-art" src="../assets/server-in-nest.webp" alt="" width="640" height="640" decoding="async">
                         <div>
@@ -79,7 +83,7 @@ watch(userId, id => { if (id && route.query.checkout === 'success') void refresh
                         <div>
                             <h4>Cloud</h4>
                             <p class="plan-description">Your workspace, on all your devices.</p>
-                            <div class="plan-price">$40<span>USD / year</span></div>
+                            <div class="plan-price">{{ status?.offer ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(status.offer.amountCents / 100) : '…' }}<span>USD / year</span></div>
                         </div>
                     </div>
                     <ul class="plan-features">
@@ -87,12 +91,12 @@ watch(userId, id => { if (id && route.query.checkout === 'success') void refresh
                         <li><UIcon name="i-lucide-check" />Sync chats, documents, and files</li>
                         <li><UIcon name="i-lucide-check" />Everything in Free Local</li>
                     </ul>
-                    <UButton v-if="!paid && status.state !== 'review'" block size="xl" :loading="busy" trailing-icon="i-lucide-arrow-up-right" @click="redirect('checkout')">Upgrade to Cloud</UButton>
+                    <UButton v-if="!subscribed && status.state !== 'review'" block size="xl" :loading="busy" trailing-icon="i-lucide-arrow-up-right" @click="redirect('checkout')">Upgrade to Cloud</UButton>
                     <UButton v-else-if="status.hasCustomer" block size="xl" :loading="busy" trailing-icon="i-lucide-arrow-up-right" @click="redirect('portal')">Manage subscription</UButton>
                 </article>
                 <article v-if="paid" class="plan-card storage-card">
                     <h4>Cloud storage</h4>
-                    <div class="storage-amount">{{ storage(used) }}<span>of {{ allowance }} GB used</span></div>
+                    <div class="storage-amount">{{ storage(used) }}<span>of {{ paidCapacity }} GB used</span></div>
                     <UProgress :model-value="progress" aria-label="Cloud storage used" />
                     <p class="plan-description mt-4">Available across your devices.</p>
                     <div class="renewal"><UIcon name="i-lucide-calendar" /><span>{{ status.paidUntil <= Date.now() ? 'Renewal processing' : `${status.cancelAtPeriodEnd ? 'Cloud ends' : 'Renews'} ${date(status.paidUntil)}` }}</span></div>
@@ -108,7 +112,7 @@ watch(userId, id => { if (id && route.query.checkout === 'success') void refresh
                 <p v-if="trial || paid">Deleted files still count toward your cloud storage allowance.</p>
                 <p v-if="trial || paid">Incomplete uploads may also count. Retry the upload or contact support for help.</p>
                 <p>AI usage is paid separately through your own provider account.</p>
-                <p v-if="!paid && status.state !== 'review'">Subscribing starts a paid year today. Renews annually; cancel anytime. Taxes shown at checkout.</p>
+                <p v-if="!subscribed && status.state !== 'review'">Subscribing starts a paid year today. Renews annually; cancel anytime. Taxes shown at checkout.</p>
             </div>
             <p v-if="route.query.checkout === 'success' && !paid && status.state !== 'review'" role="status" class="billing-notes">Confirming your payment. Your plan will update shortly.</p>
             <footer class="billing-footer">

@@ -65,11 +65,20 @@ export type ProviderStatusContext = {
  * Purpose:
  * The complete status packet for a provider card.
  */
+export type ProviderCheck = {
+    result: 'passed' | 'failed' | 'unknown' | 'stale';
+    checkedAt: number | null;
+    kind: string;
+    scope: string;
+    code: string;
+};
+
 export type ProviderAdminStatus = {
     enabled: boolean;
     provider: string;
     /** Arbitrary data points to display in the card (e.g., 'Version', 'URL'). */
     details?: Record<string, unknown>;
+    check?: ProviderCheck;
     /** Diagnostic issues detected by the adapter. */
     warnings: AdminWarning[];
     /** Management tools exposed by the adapter. */
@@ -114,6 +123,9 @@ export interface ProviderAdminAdapter {
      * Often checks environment variables or performs light network probes.
      */
     getStatus(event: H3Event, ctx: ProviderStatusContext): Promise<ProviderAdminStatusResult>;
+
+    /** Explicit, cheap bounded probe. Never scans objects or changes provider state. */
+    check?(event: H3Event): Promise<Omit<ProviderCheck, 'checkedAt'>>;
 
     /**
      * Purpose:

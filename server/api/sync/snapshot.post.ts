@@ -1,3 +1,4 @@
+import { observeSyncRequest } from '../../sync/observations';
 import { hasWorkspaceItemSemantics } from "~~/shared/posts/workspace-item-capability";
 import { requireWorkspaceItemCapability } from "../../utils/sync/workspace-item-capability";
 /**
@@ -51,44 +52,47 @@ export default defineEventHandler(async (event) => {
         id: request.data.scope.workspaceId,
     });
 
-    const rateLimit = checkSyncRateLimit(session.user.id, 'sync:snapshot');
-    enforceRateLimit(event, rateLimit);
+    const userId = session.user.id;
+    return await observeSyncRequest(event, userId, request.data.scope.workspaceId, 'snapshot', async () => {
+        const rateLimit = checkSyncRateLimit(userId, 'sync:snapshot');
+        enforceRateLimit(event, rateLimit);
 
-    const stats = getSyncRateLimitStats(session.user.id, 'sync:snapshot');
-    if (stats) {
-        setResponseHeader(event, 'X-RateLimit-Limit', String(stats.limit));
-        setResponseHeader(event, 'X-RateLimit-Remaining', String(stats.remaining));
-    }
+        const stats = getSyncRateLimitStats(userId, 'sync:snapshot');
+        if (stats) {
+            setResponseHeader(event, 'X-RateLimit-Limit', String(stats.limit));
+            setResponseHeader(event, 'X-RateLimit-Remaining', String(stats.remaining));
+        }
 
-    const adapter = getActiveSyncGatewayAdapter();
-    if (!adapter?.snapshot) {
-        throw createError({
-            statusCode: 503,
-            statusMessage: 'Snapshot bootstrap unavailable for active sync adapter',
-        });
-    }
+        const adapter = getActiveSyncGatewayAdapter();
+        if (!adapter?.snapshot) {
+            throw createError({
+                statusCode: 503,
+                statusMessage: 'Snapshot bootstrap unavailable for active sync adapter',
+            });
+        }
 
-    recordSyncRequest(session.user.id, 'sync:snapshot');
+        recordSyncRequest(userId, 'sync:snapshot');
 
-    const response = SnapshotResponseSchema.safeParse(
-        await adapter.snapshot(event, request.data)
-    );
-    if (!response.success) {
-        throw createError({ statusCode: 502, statusMessage: 'Invalid snapshot response' });
-    }
-    if (getSnapshotResponseContractError(request.data, response.data)) {
-        throw createError({ statusCode: 502, statusMessage: 'Invalid snapshot response' });
-    }
+        const response = SnapshotResponseSchema.safeParse(
+            await adapter.snapshot(event, request.data)
+        );
+        if (!response.success) {
+            throw createError({ statusCode: 502, statusMessage: 'Invalid snapshot response' });
+        }
+        if (getSnapshotResponseContractError(request.data, response.data)) {
+            throw createError({ statusCode: 502, statusMessage: 'Invalid snapshot response' });
+        }
 
-    // Snapshot pages are collected before installation, so reject the whole
-    // page before any caller can apply a partial generic-file record.
-    if (response.data.items.some((item) =>
-        item.kind === 'row' &&
-        isGenericFileMetaPayload(item.tableName, item.payload)
-    )) {
-        requireFileKindCapability(request.data.fileKindCapability);
-    }
+        // Snapshot pages are collected before installation, so reject the whole
+        // page before any caller can apply a partial generic-file record.
+        if (response.data.items.some((item) =>
+            item.kind === 'row' &&
+            isGenericFileMetaPayload(item.tableName, item.payload)
+        )) {
+            requireFileKindCapability(request.data.fileKindCapability);
+        }
 
-    if (response.data.items.some(item => item.kind === "row" && hasWorkspaceItemSemantics(item.tableName, item.payload))) requireWorkspaceItemCapability(request.data.workspaceItemCapability);
-    return response.data;
+        if (response.data.items.some(item => item.kind === "row" && hasWorkspaceItemSemantics(item.tableName, item.payload))) requireWorkspaceItemCapability(request.data.workspaceItemCapability);
+        return response.data;
+    });
 });

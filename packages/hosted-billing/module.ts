@@ -27,6 +27,15 @@ export default defineNuxtModule({
         }
         addServerHandler({ middleware: true, handler: resolver.resolve('runtime/server/middleware') });
         addServerHandler({ route: '/api/admin/hosted-billing', handler: resolver.resolve('runtime/server/routes/admin') });
+        addServerHandler({ route: '/api/admin/hosted-billing/offers', handler: resolver.resolve('runtime/server/routes/admin-offers') });
+        addServerHandler({ route: '/api/admin/hosted-billing/health', handler: resolver.resolve('runtime/server/routes/admin-health') });
+        addServerHandler({ route: '/api/admin/hosted-billing/activity', method: 'get', handler: resolver.resolve('runtime/server/routes/admin-activity') });
+        addServerHandler({ route: '/api/admin/hosted-billing/storage', method: 'get', handler: resolver.resolve('runtime/server/routes/admin-storage') });
+        addServerHandler({ route: '/api/admin/hosted-billing/accounts/:id/storage', method: 'get', handler: resolver.resolve('runtime/server/routes/admin-storage') });
+        addServerHandler({ route: '/api/admin/hosted-billing/quota-impact', method: 'get', handler: resolver.resolve('runtime/server/routes/admin-quota-impact') });
+        addServerHandler({ route: '/api/admin/hosted-billing/accounts', method: 'get', handler: resolver.resolve('runtime/server/routes/admin-accounts') });
+        addServerHandler({ route: '/api/admin/hosted-billing/accounts/:id', method: 'get', handler: resolver.resolve('runtime/server/routes/admin-account') });
+        addServerHandler({ route: '/api/admin/hosted-billing/accounts/:id/:command', method: 'post', handler: resolver.resolve('runtime/server/routes/admin-account-command') });
         addPlugin({ src: resolver.resolve('runtime/admin.client'), mode: 'client' });
         addComponent({ name: 'HostedBillingBanner', filePath: resolver.resolve('runtime/components/HostedBillingBanner.vue'), global: true });
         extendPages(pages => { pages.push({ name: 'hosted-billing', path: '/billing', file: resolver.resolve('runtime/pages/billing.vue') }); });

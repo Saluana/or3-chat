@@ -37,7 +37,8 @@ import {
 import { resolveSessionContext } from '../../auth/session';
 import { requireCloudMutation } from '../../utils/security/cloud-mutation';
 import { requireCan } from '../../auth/can';
-import { requireCloudAccess } from '../../cloud/access';
+import { requireCloudAccess, requireBackgroundAdmission } from '../../cloud/access';
+import { requireNotPaused } from '../../admin/pauses';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import {
     checkAndRecordLlmRequest,
@@ -136,7 +137,9 @@ export default defineEventHandler(async (event) => {
     };
     if (isSsrAuthEnabled(event)) requireCloudMutation(event);
     const modelSession = await getSession();
+    if (backgroundRequested) await requireNotPaused(event, 'jobs');
     if (backgroundRequested && modelSession) await requireCloudAccess(event, modelSession);
+    if (backgroundRequested && modelSession) await requireBackgroundAdmission(event, modelSession);
     if (modelSession?.authenticated && modelSession.workspace?.id && typeof body.model === 'string')
         await requireWorkspaceModel(event, modelSession.workspace.id, body.model);
     const selected = await resolveChatCredential(event, body.model, await getSession());

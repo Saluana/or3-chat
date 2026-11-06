@@ -9,6 +9,7 @@ import { AdvisoryPluginOperationLock } from '../../plugins/package-operation-loc
 function runtimeConfig(): RuntimeConfig {
     return {
         public: {
+            storageCapacityWarningPercent: 85, storageCapacityCriticalPercent: 95,
             or3: {
                 site: { name: 'Test Chat', description: '', logoUrl: '', faviconUrl: '', defaultTheme: 'blank', disabledThemes: [] },
                 ui: { defaultPaneCount: 1, maxPanes: 4, sidebarCollapsedByDefault: false },
@@ -26,6 +27,19 @@ function runtimeConfig(): RuntimeConfig {
 }
 
 describe('persistent site settings', () => {
+    // Capacity controls warn against measured volume capacity; they never
+    // change quota admission. Invalid/inverted thresholds must not persist.
+    it('validates revisioned capacity thresholds without changing upload policy', async () => {
+        const config = runtimeConfig();
+        const current = await readSiteSettings();
+        await expect(saveSiteSettings(config, [{ key: 'OR3_STORAGE_CAPACITY_WARNING_PERCENT', value: '99' }], current.revision)).rejects.toMatchObject({ statusCode: 400 });
+        await expect(saveSiteSettings(config, [{ key: 'OR3_STORAGE_CAPACITY_WARNING_PERCENT', value: '-1' }], current.revision)).rejects.toMatchObject({ statusCode: 400 });
+        await saveSiteSettings(config, [{ key: 'OR3_STORAGE_CAPACITY_WARNING_PERCENT', value: '80' }], current.revision);
+        const saved = await readSiteSettings();
+        applySiteSettings(config, saved.values);
+        expect(config.public.storageCapacityWarningPercent).toBe(80);
+        await expect(saveSiteSettings(config, [{ key: 'OR3_STORAGE_CAPACITY_CRITICAL_PERCENT', value: '70' }], saved.revision)).rejects.toMatchObject({ statusCode: 400 });
+    });
     let directory: string;
     beforeEach(async () => {
         directory = await mkdtemp(join(tmpdir(), 'or3-site-settings-'));

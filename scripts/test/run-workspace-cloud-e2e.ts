@@ -12,13 +12,16 @@ const sourceRoot = process.cwd();
 const development = process.argv.includes('--development-providers');
 const journeys = process.argv.includes('--journeys');
 const billing = process.argv.includes('--billing');
+const grepIndex = process.argv.indexOf('--grep');
+const grep = grepIndex < 0 ? null : process.argv[grepIndex + 1];
+if (grepIndex >= 0 && !grep) throw new Error('--grep requires a Playwright test pattern.');
 const stripeEnvIndex = process.argv.indexOf('--stripe-env');
 const stripeEnv = stripeEnvIndex < 0 ? null : parseEnv(await readFile(resolve(process.argv[stripeEnvIndex + 1] || ''), 'utf8'));
-if (stripeEnv && (!billing || !process.argv.includes('--watch') ||
+if (stripeEnv && (!billing ||
     !/^(sk|rk)_test_/.test(stripeEnv.OR3_BILLING_STRIPE_SECRET_KEY ?? '') ||
     !stripeEnv.OR3_BILLING_STRIPE_WEBHOOK_SECRET?.startsWith('whsec_') ||
     !stripeEnv.OR3_BILLING_STRIPE_PRICE_ID?.startsWith('price_'))) {
-    throw new Error('--stripe-env requires --billing --watch and a private test-mode Stripe configuration.');
+    throw new Error('--stripe-env requires --billing and a private test-mode Stripe configuration.');
 }
 const convexIndex = process.argv.indexOf('--convex-local');
 const convex = convexIndex < 0 ? null : await Bun.file(join(process.argv[convexIndex + 1]!, 'sandbox.json')).json() as { root: string; url: string; adminKey: string };
@@ -87,9 +90,9 @@ try {
     if (storageProvider === 's3') bucket = await prepareS3TestBucket(`http://127.0.0.1:${port}`);
     await writeFile(join(root, 'profile.json'), JSON.stringify({ root, origin: `http://127.0.0.1:${port}`, syncProvider: convex ? 'convex' : 'sqlite', storageProvider, providers }));
     const watch = process.argv.includes('--watch');
-    const command = billing && process.argv.includes('--build') ? ['bun', 'run', 'build']
+    const command = process.argv.includes('--build') ? ['bun', 'run', 'build']
         : watch ? ['bun', 'run', 'dev', '--host', '127.0.0.1', '--port', String(port)]
-        : ['bunx', 'playwright', 'test', ...(billing ? ['tests/e2e/hosted-billing.spec.ts'] : ['tests/e2e/or3-cloud-auth.spec.ts', '--grep', 'workspace cloud profile']), '--workers=1', '--reporter=line', '--trace=on', '--output', join(root, 'test-results')];
+        : ['bunx', 'playwright', 'test', ...(billing ? ['tests/e2e/hosted-billing.spec.ts'] : ['tests/e2e/or3-cloud-auth.spec.ts', '--grep', 'workspace cloud profile']), ...(grep ? ['--grep', grep] : []), '--workers=1', '--reporter=line', '--trace=on', '--output', join(root, 'test-results')];
     if (watch) console.log(`Disposable cloud Chrome profile: http://127.0.0.1:${port}/`);
     const child = Bun.spawn(command, {
         cwd: root, stdout: 'inherit', stderr: 'inherit', env: {

@@ -45,6 +45,169 @@ describe('optional hosted billing', () => {
     });
     afterEach(() => { vi.restoreAllMocks(); store.close(); rmSync(root, { recursive: true, force: true }); });
 
+    it('warns when the configured bootstrap price differs from the saved current offer', () => {
+        const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        new BillingService(store, stripe, { ...config, priceId: 'price_different' });
+        expect(warning).toHaveBeenCalledWith(expect.stringContaining('OR3_BILLING_STRIPE_PRICE_ID'));
+        expect(store.currentOffer()?.priceId).toBe('price_year');
+    });
+
+    // Offer failure inventory: retiring a price must not erase paid access;
+    // unknown/multi-item prices hold for review; a new current offer cannot
+    // rewrite old trial promises; stale/replayed/audit-failed changes are atomic.
+    async function nextOffer(operationId = 'offer-next', expectedRevision = store.offers().revision) {
+        vi.spyOn(stripe.prices, 'retrieve').mockResolvedValue({ id: 'price_next', active: true, currency: 'usd', unit_amount: 6000,
+            type: 'recurring', billing_scheme: 'per_unit', recurring: { interval: 'year', interval_count: 1, usage_type: 'licensed' } } as never);
+        return service.changeOffer({ operationId, actor: 'admin', reason: 'New annual offer', expectedRevision,
+            command: { kind: 'create_current', priceId: 'price_next', amountCents: 6000, paidStorageGb: 75, trialStorageGb: 2, trialDays: 14 } });
+    }
+
+    it('recognizes historical invoices and preserves old trials after changing the checkout offer', async () => {
+        await customer();
+        const oldTrial = store.account('bob').trial_ends_at;
+        const original = subscription();
+        vi.spyOn(stripe.subscriptions, 'list').mockResolvedValue({ data: [original], has_more: false } as never);
+        await service.refresh('alice');
+        await nextOffer();
+        expect((await service.refresh('alice'))).toMatchObject({ allowed: true, paidUntil: original.items.data[0]!.current_period_end * 1000, storageLimitBytes: 50_000_000_000, paidStorageLimitBytes: 50_000_000_000, offer: { amountCents: 4000, paidStorageGb: 50 } });
+        expect(store.status('bob')).toMatchObject({ trialEndsAt: oldTrial, storageLimitBytes: 1_000_000_000 });
+        const now = Date.now();
+        store.claimTrial('new-trial', 'new@example.test', '192.0.2.10', now);
+        expect(store.status('new-trial', now)).toMatchObject({ trialEndsAt: now + 14 * 86400000, storageLimitBytes: 2_000_000_000 });
+        expect(store.offers().items.filter(offer => offer.status === 'current')).toHaveLength(1);
+        const oldOffer = store.offers().items.find(offer => offer.priceId === 'price_year')!;
+        await service.changeOffer({ operationId: 'retire-old', actor: 'admin', reason: 'Retired from sale', expectedRevision: store.offers().revision,
+            command: { kind: 'retire', offerId: oldOffer.id } });
+        expect((await service.refresh('alice')).allowed).toBe(true);
+    });
+
+    it('freezes the allowance promised by a support trial for a never-trialed account', async () => {
+        const account = store.account('denied-with-extension');
+        await service.supportCommand(account.user_id, { operationId: 'trial-support', actor: 'admin', reason: 'Restore denied trial access', expectedRevision: account.admin_revision,
+            command: { kind: 'extend_trial', expiresAt: Date.now() + 7 * 86_400_000 } });
+        expect(store.status(account.user_id).storageLimitBytes).toBe(1_000_000_000);
+        await nextOffer();
+        expect(store.status(account.user_id)).toMatchObject({ state: 'trial', source: 'support_trial', storageLimitBytes: 1_000_000_000, trialEndsAt: 0 });
+    });
+
+    it.each(['unknown', 'multiple'])('holds %s price matches without erasing confirmed payment facts', async kind => {
+        await customer();
+        const current = subscription();
+        vi.spyOn(stripe.subscriptions, 'list').mockResolvedValue({ data: [current], has_more: false } as never);
+        const paid = await service.refresh('alice');
+        if (kind === 'unknown') current.items.data[0]!.price.id = 'price_unrecognized';
+        else current.items.data.push({ ...current.items.data[0]!, id: 'si_second' });
+        const result = await service.refresh('alice');
+        expect(result).toMatchObject({ allowed: false, state: 'review', paidUntil: paid.paidUntil });
+        expect(store.openReviewIds('alice')).toHaveLength(1);
+    });
+
+    it('allows an unknown-price review to be resolved after the subscription is canceled', async () => {
+        await customer();
+        const current = subscription();
+        current.items.data[0]!.price.id = 'price_unrecognized';
+        vi.spyOn(stripe.subscriptions, 'list').mockResolvedValue({ data: [current], has_more: false } as never);
+        await service.refresh('alice');
+        current.status = 'canceled';
+        await service.refresh('alice');
+        const account = store.account('alice');
+        await expect(service.resolveReviews('alice', { operationId: 'resolve-canceled', actor: 'admin', reason: 'Canceled invalid subscription', expectedRevision: account.admin_revision, reviewIds: store.openReviewIds('alice') })).resolves.toMatchObject({ outcome: 'resolved' });
+    });
+
+    it('replaces an expired checkout when its historical price is archived', async () => {
+        await customer();
+        const old = store.currentOffer()!;
+        await nextOffer();
+        await store.exclusive('alice', async token => store.update('alice', token, { checkout_attempt: 'old-attempt', checkout_session_id: 'cs_old', checkout_offer_id: old.id }));
+        vi.spyOn(stripe.prices, 'retrieve').mockImplementation(async id => ({ active: id !== old.priceId, currency: 'usd', unit_amount: 6000, type: 'recurring', billing_scheme: 'per_unit', recurring: { interval: 'year', interval_count: 1, usage_type: 'licensed' } }) as never);
+        vi.spyOn(stripe.subscriptions, 'list').mockResolvedValue({ data: [], has_more: false } as never);
+        vi.spyOn(stripe.checkout.sessions, 'retrieve').mockResolvedValue({ id: 'cs_old', status: 'expired' } as never);
+        vi.spyOn(stripe.checkout.sessions, 'create').mockResolvedValue({ id: 'cs_new', url: 'https://checkout.stripe.com/new' } as never);
+        await expect(service.checkout('alice')).resolves.toBe('https://checkout.stripe.com/new');
+    });
+
+    // Saved attempt without a recorded session (the create response was lost):
+    // - Stripe may already hold a session under its key, so the exact request is replayed first, even after an offer change;
+    // - only a refused replay (for example an archived price) proves no session exists and starts a current-offer attempt;
+    // - a transient or idempotency failure keeps the attempt, so a later retry still replays the same key.
+    describe('checkout attempt without a recorded session', () => {
+        const priceFor = (archived: string) => vi.spyOn(stripe.prices, 'retrieve').mockImplementation(async id => ({ active: id !== archived, currency: 'usd', unit_amount: id === 'price_year' ? 4000 : 6000,
+            type: 'recurring', billing_scheme: 'per_unit', recurring: { interval: 'year', interval_count: 1, usage_type: 'licensed' } }) as never);
+        async function lostAttempt() {
+            await customer();
+            const old = store.currentOffer()!;
+            await nextOffer();
+            await store.exclusive('alice', async token => store.update('alice', token, { checkout_attempt: 'lost-attempt', checkout_offer_id: old.id }));
+            vi.spyOn(stripe.subscriptions, 'list').mockResolvedValue({ data: [], has_more: false } as never);
+            return old;
+        }
+        const refused = () => new Stripe.errors.StripeInvalidRequestError({ message: 'The price specified is inactive.', type: 'invalid_request_error' });
+
+        it('replays a session Stripe already created instead of creating another', async () => {
+            const old = await lostAttempt();
+            priceFor(old.priceId);
+            const create = vi.spyOn(stripe.checkout.sessions, 'create').mockResolvedValue({ id: 'cs_lost', url: 'https://checkout.stripe.com/lost' } as never);
+            await expect(service.checkout('alice')).resolves.toBe('https://checkout.stripe.com/lost');
+            expect(create).toHaveBeenCalledOnce();
+            expect(create.mock.calls[0]?.[0]?.line_items).toEqual([{ price: old.priceId, quantity: 1 }]);
+            expect(create.mock.calls[0]?.[1]?.idempotencyKey).toBe('or3-checkout-lost-attempt');
+            expect(store.account('alice')).toMatchObject({ checkout_attempt: 'lost-attempt', checkout_session_id: 'cs_lost', checkout_offer_id: old.id });
+        });
+
+        it('starts a current-offer attempt when Stripe refuses the archived price', async () => {
+            const old = await lostAttempt();
+            priceFor(old.priceId);
+            const create = vi.spyOn(stripe.checkout.sessions, 'create').mockRejectedValueOnce(refused())
+                .mockResolvedValue({ id: 'cs_new', url: 'https://checkout.stripe.com/new' } as never);
+            await expect(service.checkout('alice')).resolves.toBe('https://checkout.stripe.com/new');
+            expect(create).toHaveBeenCalledTimes(2);
+            expect(create.mock.calls[1]?.[0]?.line_items).toEqual([{ price: 'price_next', quantity: 1 }]);
+            expect(create.mock.calls[1]?.[1]?.idempotencyKey).not.toBe('or3-checkout-lost-attempt');
+            expect(store.account('alice')).toMatchObject({ checkout_session_id: 'cs_new', checkout_offer_id: store.currentOffer()!.id });
+        });
+
+        it('keeps the attempt after a transient or idempotency failure', async () => {
+            const old = await lostAttempt();
+            priceFor(old.priceId);
+            const create = vi.spyOn(stripe.checkout.sessions, 'create')
+                .mockRejectedValueOnce(new Stripe.errors.StripeConnectionError({ message: 'socket hang up' }))
+                .mockRejectedValueOnce(new Stripe.errors.StripeIdempotencyError({ message: 'Keys for idempotent requests can only be used with the same parameters.', type: 'idempotency_error' }));
+            await expect(service.checkout('alice')).rejects.toThrow('socket hang up');
+            await expect(service.checkout('alice')).rejects.toThrow('same parameters');
+            expect(create.mock.calls.map(call => call[1]?.idempotencyKey)).toEqual(['or3-checkout-lost-attempt', 'or3-checkout-lost-attempt']);
+            expect(store.account('alice')).toMatchObject({ checkout_attempt: 'lost-attempt', checkout_session_id: null, checkout_offer_id: old.id });
+        });
+    });
+
+    it('changes offers once and rejects stale writes and audit failures atomically', async () => {
+        const revision = store.offers().revision;
+        await nextOffer('unique-offer', revision);
+        const current = store.offers();
+        await nextOffer('unique-offer', revision);
+        expect(store.offers()).toEqual(current);
+        await expect(service.changeOffer({ operationId: 'stale', actor: 'admin', reason: 'Retire', expectedRevision: revision,
+            command: { kind: 'retire', offerId: current.items.find(offer => offer.status !== 'current')!.id } })).rejects.toMatchObject({ code: 'stale_revision' });
+        store.db.exec("CREATE TRIGGER fail_offer_audit BEFORE INSERT ON billing_admin_actions BEGIN SELECT RAISE(ABORT, 'audit unavailable'); END");
+        await expect(service.changeOffer({ operationId: 'audit-failed', actor: 'admin', reason: 'Retire', expectedRevision: current.revision,
+            command: { kind: 'retire', offerId: current.items.find(offer => offer.status !== 'current')!.id } })).rejects.toThrow('audit unavailable');
+        expect(store.offers()).toEqual(current);
+    });
+
+    it('audits allowance changes atomically and refuses stale or reused commands', () => {
+        const initial = store.settings();
+        const input = { operationId: 'allowance-change', actor: 'admin', reason: 'Measured capacity increase', settings: { ...initial, paidStorageGb: 75 } };
+        service.changeAllowances(input);
+        expect(store.action(input.operationId)).toMatchObject({ kind: 'allowance_change', reason: input.reason, after: { paidStorageGb: 75 } });
+        expect(service.changeAllowances(input)).toEqual(store.settings());
+        expect(() => service.changeAllowances({ ...input, settings: { ...input.settings, paidStorageGb: 76 } })).toThrow(/operation ID/);
+        expect(() => service.changeAllowances({ ...input, operationId: 'stale-allowance' })).toThrow(/changed/);
+        const before = store.offers();
+        store.db.exec("CREATE TRIGGER fail_allowance_audit BEFORE INSERT ON billing_admin_actions BEGIN SELECT RAISE(ABORT, 'audit unavailable'); END");
+        expect(() => service.changeAllowances({ ...input, operationId: 'allowance-audit-failure', settings: { ...store.settings(), paidStorageGb: 80 } })).toThrow('audit unavailable');
+        expect(store.offers()).toEqual(before);
+        expect(store.settings().paidStorageGb).toBe(75);
+    });
+
     it('starts one durable seven-day trial per canonical account, independent of workspace and restart', () => {
         const start = 1_800_000_000_000;
         store.claimTrial('charlie', 'charlie@example.test', '192.0.2.3', start);

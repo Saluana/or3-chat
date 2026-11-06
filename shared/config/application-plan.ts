@@ -32,6 +32,11 @@ export function buildApplicationPlan(input: {
     }
     const requirements = requiredProviderModules(or3CloudConfig, env);
     const errors: string[] = [];
+    const storageCapacityWarningPercent = Number(env.OR3_STORAGE_CAPACITY_WARNING_PERCENT?.trim() || 85);
+    const storageCapacityCriticalPercent = Number(env.OR3_STORAGE_CAPACITY_CRITICAL_PERCENT?.trim() || 95);
+    if (![storageCapacityWarningPercent, storageCapacityCriticalPercent].every(value => Number.isInteger(value) && value >= 1 && value <= 100) || storageCapacityWarningPercent >= storageCapacityCriticalPercent) {
+        errors.push('Storage capacity thresholds require whole percentages from 1–100, with warning below critical.');
+    }
     for (const { moduleId, setting } of requirements) {
         const result = input.modules.get(moduleId);
         if (!result?.ok)
@@ -370,6 +375,8 @@ export function buildApplicationPlan(input: {
                 or3CloudConfig.backgroundStreaming?.encryptionKey ?? '',
         },
         public: {
+            storageCapacityWarningPercent,
+            storageCapacityCriticalPercent,
             appVersion: env.npm_package_version || '0.1.0',
             pluginDevelopment:
                 env.NODE_ENV !== 'production' &&

@@ -52,6 +52,7 @@
                     <dt class="opacity-70">Server space available</dt>
                     <dd class="font-medium tabular-nums">{{ formatBytes(storageUsage.serverAvailable) }}</dd>
                 </dl>
+                <p class="text-sm" role="status">{{ capacityMessage }}</p>
                 <details class="border-t border-[var(--md-outline-variant)] pt-3">
                     <summary class="w-fit cursor-pointer rounded text-sm opacity-70 focus-visible:outline-2 focus-visible:outline-offset-4">Show JSON</summary>
                     <pre class="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-[var(--md-surface-container-low)] p-3 text-xs">{{ JSON.stringify(result.value, null, 2) }}</pre>
@@ -78,6 +79,8 @@ const props = defineProps<{
     actions: Action[];
     isOwner: boolean;
     runningActionId?: string | null;
+    warningPercent?: number;
+    criticalPercent?: number;
     result?: { label: string; value: unknown; storageUsage?: boolean } | null;
 }>();
 
@@ -118,6 +121,18 @@ const storageUsage = computed(() => {
         incomplete: active === null || trash === null || disk === null,
         serverAvailable: byteCount(record(value?.volume)?.availableBytes),
     };
+});
+
+const capacityMessage = computed(() => {
+    const volume = record(record(props.result?.value)?.volume);
+    const total = byteCount(volume?.totalBytes);
+    const available = byteCount(volume?.availableBytes);
+    if (total === null || total === 0 || available === null || available > total) return 'Capacity unknown. No complete volume capacity observation is available.';
+    const used = (total - available) / total * 100;
+    const warning = props.warningPercent ?? 85;
+    const critical = props.criticalPercent ?? 95;
+    const state = used >= critical ? 'Capacity critical' : used >= warning ? 'Capacity warning' : 'Capacity below warning threshold';
+    return `${state}: ${Math.round(used)}% of the host volume used (warning ${warning}%, critical ${critical}%). Includes other data on this volume; observation is not live.`;
 });
 
 function formatBytes(bytes: number): string {

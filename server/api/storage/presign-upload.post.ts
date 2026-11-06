@@ -25,6 +25,7 @@ import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isStorageEnabled } from '../../utils/storage/is-storage-enabled';
 import { getActiveStorageGatewayAdapter } from '../../storage/gateway/registry';
 import { readFilePolicy } from '../../utils/storage/file-policy';
+import { requireNotPaused } from '../../admin/pauses';
 import { DEFAULT_STORAGE_ALLOWED_MIME_TYPES } from '~~/shared/config/constants';
 import {
     checkSyncRateLimit,
@@ -159,6 +160,9 @@ export default defineEventHandler(async (event) => {
     if (classifyFileKind(requestedMime) === 'file') {
         requireFileKindCapability(body.data.file_kind_capability);
     }
+
+    // Operator pause of new uploads. Downloads and already issued upload links are unaffected.
+    await requireNotPaused(event, 'uploads');
 
     recordSyncRequest(userId, 'storage:upload');
 

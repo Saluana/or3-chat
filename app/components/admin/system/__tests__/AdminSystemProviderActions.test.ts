@@ -41,3 +41,18 @@ it('renders S3 object usage without inventing local disk capacity', () => {
     expect(wrapper.text()).not.toContain('Files on disk');
     expect(wrapper.text()).not.toContain('Server space available');
 });
+
+// A workspace's apparent bytes cannot stand in for host capacity. Missing or
+// impossible capacity observations must stay unknown, never 0% or healthy.
+it('compares configured warning thresholds only with measured volume capacity', async () => {
+    const wrapper = mount(AdminSystemProviderActions, { props: {
+        actions: [{ id: 'storage.usage', label: 'Storage usage', kind: 'storage', provider: 'fs' }], isOwner: true,
+        warningPercent: 80, criticalPercent: 90,
+        result: { label: 'Storage usage', storageUsage: true, value: { volume: { totalBytes: 1000, availableBytes: 90 } } },
+    }, global: { stubs: { UButton: { template: '<button><slot /></button>' } } } });
+    expect(wrapper.text()).toContain('Capacity critical');
+    expect(wrapper.text()).toContain('91%');
+    await wrapper.setProps({ result: { label: 'Storage usage', storageUsage: true, value: { volume: null } } });
+    expect(wrapper.text()).toContain('Capacity unknown');
+    expect(wrapper.text()).not.toContain('Capacity critical');
+});

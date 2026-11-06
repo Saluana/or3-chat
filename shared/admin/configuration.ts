@@ -1,5 +1,7 @@
 /** Public app settings that can be applied to each newly loaded page. */
 export const siteSettingPaths = {
+    OR3_STORAGE_CAPACITY_WARNING_PERCENT: ['storageCapacityWarningPercent'],
+    OR3_STORAGE_CAPACITY_CRITICAL_PERCENT: ['storageCapacityCriticalPercent'],
     OR3_CHAT_TOOL_ITERATIONS: ['chatToolIterations'],
     OR3_CHAT_GENERATED_IMAGES: ['chatGeneratedImages'],
     OR3_SITE_NAME: ['or3', 'site', 'name'],

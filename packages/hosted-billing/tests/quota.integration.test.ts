@@ -115,4 +115,72 @@ describe('account-wide billing quotas with the installed SQLite provider', () =>
         await expect(adapter.presignUpload(event(bob, third), input(third, 'c', 1_000_000_000))).resolves.toHaveProperty('intentId');
         await expect(adapter.presignUpload(event(alice, second, 'viewer'), input(second, 'd', 1))).rejects.toMatchObject({ statusCode: 403 });
     });
+
+    /*
+     * Stage B failure inventory (task 5.1), written before the breakdown/explanation code:
+     * - the breakdown total must equal the admission total for the same snapshot, including
+     *   active and expired reservations, without double counting a same-hash retry;
+     * - retained bytes in a deleted workspace stay charged and are reported separately;
+     * - a smaller workspace cap is reported as the controlling constraint, not the account allowance;
+     * - a refused upload and the explanation must name the same controlling constraint;
+     * - lowering a limit refuses further admission but never deletes files;
+     * - unreadable accounting is unknown (503 / null), never zero.
+     */
+    it('breaks charged storage down from one snapshot that matches admission', async () => {
+        const committed = input(first, 'a', 300_000_000);
+        const upload = await adapter.presignUpload(event(alice, first), committed);
+        await sync.consumeUploadIntent(event(alice, first), { ...committed, intentId: upload.intentId!, storageId: 'committed' });
+        const expired = await adapter.presignUpload(event(alice, second), input(second, 'b', 200_000_000));
+        getRawDb().prepare("UPDATE upload_intents SET status = 'expired' WHERE id = ?").run(expired.intentId);
+        await adapter.presignUpload(event(alice, second), input(second, 'c', 100_000_000));
+        // Retrying the same hash in the same workspace is not charged twice.
+        await adapter.presignUpload(event(alice, second), input(second, 'c', 100_000_000));
+        getRawDb().prepare('UPDATE workspaces SET deleted = 1 WHERE id = ?').run(first);
+        const breakdown = quota.breakdown(alice);
+        expect(breakdown).toMatchObject({
+            chargedBytes: 600_000_000, retainedBytes: 300_000_000, reservedBytes: 300_000_000,
+            expiredReservedBytes: 200_000_000, activeReservedBytes: 100_000_000, deletedWorkspaceBytes: 300_000_000,
+        });
+        expect(breakdown.chargedBytes).toBe(quota.usedBytes(alice));
+        expect(breakdown.workspaces.find(workspace => workspace.workspaceId === first)).toMatchObject({ deleted: true, chargedBytes: 300_000_000 });
+        expect(breakdown.workspaces.reduce((sum, workspace) => sum + workspace.chargedBytes, 0)).toBe(breakdown.chargedBytes);
+    });
+
+    it('explains the same controlling constraint that admission enforces', async () => {
+        const accountRefusal = await adapter.presignUpload(event(alice, first), input(first, 'a', 1_200_000_000)).catch(error => error);
+        expect(accountRefusal).toMatchObject({ statusCode: 413, data: { code: 'storage_quota_exceeded', constraint: 'account_allowance' } });
+        const preview = quota.explain(alice, { workspaceId: first, sizeBytes: 1_200_000_000, hash: 'a'.repeat(64) });
+        expect(preview.controlling).toBe('account_allowance');
+        // A smaller workspace cap controls even though the account has room.
+        const capped = quota.explain(alice, { workspaceId: first, sizeBytes: 300_000_000, hash: 'b'.repeat(64), workspaceCapBytes: 200_000_000 });
+        expect(capped.controlling).toBe('workspace_cap');
+        expect(capped.checks.find(check => check.check === 'account_allowance')).toMatchObject({ status: 'pass' });
+        expect(quota.explain(alice, { workspaceId: first }).controlling).toBeNull();
+        expect(quota.explain(alice, { workspaceId: first }).checks.find(check => check.check === 'owner_entitlement')).toMatchObject({ status: 'pass' });
+    });
+
+    it('keeps unstarted-account explanations read-only', () => {
+        expect(store.findAccount('unstarted')).toBeNull();
+        expect(quota.explain('unstarted', { workspaceId: first }).checks[0]).toMatchObject({ check: 'owner_entitlement', status: 'fail' });
+        expect(store.findAccount('unstarted')).toBeNull();
+    });
+
+    it('reports the same deleted workspace charge in account and deployment views', async () => {
+        await adapter.presignUpload(event(alice, first), input(first, 'd', 123_000_000));
+        getRawDb().prepare('UPDATE workspaces SET deleted = 1 WHERE id = ?').run(first);
+        expect(quota.breakdown(alice).deletedWorkspaceBytes).toBe(123_000_000);
+        const summary = quota.deploymentSummary();
+        expect(summary.deletedWorkspaceBytes).toBe(123_000_000);
+        // The breakdown parts never overlap: a reservation in a deleted workspace is
+        // neither an active-workspace reservation nor subtracted from active files.
+        expect(summary).toMatchObject({ activeWorkspaceRetainedBytes: 0, activeWorkspaceReservedBytes: 0 });
+        expect(summary.activeWorkspaceRetainedBytes + summary.activeWorkspaceReservedBytes + summary.deletedWorkspaceBytes).toBe(summary.chargedBytes);
+    });
+
+    it('reports unreadable accounting as unknown, never zero', () => {
+        getRawDb().exec('DROP TRIGGER IF EXISTS retained_storage_insert');
+        getRawDb().exec('DROP TABLE storage_usage');
+        expect(() => quota.breakdown(alice)).toThrow();
+        expect(quota.explain(alice, { workspaceId: first, sizeBytes: 1 }).checks.find(check => check.check === 'account_allowance')).toMatchObject({ status: 'unknown' });
+    });
 });

@@ -127,7 +127,9 @@
                                 :class="variant === 'features' ? 'sm:flex sm:items-center sm:justify-between sm:gap-6' : ''"
                             >
                                 <div :class="variant === 'features' ? 'min-w-0 flex-1' : 'mb-2'">
-                                    <div class="flex flex-wrap items-center gap-2 text-sm font-medium">{{ entry.label }} <UBadge v-if="variant === 'advanced'" size="xs" color="neutral" variant="subtle">{{ applicationLabels[entry.application] }}</UBadge></div>
+                                    <div class="flex flex-wrap items-center gap-2 text-sm font-medium">{{ entry.label }} <UBadge v-if="variant === 'advanced'" size="xs" color="neutral" variant="subtle">{{ applicationLabels[entry.application] }}</UBadge><UBadge v-if="variant === 'advanced' && entry.source" size="xs" :color="entry.source === 'enforced' ? 'warning' : 'neutral'" variant="outline">{{ sourceLabels[entry.source] }}</UBadge></div>
+                                    <p v-if="variant === 'advanced' && entry.lockedReason" class="text-xs opacity-70">{{ entry.lockedReason }}</p>
+                                    <p v-else-if="variant === 'advanced' && entry.source === 'default' && entry.value === null" class="text-xs opacity-70">Not set: the built-in default applies.</p>
                                     <p :id="`help-${entry.key}`" class="mt-1 text-sm leading-relaxed opacity-70">
                                         {{ entry.description }}
                                     </p>
@@ -284,7 +286,8 @@ let restoredDraft = false;
 const isOwner = computed(() => statusData.value?.session?.role === 'owner');
 const pending = computed(() => !configData.value && configFetchStatus.value !== 'error');
 const hasEditableEntries = computed(() => entries.value.some(entry => entry.editable));
-const applicationLabels = { runtime: 'Applies immediately', restart: 'Restart required', build: 'New build required', unsupported: 'View only' };
+const applicationLabels = { runtime: 'Applies immediately', restart: 'Restart required', build: 'New build required', migration: 'Data migration required', unsupported: 'View only' };
+const sourceLabels = { site: 'Saved site setting', environment: 'Environment', default: 'Default', enforced: 'Enforced by hosted billing' };
 
 const booleanItems: Array<{ label: string; value: string }> = [
     { label: 'Enabled', value: 'true' },

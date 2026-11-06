@@ -20,9 +20,12 @@ onScopeDispose(() => { if (import.meta.client) document.documentElement.style.re
 const message = computed(() => {
     if (!status.value) return error.value;
     if (status.value.state === 'trial') {
-        const days = Math.max(1, Math.ceil((status.value.trialEndsAt - Date.now()) / 86_400_000));
+        // A support extension ends at accessExpiresAt; the original trial deadline is unchanged.
+        const days = Math.max(1, Math.ceil(((status.value.accessExpiresAt || status.value.trialEndsAt) - Date.now()) / 86_400_000));
         return `${days} ${days === 1 ? 'day' : 'days'} left in your Cloud trial`;
     }
+    if (status.value.state === 'grant') return `Complimentary Cloud access until ${new Date(status.value.accessExpiresAt ?? 0).toLocaleDateString()}`;
+    if (status.value.state === 'paused') return 'Cloud is paused for your account. Contact support. Your work stays saved on this device.';
     if (status.value.state === 'active') return status.value.cancelAtPeriodEnd ? 'Your plan ends at the end of this billing period' : 'Your hosted plan is active';
     return status.value.state === 'review' ? 'Your billing account needs review. Contact support.' : 'Free Local · Saved on this device. Add Cloud to sync.';
 });
