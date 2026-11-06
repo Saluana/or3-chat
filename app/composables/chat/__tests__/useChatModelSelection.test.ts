@@ -14,6 +14,7 @@ const modelStore = vi.hoisted(() => ({
         | ReturnType<typeof ref<OpenRouterModel[]>>
         | undefined,
     policy: undefined as Ref<ReturnType<typeof emptyWorkspaceModels>> | undefined,
+    stored: undefined as Ref<string | null | undefined> | undefined,
     fetchModels: vi.fn(),
     getFavoriteModels: vi.fn(),
 }));
@@ -39,7 +40,7 @@ vi.mock('../useAiSettings', () => ({
 }));
 
 vi.mock('@vueuse/core', () => ({
-    useLocalStorage: (_key: string, defaultValue: string) => ref(defaultValue),
+    useLocalStorage: (_key: string, defaultValue: string) => modelStore.stored ?? ref(defaultValue),
 }));
 
 // Real KV writes need the hook engine; the hooks themselves are not under test here.
@@ -76,6 +77,7 @@ function mountModelSelection(onChange = vi.fn()) {
 }
 
 beforeEach(() => {
+    modelStore.stored = undefined;
     modelStore.policy = ref(emptyWorkspaceModels());
     modelStore.catalog = ref([]);
     modelStore.favoriteModels = ref([]);
@@ -84,6 +86,13 @@ beforeEach(() => {
 });
 
 describe('useChatModelSelection', () => {
+    it.each([null, undefined])('uses the default model when saved selection is %s', async value => {
+        modelStore.stored = ref(value);
+        const { selection, wrapper } = mountModelSelection();
+        await selection.useInheritedModel();
+        expect(selection.selectedModel.value).toBe('~openai/gpt-luna-latest');
+        wrapper.unmount();
+    });
 
     it('propagates the effective route and variant-only changes without synthetic thinking suffixes', async () => {
         const onChange = vi.fn();
