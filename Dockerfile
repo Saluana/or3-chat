@@ -44,7 +44,7 @@ RUN npm install --global npm@11.6.2
 # but none of the OR3 application output or runtime data. It is published as a
 # separately digest-pinned image and only the narrow operator service uses it.
 FROM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS dashboard-operator
-RUN --mount=from=native-tools,source=/bin/busybox,target=/patch-tool ["/patch-tool", "sh", "-ec", "/patch-tool rm -f /usr/lib/*/libz.so.1.2.13 /usr/lib/*/libz.so.1.3.1"]
+RUN --mount=from=native-tools,source=/bin/busybox,target=/busybox ["/busybox", "sh", "-ec", "/busybox rm -f /usr/lib/*/libz.so.1.2.13 /usr/lib/*/libz.so.1.3.1"]
 COPY --from=patched-zlib /zlib/root/ /
 COPY --from=patched-zlib /zlib/operator/ /
 COPY --from=operator-npm /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
@@ -148,7 +148,7 @@ FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf100
 FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:78f07ef1b5ea71ad7c055df15d0dd8997f2d288f9158623c4d4ae3d765b7d50d AS runtime
 
 USER 0:0
-RUN --mount=from=native-tools,source=/bin/busybox,target=/patch-tool ["/patch-tool", "sh", "-ec", "/patch-tool rm -f /usr/lib/*/libz.so.1.3.1"]
+RUN --mount=from=native-tools,source=/bin/busybox,target=/busybox ["/busybox", "sh", "-ec", "/busybox rm -f /usr/lib/*/libz.so.1.3.1"]
 COPY --from=patched-zlib /zlib/root/ /
 COPY --from=patched-zlib /zlib/distroless/ /
 
