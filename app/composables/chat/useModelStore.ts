@@ -458,8 +458,11 @@ export function useModelStore() {
     /** Capture validated catalog facts. This prepares metadata only, never a chat turn. */
     async function resolveContextModel(selectedModelId: string, opts?: { signal?: AbortSignal }): Promise<ContextModelReadiness> {
         const signal = opts?.signal;
+        const db = getDb();
+        const generation = getWorkspaceGeneration();
         const checkCanceled = () => {
-            if (signal?.aborted) throw new DOMException('Model preparation canceled.', 'AbortError');
+            if (signal?.aborted || db !== getDb() || generation !== getWorkspaceGeneration())
+                throw new DOMException('Model preparation canceled.', 'AbortError');
         };
         checkCanceled();
         const lookupId = openRouterCatalogLookupId(selectedModelId);
@@ -490,6 +493,11 @@ export function useModelStore() {
         let known = lookup();
         if (known) return known;
         try {
+            // Workspace changes clear memory. A send must also restore saved
+            // model metadata when the picker has not mounted again yet.
+            await waitForCatalog(getFavoriteModels(), signal);
+            checkCanceled(); known = lookup();
+            if (known) return known;
             await waitForCatalog(fetchModels(), signal);
             checkCanceled(); known = lookup();
             if (known) return known;

@@ -338,16 +338,16 @@ if (import.meta.main) {
     const limits = {
         totalJavascriptRawBytes: positiveNumber(
             process.env.OR3_PERF_MAX_TOTAL_JS_BYTES,
-            // Same-host builds measured 13,899,039 bytes at 0.1.93 and
-            // 13,910,387 after delegation and recovery changes. Allow the
-            // measured feature cost while keeping the other limits unchanged.
-            13_915_000
+            // Same-host fixed-profile builds measured 13,912,684 at 0.1.100
+            // and 13,950,347 with model controls, upload feedback and recovery
+            // fixes. Account for that measured cost; startup/chunk caps stay fixed.
+            13_960_000
         ),
         totalJavascriptGzipBytes: positiveNumber(
             process.env.OR3_PERF_MAX_TOTAL_JS_GZIP_BYTES,
-            // Same-host fixed-profile builds measured 4,456,709 bytes at
-            // 0.1.98 and 4,459,714 after the dashboard and AI router changes.
-            4_470_000
+            // The same builds measured 4,459,105 and 4,471,075 compressed
+            // bytes respectively (Linux CI: 4,471,195).
+            4_480_000
         ),
         largestJavascriptRawBytes: positiveNumber(
             process.env.OR3_PERF_MAX_CHUNK_JS_BYTES,

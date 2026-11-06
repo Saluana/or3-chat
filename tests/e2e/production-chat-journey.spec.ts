@@ -3156,7 +3156,8 @@ test('PageShell compaction summary reload and original landmark navigation', asy
     if (await card.locator('details').getAttribute('open') === null) await card.locator('summary').click();
     await card.getByRole('button', { name: 'Preserve the exact source path', exact: true }).click();
     await expect(anchor).toBeVisible();
-    await anchor.locator('.tool-call-indicator summary').click();
+    await anchor.locator('summary.tool-call-indicator-summary').click();
+    await anchor.getByText('Technical details', { exact: true }).click();
     await expect(anchor.getByText('Canonical tool evidence: preserve app/example.ts exactly.', { exact: true })).toBeVisible();
     expect(await readRows()).toEqual(saved);
     await expect(page.getByRole('textbox', { name: 'Message input' })).toHaveText('Keep this unsent source draft.');

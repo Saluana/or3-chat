@@ -46,6 +46,13 @@ async function recovered(page: Page) {
     await expect(page.locator('[data-msg-id]').filter({ hasText: 'Recovery completed.' })).toBeVisible();
     expect(exceptions.get(page)).toEqual([]);
 }
+async function expectToolDetail(page: Page, pattern: RegExp) {
+    await page.locator('summary.tool-call-indicator-summary').click();
+    const detail = page.locator('.tool-call-detail').filter({ hasText: pattern });
+    await expect(detail).toHaveCount(1);
+    await detail.getByText('Technical details', { exact: true }).click();
+    await expect(detail.locator('.tool-call-detail-value').filter({ hasText: pattern })).toBeVisible();
+}
 async function snapshot(page: Page) {
     return JSON.parse(await page.locator('[data-fixture-snapshot]').textContent() ?? '{}') as {
         threadId: string;
@@ -81,8 +88,7 @@ for (const fixture of priorityCases) test(fixture.name, async ({ page }) => {
         expect(result.generationId).toEqual(expect.any(String));
     }
     if (fixture.pattern) {
-        await page.locator('.tool-call-indicator summary').click();
-        await expect(page.locator('.tool-call-indicator')).toContainText(fixture.pattern);
+        await expectToolDetail(page, fixture.pattern);
     }
     if (fixture.name.startsWith('3 ')) expect(stored.calls[0]?.outcome).toBe('timed_out');
     if (fixture.name.startsWith('8 ') || fixture.name.startsWith('9 ')) {
@@ -264,8 +270,7 @@ test('14 result database failure prevents continuation and recovers composer', a
     await expect(page.getByRole('button', { name: 'Stop generation', exact: true })).toHaveCount(0);
     expect(requests.get(page)).toHaveLength(1);
     expect((await snapshot(page)).results).toHaveLength(0);
-    await page.locator('.tool-call-indicator summary').click();
-    await expect(page.locator('.tool-call-indicator')).toContainText(/result could not be saved/);
+    await expectToolDetail(page, /result could not be saved/);
     expect((await snapshot(page)).calls[0]?.outcome).toBe('unresolved');
     expect((await snapshot(page)).calls[0]?.executionReceipt?.state).toBe('unresolved');
     await expect(page.locator('[data-msg-id]').filter({ hasText: 'Run fixture' })).toBeVisible();
@@ -311,8 +316,7 @@ test('15 reload restores success and failure without executing again', async ({ 
     const after = await snapshot(page);
     expect(after.executions).toEqual(before.executions);
     expect(after.results).toEqual(before.results);
-    await page.locator('.tool-call-indicator summary').click();
-    await expect(page.locator('.tool-call-indicator')).toContainText('deliberate fixture failure');
+    await expectToolDetail(page, /deliberate fixture failure/);
     await recovered(page);
 });
 

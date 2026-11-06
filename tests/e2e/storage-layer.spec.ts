@@ -270,7 +270,7 @@ test.describe('Storage Layer', () => {
         }, clientUrl);
         await item.getByRole('button', { name: /^More actions for/ }).click();
         await page.getByRole('menuitem', { name: 'Remove entry', exact: true }).click();
-        const dialog = page.getByRole('dialog', { name: kind === 'document' ? 'Remove document?' : 'Remove catalog entry?' });
+        const dialog = page.getByRole('dialog', { name: kind === 'document' ? 'Remove document?' : 'Remove from Files?' });
         await dialog.getByRole('button', { name: kind === 'document' ? 'Remove document' : 'Remove catalog entry', exact: true }).click();
         const alert = dialog.getByRole('alert');
         await expect(alert).toContainText('Could not remove item');
