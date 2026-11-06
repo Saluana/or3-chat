@@ -72,6 +72,26 @@ describe('existing catalog context readiness', () => {
             vi.unstubAllGlobals();
         }
     });
+    it('makes model choosers wait for the slower platform instead of using the partial catalog', async () => {
+        testRuntimeConfig.value.public.ssrAuthEnabled = true;
+        browserCache(Date.now());
+        const direct = sdkModelToLocal(sdkModel(32_000, '@openai/gpt-5.4-mini'));
+        let release!: (response: Response) => void;
+        vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { release = resolve; })));
+        try {
+            const store = useModelStore();
+            // The picker still publishes the first platform immediately.
+            expect((await store.fetchModels()).map(model => model.id)).toEqual(['catalog/model']);
+            let settled = false;
+            const complete = store.ensureCompleteCatalog().then(list => { settled = true; return list; });
+            await new Promise(resolve => setTimeout(resolve, 50));
+            expect(settled).toBe(false);
+            release(Response.json([direct]));
+            expect((await complete).map(model => model.id)).toEqual(['catalog/model', direct.id]);
+        } finally {
+            vi.unstubAllGlobals();
+        }
+    });
     it.each(['openai', 'openrouter'] as const)('prepares a ready %s model without waiting for the other platform', async platform => {
         testRuntimeConfig.value.public.ssrAuthEnabled = true;
         const id = platform === 'openai' ? '@openai/gpt-5.4-mini' : 'catalog/model';
