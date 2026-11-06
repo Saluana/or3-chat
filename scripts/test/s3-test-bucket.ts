@@ -6,6 +6,12 @@ import { join } from 'node:path';
 export async function prepareS3TestBucket(origin: string) {
     const required = ['ENDPOINT', 'REGION', 'BUCKET', 'ACCESS_KEY_ID', 'SECRET_ACCESS_KEY'];
     for (const key of required) if (!process.env[`OR3_STORAGE_S3_${key}`]?.trim()) throw new Error(`Missing OR3_STORAGE_S3_${key} for disposable S3 testing`);
+    // MinIO exposes server-wide CORS instead of the bucket CORS API. Only the
+    // explicitly configured disposable loopback server may use this mode.
+    const serverCors = process.env.OR3_S3_TEST_SERVER_CORS === 'true';
+    if (serverCors && !['127.0.0.1', 'localhost', '[::1]'].includes(new URL(process.env.OR3_STORAGE_S3_ENDPOINT!).hostname)) {
+        throw new Error('Preconfigured server CORS is restricted to a disposable loopback S3 fixture.');
+    }
     const require = createRequire(join(process.cwd(), 'node_modules/or3-provider-s3/package.json'));
     const { S3Client, GetBucketCorsCommand, PutBucketCorsCommand, DeleteBucketCorsCommand,
         ListObjectsV2Command, DeleteObjectsCommand } = require('@aws-sdk/client-s3');
@@ -46,12 +52,14 @@ export async function prepareS3TestBucket(origin: string) {
         }
     }
     try {
-        const rules = await readCors();
-        await client.send(new PutBucketCorsCommand({ Bucket: bucket, CORSConfiguration: { CORSRules: [...rules,
-            { ID: id, AllowedOrigins: [origin], AllowedMethods: ['GET', 'PUT', 'HEAD'],
-                AllowedHeaders: ['Content-Type', 'Content-MD5', 'x-amz-*'], ExposeHeaders: ['ETag', 'Content-Length'], MaxAgeSeconds: 300 },
-        ] } }));
-        corsInstalled = true;
+        if (!serverCors) {
+            const rules = await readCors();
+            await client.send(new PutBucketCorsCommand({ Bucket: bucket, CORSConfiguration: { CORSRules: [...rules,
+                { ID: id, AllowedOrigins: [origin], AllowedMethods: ['GET', 'PUT', 'HEAD'],
+                    AllowedHeaders: ['Content-Type', 'Content-MD5', 'x-amz-*'], ExposeHeaders: ['ETag', 'Content-Length'], MaxAgeSeconds: 300 },
+            ] } }));
+            corsInstalled = true;
+        }
         return { prefix, cleanup, env: { OR3_STORAGE_S3_KEY_PREFIX: prefix } };
     } catch (error) { client.destroy(); throw error; }
 }
