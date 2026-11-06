@@ -13,6 +13,8 @@ vi.mock('../../auth/can', () => ({ requireCan: (...args: unknown[]) => fixture.a
 vi.mock('../../utils/auth/is-ssr-auth-enabled', () => ({ isSsrAuthEnabled: () => fixture.cloud }));
 vi.mock('../registry', () => ({ getActiveSecretStore: () => fixture.config.secrets.provider ? fixture : null }));
 import { resolveOpenRouterCredential, openRouterCredentialOperation } from '../openrouter';
+import { openAiCredentialOperation, resolveOpenAiCredential } from '../openai';
+import { registerCloudAccessPolicy } from '../../cloud/access';
 const event = { context: {}, method: 'POST', node: { req: { headers: { host: 'chat.test', origin: 'http://chat.test', 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation', 'x-or3-openrouter-key': 'browser-key' } }, res: {} } } as unknown as H3Event;
 beforeEach(() => {
     vi.clearAllMocks(); fixture.cloud = true;
@@ -23,6 +25,25 @@ beforeEach(() => {
     fixture.put.mockResolvedValue({ ref: { id: 'opaque', revision: 1 }, state: 'available' });
 });
 describe('OpenRouter credential policy', () => {
+    it('requires personal AI credentials for a hosted BYOK policy even when instance keys are configured', async () => {
+        fixture.config.openaiApiKey = 'instance-openai-key';
+        fixture.config.openrouterRequireUserKey = true;
+        fixture.resolve.mockRejectedValue({ code: 'not_found' });
+        const release = registerCloudAccessPolicy(() => ({ enabled: true, expiresAt: Date.now() + 60_000 }), { requirePersonalAiCredentials: true });
+        try {
+            expect(await resolveOpenRouterCredential(event)).toEqual({ apiKey: undefined, source: 'personal' });
+            expect(await resolveOpenAiCredential(event)).toEqual({ apiKey: undefined, source: 'personal' });
+            expect(await openAiCredentialOperation(fixture.session as any, { operation: 'status' })).toMatchObject({ instance: false });
+            fixture.config.openrouterRequireUserKey = false;
+            fixture.config.openrouterAllowUserOverride = false;
+            expect(await resolveOpenRouterCredential(event)).toEqual({ apiKey: undefined, source: 'personal' });
+            fixture.resolve.mockResolvedValue({ value: 'personal-key' });
+            expect(await resolveOpenRouterCredential(event)).toEqual({ apiKey: 'personal-key', source: 'personal' });
+            expect(await resolveOpenAiCredential(event)).toEqual({ apiKey: 'personal-key', source: 'personal' });
+        } finally { release(); }
+        fixture.resolve.mockRejectedValue({ code: 'not_found' });
+        expect(await resolveOpenAiCredential(event)).toEqual({ apiKey: 'instance-openai-key', source: 'server' });
+    });
     it.each([
         [true, false, true, 'sk-or-v1-account-a-fixture', 'personal'],
         [false, true, true, 'sk-or-v1-account-a-fixture', 'personal'],

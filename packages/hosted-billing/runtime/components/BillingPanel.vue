@@ -55,6 +55,7 @@ watch(userId, id => { if (id && route.query.checkout === 'success') void refresh
             <p v-if="trial" class="trial-status" role="status"><span class="status-dot" />Cloud trial · Ends {{ date(status.trialEndsAt) }}</p>
             <UAlert v-else-if="status.state === 'review'" color="warning" title="Contact support about your subscription" description="You can continue working locally while we help." class="mb-5" />
             <UAlert v-else-if="status.state === 'payment_required'" color="warning" title="Cloud is paused" description="Update your subscription to resume syncing. You can keep working locally." class="mb-5" />
+            <UAlert v-else-if="status.state === 'expired' && !status.trialEndsAt" color="neutral" title="Cloud trial unavailable" description="Contact support if you think this is a mistake. You can still use Free Local or subscribe to Cloud." class="mb-5" />
             <div class="plan-grid" :class="{ 'plan-grid--paid': paid }">
                 <article v-if="!paid" class="plan-card">
                     <div class="plan-head">
@@ -105,7 +106,8 @@ watch(userId, id => { if (id && route.query.checkout === 'success') void refresh
                 <p v-if="trial">No card needed for your trial. When it ends, you stay on Free Local unless you subscribe.</p>
                 <p v-else-if="!paid">Local files stay in this browser. Export a copy before clearing browser data.</p>
                 <p v-if="trial || paid">Deleted files still count toward your cloud storage allowance.</p>
-                <p>AI usage is paid separately through your own OpenRouter account.</p>
+                <p v-if="trial || paid">Incomplete uploads may also count. Retry the upload or contact support for help.</p>
+                <p>AI usage is paid separately through your own provider account.</p>
                 <p v-if="!paid && status.state !== 'review'">Subscribing starts a paid year today. Renews annually; cancel anytime. Taxes shown at checkout.</p>
             </div>
             <p v-if="route.query.checkout === 'success' && !paid && status.state !== 'review'" role="status" class="billing-notes">Confirming your payment. Your plan will update shortly.</p>

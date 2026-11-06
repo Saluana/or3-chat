@@ -5,6 +5,8 @@ import { requireCloudMutation } from '~~/server/utils/security/cloud-mutation';
 import { getRateLimitProvider } from '~~/server/utils/rate-limit/store';
 import { enforceRateLimit } from '~~/server/utils/rate-limit/enforce';
 import { BillingBusyError } from '../store';
+import { ensureTrial } from '../trial';
+import { useBillingService } from '../runtime';
 
 export async function billingUser(event: H3Event, mutation = false): Promise<string> {
     setResponseHeader(event, 'Cache-Control', 'no-store');
@@ -12,6 +14,7 @@ export async function billingUser(event: H3Event, mutation = false): Promise<str
     const session = await resolveSessionContext(event);
     requireCan(session, 'workspace.read');
     if (!session.user?.id) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
+    ensureTrial(event, session, useBillingService().store);
     const limit = await getRateLimitProvider().checkAndRecord(`billing:${mutation ? 'write' : 'read'}:${session.user.id}`, {
         windowMs: 60_000, maxRequests: mutation ? 10 : 60,
     });

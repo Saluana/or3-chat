@@ -10,6 +10,7 @@ import { installBillingService } from './runtime';
 import { AccountStorageQuota } from './quota';
 import { registerStorageGatewayDecorator } from '~~/server/storage/gateway/registry';
 import { registerCloudAccessPolicy } from '~~/server/cloud/access';
+import { ensureTrial } from './trial';
 
 export default defineNitroPlugin(app => {
     if (import.meta.prerender) return;
@@ -19,15 +20,17 @@ export default defineNitroPlugin(app => {
     const quota = new AccountStorageQuota(config.syncDatabasePath, store);
     const service = new BillingService(store, new Stripe(config.secretKey, { timeout: 15_000, maxNetworkRetries: 1 }), config, userId => quota.usedBytes(userId));
     const uninstall = installBillingService(service);
-    const releaseAccess = registerCloudAccessPolicy((_event, session) => {
+    const releaseAccess = registerCloudAccessPolicy((event, session) => {
         if (!session.user) return { enabled: false, expiresAt: 0 };
+        ensureTrial(event, session, store);
         const status = store.status(session.user.id);
         return { enabled: status.allowed, expiresAt: status.accessExpiresAt ?? (status.state === 'active' ? status.paidUntil : status.trialEndsAt) };
-    });
+    }, { requirePersonalAiCredentials: true });
     const undecorate = registerStorageGatewayDecorator(adapter => quota.decorate(adapter));
     const previous = getEntitlementResolver('sqlite') ?? getEntitlementResolver('default');
     const unregister = registerEntitlementResolver('sqlite', async input => {
         const existing = await previous?.(input) ?? [];
+        ensureTrial(input.event, input.session, store);
         const status = store.status(input.session.user!.id);
         return [...existing, ...(status.allowed ? ['hosted-access'] : []), ...(status.state === 'active' ? ['paid'] : [])];
     });
