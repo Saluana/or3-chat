@@ -6,15 +6,15 @@
     "moduleManifest": "planning/complete/plugin-runtime-v2/compatibility-ledger.modules.json",
     "moduleManifestSha256": "605b4e840d28caee7a2f56b75efddae519707fdc50fbbc4abc984881372ca810",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
-    "scopedNuxtImportsDeclarationSha256": "35e4eff3448bab2dbf812cb07ff064d66e2c85d7f4e7ddea3839359a5bd1433a",
+    "scopedNuxtImportsDeclarationSha256": "5f9f61a6df63ffb99f64d3fad7bd069c1855646164dd3ad03589c4cd45e211dc",
     "behaviorProfiles": "planning/complete/plugin-runtime-v2/compatibility-profiles.json",
     "behaviorProfilesSha256": "aa3af173c77feddccd582212a61b84c4680ad3e2664f2bc10bc40d149376d05a"
   },
   "coverage": {
     "moduleCount": 39,
-    "exportCount": 607,
-    "callableExportCount": 282,
-    "nuxtAutoImportCount": 309
+    "exportCount": 608,
+    "callableExportCount": 283,
+    "nuxtAutoImportCount": 310
   },
   "behaviorProfiles": [
     {
@@ -559,7 +559,7 @@
     },
     {
       "source": "app/composables/admin/useAdminPlugins.ts",
-      "apiSha256": "d116040da88d6871b2b917ea5c252fc4d10bffd073151cbffaeeb28f8c308ca2",
+      "apiSha256": "b93ec1e45e40d9b0a3233d17e76bc7db8e9a9374da4afd6e9387d81eb1a0e660",
       "runtime": "client",
       "publicPaths": [
         "~/composables/admin/useAdminPlugins"
@@ -580,7 +580,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 27,
+              "line": 28,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AdminComponent =\n    | Component\n    | (() => Promise<Component | { default: Component }>);"
             }
@@ -594,7 +594,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 12,
+              "line": 13,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AdminPageDef = {\n    id: string;\n    label: string;\n    path?: string;\n    order?: number;\n    component: AdminComponent;\n};"
             }
@@ -608,7 +608,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 31,
+              "line": 32,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AdminPlugin {\n    id: string;\n    register: (api: AdminPluginApi) => void | Promise<void>;\n}"
             }
@@ -622,7 +622,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 36,
+              "line": 37,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AdminPluginApi {\n    registerAdminPage: (def: AdminPageDef) => void;\n    registerAdminWidget: (def: AdminWidgetDef) => void;\n}"
             }
@@ -636,7 +636,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 20,
+              "line": 21,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AdminWidgetDef = {\n    id: string;\n    slot: 'overview' | 'workspace' | 'plugins' | 'themes' | 'system';\n    order?: number;\n    component: AdminComponent;\n};"
             }
@@ -653,7 +653,7 @@
               "resolvedReturnType": "AdminPluginApi",
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 169,
+                "line": 182,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createAdminPluginApi(): AdminPluginApi;"
               }
@@ -662,7 +662,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 169,
+              "line": 182,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createAdminPluginApi(): AdminPluginApi;"
             }
@@ -679,7 +679,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 179,
+                "line": 192,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function loadAdminPlugins();"
               }
@@ -688,7 +688,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 179,
+              "line": 192,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function loadAdminPlugins();"
             }
@@ -700,23 +700,23 @@
           "nuxtAutoImport": true,
           "signatures": [
             {
-              "signature": "export function registerAdminPage(def: AdminPageDef);",
-              "declaredReturnType": null,
-              "resolvedReturnType": null,
+              "signature": "(def: AdminPageDef): void",
+              "declaredReturnType": "void",
+              "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 108,
+                "line": 110,
                 "syntaxKind": "FunctionDeclaration",
-                "text": "export function registerAdminPage(def: AdminPageDef);"
+                "text": "export function registerAdminPage(def: AdminPageDef): void;"
               }
             }
           ],
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 108,
+              "line": 110,
               "syntaxKind": "FunctionDeclaration",
-              "text": "export function registerAdminPage(def: AdminPageDef);"
+              "text": "export function registerAdminPage(def: AdminPageDef): void;"
             }
           ]
         },
@@ -731,7 +731,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 122,
+                "line": 135,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerAdminWidget(def: AdminWidgetDef);"
               }
@@ -740,9 +740,35 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 122,
+              "line": 135,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerAdminWidget(def: AdminWidgetDef);"
+            }
+          ]
+        },
+        {
+          "name": "registerOwnedAdminPage",
+          "kind": "value",
+          "nuxtAutoImport": true,
+          "signatures": [
+            {
+              "signature": "(def: AdminPageDef): () => void",
+              "declaredReturnType": "() => void",
+              "resolvedReturnType": "() => void",
+              "declaration": {
+                "source": "app/composables/admin/useAdminPlugins.ts",
+                "line": 115,
+                "syntaxKind": "FunctionDeclaration",
+                "text": "export function registerOwnedAdminPage(def: AdminPageDef): () => void;"
+              }
+            }
+          ],
+          "declarations": [
+            {
+              "source": "app/composables/admin/useAdminPlugins.ts",
+              "line": 115,
+              "syntaxKind": "FunctionDeclaration",
+              "text": "export function registerOwnedAdminPage(def: AdminPageDef): () => void;"
             }
           ]
         },
@@ -757,7 +783,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 152,
+                "line": 165,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function resolveAdminComponent(def: { id: string; component: AdminComponent });"
               }
@@ -766,7 +792,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 152,
+              "line": 165,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function resolveAdminComponent(def: { id: string; component: AdminComponent });"
             }
@@ -780,7 +806,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 46,
+              "line": 47,
               "syntaxKind": "VariableDeclaration",
               "text": "state: AdminPluginState = reactive({\n    pages: [],\n    widgets: [],\n})"
             }
@@ -797,7 +823,7 @@
               "resolvedReturnType": "ComputedRef<AdminPageDef[]>",
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 135,
+                "line": 148,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAdminPages(): ComputedRef<AdminPageDef[]>;"
               }
@@ -806,7 +832,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 135,
+              "line": 148,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAdminPages(): ComputedRef<AdminPageDef[]>;"
             }
@@ -823,7 +849,7 @@
               "resolvedReturnType": "ComputedRef<AdminWidgetDef[]>",
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 141,
+                "line": 154,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAdminWidgets(\n    slot?: AdminWidgetDef['slot']\n): ComputedRef<AdminWidgetDef[]>;"
               }
@@ -832,7 +858,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 141,
+              "line": 154,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAdminWidgets(\n    slot?: AdminWidgetDef['slot']\n): ComputedRef<AdminWidgetDef[]>;"
             }
@@ -2810,7 +2836,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "142db786909271900bb60974b98a093d88721608e28287cc4cb64ca244132c87",
+      "apiSha256": "7fc08242a5940e961b5daca541c207fb5370807f7bfbb2dcb53a61c941b2308f",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2832,7 +2858,7 @@
               "resolvedReturnType": "boolean",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 499,
+                "line": 498,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function __hasPendingDocumentChanges(id: string): boolean;"
               }
@@ -2841,7 +2867,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 499,
+              "line": 498,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function __hasPendingDocumentChanges(id: string): boolean;"
             }
@@ -2858,7 +2884,7 @@
               "resolvedReturnType": "\"idle\" | \"saving\" | \"saved\" | \"error\" | \"loading\" | \"unavailable\" | undefined",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 524,
+                "line": 523,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function __peekDocumentStatus(\n    id: string\n): DocState['status'] | undefined;"
               }
@@ -2867,7 +2893,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 524,
+              "line": 523,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function __peekDocumentStatus(\n    id: string\n): DocState['status'] | undefined;"
             }
@@ -2884,7 +2910,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 318,
+                "line": 317,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function acceptCommittedDocument(record: Document, db: Or3DB): void;"
               }
@@ -2893,7 +2919,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 318,
+              "line": 317,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function acceptCommittedDocument(record: Document, db: Or3DB): void;"
             }
@@ -2907,7 +2933,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 18,
+              "line": 22,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ActiveDocumentEditorSession {\n    readonly documentId: string;\n    readonly paneId?: string;\n    readonly tabId?: string;\n    captureContent: () => void;\n    ensureLocalDurability: () => Promise<void>;\n    captureViewState: () => DocumentEditorViewState;\n    restoreViewState: (\n        state: DocumentEditorViewState,\n        options?: { focus?: boolean }\n    ) => Promise<void>;\n    /** Live, frozen context for a chat request; may include unsaved editor text. */\n    getChatContext?: (requestId: string) => string;\n    /** Execute one of the document agent's native tools in this editor. */\n    executeChatTool?: (name: string, argsJson: string, requestId: string) => string;\n    /** Actual buffer used to refuse competing drafts before a workspace read/apply. */\n    getDocumentSnapshot?: () => { title: string; content: TipTapDocument };\n    /** Captured origin handle, including while an old editor is saving after a switch. */\n    originDb?: Or3DB;\n    /** Brief host Apply/Undo lease; rejects a buffer that changed during preparation. */\n    beginExternalWrite?: (expected: { title: string; content: TipTapDocument }) => () => void;\n    /** Accept the already committed row synchronously, without another fallible storage read. */\n    acceptExternalWrite?: (row: Post) => void;\n}"
             }
@@ -2921,7 +2947,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useActivePrompt.ts",
-              "line": 49,
+              "line": 7,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ActivePromptState {\n    activePromptId: string | null;\n    activePromptContent: TipTapDocument | null;\n}"
             }
@@ -3020,7 +3046,7 @@
               "resolvedReturnType": "Promise<void>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 185,
+                "line": 195,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function captureDocumentEditor(documentId: string): Promise<void>;"
               }
@@ -3029,7 +3055,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 185,
+              "line": 195,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function captureDocumentEditor(documentId: string): Promise<void>;"
             }
@@ -3139,7 +3165,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useModelStore.ts",
-              "line": 76,
+              "line": 90,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ContextModelReadiness =\n    | { ok: false; code: 'model_metadata_unavailable' }\n    | { ok: true; selectedModelId: string; modelId: string; source: ModelCatalogResult['source'];\n        fetchedAt: number | null; metadata: ContextModelMetadata };"
             }
@@ -3487,7 +3513,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 1,
+              "line": 5,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DocumentEditorFocusedRegion =\n    | 'title'\n    | 'content'\n    | 'inspector';"
             }
@@ -3501,7 +3527,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 51,
+              "line": 55,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentEditorSessionLookup {\n    paneId: string;\n    tabId: string;\n}"
             }
@@ -3515,7 +3541,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 6,
+              "line": 10,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentEditorViewState {\n    version: 1;\n    documentId: string;\n    contentRevision?: number;\n    scrollTop: number;\n    selectionJson?: unknown;\n    inspectorOpen?: boolean;\n    inspectorTab?: string;\n    findOpen?: boolean;\n    focusedRegion?: DocumentEditorFocusedRegion;\n}"
             }
@@ -3672,7 +3698,7 @@
               "resolvedReturnType": "Promise<void>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 201,
+                "line": 213,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function ensureDocumentEditorLocalDurability(\n    documentId: string\n): Promise<void>;"
               }
@@ -3681,7 +3707,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 201,
+              "line": 213,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function ensureDocumentEditorLocalDurability(\n    documentId: string\n): Promise<void>;"
             }
@@ -3698,7 +3724,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 124,
+                "line": 123,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function flush(id: string, db = getDb());"
               }
@@ -3707,7 +3733,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 124,
+              "line": 123,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function flush(id: string, db = getDb());"
             }
@@ -3724,7 +3750,7 @@
               "resolvedReturnType": "boolean",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 172,
+                "line": 173,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function focusPaneInput(paneId: string): boolean;"
               }
@@ -3733,7 +3759,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 172,
+              "line": 173,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function focusPaneInput(paneId: string): boolean;"
             }
@@ -3750,7 +3776,7 @@
               "resolvedReturnType": "ActiveDocumentEditorSession | undefined",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 280,
+                "line": 294,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getActiveDocumentEditorSession(\n    documentId: string,\n    tabId?: string,\n): ActiveDocumentEditorSession | undefined;"
               }
@@ -3759,7 +3785,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 280,
+              "line": 294,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getActiveDocumentEditorSession(\n    documentId: string,\n    tabId?: string,\n): ActiveDocumentEditorSession | undefined;"
             }
@@ -3828,7 +3854,7 @@
               "resolvedReturnType": "ActiveDocumentEditorSession | undefined",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 152,
+                "line": 157,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup\n): ActiveDocumentEditorSession | undefined;"
               }
@@ -3837,7 +3863,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 152,
+              "line": 157,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup\n): ActiveDocumentEditorSession | undefined;"
             }
@@ -3906,7 +3932,7 @@
               "resolvedReturnType": "boolean",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 276,
+                "line": 289,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function hasActiveDocumentEditor(documentId: string): boolean;"
               }
@@ -3915,7 +3941,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 276,
+              "line": 289,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function hasActiveDocumentEditor(documentId: string): boolean;"
             }
@@ -4010,7 +4036,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 223,
+                "line": 224,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function hasPane(paneId: string);"
               }
@@ -4019,7 +4045,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 223,
+              "line": 224,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function hasPane(paneId: string);"
             }
@@ -4075,7 +4101,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 45,
+              "line": 46,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ImportMetadata {\n    databaseName: string;\n    databaseVersion: number;\n    tables: Array<{ name: string; rowCount: number }>;\n}"
             }
@@ -4118,7 +4144,7 @@
               "resolvedReturnType": "{ release: () => void; accept: (row: Post) => void; }",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 228,
+                "line": 241,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function leaseWorkspaceDocumentEditors(documentId: string, db: Or3DB,\n    expected: { title: string; content: TipTapDocument }): { release: () => void; accept: (row: Post) => void };"
               }
@@ -4127,7 +4153,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 228,
+              "line": 241,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function leaseWorkspaceDocumentEditors(documentId: string, db: Or3DB,\n    expected: { title: string; content: TipTapDocument }): { release: () => void; accept: (row: Post) => void };"
             }
@@ -4600,7 +4626,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 233,
+                "line": 232,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function loadDocument(id: string, db = getDb());"
               }
@@ -4609,7 +4635,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 233,
+              "line": 232,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function loadDocument(id: string, db = getDb());"
             }
@@ -4691,7 +4717,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useModelStore.ts",
-              "line": 109,
+              "line": 129,
               "syntaxKind": "VariableDeclaration",
               "text": "MODELS_CACHE_KEY = 'MODELS_CATALOG'"
             }
@@ -4705,7 +4731,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useModelStore.ts",
-              "line": 110,
+              "line": 130,
               "syntaxKind": "VariableDeclaration",
               "text": "MODELS_TTL_MS = 48 * 60 * 60 * 1000"
             }
@@ -4750,7 +4776,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 349,
+                "line": 348,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function newDocument(initial?: {\n    title?: string;\n    content?: TipTapDocument | null;\n});"
               }
@@ -4759,7 +4785,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 349,
+              "line": 348,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function newDocument(initial?: {\n    title?: string;\n    content?: TipTapDocument | null;\n});"
             }
@@ -4846,7 +4872,7 @@
               "resolvedReturnType": "Promise<{ status: \"ready\"; } | { status: \"unavailable\"; }>",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 209,
+                "line": 210,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function programmaticAttachFile(paneId: string, file: File): Promise<{ status: 'ready' } | { status: 'unavailable' }>;"
               }
@@ -4855,7 +4881,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 209,
+              "line": 210,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function programmaticAttachFile(paneId: string, file: File): Promise<{ status: 'ready' } | { status: 'unavailable' }>;"
             }
@@ -4872,7 +4898,7 @@
               "resolvedReturnType": "{ status: \"ready\"; } | { status: \"unavailable\"; }",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 197,
+                "line": 198,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function programmaticInsertReference(paneId: string,\n    reference: { id: string; source: 'document' | 'chat' | 'file'; label: string }, afterText?: string):\n    { status: 'ready' } | { status: 'unavailable' };"
               }
@@ -4881,7 +4907,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 197,
+              "line": 198,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function programmaticInsertReference(paneId: string,\n    reference: { id: string; source: 'document' | 'chat' | 'file'; label: string }, afterText?: string):\n    { status: 'ready' } | { status: 'unavailable' };"
             }
@@ -4898,7 +4924,7 @@
               "resolvedReturnType": "{ status: \"ready\"; } | { status: \"unavailable\"; }",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 185,
+                "line": 186,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function programmaticPrefill(\n    paneId: string,\n    text: string\n): { status: 'ready' } | { status: 'unavailable' };"
               }
@@ -4907,7 +4933,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 185,
+              "line": 186,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function programmaticPrefill(\n    paneId: string,\n    text: string\n): { status: 'ready' } | { status: 'unavailable' };"
             }
@@ -4924,7 +4950,7 @@
               "resolvedReturnType": "Promise<SendResult>",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 150,
+                "line": 151,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function programmaticSend(\n    paneId: string,\n    text: string\n): Promise<SendResult>;"
               }
@@ -4933,7 +4959,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 150,
+              "line": 151,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function programmaticSend(\n    paneId: string,\n    text: string\n): Promise<SendResult>;"
             }
@@ -5034,7 +5060,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 238,
+                "line": 237,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function refreshDocument(id: string, db = getDb());"
               }
@@ -5043,7 +5069,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 238,
+              "line": 237,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function refreshDocument(id: string, db = getDb());"
             }
@@ -5164,7 +5190,7 @@
               "resolvedReturnType": "() => void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 91,
+                "line": 96,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDocumentEditorSession(\n    session: ActiveDocumentEditorSession\n): () => void;"
               }
@@ -5175,7 +5201,7 @@
               "resolvedReturnType": "() => void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 95,
+                "line": 100,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDocumentEditorSession(\n    documentId: string,\n    session: LegacyDocumentEditorSession\n): () => void;"
               }
@@ -5184,19 +5210,19 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 91,
+              "line": 96,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDocumentEditorSession(\n    session: ActiveDocumentEditorSession\n): () => void;"
             },
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 95,
+              "line": 100,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDocumentEditorSession(\n    documentId: string,\n    session: LegacyDocumentEditorSession\n): () => void;"
             },
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 99,
+              "line": 104,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDocumentEditorSession(\n    documentIdOrSession: string | ActiveDocumentEditorSession,\n    legacySession?: LegacyDocumentEditorSession\n): () => void;"
             }
@@ -5565,7 +5591,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 551,
+                "line": 550,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function releaseDocument(\n    id: string,\n    opts: { flush?: boolean; deleteEntry?: boolean } = {},\n    db = getDb(),\n);"
               }
@@ -5574,7 +5600,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 551,
+              "line": 550,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function releaseDocument(\n    id: string,\n    opts: { flush?: boolean; deleteEntry?: boolean } = {},\n    db = getDb(),\n);"
             }
@@ -5709,7 +5735,7 @@
               "resolvedReturnType": "() => Promise<void>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 598,
+                "line": 597,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function retainDocumentEditor(id: string, db = getDb()): () => Promise<void>;"
               }
@@ -5718,7 +5744,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 598,
+              "line": 597,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function retainDocumentEditor(id: string, db = getDb()): () => Promise<void>;"
             }
@@ -5787,7 +5813,7 @@
               "resolvedReturnType": "Promise<Document>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 272,
+                "line": 271,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function saveDocumentRecoveryCopy(\n    id: string,\n    draft: { title: string; content: TipTapDocument },\n    options: { conflictOwner?: string; isCurrent: () => boolean },\n    db = getDb(),\n): Promise<Document>;"
               }
@@ -5796,7 +5822,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 272,
+              "line": 271,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function saveDocumentRecoveryCopy(\n    id: string,\n    draft: { title: string; content: TipTapDocument },\n    options: { conflictOwner?: string; isCurrent: () => boolean },\n    db = getDb(),\n): Promise<Document>;"
             }
@@ -5853,7 +5879,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 414,
+                "line": 413,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function setDocumentContent(id: string, content: TipTapDocument | null, db = getDb());"
               }
@@ -5862,7 +5888,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 414,
+              "line": 413,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function setDocumentContent(id: string, content: TipTapDocument | null, db = getDb());"
             }
@@ -5879,7 +5905,7 @@
               "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 425,
+                "line": 424,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function setDocumentEditorConflict(id: string, key: string, draft: EditorConflictDraft | undefined, db = getDb()): void;"
               }
@@ -5888,7 +5914,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 425,
+              "line": 424,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function setDocumentEditorConflict(id: string, key: string, draft: EditorConflictDraft | undefined, db = getDb()): void;"
             }
@@ -5905,7 +5931,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 386,
+                "line": 385,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function setDocumentTitle(id: string, title: string, db = getDb());"
               }
@@ -5914,7 +5940,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 386,
+              "line": 385,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function setDocumentTitle(id: string, title: string, db = getDb());"
             }
@@ -5957,7 +5983,7 @@
               "resolvedReturnType": "Promise<void>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 214,
+                "line": 227,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function settleWorkspaceDocumentEditors(documentId: string, db: Or3DB): Promise<void>;"
               }
@@ -5966,7 +5992,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 214,
+              "line": 227,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function settleWorkspaceDocumentEditors(documentId: string, db: Or3DB): Promise<void>;"
             }
@@ -6135,7 +6161,7 @@
               "resolvedReturnType": "() => void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 50,
+                "line": 49,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function subscribeDocumentSaves(listener: (db: Or3DB, id: string) => void): () => void;"
               }
@@ -6144,7 +6170,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 50,
+              "line": 49,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function subscribeDocumentSaves(listener: (db: Or3DB, id: string) => void): () => void;"
             }
@@ -6527,7 +6553,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 129,
+                "line": 130,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterPaneInput(paneId: string);"
               }
@@ -6536,7 +6562,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 129,
+              "line": 130,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterPaneInput(paneId: string);"
             }
@@ -6657,7 +6683,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useActivePrompt.ts",
-                "line": 75,
+                "line": 32,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useActivePrompt();"
               }
@@ -6666,7 +6692,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useActivePrompt.ts",
-              "line": 75,
+              "line": 32,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useActivePrompt();"
             }
@@ -6683,7 +6709,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAiSettings.ts",
-                "line": 297,
+                "line": 295,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAiSettings();"
               }
@@ -6692,7 +6718,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAiSettings.ts",
-              "line": 297,
+              "line": 295,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAiSettings();"
             }
@@ -6709,7 +6735,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 478,
+                "line": 477,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAllDocumentsState();"
               }
@@ -6718,7 +6744,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 478,
+              "line": 477,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAllDocumentsState();"
             }
@@ -6735,7 +6761,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAi.ts",
-                "line": 75,
+                "line": 76,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[]; toolDraftId?: () => string | undefined } = {}\n);"
               }
@@ -6744,7 +6770,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAi.ts",
-              "line": 75,
+              "line": 76,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[]; toolDraftId?: () => string | undefined } = {}\n);"
             }
@@ -7035,7 +7061,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsList.ts",
-                "line": 28,
+                "line": 29,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDocumentsList(limit = 200);"
               }
@@ -7044,7 +7070,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsList.ts",
-              "line": 28,
+              "line": 29,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDocumentsList(limit = 200);"
             }
@@ -7061,7 +7087,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentsStore.ts",
-                "line": 456,
+                "line": 455,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useDocumentState(id: string, db = getDb());"
               }
@@ -7070,7 +7096,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentsStore.ts",
-              "line": 456,
+              "line": 455,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useDocumentState(id: string, db = getDb());"
             }
@@ -7269,7 +7295,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useModelStore.ts",
-                "line": 140,
+                "line": 189,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useModelStore();"
               }
@@ -7278,7 +7304,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useModelStore.ts",
-              "line": 140,
+              "line": 189,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useModelStore();"
             }
@@ -7320,7 +7346,7 @@
               "source": "app/composables/core/useMultiPane.ts",
               "line": 78,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface UseMultiPaneApi {\n    panes: Ref<PaneState[]>;\n    activePaneIndex: Ref<number>;\n    activePaneId: ComputedRef<string | null>;\n    canAddPane: ComputedRef<boolean>;\n    newWindowTooltip: ComputedRef<string>;\n    addPane: () => string | null;\n    closePane: (index: number) => Promise<void> | void;\n    swapAdjacentPanes: (leftIndex: number) => void;\n    setActive: (index: number) => void;\n    focusPrev: (current: number) => void;\n    focusNext: (current: number) => void;\n    setPaneThread: (index: number, threadId: string, options?: { isCurrent?: () => boolean }) => Promise<boolean>;\n    loadMessagesFor: (id: string) => Promise<MultiPaneMessage[]>;\n    ensureAtLeastOne: () => void;\n    newPaneForApp: (\n        appId: string,\n        opts?: { initialRecordId?: string }\n    ) => Promise<void>;\n    setPaneApp: (\n        index: number,\n        appId: string,\n        opts?: { recordId?: string }\n    ) => Promise<void>;\n    updatePane: (index: number, updates: Partial<PaneState>) => void;\n    getPaneIndexById: (paneId: string) => number;\n    getPaneById: (paneId: string) => PaneState | undefined;\n    getPaneWidth: (index: number) => string;\n    handleResize: (\n        paneIndex: number,\n        deltaX: number,\n        persist?: boolean\n    ) => void;\n    persistPaneWidths: () => void;\n    recalculateWidthsForContainer: (newContainerWidth: number) => void;\n    paneWidths: Ref<number[]>;\n}"
+              "text": "export interface UseMultiPaneApi {\n    panes: Ref<PaneState[]>;\n    activePaneIndex: Ref<number>;\n    activePaneId: ComputedRef<string | null>;\n    canAddPane: ComputedRef<boolean>;\n    newWindowTooltip: ComputedRef<string>;\n    addPane: () => string | null;\n    closePane: (index: number) => Promise<void> | void;\n    swapAdjacentPanes: (leftIndex: number) => void;\n    setActive: (index: number) => void;\n    focusPrev: (current: number) => void;\n    focusNext: (current: number) => void;\n    setPaneThread: (index: number, threadId: string, options?: { isCurrent?: () => boolean }) => Promise<boolean>;\n    loadMessagesFor: (id: string) => Promise<MultiPaneMessage[]>;\n    ensureAtLeastOne: () => void;\n    newPaneForApp: (\n        appId: string,\n        opts?: { initialRecordId?: string }\n    ) => Promise<void>;\n    setPaneApp: (\n        index: number,\n        appId: string,\n        opts?: { recordId?: string; isCurrent?: () => boolean }\n    ) => Promise<void>;\n    updatePane: (index: number, updates: Partial<PaneState>) => void;\n    getPaneIndexById: (paneId: string) => number;\n    getPaneById: (paneId: string) => PaneState | undefined;\n    getPaneWidth: (index: number) => string;\n    handleResize: (\n        paneIndex: number,\n        deltaX: number,\n        persist?: boolean\n    ) => void;\n    persistPaneWidths: () => void;\n    recalculateWidthsForContainer: (newContainerWidth: number) => void;\n    paneWidths: Ref<number[]>;\n}"
             }
           ]
         },
@@ -7401,7 +7427,7 @@
               "resolvedReturnType": "UsePaneDocumentsApi",
               "declaration": {
                 "source": "app/composables/documents/usePaneDocuments.ts",
-                "line": 125,
+                "line": 130,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function usePaneDocuments(\n    opts: UsePaneDocumentsOptions\n): UsePaneDocumentsApi;"
               }
@@ -7410,7 +7436,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/usePaneDocuments.ts",
-              "line": 125,
+              "line": 130,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function usePaneDocuments(\n    opts: UsePaneDocumentsOptions\n): UsePaneDocumentsApi;"
             }
@@ -7424,7 +7450,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/usePaneDocuments.ts",
-              "line": 46,
+              "line": 47,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UsePaneDocumentsApi {\n    newDocumentInActive: (initial?: {\n        title?: string;\n    }) => Promise<{ id: string } | undefined>;\n    selectDocumentInActive: (id: string) => Promise<void>;\n}"
             }
@@ -7438,7 +7464,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/usePaneDocuments.ts",
-              "line": 26,
+              "line": 27,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface UsePaneDocumentsOptions {\n    panes: Ref<MultiPaneState[]>;\n    activePaneIndex: Ref<number>;\n    createNewDoc: (initial?: { title?: string }) => Promise<{ id: string }>;\n    flushDocument: (id: string) => Promise<void> | void;\n}"
             }
@@ -7625,7 +7651,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarSearch.ts",
-                "line": 164,
+                "line": 18,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarSearch(\n    threads: Ref<Thread[]>,\n    projects: Ref<Project[]>,\n    documents: Ref<Post[]>\n);"
               }
@@ -7634,7 +7660,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarSearch.ts",
-              "line": 164,
+              "line": 18,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarSearch(\n    threads: Ref<Thread[]>,\n    projects: Ref<Project[]>,\n    documents: Ref<Post[]>\n);"
             }
@@ -7729,7 +7755,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/threads/useThreadSearch.ts",
-                "line": 26,
+                "line": 6,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useThreadSearch(threads: Ref<Thread[]>);"
               }
@@ -7738,7 +7764,7 @@
           "declarations": [
             {
               "source": "app/composables/threads/useThreadSearch.ts",
-              "line": 26,
+              "line": 6,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useThreadSearch(threads: Ref<Thread[]>);"
             }
@@ -7781,7 +7807,7 @@
               "resolvedReturnType": "WorkspaceBackupApi",
               "declaration": {
                 "source": "app/composables/core/useWorkspaceBackup.ts",
-                "line": 185,
+                "line": 186,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useWorkspaceBackup(): WorkspaceBackupApi;"
               }
@@ -7790,7 +7816,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 185,
+              "line": 186,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useWorkspaceBackup(): WorkspaceBackupApi;"
             }
@@ -7807,7 +7833,7 @@
               "resolvedReturnType": "Promise<ActiveDocumentEditorSession | undefined>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 159,
+                "line": 165,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function waitForDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup,\n    timeoutMs = 1_500\n): Promise<ActiveDocumentEditorSession | undefined>;"
               }
@@ -7816,7 +7842,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 159,
+              "line": 165,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function waitForDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup,\n    timeoutMs = 1_500\n): Promise<ActiveDocumentEditorSession | undefined>;"
             }
@@ -7833,7 +7859,7 @@
               "resolvedReturnType": "Promise<boolean>",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 228,
+                "line": 229,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function waitForPaneInput(paneId: string, signal: AbortSignal): Promise<boolean>;"
               }
@@ -7842,7 +7868,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 228,
+              "line": 229,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function waitForPaneInput(paneId: string, signal: AbortSignal): Promise<boolean>;"
             }
@@ -7856,7 +7882,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 51,
+              "line": 52,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface WorkspaceBackupApi {\n    state: WorkspaceBackupState;\n    exportWorkspace(): Promise<void>;\n    peekBackup(file: Blob): Promise<void>;\n    importWorkspace(file: Blob): Promise<void>;\n    reset(): void;\n}"
             }
@@ -7870,7 +7896,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 25,
+              "line": 26,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface WorkspaceBackupState {\n    isExporting: Ref<boolean>;\n    isImporting: Ref<boolean>;\n    progress: Ref<number>; // 0-100\n    currentStep: Ref<\n        | 'idle'\n        | 'peeking'\n        | 'confirm'\n        | 'importing'\n        | 'exporting'\n        | 'done'\n        | 'error'\n    >;\n    importMode: Ref<WorkspaceImportMode>;\n    overwriteValues: Ref<boolean>;\n    backupMeta: Ref<ImportMetadata | null>;\n    backupFormat: Ref<'stream' | 'dexie' | 'cloud' | null>;\n    error: Ref<AppError | null>;\n}"
             }
@@ -7884,7 +7910,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 23,
+              "line": 24,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type WorkspaceImportMode = 'replace' | 'append';"
             }
@@ -10207,7 +10233,7 @@
     },
     {
       "source": "app/core/hooks/hook-types.ts",
-      "apiSha256": "8315986f1a1fcb453b7b03aa68e99a75e712a76e67c0ec8754ee8d49b179a99f",
+      "apiSha256": "6f62cde3314b35caf483fabc1d74fc85e9dee6ae37d4f06d832bd6b9b4fc37ee",
       "runtime": "client",
       "publicPaths": [
         "~/core/hooks/hook-types"
@@ -10564,7 +10590,7 @@
               "source": "app/core/hooks/hook-types.ts",
               "line": 486,
               "syntaxKind": "TypeAliasDeclaration",
-              "text": "export type CoreHookPayloadMap = {\n    'ui.chat.tool-card:action:mounted': [\n        {\n            pluginId: string | null;\n            tool: string;\n            callId: string;\n            runtime: 'page' | 'frame';\n        },\n    ];\n    'ui.chat.tool-card:action:failed': [\n        {\n            pluginId: string | null;\n            tool: string;\n            callId: string;\n            runtime: 'page' | 'frame';\n            code?: string;\n        },\n    ];\n    // AI/Chat Actions\n    'ai.chat.send:action:before': [AiSendBeforePayload];\n    'ai.chat.send:action:after': [AiSendAfterPayload];\n    'ai.chat.stream:action:delta': [string, AiStreamDeltaPayload];\n    'ai.chat.stream:action:reasoning': [string, AiStreamReasoningPayload];\n    'ai.chat.stream:action:complete': [AiStreamCompletePayload];\n    'ai.chat.stream:action:error': [AiStreamErrorPayload];\n    'ai.chat.retry:action:before': [AiRetryBeforePayload];\n    'ai.chat.retry:action:after': [AiRetryAfterPayload];\n    'ai.document.edit:filter:request': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:before': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:after': [DocumentAiEditResultPayload];\n    'ai.document.edit:action:error': [DocumentAiEditResultPayload];\n\n    // Pane Actions (now use named payloads)\n    'ui.pane.active:action': [UiPaneActivePayload];\n    'ui.pane.blur:action': [UiPaneBlurPayload];\n    'ui.pane.switch:action': [UiPaneSwitchPayload];\n    'ui.pane.open:action:after': [UiPaneActivePayload];\n    'ui.pane.close:action:before': [UiPaneActivePayload];\n    'ui.pane.close:action:after': [UiPaneActivePayload];\n    'ui.pane.thread:action:changed': [UiPaneThreadChangedPayload];\n    'ui.pane.doc:action:changed': [UiPaneDocChangedPayload];\n    'ui.pane.doc:action:saved': [UiPaneDocChangedPayload];\n    'ui.pane.msg:action:sent': [UiPaneMsgSentPayload];\n    'ui.pane.msg:action:received': [UiPaneMsgReceivedPayload];\n\n    // Sidebar Actions\n    'ui.sidebar.select:action:before': [UiSidebarSelectPayload];\n    'ui.sidebar.select:action:after': [UiSidebarSelectPayload];\n    'ui.chat.new:action:after': [UiChatNewPayload];\n\n    // App Actions\n    'app.init:action:after': [AppInitPayload];\n\n    // Chat Filters\n    'ui.chat.message:filter:outgoing': [string];\n    'ui.chat.message:filter:incoming': [string, string | undefined];\n    'ai.chat.model:filter:select': [string];\n    'ai.chat.messages:filter:input': [ChatMessage[]];\n\n    // Pane Filters\n    'ui.pane.thread:filter:select': [string | false, PaneState, string];\n    'ui.pane.doc:filter:select': [string, PaneState, string];\n\n    // Files Filters\n    'files.attach:filter:input': [FilesAttachInputPayload | false];\n\n    // Small, well-known DB-specialized hooks kept explicit\n    'db.messages.files.validate:filter:hashes': [string[]];\n    'db.files.refchange:action:after': [\n        { before: FileEntity; after: FileEntity; delta: number }\n    ];\n    'db.threads.getSystemPrompt:filter:output': [string | null];\n\n    // Editor Lifecycle (Examples/Plugins)\n    'editor.created:action:after': [{ editor: unknown }];\n    'editor.updated:action:after': [{ editor: unknown }];\n    'editor:request-extensions': [void];\n\n    // UI/Chat Extensions\n    'ui.chat.editor:filter:extensions': [unknown[]];\n    'ui.chat.editor:action:before_send': [Record<string, unknown>]; // editor JSON\n    'ai.chat.send:filter:prepare': [ChatSendPreparation];\n    'ai.chat.send:filter:commit': [ChatSendCommit];\n    'ai.chat.messages:filter:before_send': [\n        { messages: OpenRouterMessage[] } | { messages: OpenRouterMessage[] }[]\n    ];\n\n    // Branching lifecycle\n    'branch.fork:filter:options': [BranchForkOptions];\n    'branch.fork:action:before': [BranchForkBeforePayload];\n    'branch.fork:action:after': [ThreadEntity];\n    'branch.retry:filter:options': [RetryBranchParams];\n    'branch.retry:action:before': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.retry:action:after': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            newThreadId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.context:filter:messages': [\n        MessageEntity[],\n        string /* threadId */,\n        BranchMode\n    ];\n    'branch.context:action:after': [BranchContextAfterPayload];\n\n    // Documents helpers\n    'db.documents.title:filter': [\n        string,\n        {\n            phase: 'create' | 'update';\n            id: string;\n            rawTitle?: string | null;\n            existing?: DocumentEntity;\n        }\n    ];\n\n    // Workflow Actions\n    'workflow.execution:action:state_update': [\n        { messageId: string; state: unknown }\n    ];\n    'workflow.execution:action:complete': [\n        { messageId: string; workflowId: string; finalOutput?: string }\n    ];\n\n    // Auth hooks\n    'auth.access:filter:decision': [\n        AccessDecision,\n        { session: SessionContext | null }\n    ];\n    'auth.user:action:created': [{ userId: string; provider: string }];\n    'auth.workspace:action:created': [{ workspaceId: string; userId: string }];\n\n    // Storage hooks\n    'workspace.files:action:before': [PluginFileLifecycle];\n    'workspace.files:action:after': [PluginFileLifecycle];\n    'workspace.files:filter:policy': [boolean, PluginFileLifecycle];\n    'storage.files.upload:action:before': [StorageFileUploadBeforePayload];\n    'storage.files.upload:action:after': [StorageFileUploadAfterPayload];\n    'storage.files.download:action:before': [StorageFileDownloadBeforePayload];\n    'storage.files.download:action:after': [StorageFileDownloadAfterPayload];\n    'storage.files.url:filter:options': [StorageFileUrlOptionsPayload];\n    'storage.files.upload:filter:policy': [\n        StorageFileUploadPolicyPayload | false,\n    ];\n    'storage.files.gc:action:run': [StorageFileGcPayload];\n    'storage:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Sync hooks\n    'sync.op:action:captured': [{ op: SyncPendingOpPayload }];\n    'sync.push:action:before': [{ scope: SyncScopePayload; count: number }];\n    'sync.push:action:after': [\n        { scope: SyncScopePayload; successCount: number; failCount: number }\n    ];\n    'sync.bootstrap:action:start': [{ scope: SyncScopePayload }];\n    'sync.bootstrap:action:progress': [\n        {\n            scope: SyncScopePayload;\n            cursor: number;\n            pulledCount: number;\n            hasMore: boolean;\n        }\n    ];\n    'sync.bootstrap:action:complete': [\n        { scope: SyncScopePayload; cursor: number; totalPulled: number; elapsedMs?: number }\n    ];\n    'sync.pull:action:received': [\n        { scope: SyncScopePayload; changeCount: number }\n    ];\n    'sync.pull:action:applied': [\n        {\n            scope: SyncScopePayload;\n            applied: number;\n            skipped: number;\n            conflicts: number;\n        }\n    ];\n    'sync.pull:action:error': [{ scope: SyncScopePayload; error: string }];\n    'sync.pull:action:after': [\n        { scope: SyncScopePayload; count: number; cursor: number }\n    ];\n    'sync.subscription:action:statusChange': [\n        {\n            scope: SyncScopePayload;\n            previousStatus: string;\n            status: string;\n        }\n    ];\n    'sync.conflict:action:detected': [\n        {\n            tableName: string;\n            pk: string;\n            local: unknown;\n            remote: unknown;\n            winner: 'local' | 'remote';\n        }\n    ];\n    'sync.error:action': [{ op: SyncPendingOpPayload; error: unknown; permanent?: boolean }];\n    'sync.retry:action': [{ op: SyncPendingOpPayload; attempt: number }];\n    'sync.queue:action:full': [{ pendingCount: number; maxSize: number }];\n    'sync.rescan:action:starting': [{ scope: SyncScopePayload }];\n    'sync.rescan:action:progress': [\n        { scope: SyncScopePayload; progress: number },\n    ];\n    'sync.rescan:action:completed': [{ scope: SyncScopePayload }];\n    'sync.stats:action': [\n        { pendingCount: number; cursor: number; lastSyncAt: number }\n    ];\n    'sync:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Notification hooks\n    'notify:action:push': [NotificationCreatePayload];\n    'notify:action:read': [{ id: string; readAt: number }];\n    'notify:action:clicked': [{ notification: NotificationEntity; action?: NotificationAction }];\n    'notify:action:cleared': [{ count: number }];\n    'notify:filter:before_store': [NotificationCreatePayload | false, { source: string }];\n};"
+              "text": "export type CoreHookPayloadMap = {\n    'ui.chat.tool-card:action:mounted': [\n        {\n            pluginId: string | null;\n            tool: string;\n            callId: string;\n            runtime: 'page' | 'frame';\n        },\n    ];\n    'ui.chat.tool-card:action:failed': [\n        {\n            pluginId: string | null;\n            tool: string;\n            callId: string;\n            runtime: 'page' | 'frame';\n            code?: string;\n        },\n    ];\n    // AI/Chat Actions\n    'ai.chat.send:action:before': [AiSendBeforePayload];\n    'ai.chat.send:action:after': [AiSendAfterPayload];\n    'ai.chat.stream:action:delta': [string, AiStreamDeltaPayload];\n    'ai.chat.stream:action:reasoning': [string, AiStreamReasoningPayload];\n    'ai.chat.stream:action:complete': [AiStreamCompletePayload];\n    'ai.chat.stream:action:error': [AiStreamErrorPayload];\n    'ai.chat.retry:action:before': [AiRetryBeforePayload];\n    'ai.chat.retry:action:after': [AiRetryAfterPayload];\n    'ai.document.edit:filter:request': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:before': [DocumentAiEditRequestPayload];\n    'ai.document.edit:action:after': [DocumentAiEditResultPayload];\n    'ai.document.edit:action:error': [DocumentAiEditResultPayload];\n\n    // Pane Actions (now use named payloads)\n    'ui.pane.active:action': [UiPaneActivePayload];\n    'ui.pane.blur:action': [UiPaneBlurPayload];\n    'ui.pane.switch:action': [UiPaneSwitchPayload];\n    'ui.pane.open:action:after': [UiPaneActivePayload];\n    'ui.pane.close:action:before': [UiPaneActivePayload];\n    'ui.pane.close:action:after': [UiPaneActivePayload];\n    'ui.pane.thread:action:changed': [UiPaneThreadChangedPayload];\n    'ui.pane.doc:action:changed': [UiPaneDocChangedPayload];\n    'ui.pane.doc:action:saved': [UiPaneDocChangedPayload];\n    'ui.pane.msg:action:sent': [UiPaneMsgSentPayload];\n    'ui.pane.msg:action:received': [UiPaneMsgReceivedPayload];\n\n    // Sidebar Actions\n    'ui.sidebar.select:action:before': [UiSidebarSelectPayload];\n    'ui.sidebar.select:action:after': [UiSidebarSelectPayload];\n    'ui.chat.new:action:after': [UiChatNewPayload];\n\n    // App Actions\n    'app.init:action:after': [AppInitPayload];\n\n    // Chat Filters\n    'ui.chat.message:filter:outgoing': [string];\n    'ui.chat.message:filter:incoming': [string, string | undefined];\n    'ai.chat.model:filter:select': [string];\n    'ai.chat.messages:filter:input': [ChatMessage[]];\n\n    // Pane Filters\n    'ui.pane.thread:filter:select': [string | false, PaneState, string];\n    'ui.pane.doc:filter:select': [string, PaneState, string];\n\n    // Files Filters\n    'files.attach:filter:input': [FilesAttachInputPayload | false];\n\n    // Small, well-known DB-specialized hooks kept explicit\n    'db.messages.files.validate:filter:hashes': [string[]];\n    'db.files.refchange:action:after': [\n        { before: FileEntity; after: FileEntity; delta: number }\n    ];\n    'db.threads.getSystemPrompt:filter:output': [string | null];\n\n    // Editor Lifecycle (Examples/Plugins)\n    'editor.created:action:after': [{ editor: unknown }];\n    'editor.updated:action:after': [{ editor: unknown }];\n    'editor:request-extensions': [void];\n\n    // UI/Chat Extensions\n    'ui.chat.editor:filter:extensions': [unknown[]];\n    'ui.chat.editor:action:before_send': [Record<string, unknown>]; // editor JSON\n    'ai.chat.send:filter:prepare': [ChatSendPreparation];\n    'ai.chat.send:filter:commit': [ChatSendCommit];\n    'ai.chat.messages:filter:before_send': [\n        { messages: OpenRouterMessage[]; editorDoc?: Record<string, unknown> | null } | { messages: OpenRouterMessage[] }[]\n    ];\n\n    // Branching lifecycle\n    'branch.fork:filter:options': [BranchForkOptions];\n    'branch.fork:action:before': [BranchForkBeforePayload];\n    'branch.fork:action:after': [ThreadEntity];\n    'branch.retry:filter:options': [RetryBranchParams];\n    'branch.retry:action:before': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.retry:action:after': [\n        {\n            assistantMessageId: string;\n            precedingUserId: string;\n            newThreadId: string;\n            mode: BranchMode;\n        }\n    ];\n    'branch.context:filter:messages': [\n        MessageEntity[],\n        string /* threadId */,\n        BranchMode\n    ];\n    'branch.context:action:after': [BranchContextAfterPayload];\n\n    // Documents helpers\n    'db.documents.title:filter': [\n        string,\n        {\n            phase: 'create' | 'update';\n            id: string;\n            rawTitle?: string | null;\n            existing?: DocumentEntity;\n        }\n    ];\n\n    // Workflow Actions\n    'workflow.execution:action:state_update': [\n        { messageId: string; state: unknown }\n    ];\n    'workflow.execution:action:complete': [\n        { messageId: string; workflowId: string; finalOutput?: string }\n    ];\n\n    // Auth hooks\n    'auth.access:filter:decision': [\n        AccessDecision,\n        { session: SessionContext | null }\n    ];\n    'auth.user:action:created': [{ userId: string; provider: string }];\n    'auth.workspace:action:created': [{ workspaceId: string; userId: string }];\n\n    // Storage hooks\n    'workspace.files:action:before': [PluginFileLifecycle];\n    'workspace.files:action:after': [PluginFileLifecycle];\n    'workspace.files:filter:policy': [boolean, PluginFileLifecycle];\n    'storage.files.upload:action:before': [StorageFileUploadBeforePayload];\n    'storage.files.upload:action:after': [StorageFileUploadAfterPayload];\n    'storage.files.download:action:before': [StorageFileDownloadBeforePayload];\n    'storage.files.download:action:after': [StorageFileDownloadAfterPayload];\n    'storage.files.url:filter:options': [StorageFileUrlOptionsPayload];\n    'storage.files.upload:filter:policy': [\n        StorageFileUploadPolicyPayload | false,\n    ];\n    'storage.files.gc:action:run': [StorageFileGcPayload];\n    'storage:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Sync hooks\n    'sync.op:action:captured': [{ op: SyncPendingOpPayload }];\n    'sync.push:action:before': [{ scope: SyncScopePayload; count: number }];\n    'sync.push:action:after': [\n        { scope: SyncScopePayload; successCount: number; failCount: number }\n    ];\n    'sync.bootstrap:action:start': [{ scope: SyncScopePayload }];\n    'sync.bootstrap:action:progress': [\n        {\n            scope: SyncScopePayload;\n            cursor: number;\n            pulledCount: number;\n            hasMore: boolean;\n        }\n    ];\n    'sync.bootstrap:action:complete': [\n        { scope: SyncScopePayload; cursor: number; totalPulled: number; elapsedMs?: number }\n    ];\n    'sync.pull:action:received': [\n        { scope: SyncScopePayload; changeCount: number }\n    ];\n    'sync.pull:action:applied': [\n        {\n            scope: SyncScopePayload;\n            applied: number;\n            skipped: number;\n            conflicts: number;\n        }\n    ];\n    'sync.pull:action:error': [{ scope: SyncScopePayload; error: string }];\n    'sync.pull:action:after': [\n        { scope: SyncScopePayload; count: number; cursor: number }\n    ];\n    'sync.subscription:action:statusChange': [\n        {\n            scope: SyncScopePayload;\n            previousStatus: string;\n            status: string;\n        }\n    ];\n    'sync.conflict:action:detected': [\n        {\n            tableName: string;\n            pk: string;\n            local: unknown;\n            remote: unknown;\n            winner: 'local' | 'remote';\n        }\n    ];\n    'sync.error:action': [{ op: SyncPendingOpPayload; error: unknown; permanent?: boolean }];\n    'sync.retry:action': [{ op: SyncPendingOpPayload; attempt: number }];\n    'sync.queue:action:full': [{ pendingCount: number; maxSize: number }];\n    'sync.rescan:action:starting': [{ scope: SyncScopePayload }];\n    'sync.rescan:action:progress': [\n        { scope: SyncScopePayload; progress: number },\n    ];\n    'sync.rescan:action:completed': [{ scope: SyncScopePayload }];\n    'sync.stats:action': [\n        { pendingCount: number; cursor: number; lastSyncAt: number }\n    ];\n    'sync:action:error': [{ message?: string } & Record<string, unknown>];\n\n    // Notification hooks\n    'notify:action:push': [NotificationCreatePayload];\n    'notify:action:read': [{ id: string; readAt: number }];\n    'notify:action:clicked': [{ notification: NotificationEntity; action?: NotificationAction }];\n    'notify:action:cleared': [{ count: number }];\n    'notify:filter:before_store': [NotificationCreatePayload | false, { source: string }];\n};"
             }
           ]
         },

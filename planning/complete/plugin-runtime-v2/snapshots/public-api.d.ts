@@ -54,7 +54,10 @@ interface AdminPluginState {
     widgets: AdminWidgetDef[];
 }
 export declare const state: AdminPluginState;
+/** Existing admin-plugin API retains its void return contract. */
 export declare function registerAdminPage(def: AdminPageDef): void;
+/** Source modules can release their page on teardown/HMR without removing a replacement. */
+export declare function registerOwnedAdminPage(def: AdminPageDef): () => void;
 export declare function registerAdminWidget(def: AdminWidgetDef): void;
 export declare function useAdminPages(): ComputedRef<AdminPageDef[]>;
 export declare function useAdminWidgets(slot?: AdminWidgetDef['slot']): ComputedRef<AdminWidgetDef[]>;
@@ -690,7 +693,7 @@ export declare function useDashboardNavigation(options?: UseDashboardNavigationO
  */
 import type { Post } from '~/db';
 import { type HistoryActionRegistryItem } from '../history/createHistoryActionRegistry';
-/** Definition for an extendable chat message action button. */
+/** Definition for an extendable document history action. */
 export interface DocumentHistoryAction extends HistoryActionRegistryItem<Post> {
 }
 /**
@@ -3785,6 +3788,7 @@ export type CoreHookPayloadMap = {
     'ai.chat.messages:filter:before_send': [
         {
             messages: OpenRouterMessage[];
+            editorDoc?: Record<string, unknown> | null;
         } | {
             messages: OpenRouterMessage[];
         }[]

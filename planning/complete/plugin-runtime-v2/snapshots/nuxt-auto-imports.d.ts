@@ -23,7 +23,7 @@ export { registerSidebarPage, registerSidebarPageWithPosts, RegisterSidebarPageO
 export { registerSidebarSection, unregisterSidebarSection, registerSidebarFooterAction, unregisterSidebarFooterAction, useSidebarSections, useSidebarFooterActions, listRegisteredSidebarSectionIds, listRegisteredSidebarFooterActionIds, SidebarSectionPlacement, SidebarSection, SidebarSectionGroups, SidebarFooterActionContext, ChromeActionColor, SidebarFooterAction, SidebarFooterActionEntry } from '../app/composables/sidebar/useSidebarSections';
 export { registerThreadHistoryAction, unregisterThreadHistoryAction, useThreadHistoryActions, listRegisteredThreadHistoryActionIds, ThreadHistoryAction } from '../app/composables/threads/useThreadHistoryActions';
 export { setHookEngine, tryGetHooks, useHooks } from '../app/core/hooks/useHooks';
-export { state, registerAdminPage, registerAdminWidget, useAdminPages, useAdminWidgets, resolveAdminComponent, createAdminPluginApi, loadAdminPlugins, AdminPageDef, AdminWidgetDef, AdminComponent, AdminPlugin, AdminPluginApi } from '../app/composables/admin/useAdminPlugins';
+export { state, registerAdminPage, registerOwnedAdminPage, registerAdminWidget, useAdminPages, useAdminWidgets, resolveAdminComponent, createAdminPluginApi, loadAdminPlugins, AdminPageDef, AdminWidgetDef, AdminComponent, AdminPlugin, AdminPluginApi } from '../app/composables/admin/useAdminPlugins';
 export { subscribeDashboardRegistry, getRegisteredDashboardPlugin, registerDashboardPlugin, unregisterDashboardPlugin, useDashboardPlugins, listRegisteredDashboardPluginIds, registerDashboardPluginPage, unregisterDashboardPluginPage, useDashboardPluginPages, listDashboardPluginPages, getDashboardPluginPage, resolveDashboardPluginPageComponent, useDashboardNavigation, getPluginCapabilities, hasAllCapabilities, hasAnyCapability, hasCapability, DashboardPlugin, DashboardPluginPage, DashboardNavigationError, DashboardNavigationErrorCode, DashboardNavigationResult, DashboardNavigationState, UseDashboardNavigationOptions } from '../app/composables/dashboard/useDashboardPlugins';
 export { typedOn, KnownHookKey, DbFamily, DbHookKey, HookKey, ChatOutgoingFilterReturn, ChatIncomingFilterReturn, FilesAttachFilterReturn } from '../app/core/hooks/hook-keys';
 export { useGlobalRegistry, createRegistry, RegistryItem, RegistryApi, RegistrationHandle } from '../app/composables/_registry';
@@ -90,6 +90,7 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
     readonly registerEditorToolbarButton: UnwrapRef<typeof import('../../app/composables/editor/useEditorToolbar')['registerEditorToolbarButton']>
     readonly registerHeaderAction: UnwrapRef<typeof import('../../app/composables/sidebar/useHeaderActions')['registerHeaderAction']>
     readonly registerMessageAction: UnwrapRef<typeof import('../../app/composables/chat/useMessageActions')['registerMessageAction']>
+    readonly registerOwnedAdminPage: UnwrapRef<typeof import('../../app/composables/admin/useAdminPlugins')['registerOwnedAdminPage']>
     readonly registerProjectTreeAction: UnwrapRef<typeof import('../../app/composables/projects/useProjectTreeActions')['registerProjectTreeAction']>
     readonly registerSidebarFooterAction: UnwrapRef<typeof import('../../app/composables/sidebar/useSidebarSections')['registerSidebarFooterAction']>
     readonly registerSidebarPage: UnwrapRef<typeof import('../../app/composables/sidebar/registerSidebarPage')['registerSidebarPage']>
@@ -216,6 +217,7 @@ export { useSidebarPages, SidebarPageDef, SidebarPageContext, SidebarActivateCon
   const registerEditorToolbarButton: typeof import('../../app/composables/editor/useEditorToolbar').registerEditorToolbarButton
   const registerHeaderAction: typeof import('../../app/composables/sidebar/useHeaderActions').registerHeaderAction
   const registerMessageAction: typeof import('../../app/composables/chat/useMessageActions').registerMessageAction
+  const registerOwnedAdminPage: typeof import('../../app/composables/admin/useAdminPlugins').registerOwnedAdminPage
   const registerProjectTreeAction: typeof import('../../app/composables/projects/useProjectTreeActions').registerProjectTreeAction
   const registerSidebarFooterAction: typeof import('../../app/composables/sidebar/useSidebarSections').registerSidebarFooterAction
   const registerSidebarPage: typeof import('../../app/composables/sidebar/registerSidebarPage').registerSidebarPage
