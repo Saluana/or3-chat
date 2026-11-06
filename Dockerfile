@@ -4,7 +4,7 @@
 # The Cloud operator executes a small shell-tool contract against the managed
 # /data volume for backup, restore, adoption, and free-space checks. This stage
 # is a static multicall binary plus applet links; it performs no target-arch RUN
-# so the multi-arch build does not require QEMU.
+# and its static tools also support the target-architecture cleanup below.
 FROM busybox:1.37.0-uclibc@sha256:8d7b1636e974e0adfd8d945955fca609304f0a56c18799dfd032d6e661382d84 AS runtime-tools
 
 # Kept out of the app container at runtime. The dedicated dashboard-operator
@@ -15,8 +15,8 @@ FROM docker:27.5.1-cli@sha256:851f91d241214e7c6db86513b270d58776379aacc5eb9c4a87
 # Debian's stable bases still contain the zlib write-error overflow. Install
 # only the checksum-pinned Debian fix (CVE-2026-76844 / CVE-2026-85091), not a
 # moving unstable distribution. Its libc requirements are <= both base images.
-# All extraction and cleanup run native tools, including for the ARM image.
-FROM --platform=$BUILDPLATFORM busybox:1.37.0-uclibc@sha256:8d7b1636e974e0adfd8d945955fca609304f0a56c18799dfd032d6e661382d84 AS native-tools
+# Package extraction runs natively; the tiny cleanup uses the target BusyBox
+# through BuildKit emulation when cross-building an image.
 FROM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS operator-base
 FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS patched-zlib
 ARG TARGETARCH
@@ -44,7 +44,7 @@ RUN npm install --global npm@11.6.2
 # but none of the OR3 application output or runtime data. It is published as a
 # separately digest-pinned image and only the narrow operator service uses it.
 FROM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS dashboard-operator
-RUN --mount=from=native-tools,source=/bin/busybox,target=/busybox ["/busybox", "sh", "-ec", "/busybox rm -f /usr/lib/*/libz.so.1.2.13 /usr/lib/*/libz.so.1.3.1"]
+RUN --mount=from=runtime-tools,source=/bin/busybox,target=/busybox ["/busybox", "rm", "-f", "/usr/lib/x86_64-linux-gnu/libz.so.1.2.13", "/usr/lib/x86_64-linux-gnu/libz.so.1.3.1", "/usr/lib/aarch64-linux-gnu/libz.so.1.2.13", "/usr/lib/aarch64-linux-gnu/libz.so.1.3.1"]
 COPY --from=patched-zlib /zlib/root/ /
 COPY --from=patched-zlib /zlib/operator/ /
 COPY --from=operator-npm /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
@@ -148,7 +148,7 @@ FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf100
 FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:78f07ef1b5ea71ad7c055df15d0dd8997f2d288f9158623c4d4ae3d765b7d50d AS runtime
 
 USER 0:0
-RUN --mount=from=native-tools,source=/bin/busybox,target=/busybox ["/busybox", "sh", "-ec", "/busybox rm -f /usr/lib/*/libz.so.1.3.1"]
+RUN --mount=from=runtime-tools,source=/bin/busybox,target=/busybox ["/busybox", "rm", "-f", "/usr/lib/x86_64-linux-gnu/libz.so.1.3.1", "/usr/lib/aarch64-linux-gnu/libz.so.1.3.1"]
 COPY --from=patched-zlib /zlib/root/ /
 COPY --from=patched-zlib /zlib/distroless/ /
 
