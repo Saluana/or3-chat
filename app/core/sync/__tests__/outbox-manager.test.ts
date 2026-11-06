@@ -226,7 +226,7 @@ describe('OutboxManager', () => {
         }
     );
 
-    it('retains queued edits without consuming attempts offline and sends them after reconnect', async () => {
+    it.each(['before push', 'during push'] as const)('retains queued edits when connectivity is lost %s and sends them after reconnect', async (disconnect) => {
         const pendingOp = createPendingOp();
         const pendingOps = createPendingOpsTable([pendingOp]);
         const provider = new SpyProvider();
@@ -239,19 +239,32 @@ describe('OutboxManager', () => {
             provider,
             { workspaceId: 'workspace-1' }
         );
-        const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+        const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(disconnect === 'during push');
+        if (disconnect === 'during push') {
+            provider.push.mockImplementationOnce(async () => {
+                online.mockReturnValue(false);
+                throw new TypeError('Failed to fetch');
+            });
+        }
         try {
             await outbox.flush();
             await outbox.flush();
 
-            expect(provider.push).not.toHaveBeenCalled();
-            expect(pendingOps.__rows.get(pendingOp.id)).toEqual(pendingOp);
+            expect(provider.push).toHaveBeenCalledTimes(disconnect === 'during push' ? 1 : 0);
+            expect(pendingOps.__rows.get(pendingOp.id)).toMatchObject({
+                payload: pendingOp.payload,
+                stamp: pendingOp.stamp,
+                attempts: pendingOp.attempts,
+                status: disconnect === 'during push' ? 'retry_wait' : 'pending',
+            });
 
             online.mockReturnValue(true);
             await outbox.flush();
 
-            expect(provider.push).toHaveBeenCalledTimes(1);
-            expect(provider.push.mock.calls[0]![0].ops[0]!.payload).toMatchObject(pendingOp.payload!);
+            expect(provider.push).toHaveBeenCalledTimes(disconnect === 'during push' ? 2 : 1);
+            const sent = provider.push.mock.calls.at(-1)![0].ops[0]!;
+            expect(sent.payload).toMatchObject(pendingOp.payload!);
+            expect(sent.stamp.opId).toBe(pendingOp.stamp.opId);
             expect(pendingOps.__rows.has(pendingOp.id)).toBe(false);
         } finally {
             online.mockRestore();

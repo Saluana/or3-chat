@@ -734,6 +734,18 @@ export class OutboxManager {
             }
 
             const status = httpStatusOf(error);
+            // Connectivity can disappear after flush() claims the batch. A
+            // transport failure while offline must preserve the same retry
+            // budget and op_ids as edits queued before going offline.
+            if (status === null && typeof navigator !== 'undefined' && navigator.onLine === false) {
+                await this.releaseBatchForDeferredRetry(batch, 0);
+                await hooks.doAction('sync.push:action:after', {
+                    scope: this.scope,
+                    successCount: 0,
+                    failCount: 0,
+                });
+                return { successCount: 0, failCount: 0, deferred: true };
+            }
             if (status === 401 || status === 403) {
                 const firstDelay = this.config.retryDelays[0] ?? DEFAULT_RETRY_DELAYS[0] ?? 250;
                 await this.releaseBatchForDeferredRetry(
