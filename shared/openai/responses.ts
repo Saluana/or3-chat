@@ -1,7 +1,7 @@
 import type { AiEvent } from '../ai/events';
 import { MAX_SSE_EVENT_BYTES, MAX_TOOL_ARGUMENT_BYTES, utf8Bytes } from '../chat/tool-limits';
 import { OpenRouterProtocolError, OpenRouterProviderError } from '../openrouter/errors';
-import { openAiApiModel } from './models';
+import { openAiApiModel, openAiReasoningEfforts } from './models';
 
 type ResponsesStreamEvent = {
     type?: string;
@@ -56,8 +56,10 @@ export function encodeOpenAiResponseRequest(body: Record<string, unknown>): Reco
         ? { type: 'json_schema', ...format.json_schema }
         : format?.type === 'json_object' || format?.type === 'text' ? { type: format.type } : undefined;
     const choice = body.tool_choice as string | { type?: string; function?: { name?: string } } | undefined;
-    return { model: openAiApiModel(String(body.model)), input, stream: body.stream === true, store: false,
-        include: ['reasoning.encrypted_content'],
+    const model = openAiApiModel(String(body.model));
+    return { model, input, stream: body.stream === true, store: false,
+        // Only reasoning models produce encrypted reasoning to carry between tool rounds.
+        ...(openAiReasoningEfforts(model) ? { include: ['reasoning.encrypted_content'] } : {}),
         ...(typeof body.max_tokens === 'number' ? { max_output_tokens: body.max_tokens } : {}),
         ...(typeof body.max_completion_tokens === 'number' ? { max_output_tokens: body.max_completion_tokens } : {}),
         ...(typeof effort === 'string' ? { reasoning: { effort } } : {}),
