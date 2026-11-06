@@ -5,6 +5,7 @@ import { isReactive, toRaw, watch } from 'vue';
 import {
     loadAdminPlugins,
     registerAdminPage,
+    registerOwnedAdminPage,
     registerAdminWidget,
     resolveAdminComponent,
     state,
@@ -41,6 +42,19 @@ function select(enabled: boolean) {
 }
 
 describe('admin extension contribution adapters', () => {
+    it('removes only the source module page owned by its cleanup handle in both registries', () => {
+        for (const enabled of [false, true]) {
+            select(enabled);
+            const id = `owned-${crypto.randomUUID()}`;
+            const old = registerOwnedAdminPage({ id, label: 'Old', component: {} });
+            const current = registerOwnedAdminPage({ id, label: 'Current', component: {} });
+            old();
+            expect(useAdminPages().value.find(page => page.id === id)?.label).toBe('Current');
+            current();
+            expect(useAdminPages().value.some(page => page.id === id)).toBe(false);
+        }
+        select(false);
+    });
     it('matches replace-in-place pages/widgets, defaults, projections, and returns', () => {
         requireCompatibilityProfile(profiles, 'registry.admin-extensions');
         const prefix = `adapter-${crypto.randomUUID()}`;

@@ -10,9 +10,10 @@ import * as queues from '../transfer-queue';
 import type { ObjectStorageProvider, PresignedUrlResult } from '../types';
 import { deferred } from './fixtures/transfer-faults';
 
-const policy = vi.hoisted(() => ({ cloud: false, cacheBytes: 10 * 1024 * 1024 }));
+const policy = vi.hoisted(() => ({ cloud: false, configured: false, cacheBytes: 10 * 1024 * 1024 }));
 vi.mock('../file-policy', () => ({
     isCloudFileStorageEnabled: () => policy.cloud,
+    isCloudFileStorageConfigured: () => policy.configured || policy.cloud,
     loadFilePolicy: async () => ({ maxCachedFileBytes: policy.cacheBytes, maxCacheBytes: 250 * 1024 * 1024,
         retentionDays: 14, maxUploadBytes: 100 * 1024 * 1024 }),
 }));
@@ -68,6 +69,7 @@ beforeEach(() => {
     vi.stubGlobal('Blob', NodeBlob);
     vi.stubGlobal('fetch', vi.fn(async () => new Response('hello', { headers: { 'content-type': 'text/plain' } })));
     policy.cloud = false;
+    policy.configured = false;
     policy.cacheBytes = DEFAULT_FILE_POLICY.maxCachedFileBytes;
 });
 afterEach(async () => {
@@ -79,6 +81,61 @@ afterEach(async () => {
 });
 
 describe('durable storage recovery contracts', () => {
+    it('downloads previously stored files above the local cap after expiry without pinning them', async () => {
+        policy.configured = true;
+        policy.cacheBytes = 1; // Cloud cache rejects this original, but download still succeeds.
+        const db = await database();
+        await db.file_meta.put({ ...meta(), storage_id: 'original' });
+        const executor = queue(db, provider(), { maxDownloadBytes: 1 });
+        executor.setUploadsEnabled(false);
+        executor.setWorkspaceId('ws');
+        expect(await (await executor.ensureDownloadedBlob(hash))?.text()).toBe('hello');
+        expect(await db.file_blobs.get(hash)).toBeUndefined();
+    });
+
+    it.each([402, 413])('defers recoverable %s upload admission without exhausting attempts, then resumes', async status => {
+        const db = await database(); await original(db);
+        const storage = provider();
+        let allowed = false;
+        vi.mocked(storage.getPresignedUploadUrl).mockImplementation(async () => {
+            if (!allowed) throw Object.assign(new Error('Cloud admission paused'), { status, retryable: false,
+                code: status === 413 ? 'ERR_STORAGE_QUOTA_EXCEEDED' : 'ERR_PAYMENT_REQUIRED' });
+            return { url: 'https://storage.example/upload', expiresAt: Date.now() + 60_000, storageId: 'original' };
+        });
+        const executor = queue(db, storage, { maxAttempts: 1 });
+        executor.setWorkspaceId('ws');
+        const upload = await executor.enqueue(hash, 'upload');
+        await until(async () => Boolean((await db.file_transfers.get(upload!.id))?.last_error));
+        expect(await db.file_transfers.get(upload!.id)).toMatchObject({ state: 'queued', attempts: 0 });
+        executor.setUploadsEnabled(false);
+        allowed = true;
+        executor.setUploadsEnabled(true);
+        await until(async () => (await db.file_transfers.get(upload!.id))?.state === 'done');
+        expect(storage.commitUpload).toHaveBeenCalledOnce();
+    });
+
+    it('keeps uploads durable while Cloud is paused, permits downloads, and resumes on upgrade', async () => {
+        const db = await database(); await original(db);
+        const storage = provider();
+        const executor = queue(db, storage);
+        executor.setUploadsEnabled(false);
+        executor.setWorkspaceId('ws');
+        const upload = await executor.enqueue(hash, 'upload');
+        // A download for an existing Cloud file can still recover its original bytes.
+        await db.file_meta.update(hash, { storage_id: 'original' });
+        const download = await executor.enqueue(hash, 'download');
+        await until(async () => (await db.file_transfers.get(download!.id))?.state === 'done');
+        expect(storage.getPresignedUploadUrl).not.toHaveBeenCalled();
+        expect(storage.getPresignedDownloadUrl).toHaveBeenCalled();
+        expect(await db.file_transfers.get(upload!.id)).toMatchObject({ state: 'queued', attempts: 0 });
+        expect(await db.file_blobs.get(hash)).toBeDefined();
+        await db.file_meta.update(hash, { storage_id: undefined });
+        executor.setUploadsEnabled(true);
+        await until(async () => (await db.file_transfers.get(upload!.id))?.state === 'done');
+        expect(storage.commitUpload).toHaveBeenCalledOnce();
+        expect((await db.file_meta.get(hash))?.storage_id).toBe('verified-original');
+    });
+
     it.each([
         { connection: '4g', configured: 1, expected: 1 },
         { connection: '4g', configured: undefined, expected: 4 },

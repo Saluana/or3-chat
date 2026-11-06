@@ -58,7 +58,10 @@ async function requestJson<T>(
         });
 
         if (!res.ok) {
-            const metadata = normalizeError({ status: res.status,
+            const payload: unknown = res.status === 413 ? await res.json().catch(() => null) : null;
+            const data = payload && typeof payload === 'object' && 'data' in payload ? payload.data : undefined;
+            const quota = data && typeof data === 'object' && 'code' in data && data.code === 'storage_quota_exceeded';
+            const metadata = normalizeError({ status: res.status, ...(quota ? { code: 'ERR_STORAGE_QUOTA_EXCEEDED' } : {}),
                 retryAfterMs: parseRetryAfter(res.headers.get('retry-after')) }, { source: 'storage' });
             throw Object.assign(new Error(presentError(metadata).message), metadata);
         }

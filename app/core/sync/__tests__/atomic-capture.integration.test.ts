@@ -44,6 +44,24 @@ describe('atomic sync capture integration', () => {
         }
     });
 
+    it('coalesces never-sent local revisions atomically without discarding an attempted operation', async () => {
+        const bridge = getHookBridge(db);
+        bridge.start({ coalesceUnsent: true });
+        const write = (value: string, clock: number) => db.transaction('rw', getWriteTxTableNames(db, 'kv'), () =>
+            db.kv.put({ id: 'kv:local-edit', name: 'local-edit', value, clock, deleted: false, created_at: 1, updated_at: 1 }));
+        await write('first', 1);
+        const attempted = await db.pending_ops.toCollection().first();
+        await db.pending_ops.update(attempted!.id, { attempts: 1, status: 'retry_wait' });
+        for (let clock = 2; clock <= 20; clock++) await write(`edit-${clock}`, clock);
+        expect(await db.pending_ops.count()).toBe(2);
+        expect(await db.pending_ops.get(attempted!.id)).toMatchObject({ attempts: 1 });
+        expect((await db.pending_ops.where('status').equals('pending').first())?.payload).toMatchObject({ value: 'edit-20' });
+        await db.transaction('rw', getWriteTxTableNames(db, 'kv'), () => db.kv.delete('kv:local-edit'));
+        expect(await db.pending_ops.count()).toBe(2);
+        expect((await db.pending_ops.where('status').equals('pending').first())?.operation).toBe('delete');
+        expect(await db.tombstones.get('kv:kv:local-edit')).toBeDefined();
+    });
+
     it('captures put operations atomically for synced tables', async () => {
         const now = nowSec();
         await db.transaction(

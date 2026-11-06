@@ -24,3 +24,20 @@ describe('provider maintenance results', () => {
         expect(wrapper.find('script').exists()).toBe(false);
     });
 });
+
+// Remote usage has no local disk capacity; partial listings must stay explicit.
+it('renders S3 object usage without inventing local disk capacity', () => {
+    const wrapper = mount(AdminSystemProviderActions, { props: {
+        actions: [{ id: 'storage.usage', label: 'Storage usage', kind: 'storage', provider: 's3' }], isOwner: true,
+        result: { label: 'Storage usage', storageUsage: true, value: {
+            canonical: { activeMetadataBytes: 1024, retainedDeletedMetadataBytes: 2048,
+                complete: { activeMetadata: true, retainedDeletedMetadata: true } },
+            objectStore: { objectBytes: 4096, complete: false },
+        } },
+    }, global: { stubs: { UButton: { template: '<button><slot /></button>' } } } });
+    expect(wrapper.text()).toContain('Objects in storage');
+    expect(wrapper.text()).toContain('4 KB');
+    expect(wrapper.text()).toContain('Partial scan');
+    expect(wrapper.text()).not.toContain('Files on disk');
+    expect(wrapper.text()).not.toContain('Server space available');
+});

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp, createRouter, toWebHandler } from 'h3';
 import { createHash } from 'node:crypto';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { SessionContext, WorkspaceRole } from '~/core/hooks/hook-types';
@@ -157,6 +158,22 @@ describe('filesystem download HTTP isolation and signed-link lifetime', () => {
         expect(scoped.status).toBe(502);
         expect(send).toHaveBeenCalledOnce();
         expect(send).toHaveBeenCalledWith(expect.objectContaining({ input: expect.objectContaining({ Key: buildS3MarkerKey(key('ws-b')) }) }));
+    });
+
+    it('presigns legacy downloads without reading the object even when verification is requested', async () => {
+        const { S3StorageGatewayAdapter } = await import('../../../../node_modules/or3-provider-s3/dist/runtime/server/storage/s3-storage-gateway-adapter.js');
+        const cfg = { region: 'test', bucket: 'test', keyPrefix: '', accessKeyId: 'fixture', secretAccessKey: 'fixture',
+            forcePathStyle: true, urlTtlSeconds: 900, requireChecksum: true };
+        const client = new S3Client({ region: 'test', credentials: { accessKeyId: 'fixture', secretAccessKey: 'fixture' } });
+        const send = vi.spyOn(client, 'send').mockResolvedValue({ ContentLength: 1024 ** 3, ETag: 'legacy' } as never);
+        try {
+            const adapter = new S3StorageGatewayAdapter(cfg, { client });
+            const result = await adapter.presignDownload({} as never, { workspaceId: 'ws',
+                hash: 'md5:5d41402abc4b2a76b9719d911017c592', verifyContent: true });
+            expect(new URL(result.url).searchParams.has('X-Amz-Signature')).toBe(true);
+            expect(result.verifiedContent).toBeUndefined();
+            expect(send.mock.calls.some(args => args[0] instanceof GetObjectCommand)).toBe(false);
+        } finally { client.destroy(); }
     });
 
     it('makes another workspace hash and a deleted metadata row indistinguishable', async () => {

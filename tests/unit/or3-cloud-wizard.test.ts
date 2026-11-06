@@ -711,10 +711,10 @@ describe('or3 cloud wizard apply', () => {
             instanceDir,
         });
         expect(plan.commands.npm).toContain(
-            'or3-provider-basic-auth@0.0.17'
+            'or3-provider-basic-auth@0.0.18'
         );
-        expect(plan.commands.npm).toContain('or3-provider-fs@0.0.15');
-        expect(plan.commands.npm).toContain('or3-provider-sqlite@0.0.26');
+        expect(plan.commands.npm).toContain('or3-provider-fs@0.0.16');
+        expect(plan.commands.npm).toContain('or3-provider-sqlite@0.0.27');
     });
 
     it('keeps installed release-qualified provider plugins valid JavaScript', async () => {

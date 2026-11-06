@@ -12,6 +12,12 @@ export const TRANSFER_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 export const DEFAULT_LEASE_DURATION_MS = 30_000;
 export const DEFAULT_MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024;
 
+/** Permit large originals on slower links, bounded below the one-hour URL/intent lifetime. */
+export function transferDeadlineMs(bytes: number): number {
+    const size = Number.isSafeInteger(bytes) && bytes >= 0 ? bytes : 0;
+    return Math.min(50 * 60_000, 5 * 60_000 + Math.ceil(size / (512 * 1024)) * 1000);
+}
+
 export interface FileTransferQueueConfig {
     concurrency?: number;
     maxAttempts?: number;

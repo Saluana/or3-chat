@@ -146,7 +146,8 @@ export async function catalogWorkspaceFile(scope: WorkspaceOperationScope, hash:
     return { post: result.post, duplicate: result.duplicate, restored: result.restored };
 }
 
-export async function importWorkspaceFile(scope: WorkspaceOperationScope, blob: Blob, name: string) {
+export async function importWorkspaceFile(scope: WorkspaceOperationScope, blob: Blob, name: string,
+    options: { onDirectUpload?(): void } = {}) {
     scope.assertCurrent('write');
     if (!name.trim()) throw new Error('Enter a filename.');
     const filtered = await useHooks().applyFilters('files.attach:filter:input', {
@@ -158,7 +159,7 @@ export async function importWorkspaceFile(scope: WorkspaceOperationScope, blob: 
     if (!name.trim()) throw new Error('Enter a filename.');
     const text = await extractWorkspaceFileText(blob, name);
     scope.assertCurrent('write');
-    const meta = await createOrRefFile(blob, name, { assertCurrent: () => scope.assertCurrent('write') });
+    const meta = await createOrRefFile(blob, name, { assertCurrent: () => scope.assertCurrent('write'), onDirectUpload: options.onDirectUpload });
     // createOrRefFile holds an intake reference. Transfer it to catalog ownership
     // without removing immutable bytes, including on failed/cancelled intake.
     try {

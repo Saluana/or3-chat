@@ -24,7 +24,7 @@ import { err, reportError } from '~/utils/errors';
 import { getActiveStorageProvider } from './provider-registry';
 import type { ObjectStorageProvider } from './types';
 import { cacheDownloadedFile, cleanupFileCache, markUploadedFileCached, touchFileCache } from './file-cache';
-import { isCloudFileStorageEnabled, loadFilePolicy } from './file-policy';
+import { isCloudFileStorageConfigured, isCloudFileStorageEnabled, loadFilePolicy } from './file-policy';
 import type { FilePolicy } from '~~/shared/storage/file-policy';
 import { withStorageDeadline } from './storage-request';
 import {
@@ -37,6 +37,7 @@ import {
     TRANSFER_CLEANUP_INTERVAL_MS,
     TRANSFER_RETENTION_SEC,
     getDefaultConcurrency,
+    transferDeadlineMs,
     normalizeTransferMime,
     isRecoverableTransferError,
     recoverableTransferError,
@@ -78,6 +79,8 @@ export class FileTransferQueue {
     private backoffBaseMs: number;
     private backoffMaxMs: number;
     private running = new Set<string>();
+    private uploadsEnabled = true;
+    private runningUploads = new Set<string>();
     private waiters = new Map<string, TransferWaiter[]>();
     private abortControllers = new Map<string, AbortController>();
     private requeueOnAbort = new Set<string>();
@@ -146,6 +149,28 @@ export class FileTransferQueue {
         }
     }
 
+    setUploadsEnabled(enabled: boolean): void {
+        if (enabled === this.uploadsEnabled) return;
+        this.uploadsEnabled = enabled;
+        this.recoveryCursor = undefined;
+        this.recoveryComplete = false;
+        if (!enabled) for (const id of this.runningUploads) {
+            this.requeueOnAbort.add(id);
+            this.abortControllers.get(id)?.abort();
+        }
+        if (enabled) {
+            const db = this.db;
+            const workspaceId = this.workspaceId;
+            // Admission failures are resumable; validation failures stay failed.
+            void db.file_transfers.filter(row => row.workspace_id === workspaceId && row.direction === 'upload' &&
+                ['queued', 'failed'].includes(row.state) &&
+                (row.last_error_details?.status === 402 || row.last_error_details?.code === 'ERR_STORAGE_QUOTA_EXCEEDED'))
+                .modify({ state: 'queued', attempts: 0, retry_at: 0 })
+                .then(() => this.scheduleProcessQueue(0)).catch(() => {});
+        }
+        this.scheduleProcessQueue(0);
+    }
+
     getWorkspaceId(): string | null {
         return this.workspaceId;
     }
@@ -156,6 +181,7 @@ export class FileTransferQueue {
     async uploadDirect(meta: FileMeta, blob: Blob, context: BoundQueueContext, assertCurrent: () => void): Promise<FileMeta> {
         this.assertBoundContext(context);
         assertCurrent();
+        if (!this.uploadsEnabled) throw new Error('Cloud uploads are paused.');
         if (!this.provider.commitUpload) throw new Error('Verified Cloud uploads are unavailable for this provider.');
         const controller = new AbortController();
         const transfer = { id: createRuntimeUuid(), hash: meta.hash, workspace_id: context.workspaceId,
@@ -163,9 +189,10 @@ export class FileTransferQueue {
         this.abortControllers.set(transfer.id, controller);
         this.running.add(transfer.id);
         this.directUploads++;
+        this.runningUploads.add(transfer.id);
         try {
             const storageId = await withStorageDeadline(signal => this.doUpload(transfer, signal,
-                { ...context, dbName: context.db.name }, { meta, blob }), controller.signal, 300_000);
+                { ...context, dbName: context.db.name }, { meta, blob }), controller.signal, transferDeadlineMs(blob.size));
             this.assertBoundContext(context);
             assertCurrent();
             if (isCloudFileStorageEnabled()) await markUploadedFileCached(context.db, context.workspaceId, this.provider.id, meta.hash).catch(() => {});
@@ -175,6 +202,7 @@ export class FileTransferQueue {
             this.running.delete(transfer.id);
             this.requeueOnAbort.delete(transfer.id);
             this.directUploads--;
+            this.runningUploads.delete(transfer.id);
             this.scheduleProcessQueue(0);
         }
     }
@@ -206,6 +234,7 @@ export class FileTransferQueue {
 
     /** Idempotently release every resource owned by this queue instance. */
     dispose(): void {
+        if (queueInstance === this) queueInstance = null;
         this.workspaceId = null;
         this.pauseRunning();
         if (this.processQueueTimeout) clearTimeout(this.processQueueTimeout);
@@ -363,7 +392,7 @@ export class FileTransferQueue {
         if (!transfer) return undefined;
         if (capturedContext) this.assertBoundContext(capturedContext);
         try {
-            await this.waitForTransfer(transfer.id, 60_000, db);
+            await this.waitForTransfer(transfer.id, transferDeadlineMs((await db.file_meta.get(hash))?.size_bytes ?? 0) + 60_000, db);
             if (capturedContext) this.assertBoundContext(capturedContext);
         } catch (error) {
             if (capturedContext) this.assertBoundContext(capturedContext);
@@ -431,7 +460,7 @@ export class FileTransferQueue {
 
     /** Repair pre-atomic-intake originals in bounded startup pages. */
     private async recoverOrphanUploads(context: TransferExecutionContext): Promise<void> {
-        if (this.recoveryComplete || !isCloudFileStorageEnabled()) return;
+        if (!this.uploadsEnabled || this.recoveryComplete || !isCloudFileStorageEnabled()) return;
         const rows = this.recoveryCursor
             ? await context.db.file_meta.where(':id').above(this.recoveryCursor).limit(50).toArray()
             : await context.db.file_meta.orderBy(':id').limit(50).toArray();
@@ -475,15 +504,18 @@ export class FileTransferQueue {
             }
 
             for (const transfer of candidates) {
-                if (this.workspaceId !== context.workspaceId || this.db !== context.db) {
+                if (this.workspaceId !== context.workspaceId || this.db !== context.db ||
+                    (transfer.direction === 'upload' && !this.uploadsEnabled)) {
                     await this.safeUpdateTransfer(transfer.id, { state: 'queued', retry_at: 0,
                         lease_owner: undefined, lease_token: undefined, lease_expires_at: undefined }, context.db, transfer.lease_token);
                     this.claimTokens.delete(transfer.id);
                     continue;
                 }
                 this.running.add(transfer.id);
+                if (transfer.direction === 'upload') this.runningUploads.add(transfer.id);
                 void this.processTransfer(transfer, context).finally(() => {
                     this.running.delete(transfer.id);
+                    this.runningUploads.delete(transfer.id);
                     this.scheduleProcessQueue(0);
                 });
             }
@@ -512,6 +544,10 @@ export class FileTransferQueue {
     ): Promise<void> {
         const controller = new AbortController();
         this.abortControllers.set(transfer.id, controller);
+        if (transfer.direction === 'upload' && !this.uploadsEnabled) {
+            this.requeueOnAbort.add(transfer.id);
+            controller.abort();
+        }
 
         const claimed = await context.db.transaction('rw', context.db.file_transfers, async () => {
             const current = await context.db.file_transfers.get(transfer.id);
@@ -531,10 +567,11 @@ export class FileTransferQueue {
         this.startLeaseRenewal(transfer.id, context.db, transfer.lease_token!);
         // One fresh policy read per operation, shared by admission and maintenance.
         // Start it alongside I/O; policy failure cannot fail verified file bytes.
-        const policy = isCloudFileStorageEnabled()
+        const policy = isCloudFileStorageConfigured()
             ? loadFilePolicy(context.workspaceId, controller.signal).catch(() => null) : undefined;
 
         try {
+            const size = (await context.db.file_meta.get(transfer.hash))?.size_bytes ?? 0;
             await withStorageDeadline(async signal => {
                 if (transfer.direction === 'upload') {
                     await this.doUpload(transfer, signal, context);
@@ -542,7 +579,7 @@ export class FileTransferQueue {
                     const blob = await this.doDownload(transfer, signal, context, policy);
                     this.completedDownloads.set(transfer.id, blob);
                 }
-            }, controller.signal, 300_000);
+            }, controller.signal, transferDeadlineMs(size));
 
             const latest = await context.db.file_transfers.get(transfer.id);
             const markedDone = await this.safeUpdateTransfer(transfer.id, {
@@ -618,7 +655,8 @@ export class FileTransferQueue {
             const metadata = normalizeError(error, { source: 'storage', code: 'ERR_STORAGE_PROVIDER_ERROR' });
             // Server maintenance/rate-limit deferrals retain the durable transfer
             // and its retry budget. A later attempt obtains a fresh presigned URL.
-            const deferred = (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+            const admissionDeferred = transfer.direction === 'upload' && (metadata.status === 402 || metadata.code === 'ERR_STORAGE_QUOTA_EXCEEDED');
+            const deferred = admissionDeferred || (typeof navigator !== 'undefined' && navigator.onLine === false) ||
                 metadata.status === 429 || metadata.status === 408 || (metadata.status !== undefined && metadata.status >= 500) ||
                 error instanceof TypeError || (error as Error | undefined)?.name === 'TimeoutError' || (error as Error | undefined)?.name === 'NetworkError';
             const attempts = transfer.attempts + (deferred ? 0 : 1);
@@ -630,8 +668,8 @@ export class FileTransferQueue {
                 'retryable' in error && 
                 (error as { retryable?: boolean }).retryable === false;
 
-            const failed = isNonRetryable || (!deferred && attempts >= this.maxAttempts);
-            const delay = failed ? 0 : Math.max(this.getBackoffDelay(Math.max(1, attempts)), metadata.retryAfterMs ?? 0);
+            const failed = (!admissionDeferred && isNonRetryable) || (!deferred && attempts >= this.maxAttempts);
+            const delay = failed ? 0 : Math.max(this.getBackoffDelay(Math.max(1, attempts)), metadata.retryAfterMs ?? 0, admissionDeferred ? 60_000 : 0);
             const updated = await this.safeUpdateTransfer(transfer.id, {
                 state: failed ? 'failed' : 'queued',
                 attempts,
@@ -678,6 +716,7 @@ export class FileTransferQueue {
                     ['running', context.workspaceId, Dexie.minKey],
                     ['running', context.workspaceId, now], true, true
                 )
+                .filter(row => this.uploadsEnabled || row.direction === 'download')
                 .limit(limit)
                 .toArray();
             const queued = await context.db.file_transfers
@@ -686,6 +725,7 @@ export class FileTransferQueue {
                     ['queued', context.workspaceId, Dexie.minKey],
                     ['queued', context.workspaceId, now], true, true
                 )
+                .filter(row => this.uploadsEnabled || row.direction === 'download')
                 .limit(limit)
                 .toArray();
             const candidates = [...expired, ...queued].slice(0, limit);
@@ -715,10 +755,12 @@ export class FileTransferQueue {
                 ['queued', context.workspaceId, now],
                 ['queued', context.workspaceId, Dexie.maxKey]
             )
+            .filter(row => this.uploadsEnabled || row.direction === 'download')
             .limit(1)
             .toArray(), context.db.file_transfers
             .where('[state+workspace_id+lease_expires_at]')
             .between(['running', context.workspaceId, now], ['running', context.workspaceId, Dexie.maxKey])
+            .filter(row => this.uploadsEnabled || row.direction === 'download')
             .limit(1).toArray()]);
         const next = Math.min(future[0]?.retry_at ?? Infinity, leases[0]?.lease_expires_at ?? Infinity);
         if (Number.isFinite(next)) {
@@ -852,15 +894,28 @@ export class FileTransferQueue {
             bytes_done: 0,
         }, context.db, transfer.lease_token);
 
-        const presign = await this.provider.getPresignedUploadUrl({
-            workspaceId: transfer.workspace_id,
-            hash: meta.hash,
-            mimeType: meta.mime_type,
-            sizeBytes: meta.size_bytes,
-            expiresInMs: urlOptions.expiry_ms,
-            disposition: urlOptions.disposition,
-            signal,
-        });
+        // Direct uploads have no durable retry row. Retry admission only, before
+        // sending bytes, so an overlapping billing lease is invisible to the user.
+        const presign = await (async () => {
+            for (let attempt = 0; ; attempt++) {
+                await this.assertTransferActive(transfer, context.db, signal);
+                try { return await this.provider.getPresignedUploadUrl({
+                    workspaceId: transfer.workspace_id, hash: meta.hash,
+                    mimeType: meta.mime_type, sizeBytes: meta.size_bytes,
+                    expiresInMs: urlOptions.expiry_ms, disposition: urlOptions.disposition, signal,
+                }); } catch (error) {
+                    const metadata = normalizeError(error);
+                    if (!source || metadata.status !== 503 || attempt >= 3) throw error;
+                    await new Promise<void>((resolve, reject) => {
+                        const abort = () => { clearTimeout(timer); reject(signal.reason); };
+                        const timer = setTimeout(() => { signal.removeEventListener('abort', abort); resolve(); },
+                            Math.min(10_000, Math.max(250, metadata.retryAfterMs ?? 2_000)));
+                        signal.addEventListener('abort', abort, { once: true });
+                        if (signal.aborted) abort();
+                    });
+                }
+            }
+        })();
         await this.assertTransferActive(transfer, context.db, signal);
 
         // Convex storage requires Content-Type header set to the file's MIME type
@@ -1059,7 +1114,7 @@ export class FileTransferQueue {
             response,
             transfer.id,
             context.db,
-            isCloudFileStorageEnabled() ? Math.max(this.maxDownloadBytes, meta.size_bytes) : this.maxDownloadBytes,
+            isCloudFileStorageConfigured() ? Math.max(this.maxDownloadBytes, meta.size_bytes) : this.maxDownloadBytes,
             blobMime,
             signal,
             transfer.lease_token,
@@ -1088,7 +1143,7 @@ export class FileTransferQueue {
             );
         }
 
-        if (isCloudFileStorageEnabled()) {
+        if (isCloudFileStorageConfigured()) {
             try {
                 const settings = await (policy ?? loadFilePolicy(context.workspaceId, signal));
                 this.assertBoundContext(context);

@@ -20,7 +20,8 @@ import { getCachedSessionContext, useSessionContext } from '~/composables/auth/u
 import { startCoordinatedSubscription } from './subscription-coordinator';
 import { useAuthTokenBroker, type AuthTokenBroker } from '~/composables/auth/useAuthTokenBroker.client';
 import { useWorkspaceManager } from '~/composables/workspace/useWorkspaceManager';
-import { watch } from 'vue';
+import { watch, effectScope } from 'vue';
+import { hasCloudAccess, useCloudAccess } from '~/core/cloud/access';
 import type { SyncProvider, SyncScope } from '~~/shared/sync/types';
 
 /** Sync engine state */
@@ -178,6 +179,7 @@ function startSyncEngine(
     principalId = getCachedSessionContext()?.user?.id,
     authorizationRevision = getCachedSessionContext()?.authorizationRevision,
 ): Promise<void> {
+    if (!hasCloudAccess()) return stopSyncEngine();
     return requestEngine({ workspaceId, ...(principalId ? { principalId } : {}) }, false, authorizationRevision);
 }
 
@@ -254,6 +256,8 @@ export async function setupSyncEngine(): Promise<void> {
     const { activeWorkspaceId } = useWorkspaceManager();
     const nuxtApp = useNuxtApp();
     const router = useRouter();
+    const accessScope = effectScope();
+    const cloudEnabled = accessScope.run(() => useCloudAccess())!;
 
     function getRoutePathSafe(): string {
         const maybeRouter = router as unknown as { currentRoute?: { value?: { path?: unknown } } };
@@ -267,9 +271,15 @@ export async function setupSyncEngine(): Promise<void> {
         path: string,
         authenticated: boolean,
         principalId?: string,
-        authorizationRevision?: number
+        authorizationRevision?: number,
+        cloudEnabled = true
     ): void {
         const isAdmin = isAdminPath(path);
+        // Capture local edits even on Free Local, including after a reload. Only
+        // transport is paused; upgrade snapshots must preserve this local intent.
+        if (workspaceId && authenticated) {
+            getHookBridge(createWorkspaceDb(workspaceId)).start({ coalesceUnsent: !cloudEnabled });
+        }
 
         if (isAdmin) {
             // Admin routes shouldn't run the user sync engine (heavy + irrelevant).
@@ -288,7 +298,7 @@ export async function setupSyncEngine(): Promise<void> {
         // Manage sync engine based on workspace ID AND authentication status
         // Note: Workspace DB switching is handled separately by useWorkspaceManager
         // in 00-workspace-db.client.ts. This function only starts/stops the sync engine.
-        if (workspaceId && authenticated) {
+        if (workspaceId && authenticated && cloudEnabled) {
             void startSyncEngine(workspaceId, principalId, authorizationRevision).catch((error) => {
                 console.error('[sync-engine] Failed to start sync engine:', error);
             });
@@ -303,16 +313,17 @@ export async function setupSyncEngine(): Promise<void> {
         }
     }
 
-    watch(
+    const stopWatch = watch(
         () => ({
             workspaceId: activeWorkspaceId.value,
             path: getRoutePathSafe(),
             authenticated: sessionData.value?.session?.authenticated ?? false,
             principalId: sessionData.value?.session?.user?.id,
             authorizationRevision: sessionData.value?.session?.authorizationRevision,
+            cloudEnabled: cloudEnabled.value,
         }),
-        ({ workspaceId, path, authenticated, principalId, authorizationRevision }) =>
-            updateSyncForRouteAndSession(workspaceId, path, authenticated, principalId, authorizationRevision),
+        ({ workspaceId, path, authenticated, principalId, authorizationRevision, cloudEnabled }) =>
+            updateSyncForRouteAndSession(workspaceId, path, authenticated, principalId, authorizationRevision, cloudEnabled),
         { immediate: true }
     );
 
@@ -342,10 +353,13 @@ export async function setupSyncEngine(): Promise<void> {
         discardQuarantined: async (id: string) => engineState?.outboxManager.discardQuarantined(id) ?? false,
     });
 
+    const dispose = () => { stopWatch(); accessScope.stop(); void stopSyncEngine(); };
+    nuxtApp.vueApp?.onUnmount(dispose);
+
     // Handle HMR cleanup
     if (import.meta.hot) {
         import.meta.hot.dispose(() => {
-            stopSyncEngine();
+            dispose();
         });
     }
 }

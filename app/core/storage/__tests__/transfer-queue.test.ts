@@ -89,6 +89,9 @@ class TableStub<T extends Record<string, any>> {
                     return false;
                 });
                 return {
+                    filter: (predicate: (row: T) => boolean) => ({
+                        limit: (n: number) => ({ toArray: async () => matches.filter(predicate).slice(0, n) }),
+                    }),
                     limit: (n: number) => ({
                         toArray: async () => matches.slice(0, n),
                     }),
@@ -669,10 +672,7 @@ describe('FileTransferQueue', () => {
         (queue as any).running.add(transfer.id);
 
         const processing = (queue as any).processTransfer(transfer);
-        for (let i = 0; i < 20 && fetchMock.mock.calls.length === 0; i += 1) {
-            await Promise.resolve();
-        }
-        expect(fetchMock).toHaveBeenCalledOnce();
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
 
         queue.setWorkspaceId('ws-2');
         await processing;
@@ -737,10 +737,7 @@ describe('FileTransferQueue', () => {
         (queue as any).running.add(transfer.id);
 
         const processing = (queue as any).processTransfer(transfer);
-        for (let i = 0; i < 20 && fetchMock.mock.calls.length === 0; i += 1) {
-            await Promise.resolve();
-        }
-        expect(fetchMock).toHaveBeenCalledOnce();
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
 
         queue.setWorkspaceId('ws-2');
         await processing;
@@ -1354,6 +1351,7 @@ describe('FileTransferQueue', () => {
             file_transfers: {
                 where: vi.fn(() => ({
                     between: vi.fn(() => ({
+                        filter() { return this; },
                         limit: vi.fn(() => ({
                             toArray: vi.fn(async () => {
                                 throw closedError;
@@ -1369,6 +1367,7 @@ describe('FileTransferQueue', () => {
             file_transfers: {
                 where: vi.fn(() => ({
                     between: vi.fn(() => ({
+                        filter() { return this; },
                         limit: vi.fn(() => ({
                             toArray: vi.fn(async () => []),
                         })),

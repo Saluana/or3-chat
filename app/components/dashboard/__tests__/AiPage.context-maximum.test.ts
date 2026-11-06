@@ -308,7 +308,9 @@ describe('Dashboard context maximum through real KV', () => {
     it('changes the fast model and Nitro routing through AI Settings and restores them on remount', async () => {
         await openPage();
         await show('fast');
-        await vi.waitFor(() => expect(wrapper!.find('#dashboard-title-model').exists()).toBe(true));
+        // The real control is disabled while workspace preferences load. Wait
+        // for user interaction to be available before emitting a selection.
+        await vi.waitFor(() => expect(wrapper!.get('#dashboard-title-model').attributes('disabled')).toBeUndefined());
         expect(wrapper!.getComponent<typeof FastSelect>('#dashboard-title-model').props('modelValue')).toBe('deepseek/deepseek-v4.1-flash');
         expect(wrapper!.getComponent<typeof FastSelect>('#dashboard-title-routing').props('modelValue')).toBe('nitro');
         expect(wrapper!.find('details').exists()).toBe(false);

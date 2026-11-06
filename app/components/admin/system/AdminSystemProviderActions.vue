@@ -46,7 +46,7 @@
                     </div>
                 </dl>
                 <p v-if="!storageUsage.metrics.length" class="text-sm opacity-70">Storage usage couldn’t be measured for this workspace.</p>
-                <p v-else-if="storageUsage.partial" class="text-sm opacity-70">The disk total may be higher. Some files could not be checked.</p>
+                <p v-else-if="storageUsage.partial" class="text-sm opacity-70">{{ storageUsage.partialMessage }}</p>
                 <p v-else-if="storageUsage.incomplete" class="text-sm opacity-70">Some storage information is unavailable.</p>
                 <dl v-if="storageUsage.serverAvailable !== null" class="flex flex-wrap items-baseline justify-between gap-2 text-sm">
                     <dt class="opacity-70">Server space available</dt>
@@ -101,17 +101,20 @@ const storageUsage = computed(() => {
     const value = record(props.result.value);
     const canonical = record(value?.canonical);
     const complete = record(canonical?.complete);
+    const objects = record(value?.objectStore);
     const filesystem = record(value?.filesystem);
+    const physical = objects ?? filesystem;
     const active = complete?.activeMetadata === true ? byteCount(canonical?.activeMetadataBytes) : null;
     const trash = complete?.retainedDeletedMetadata === true ? byteCount(canonical?.retainedDeletedMetadataBytes) : null;
-    const disk = byteCount(filesystem?.apparentFileBytes);
+    const disk = byteCount(objects ? objects.objectBytes : filesystem?.apparentFileBytes);
     return {
         metrics: [
             { label: 'Active files', bytes: active },
             { label: 'In Trash', bytes: trash },
-            { label: 'Files on disk', bytes: disk, description: 'Includes Trash and supporting files' },
+            { label: objects ? 'Objects in storage' : 'Files on disk', bytes: disk, description: 'Includes Trash and supporting files' },
         ].flatMap(metric => metric.bytes === null ? [] : [{ ...metric, bytes: metric.bytes }]),
-        partial: disk !== null && filesystem?.complete !== true,
+        partialMessage: objects ? 'The storage total may be higher. Some files could not be checked.' : 'The disk total may be higher. Some files could not be checked.',
+        partial: disk !== null && physical?.complete !== true,
         incomplete: active === null || trash === null || disk === null,
         serverAvailable: byteCount(record(value?.volume)?.availableBytes),
     };
