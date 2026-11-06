@@ -12,7 +12,8 @@ export type EntitlementResolver = (
     input: EntitlementResolverInput
 ) => Promise<string[]>;
 
-const resolverRegistry = new Map<string, EntitlementResolver>();
+interface ResolverEntry { resolver: EntitlementResolver; active: boolean; previous?: ResolverEntry }
+const resolverRegistry = new Map<string, ResolverEntry>();
 
 const DEFAULT_RESOLVER_ID = 'default';
 const DEFAULT_RESOLVER: EntitlementResolver = async () => [];
@@ -30,11 +31,21 @@ function normalizeEntitlements(values: string[]): string[] {
 export function registerEntitlementResolver(
     id: string,
     resolver: EntitlementResolver
-): void {
+): () => void {
     if (import.meta.dev && resolverRegistry.has(id)) {
         console.warn(`[auth:entitlements] Replacing resolver: ${id}`);
     }
-    resolverRegistry.set(id, resolver);
+    const previous = resolverRegistry.get(id);
+    const entry = { resolver, active: true, previous };
+    resolverRegistry.set(id, entry);
+    return () => {
+        entry.active = false;
+        if (resolverRegistry.get(id) !== entry) return;
+        let restore = previous;
+        while (restore && !restore.active) restore = restore.previous;
+        if (restore) resolverRegistry.set(id, restore);
+        else resolverRegistry.delete(id);
+    };
 }
 
 export function listEntitlementResolverIds(): string[] {
@@ -42,7 +53,7 @@ export function listEntitlementResolverIds(): string[] {
 }
 
 export function getEntitlementResolver(id: string): EntitlementResolver | null {
-    return resolverRegistry.get(id) ?? null;
+    return resolverRegistry.get(id)?.resolver ?? null;
 }
 
 function resolveActiveResolverId(event?: H3Event): string {
@@ -54,7 +65,7 @@ export function getActiveEntitlementResolver(
     event?: H3Event
 ): EntitlementResolver {
     const activeId = resolveActiveResolverId(event);
-    return resolverRegistry.get(activeId) ?? resolverRegistry.get(DEFAULT_RESOLVER_ID) ?? DEFAULT_RESOLVER;
+    return resolverRegistry.get(activeId)?.resolver ?? resolverRegistry.get(DEFAULT_RESOLVER_ID)?.resolver ?? DEFAULT_RESOLVER;
 }
 
 export async function resolveEntitlements(

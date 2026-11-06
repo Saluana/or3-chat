@@ -19,6 +19,7 @@ import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { useWorkspaceFileActions } from '~/composables/files/useWorkspaceFileActions';
 import type { WorkspaceFileAction } from '~/composables/files/useWorkspaceFileActions';
 import { reportError } from '~/utils/errors';
+import { isCloudFileStorageEnabled, isCloudFileStorageConfigured } from '~/core/storage/file-policy';
 
 const pageElement = ref<HTMLElement | null>(null);
 const widePreview = ref(false);
@@ -46,6 +47,7 @@ const icons = {
     file: useIcon('external-agent.file'), text: useIcon('external-agent.file.text'),
     pdf: useIcon('external-agent.file.pdf'), download: useIcon('ui.download'),
     chat: useIcon('sidebar.chat'), edit: useIcon('ui.edit'),
+    check: useIcon('ui.check'), warning: useIcon('ui.warning'),
 };
 const query = ref('');
 const trash = ref(false);
@@ -70,6 +72,9 @@ const rename = ref(false);
 const newTitle = ref('');
 const uploadInput = ref<HTMLInputElement | null>(null);
 const failures = ref<Array<{ file: File; error: string }>>([]);
+const uploadStatus = ref<{ name: string; index: number; total: number; uploading: boolean } | null>(null);
+const uploadResult = ref('');
+let uploadResultTimer: ReturnType<typeof setTimeout> | undefined;
 const readOnly = ref(false);
 const typeFilter = ref('all');
 const projectFilter = ref('all');
@@ -339,22 +344,45 @@ async function run(action: (origin: WorkspaceOperationScope) => Promise<void>, f
 }
 
 async function intake(files: File[], retry = false) {
+    if (!files.length) return;
+    clearTimeout(uploadResultTimer); uploadResult.value = '';
     await run(async origin => {
-        const { importWorkspaceFile } = await import('~/db/workspace-files');
-        failures.value = retry ? failures.value.filter(failure => !files.includes(failure.file)) : [];
-        let saved = 0;
-        for (const file of files) {
-            origin.assertCurrent('write');
-            try {
-                const result = await importWorkspaceFile(origin, file, file.name);
-                saved++;
-                feedback.value = result.restored ? 'Existing file restored locally' : result.duplicate ? 'File already exists' : 'File saved locally';
-            } catch (caught) {
+        // Show the strip before any await: large Cloud files are hashed and
+        // uploaded directly, and their row appears only once committed.
+        uploadStatus.value = { name: files[0]!.name, index: 1, total: files.length, uploading: false };
+        try {
+            const { importWorkspaceFile } = await import('~/db/workspace-files');
+            failures.value = retry ? failures.value.filter(failure => !files.includes(failure.file)) : [];
+            let saved = 0; let background = 0; let note = '';
+            for (const [index, file] of files.entries()) {
                 origin.assertCurrent('write');
-                failures.value.push({ file, error: fileErrorMessage(caught, 'The file could not be uploaded. Try again.') });
+                const status = { name: file.name, index: index + 1, total: files.length, uploading: false };
+                uploadStatus.value = status;
+                let direct = false;
+                try {
+                    const result = await importWorkspaceFile(origin, file, file.name, { onDirectUpload: () => {
+                        direct = true; uploadStatus.value = { ...status, uploading: true };
+                    } });
+                    saved++;
+                    if (!direct) background++;
+                    note = result.duplicate ? 'File already exists' : result.restored ? 'Existing file restored' : '';
+                } catch (caught) {
+                    origin.assertCurrent('write');
+                    failures.value.push({ file, error: fileErrorMessage(caught, 'The file could not be uploaded. Try again.') });
+                }
             }
-        }
-        if (files.length > 1) feedback.value = `${saved} saved locally · ${failures.value.length} failed`;
+            origin.assertCurrent();
+            if (!saved) return;
+            // Smaller Cloud files are saved locally first and uploaded by the transfer queue.
+            const local = background > 0;
+            const syncing = isCloudFileStorageEnabled() && local;
+            const paused = isCloudFileStorageConfigured() && !isCloudFileStorageEnabled() && local;
+            const summary = files.length === 1 ? note || (local ? 'Saved locally' : 'Upload complete')
+                : `${saved} of ${files.length} files ${local ? 'saved' : 'uploaded'}`;
+            uploadResult.value = !(files.length === 1 && note) && (syncing || paused)
+                ? `${summary} · ${syncing ? 'Syncing in background' : 'Cloud paused'}` : summary;
+            uploadResultTimer = setTimeout(() => { uploadResult.value = ''; }, 4000);
+        } finally { uploadStatus.value = null; }
     });
 }
 async function upload(event: Event) {
@@ -585,7 +613,7 @@ function resetScope() {
     if (disposed) return;
     generation++; scope = null; rows.value = []; fileDetails.value = {}; syncStatuses.value = {}; clearPreview(); rename.value = false;
     associate.value = false; remove.value = false; existingCursor.value = ''; existingComplete.value = false;
-    failures.value = []; projects.value = []; readOnly.value = true; projectFilter.value = 'all'; actionTarget.value = null;
+    failures.value = []; uploadResult.value = ''; clearTimeout(uploadResultTimer); projects.value = []; readOnly.value = true; projectFilter.value = 'all'; actionTarget.value = null;
     statusSubscription?.unsubscribe(); previewSubscription?.unsubscribe(); clearTimeout(resultTimer);
     subscription?.unsubscribe(); subscription = undefined; void initialize();
 }
@@ -638,7 +666,7 @@ async function catalogExistingImages(origin: WorkspaceOperationScope) {
         cursor = batch[batch.length - 1]!.hash;
     }
 }
-onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generation++; releasePreviewImage(); clearTimeout(timer); stop?.(); subscription?.unsubscribe(); statusSubscription?.unsubscribe(); previewSubscription?.unsubscribe(); clearTimeout(resultTimer); });
+onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generation++; releasePreviewImage(); clearTimeout(timer); clearTimeout(uploadResultTimer); stop?.(); subscription?.unsubscribe(); statusSubscription?.unsubscribe(); previewSubscription?.unsubscribe(); clearTimeout(resultTimer); });
 </script>
 
 <template>
@@ -673,6 +701,31 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
                     <template #actions><UButton size="workspace" label="Refresh files" color="neutral" variant="ghost" @click="refresh" /></template>
                 </UAlert>
             </div>
+            <div role="status">
+                <Transition name="files-upload" mode="out-in">
+                    <div v-if="uploadStatus" class="files-upload">
+                        <div class="files-upload-line">
+                            <UIcon :name="icons.upload.value" class="files-upload-icon size-4" />
+                            <span class="files-upload-text">
+                                {{ uploadStatus.total > 1 ? `Uploading ${uploadStatus.index} of ${uploadStatus.total} files ·` : 'Uploading' }}
+                                <strong :title="uploadStatus.name">{{ uploadStatus.name }}</strong>
+                            </span>
+                            <span class="files-upload-phase">{{ uploadStatus.uploading ? 'Uploading…' : 'Preparing…' }}</span>
+                        </div>
+                        <UProgress :model-value="null" size="xs" color="primary" aria-label="Upload in progress" />
+                    </div>
+                    <div v-else-if="uploadResult" class="files-upload" data-state="complete">
+                        <p class="files-upload-line"><UIcon :name="icons.check.value" class="files-upload-icon size-4" />{{ uploadResult }}</p>
+                    </div>
+                </Transition>
+            </div>
+            <ul v-if="failures.length" aria-label="Failed uploads" class="files-upload-failures">
+                <li v-for="failure in failures" :key="failure.file.name" class="files-upload files-upload-line" data-state="failed">
+                    <UIcon :name="icons.warning.value" class="files-upload-icon size-4" />
+                    <span class="files-upload-text"><strong>Couldn’t upload {{ failure.file.name }}</strong> <span class="files-upload-reason">{{ failure.error }}</span></span>
+                    <UButton size="workspace" label="Retry upload" color="neutral" variant="outline" :disabled="busy || readOnly" @click="intake([failure.file], true)" />
+                </li>
+            </ul>
             <div class="files-list">
                 <div class="files-columns" :data-trash="trash" aria-hidden="true">
                     <span class="files-name-label">Name</span><span class="files-type-column">Type</span><span class="files-project-column">Project</span><span class="files-date-column">Last modified</span><span class="files-size-column">Size</span><span />
@@ -722,9 +775,6 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
                     <UButton v-if="more" size="workspace" label="Load more" color="neutral" variant="outline" :disabled="loading" @click="limit += 50; refresh()" />
                 </footer>
             </div>
-            <ul v-if="failures.length" aria-label="Failed uploads" class="files-notices">
-                <li v-for="failure in failures" :key="failure.file.name">{{ failure.file.name }}: {{ failure.error }} <UButton size="workspace" label="Retry upload" :disabled="busy || readOnly" @click="intake([failure.file], true)" /></li>
-            </ul>
         </div>
         <Transition name="files-inspector">
         <aside v-if="preview" aria-label="File preview" class="files-inspector" :class="{ 'files-inspector-compact': !widePreview }" @keydown.esc.stop="closePreview">
@@ -816,6 +866,20 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
 .files-empty p { color: var(--md-on-surface-variant); font-size: 14px; max-width: 320px; line-height: 1.6; }
 .files-empty-icon { width: 72px; height: 72px; display: grid; place-items: center; border-radius: var(--md-border-radius); background: var(--md-surface-container-lowest,var(--md-surface-container-low,var(--md-surface-variant))); color: var(--md-primary); }
 .files-notices { margin: 12px 0; padding: 12px 16px; background: var(--md-surface-container-lowest,var(--md-surface-container-low,var(--md-surface-variant))); border-radius: var(--md-border-radius-small); font-size: 13px; }
+.files-upload { display: flex; flex-direction: column; gap: 10px; margin: 0 0 12px; padding: 10px 14px; border: var(--md-border-width,1px) solid var(--md-border-color,var(--md-outline-variant)); border-radius: var(--md-border-radius-small); background: var(--md-surface-container-lowest,var(--md-surface-container-low,var(--md-surface-variant))); font-size: 13px; }
+.files-upload-line { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.files-upload-icon { flex-shrink: 0; color: var(--md-primary); }
+.files-upload-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--md-on-surface-variant); }
+.files-upload-text strong { font-weight: 600; color: var(--md-on-surface); }
+.files-upload-phase { flex-shrink: 0; color: var(--md-on-surface-variant); }
+.files-upload[data-state="complete"] { color: var(--md-on-surface-variant); }
+.files-upload-failures { display: grid; gap: 8px; margin: 0 0 12px; padding: 0; list-style: none; }
+.files-upload[data-state="failed"] { flex-direction: row; flex-wrap: wrap; margin: 0; border-color: color-mix(in srgb, var(--md-error) 45%, var(--md-surface)); background: color-mix(in srgb, var(--md-error) 6%, var(--md-surface)); }
+.files-upload[data-state="failed"] .files-upload-icon { color: var(--md-error); }
+.files-upload[data-state="failed"] .files-upload-text { white-space: normal; }
+.files-upload-reason { display: block; margin-top: 2px; color: var(--md-on-surface-variant); }
+.files-upload-leave-active { transition: opacity 200ms ease; }
+.files-upload-leave-to { opacity: 0; }
 @container (max-width: 1050px) {
     .files-size-column { display: none; }
     .files-columns, .files-row { grid-template-columns: minmax(150px, 1fr) 100px minmax(90px, .45fr) 140px 48px; gap: 12px; }
@@ -850,5 +914,5 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
     .files-empty { min-height: 260px; padding: 24px 16px; }
 }
 @media (pointer: coarse) { .files-page :deep(button), .files-page :deep(input), .files-page :deep([role=combobox]) { min-height: 44px !important; } }
-@media (prefers-reduced-motion: reduce) { .files-row, .files-inspector-enter-active, .files-inspector-leave-active { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .files-row, .files-inspector-enter-active, .files-inspector-leave-active, .files-upload-leave-active { transition: none; } }
 </style>

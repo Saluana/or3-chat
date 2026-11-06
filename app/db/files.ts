@@ -244,12 +244,13 @@ async function changeRefCount(
  * - Enforces max file size limit.
  * - Requires browser APIs for blob hashing and storage.
  *
- * Large Cloud files commit directly from the selected disk file before publication.
+ * Large Cloud files commit directly from the selected disk file before publication;
+ * `owner.onDirectUpload` runs when that upload starts.
  */
 export async function createOrRefFile(
     file: Blob,
     name: string,
-    owner?: { assertCurrent(): void }
+    owner?: { assertCurrent(): void; onDirectUpload?(): void }
 ): Promise<FileMeta> {
     const { db, assertCurrent } = captureFileWrite();
     const assertCurrentDb = () => {
@@ -310,6 +311,7 @@ export async function createOrRefFile(
     assertCurrentDb();
     if (existing) {
         if (direct) {
+            owner?.onDirectUpload?.();
             await queue!.uploadDirect(existing, file, { db, workspaceId: workspaceId! }, assertCurrentDb);
             assertCurrentDb();
         }
@@ -320,7 +322,7 @@ export async function createOrRefFile(
                 assertCurrentDb();
                 if (!direct && !(await db.file_blobs.get(hash))) await db.file_blobs.put({ hash, blob: file });
                 const incremented = await changeFileRefRows(hash, 1, db);
-                if (incremented && !incremented.row.storage_id && !direct && queue && workspaceId)
+                if (incremented && !incremented.row.storage_id && !direct && cloud && queue && workspaceId)
                     await queue.enqueue(hash, 'upload', { db, workspaceId });
                 assertCurrentDb();
                 return incremented;
@@ -396,6 +398,7 @@ export async function createOrRefFile(
     await hooks.doAction('db.files.create:action:before', actionPayload);
     let mergedMeta = parseOrThrow(FileMetaSchema, applyFileEntityToMeta(seededMeta, actionPayload.entity));
     if (direct) {
+        owner?.onDirectUpload?.();
         mergedMeta = await queue!.uploadDirect(mergedMeta, file, { db, workspaceId: workspaceId! }, assertCurrentDb);
     }
     assertCurrentDb();
@@ -414,7 +417,7 @@ export async function createOrRefFile(
             const changed = (await changeFileRefRows(hash, 1, db))!;
             referenceChanges.push(changed.notification);
             storedMeta = changed.row;
-            if (!storedMeta.storage_id && !direct && queue && workspaceId)
+            if (!storedMeta.storage_id && !direct && cloud && queue && workspaceId)
                 await queue.enqueue(hash, 'upload', { db, workspaceId });
             assertCurrentDb();
             return;
@@ -425,7 +428,7 @@ export async function createOrRefFile(
             db.file_meta.put(mergedMeta),
             ...(!direct ? [db.file_blobs.put({ hash: mergedMeta.hash, blob: file })] : []),
         ]);
-        if (!mergedMeta.storage_id && !direct && queue && workspaceId)
+        if (!mergedMeta.storage_id && !direct && cloud && queue && workspaceId)
             await queue.enqueue(mergedMeta.hash, 'upload', { db, workspaceId });
         storedMeta = mergedMeta;
         createdNew = true;

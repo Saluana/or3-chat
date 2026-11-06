@@ -68,4 +68,20 @@ describe('storage gateway registry', () => {
         runtimeConfig.public.storage.provider = '' as any;
         expect(reg.getActiveStorageGatewayAdapter()).toBeNull();
     });
+
+    it('applies an owned admission policy to both lookups and restores the provider after disposal', async () => {
+        const reg = await loadRegistry();
+        const presignUpload = vi.fn(async () => ({ url: 'https://storage.example/upload' }));
+        reg.registerStorageGatewayAdapter({ id: 'convex', create: () => ({ id: 'convex', presignUpload, presignDownload: presignUpload }) });
+        const release = reg.registerStorageGatewayDecorator(adapter => ({
+            ...adapter, presignUpload: async () => { throw new Error('Subscription required'); },
+        }));
+        const input = { workspaceId: 'w', hash: 'a'.repeat(64), mimeType: 'text/plain', sizeBytes: 1 };
+        const event = {} as import('h3').H3Event;
+        await expect(reg.getStorageGatewayAdapter('convex')!.presignUpload(event, input)).rejects.toThrow('Subscription required');
+        await expect(reg.getActiveStorageGatewayAdapter()!.presignUpload(event, input)).rejects.toThrow('Subscription required');
+        expect(presignUpload).not.toHaveBeenCalled();
+        release();
+        await expect(reg.getActiveStorageGatewayAdapter()!.presignUpload(event, input)).resolves.toEqual({ url: 'https://storage.example/upload' });
+    });
 });

@@ -1,25 +1,37 @@
 #!/usr/bin/env bun
 import { mkdtemp, readdir, readFile, writeFile, symlink, mkdir, rm, cp, lstat, chmod } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { parseEnv } from 'node:util';
 import { resolveQualificationProvider } from './workspace-cloud-providers';
+import { prepareS3TestBucket } from './s3-test-bucket';
 
 // Installed provider artifacts are the default. Development source overlays
 // require an explicit flag and never produce an installed qualification receipt.
 const sourceRoot = process.cwd();
 const development = process.argv.includes('--development-providers');
 const journeys = process.argv.includes('--journeys');
+const billing = process.argv.includes('--billing');
+const stripeEnvIndex = process.argv.indexOf('--stripe-env');
+const stripeEnv = stripeEnvIndex < 0 ? null : parseEnv(await readFile(resolve(process.argv[stripeEnvIndex + 1] || ''), 'utf8'));
+if (stripeEnv && (!billing || !process.argv.includes('--watch') ||
+    !/^(sk|rk)_test_/.test(stripeEnv.OR3_BILLING_STRIPE_SECRET_KEY ?? '') ||
+    !stripeEnv.OR3_BILLING_STRIPE_WEBHOOK_SECRET?.startsWith('whsec_') ||
+    !stripeEnv.OR3_BILLING_STRIPE_PRICE_ID?.startsWith('price_'))) {
+    throw new Error('--stripe-env requires --billing --watch and a private test-mode Stripe configuration.');
+}
 const convexIndex = process.argv.indexOf('--convex-local');
 const convex = convexIndex < 0 ? null : await Bun.file(join(process.argv[convexIndex + 1]!, 'sandbox.json')).json() as { root: string; url: string; adminKey: string };
 if (convex && (!convex.root.startsWith('/private/tmp/or3-files-convex-') || new URL(convex.url).hostname !== '127.0.0.1')) {
     throw new Error('Convex qualification requires the disposable loopback sandbox.');
 }
-const storageProvider = process.argv.includes('--convex-storage') ? 'convex' : 'fs';
+const storageProvider = process.argv.includes('--s3') ? 's3' : process.argv.includes('--convex-storage') ? 'convex' : 'fs';
 if (storageProvider === 'convex' && !convex) throw new Error('--convex-storage requires --convex-local.');
 const syncPackage = await resolveQualificationProvider(sourceRoot, convex ? 'or3-provider-convex' : 'or3-provider-sqlite', development);
-const storagePackage = storageProvider === 'fs' ? await resolveQualificationProvider(sourceRoot, 'or3-provider-fs', development) : syncPackage;
+const storagePackage = storageProvider === 'convex' ? syncPackage : await resolveQualificationProvider(sourceRoot, storageProvider === 's3' ? 'or3-provider-s3' : 'or3-provider-fs', development);
 const providers = [syncPackage, ...(storagePackage === syncPackage ? [] : [storagePackage])];
 if (convex && (convex as { provider?: typeof syncPackage }).provider?.mode !== syncPackage.mode)
     throw new Error('Convex sandbox template and app provider qualification modes must match. Recreate the sandbox in the selected mode.');
+let bucket: Awaited<ReturnType<typeof prepareS3TestBucket>> | undefined;
 const root = await mkdtemp('/private/tmp/or3-workspace-cloud-e2e-');
 async function removeOverlay() {
     // Installed extension copies have read-only directories. Never follow the
@@ -71,10 +83,12 @@ try {
     const probe = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response('port probe') });
     const port = probe.port!;
     await probe.stop(true);
+    if (storageProvider === 's3') bucket = await prepareS3TestBucket(`http://127.0.0.1:${port}`);
     await writeFile(join(root, 'profile.json'), JSON.stringify({ root, origin: `http://127.0.0.1:${port}`, syncProvider: convex ? 'convex' : 'sqlite', storageProvider, providers }));
     const watch = process.argv.includes('--watch');
-    const command = watch ? ['bun', 'run', 'dev', '--host', '127.0.0.1', '--port', String(port)]
-        : ['bunx', 'playwright', 'test', 'tests/e2e/or3-cloud-auth.spec.ts', '--grep', 'workspace cloud profile', '--workers=1', '--reporter=line', '--trace=on', '--output', join(root, 'test-results')];
+    const command = billing && process.argv.includes('--build') ? ['bun', 'run', 'build']
+        : watch ? ['bun', 'run', 'dev', '--host', '127.0.0.1', '--port', String(port)]
+        : ['bunx', 'playwright', 'test', ...(billing ? ['tests/e2e/hosted-billing.spec.ts'] : ['tests/e2e/or3-cloud-auth.spec.ts', '--grep', 'workspace cloud profile']), '--workers=1', '--reporter=line', '--trace=on', '--output', join(root, 'test-results')];
     if (watch) console.log(`Disposable cloud Chrome profile: http://127.0.0.1:${port}/`);
     const child = Bun.spawn(command, {
         cwd: root, stdout: 'inherit', stderr: 'inherit', env: {
@@ -92,7 +106,8 @@ try {
             OR3_BASIC_AUTH_REFRESH_SECRET: crypto.randomUUID() + crypto.randomUUID(),
             OR3_BASIC_AUTH_BOOTSTRAP_EMAIL: 'workspace-e2e@example.test',
             OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD: 'DisposableWorkspaceE2e!123',
-            OR3_STORAGE_ENABLED: 'true', OR3_CLOUD_STORAGE_ENABLED: 'true', NUXT_PUBLIC_STORAGE_PROVIDER: storageProvider,
+            OR3_STORAGE_ENABLED: 'true', OR3_CLOUD_STORAGE_ENABLED: 'true', NUXT_PUBLIC_STORAGE_PROVIDER: storageProvider, OR3_STORAGE_PROVIDER: storageProvider,
+            ...bucket?.env,
             OR3_STORAGE_FS_ROOT: join(root, 'storage'), OR3_STORAGE_FS_TOKEN_SECRET: crypto.randomUUID() + crypto.randomUUID(),
             OR3_PRODUCTION_JOURNEY_TEST_HARNESS: journeys ? 'true' : 'false',
             OR3_BACKGROUND_STREAMING_ENABLED: 'false', OR3_WORKSPACE_CLOUD_E2E: 'true', OR3_WORKSPACE_CLOUD_E2E_DIR: root,
@@ -100,20 +115,32 @@ try {
             NUXT_SECRETS_PROVIDER: '',
             OR3_ADMIN_DATA_DIR: join(root, 'admin'), PW_PORT: String(port), PW_SKIP_WEB_SERVER: 'false',
             OR3_ADMIN_USERNAME: 'workspace-e2e-admin', OR3_ADMIN_PASSWORD: 'DisposableAdminE2e!123',
+            OR3_HOSTED_BILLING_ENABLED: billing ? 'true' : 'false',
+            ...(billing ? {
+                OR3_BILLING_STRIPE_SECRET_KEY: stripeEnv?.OR3_BILLING_STRIPE_SECRET_KEY ?? 'sk_test_disposable_no_network',
+                OR3_BILLING_STRIPE_WEBHOOK_SECRET: stripeEnv?.OR3_BILLING_STRIPE_WEBHOOK_SECRET ?? 'whsec_disposable_no_network',
+                OR3_BILLING_STRIPE_PRICE_ID: stripeEnv?.OR3_BILLING_STRIPE_PRICE_ID ?? 'price_disposable_no_network',
+                OR3_BILLING_BASE_URL: `http://127.0.0.1:${port}`,
+                OR3_BILLING_SQLITE_PATH: join(root, 'billing.sqlite'),
+            } : {}),
             OPENROUTER_API_KEY: '', OR3_OPENROUTER_API_KEY: '', NUXT_OPENROUTER_API_KEY: '',
         },
     });
     process.exitCode = await child.exited;
-    const output = join(sourceRoot, `output/workspace-assistant-files/review-fixes/cloud-${convex ? 'convex' : 'sqlite'}-${storageProvider}-${development ? 'development' : 'installed'}`);
+    const output = join(sourceRoot, billing ? 'output/hosted-billing' : `output/workspace-assistant-files/review-fixes/cloud-${convex ? 'convex' : 'sqlite'}-${storageProvider}-${development ? 'development' : 'installed'}`);
     await mkdir(output, { recursive: true });
     try { await cp(join(root, 'test-results'), join(output, 'test-results'), { recursive: true }); }
     catch (error) { if ((error as { code?: string }).code !== 'ENOENT') throw error; }
+    const s3Prefix = bucket?.prefix;
+    const bucketToRemove = bucket;
+    bucket = undefined;
+    await bucketToRemove?.cleanup();
     await removeOverlay();
     await writeFile(join(output, 'profile.json'), JSON.stringify({
         profile: `Basic Auth + ${convex ? 'Convex' : 'native SQLite'} + ${storageProvider} storage`,
         sourceRoot, providers, port,
-        temporaryDataRemoved: true, exitCode: process.exitCode,
+        temporaryDataRemoved: true, s3Prefix, s3CleanupComplete: s3Prefix ? true : undefined, exitCode: process.exitCode,
     }, null, 2) + '\n');
 } finally {
-    await removeOverlay();
+    try { await bucket?.cleanup(); } finally { await removeOverlay(); }
 }

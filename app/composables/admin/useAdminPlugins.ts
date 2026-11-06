@@ -2,6 +2,7 @@ import {
     computed,
     reactive,
     shallowRef,
+    toRaw,
     defineAsyncComponent,
     type Component,
     type ComputedRef,
@@ -105,10 +106,18 @@ widgetV2Kernel.registry.subscribe(() => {
     if (useV2Surface()) state.widgets = [...widgetV2Kernel.items.value];
 });
 
-export function registerAdminPage(def: AdminPageDef) {
+/** Existing admin-plugin API retains its void return contract. */
+export function registerAdminPage(def: AdminPageDef): void {
+    registerOwnedAdminPage(def);
+}
+
+/** Source modules can release their page on teardown/HMR without removing a replacement. */
+export function registerOwnedAdminPage(def: AdminPageDef): () => void {
+    legacyComponentCache.delete(def.id);
+    v2ComponentCache.delete(def.id);
     if (useV2Surface()) {
-        pageV2Kernel.registry.registerLegacy({ value: def });
-        return;
+        const handle = pageV2Kernel.registry.registerLegacy({ value: def });
+        return () => { if (handle.dispose()) v2ComponentCache.delete(def.id); };
     }
     const normalized = normalizePage(def);
     const existingIndex = state.pages.findIndex((page) => page.id === normalized.id);
@@ -117,6 +126,10 @@ export function registerAdminPage(def: AdminPageDef) {
     } else {
         state.pages.push(normalized);
     }
+    return () => {
+        const index = state.pages.findIndex(page => toRaw(page) === normalized);
+        if (index >= 0) { state.pages.splice(index, 1); legacyComponentCache.delete(def.id); }
+    };
 }
 
 export function registerAdminWidget(def: AdminWidgetDef) {

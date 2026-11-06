@@ -7,6 +7,7 @@ import { $fetch } from 'ofetch';
 import { useFetch, useRuntimeConfig, useState } from 'nuxt/app';
 import type { ComputedRef, Ref } from 'vue';
 import type { SessionContext } from '~/core/hooks/hook-types';
+import type { CloudAccess } from '~~/shared/cloud/access';
 import { recoverClientSession } from '~/composables/auth/useClientSessionRecovery';
 
 export type SessionPayload = {
@@ -14,6 +15,7 @@ export type SessionPayload = {
     appAccessAllowed: boolean;
     workspaceItemCapability?: 'v1';
     secretStoreEnabled?: boolean;
+    cloudAccess?: CloudAccess;
 };
 type SessionContextState = {
     data: ComputedRef<SessionPayload | null>;

@@ -710,7 +710,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 13,
-                    "summary": "S3 endpoint validation, canonical SHA-256 identity, paired upload reservations, retryable commits, and safe disabled physical cleanup."
+                    "summary": "S3 and Hippius setup, verified transfers, dormant immutable generations and coordinated cleanup, retained quotas, offline SHA-256 backup preparation, and qualification."
                 },
                 {
                     "name": "deployment-operations.md",
@@ -827,6 +827,15 @@
                     "category": "Providers",
                     "order": 10,
                     "summary": "Configure credential custody, the local vault, account connections, and recovery."
+                },
+                {
+                    "name": "hosted-billing.md",
+                    "path": "/cloud/hosted-billing",
+                    "title": "Optional hosted billing",
+                    "category": "Advanced",
+                    "categoryOrder": 5,
+                    "order": 24,
+                    "summary": "Opt-in source module with Free Local, a 7-day no-card Cloud trial, $40/year Stripe subscriptions, adjustable Cloud storage, paid-invoice period verification, sandbox qualification, and safe sync pause/resume after expiry."
                 }
             ]
         },

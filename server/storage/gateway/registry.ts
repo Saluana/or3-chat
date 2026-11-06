@@ -25,6 +25,19 @@ export interface StorageGatewayAdapterRegistryItem {
     create: StorageGatewayAdapterFactory;
 }
 
+/** Trusted, operator-installed policies wrap storage without replacing provider registrations. */
+const decorators = new Set<{ decorate: (adapter: StorageGatewayAdapter) => StorageGatewayAdapter }>();
+export function registerStorageGatewayDecorator(decorate: (adapter: StorageGatewayAdapter) => StorageGatewayAdapter): () => void {
+    const entry = { decorate };
+    decorators.add(entry);
+    return () => { decorators.delete(entry); };
+}
+function decorateAdapter(adapter: StorageGatewayAdapter | null): StorageGatewayAdapter | null {
+    if (!adapter) return null;
+    for (const { decorate } of decorators) adapter = decorate(adapter);
+    return adapter;
+}
+
 const registry = createRuntimeConfigRegistry<
     StorageGatewayAdapter,
     StorageGatewayAdapterRegistryItem
@@ -78,7 +91,7 @@ export function registerStorageGatewayAdapter(
 export function getStorageGatewayAdapter(
     id: string
 ): StorageGatewayAdapter | null {
-    return registry.get(id);
+    return decorateAdapter(registry.get(id));
 }
 
 /**
@@ -104,7 +117,7 @@ export function getStorageGatewayAdapter(
  * ```
  */
 export function getActiveStorageGatewayAdapter(): StorageGatewayAdapter | null {
-    return registry.getActive();
+    return decorateAdapter(registry.getActive());
 }
 
 /**

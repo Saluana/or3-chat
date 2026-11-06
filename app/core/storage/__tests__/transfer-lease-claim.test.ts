@@ -16,6 +16,7 @@ const policyState = vi.hoisted(() => ({ cloud: false }));
 vi.mock('../file-policy', async importOriginal => ({
     ...await importOriginal<typeof import('../file-policy')>(),
     isCloudFileStorageEnabled: () => policyState.cloud,
+    isCloudFileStorageConfigured: () => policyState.cloud,
 }));
 const databases: Or3DB[] = [];
 

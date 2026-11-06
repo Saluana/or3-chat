@@ -34,6 +34,9 @@ const isProductionJourneyTestHarnessEnabled =
 const isStaticGenerateBuild = process.argv.includes('generate');
 const shouldLoadCloudProviderModules =
     isSsrAuthEnabled && !isStaticGenerateBuild;
+if (process.env.OR3_HOSTED_BILLING_ENABLED === 'true' && !isStaticGenerateBuild && !isSsrAuthEnabled) {
+    throw new Error('Hosted billing requires SSR_AUTH_ENABLED=true.');
+}
 
 const sqliteRuntime = process.env.OR3_SQLITE_DRIVER?.trim().toLowerCase() ||
     'better-sqlite3';
@@ -283,6 +286,8 @@ export default defineNuxtConfig({
     },
     modules: [
         './modules/plugin-runtime-catalog',
+        ...(shouldLoadCloudProviderModules && process.env.OR3_HOSTED_BILLING_ENABLED === 'true'
+            ? ['./packages/hosted-billing/module'] : []),
         '@nuxt/ui',
         '@nuxt/fonts',
         '@vite-pwa/nuxt',

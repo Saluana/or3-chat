@@ -21,7 +21,7 @@
                     :icon="iconBackup"
                     label="Export workspace"
                     :description="
-                        cloud
+                        exportCloud
                             ? 'Download an archive with original files'
                             : 'Download a backup of this browser’s data'
                     "
@@ -54,9 +54,10 @@
             >
                 {{ exportStatusText }}
             </p>
-            <p v-if="cloud" class="dashboard-list-footnote">
+            <p v-if="exportCloud" class="dashboard-list-footnote">
                 Finish syncing and uploading first.
             </p>
+            <p v-if="cloud && !exportCloud" class="dashboard-list-footnote">Includes files saved in this browser. Download any cloud-only files separately.</p>
         </section>
 
         <section
@@ -204,7 +205,10 @@ import DashboardListRow from '../DashboardListRow.vue';
 import { err, reportError, type AppError } from '~/utils/errors';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { isCloudWorkspaceBackupEnabled } from '~/core/storage/file-policy';
+import { useCloudAccess } from '~/core/cloud/access';
 const cloud = isCloudWorkspaceBackupEnabled();
+const cloudAccess = useCloudAccess();
+const exportCloud = computed(() => cloud && cloudAccess.value);
 
 const iconBackup = useIcon('dashboard.backup');
 const iconUpload = useIcon('ui.upload');

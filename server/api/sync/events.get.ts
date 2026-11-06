@@ -5,6 +5,7 @@ import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import { isSyncEnabled } from '../../utils/sync/is-sync-enabled';
 import { getActiveSyncGatewayAdapter } from '../../sync/gateway/registry';
 import { setNoCacheHeaders } from '../../utils/headers';
+import { requireCloudAccess, resolveCloudAccess } from '../../cloud/access';
 
 // One origin leader normally owns each workspace subscription. Bound open
 // requests per user as well as per-request queues to contain connection abuse.
@@ -20,7 +21,9 @@ export default defineEventHandler(async event => {
     const workspaceId = getQuery(event).workspaceId;
     if (typeof workspaceId !== 'string' || !workspaceId.trim() || workspaceId.length > 256) throw createError({ statusCode: 400 });
     const session = await resolveSessionContext(event);
-    const expiresAt = session.expiresAt ? Date.parse(session.expiresAt) : Infinity;
+    const cloudAccess = await resolveCloudAccess(event, session);
+    await requireCloudAccess(event, session);
+    const expiresAt = Math.min(session.expiresAt ? Date.parse(session.expiresAt) : Infinity, cloudAccess?.expiresAt ?? Infinity);
     const startedAt = Date.now();
     await requireStorageWorkspaceAccess(event, session, workspaceId);
     const adapter = getActiveSyncGatewayAdapter();
@@ -54,7 +57,7 @@ export default defineEventHandler(async event => {
             while (!closed && pending !== undefined) {
                 const version = pending; pending = undefined;
                 if (Date.now() >= expiresAt) { close(); return; }
-                await requireStorageWorkspaceAccess(event, session, workspaceId);
+                await Promise.all([requireStorageWorkspaceAccess(event, session, workspaceId), requireCloudAccess(event, session)]);
                 // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- close() can run while access is rechecked.
                 if (!closed) await stream.push(JSON.stringify({ version }));
             }
@@ -84,7 +87,7 @@ export default defineEventHandler(async event => {
             if (draining || closed) return;
             if (Date.now() >= expiresAt) { close(); return; }
             draining = true;
-            void requireStorageWorkspaceAccess(event, session, workspaceId)
+            void Promise.all([requireStorageWorkspaceAccess(event, session, workspaceId), requireCloudAccess(event, session)])
                 .then(async () => {
                     if (closed) return;
                     await stream.push({ event: 'keepalive', data: '' });

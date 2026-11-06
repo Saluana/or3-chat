@@ -2,6 +2,7 @@ import { ref, type Ref } from 'vue';
 import { useRuntimeConfig } from '#imports';
 import { getDb } from '~/db/client';
 import { getCachedSessionContext, useSessionContext } from '~/composables/auth/useSessionContext';
+import { hasCloudAccess } from '~/core/cloud/access';
 import { isCloudWorkspaceBackupEnabled } from '~/core/storage/file-policy';
 import { CLOUD_BACKUP_MAGIC, CloudBackupError, peekCloudBackup } from '~~/shared/storage/workspace-archive';
 import { STATIC_FILE_CEILING } from '~~/shared/storage/file-policy';
@@ -235,6 +236,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
 
         // A picker or hook can outlive the current workspace selection.
         const exportDb = getDb();
+        const exportCloud = cloud && hasCloudAccess();
         const exportSubject = cloud ? getCachedSessionContext()?.user?.id : null;
         const assertCloudOrigin = () => {
             if (cloud && (getDb() !== exportDb || getCachedSessionContext()?.user?.id !== exportSubject)) throw new CloudBackupError('Account or workspace changed while preparing backup.');
@@ -260,10 +262,10 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 .toISOString()
                 .slice(0, 19)
                 .replace(/:/g, '-')}`;
-            const suggestedName = `${filenameBase}.${cloud ? 'or3cloud' : 'or3.jsonl'}`;
+            const suggestedName = `${filenameBase}.${exportCloud ? 'or3cloud' : 'or3.jsonl'}`;
 
             exportTelemetry = {
-                format: cloud ? 'cloud' : 'stream',
+                format: exportCloud ? 'cloud' : 'stream',
                 filenameBase,
                 suggestedName,
             };
@@ -290,14 +292,14 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                         {
                             description: 'OR3 Workspace Backup',
                             accept: {
-                                [cloud ? 'application/octet-stream' : 'application/json']: cloud ? ['.or3cloud'] : ['.or3.jsonl', '.jsonl'],
+                                [exportCloud ? 'application/octet-stream' : 'application/json']: exportCloud ? ['.or3cloud'] : ['.or3.jsonl', '.jsonl'],
                             },
                         },
                     ],
                 });
 
                 assertCloudOrigin();
-                if (cloud) {
+                if (exportCloud) {
                     const { exportCloudWorkspace } = await import('~/utils/cloud-workspace-backup');
                     assertCloudOrigin();
                     await exportCloudWorkspace(await fileHandle.createWritable());
@@ -356,7 +358,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                     suggestedName,
                     {
                         headers: {
-                            'Content-Type': cloud ? 'application/octet-stream' : 'application/json',
+                            'Content-Type': exportCloud ? 'application/octet-stream' : 'application/json',
                             'Content-Disposition': `attachment; filename="${suggestedName}"`,
                         },
                     } as unknown as Parameters<typeof streamSaverApi.createWriteStream>[1]
@@ -375,7 +377,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                     );
                 }
 
-                if (cloud) {
+                if (exportCloud) {
                     assertCloudOrigin();
                     const { exportCloudWorkspace } = await import('~/utils/cloud-workspace-backup');
                     assertCloudOrigin();

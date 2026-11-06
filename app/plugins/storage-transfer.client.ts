@@ -3,9 +3,10 @@ import {
     listStorageProviderIds,
 } from '~/core/storage/provider-registry';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
-import { watch } from 'vue';
+import { watch, effectScope } from 'vue';
+import { useCloudAccess } from '~/core/cloud/access';
 
-export default defineNuxtPlugin(async () => {
+export default defineNuxtPlugin(async (nuxtApp) => {
     if (import.meta.server) return;
 
     const runtimeConfig = useRuntimeConfig();
@@ -36,16 +37,19 @@ export default defineNuxtPlugin(async () => {
 
     const { getStorageTransferQueue } = await import('~/core/storage/transfer-queue');
     const queue = getStorageTransferQueue();
+    const accessScope = effectScope();
+    const cloudEnabled = accessScope.run(() => useCloudAccess())!;
     const { data: sessionData } = useSessionContext();
 
-    watch(
-        () => sessionData.value?.session,
-        (session) => {
+    const stop = watch(
+        () => ({ session: sessionData.value?.session, enabled: cloudEnabled.value }),
+        ({ session, enabled }) => {
             const workspaceId = session?.authenticated
                 ? session.workspace?.id ?? null
                 : null;
+            queue?.setUploadsEnabled(enabled);
             queue?.setWorkspaceId(workspaceId);
-            if (workspaceId && queue) {
+            if (workspaceId && queue && enabled) {
                 void (async () => {
                     const [{ getDb }, { getActiveStorageProvider }, { loadFilePolicy }, { cleanupFileCache }] = await Promise.all([
                         import('~/db/client'), import('~/core/storage/provider-registry'),
@@ -54,7 +58,7 @@ export default defineNuxtPlugin(async () => {
                     const db = getDb();
                     const policy = await loadFilePolicy(workspaceId);
                     const provider = getActiveStorageProvider();
-                    if (provider && queue.getWorkspaceId() === workspaceId && getDb() === db) {
+                    if (cloudEnabled.value && provider && queue.getWorkspaceId() === workspaceId && getDb() === db) {
                         await cleanupFileCache(db, workspaceId, provider, policy);
                     }
                 })().catch(() => {}); // Offline/settings failure preserves every local copy.
@@ -62,4 +66,7 @@ export default defineNuxtPlugin(async () => {
         },
         { immediate: true }
     );
+    const dispose = () => { stop(); accessScope.stop(); queue?.dispose(); };
+    nuxtApp.vueApp.onUnmount(dispose);
+    import.meta.hot?.dispose(dispose);
 });

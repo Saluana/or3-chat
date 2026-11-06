@@ -86,7 +86,7 @@ test('offline inspection accepts the installed provider migration history and re
   const db = new Database(path);
   try {
     const installed = JSON.parse(await readFile(new URL('../../../node_modules/or3-provider-sqlite/package.json', import.meta.url), 'utf8')) as { version: string };
-    const migrationCount = installed.version === '0.0.24' ? 28 : installed.version === '0.0.25' ? 29 : installed.version === '0.0.26' ? 31 : 0;
+    const migrationCount = installed.version === '0.0.24' ? 28 : installed.version === '0.0.25' ? 29 : ['0.0.26', '0.0.27'].includes(installed.version) ? 31 : 0;
     expect(migrationCount).toBeGreaterThan(0);
     expect(db.query('SELECT name FROM kysely_migration ORDER BY name').all())
       .toEqual(QUALIFIED_MIGRATIONS.slice(0, migrationCount).map(name => ({ name })));
@@ -111,8 +111,8 @@ test('offline inspection accepts the installed provider migration history and re
 });
 
 test('offline inspection refuses unsupported versions, ambiguous archives and scratch exhaustion', () => {
-  expect(() => assertInspectionProfile({ contract: 1, sqlite: '0.0.26', filesystem: '0.0.16' })).not.toThrow();
-  for (const profile of [{ contract: 2, sqlite: '0.0.26', filesystem: '0.0.16' }, { contract: 1, sqlite: '0.0.25', filesystem: '0.0.16' }, { contract: 1, sqlite: '0.0.26', filesystem: '0.0.15' }]) expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
+  expect(() => assertInspectionProfile({ contract: 1, sqlite: '0.0.27', filesystem: '0.0.16' })).not.toThrow();
+  for (const profile of [{ contract: 2, sqlite: '0.0.27', filesystem: '0.0.16' }, { contract: 1, sqlite: '0.0.26', filesystem: '0.0.16' }, { contract: 1, sqlite: '0.0.27', filesystem: '0.0.15' }]) expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
   const entry = '-rw------- nonroot/nonroot 4096 2026-10-11 10:16:23 ./sync.sqlite\n';
   expect(() => readBackupInventory(entry + entry)).toThrow('Duplicate');
   expect(() => readBackupInventory(entry.replace('./sync.sqlite', '../sync.sqlite'))).toThrow('Unsafe');

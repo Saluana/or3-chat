@@ -20,6 +20,7 @@ import { sanitizePayloadForSync, SyncPayloadTooLargeError } from '~~/shared/sync
 import { getPkField } from '~~/shared/sync/table-metadata';
 import { markRecentOpId } from './recent-op-cache';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
+import { compareSyncRevision } from '~~/shared/sync/revision';
 
 /** Tables that should be captured for sync */
 export const SYNCED_TABLES = [
@@ -132,6 +133,7 @@ export class HookBridge {
     private deviceId: string;
     private syncTransactionTokens = new WeakSet<object>();
     private captureEnabled = true;
+    private coalesceUnsent = false;
     private hooksInstalled = false;
     private hookUnsubscribers: Array<() => void> = [];
 
@@ -143,7 +145,8 @@ export class HookBridge {
     /**
      * Start capturing writes to synced tables
      */
-    start(): void {
+    start(options: { coalesceUnsent?: boolean } = {}): void {
+        this.coalesceUnsent = options.coalesceUnsent ?? false;
         if (this.hooksInstalled) {
             this.captureEnabled = true;
             return;
@@ -458,7 +461,16 @@ export class HookBridge {
 
         if (hasPendingOps) {
             const request = transaction.table('pending_ops').add(pendingOp);
-            void Promise.resolve(request).catch((error: unknown) => {
+            void Promise.resolve(request).then(async () => {
+                if (!this.coalesceUnsent || pendingOp.status !== 'pending') return;
+                const table = transaction.table<PendingOp, string>('pending_ops');
+                // Never replace an operation already attempted/claimed by another tab.
+                // Its id must remain available for the server's idempotent replay.
+                const unsent = await table.where('[tableName+pk]').equals([tableName, pk])
+                    .filter(op => op.status === 'pending' && op.attempts === 0 && !op.claimId).toArray();
+                const winner = unsent.reduce((a, b) => compareSyncRevision(a.stamp, b.stamp) >= 0 ? a : b, pendingOp);
+                await table.bulkDelete(unsent.filter(op => op.id !== winner.id).map(op => op.id));
+            }).catch((error: unknown) => {
                 console.error('[HookBridge] Atomic outbox write failed; aborting transaction', error);
                 transaction.abort();
             });

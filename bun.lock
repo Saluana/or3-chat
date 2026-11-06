@@ -42,8 +42,8 @@
         "or3-provider-clerk": "0.0.11",
         "or3-provider-convex": "0.0.26",
         "or3-provider-fs": "0.0.16",
-        "or3-provider-s3": "0.0.14",
-        "or3-provider-sqlite": "0.0.26",
+        "or3-provider-s3": "0.0.15",
+        "or3-provider-sqlite": "0.0.27",
         "or3-scroll": "0.1.6",
         "pathe": "2.0.3",
         "pdfjs-dist": "^6.4.299",
@@ -2319,9 +2319,9 @@
 
     "or3-provider-fs": ["or3-provider-fs@0.0.16", "", { "dependencies": { "jsonwebtoken": "^9.0.3" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-Zz4ZBsLgLrDtmla1lYi2tD3J7BSM8ep8g1G7FKMdrpqsdRmo1Xbcx+T99/GpWlU/1F+ekKL1HjDUArCyAFPUSQ=="],
 
-    "or3-provider-s3": ["or3-provider-s3@0.0.14", "", { "dependencies": { "@aws-sdk/client-s3": "^3.1156.0", "@aws-sdk/s3-request-presigner": "^3.1156.0" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-8mIDk9gwbeKkdJmdPGbllfPwqNL+OPrhY3OV135a9TNqgAjizEQqvrWUWkNKkRdB3HrBccF4AGz3b5oJyxTbVA=="],
+    "or3-provider-s3": ["or3-provider-s3@0.0.15", "", { "dependencies": { "@aws-sdk/client-s3": "^3.1156.0", "@aws-sdk/s3-request-presigner": "^3.1156.0" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-1aiSPUgrZ85PHMMtVMWXGf/UDFdw9qxDOInyiUkzglgJpOfmaryLxEsb1MYFUolL/q0I2JWj2zn7z7XAXr66qg=="],
 
-    "or3-provider-sqlite": ["or3-provider-sqlite@0.0.26", "", { "dependencies": { "kysely": "^0.28.18" }, "optionalDependencies": { "better-sqlite3": "^13.0.3", "libsql": "^0.5.29" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-X6cybJtLmhY5bLbfefmjZPyfcUaeYXmGkHG8h1xuaCaNJZBcvSugsYGDXN210gFyfQ8/ruP0Wi4RXNHehJO8gg=="],
+    "or3-provider-sqlite": ["or3-provider-sqlite@0.0.27", "", { "dependencies": { "kysely": "^0.28.18" }, "optionalDependencies": { "better-sqlite3": "^13.0.3", "libsql": "^0.5.29" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-2x+a4Roe3HnUuSUdf/vn4coEentbKWIlIWqSrQQQXDjArrUUrzrjxg9hoj00YOxW1OGGKvQ5zlH7P6OqAm35PQ=="],
 
     "or3-scroll": ["or3-scroll@0.1.6", "", { "peerDependencies": { "vue": "^3.3.0" } }, "sha512-6ypwWXWTiavfYIimgHajoWi7cQbTpmipsioX4/V+uBcAtDiNZ+j6u2sOy0XjhrZ5XRr0ySzCqhWRLbg906VQug=="],
 

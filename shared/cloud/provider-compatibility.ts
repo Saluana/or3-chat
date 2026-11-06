@@ -52,6 +52,7 @@ export const SUPPORTED_PROVIDER_STACKS: readonly SupportedProviderStack[] = [
     { id: 'local-only', auth: null, sync: null, storage: null },
     { id: 'legacy-cloud', auth: 'clerk', sync: 'convex', storage: 'convex' },
     { id: 'default-ssr', auth: 'basic-auth', sync: 'sqlite', storage: 'fs' },
+    { id: 'basic-sqlite-s3', auth: 'basic-auth', sync: 'sqlite', storage: 's3' },
     { id: 'clerk-sqlite-fs', auth: 'clerk', sync: 'sqlite', storage: 'fs' },
     {
         id: 'basic-convex',

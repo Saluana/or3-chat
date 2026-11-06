@@ -1,0 +1,9 @@
+{
+  "name": "@or3/hosted-billing",
+  "private": true,
+  "type": "module",
+  "description": "Opt-in operator billing module for the OR3 SQLite host",
+  "dependencies": {
+    "stripe": "23.1.0"
+  }
+}
