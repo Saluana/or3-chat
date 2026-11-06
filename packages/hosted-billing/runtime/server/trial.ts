@@ -14,7 +14,7 @@ export function trialNetwork(input: string | null): string | null {
     const leading = left ? left.split(':') : [];
     const trailing = right ? right.split(':') : [];
     const groups = canonical.includes('::')
-        ? [...leading, ...Array(8 - leading.length - trailing.length).fill('0'), ...trailing]
+        ? [...leading, ...Array<string>(8 - leading.length - trailing.length).fill('0'), ...trailing]
         : leading;
     if (groups.length !== 8) return null;
     const words = groups.map(group => Number.parseInt(group, 16));
