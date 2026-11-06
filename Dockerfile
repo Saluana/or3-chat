@@ -30,7 +30,7 @@ RUN test "$(dpkg-deb --field /zlib/$TARGETARCH.deb Architecture)" = "$TARGETARCH
     cp /zlib/control/control /zlib/distroless/var/lib/dpkg/status.d/zlib1g && \
     cp /zlib/control/md5sums /zlib/distroless/var/lib/dpkg/status.d/zlib1g.md5sums && \
     for field in md5sums shlibs symbols triggers; do cp /zlib/control/$field /zlib/operator/var/lib/dpkg/info/zlib1g:$TARGETARCH.$field; done && \
-    dpkg-deb --fsys-tarfile /zlib/$TARGETARCH.deb | tar -tf - | sed 's|^\\./|/|;s|/$||' > /zlib/operator/var/lib/dpkg/info/zlib1g:$TARGETARCH.list
+    dpkg-deb --fsys-tarfile /zlib/$TARGETARCH.deb | tar -tf - | sed 's|^[.]/$|/.|;s|^[.]/|/|;s|/$||' > /zlib/operator/var/lib/dpkg/info/zlib1g:$TARGETARCH.list
 RUN node --input-type=module -e 'import fs from "node:fs"; const blocks=fs.readFileSync("/zlib/operator-status","utf8").trim().split(/\n\n+/); const matches=blocks.filter(b=>b.startsWith("Package: zlib1g\n")); if(matches.length!==1)throw Error("Expected one installed zlib package"); const control=fs.readFileSync("/zlib/control/control","utf8").trim()+"\nStatus: install ok installed"; fs.writeFileSync("/zlib/operator/var/lib/dpkg/status",blocks.map(b=>b===matches[0]?control:b).join("\n\n")+"\n\n")'
 
 # Keep the operator's package manager on the same tested release-toolchain
