@@ -120,7 +120,7 @@ export function createTurnPreparation(ports: {
         // not allow that intake to write after the pane has changed.
         if (initialProjectId && requestScope.navigationPendingBeforeSave) {
             requestScope.cancelled = true;
-            requestScope.abortController?.abort();
+            requestScope.abortController.abort();
             return early({ status: 'aborted', requestId, reason: 'aborted' });
         }
         let projectAttachmentScope: WorkspaceOperationScope | undefined;

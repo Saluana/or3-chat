@@ -31,6 +31,8 @@ export function useSidebarSearch(
     let revision = 0;
     let queryToken = 0;
     let disposed = false;
+    // Re-read after awaits: scope disposal can run while indexing is suspended.
+    const isDisposed = () => disposed;
     let warnedFallback = false;
     let pendingBuild: Promise<void> | null = null;
     let rebuildTimer: ReturnType<typeof setTimeout> | undefined;
@@ -51,16 +53,16 @@ export function useSidebarSearch(
         ...visibleThreads.value.map(t => ({ id: `thread:${t.id}`, recordId: t.id, kind: 'thread' as const,
             title: t.title?.trim() || 'Untitled Thread', updated_at: t.updated_at })),
         ...visibleProjects.value.map(p => ({ id: `project:${p.id}`, recordId: p.id, kind: 'project' as const,
-            title: p.name?.trim() || 'Untitled Project', updated_at: p.updated_at })),
+            title: p.name.trim() || 'Untitled Project', updated_at: p.updated_at })),
         ...visibleDocuments.value.map(d => ({ id: `doc:${d.id}`, recordId: d.id, kind: 'doc' as const,
-            title: d.title?.trim() || 'Untitled', updated_at: d.updated_at })),
+            title: d.title.trim() || 'Untitled', updated_at: d.updated_at })),
     ]);
 
     function fallback(raw: string, failed = false) {
         const needle = raw.toLowerCase();
         threadResults.value = visibleThreads.value.filter(t => (t.title?.trim() || 'Untitled Thread').toLowerCase().includes(needle));
-        projectResults.value = visibleProjects.value.filter(p => (p.name?.trim() || 'Untitled Project').toLowerCase().includes(needle));
-        documentResults.value = visibleDocuments.value.filter(d => (d.title?.trim() || 'Untitled').toLowerCase().includes(needle));
+        projectResults.value = visibleProjects.value.filter(p => (p.name.trim() || 'Untitled Project').toLowerCase().includes(needle));
+        documentResults.value = visibleDocuments.value.filter(d => (d.title.trim() || 'Untitled').toLowerCase().includes(needle));
         if (failed && !warnedFallback) {
             warnedFallback = true;
             console.warn('[useSidebarSearch] fallback substring search used');
@@ -73,7 +75,7 @@ export function useSidebarSearch(
         const build = (async () => {
             busy.value = true;
             try {
-                while (!disposed) {
+                while (!isDisposed()) {
                     const snapshot = docs.value;
                     const signature = JSON.stringify(snapshot);
                     if (signature === indexedSignature && dbInstance) { ready.value = true; return; }
@@ -84,9 +86,9 @@ export function useSidebarSearch(
                         if (next) await buildIndex(next, snapshot);
                     } catch {
                         next = null;
-                        if (!disposed && version === revision) fallback(query.value.trim(), true);
+                        if (!isDisposed() && version === revision) fallback(query.value.trim(), true);
                     }
-                    if (disposed) return;
+                    if (isDisposed()) return;
                     if (version !== revision) continue;
                     dbInstance = next;
                     indexedSignature = next ? signature : '';
@@ -101,7 +103,7 @@ export function useSidebarSearch(
     }
 
     async function runSearch(): Promise<void> {
-        if (disposed) return;
+        if (isDisposed()) return;
         const token = ++queryToken;
         const version = revision;
         const raw = query.value.trim();

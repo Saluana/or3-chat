@@ -52,7 +52,7 @@ export function useBilling() {
             error.value = '';
             const access = session.data.value?.cloudAccess;
             const expiresAt = next.accessExpiresAt ?? (next.state === 'active' ? next.paidUntil : next.trialEndsAt);
-            if (reconcile || access?.enabled !== next.allowed || access?.expiresAt !== expiresAt) await session.refresh();
+            if (reconcile || access?.enabled !== next.allowed || access.expiresAt !== expiresAt) await session.refresh();
         } catch {
             if (request === generation && userId.value === owner) error.value = 'Could not check your subscription. Please try again.';
         } finally { if (request === generation) reconciling = false; }

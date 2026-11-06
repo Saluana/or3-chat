@@ -5,7 +5,7 @@ export default defineNuxtModule({
     meta: { name: '@or3/hosted-billing' },
     setup(_options, nuxt) {
         const config = nuxt.options.runtimeConfig;
-        if (config.public.ssrAuthEnabled !== true || config.public.sync?.provider !== 'sqlite') {
+        if (config.public.ssrAuthEnabled !== true || config.public.sync.provider !== 'sqlite') {
             throw new Error('Hosted billing requires SSR authentication and the SQLite sync provider.');
         }
         if (config.public.guestAccessEnabled === true) {

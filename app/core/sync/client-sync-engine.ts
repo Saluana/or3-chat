@@ -354,7 +354,7 @@ export async function setupSyncEngine(): Promise<void> {
     });
 
     const dispose = () => { stopWatch(); accessScope.stop(); void stopSyncEngine(); };
-    nuxtApp.vueApp?.onUnmount(dispose);
+    nuxtApp.vueApp.onUnmount(dispose);
 
     // Handle HMR cleanup
     if (import.meta.hot) {

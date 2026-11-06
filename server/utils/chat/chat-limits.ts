@@ -3,7 +3,8 @@ import { getWorkspaceSettingsStore } from '../../admin/stores/registry';
 import { CHAT_LIMITS_KEY, ChatLimitsSchema, DEFAULT_CHAT_LIMITS, effectiveChatLimits, type ChatLimits } from '~~/shared/chat/chat-limits';
 
 export function instanceChatLimits(event: H3Event): ChatLimits {
-    const config = useRuntimeConfig(event).public;
+    // Keep defaults for older or partial runtime configuration.
+    const config: { chatToolIterations?: number; chatGeneratedImages?: number } = useRuntimeConfig(event).public;
     return ChatLimitsSchema.parse({ toolIterations: config.chatToolIterations ?? DEFAULT_CHAT_LIMITS.toolIterations,
         generatedImages: config.chatGeneratedImages ?? DEFAULT_CHAT_LIMITS.generatedImages });
 }

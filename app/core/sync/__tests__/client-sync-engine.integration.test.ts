@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import Dexie from 'dexie';
-import { effectScope, nextTick, ref } from 'vue';
+import { effectScope, nextTick, onScopeDispose, ref } from 'vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setHookEngine } from '~/core/hooks/useHooks';
 import { createHookEngine } from '~/core/hooks/hooks';
@@ -50,7 +50,7 @@ describe('sync lifecycle with real local write capture', () => {
         state.session = session; state.workspace = ref(id); state.starts = []; state.dispose = async () => {};
         let control!: { stop(): Promise<void>; isRunning(): boolean };
         vi.stubGlobal('useRuntimeConfig', () => ({ public: { sync: { enabled: true }, ssrAuthEnabled: false, cloudAccessPolicyEnabled: true } }));
-        vi.stubGlobal('useNuxtApp', () => ({ provide: (_key: string, value: typeof control) => { control = value; } }));
+        vi.stubGlobal('useNuxtApp', () => ({ vueApp: { onUnmount: onScopeDispose }, provide: (_key: string, value: typeof control) => { control = value; } }));
         vi.stubGlobal('useRouter', () => ({ currentRoute: ref({ path: '/' }) }));
         const scope = effectScope();
         try {
@@ -87,7 +87,7 @@ describe('sync lifecycle with real local write capture', () => {
         state.dispose = async () => {};
         let control!: { start(id: string): Promise<void>; stop(): Promise<void>; isRunning(): boolean };
         vi.stubGlobal('useRuntimeConfig', () => ({ public: { sync: { enabled: true }, ssrAuthEnabled: false } }));
-        vi.stubGlobal('useNuxtApp', () => ({ provide: (_key: string, value: typeof control) => { control = value; } }));
+        vi.stubGlobal('useNuxtApp', () => ({ vueApp: { onUnmount: onScopeDispose }, provide: (_key: string, value: typeof control) => { control = value; } }));
         vi.stubGlobal('useRouter', () => ({ currentRoute: route }));
         const scope = effectScope();
         let release!: () => void;
