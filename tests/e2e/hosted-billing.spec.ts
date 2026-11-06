@@ -1,9 +1,13 @@
 import { expect, test } from '@playwright/test';
 import Database from 'better-sqlite3';
+import { basename, dirname, join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 
 test('trial, editable admin allowances, and expiry preserve billing and data access', async ({ page, baseURL }, info) => {
     const root = process.env.OR3_WORKSPACE_CLOUD_E2E_DIR;
-    if (!root?.startsWith('/private/tmp/or3-workspace-cloud-e2e-') || !process.env.OR3_BILLING_SQLITE_PATH?.startsWith(root)) {
+    if (!root || dirname(resolve(root)) !== resolve(tmpdir()) ||
+        !/^or3-workspace-cloud-e2e-[a-zA-Z0-9]+$/.test(basename(root)) ||
+        process.env.OR3_BILLING_SQLITE_PATH !== join(root, 'billing.sqlite')) {
         throw new Error('Use bun run test:e2e:hosted-billing with its disposable databases.');
     }
     test.setTimeout(120_000);

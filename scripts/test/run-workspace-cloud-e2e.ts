@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { mkdtemp, readdir, readFile, writeFile, symlink, mkdir, rm, cp, lstat, chmod } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { parseEnv } from 'node:util';
 import { resolveQualificationProvider } from './workspace-cloud-providers';
 import { prepareS3TestBucket } from './s3-test-bucket';
@@ -32,7 +33,7 @@ const providers = [syncPackage, ...(storagePackage === syncPackage ? [] : [stora
 if (convex && (convex as { provider?: typeof syncPackage }).provider?.mode !== syncPackage.mode)
     throw new Error('Convex sandbox template and app provider qualification modes must match. Recreate the sandbox in the selected mode.');
 let bucket: Awaited<ReturnType<typeof prepareS3TestBucket>> | undefined;
-const root = await mkdtemp('/private/tmp/or3-workspace-cloud-e2e-');
+const root = await mkdtemp(join(tmpdir(), 'or3-workspace-cloud-e2e-'));
 async function removeOverlay() {
     // Installed extension copies have read-only directories. Never follow the
     // overlay's dependency/source symlinks when restoring deletion permissions.
