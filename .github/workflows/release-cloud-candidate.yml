@@ -417,6 +417,7 @@ jobs:
             --platform linux/arm64 --syft "${{ steps.syft.outputs.cmd }}" --out release-evidence-arm64.json)
           echo "Two-architecture security scan completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
+        if: ${{ always() }}
         with:
           name: or3-cloud-scans-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
           path: release-artifact/

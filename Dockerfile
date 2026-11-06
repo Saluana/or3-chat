@@ -12,6 +12,27 @@ FROM busybox:1.37.0-uclibc@sha256:8d7b1636e974e0adfd8d945955fca609304f0a56c18799
 # the web service never contains or mounts either one.
 FROM docker:27.5.1-cli@sha256:851f91d241214e7c6db86513b270d58776379aacc5eb9c4a87e5b47115e3065c AS docker-client
 
+# Debian's stable bases still contain the zlib write-error overflow. Install
+# only the checksum-pinned Debian fix (CVE-2026-76844 / CVE-2026-85091), not a
+# moving unstable distribution. Its libc requirements are <= both base images.
+# All extraction and cleanup run native tools, including for the ARM image.
+FROM --platform=$BUILDPLATFORM busybox:1.37.0-uclibc@sha256:8d7b1636e974e0adfd8d945955fca609304f0a56c18799dfd032d6e661382d84 AS native-tools
+FROM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS operator-base
+FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS patched-zlib
+ARG TARGETARCH
+ADD --checksum=sha256:8506ce550a81ac14b047608e0df121037d9cbb10c3cc28446f68cf8c1d9d31ce https://deb.debian.org/debian/pool/main/z/zlib/zlib1g_1.3.dfsg+really1.3.2-4_amd64.deb /zlib/amd64.deb
+ADD --checksum=sha256:aaf9e8cfc7d86771144c660d544806c886a5ae406f97bd50b62588a0718229ab https://deb.debian.org/debian/pool/main/z/zlib/zlib1g_1.3.dfsg+really1.3.2-4_arm64.deb /zlib/arm64.deb
+COPY --from=operator-base /var/lib/dpkg/status /zlib/operator-status
+RUN test "$(dpkg-deb --field /zlib/$TARGETARCH.deb Architecture)" = "$TARGETARCH" && \
+    dpkg-deb --extract /zlib/$TARGETARCH.deb /zlib/root && \
+    dpkg-deb --control /zlib/$TARGETARCH.deb /zlib/control && \
+    mkdir -p /zlib/distroless/var/lib/dpkg/status.d /zlib/operator/var/lib/dpkg/info && \
+    cp /zlib/control/control /zlib/distroless/var/lib/dpkg/status.d/zlib1g && \
+    cp /zlib/control/md5sums /zlib/distroless/var/lib/dpkg/status.d/zlib1g.md5sums && \
+    for field in md5sums shlibs symbols triggers; do cp /zlib/control/$field /zlib/operator/var/lib/dpkg/info/zlib1g:$TARGETARCH.$field; done && \
+    dpkg-deb --fsys-tarfile /zlib/$TARGETARCH.deb | tar -tf - | sed 's|^\\./|/|;s|/$||' > /zlib/operator/var/lib/dpkg/info/zlib1g:$TARGETARCH.list
+RUN node --input-type=module -e 'import fs from "node:fs"; const blocks=fs.readFileSync("/zlib/operator-status","utf8").trim().split(/\n\n+/); const matches=blocks.filter(b=>b.startsWith("Package: zlib1g\n")); if(matches.length!==1)throw Error("Expected one installed zlib package"); const control=fs.readFileSync("/zlib/control/control","utf8").trim()+"\nStatus: install ok installed"; fs.writeFileSync("/zlib/operator/var/lib/dpkg/status",blocks.map(b=>b===matches[0]?control:b).join("\n\n")+"\n\n")'
+
 # Keep the operator's package manager on the same tested release-toolchain
 # version instead of inheriting whichever npm happens to ship in a refreshed
 # Node base image. npm is architecture-independent, so prepare it once on the
@@ -23,6 +44,9 @@ RUN npm install --global npm@11.6.2
 # but none of the OR3 application output or runtime data. It is published as a
 # separately digest-pinned image and only the narrow operator service uses it.
 FROM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS dashboard-operator
+RUN --mount=from=native-tools,source=/bin/busybox,target=/patch-tool ["/patch-tool", "sh", "-ec", "/patch-tool rm -f /usr/lib/*/libz.so.1.2.13 /usr/lib/*/libz.so.1.3.1"]
+COPY --from=patched-zlib /zlib/root/ /
+COPY --from=patched-zlib /zlib/operator/ /
 COPY --from=operator-npm /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
 COPY --from=docker-client /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=docker-client /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose
@@ -122,6 +146,11 @@ FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf100
 # pinned static multicall tool above. Both bases are pinned multi-arch
 # OCI indexes and the resulting architectures are scanned during release.
 FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:78f07ef1b5ea71ad7c055df15d0dd8997f2d288f9158623c4d4ae3d765b7d50d AS runtime
+
+USER 0:0
+RUN --mount=from=native-tools,source=/bin/busybox,target=/patch-tool ["/patch-tool", "sh", "-ec", "/patch-tool rm -f /usr/lib/*/libz.so.1.3.1"]
+COPY --from=patched-zlib /zlib/root/ /
+COPY --from=patched-zlib /zlib/distroless/ /
 
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \

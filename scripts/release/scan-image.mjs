@@ -10,8 +10,9 @@
 //     [--syft <path>] [--trivy <path>] [--platform <linux/arch>]
 
 import { spawn } from 'node:child_process';
-import { writeFile } from 'node:fs/promises';
+import { copyFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const args = process.argv.slice(2);
 const image = args.find((value) => !value.startsWith('--'));
@@ -95,7 +96,8 @@ async function runTrivy() {
   const versionMatch = versionResult.ok ? versionResult.stdout.match(/Version:\s*([0-9][^\s]*)/) : null;
   const scannerVersion = versionMatch ? versionMatch[1] : null;
 
-  const result = await runCommand(trivy, ['image', '--scanners', 'vuln', '--format', 'json', ...(platform ? ['--platform', platform] : []), image]);
+  const vexSource = fileURLToPath(new URL('./zlib.openvex.json', import.meta.url));
+  const result = await runCommand(trivy, ['image', '--scanners', 'vuln', '--format', 'json', '--show-suppressed', '--vex', vexSource, ...(platform ? ['--platform', platform] : []), image]);
   if (!result.ok) {
     const detail = result.stderr.trim() || result.stdout.trim();
     return {
@@ -118,10 +120,17 @@ async function runTrivy() {
       note: 'trivy output was not valid JSON; vulnerability counts unavailable.',
     };
   }
+  const reportPath = resolve(`or3-vulnerabilities-${Date.now()}.json`);
+  const vexPath = resolve('or3-zlib.openvex.json');
+  await writeFile(reportPath, result.stdout);
+  await copyFile(vexSource, vexPath);
   const counts = { high: 0, critical: 0, medium: 0, low: 0 };
   for (const target of parsed.Results ?? []) {
     for (const vulnerability of target.Vulnerabilities ?? []) {
       const severity = String(vulnerability.Severity ?? '').toLowerCase();
+      if (severity === 'high' || severity === 'critical') {
+        console.error(`${vulnerability.VulnerabilityID}: ${vulnerability.PkgName}@${vulnerability.InstalledVersion} (${severity}); fixed: ${vulnerability.FixedVersion || 'not listed'}; target: ${target.Target}`);
+      }
       if (severity === 'high') counts.high += 1;
       else if (severity === 'critical') counts.critical += 1;
       else if (severity === 'medium') counts.medium += 1;
@@ -133,6 +142,8 @@ async function runTrivy() {
     scannerVersion,
     dbTimestamp: parsed.Metadata?.UpdatedAt ?? null,
     counts,
+    reportPath,
+    vexPath,
     note: null,
   };
 }
@@ -157,6 +168,8 @@ const evidence = {
   medium: trivy.counts?.medium ?? 0,
   low: trivy.counts?.low ?? 0,
   sbomPath: syft.sbomPath,
+  vulnerabilityReportPath: trivy.reportPath ?? null,
+  vexPath: trivy.vexPath ?? null,
   provenance,
   notes: [syft.note, trivy.note].filter(Boolean),
 };
