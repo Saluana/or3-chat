@@ -38,7 +38,7 @@
         "lru-cache": "^11.5.2",
         "mammoth": "^1.13.0",
         "nuxt": "4.6.2",
-        "or3-provider-basic-auth": "0.0.18",
+        "or3-provider-basic-auth": "0.0.19",
         "or3-provider-clerk": "0.0.11",
         "or3-provider-convex": "0.0.26",
         "or3-provider-fs": "0.0.16",
@@ -2311,7 +2311,7 @@
 
     "optionator": ["optionator@0.9.4", "", { "dependencies": { "deep-is": "^0.1.3", "fast-levenshtein": "^2.0.6", "levn": "^0.4.1", "prelude-ls": "^1.2.1", "type-check": "^0.4.0", "word-wrap": "^1.2.5" } }, "sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g=="],
 
-    "or3-provider-basic-auth": ["or3-provider-basic-auth@0.0.18", "", { "dependencies": { "bcryptjs": "^3.0.3", "better-sqlite3": "^13.0.3", "jsonwebtoken": "^9.0.2", "zod": "^4.6.7" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-cNIISBP8OtybIGZpL9TUz3msZs3NmrLmIlu7n+Mmy351glz/sQtuiJiEG+XOu7rlIALOQlLuq/NVNBz79qNFLw=="],
+    "or3-provider-basic-auth": ["or3-provider-basic-auth@0.0.19", "", { "dependencies": { "bcryptjs": "^3.0.3", "better-sqlite3": "^13.0.3", "jsonwebtoken": "^9.0.2", "zod": "^4.6.7" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-hffnaWLuAWe1dtkiSpz5upyUgayok18r6oKky2fQiV0hU06Mc7H/BXSwDXmaTc7D11MIcqQBxmlYBJ9KsbBrcA=="],
 
     "or3-provider-clerk": ["or3-provider-clerk@0.0.11", "", { "dependencies": { "@clerk/nuxt": "^1.13.34" }, "peerDependencies": { "@nuxt/kit": "^3.0.0 || ^4.0.0", "nuxt": "^3.0.0 || ^4.0.0" } }, "sha512-FczlY9+3kw79oJlkGadI9BWa3BQaqXP6c7kZ1HRIS17dsYvUBWDvCXvosLYTPVSvW8GJvLC/odKmmC5zC6wkfw=="],
 

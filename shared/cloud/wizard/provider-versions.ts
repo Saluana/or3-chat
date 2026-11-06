@@ -3,7 +3,7 @@
  * Keep these aligned with the creator template and release verification.
  */
 export const QUALIFIED_PROVIDER_VERSIONS: Readonly<Record<string, string>> = {
-    'or3-provider-basic-auth': '0.0.18',
+    'or3-provider-basic-auth': '0.0.19',
     'or3-provider-clerk': '0.0.11',
     'or3-provider-convex': '0.0.26',
     'or3-provider-fs': '0.0.16',

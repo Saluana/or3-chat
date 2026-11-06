@@ -166,4 +166,4 @@ own private workspaces instead.
 
 ### Coordinated Basic Auth source changes
 
-Basic Auth source development now reads the host shared session and emits `or3:auth-session-changed` so the host owns refresh and account-change reloads. It also clears the pending invitation cookie on sign-out, labels invite-only codes as required, and gives specific password and invitation recovery messages. Production is still pinned to `or3-provider-basic-auth@0.0.13`; these improvements require a new provider release followed by an exact host dependency and lockfile update. Source validation does not make them available in the existing published package.
+The qualified Basic Auth package reads the host shared session and emits `or3:auth-session-changed` so the host owns refresh and account-change reloads. It clears the pending invitation cookie on sign-out, labels invite-only codes as required, and gives specific password and invitation recovery messages. The host pins the published provider and its lockfiles together. Initial account bootstrap completes before the server accepts requests, and an existing account is preserved on restart.

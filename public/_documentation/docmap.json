@@ -665,7 +665,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 8,
-                    "summary": "Basic Auth credentials, branded sign-in and registration dialogs, visible workspace-session failures with retry, short invitation codes, session-preserving registration refusals, and provider-isolated status and recovery adapters."
+                    "summary": "Basic Auth credentials, first-boot account readiness, sign-in and registration dialogs, invitation codes, session-preserving refusals, and provider-isolated recovery."
                 },
                 {
                     "name": "provider-sqlite.md",

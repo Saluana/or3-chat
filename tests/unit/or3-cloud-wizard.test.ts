@@ -711,7 +711,7 @@ describe('or3 cloud wizard apply', () => {
             instanceDir,
         });
         expect(plan.commands.npm).toContain(
-            'or3-provider-basic-auth@0.0.18'
+            'or3-provider-basic-auth@0.0.19'
         );
         expect(plan.commands.npm).toContain('or3-provider-fs@0.0.16');
         expect(plan.commands.npm).toContain('or3-provider-sqlite@0.0.27');
