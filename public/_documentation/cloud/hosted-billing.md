@@ -175,7 +175,7 @@ The quota adapter reads the installed SQLite provider's canonical `workspaces`,
 connection. It does not create a second user/workspace authority or write those
 tables. Account-scoped billing leases serialize upload admissions across owned
 workspaces; provider transactions still reserve and commit the actual bytes.
-The integration is qualified against SQLite provider 0.0.27. Re-run the real
+The integration is qualified against SQLite provider 0.0.28. Re-run the real
 provider quota suite before changing its schema/version. All processes must
 share the same billing and sync database files; unrelated per-replica SQLite
 copies cannot enforce one account budget.

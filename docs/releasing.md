@@ -146,9 +146,9 @@ in `packages/create-or3-chat/first-party-versions.json` are already available
 on npm:
 
 ```bash
-npm view or3-provider-basic-auth@0.0.19 version
-npm view or3-provider-sqlite@0.0.27 version
-npm view or3-provider-fs@0.0.16 version
+npm view or3-provider-basic-auth@0.0.20 version
+npm view or3-provider-sqlite@0.0.28 version
+npm view or3-provider-fs@0.0.17 version
 ```
 
 Run the relevant provider qualification in its own repository before tagging.

@@ -725,7 +725,7 @@ test('compose.public.yaml keeps the public proxy wiring intact', () => {
 test('recovery status distinguishes reported snapshots from verified component coverage', async () => {
   const { projectRecoveryState } = await import('../assets/dashboard-operator.mjs');
   const state = {
-    appVersion: '0.1.106', updatedAt: '2026-11-06T00:00:00Z',
+    appVersion: '0.1.107', updatedAt: '2026-11-06T00:00:00Z',
     rollback: { backupId: 'backup-safe', createdAt: '2026-11-05T00:00:00Z' },
     lastReceipt: { checks: [{ code: 'public-health', status: 'passed' }] },
     incompleteOperation: { id: 'update-1', operation: 'update', startedAt: '2026-11-06T00:00:00Z', credentialReset: { nextEnv: { SECRET: 'private' } } },

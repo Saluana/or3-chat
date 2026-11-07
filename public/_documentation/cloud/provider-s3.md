@@ -195,7 +195,7 @@ are saved under `test-results/file-backup-cloud-s3/` and the workspace harness's
 `output/workspace-assistant-files/review-fixes/cloud-sqlite-s3-installed/`.
 
 These capabilities ship in the pinned `or3-provider-s3@0.0.15` release, paired
-with `or3-provider-sqlite@0.0.27`. No local provider patch is required.
+with `or3-provider-sqlite@0.0.28`. No local provider patch is required.
 
 ## Related
 

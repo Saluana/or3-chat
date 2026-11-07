@@ -1,7 +1,7 @@
 # Deployment and Operations Guide
 
 Operational runbook for OR3 Cloud SSR deployments. For the managed profile,
-the current backup inspection profile uses SQLite `0.0.27` and filesystem `0.0.16`.
+the current backup inspection profile uses SQLite `0.0.28` and filesystem `0.0.17`.
 It accepts the current complete history through `032_sync_observations`
 and selected earlier histories through 024, 026, 028, 029, and 031. An incomplete or
 unknown history is refused; see [SQLite operations](/documentation/cloud/provider-sqlite).
