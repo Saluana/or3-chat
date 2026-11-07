@@ -56,6 +56,8 @@ export default [
             '.output/**',
             '.or3-plugin-dev/**',
             '.nuxt-plugin-dev/**',
+            '.nuxt-e2e*/**',
+            '.claude/**',
             'output/**',
             'extensions/.store/**',
             'convex/**',
