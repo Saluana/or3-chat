@@ -138,7 +138,9 @@ jobs:
       - name: Type-check application and run core tests in parallel
         run: |
           set +e
-          bun run type-check > "$RUNNER_TEMP/type-check.log" 2>&1 &
+          # The type-check shares the runner with the core tests; the default V8 heap
+          # can abort it (exit 134) on a large project graph.
+          NODE_OPTIONS=--max-old-space-size=6144 bun run type-check > "$RUNNER_TEMP/type-check.log" 2>&1 &
           typecheck_pid=$!
           bun run test
           test_status=$?
