@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { chmod, mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
@@ -845,6 +845,30 @@ describe('or3 cloud wizard apply', () => {
 
         expect(result.changed).toBe(false);
         expect((await stat(envPath)).mode & 0o777).toBe(0o600);
+    });
+
+    // Applying unrelated wizard settings must neither erase an operator's
+    // cleanup opt-in nor enable cleanup on an installation without one.
+    it.each([true, false])('preserves operator cleanup configuration when reapplying setup (configured=%s)', async (configured) => {
+        const dir = await mkdtemp(resolve(tmpdir(), 'or3-wizard-cleanup-env-'));
+        const envPath = resolve(dir, '.env');
+        const cleanup = 'OR3_STORAGE_FS_CLEANUP_NAMESPACE_ID=11111111-1111-4111-8111-111111111111\nOR3_STORAGE_RETENTION_WORKSPACES=workspace_a,workspace_b\n';
+        try {
+            await writeFile(envPath, `${configured ? cleanup : ''}OR3_SITE_NAME=Before\n`);
+            for (const siteName of ['After', 'Reapplied']) {
+                await applyAnswers({
+                    ...validRecommendedAnswers(), instanceDir: dir,
+                    fsRoot: resolve(dir, 'storage'), or3SiteName: siteName,
+                }, { dryRun: false, createBackup: false });
+                const content = await readFile(envPath, 'utf8');
+                expect(content).toContain(`OR3_SITE_NAME=${siteName}`);
+                if (configured) expect(content).toContain(cleanup);
+                else {
+                    expect(content).not.toContain('OR3_STORAGE_FS_CLEANUP_NAMESPACE_ID=');
+                    expect(content).not.toContain('OR3_STORAGE_RETENTION_WORKSPACES=');
+                }
+            }
+        } finally { await rm(dir, { recursive: true, force: true }); }
     });
 
     it('preserves blank lines and unrelated quoted entries when updating an env key', async () => {

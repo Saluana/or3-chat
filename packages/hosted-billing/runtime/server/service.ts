@@ -90,7 +90,8 @@ export class BillingService {
         const price = await this.stripe.prices.retrieve(offer.priceId);
         if (!price.active || price.currency !== offer.currency || price.unit_amount !== offer.amountCents ||
             price.type !== 'recurring' || price.recurring?.interval !== offer.interval ||
-            price.recurring.interval_count !== 1 || price.recurring.usage_type !== 'licensed' || price.billing_scheme !== 'per_unit') {
+            price.recurring.interval_count !== 1 || price.recurring.usage_type !== 'licensed' || price.billing_scheme !== 'per_unit' ||
+            price.transform_quantity != null) {
             throw new BillingCommandError(400, 'invalid_price', `The Stripe price must match the active fixed USD $${offer.amountCents / 100}/year offer.`);
         }
     }
@@ -134,8 +135,20 @@ export class BillingService {
     private async reconcileLocked(userId: string, token: string): Promise<{ conflict: boolean }> {
         const account = this.store.account(userId);
         if (!account.customer_id) return { conflict: false };
+        try {
+            const result = await this.reconcileCustomerLocked(account, token);
+            this.store.recordReconcile(userId, token, 'ok');
+            return result;
+        } catch (error) {
+            if (!(error instanceof BillingBusyError)) this.store.recordReconcile(userId, token, 'failed');
+            throw error;
+        }
+    }
+
+    private async reconcileCustomerLocked(account: BillingAccount, token: string): Promise<{ conflict: boolean }> {
+        const userId = account.user_id;
         // Retrieve current state, not event payloads: delayed/out-of-order webhooks cannot restore old access.
-        const subscriptions = await this.stripe.subscriptions.list({ customer: account.customer_id, status: 'all', limit: 100, expand: ['data.latest_invoice'] });
+        const subscriptions = await this.stripe.subscriptions.list({ customer: account.customer_id!, status: 'all', limit: 100, expand: ['data.latest_invoice'] });
         if (subscriptions.has_more) throw new Error('Billing subscription history requires operator review.');
         const offers = this.store.offers().items;
         const live = subscriptions.data.filter(sub => !['canceled', 'incomplete_expired'].includes(sub.status));
@@ -224,21 +237,11 @@ export class BillingService {
             if (account.subscription_id && !['canceled', 'incomplete_expired'].includes(account.subscription_status)) {
                 return this.portal(userId);
             }
-            if (account.checkout_session_id) {
-                const previous = await this.stripe.checkout.sessions.retrieve(account.checkout_session_id);
-                if (previous.status === 'open' && previous.url) return previous.url;
-                if (previous.status === 'complete' && !['canceled', 'incomplete_expired'].includes(account.subscription_status)) {
-                    // An asynchronous payment may still be pending. Never create a second subscription.
-                    return this.portal(userId);
-                }
-                this.store.update(userId, token, { checkout_attempt: null, checkout_session_id: null, checkout_offer_id: null });
-                account = this.store.account(userId);
-                offer = this.store.currentOffer()!;
-            }
-            if (account.checkout_attempt) {
+            if (account.checkout_attempt && !account.checkout_session_id) {
                 // The create response was lost, so Stripe may already hold a session under this
-                // key. Replaying the exact request returns it instead of opening a second one.
-                try { return await this.createCheckoutSession(userId, token, account.customer_id!, offer, account.checkout_attempt); }
+                // key. Recover its ID, then retrieve current state rather than redirecting to
+                // the cached creation response, which may now describe an expired session.
+                try { await this.createCheckoutSession(userId, token, account.customer_id!, offer, account.checkout_attempt); }
                 catch (error) {
                     // A refused request (for example an archived price) created no session under this key.
                     // Transient and idempotency failures keep the attempt for the next retry.
@@ -246,18 +249,41 @@ export class BillingService {
                     this.store.update(userId, token, { checkout_attempt: null, checkout_offer_id: null });
                     offer = this.store.currentOffer()!;
                 }
+                account = this.store.account(userId);
+            }
+            if (account.checkout_session_id) {
+                const previous = await this.stripe.checkout.sessions.retrieve(account.checkout_session_id);
+                if (previous.status === 'open') {
+                    if (!previous.url) throw new Error('Stripe did not return a Checkout URL.');
+                    return previous.url;
+                }
+                if (previous.status === 'complete') {
+                    // Stripe can complete Checkout after the earlier subscription snapshot.
+                    // Only a terminal subscription belonging to THIS session permits a retry.
+                    const subscriptionId = id(previous.subscription);
+                    if (!subscriptionId) return this.portal(userId);
+                    const subscription = await this.stripe.subscriptions.retrieve(subscriptionId);
+                    if (!['canceled', 'incomplete_expired'].includes(subscription.status)) return this.portal(userId);
+                } else if (previous.status !== 'expired') {
+                    throw new Error('Checkout is still updating. Try again shortly.');
+                }
+                this.store.update(userId, token, { checkout_attempt: null, checkout_session_id: null, checkout_offer_id: null });
+                account = this.store.account(userId);
+                offer = this.store.currentOffer()!;
             }
             await this.validatePrice(offer);
             // No await between choosing the current revision and persisting the attempt.
             if (offer.id !== this.store.currentOffer()!.id) throw new BillingCommandError(409, 'offer_changed', 'The offer changed. Try again.');
             const attempt = randomUUID();
             this.store.update(userId, token, { checkout_attempt: attempt, checkout_offer_id: offer.id });
-            return this.createCheckoutSession(userId, token, account.customer_id!, offer, attempt);
+            const session = await this.createCheckoutSession(userId, token, account.customer_id!, offer, attempt);
+            if (!session.url) throw new Error('Stripe did not return a Checkout URL.');
+            return session.url;
         });
     }
 
     /** Creates, or with a reused attempt key replays, one Checkout session and records it. */
-    private async createCheckoutSession(userId: string, token: string, customer: string, offer: BillingOffer, attempt: string): Promise<string> {
+    private async createCheckoutSession(userId: string, token: string, customer: string, offer: BillingOffer, attempt: string): Promise<Stripe.Checkout.Session> {
         const session = await this.stripe.checkout.sessions.create({
             mode: 'subscription', customer,
             line_items: [{ price: offer.priceId, quantity: 1 }],
@@ -267,8 +293,7 @@ export class BillingService {
             integration_identifier: `or3_hosted_${createHash('sha256').update(attempt).digest('hex').slice(0, 8).replace(/[0-9]/g, c => String.fromCharCode(97 + Number(c)))}`,
         }, { idempotencyKey: `or3-checkout-${attempt}` });
         this.store.update(userId, token, { checkout_session_id: session.id });
-        if (!session.url) throw new Error('Stripe did not return a Checkout URL.');
-        return session.url;
+        return session;
     }
 
     async portal(userId: string): Promise<string> {
@@ -319,11 +344,9 @@ export class BillingService {
             if (!before.customer_id) return { outcome: 'no_customer', code: null };
             try {
                 await this.reconcileLocked(userId, token);
-                this.store.recordReconcile(userId, token, 'ok');
                 return { outcome: 'refreshed', code: null };
             } catch (error) {
                 if (error instanceof BillingBusyError) throw error;
-                this.store.recordReconcile(userId, token, 'failed');
                 return { outcome: 'failed', code: 'stripe_unavailable' };
             }
         }, { existingOnly: true });
@@ -353,10 +376,8 @@ export class BillingService {
                 let conflict: boolean;
                 try {
                     ({ conflict } = await this.reconcileLocked(userId, token));
-                    this.store.recordReconcile(userId, token, 'ok');
                 } catch (error) {
                     if (error instanceof BillingBusyError) throw error;
-                    this.store.recordReconcile(userId, token, 'failed');
                     this.store.recordAction({ operationId: input.operationId, userId, actor: input.actor, kind: 'resolve_review', reason, outcome: 'failed', code: 'refresh_failed', before: null, after: null });
                     throw new BillingCommandError(503, 'refresh_failed', 'Stripe could not be refreshed. The hold remains in place.');
                 }

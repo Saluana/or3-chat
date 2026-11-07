@@ -105,9 +105,31 @@ export function inspectCanonicalReferences(Database, databasePath, inventory, st
       const match = /^(?:(sha256|md5):)?([a-f0-9]+)$/.exec(hash);
       const algorithm = match?.[1] ?? (match?.[2].length === 64 ? 'sha256' : match?.[2].length === 32 ? 'md5' : undefined);
       if (!match || !algorithm || match[2].length !== (algorithm === 'sha256' ? 64 : 32)) throw new Error('Invalid canonical filesystem hash');
-      const name = `${root ? `${root}/` : ''}workspaces/${row.workspace_id}/${algorithm}_${match[2]}`;
-      requireEntry(name, size);
-      requireEntry(`${name}.meta.json`);
+      if (storageId.startsWith('fs-generation-')) {
+        const parts = storageId.split(':');
+        const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+        if (parts.length !== 5 || parts[0] !== 'fs-generation-v1' || !uuid.test(parts[1]) || !uuid.test(parts[3]) ||
+            !/^[A-Za-z0-9_-]{1,128}$/.test(parts[2]) || parts[2] !== row.workspace_id || algorithm !== 'sha256' || parts[4] !== match[2]) {
+          throw new Error('Invalid canonical filesystem generation identity');
+        }
+        const generation = db.prepare('SELECT workspace_id,hash,storage_provider_id,storage_id,size_bytes,state FROM storage_object_generations WHERE generation_id = ?').get(parts[3]);
+        if (!generation || generation.workspace_id !== row.workspace_id || generation.storage_provider_id !== 'fs' ||
+            generation.storage_id !== storageId || generation.size_bytes !== size || generation.state !== 'verified' ||
+            typeof generation.hash !== 'string' || generation.hash.replace(/^sha256:/i, '').toLowerCase() !== match[2]) {
+          throw new Error('Invalid canonical filesystem generation binding');
+        }
+        const base = `${root ? `${root}/` : ''}generations-v1`;
+        const slot = `${base}/workspaces/${row.workspace_id}/${parts[3]}`;
+        // Inventory proves regular entries and ancestry. Authenticated manifest
+        // contents and payload hashes are verified after extraction, before start.
+        requireEntry(`${base}/namespace.json`);
+        requireEntry(`${slot}/ready.json`);
+        requireEntry(`${slot}/payload/blob`, size);
+      } else {
+        const name = `${root ? `${root}/` : ''}workspaces/${row.workspace_id}/${algorithm}_${match[2]}`;
+        requireEntry(name, size);
+        requireEntry(`${name}.meta.json`);
+      }
       live++;
     }
     return { contract: 1, inspectedMetadata: inspected, liveAttachments: live, complete: true };

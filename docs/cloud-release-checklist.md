@@ -43,6 +43,16 @@ budgets, and broad performance baselines remain strict in the scheduled or
 on-demand **Extended validation** workflow instead of rebuilding the host app
 on the release critical path.
 
+For backup and sync recovery changes, require the **Full and browser tests**
+job from Extended validation on the candidate commit. It runs
+`bun run test:e2e:projects --grep 'pending backup import' --retries=0` and
+`bun run test:e2e:sync:cloud`, retaining browser receipts, screenshots, and
+failure traces. These cover frozen import options, local backup recovery,
+offline persistence, interrupted pushes, and workspace-scoped retry/discard.
+The candidate's managed HTTPS browser smoke must also pass against the actual
+packaged Caddy configuration, including portable-frame containment; an HTTP
+header overlay does not qualify proxy behavior.
+
 Do not promote a candidate from a dirty worktree. The preflight rejects one,
 including untracked files. Record the clean commit SHA and retain
 `output/release/preflight.json` with the release artifacts.

@@ -38,6 +38,11 @@ If a valid, unexpired invitation is for a different email, registration asks you
 
 Basic Auth registration and password changes show **Use at least 8 characters**. If a password is too long, the form asks you to shorten it. Password limits still apply, including when using emoji or other characters that take more storage space.
 
+Updated Basic Auth providers limit credential request bodies to 16 KiB before
+parsing JSON or form fields. Oversized requests return HTTP `413`, including
+chunked uploads without a declared size. This protection requires the updated
+provider package; a host-only update does not replace the installed provider.
+
 ## Two user identifiers
 
 | Identifier | Used for |

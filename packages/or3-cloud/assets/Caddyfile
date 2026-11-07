@@ -5,13 +5,34 @@
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
-		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+
+	# Only the two host-owned bridge documents can be embedded. Ordinary app
+	# pages still deny every ancestor, including same-origin frames.
+	@hostDocument {
+		not path /or3/portable-frame /streamsaver/mitm.html
+	}
+	header @hostDocument {
+		X-Frame-Options "DENY"
 		# Nuxt needs same-origin scripts plus inline hydration styles/scripts. The
 		# browser exchanges OpenRouter PKCE authorization codes directly with the
 		# OpenRouter API, so that origin must remain available to connect-src.
-		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://openrouter.ai; media-src 'self' blob:; worker-src 'self' blob:; frame-src 'none'; upgrade-insecure-requests"
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://openrouter.ai; media-src 'self' blob:; worker-src 'self' blob:; frame-src 'self'; upgrade-insecure-requests"
+	}
+
+	# Preserve the portable route's hash-authorized, opaque-origin sandbox CSP.
+	# Applying the app policy here would block its worker or weaken containment.
+	@portableFrame path /or3/portable-frame
+	header @portableFrame X-Frame-Options "SAMEORIGIN"
+
+	# The fallback streaming exporter uses this bundled same-origin bridge to
+	# register its download service worker; it cannot use an opaque origin.
+	@downloadBridge path /streamsaver/mitm.html
+	header @downloadBridge {
+		X-Frame-Options "SAMEORIGIN"
+		Content-Security-Policy "default-src 'none'; script-src 'unsafe-inline'; connect-src 'self'; worker-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'"
 	}
 
 	encode zstd gzip

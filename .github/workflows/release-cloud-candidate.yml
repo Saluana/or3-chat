@@ -518,11 +518,30 @@ jobs:
           (cd "$MANAGED" && OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE" OR3_CLOUD_TEST_OPERATOR_IMAGE="$CANDIDATE_OPERATOR_IMAGE" OR3_EXPECTED_OPERATOR_IMAGE_DIGEST="$OPERATOR_DIGEST" \
             timeout --signal=TERM 8m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 update --to "$VERSION")
           echo "Candidate update completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
-      - name: Verify browser hydration under the production CSP
+      - name: Verify hydration and portable frames through the shipped Caddy proxy
         run: |
+          set -euo pipefail
+          container="$(docker compose --project-directory "$MANAGED" --env-file "$MANAGED/.env" -f "$MANAGED/compose.yaml" ps -q or3)"
+          network="$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.NetworkID}}{{end}}' "$container")"
+          caddy_image="$(node --input-type=module -e 'import { readFileSync } from "node:fs"; const match = readFileSync("packages/or3-cloud/assets/compose.public.yaml", "utf8").match(/image:\s*(caddy:\S+)/); if (!match) throw new Error("Pinned Caddy image missing"); console.log(match[1]);')"
+          # Local managed installs omit Caddy. Exercise the exact candidate
+          # package's public asset, and bind it to the reviewed source.
+          tar -xOf "$CANDIDATE_TARBALL" package/assets/Caddyfile > "$RUNNER_TEMP/or3-browser/Caddyfile"
+          cmp "$RUNNER_TEMP/or3-browser/Caddyfile" packages/or3-cloud/assets/Caddyfile
+          docker run --detach --name or3-candidate-caddy --network "$network" \
+            --publish 127.0.0.1:3018:3018 --read-only --cap-drop ALL --cap-add NET_BIND_SERVICE \
+            --security-opt no-new-privileges --tmpfs /data --tmpfs /config --tmpfs /tmp \
+            --env OR3_PUBLIC_DOMAIN=localhost:3018 \
+            --mount "type=bind,src=$RUNNER_TEMP/or3-browser/Caddyfile,dst=/etc/caddy/Caddyfile,readonly" "$caddy_image"
+          trap 'docker logs or3-candidate-caddy; docker rm -f or3-candidate-caddy' EXIT
+          for attempt in {1..30}; do
+            if curl --insecure --fail --silent https://localhost:3018/ >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --insecure --fail --silent https://localhost:3018/ >/dev/null
           cp scripts/release/smoke-browser.mjs "$RUNNER_TEMP/or3-browser/smoke-browser.mjs"
-          OR3_SMOKE_URL=http://127.0.0.1:3017 OR3_SMOKE_HYDRATION_ONLY=1 \
-            OR3_SMOKE_CADDYFILE="$GITHUB_WORKSPACE/packages/or3-cloud/assets/Caddyfile" \
+          OR3_SMOKE_URL=https://localhost:3018 OR3_SMOKE_HYDRATION_ONLY=1 \
+            OR3_SMOKE_CADDYFILE="$RUNNER_TEMP/or3-browser/Caddyfile" \
             OR3_SMOKE_ARTIFACT_DIR="$GITHUB_WORKSPACE/output/browser-smoke" \
             node "$RUNNER_TEMP/or3-browser/smoke-browser.mjs"
       - uses: actions/upload-artifact@v7

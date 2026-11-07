@@ -199,7 +199,7 @@ Start after B accounting is stable. A–C may already ship. Keep destructive con
 - [x] 11.1 Inventory existing generation guards and all canonical write/upload/restore paths; write a deletion failure matrix and eligible/legacy scope definition. (4h)
       Components: C9, C11. Requirements: R6, R14, R16.
       Done when: every path that could restore a reference or publish bytes is named; mutable legacy keys and uncertain references are excluded, not guessed safe.
-- [ ] 11.2 Extend existing disposable provider lifecycle coverage before code with claim/delete/complete crashes, delayed publication, active/expired intents and repeated cleanup. (4h)
+- [x] 11.2 Extend existing disposable provider lifecycle coverage before code with claim/delete/complete crashes, delayed publication, active/expired intents and repeated cleanup. (4h)
       Components: C9, C11. Requirements: R14, R16.
       Done when: receipts independently verify object hashes/existence and canonical charges, including failing controls for live references and stale claims.
 - [x] 11.3 Add bounded dry-run candidate inspection with explicit blocked reasons and exact generation identities. (3h)
@@ -211,27 +211,32 @@ Start after B accounting is stable. A–C may already ship. Keep destructive con
 - [x] 11.5 Implement idempotent accounting completion and unresolved-intent reconciliation tied to independently verified deletion proof. (4h)
       Components: C4, C9. Requirements: R6, R14.
       Done when: accounting decreases once only after valid completion, expired intents never release by time alone, and replacement generations charge correctly.
-- [ ] 11.6 Implement exact filesystem-generation deletion and resumable operation state; keep the capability disabled during development. (4h)
+- [x] 11.6 Implement exact filesystem-generation deletion and resumable operation state; keep the capability disabled during development. (4h)
       Components: C9. Requirements: R14.
       Done when: paths/sidecars and symlink/traversal protections are verified; crashes preserve charges/barriers and retries cannot delete a replacement generation.
-- [ ] 11.7 Qualify SQLite + filesystem with installed artifacts, crash races, backup/restore and admission checks. (4h)
+      Implementation: [x] bounded cleanup composition, durable claim replay and gateway entry point; [x] Linux source-snapshot filesystem and SQLite integration tests; [x] installed physical deletion and process-kill/replay checks. The completed pairing/lifecycle receipts are recorded under 11.7 and 11.12; cleanup remains explicit opt-in.
+- [x] 11.7 Qualify SQLite + filesystem with installed artifacts, crash races, backup/restore and admission checks. (4h)
       Components: C9, C11. Requirements: R14, R16.
       Done when: the repeatable lifecycle receipt verifies bytes, hashes, accounting and post-restart usability; only this qualified pairing can advertise cleanup.
+      Evidence: installed normal registration, process-kill/replay and admission controls, certified live-generation backup/restore/restart, independent hashes/accounting, sign-in and live-file cleanup refusal pass. Final VPS receipt: `8d975483/REPORT.md`; cumulative evidence is in `reclamation-qualification.md`.
 - [x] 11.8 Implement exact S3 generation/version deletion, including multipart/versioning ambiguity and retry behavior. (4h)
       Components: C9. Requirements: R14.
       Done when: bucket/key/version ownership is proven, deletion markers do not masquerade as removal, and unsupported versioning/legacy layouts remain blocked.
 - [x] 11.9 Qualify SQLite + S3 with disposable versioned/unversioned fixtures, delayed PUT and lost-response scenarios. (4h)
       Components: C9, C11. Requirements: R14, R16.
       Done when: independent object and accounting receipts pass before this pairing advertises cleanup; filesystem qualification is not reused as proof.
-- [ ] 11.10 Add destructive preview/confirmation/progress/resume UI only for qualified pairings and record each cleanup action. (3h)
+- [x] 11.10 Add destructive preview/confirmation/progress/resume UI only for qualified pairings and record each cleanup action. (3h)
       Components: C1, C8, C9. Requirements: R1, R6, R13, R14.
       Done when: confirmation shows scope and estimated reclaim, execution rechecks eligibility, and failed/partial operations remain recoverable rather than reported as complete.
-- [ ] 11.11 Add opt-in retained-file retention batches through existing scheduling/operations infrastructure after manual qualification. (4h)
+      Evidence: normal installed registration passed real browser preview, confirmation, execution and reinspection in an isolated workspace; two targets were deleted, the live reference stayed blocked and independent usage fell from 160 to 51 bytes. Authenticated retry completed zero and preserved the live file. VPS receipt `962434f4/REPORT.md` includes screenshots and independent hashes; 11.7 separately records the completed managed-backup acceptance checks.
+- [x] 11.11 Add opt-in retained-file retention batches through existing scheduling/operations infrastructure after manual qualification. (4h)
       Components: C5, C8, C9. Requirements: R14.
       Done when: age/scope/batch limits and interruption/resume work through the same primitive, no separate deletion path exists, and expired-account purge stays disabled.
-- [ ] 11.12 Run D's full relevant provider/migration/type/build/lifecycle gate and update provider READMEs, backup/recovery docs and docmap. (4h)
+      Evidence: [x] scoped opt-in host scheduler and same audited batch primitive; [x] cursor retry/non-overlap/shutdown tests; [x] Linux physical execution with normal installed registration. Cumulative installed receipts verify 25-generation batches, seven-day eligibility, other-workspace preservation, audit and durable claim recovery (VPS reports `194935e7` and `1845f376`). Timer acceleration was limited to disposable test bundles; production defaults remain unchanged.
+- [x] 11.12 Run D's full relevant provider/migration/type/build/lifecycle gate and update provider READMEs, backup/recovery docs and docmap. (4h)
       Components: C11. Requirements: R6, R12, R14, R16.
       Done when: exact installed versions pass disposable update, verified backup, rollback and restart checks; no immutable release version or production data has been used as a test.
+      Evidence: exact artifact hashes, Mac type/build checks, Debian migration/registration (24 tests) and Cloud backup/restore (56 tests), and distinct compiled-image update/rollback passed. Ordinary backup/restore is canonically certified. Update safety snapshots are authenticated/checksum-verified prior-state copies, intentionally not attachment-completeness certificates; independent live-byte/refusal/accounting checks passed after both lifecycle actions. This satisfies the documented task without changing the established rollback contract. Publication and production qualification remain separate.
 
 ## 12. Accepted historical offers before price changes — E
 

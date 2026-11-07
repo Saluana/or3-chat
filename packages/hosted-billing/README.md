@@ -43,11 +43,18 @@ ambiguous retry keeps its original price. Current-cohort allowance changes do no
 rewrite historical cohorts. Support trial extensions retain their promised
 allowance as well as their deadline.
 
+Checkout retries check the session's current Stripe state. A session that completes
+during a retry cannot start a second subscription, and a recovered expired session
+is replaced in the same request. Billing health records the latest reconciliation
+outcome from webhooks, Checkout, customer refreshes and support; an account without
+a Stripe customer does not count as reconciled.
+
 `OR3_BILLING_STRIPE_PRICE_ID` seeds the first offer only. If it differs from the
 saved current offer on startup, a warning directs the operator to manage offers
 in the admin panel; changing the environment value does not change accepted terms.
 
-The Accepted offers workflow validates an existing active annual USD price,
+The Accepted offers workflow validates an existing active annual USD price without
+quantity transformations (`transform_quantity` must be unset),
 previews the future-only effect, and commits a revisioned change with a reason and
 atomic audit record. It does not create prices, migrate subscribers, configure tax,
 or upgrade the Stripe API. The real test-mode gate is

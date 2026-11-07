@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 
 // Real browser IndexedDB, capture/outbox/subscription, authenticated gateway,
 // SQLite and filesystem storage. Only the network faults are synthetic.
@@ -147,4 +147,140 @@ test('a second tab recovers a crashed push owner after a committed response is l
         await info.attach('crash-race-receipt', { path: receiptPath, contentType: 'application/json' });
         await peer.screenshot({ path: info.outputPath('crash-recovered.png'), fullPage: true });
     } finally { release(); }
+});
+
+// Failure inventory (user recovery): failed changes invisible to normal users;
+// raw provider errors or payloads shown; retry/discard acting on another
+// workspace; unconfirmed or content-deleting discard; a retry that bypasses the
+// authorized gateway or applies twice; local backup blocked while Cloud cannot
+// drain; a stale list surviving a workspace switch.
+test('a normal user recovers failed changes from the workspace sync view', async ({ page, context }, info) => {
+    test.setTimeout(180_000);
+    await context.addInitScript(() => {
+        Object.defineProperty(window, 'showSaveFilePicker', { value: undefined, configurable: true });
+    });
+    const { clientUrl, workspaceId, headers } = await openWorkspace(page);
+    await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click();
+    const outbox = (target: Page, url: string, name: string) => target.evaluate(async ({ url, name }) =>
+        (await (await import(url)).getDb().pending_ops.toArray())
+            .filter((row: any) => row.payload?.name === name)
+            .map((row: any) => ({ id: row.id, status: row.status })), { url, name });
+    const localValue = (target: Page, url: string, name: string) => target.evaluate(async ({ url, name }) =>
+        (await (await import(new URL('./kv.ts', url).href)).getKvByName(name))?.value ?? null, { url, name });
+    await expect.poll(() => page.evaluate(async url => (await (await import(url)).getDb().pending_ops.toArray())
+        .filter((row: any) => !['applied', 'discarded'].includes(row.status)).length, clientUrl), { timeout: 30_000 }).toBe(0);
+
+    const names = ['sync-recovery-retry', 'sync-recovery-discard', 'sync-recovery-switch'];
+    let rejecting = true;
+    // The real gateway is reachable; only these records are rejected, as a
+    // server-side validation failure would be.
+    await context.route('**/api/sync/push', async route => {
+        const batch = route.request().postDataJSON();
+        if (!rejecting || !batch.ops.some((row: any) => names.includes(row.payload?.name))) {
+            await route.continue();
+            return;
+        }
+        await route.fulfill({ json: { serverVersion: 0, results: batch.ops.map((row: any) => ({
+            opId: row.stamp.opId, success: false, error: 'Rejected by fixture: secret-detail', errorCode: 'VALIDATION_ERROR',
+        })) } });
+    });
+    await page.evaluate(async url => {
+        const { setKvByName } = await import(new URL('./kv.ts', url).href);
+        await setKvByName('sync-recovery-retry', 'retry value kept in this browser');
+        await setKvByName('sync-recovery-discard', 'discard value kept in this browser');
+    }, clientUrl);
+    for (const name of names.slice(0, 2)) {
+        await expect.poll(() => outbox(page, clientUrl, name), { timeout: 30_000 })
+            .toEqual([expect.objectContaining({ status: 'failed_permanent' })]);
+    }
+
+    // Discoverable from the permanent-failure notification.
+    await page.getByRole('button', { name: 'Notifications' }).click();
+    await page.getByRole('button', { name: 'Review sync' }).first().click();
+    const view = page.locator('#dashboard-workspace-sync-container');
+    await expect(view.getByText('2 changes need attention')).toBeVisible({ timeout: 30_000 });
+    const item = (name: string) => view.getByRole('listitem').filter({ hasText: name });
+    await expect(item('sync-recovery-retry')).toContainText('The server didn’t accept this change.');
+    await expect(view.getByText(/secret-detail|discard value kept/)).toHaveCount(0);
+
+    // A local copy is available while Cloud cannot drain the queue.
+    const download = page.waitForEvent('download');
+    await view.getByRole('button', { name: 'Save copy', exact: true }).click();
+    const backupPath = info.outputPath('browser-copy.or3.jsonl');
+    await (await download).saveAs(backupPath);
+    const backup = await readFile(backupPath, 'utf8');
+    expect(backup).toContain('retry value kept in this browser');
+    expect(backup).toContain('discard value kept in this browser');
+    await expect(view.getByRole('status').filter({ hasText: 'Browser copy saved' })).toBeVisible();
+
+    // Discard needs an explicit second step and never removes local content.
+    await item('sync-recovery-discard').getByRole('button', { name: 'Discard', exact: true }).click();
+    await expect(item('sync-recovery-discard')).toContainText('stays saved in this browser');
+    await expect(item('sync-recovery-discard').getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+    expect(await outbox(page, clientUrl, 'sync-recovery-discard')).toEqual([expect.objectContaining({ status: 'failed_permanent' })]);
+    await item('sync-recovery-discard').getByRole('button', { name: 'Cancel', exact: true }).click();
+    expect(await outbox(page, clientUrl, 'sync-recovery-discard')).toEqual([expect.objectContaining({ status: 'failed_permanent' })]);
+    await item('sync-recovery-discard').getByRole('button', { name: 'Discard', exact: true }).click();
+    await item('sync-recovery-discard').getByRole('button', { name: 'Discard change', exact: true }).click();
+    await expect(item('sync-recovery-discard')).toHaveCount(0);
+    expect(await outbox(page, clientUrl, 'sync-recovery-discard')).toEqual([expect.objectContaining({ status: 'discarded' })]);
+    expect(await localValue(page, clientUrl, 'sync-recovery-discard')).toBe('discard value kept in this browser');
+
+    // A retry from another tab goes through the authorized gateway once, and
+    // this tab's list follows the shared outbox instead of keeping a stale row.
+    rejecting = false;
+    const peer = await context.newPage();
+    const opened = await openWorkspace(peer, false);
+    expect(opened.workspaceId).toBe(workspaceId);
+    await peer.goto('/chat?dashboard=workspaces&page=sync');
+    const peerView = peer.locator('#dashboard-workspace-sync-container');
+    await peerView.getByRole('listitem').filter({ hasText: 'sync-recovery-retry' })
+        .getByRole('button', { name: 'Retry', exact: true }).click();
+    await expect(item('sync-recovery-retry')).toHaveCount(0, { timeout: 30_000 });
+    await expect.poll(() => outbox(page, clientUrl, 'sync-recovery-retry'), { timeout: 30_000 }).toEqual([]);
+    await expect(view.getByText('No changes waiting to sync')).toBeVisible({ timeout: 30_000 });
+    // The discarded local change was never uploaded, so an empty queue must
+    // not promise that every browser change exists on the server.
+    await expect(view.getByText('Every change saved in this browser has synced.')).toHaveCount(0);
+    await peer.close();
+    const server = await serverChanges(page, workspaceId, headers);
+    const retried = server.filter(change => change.payload?.name === 'sync-recovery-retry');
+    expect(retried.map(change => change.payload.value)).toEqual(['retry value kept in this browser']);
+    expect(server.filter(change => change.payload?.name === 'sync-recovery-discard')).toEqual([]);
+
+    // Switching workspace replaces the list; the old workspace's failure is untouched.
+    rejecting = true;
+    await page.evaluate(async url => {
+        await (await import(new URL('./kv.ts', url).href)).setKvByName('sync-recovery-switch', 'switch value');
+    }, clientUrl);
+    await expect.poll(() => outbox(page, clientUrl, 'sync-recovery-switch'), { timeout: 30_000 })
+        .toEqual([expect.objectContaining({ status: 'failed_permanent' })]);
+    await expect(item('sync-recovery-switch')).toBeVisible();
+    const other = await page.request.post('/api/workspaces', { headers, data: { name: `Sync recovery other ${randomUUID()}` } });
+    expect(other.ok(), await other.text()).toBe(true);
+    const otherId = (await other.json()).id as string;
+    const activated = await page.request.post('/api/workspaces/active', { headers, data: { id: otherId } });
+    expect(activated.ok(), await activated.text()).toBe(true);
+    await page.evaluate(async url => {
+        const { useSessionContext } = await import(new URL('../composables/auth/useSessionContext.ts', url).href);
+        await useSessionContext().refresh();
+    }, clientUrl);
+    await expect.poll(() => page.evaluate(async url => (await import(url)).getActiveWorkspaceId(), clientUrl), { timeout: 30_000 }).toBe(otherId);
+    await expect(item('sync-recovery-switch')).toHaveCount(0);
+    await expect(view.getByText('No changes waiting to sync')).toBeVisible({ timeout: 30_000 });
+    const original = await page.evaluate(async ({ url, workspaceId }) =>
+        (await (await import(url)).createWorkspaceDb(workspaceId).pending_ops.toArray())
+            .filter((row: any) => row.payload?.name === 'sync-recovery-switch').map((row: any) => row.status), { url: clientUrl, workspaceId });
+    expect(original).toEqual(['failed_permanent']);
+
+    const receiptPath = info.outputPath('sync-recovery-view-receipt.json');
+    await writeFile(receiptPath, JSON.stringify({
+        workspaceId, otherWorkspaceId: otherId, serverRetried: retried,
+        discarded: await page.evaluate(async ({ url, workspaceId }) =>
+            (await (await import(url)).createWorkspaceDb(workspaceId).pending_ops.toArray())
+                .filter((row: any) => row.payload?.name === 'sync-recovery-discard').map((row: any) => row.status), { url: clientUrl, workspaceId }),
+        originalWorkspaceAfterSwitch: original, browserCopyBytes: backup.length,
+    }, null, 2));
+    await info.attach('sync-recovery-view-receipt', { path: receiptPath, contentType: 'application/json' });
+    await page.screenshot({ path: info.outputPath('sync-recovery-view.png'), fullPage: true });
 });

@@ -110,6 +110,58 @@ test('offline inspection accepts the installed provider migration history and re
   } finally { db.close(); }
 });
 
+// Generation references use immutable slots, never legacy hash filenames. A
+// correct inventory must pass, while wrong canonical bindings or missing/link
+// entries must fail before the managed restore can replace the live volume.
+test('offline inspection validates immutable generation bindings and their archive paths', async () => {
+  const fixture = await sandbox();
+  const path = join(fixture.root, 'generations.sqlite');
+  const db = new Database(path);
+  try {
+    db.exec('CREATE TABLE kysely_migration(name TEXT PRIMARY KEY); CREATE TABLE s_file_meta(workspace_id TEXT NOT NULL,id TEXT NOT NULL,data_json TEXT NOT NULL,deleted INTEGER NOT NULL,PRIMARY KEY(workspace_id,id)); CREATE TABLE storage_object_generations(generation_id TEXT PRIMARY KEY,workspace_id TEXT,hash TEXT,storage_provider_id TEXT,storage_id TEXT,size_bytes INTEGER,state TEXT);');
+    for (const name of QUALIFIED_MIGRATIONS) db.query('INSERT INTO kysely_migration VALUES(?)').run(name);
+    const namespace = '11111111-1111-4111-8111-111111111111';
+    const generation = '22222222-2222-4222-8222-222222222222';
+    const digest = 'a'.repeat(64), hash = `sha256:${digest}`;
+    const storageId = `fs-generation-v1:${namespace}:workspace:${generation}:${digest}`;
+    const metadata = (id: string) => db.query('INSERT OR REPLACE INTO s_file_meta VALUES(?,?,?,0)').run('workspace', hash, JSON.stringify({ size_bytes: 3, storage_id: id }));
+    const canonical = (overrides: Record<string, string | number> = {}) => {
+      const row = { generation_id: generation, workspace_id: 'workspace', hash: digest, storage_provider_id: 'fs', storage_id: storageId, size_bytes: 3, state: 'verified', ...overrides };
+      db.query('DELETE FROM storage_object_generations').run();
+      db.query('INSERT INTO storage_object_generations VALUES(?,?,?,?,?,?,?)').run(row.generation_id, row.workspace_id, row.hash, row.storage_provider_id, row.storage_id, row.size_bytes, row.state);
+    };
+    const base = 'storage/generations-v1', slot = `${base}/workspaces/workspace/${generation}`;
+    const entry = (name: string, size = 2, type = '-') => `${type}rw------- nonroot/nonroot ${size} 2026-10-11 10:16:23 ./${name}\n`;
+    const header = entry('sync.sqlite', 4096);
+    const files = [entry(`${base}/namespace.json`), entry(`${slot}/ready.json`), entry(`${slot}/payload/blob`, 3)];
+    const inspect = (text = header + files.join('')) => inspectCanonicalReferences(OfflineDatabase, path, readBackupInventory(text), '/data/storage');
+    metadata(storageId); canonical();
+    expect(inspect()).toMatchObject({ complete: true, liveAttachments: 1 });
+    for (const overrides of [
+      { workspace_id: 'other' }, { hash: 'sha256:' + 'b'.repeat(64) }, { size_bytes: 4 },
+      { storage_provider_id: 's3' }, { storage_id: storageId.replace(namespace, generation) },
+      { state: 'claimed' }, { state: 'deleted' },
+    ]) {
+      canonical(overrides);
+      expect(inspect).toThrow('generation');
+    }
+    db.query('DELETE FROM storage_object_generations').run();
+    expect(inspect).toThrow('generation');
+    canonical();
+    for (const id of [storageId.replace(':workspace:', ':other:'), storageId.replace(digest, 'b'.repeat(64)), storageId.replace(namespace, '../outside'), storageId + ':extra']) {
+      metadata(id);
+      expect(inspect).toThrow('generation');
+    }
+    metadata(storageId);
+    for (let missing = 0; missing < files.length; missing++) {
+      expect(() => inspect(header + files.filter((_file, index) => index !== missing).join(''))).toThrow('required by live canonical attachment metadata');
+    }
+    expect(() => inspect(header + files.slice(0, 2).join('') + entry(`${slot}/payload/blob`, 4))).toThrow('size mismatch');
+    expect(() => inspect(header + files.join('') + `lrwxrwxrwx nonroot/nonroot 0 2026-10-11 10:16:23 ./${slot}/payload -> /outside\n`)).toThrow('ancestor must be a directory');
+    expect(() => inspect(header + files.slice(0, 2).join('') + `hrw------- nonroot/nonroot 3 2026-10-11 10:16:23 ./${slot}/payload/blob link to ./outside\n`)).toThrow('required by live canonical attachment metadata');
+  } finally { db.close(); }
+});
+
 test('offline inspection refuses unsupported versions, ambiguous archives and scratch exhaustion', () => {
   expect(() => assertInspectionProfile({ contract: 1, sqlite: '0.0.27', filesystem: '0.0.16' })).not.toThrow();
   for (const profile of [{ contract: 2, sqlite: '0.0.27', filesystem: '0.0.16' }, { contract: 1, sqlite: '0.0.26', filesystem: '0.0.16' }, { contract: 1, sqlite: '0.0.27', filesystem: '0.0.15' }]) expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');

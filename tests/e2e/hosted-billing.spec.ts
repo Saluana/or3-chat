@@ -615,3 +615,54 @@ test('accepted offers are read-only on load and invalid changes preserve the off
         }
     } finally { db.close(); }
 });
+
+// UI-only fixture responses exercise confirmation/progress without qualifying
+// physical deletion. Authentication and capability refusal use the real server.
+test('retained cleanup confirmation and retry UI', async ({ page, baseURL }, info) => {
+    test.setTimeout(180_000);
+    page.setDefaultTimeout(15_000);
+    const adminHeaders = { origin: baseURL!, 'x-or3-admin-intent': 'admin' };
+    expect((await page.request.post('/api/admin/storage/cleanup', { headers: adminHeaders, data: { workspaceId: 'fixture', generationIds: ['approved'] } })).status()).toBe(401);
+    expect((await page.request.post('/api/admin/auth/login', { headers: adminHeaders, data: { username: 'workspace-e2e-admin', password: 'DisposableAdminE2e!123' } })).ok()).toBe(true);
+    expect((await page.request.post('/api/admin/storage/cleanup', { data: { workspaceId: 'fixture', generationIds: ['approved'] } })).status()).toBe(403);
+    expect((await page.request.post('/api/admin/storage/cleanup', { headers: { ...adminHeaders, origin: 'https://other.example.test' }, data: { workspaceId: 'fixture', generationIds: ['approved'] } })).status()).toBe(403);
+    expect((await page.request.post('/api/admin/storage/cleanup', { headers: adminHeaders, data: { workspaceId: 'fixture', generationIds: ['approved'] } })).status()).toBe(503);
+    let available = false;
+    let calls = 0;
+    const submitted: unknown[] = [];
+    await page.route('**/api/admin/workspaces*', route => route.fulfill({ json: { items: [{ id: 'fixture', name: 'Cleanup fixture', memberCount: 1 }], total: 1 } }));
+    await page.route('**/api/admin/storage/candidates*', route => route.fulfill({ json: { available: true, cleanupAvailable: available, page: {
+        workspaceId: 'fixture', retentionSeconds: 604800, observedAt: Math.floor(Date.now() / 1000), complete: true, nextCursor: null,
+        scope: 'managed_generations_only', legacyIncluded: false, estimatedLogicalBytes: 12,
+        items: [{ status: 'eligible', reason: null, generation: { workspaceId: 'fixture', generationId: 'approved', hash: 'sha256:' + 'a'.repeat(64), storageId: 'fixture-object', sizeBytes: 12, state: 'verified', createdAt: 1, lastActivityAt: 1 } }],
+    } } }));
+    await page.route('**/api/admin/storage/cleanup', async route => {
+        submitted.push(route.request().postDataJSON()); calls++;
+        await route.fulfill({ json: { examined: 1, completed: calls > 1 ? 1 : 0, blocked: 0, pending: calls > 1 ? 0 : 1, complete: calls > 1, nextCursor: null } });
+    });
+    await page.goto('/admin/storage');
+    await page.waitForFunction(() => Boolean((document.querySelector('#__nuxt') as HTMLElement & { __vue_app__?: unknown })?.__vue_app__));
+    await page.getByRole('button', { name: 'Choose workspace file settings' }).click();
+    await page.getByRole('button', { name: /Cleanup fixture/ }).click();
+    await page.getByRole('button', { name: 'Inspect managed generations' }).click();
+    await page.getByRole('button', { name: 'Review cleanup' }).click();
+    await expect(page.getByRole('dialog', { name: 'Review retained-file cleanup' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Confirm cleanup', exact: true })).toBeDisabled();
+    await page.getByRole('button', { name: 'Close', exact: true }).last().click();
+    available = true;
+    await page.getByRole('button', { name: 'Inspect managed generations' }).click();
+    for (let attempt = 0; attempt < 2; attempt++) {
+        await page.getByRole('button', { name: 'Review cleanup' }).click();
+        await expect(page.getByRole('dialog', { name: 'Review retained-file cleanup' })).toBeVisible();
+        await page.getByRole('button', { name: 'Confirm cleanup', exact: true }).click();
+        await expect(page.getByText(attempt ? /Last batch: 1 examined, 1 completed/ : /Last batch: 1 examined, 0 completed.*1 pending/)).toBeVisible();
+    }
+    expect(submitted).toEqual([{ workspaceId: 'fixture', generationIds: ['approved'] }, { workspaceId: 'fixture', generationIds: ['approved'] }]);
+    await page.screenshot({ path: info.outputPath('retained-cleanup-progress.png'), fullPage: true, animations: 'disabled' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: 'Review cleanup' }).click();
+    await expect(page.getByRole('dialog', { name: 'Review retained-file cleanup' })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+    await page.screenshot({ path: info.outputPath('retained-cleanup-mobile-confirmation.png'), fullPage: true, animations: 'disabled' });
+    await info.attach('cleanup-ui-receipt.json', { body: JSON.stringify({ physicalDeletionQualified: false, submitted, realUnqualifiedServerStatus: 503 }), contentType: 'application/json' });
+});

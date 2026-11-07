@@ -74,6 +74,12 @@ An ordinary buyer can request installation of an older acquired version after
 loading it; the server checks that exact release against the buyer's own
 marketplace account before creating the request.
 
+A full refund or dispute stops new acquisitions under the affected purchase or
+Plus billing period. Other valid purchases and periods remain available, and
+previously acquired versions remain in your history. If a marketplace account
+was restricted, reconnect after it is restored: older Library credentials stay
+revoked even when account notifications arrive out of order.
+
 ## Troubleshooting
 
 | Problem | What to do |

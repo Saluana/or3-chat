@@ -45,6 +45,19 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run test:full
       - run: bunx playwright install --with-deps chromium
+      - name: Verify workspace backup imports
+        run: bun run test:e2e:projects --grep 'pending backup import' --retries=0 --output=test-results/workspace-backup
+      - name: Verify offline sync and failed-change recovery
+        run: bun run test:e2e:sync:cloud
+      - name: Save workspace recovery browser evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: workspace-recovery-browser-evidence
+          path: |
+            test-results/workspace-backup/**
+            test-results/sync-hardening-cloud/**
+          if-no-files-found: warn
       - run: bun run test:e2e:storage
       - run: bun run test:e2e:admin-auth
       - name: Install optional billing test dependency

@@ -109,6 +109,13 @@ it into a sandbox. Portable plugins run in an opaque-origin sandboxed frame
 hosting a worker. The host window does not evaluate portable publisher code.
 There is no fallback from unsupported isolation to trusted execution.
 
+Managed public installations allow same-origin framing only for the host-owned
+portable sandbox and streaming-export bridge. The proxy preserves the portable
+route's own containment CSP, including its opaque origin, hash-authorized relay
+and denied direct network access. Other app documents continue to deny framing.
+Custom reverse proxies must preserve that route policy instead of replacing it
+with the app's CSP or applying `X-Frame-Options: DENY` to every response.
+
 Permissions are workspace-specific, while selected code is instance-wide.
 Every enabled workspace must pass update preflight. Approvals can carry forward
 when access is unchanged or narrowed. Adding a destination, path, method, scope,
@@ -137,6 +144,13 @@ for the limits of this check.
 The live host Vue render proof loads a precompiled same-origin module through
 the host import map. It runs under the managed production CSP without `blob:`
 scripts or `unsafe-eval`.
+
+The managed release browser smoke runs through the candidate package's actual
+Caddy configuration. In Chromium it verifies a portable module's frame/worker
+message roundtrip and opaque origin; it also checks that the proxy retains the
+containment policy and ordinary-page framing denial. Screenshots, traces and
+the JSON receipt are retained with candidate evidence. This transport check
+does not replace each installed package's activation check.
 
 Installed, workspace-enabled, and browser-running are separate states. The UI
 checks the exact package digest, not just a version string. An activation check

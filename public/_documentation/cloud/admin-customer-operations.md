@@ -147,6 +147,7 @@ explicit target IDs. Commands also require the admin origin and
 | `GET/POST /api/admin/system/pauses` | Deployment pauses |
 | `GET/POST /api/admin/hosted-billing/offers` | Accepted history, explicit validation/preview and revisioned offer commands |
 | `GET /api/admin/storage/candidates?workspaceId=…` | Explicit bounded advisory generation inspection; legacy excluded, no physical scan or claim |
+| `POST /api/admin/storage/cleanup` | Super-admin, audited bounded cleanup of previewed generation IDs; available only for a qualified provider pairing |
 | `POST /api/admin/system/checks`, `GET /api/admin/system/recovery` | Explicit provider checks and read-only recovery coverage |
 | `GET /api/admin/activity`, `GET /api/admin/hosted-billing/activity` | History sources |
 
@@ -236,10 +237,28 @@ Mutable legacy files remain excluded from physical reclamation. The explicit wor
 generation inspection (25 identities per HTTP page; at most 100 for trusted internal callers) and reports exact
 blocked reasons without changing objects, claims or accounting. Its estimate is
 logical managed bytes, not freed disk space. Claims repeat the eligibility proof.
-No cleanup capability, destructive dashboard action or retention scheduler is
-registered until the exact installed SQLite/filesystem or SQLite/S3 pairing passes
+The review dialog shows the current page's estimated scope. A cleanup request can
+include only generation IDs shown in the preview, and the qualified provider must
+recheck eligibility. The dashboard reports each batch's completed, blocked and
+pending counts; an interrupted or pending page can be inspected and retried.
+Confirmation remains disabled and no cleanup or retention job is started until the
+pairing qualifies. No provider advertises cleanup capability until
+the exact installed SQLite/filesystem or SQLite/S3 pairing passes
 its independent crash, admission, backup/restore and restart gate. Expired-account
 purge remains unavailable.
+
+Automatic retained-file cleanup is opt-in through
+`OR3_STORAGE_RETENTION_WORKSPACES=workspace_id,another_workspace_id` (at most 100
+explicit workspace IDs; empty disables it). Restart after changing the value.
+Each hourly tick processes at most 25 managed generations in one selected
+workspace, rotating across the list. The retention cutoff is seven days.
+Every destructive batch uses the same qualification gate, canonical claim and
+audit path as manual cleanup. An unqualified provider refuses the batch.
+The scheduler retries pending work without advancing its cursor; after a restart
+it scans again from the beginning and resumes persisted claims. Activity records
+show each destructive batch's result, and inspecting a workspace shows claims
+that still need retry. Shutdown waits for the active batch. This setting never
+enables legacy-file cleanup or expired-account purge.
 
 The offer editor is available after disposable Stripe API and browser
 qualification. It requires explicit price validation and impact preview, a reason,
@@ -247,3 +266,9 @@ and the current offer revision. Confirmation validates the price again; retiring
 an offer preserves its recognition for existing subscribers. Opening the page
 remains local and never contacts Stripe. This development qualification does not
 change a live price or replace release/deployment verification.
+
+### Opt-in enrolled-generation cleanup
+
+On Linux, the SQLite/filesystem pairing exposes managed-generation cleanup only when `OR3_STORAGE_FS_CLEANUP_NAMESPACE_ID` names the existing filesystem namespace UUID and SQLite runs with `OR3_SQLITE_PRAGMA_SYNCHRONOUS=FULL` (or `EXTRA`). The namespace must already have been provisioned by the generation protocol; this setting neither provisions it nor enrolls legacy files. It does not change normal upload/download routing. Leave the namespace setting unset to keep cleanup unavailable. D1 and other unsupported drivers remain unavailable.
+
+Manual admin cleanup rechecks canonical eligibility and uses the installed filesystem remover. Optional `OR3_STORAGE_RETENTION_WORKSPACES` selects explicit workspace IDs for the same audited primitive, with seven-day retention and at most 25 examined generations per hourly turn. Changing these environment settings requires a managed restart. Defaults remain disabled. Both settings are operator-managed and preserved when reapplying the setup wizard; setup does not enable cleanup. Use the repaired managed backup/restore path for enrolled data; raw file copying is not a supported restore.

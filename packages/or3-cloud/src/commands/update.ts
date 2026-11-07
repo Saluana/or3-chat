@@ -2,7 +2,7 @@ import { readFile, statfs } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { restoreVolumeArchive } from '../backup/archive';
 import { createBackup } from '../backup/create';
-import { restoreBackupData } from '../backup/restore';
+import { restoreBackupData, restoreGenerationIdentities } from '../backup/restore';
 import {
   BACKUP_RETENTION_KEEP,
   planRetention,
@@ -393,6 +393,7 @@ async function runUpdateCommand(directory: string, flags: Flags, asJson: boolean
       await copyAssets(loaded.directory, state.mode);
       if (migrateLegacyVolume || recreateDataVolume) {
         await restoreVolumeArchive(loaded.directory, state.mode, nextEnv, backup.backupDir);
+        await restoreGenerationIdentities(loaded.directory, state, nextEnv, backup.backupDir);
       }
     } catch (error) {
       // Failure before the target can accept writes: the deployment is still

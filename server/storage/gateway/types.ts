@@ -21,6 +21,12 @@
  * 8. Client optionally calls commit endpoint to finalize
  */
 import type { H3Event } from 'h3';
+import type { ExternalStorageGenerationCoordinatorV1 } from './generation-lifecycle';
+
+export interface StorageReclamationProgress {
+    examined: number; completed: number; blocked: number; pending: number;
+    complete: boolean; nextCursor: string | null;
+}
 
 /**
  * Purpose:
@@ -141,7 +147,11 @@ export interface StorageGatewayAdapter {
     atomicUploadQuota?: 'retained-v1';
     /** Dormant external immutable-generation pairing. Never set solely because
      * canonical queries or native-provider deletion coordination are present. */
-    externalStorageGenerations?: { version: 1; syncProviderId: string };
+    externalStorageGenerations?: { version: 1; syncProviderId: string;
+        /** Only a qualified pair may expose this destructive operation. It must
+         * recheck canonical eligibility and remove only the specified IDs. */
+        reclaimBatch?: (input: { workspaceId: string; retentionSeconds: number; limit: number; cursor?: string; generationIds: string[] }, coordinator: ExternalStorageGenerationCoordinatorV1) => Promise<StorageReclamationProgress>;
+    };
     /** Canonical backend owns an atomic deletion barrier honored by writes/restores.
      * Query-only liveness checks do not qualify. The barrier can be released only
      * after a verified re-upload; host dispatch also binds it to the sync backend.

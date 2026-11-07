@@ -147,11 +147,31 @@ describe('optional hosted billing', () => {
             const old = await lostAttempt();
             priceFor(old.priceId);
             const create = vi.spyOn(stripe.checkout.sessions, 'create').mockResolvedValue({ id: 'cs_lost', url: 'https://checkout.stripe.com/lost' } as never);
+            vi.spyOn(stripe.checkout.sessions, 'retrieve').mockResolvedValue({ id: 'cs_lost', status: 'open', url: 'https://checkout.stripe.com/lost' } as never);
             await expect(service.checkout('alice')).resolves.toBe('https://checkout.stripe.com/lost');
             expect(create).toHaveBeenCalledOnce();
             expect(create.mock.calls[0]?.[0]?.line_items).toEqual([{ price: old.priceId, quantity: 1 }]);
             expect(create.mock.calls[0]?.[1]?.idempotencyKey).toBe('or3-checkout-lost-attempt');
             expect(store.account('alice')).toMatchObject({ checkout_attempt: 'lost-attempt', checkout_session_id: 'cs_lost', checkout_offer_id: old.id });
+        });
+
+        // A v1 idempotent replay contains the original creation response, not
+        // the current session state. Expiry must replace it in this request.
+        it('replaces an expired replay with the current offer without redirecting to the cached URL', async () => {
+            const old = await lostAttempt();
+            priceFor(old.priceId);
+            const create = vi.spyOn(stripe.checkout.sessions, 'create')
+                .mockResolvedValueOnce({ id: 'cs_lost', status: 'open', url: 'https://checkout.stripe.com/expired' } as never)
+                .mockResolvedValue({ id: 'cs_new', status: 'open', url: 'https://checkout.stripe.com/new' } as never);
+            vi.spyOn(stripe.checkout.sessions, 'retrieve').mockImplementation(async id => (id === 'cs_lost'
+                ? { id, status: 'expired', url: null }
+                : { id, status: 'open', url: 'https://checkout.stripe.com/new' }) as never);
+
+            await expect(service.checkout('alice')).resolves.toBe('https://checkout.stripe.com/new');
+            expect(create).toHaveBeenCalledTimes(2);
+            expect(create.mock.calls[1]?.[0]?.line_items).toEqual([{ price: 'price_next', quantity: 1 }]);
+            expect(create.mock.calls[1]?.[1]?.idempotencyKey).not.toBe('or3-checkout-lost-attempt');
+            expect(store.account('alice')).toMatchObject({ checkout_session_id: 'cs_new', checkout_offer_id: store.currentOffer()!.id });
         });
 
         it('starts a current-offer attempt when Stripe refuses the archived price', async () => {
@@ -334,6 +354,79 @@ describe('optional hosted billing', () => {
         expect(store.account('alice').customer_id).toBeNull();
     });
 
+    // Audit failure inventory: a valid unit_amount can still bill zero when
+    // quantity is transformed; payment may complete after the subscription
+    // snapshot; successful ordinary reconciliations must clear stale failures.
+    it.each(['checkout', 'offer'] as const)('rejects quantity-transformed prices before %s changes billing state', async action => {
+        vi.spyOn(stripe.prices, 'retrieve').mockResolvedValue({ id: 'price_transformed', active: true, currency: 'usd', unit_amount: 4000,
+            type: 'recurring', billing_scheme: 'per_unit', recurring: { interval: 'year', interval_count: 1, usage_type: 'licensed' },
+            transform_quantity: { divide_by: 5, round: 'down' } } as never);
+        const createCustomer = vi.spyOn(stripe.customers, 'create').mockResolvedValue({ id: 'cus_1' } as never);
+        const createCheckout = vi.spyOn(stripe.checkout.sessions, 'create').mockResolvedValue({ id: 'cs_1', url: 'https://checkout.stripe.com/test' } as never);
+        vi.spyOn(stripe.subscriptions, 'list').mockResolvedValue({ data: [], has_more: false } as never);
+        const before = store.offers();
+        const result = action === 'checkout' ? service.checkout('alice') : service.changeOffer({
+            operationId: 'transformed-price', actor: 'admin', reason: 'New annual offer', expectedRevision: before.revision,
+            command: { kind: 'create_current', priceId: 'price_transformed', amountCents: 4000, paidStorageGb: 50, trialStorageGb: 1, trialDays: 7 },
+        });
+        await expect(result).rejects.toMatchObject({ code: 'invalid_price' });
+        expect(createCustomer).not.toHaveBeenCalled();
+        expect(createCheckout).not.toHaveBeenCalled();
+        expect(store.account('alice').customer_id).toBeNull();
+        expect(store.offers()).toEqual(before);
+    });
+
+    it.each(['active', 'canceled'] as const)('checks the completed Checkout subscription when it is %s after an earlier canceled snapshot', async status => {
+        await customer();
+        await store.exclusive('alice', async token => store.update('alice', token, {
+            subscription_id: 'sub_old', subscription_status: 'canceled', checkout_attempt: 'pending-attempt',
+            checkout_session_id: 'cs_pending', checkout_offer_id: store.currentOffer()!.id,
+        }));
+        const old = { ...subscription('canceled'), id: 'sub_old' };
+        const completed = subscription(status);
+        let subscriptions = [old];
+        vi.spyOn(stripe.subscriptions, 'list').mockImplementation(() => Promise.resolve({ data: subscriptions, has_more: false }) as unknown as ReturnType<typeof stripe.subscriptions.list>);
+        vi.spyOn(stripe.subscriptions, 'retrieve').mockResolvedValue(completed as never);
+        vi.spyOn(stripe.checkout.sessions, 'retrieve').mockImplementation(async () => {
+            // Stripe completes the outstanding purchase after the list response.
+            subscriptions = [old, completed];
+            return { id: 'cs_pending', customer: 'cus_1', status: 'complete', subscription: completed.id, url: null } as never;
+        });
+        vi.spyOn(stripe.prices, 'retrieve').mockResolvedValue({ active: true, currency: 'usd', unit_amount: 4000, type: 'recurring',
+            billing_scheme: 'per_unit', recurring: { interval: 'year', interval_count: 1, usage_type: 'licensed' } } as never);
+        const create = vi.spyOn(stripe.checkout.sessions, 'create').mockResolvedValue({ id: 'cs_new', url: 'https://checkout.stripe.com/new' } as never);
+        vi.spyOn(stripe.billingPortal.sessions, 'create').mockResolvedValue({ url: 'https://billing.stripe.com/manage' } as never);
+
+        await expect(service.checkout('alice')).resolves.toBe(status === 'active' ? 'https://billing.stripe.com/manage' : 'https://checkout.stripe.com/new');
+        expect(create).toHaveBeenCalledTimes(status === 'active' ? 0 : 1);
+        expect(store.account('alice').checkout_session_id).toBe(status === 'active' ? 'cs_pending' : 'cs_new');
+    });
+
+    it.each(['refresh', 'checkout', 'webhook'] as const)('records %s reconciliation failure and subsequent recovery in account health', async action => {
+        await customer();
+        let now = Date.now();
+        vi.spyOn(Date, 'now').mockImplementation(() => now);
+        vi.spyOn(stripe.subscriptions, 'list').mockRejectedValueOnce(new Error('provider unavailable'))
+            .mockResolvedValue({ data: [subscription()], has_more: false } as never);
+        vi.spyOn(stripe.billingPortal.sessions, 'create').mockResolvedValue({ url: 'https://billing.stripe.com/manage' } as never);
+        const event = { id: 'evt_health', type: 'invoice.paid', data: { object: { customer: 'cus_1' } } } as Stripe.Event;
+        const reconcile = () => action === 'webhook' ? service.webhook(event) : service[action]('alice');
+
+        await expect(reconcile()).rejects.toThrow('provider unavailable');
+        expect(store.findAccount('alice')).toMatchObject({ last_reconciled_at: now, last_reconcile_outcome: 'failed' });
+        now += 1000;
+        await reconcile();
+        expect(store.findAccount('alice')).toMatchObject({ last_reconciled_at: now, last_reconcile_outcome: 'ok' });
+        expect(service.inspectAccount('alice').account).toMatchObject({ lastReconciledAt: now, lastReconcileOutcome: 'ok' });
+    });
+
+    it('leaves reconciliation health unset when the account has no Stripe customer', async () => {
+        const list = vi.spyOn(stripe.subscriptions, 'list').mockRejectedValue(new Error('Unexpected Stripe request'));
+        await service.refresh('alice');
+        expect(list).not.toHaveBeenCalled();
+        expect(store.findAccount('alice')).toMatchObject({ last_reconciled_at: 0, last_reconcile_outcome: null });
+    });
+
     it.each(['canceled', 'unpaid', 'paused', 'incomplete', 'incomplete_expired', 'trialing'])(
         'does not turn a paid invoice into hosted access for subscription status %s', async status => {
             await customer();
@@ -413,10 +506,11 @@ describe('optional hosted billing', () => {
         vi.spyOn(stripe.subscriptions, 'list').mockResolvedValue({ data: [], has_more: false } as never);
         const create = vi.spyOn(stripe.checkout.sessions, 'create').mockRejectedValueOnce(new Error('response lost'))
             .mockResolvedValue({ id: 'cs_1', url: 'https://checkout.stripe.com/c/test' } as never);
+        const retrieve = vi.spyOn(stripe.checkout.sessions, 'retrieve').mockResolvedValue({ id: 'cs_1', status: 'open', url: 'https://checkout.stripe.com/c/test' } as never);
         await expect(service.checkout('alice')).rejects.toThrow('response lost');
         await service.checkout('alice');
         expect(create.mock.calls[1]?.[1]?.idempotencyKey).toBe(create.mock.calls[0]?.[1]?.idempotencyKey);
-        vi.spyOn(stripe.checkout.sessions, 'retrieve').mockResolvedValue({ id: 'cs_1', status: 'expired' } as never);
+        retrieve.mockResolvedValue({ id: 'cs_1', status: 'expired' } as never);
         await service.checkout('alice');
         expect(create.mock.calls[2]?.[1]?.idempotencyKey).not.toBe(create.mock.calls[1]?.[1]?.idempotencyKey);
     });

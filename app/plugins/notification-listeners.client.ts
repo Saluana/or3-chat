@@ -14,10 +14,11 @@ import { useRuntimeConfig } from '#imports';
 import { useHooks } from '~/core/hooks/useHooks';
 import { NotificationService } from '~/core/notifications/notification-service';
 import { resolveNotificationUserId } from '~/core/notifications/notification-user';
-import { getDb } from '~/db/client';
+import { getActiveWorkspaceId, getDb } from '~/db/client';
 import { newId } from '~/db/util';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { getGlobalMultiPaneApi } from '~/utils/multiPaneApi';
+import type { NotificationAction } from '~~/shared/hooks/hook-domain-types';
 
 /**
  * Create a notification for system warnings and errors
@@ -35,6 +36,7 @@ export async function emitSystemNotification(payload: {
     body: string;
     threadId?: string;
     documentId?: string;
+    actions?: NotificationAction[];
 }): Promise<void> {
     if (!isClientRuntime()) return;
     
@@ -54,6 +56,7 @@ export async function emitSystemNotification(payload: {
         body: payload.body,
         threadId: payload.threadId,
         documentId: payload.documentId,
+        actions: payload.actions,
     });
 }
 
@@ -68,6 +71,10 @@ export default defineNuxtPlugin(() => {
     const hooks = useHooks();
     const getNotificationUserId = () =>
         resolveNotificationUserId(sessionContext?.data.value?.session);
+    // The Workspaces dashboard registers its Sync status page under the same conditions.
+    const syncRecoveryAvailable =
+        runtimeConfig.public?.ssrAuthEnabled === true &&
+        (runtimeConfig.public.sync as { enabled?: boolean } | undefined)?.enabled === true;
     const conflictDedupe = new Map<string, number>();
     const errorDedupe = new Map<string, number>();
     const streamDedupe = new Map<string, number>();
@@ -154,9 +161,17 @@ export default defineNuxtPlugin(() => {
             if (lastSeen && now - lastSeen < DEDUPE_WINDOW_MS) return;
             errorDedupe.set(errorKey, now);
 
+            // The change stays queued as failed; point to its workspace's recovery view.
             await emitSystemNotification({
                 title: presentation.title,
                 body: message,
+                actions: syncRecoveryAvailable ? [{
+                    id: newId(),
+                    label: 'Review sync',
+                    kind: 'navigate',
+                    target: { route: '/chat?dashboard=workspaces&page=sync' },
+                    data: { workspaceId: getActiveWorkspaceId() ?? 'local' },
+                }] : undefined,
             });
         } catch (err) {
             console.error('[notification-listeners] Failed to create sync error notification:', err);

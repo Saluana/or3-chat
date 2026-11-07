@@ -34,7 +34,8 @@ SDK requirement or payment checks.
   Concurrent edits use a revision check. Lowering a limit never deletes files.
 - **Accepted offers** retains historical and retired Stripe prices. New offers
   validate an existing active, fixed, licensed annual USD price with quantity
-  one, explicit cents/storage/trial terms, an impact preview, reason and revision.
+  one and no quantity transformation (`transform_quantity` must be unset),
+  explicit cents/storage/trial terms, an impact preview, reason and revision.
   Existing subscriber terms and trial deadlines remain recognized; unknown or
   ambiguous price matches create review holds without erasing paid dates.
   See [Customer support and operations](./admin-customer-operations.md#accepted-historical-offers).
@@ -209,12 +210,20 @@ Use a separate Stripe sandbox to qualify the payment flow before live mode.
 Stripe Checkout owns the payment form; OR3 never receives card details.
 Customers are mapped through server-owned Stripe IDs to canonical OR3 user IDs,
 never matched by email or trusted from client parameters. Repeated Checkout
-clicks reuse an open session. Current subscription state is fetched when handling
+clicks reuse an open session. Retries check its current Stripe state, including
+when the original creation response was lost: an expired session is replaced in
+the same request, and a session that completes during a retry cannot start a
+second subscription. Current subscription state is fetched when handling
 events so delayed events cannot overwrite newer Stripe state. Event IDs are
 deduplicated for 30 days; older replays still reconcile current state. The billing
 page can explicitly refresh confirmed state after a missed webhook. Successful
 redirects alone never grant access. Configure Stripe delivery monitoring/retries;
 there is no background reconciliation scheduler in this first version.
+
+Billing health records reconciliation times and outcomes for webhooks, Checkout,
+explicit customer refreshes and admin refreshes. A successful reconciliation clears
+an earlier failure indication; accounts without a Stripe customer are not marked
+as reconciled.
 
 Configure applicable sales-tax handling before live payments. This module does
 not turn on Stripe Tax automatically. Enabling automatic tax requires confirmed

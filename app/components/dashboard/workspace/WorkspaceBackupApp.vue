@@ -56,6 +56,14 @@
             </p>
             <p v-if="exportCloud" class="dashboard-list-footnote">
                 Finish syncing and uploading first.
+                <UButton
+                    variant="link"
+                    size="xs"
+                    class="p-0 align-baseline"
+                    @click="openSyncStatus"
+                >
+                    Review sync status
+                </UButton>
             </p>
             <p v-if="cloud && !exportCloud" class="dashboard-list-footnote">Includes files saved in this browser. Download any cloud-only files separately.</p>
         </section>
@@ -73,6 +81,7 @@
                 type="file"
                 :accept="cloud ? '.or3cloud' : 'application/json,.json,.jsonl,.or3.jsonl'"
                 class="hidden"
+                :disabled="importLocked"
                 @change="onFilePicked"
             />
             <div class="dashboard-list">
@@ -135,6 +144,7 @@
                     :label="option.label"
                     :description="option.description"
                     :selected="importMode === option.value"
+                    :disabled="importLocked"
                     @click="importModeModel = option.value"
                 />
                 <DashboardListRow
@@ -146,6 +156,7 @@
                     <template #trailing>
                         <USwitch
                             v-model="overwriteValuesModel"
+                            :disabled="importLocked"
                             aria-label="Overwrite conflicting records"
                         />
                     </template>
@@ -206,6 +217,7 @@ import { err, reportError, type AppError } from '~/utils/errors';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { isCloudWorkspaceBackupEnabled } from '~/core/storage/file-policy';
 import { useCloudAccess } from '~/core/cloud/access';
+import { useDashboardNavigation } from '~/composables/dashboard/useDashboardPlugins';
 const cloud = isCloudWorkspaceBackupEnabled();
 const cloudAccess = useCloudAccess();
 const exportCloud = computed(() => cloud && cloudAccess.value);
@@ -295,11 +307,16 @@ const peeking = computed(() => state.currentStep.value === 'peeking');
 const busy = computed(
     () => importing.value || exporting.value || peeking.value
 );
+// A confirmed import keeps the file and policy it started with until it settles.
+const importLocked = computed(
+    () => importing.value || pendingAction.value === 'import'
+);
 
 const backupMeta = computed(() => state.backupMeta.value);
 const importModeModel = computed<WorkspaceImportMode>({
     get: () => state.importMode.value,
     set: (value) => {
+        if (importLocked.value) return;
         state.importMode.value = value;
     },
 });
@@ -307,6 +324,7 @@ const importModeModel = computed<WorkspaceImportMode>({
 const overwriteValuesModel = computed({
     get: () => state.overwriteValues.value,
     set: (value: boolean) => {
+        if (importLocked.value) return;
         state.overwriteValues.value = value;
     },
 });
@@ -434,6 +452,7 @@ function resetFileInputValue() {
 }
 
 function clearSelection() {
+    if (importLocked.value) return;
     resetFileInputValue();
     selectedFile.value = null;
     peekError.value = null;
@@ -445,6 +464,10 @@ function clearSelection() {
 
 async function onFilePicked(event: Event) {
     const input = event.target as HTMLInputElement;
+    if (importLocked.value) {
+        resetFileInputValue();
+        return;
+    }
     const file = input.files?.[0];
     if (!file || file === selectedFile.value) {
         if (!file) {
@@ -467,8 +490,15 @@ async function onFilePicked(event: Event) {
 }
 
 function onBrowse() {
+    if (importLocked.value) return;
     resetFileInputValue();
     fileInput.value?.click();
+}
+
+const dashboardNavigation = useDashboardNavigation();
+
+function openSyncStatus() {
+    void dashboardNavigation.openPage('workspaces', 'sync');
 }
 
 async function onExport() {

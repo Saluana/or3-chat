@@ -1,9 +1,9 @@
 # Deployment and Operations Guide
 
 Operational runbook for OR3 Cloud SSR deployments. For the managed profile,
-the backup inspector qualifies SQLite `0.0.26` and filesystem `0.0.16`.
-It accepts complete migration histories through `031_storage_generation_uploads`
-and selected earlier histories through 024, 026, 028, and 029. An incomplete or
+the current backup inspection profile uses SQLite `0.0.27` and filesystem `0.0.16`.
+It accepts the current complete history through `032_sync_observations`
+and selected earlier histories through 024, 026, 028, 029, and 031. An incomplete or
 unknown history is refused; see [SQLite operations](/documentation/cloud/provider-sqlite).
 
 ## Start with the right operator
@@ -284,3 +284,11 @@ Stable promotion is an explicit contributor workflow. Follow the [release proced
 
 - [Configuration reference](/documentation/cloud/config-reference)
 - [Supported combinations](/documentation/cloud/providers#supported-combinations)
+
+### Immutable-generation restore
+
+SQLite migrations 030–032 resume after interrupted startup by validating already-created tables, indexes and guards before continuing. Conflicting schema definitions stop the migration instead of being silently reused. Restarting after an interrupted sync-observation migration preserves the completed schema steps.
+
+Managed restore and updates that re-extract the data volume validate generation manifests against the restored SQLite records and verify any remaining payload hashes before updating the recorded directory identities. This runs offline, after backup authentication and extraction, before application startup. Claims, removal fences, accounting and missing payloads are preserved; runtime inode checks remain enforced. A validation failure stops startup. A raw filesystem copy alone is not a supported restore for enrolled immutable generations. Cleanup activation still requires the installed-provider lifecycle qualification.
+
+Backup preflight recognizes `fs-generation-v1` attachment IDs and checks their verified canonical bindings and generation archive paths, alongside legacy filesystem attachments. Ordinary restore requires complete generation payloads and fences. Recovery from the recorded pre-operation safety snapshot instead preserves pre-existing missing files without recreating or rebinding incomplete generations; healthy generations are still verified and rebound. Present corrupt payloads or invalid identities remain errors in either mode.

@@ -13,7 +13,7 @@ import type {
     SyncSubscribeOptions,
 } from '~~/shared/sync/types';
 import { FULL_HISTORY_PULL_RETENTION } from '~~/shared/sync/types';
-import { OutboxManager } from '../outbox-manager';
+import { listFailedOps, OutboxManager } from '../outbox-manager';
 import { _resetSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 import { isRecentOpId, markRecentOpId } from '../recent-op-cache';
 import { Or3DB } from '~/db/client';
@@ -1596,6 +1596,60 @@ describe('OutboxManager fairness (real Dexie)', () => {
         } finally {
             nowSpy.mockRestore();
         }
+    });
+
+    // Failure inventory for user recovery: a retry/discard that reads then
+    // writes outside one transaction can resurrect a row another tab already
+    // settled (acknowledged or removed), re-pushing or hiding a settled change.
+    it.each([
+        ['retry one', (outbox: OutboxManager, op: PendingOp) => outbox.retryFailed(op.id)],
+        ['retry all', (outbox: OutboxManager) => outbox.retryFailed()],
+        ['discard', (outbox: OutboxManager, op: PendingOp) => outbox.discardFailed(op.id, 'user_discarded')],
+    ])('%s never overwrites a failed row another writer settled meanwhile', async (_name, act) => {
+        for (const settleFirst of [false, true]) {
+            const db = await freshDb();
+            const failed = realPendingOp({
+                id: `settled-${settleFirst}`,
+                status: 'failed_retryable',
+                attempts: 5,
+                payload: { id: 'm1', text: 'kept locally' },
+            });
+            await db.pending_ops.put({ ...failed, failureKind: 'retry_exhausted', failedAt: 1 });
+            const outbox = new OutboxManager(db, new SpyProvider() as never, { workspaceId: 'recovery-race' });
+            // Another tab's recovery + acknowledgement settles the same row.
+            const settle = () => db.transaction('rw', ['pending_ops'], async () => {
+                const row = await db.pending_ops.get(failed.id);
+                if (row?.status !== 'failed_retryable') return false;
+                await db.pending_ops.delete(failed.id);
+                return true;
+            });
+            // Start order decides which transaction IndexedDB schedules first.
+            const first = settleFirst ? settle() : act(outbox, failed);
+            const second = settleFirst ? act(outbox, failed) : settle();
+            const settled = (await (settleFirst ? first : second)) === true;
+            await Promise.all([first, second]);
+            const after = await db.pending_ops.get(failed.id);
+            // Exactly one writer wins: a settled row stays gone; otherwise the
+            // recovery action applied and kept the original payload.
+            expect(after === undefined).toBe(settled);
+            if (after) expect(after.payload).toEqual(failed.payload);
+        }
+    });
+
+    it('lists a bounded newest-first page of every failed status with the full count', async () => {
+        const db = await freshDb();
+        await db.pending_ops.bulkPut([
+            realPendingOp({ id: 'legacy', status: 'failed', createdAt: 1 }),
+            realPendingOp({ id: 'retryable', status: 'failed_retryable', createdAt: 2 }),
+            realPendingOp({ id: 'permanent', status: 'failed_permanent', createdAt: 3 }),
+            realPendingOp({ id: 'queued', status: 'pending', createdAt: 4 }),
+            realPendingOp({ id: 'gone', status: 'discarded', createdAt: 5 }),
+        ]);
+
+        const page = await listFailedOps(db, 2);
+
+        expect(page.total).toBe(3);
+        expect(page.ops.map((op) => op.id)).toEqual(['permanent', 'retryable']);
     });
 });
 
