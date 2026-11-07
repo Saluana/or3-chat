@@ -78,7 +78,7 @@ function observe(store: WorkspaceAccessStore, observation: Observation) {
             const pending = takePending(current);
             if (pending) persist(current, pending);
         }, Math.max(0, current.writtenAt + SYNC_OBSERVATION_WINDOW_MS - Date.now()));
-        current.timer.unref?.();
+        current.timer.unref();
     }
 }
 

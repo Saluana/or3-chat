@@ -38,7 +38,7 @@ SDK requirement or payment checks.
   explicit cents/storage/trial terms, an impact preview, reason and revision.
   Existing subscriber terms and trial deadlines remain recognized; unknown or
   ambiguous price matches create review holds without erasing paid dates.
-  See [Customer support and operations](./admin-customer-operations.md#accepted-historical-offers).
+  See [Customer support and operations](/documentation/cloud/admin-customer-operations#accepted-historical-offers).
 
 
 The paid storage allowance is account-wide across workspaces whose canonical
@@ -124,7 +124,7 @@ changed or more than one live subscription exists, and then removes only those
 holds with your reason in the same database transaction. Holds that predate
 review records appear as "Legacy review — reason unavailable". Do not edit
 `billing_accounts.review_required` by hand; see
-[Customer support and operations](./admin-customer-operations.md).
+[Customer support and operations](/documentation/cloud/admin-customer-operations).
 
 ## Cloud access extension
 

@@ -5,7 +5,7 @@
  */
 export function rebindRestoredGenerations(
   fs: typeof import('node:fs'), path: typeof import('node:path'), crypto: typeof import('node:crypto'),
-  db: { prepare(sql: string): { all(...params: any[]): any[]; get(...params: any[]): any } }, root: string,
+  db: { prepare(sql: string): { all(...params: unknown[]): Array<Record<string, unknown>>; get(...params: unknown[]): Record<string, unknown> | undefined } }, root: string,
   options: { previousSafetySnapshot?: boolean } = {},
 ) {
   type GenerationRow = {
@@ -30,10 +30,10 @@ export function rebindRestoredGenerations(
   const tables = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(row => row.name));
   const required = new Set<string>();
   if (tables.has('storage_object_generations')) {
-    for (const row of db.prepare("SELECT generation_id FROM storage_object_generations WHERE storage_provider_id = 'fs'").all()) required.add(row.generation_id);
+    for (const row of db.prepare("SELECT generation_id FROM storage_object_generations WHERE storage_provider_id = 'fs'").all()) required.add(String(row.generation_id));
   }
   if (tables.has('storage_generation_uploads')) {
-    for (const row of db.prepare("SELECT generation_id FROM storage_generation_uploads WHERE storage_provider_id = 'fs' AND ready_receipt_id IS NOT NULL").all()) required.add(row.generation_id);
+    for (const row of db.prepare("SELECT generation_id FROM storage_generation_uploads WHERE storage_provider_id = 'fs' AND ready_receipt_id IS NOT NULL").all()) required.add(String(row.generation_id));
   }
   if (!info(base)) { if (required.size && !preserveMissing) fail(); return; }
   dir(root); dir(base);

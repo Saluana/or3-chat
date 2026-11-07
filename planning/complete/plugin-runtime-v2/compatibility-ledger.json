@@ -2836,7 +2836,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "f34e07918e448e047b000196c4e3a799456174a935854f05f41564302d8596b9",
+      "apiSha256": "29d13b850e7b40325dc9bff2c29d921403c47f2983f7a8ddbfb3ace62776142b",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -7884,7 +7884,7 @@
               "source": "app/composables/core/useWorkspaceBackup.ts",
               "line": 52,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface WorkspaceBackupApi {\n    state: WorkspaceBackupState;\n    exportWorkspace(): Promise<void>;\n    peekBackup(file: Blob): Promise<void>;\n    importWorkspace(file: Blob): Promise<void>;\n    reset(): void;\n}"
+              "text": "export interface WorkspaceBackupApi {\n    state: WorkspaceBackupState;\n    exportWorkspace(options?: { localOnly?: boolean }): Promise<void>;\n    peekBackup(file: Blob): Promise<void>;\n    importWorkspace(file: Blob): Promise<void>;\n    reset(): void;\n}"
             }
           ]
         },
