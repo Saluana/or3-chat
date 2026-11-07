@@ -579,6 +579,17 @@ describe('POST /api/openrouter/stream credential authorization', () => {
         expect(startBackgroundStreamMock).not.toHaveBeenCalled();
     });
 
+    it.each([
+        { models: ['hidden/model'] },
+        { route: 'fallback' },
+    ])('rejects OpenRouter fallback routing that bypasses the workspace model policy (%o)', async (routing) => {
+        readBodyMock.mockResolvedValue({ model: 'test/model', messages: [], stream: true, ...routing });
+        expect(await handler(makeEvent())).toMatchObject({ code: 'unsupported_model_routing' });
+        expect(setResponseStatusMock).toHaveBeenCalledWith(expect.anything(), 400);
+        expect(fetch).not.toHaveBeenCalled();
+        expect(startBackgroundStreamMock).not.toHaveBeenCalled();
+    });
+
     it('strips OR3 metadata from a foreground provider request', async () => {
         backgroundStreamingAvailableMock.mockReturnValue(false);
         readBodyMock.mockResolvedValue({

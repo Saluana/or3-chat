@@ -158,7 +158,7 @@ export class FileTransferQueue {
             this.requeueOnAbort.add(id);
             this.abortControllers.get(id)?.abort();
         }
-        if (enabled) {
+        if (enabled && this.workspaceId) {
             const db = this.db;
             const workspaceId = this.workspaceId;
             // Admission failures are resumable; validation failures stay failed.

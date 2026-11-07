@@ -64,7 +64,7 @@ export function createTrustedRuntimeServices(input: {
     };
     const ai: PluginHostClients['ai'] = {
         models: () => run('ai.models', async () => {
-            if (!models.catalog.value.length) await models.fetchModels({ ttlMs: 60 * 60 * 1000 });
+            await models.ensureCompleteCatalog({ ttlMs: 60 * 60 * 1000 });
             const favorites = new Set(models.favoriteModels.value.map(model => model.id));
             return { configured: connected.value || runtime.public.openRouter.hasInstanceKey === true, models: models.catalog.value.map(model => ({ id: model.id, label: model.name || model.id, priced: Boolean(model.pricing), favorite: favorites.has(model.id), metadata: model as unknown as Record<string, unknown> })), limits: { maxOutputTokens: 0, spendLimitUsd: 0, maxConcurrentCalls: 0, deadlineMs: 0 } };
         }),

@@ -50,9 +50,10 @@ export type DelegationReceipt = {
 };
 
 async function ensureModelCatalog(store: ReturnType<typeof useModelStore>): Promise<void> {
-    if (store.catalog.value.length) return;
-    try { await store.fetchModels(); }
+    // Wait for every platform: a partial catalog would misreport a model as unavailable.
+    try { await store.ensureCompleteCatalog(); }
     catch { throw new Error('Model catalog is unavailable.'); }
+    if (!store.catalog.value.length) throw new Error('Model catalog is unavailable.');
 }
 
 export async function searchModels(args: Record<string, unknown>, context: ToolExecutionContext): Promise<string> {

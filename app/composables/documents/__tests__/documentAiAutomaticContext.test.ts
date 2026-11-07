@@ -13,7 +13,7 @@ import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine } from '~/core/hooks/useHooks';
 import { effectScope, ref, shallowRef } from 'vue';
 vi.mock('~/core/auth/useUserApiKey', () => ({ useUserApiKey: () => ({ apiKey: ref('') }) }));
-vi.mock('~/composables/chat/useModelStore', () => ({ useModelStore: () => ({ catalog: ref([]), fetchModels: vi.fn() }) }));
+vi.mock('~/composables/chat/useModelStore', () => ({ useModelStore: () => ({ catalog: ref([]), fetchModels: vi.fn(), ensureCompleteCatalog: vi.fn(async () => []) }) }));
 vi.mock('~/composables/core/useTokenizer', () => ({ useTokenizer: () => ({ countTokens: vi.fn() }) }));
 vi.mock('../useDocumentAiSettings', () => ({ DEFAULT_DOCUMENT_AI_MAX_ITERATIONS: 8, useDocumentAiSettings: () => ({ settings: ref({}), ensureLoaded: vi.fn() }) }));
 let editor: Editor | undefined;
