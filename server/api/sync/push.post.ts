@@ -1,3 +1,4 @@
+import { observeSyncRequest } from '../../sync/observations';
 import { isLocalOnlyKvChange } from '../../../shared/sync/local-only-kv';
 import { WORKSPACE_ITEM_CAPABILITY } from "~~/shared/posts/workspace-item-capability";
 import { hasWorkspaceItemSemantics } from '~~/shared/posts/workspace-item-capability';
@@ -173,87 +174,90 @@ export default defineEventHandler(async (event) => {
         id: envelope.data.scope.workspaceId,
     });
 
-    const rateLimitResult = checkSyncRateLimit(session.user.id, 'sync:push');
-    enforceRateLimit(event, rateLimitResult);
+    const userId = session.user.id;
+    return await observeSyncRequest(event, userId, envelope.data.scope.workspaceId, 'push', async () => {
+        const rateLimitResult = checkSyncRateLimit(userId, 'sync:push');
+        enforceRateLimit(event, rateLimitResult);
 
-    const stats = getSyncRateLimitStats(session.user.id, 'sync:push');
-    if (stats) {
-        setResponseHeader(event, 'X-RateLimit-Limit', String(stats.limit));
-        setResponseHeader(event, 'X-RateLimit-Remaining', String(stats.remaining));
-    }
-
-    recordSyncRequest(session.user.id, 'sync:push');
-
-    const merged = new Array<PushResultItem>(envelope.data.ops.length);
-    const validOps: PendingOp[] = [];
-    const validIndexes: number[] = [];
-
-    for (const [index, raw] of envelope.data.ops.entries()) {
-        const { op, result } = validateOneOp(raw, index);
-        if (result) {
-            merged[index] = result;
-            continue;
+        const stats = getSyncRateLimitStats(userId, 'sync:push');
+        if (stats) {
+            setResponseHeader(event, 'X-RateLimit-Limit', String(stats.limit));
+            setResponseHeader(event, 'X-RateLimit-Remaining', String(stats.remaining));
         }
-        validOps.push(op!);
-        validIndexes.push(index);
-    }
 
-    if (validOps.length === 0) {
+        recordSyncRequest(userId, 'sync:push');
+
+        const merged = new Array<PushResultItem>(envelope.data.ops.length);
+        const validOps: PendingOp[] = [];
+        const validIndexes: number[] = [];
+
+        for (const [index, raw] of envelope.data.ops.entries()) {
+            const { op, result } = validateOneOp(raw, index);
+            if (result) {
+                merged[index] = result;
+                continue;
+            }
+            validOps.push(op!);
+            validIndexes.push(index);
+        }
+
+        if (validOps.length === 0) {
+            return {
+                results: merged,
+                serverVersion: 0,
+            };
+        }
+
+        if (validOps.some((op) =>
+            op.operation === 'put' &&
+            isGenericFileMetaPayload(op.tableName, op.payload)
+        )) {
+            requireFileKindCapability(envelope.data.fileKindCapability);
+        }
+
+        if (validOps.some(op => hasWorkspaceItemSemantics(op.tableName, op.payload))) {
+            requireWorkspaceItemCapability(envelope.data.workspaceItemCapability);
+        }
+        const adapter = getActiveSyncGatewayAdapter();
+        if (!adapter) {
+            throw createError({ statusCode: 500, statusMessage: 'Sync adapter not configured' });
+        }
+        if (validOps.some(op => hasWorkspaceItemSemantics(op.tableName, op.payload)) && adapter.capabilities?.workspaceItems !== 'v1') {
+            throw createError({ statusCode: 503, statusMessage: 'The selected sync provider needs workspace Files support' });
+        }
+
+        const normalizedBatch = {
+            scope: envelope.data.scope,
+            ops: validOps,
+            ...(envelope.data.workspaceItemCapability ? { workspaceItemCapability: envelope.data.workspaceItemCapability } : {}),
+        };
+
+        const adapterResult = PushResultSchema.safeParse(
+            await adapter.push(event, normalizedBatch)
+        );
+        if (
+            !adapterResult.success ||
+            getPushResultContractError(normalizedBatch, adapterResult.data)
+        ) {
+            throw createError({
+                statusCode: 502,
+                statusMessage: 'Invalid push response',
+            });
+        }
+
+        const adapterByOpId = new Map(
+            adapterResult.data.results.map((item) => [item.opId, item])
+        );
+        for (let i = 0; i < validIndexes.length; i++) {
+            const index = validIndexes[i]!;
+            const op = validOps[i]!;
+            const item = adapterByOpId.get(op.stamp.opId);
+            if (item) merged[index] = item;
+        }
+
         return {
             results: merged,
-            serverVersion: 0,
+            serverVersion: adapterResult.data.serverVersion,
         };
-    }
-
-    if (validOps.some((op) =>
-        op.operation === 'put' &&
-        isGenericFileMetaPayload(op.tableName, op.payload)
-    )) {
-        requireFileKindCapability(envelope.data.fileKindCapability);
-    }
-
-    if (validOps.some(op => hasWorkspaceItemSemantics(op.tableName, op.payload))) {
-        requireWorkspaceItemCapability(envelope.data.workspaceItemCapability);
-    }
-    const adapter = getActiveSyncGatewayAdapter();
-    if (!adapter) {
-        throw createError({ statusCode: 500, statusMessage: 'Sync adapter not configured' });
-    }
-    if (validOps.some(op => hasWorkspaceItemSemantics(op.tableName, op.payload)) && adapter.capabilities?.workspaceItems !== 'v1') {
-        throw createError({ statusCode: 503, statusMessage: 'The selected sync provider needs workspace Files support' });
-    }
-
-    const normalizedBatch = {
-        scope: envelope.data.scope,
-        ops: validOps,
-        ...(envelope.data.workspaceItemCapability ? { workspaceItemCapability: envelope.data.workspaceItemCapability } : {}),
-    };
-
-    const adapterResult = PushResultSchema.safeParse(
-        await adapter.push(event, normalizedBatch)
-    );
-    if (
-        !adapterResult.success ||
-        getPushResultContractError(normalizedBatch, adapterResult.data)
-    ) {
-        throw createError({
-            statusCode: 502,
-            statusMessage: 'Invalid push response',
-        });
-    }
-
-    const adapterByOpId = new Map(
-        adapterResult.data.results.map((item) => [item.opId, item])
-    );
-    for (let i = 0; i < validIndexes.length; i++) {
-        const index = validIndexes[i]!;
-        const op = validOps[i]!;
-        const item = adapterByOpId.get(op.stamp.opId);
-        if (item) merged[index] = item;
-    }
-
-    return {
-        results: merged,
-        serverVersion: adapterResult.data.serverVersion,
-    };
+    });
 });

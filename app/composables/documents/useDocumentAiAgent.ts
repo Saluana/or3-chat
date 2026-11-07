@@ -341,7 +341,7 @@ export function useDocumentAiAgent(options: {
     const acceptControl = createAcceptQueue();
     const { apiKey } = useUserApiKey();
     const { settings, ensureLoaded } = useDocumentAiSettings();
-    const { catalog, fetchModels } = useModelStore();
+    const { catalog, ensureCompleteCatalog } = useModelStore();
     const { countTokens } = useTokenizer();
     const hooks = useHooks();
     let referenceRevision = 0;
@@ -671,7 +671,10 @@ export function useDocumentAiAgent(options: {
         await ensureLoaded();
         signal.throwIfAborted();
         if (!online.value) throw new Error('You’re offline. Reconnect to send an AI request.');
-        if (!catalog.value.length) await fetchModels().catch(() => []);
+        // The configured model may come from the slower platform; never pick a
+        // fallback from a partially loaded catalog.
+        await ensureCompleteCatalog().catch(() => []);
+        signal.throwIfAborted();
         let inherited = FALLBACK_DOCUMENT_MODEL;
         try {
             inherited = localStorage.getItem('last_selected_model') || inherited;

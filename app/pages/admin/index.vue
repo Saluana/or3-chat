@@ -8,6 +8,8 @@
             </p>
         </div>
 
+        <AdminAttention />
+
         <!-- Loading Skeleton -->
         <div v-if="pending" class="space-y-6 animate-pulse">
             <div class="h-8 w-32 bg-[var(--md-surface-container-highest)] rounded"></div>
@@ -82,6 +84,7 @@
 		} from '~/composables/admin/useAdminPlugins';
 		import { useAdminSystemStatus } from '~/composables/admin/useAdminData';
 import AdminSystemWarnings from '~/components/admin/system/AdminSystemWarnings.vue';
+import AdminAttention from '~/components/admin/AdminAttention.vue';
 
 definePageMeta({
     layout: 'admin',

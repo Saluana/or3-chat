@@ -314,7 +314,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 3,
-                    "summary": "Export and restore workspace backups, including Cloud archives and local JSONL backups."
+                    "summary": "Export Cloud archives or local recovery copies, understand remote-only file coverage, and restore with captured import options and workspace identity."
                 }
             ]
         },
@@ -620,7 +620,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Configure sign-in, registration, invitations, accounts, and workspace access."
+                    "summary": "Configure sign-in, registration, invitations, accounts, workspace access, and bounded Basic Auth credential requests."
                 },
                 {
                     "name": "background-execution.md",
@@ -665,7 +665,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 8,
-                    "summary": "Basic Auth credentials, branded sign-in and registration dialogs, visible workspace-session failures with retry, short invitation codes, session-preserving registration refusals, and provider-isolated status and recovery adapters."
+                    "summary": "Basic Auth credentials, first-boot account readiness, sign-in and registration dialogs, invitation codes, session-preserving refusals, and provider-isolated recovery."
                 },
                 {
                     "name": "provider-sqlite.md",
@@ -710,7 +710,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 13,
-                    "summary": "S3 endpoint validation, canonical SHA-256 identity, paired upload reservations, retryable commits, and safe disabled physical cleanup."
+                    "summary": "S3 and Hippius setup, verified transfers, dormant immutable generations and coordinated cleanup, retained quotas, offline SHA-256 backup preparation, and qualification."
                 },
                 {
                     "name": "deployment-operations.md",
@@ -719,7 +719,7 @@
                     "category": "Operations",
                     "categoryOrder": 3,
                     "order": 14,
-                    "summary": "Operational runbook for OR3 Cloud SSR deployments, including reserved upload verification, qualified SQLite backup histories through migration 028, and incomplete-upgrade refusal."
+                    "summary": "Operational runbook for OR3 Cloud SSR deployments, including generation-aware backup inspection, authenticated offline restore and safety-snapshot recovery, resumable SQLite migrations 030–032, and incomplete-upgrade refusal."
                 },
                 {
                     "name": "troubleshooting.md",
@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Understand how workspace records synchronize, recover from outages, and handle conflicts."
+                    "summary": "Understand workspace synchronization, failed-write recovery, local recovery backups, and conflict handling."
                 },
                 {
                     "name": "storage-layer.md",
@@ -827,6 +827,24 @@
                     "category": "Providers",
                     "order": 10,
                     "summary": "Configure credential custody, the local vault, account connections, and recovery."
+                },
+                {
+                    "name": "admin-customer-operations.md",
+                    "path": "/cloud/admin-customer-operations",
+                    "title": "Customer support and operations",
+                    "category": "Advanced",
+                    "categoryOrder": 5,
+                    "order": 25,
+                    "summary": "Customer support, validated offer changes, storage accounting, operator-managed Linux filesystem cleanup settings preserved by setup, completed-sync observations, provider checks, recovery coverage and audited activity."
+                },
+                {
+                    "name": "hosted-billing.md",
+                    "path": "/cloud/hosted-billing",
+                    "title": "Optional hosted billing",
+                    "category": "Advanced",
+                    "categoryOrder": 5,
+                    "order": 24,
+                    "summary": "Opt-in hosted billing with Free Local, Cloud trials, validated annual offers, safe Checkout retries, reconciliation health, account storage allowances and sync pause/resume."
                 }
             ]
         },
@@ -901,7 +919,7 @@
                     "category": "Using plugins",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Connect a marketplace account, page through older purchases and coverage, request administrator installation, and manage the account link."
+                    "summary": "Connect a marketplace account, browse purchases and coverage, understand reversals, and reconnect after an account restriction."
                 },
                 {
                     "name": "first-plugin.md",
@@ -928,7 +946,7 @@
                     "category": "Building plugins",
                     "categoryOrder": 2,
                     "order": 2,
-                    "summary": "Freeze and qualify an exact candidate, test its files, prepare a marketplace draft, and follow review and publication."
+                    "summary": "Freeze and qualify an unambiguous package, prepare a marketplace draft, and follow review and session-bound publication approval."
                 },
                 {
                     "name": "manifest.md",
@@ -973,7 +991,7 @@
                     "category": "Advanced",
                     "categoryOrder": 4,
                     "order": 0,
-                    "summary": "Configure plugin execution, permissions, credential custody, containment, and recovery."
+                    "summary": "Configure plugin execution, permissions, credential custody, containment, recovery, and managed proxy policies for portable frames and streaming exports."
                 },
                 {
                     "name": "admin-plugins.md",

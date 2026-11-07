@@ -60,7 +60,9 @@ choose **Use instance limits** when the sync provider supports those grants.
 If an instance
 limit is lowered below a saved workspace override, the lower instance limit
 applies. Changes apply to new responses; a background job keeps the limits it
-captured when admitted.
+captured when admitted. An open page reuses the workspace limits it read for up
+to a minute, so a change can take that long to reach foreground responses there.
+If that refresh fails, the page keeps the limits it last read for the workspace.
 
 The image setting limits images saved by the app, not images a provider may
 already have generated. Foreground tool limits are enforced by the app, so

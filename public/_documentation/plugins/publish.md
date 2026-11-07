@@ -150,6 +150,14 @@ host, compare its package identity with the publication receipt, and repeat your
 interaction check. Staging publication does not publish to production. Use that
 environment's separate review and signing process.
 
+Package ZIP paths must be unique. Each local header must name the same file and
+compression method as its central-directory entry. Repack an ambiguous archive
+and qualify the exact replacement bytes before uploading again.
+
+Operator approval drafts and pending review actions are retained for fifteen
+minutes in the same authenticated browser session. After changing accounts or
+sessions, reopen the submission and start the action again.
+
 ## Common blockers
 
 | Blocker | Fix |

@@ -68,6 +68,13 @@ describe('OpenAI endpoint contracts', () => {
         expect(encodeOpenAiResponseRequest({ model: 'gpt-4.1', response_format: { type: 'json_object' } }))
             .toMatchObject({ text: { format: { type: 'json_object' } } });
     });
+    it('requests encrypted reasoning only from models that reason', () => {
+        for (const model of ['@openai/gpt-4.1', '@openai/gpt-4o', '@openai/gpt-5.3-chat-latest'])
+            expect(encodeOpenAiResponseRequest(encodeOpenAiRequest({ model, messages: [] }))).not.toHaveProperty('include');
+        for (const model of ['@openai/gpt-5', '@openai/o3', '@openai/gpt-5.4'])
+            expect(encodeOpenAiResponseRequest(encodeOpenAiRequest({ model, messages: [] })))
+                .toMatchObject({ include: ['reasoning.encrypted_content'], store: false });
+    });
     it('uses documented capabilities and capacities for current models', () => {
         const [astra, turbo] = mapOpenAiModels([{ id: 'gpt-6-astra' }, { id: 'gpt-4-turbo' }]);
         expect(astra!.context_length).toBe(1_050_000);

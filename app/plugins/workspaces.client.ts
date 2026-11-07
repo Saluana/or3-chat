@@ -33,6 +33,19 @@ export default defineNuxtPlugin(() => {
                   },
               ]
             : []),
+        // Recovery for changes that could not sync; only meaningful with Cloud sync.
+        ...((runtimeConfig.public.sync as { enabled?: boolean } | undefined)?.enabled
+            ? [
+                  {
+                      id: 'sync',
+                      title: 'Sync status',
+                      icon: 'pixelarticons:sync',
+                      description: 'Review and retry changes that didn’t sync.',
+                      component: async () =>
+                          await import('~/components/dashboard/workspace/WorkspaceSyncStatus.vue'),
+                  },
+              ]
+            : []),
     ];
 
     registerDashboardPlugin({

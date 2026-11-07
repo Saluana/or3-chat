@@ -7,6 +7,7 @@
 import { defineEventHandler, getRouterParam, createError } from 'h3';
 import { requireAdminApiContext } from '../../../admin/api';
 import { getWorkspaceAccessStore } from '../../../admin/stores/registry';
+import { withAdminJournal } from '../../../admin/activity/journal';
 import { isAdminEnabled } from '../../../utils/admin/is-admin-enabled';
 
 /**
@@ -29,7 +30,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // Require admin context
-    await requireAdminApiContext(event, {
+    const adminCtx = await requireAdminApiContext(event, {
         mutation: true,
         superAdminOnly: true,
     });
@@ -47,7 +48,11 @@ export default defineEventHandler(async (event) => {
     const store = getWorkspaceAccessStore(event);
 
     // Restore workspace
+    await withAdminJournal({
+        actor: adminCtx.principal.kind === 'super_admin' ? adminCtx.principal.username : adminCtx.principal.userId, action: 'workspace.restore', target: { kind: 'workspace', id: workspaceId },
+    }, async () => {
     await store.restoreWorkspace({ workspaceId });
+    });
 
     return { success: true };
 });

@@ -1,6 +1,7 @@
 /** Host job admission, status and browser-tool transport. */
 import { shallowRef } from 'vue';
 import { useRuntimeConfig } from '#imports';
+import { hasCloudAccess } from '~/core/cloud/access';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { readRequestUsage, type RequestUsage } from '~~/shared/chat/compaction';
 import { captureContextEnvelope, type ContextRequestPolicy } from '~~/shared/chat/context-budget';
@@ -222,7 +223,7 @@ async function readErrorMessage(
 export function isBackgroundStreamingEnabled(
     configuredEnabled?: boolean
 ): boolean {
-    if (backgroundStreamingCapabilityDisabled.value) return false;
+    if (backgroundStreamingCapabilityDisabled.value || !hasCloudAccess()) return false;
     const configEnabled =
         configuredEnabled ??
         (

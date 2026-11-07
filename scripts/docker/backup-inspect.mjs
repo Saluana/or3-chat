@@ -5,8 +5,8 @@ import { readFileSync, lstatSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const INSPECTION_PROFILE = Object.freeze({ contract: 1, sqlite: '0.0.26', filesystem: '0.0.16' });
-export const QUALIFIED_MIGRATIONS = ['001_init', '002_sync_tables', '003_sync_hardening', '004_auth_invites', '005_admin_stores', '006_sync_snapshots', '007_device_cursor_ownership', '008_upload_intents', '009_or3_connect', '010_connect_user_code_hmac', '011_connect_environment_scope_indexes', '012_connect_credential_redelivery', '013_connect_environment_lifecycle', '014_connect_retention_activation', '015_rate_limits', '016_connect_runtime_binding', '017_background_jobs', '018_background_admission_cancels', '019_background_generation_history', '020_background_generation_receipts', '021_background_request_usage', '022_canonical_chat_reader', '023_legacy_chat_seek_index', '024_signup_invites', '025_background_shutdown_accounting', '026_retained_storage_usage', '027_verified_storage_usage', '028_user_scoped_device_cursors', '029_delegation_wait', '030_storage_generations', '031_storage_generation_uploads'];
+export const INSPECTION_PROFILE = Object.freeze({ contract: 1, sqlite: '0.0.27', filesystem: '0.0.16' });
+export const QUALIFIED_MIGRATIONS = ['001_init', '002_sync_tables', '003_sync_hardening', '004_auth_invites', '005_admin_stores', '006_sync_snapshots', '007_device_cursor_ownership', '008_upload_intents', '009_or3_connect', '010_connect_user_code_hmac', '011_connect_environment_scope_indexes', '012_connect_credential_redelivery', '013_connect_environment_lifecycle', '014_connect_retention_activation', '015_rate_limits', '016_connect_runtime_binding', '017_background_jobs', '018_background_admission_cancels', '019_background_generation_history', '020_background_generation_receipts', '021_background_request_usage', '022_canonical_chat_reader', '023_legacy_chat_seek_index', '024_signup_invites', '025_background_shutdown_accounting', '026_retained_storage_usage', '027_verified_storage_usage', '028_user_scoped_device_cursors', '029_delegation_wait', '030_storage_generations', '031_storage_generation_uploads', '032_sync_observations'];
 const MAX_ENTRIES = 100_000;
 const MAX_DATABASE_BYTES = 192 * 1024 * 1024;
 // One MiB accommodates the admitted 256 KiB payload and persisted fields.
@@ -74,7 +74,7 @@ export function inspectCanonicalReferences(Database, databasePath, inventory, st
     const migrationNames = db.prepare('SELECT name FROM kysely_migration ORDER BY name LIMIT ?').all(QUALIFIED_MIGRATIONS.length + 1).map(row => row.name);
     // Accept previously published histories and the current candidate.
     // Interrupted upgrades remain unsupported.
-    const expectedMigrations = [24, 26, 28, 29].includes(migrationNames.length) ? QUALIFIED_MIGRATIONS.slice(0, migrationNames.length) : QUALIFIED_MIGRATIONS;
+    const expectedMigrations = [24, 26, 28, 29, 31].includes(migrationNames.length) ? QUALIFIED_MIGRATIONS.slice(0, migrationNames.length) : QUALIFIED_MIGRATIONS;
     if (JSON.stringify(migrationNames) !== JSON.stringify(expectedMigrations)) throw new Error('Unsupported offline canonical SQLite migration history');
     const columns = db.prepare('PRAGMA table_info(s_file_meta)').all();
     for (const [name, type, pk] of [['workspace_id', 'TEXT', 1], ['id', 'TEXT', 2], ['data_json', 'TEXT', 0], ['deleted', 'INTEGER', 0]]) {
@@ -105,9 +105,31 @@ export function inspectCanonicalReferences(Database, databasePath, inventory, st
       const match = /^(?:(sha256|md5):)?([a-f0-9]+)$/.exec(hash);
       const algorithm = match?.[1] ?? (match?.[2].length === 64 ? 'sha256' : match?.[2].length === 32 ? 'md5' : undefined);
       if (!match || !algorithm || match[2].length !== (algorithm === 'sha256' ? 64 : 32)) throw new Error('Invalid canonical filesystem hash');
-      const name = `${root ? `${root}/` : ''}workspaces/${row.workspace_id}/${algorithm}_${match[2]}`;
-      requireEntry(name, size);
-      requireEntry(`${name}.meta.json`);
+      if (storageId.startsWith('fs-generation-')) {
+        const parts = storageId.split(':');
+        const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+        if (parts.length !== 5 || parts[0] !== 'fs-generation-v1' || !uuid.test(parts[1]) || !uuid.test(parts[3]) ||
+            !/^[A-Za-z0-9_-]{1,128}$/.test(parts[2]) || parts[2] !== row.workspace_id || algorithm !== 'sha256' || parts[4] !== match[2]) {
+          throw new Error('Invalid canonical filesystem generation identity');
+        }
+        const generation = db.prepare('SELECT workspace_id,hash,storage_provider_id,storage_id,size_bytes,state FROM storage_object_generations WHERE generation_id = ?').get(parts[3]);
+        if (!generation || generation.workspace_id !== row.workspace_id || generation.storage_provider_id !== 'fs' ||
+            generation.storage_id !== storageId || generation.size_bytes !== size || generation.state !== 'verified' ||
+            typeof generation.hash !== 'string' || generation.hash.replace(/^sha256:/i, '').toLowerCase() !== match[2]) {
+          throw new Error('Invalid canonical filesystem generation binding');
+        }
+        const base = `${root ? `${root}/` : ''}generations-v1`;
+        const slot = `${base}/workspaces/${row.workspace_id}/${parts[3]}`;
+        // Inventory proves regular entries and ancestry. Authenticated manifest
+        // contents and payload hashes are verified after extraction, before start.
+        requireEntry(`${base}/namespace.json`);
+        requireEntry(`${slot}/ready.json`);
+        requireEntry(`${slot}/payload/blob`, size);
+      } else {
+        const name = `${root ? `${root}/` : ''}workspaces/${row.workspace_id}/${algorithm}_${match[2]}`;
+        requireEntry(name, size);
+        requireEntry(`${name}.meta.json`);
+      }
       live++;
     }
     return { contract: 1, inspectedMetadata: inspected, liveAttachments: live, complete: true };

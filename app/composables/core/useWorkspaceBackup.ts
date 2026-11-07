@@ -2,6 +2,7 @@ import { ref, type Ref } from 'vue';
 import { useRuntimeConfig } from '#imports';
 import { getDb } from '~/db/client';
 import { getCachedSessionContext, useSessionContext } from '~/composables/auth/useSessionContext';
+import { hasCloudAccess } from '~/core/cloud/access';
 import { isCloudWorkspaceBackupEnabled } from '~/core/storage/file-policy';
 import { CLOUD_BACKUP_MAGIC, CloudBackupError, peekCloudBackup } from '~~/shared/storage/workspace-archive';
 import { STATIC_FILE_CEILING } from '~~/shared/storage/file-policy';
@@ -50,7 +51,7 @@ export interface ImportMetadata {
 
 export interface WorkspaceBackupApi {
     state: WorkspaceBackupState;
-    exportWorkspace(): Promise<void>;
+    exportWorkspace(options?: { localOnly?: boolean }): Promise<void>;
     peekBackup(file: Blob): Promise<void>;
     importWorkspace(file: Blob): Promise<void>;
     reset(): void;
@@ -115,9 +116,9 @@ interface DexieBackupMeta {
     data: ImportMetadata;
 }
 
-function validateBackupMeta(meta: unknown): ImportMetadata {
+function validateBackupMeta(meta: unknown, database = getDb()): ImportMetadata {
     const backupMeta = meta as DexieBackupMeta;
-    const expectedDatabaseName = getDb().name;
+    const expectedDatabaseName = database.name;
     if (backupMeta.formatName !== 'dexie') {
         throw err(
             'ERR_VALIDATION',
@@ -145,7 +146,7 @@ function validateBackupMeta(meta: unknown): ImportMetadata {
             }
         );
     }
-    if (backupMeta.data.databaseVersion > getDb().verno) {
+    if (backupMeta.data.databaseVersion > database.verno) {
         throw err(
             'ERR_VALIDATION',
             'Backup is from a newer app version. Please update.',
@@ -218,7 +219,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         state.error.value = null;
     }
 
-    async function exportWorkspace(): Promise<void> {
+    async function exportWorkspace(options: { localOnly?: boolean } = {}): Promise<void> {
         if (state.isExporting.value || state.isImporting.value) return;
         if (typeof window === 'undefined') {
             state.error.value = err(
@@ -235,9 +236,13 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
 
         // A picker or hook can outlive the current workspace selection.
         const exportDb = getDb();
-        const exportSubject = cloud ? getCachedSessionContext()?.user?.id : null;
+        const exportCloud = !options.localOnly && cloud && hasCloudAccess();
+        const exportSession = cloud ? getCachedSessionContext() : null;
+        const exportSubject = exportSession?.user?.id;
+        const exportWorkspaceId = exportSession?.workspace?.id;
         const assertCloudOrigin = () => {
-            if (cloud && (getDb() !== exportDb || getCachedSessionContext()?.user?.id !== exportSubject)) throw new CloudBackupError('Account or workspace changed while preparing backup.');
+            const current = cloud ? getCachedSessionContext() : null;
+            if (cloud && (getDb() !== exportDb || current?.user?.id !== exportSubject || current?.workspace?.id !== exportWorkspaceId)) throw new CloudBackupError('Account or workspace changed while preparing backup.');
         };
         const exportStartedAt = Date.now();
         let exportTelemetry: {
@@ -260,10 +265,10 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 .toISOString()
                 .slice(0, 19)
                 .replace(/:/g, '-')}`;
-            const suggestedName = `${filenameBase}.${cloud ? 'or3cloud' : 'or3.jsonl'}`;
+            const suggestedName = `${filenameBase}.${exportCloud ? 'or3cloud' : 'or3.jsonl'}`;
 
             exportTelemetry = {
-                format: cloud ? 'cloud' : 'stream',
+                format: exportCloud ? 'cloud' : 'stream',
                 filenameBase,
                 suggestedName,
             };
@@ -276,6 +281,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
             const updateStreamProgress = (
                 progress: WorkspaceBackupProgress
             ) => {
+                assertCloudOrigin();
                 const total = progress.totalTables + progress.totalRows;
                 const completed =
                     progress.completedTables + progress.completedRows;
@@ -290,14 +296,14 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                         {
                             description: 'OR3 Workspace Backup',
                             accept: {
-                                [cloud ? 'application/octet-stream' : 'application/json']: cloud ? ['.or3cloud'] : ['.or3.jsonl', '.jsonl'],
+                                [exportCloud ? 'application/octet-stream' : 'application/json']: exportCloud ? ['.or3cloud'] : ['.or3.jsonl', '.jsonl'],
                             },
                         },
                     ],
                 });
 
                 assertCloudOrigin();
-                if (cloud) {
+                if (exportCloud) {
                     const { exportCloudWorkspace } = await import('~/utils/cloud-workspace-backup');
                     assertCloudOrigin();
                     await exportCloudWorkspace(await fileHandle.createWritable());
@@ -324,6 +330,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 }
 
                 const streamSaverModule = await loadStreamSaver();
+                assertCloudOrigin();
                 // StreamSaver module may have default export or direct export
                 const streamSaverModuleWithDefault = streamSaverModule as { default?: typeof import('streamsaver') } | typeof import('streamsaver') | null;
                 const streamSaver = streamSaverModuleWithDefault && 'default' in streamSaverModuleWithDefault 
@@ -356,7 +363,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                     suggestedName,
                     {
                         headers: {
-                            'Content-Type': cloud ? 'application/octet-stream' : 'application/json',
+                            'Content-Type': exportCloud ? 'application/octet-stream' : 'application/json',
                             'Content-Disposition': `attachment; filename="${suggestedName}"`,
                         },
                     } as unknown as Parameters<typeof streamSaverApi.createWriteStream>[1]
@@ -375,7 +382,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                     );
                 }
 
-                if (cloud) {
+                if (exportCloud) {
                     assertCloudOrigin();
                     const { exportCloudWorkspace } = await import('~/utils/cloud-workspace-backup');
                     assertCloudOrigin();
@@ -536,13 +543,34 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         state.progress.value = 0;
         state.error.value = null;
 
+        // File reads, hooks, and lazy imports must not retarget a confirmed
+        // operation or change its destructive/conflict policy.
+        const importDb = getDb();
+        const importMode = state.importMode.value;
+        const overwriteValues = state.overwriteValues.value;
+        const importSession = getCachedSessionContext();
+        const importSubject = importSession?.user?.id;
+        const importWorkspaceId = importSession?.workspace?.id;
+        const importAuthenticated = importSession?.authenticated ?? false;
+        const assertImportOrigin = () => {
+            const current = getCachedSessionContext();
+            if (
+                getDb() !== importDb ||
+                current?.user?.id !== importSubject ||
+                current?.workspace?.id !== importWorkspaceId ||
+                (current?.authenticated ?? false) !== importAuthenticated
+            ) {
+                throw new CloudBackupError('Account or workspace changed during import. Please select the backup again.');
+            }
+        };
+
         const fileWithName = file as Blob & { name?: string };
         const fileName =
             typeof fileWithName.name === 'string' ? fileWithName.name : null;
         const baseImportTelemetry = {
             fileName,
-            mode: state.importMode.value,
-            overwrite: state.overwriteValues.value,
+            mode: importMode,
+            overwrite: overwriteValues,
         };
         let importTelemetry = {
             ...baseImportTelemetry,
@@ -553,6 +581,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         try {
             // Inspect the selected bytes again; metadata from another file grants no authority.
             const format = await detectFormat(file);
+            assertImportOrigin();
             if (cloud && format !== 'cloud') throw new CloudBackupError(notCloudBackupMessage(format));
 
             importTelemetry = { ...baseImportTelemetry, format };
@@ -561,21 +590,24 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 'workspace.backup.import:action:before',
                 importTelemetry
             );
+            assertImportOrigin();
 
             if (format === 'cloud') {
                 if (!cloud || !session) throw new CloudBackupError('Cloud restore requires an authenticated Cloud installation.');
                 const { restoreCloudWorkspace } = await import('~/utils/cloud-workspace-backup');
+                assertImportOrigin();
                 await restoreCloudWorkspace(file, session, value => { state.progress.value = value; });
             } else if (format === 'stream') {
                 await importWorkspaceStream({
-                    db: getDb(),
+                    db: importDb,
                     file,
-                    clearTables: state.importMode.value === 'replace',
+                    clearTables: importMode === 'replace',
                     overwriteValues:
-                        state.importMode.value === 'replace'
+                        importMode === 'replace'
                             ? true
-                            : state.overwriteValues.value,
+                            : overwriteValues,
                     onProgress: (progress: WorkspaceBackupProgress) => {
+                        assertImportOrigin();
                         const total = progress.totalTables + progress.totalRows;
                         const completed =
                             progress.completedTables + progress.completedRows;
@@ -587,7 +619,9 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 });
             } else if (format === 'dexie') {
                 const { importInto, peakImportFile } = await loadDexieExportImport();
-                validateBackupMeta(await peakImportFile(file));
+                const metadata = await peakImportFile(file);
+                assertImportOrigin();
+                validateBackupMeta(metadata, importDb);
                 interface DexieImportProgress {
                     totalTables: number;
                     totalRows?: number;
@@ -598,10 +632,12 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                     acceptVersionDiff: true, // The preceding validation permits older compatible backups only.
                     chunkSizeBytes: DEFAULT_KILOBYTES_PER_CHUNK,
                     filter: (table: string, row: { blob?: Blob }) => {
+                        assertImportOrigin();
                         if (table === 'file_blobs' && row.blob && row.blob.size > STATIC_FILE_CEILING) throw new Error('Local restore cannot import files larger than 50 MiB.');
                         return true;
                     },
                     progressCallback: (progress: DexieImportProgress) => {
+                        assertImportOrigin();
                         const total =
                             progress.totalTables + (progress.totalRows ?? 0);
                         const completed =
@@ -615,16 +651,16 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                     },
                 };
 
-                if (state.importMode.value === 'replace') {
-                    await importInto(getDb(), file, {
+                if (importMode === 'replace') {
+                    await importInto(importDb, file, {
                         ...baseOptions,
                         clearTablesBeforeImport: true,
                     });
                 } else {
-                    await importInto(getDb(), file, {
+                    await importInto(importDb, file, {
                         ...baseOptions,
                         clearTablesBeforeImport: false,
-                        overwriteValues: state.overwriteValues.value,
+                        overwriteValues,
                     });
                 }
             } else {

@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import Dexie from 'dexie';
-import { effectScope, nextTick, ref } from 'vue';
+import { effectScope, nextTick, onScopeDispose, ref } from 'vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setHookEngine } from '~/core/hooks/useHooks';
 import { createHookEngine } from '~/core/hooks/hooks';
@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock('~/composables/auth/useSessionContext', () => ({
     useSessionContext: () => ({ data: state.session }),
+    getCachedSessionPayload: () => (state.session as { value: unknown }).value,
     getCachedSessionContext: () => (state.session as { value: { session: unknown } }).value.session,
 }));
 vi.mock('~/composables/workspace/useWorkspaceManager', () => ({
@@ -41,6 +42,38 @@ vi.mock('../outbox-manager', () => ({ OutboxManager: class {
 afterEach(() => { vi.unstubAllGlobals(); setHookEngine(null); });
 
 describe('sync lifecycle with real local write capture', () => {
+    it('captures Free Local edits after startup, resumes on upgrade, and stops at expiry without another response', async () => {
+        setHookEngine(createTypedHookEngine(createHookEngine()));
+        const id = crypto.randomUUID(); const db = getWorkspaceDb(id);
+        await db.open(); setActiveWorkspaceDb(id);
+        const session = ref({ session: { authenticated: true, user: { id: 'local-user' } }, cloudAccess: { enabled: false, expiresAt: 0 } });
+        state.session = session; state.workspace = ref(id); state.starts = []; state.dispose = async () => {};
+        let control!: { stop(): Promise<void>; isRunning(): boolean };
+        vi.stubGlobal('useRuntimeConfig', () => ({ public: { sync: { enabled: true }, ssrAuthEnabled: false, cloudAccessPolicyEnabled: true } }));
+        vi.stubGlobal('useNuxtApp', () => ({ vueApp: { onUnmount: onScopeDispose }, provide: (_key: string, value: typeof control) => { control = value; } }));
+        vi.stubGlobal('useRouter', () => ({ currentRoute: ref({ path: '/' }) }));
+        const scope = effectScope();
+        try {
+            await scope.run(() => setupSyncEngine());
+            expect(control.isRunning()).toBe(false);
+            expect(state.starts).toEqual([]);
+            const write = (value: string, clock: number) => db.transaction('rw', getWriteTxTableNames(db, 'kv'), () =>
+                db.kv.put({ id: 'local-intent', name: 'local-intent', value, clock, deleted: false, created_at: 1, updated_at: 1 }));
+            await write('before upgrade', 1);
+            expect(await db.pending_ops.count()).toBe(1);
+            session.value.cloudAccess = { enabled: true, expiresAt: Date.now() + 250 };
+            await vi.waitFor(() => expect(control.isRunning()).toBe(true));
+            await vi.waitFor(() => expect(control.isRunning()).toBe(false));
+            await write('after expiry', 2);
+            await write('latest edit', 3);
+            expect(await db.pending_ops.count()).toBe(1);
+            expect((await db.pending_ops.toCollection().first())?.payload).toMatchObject({ value: 'latest edit' });
+            expect(state.starts).toEqual([id]);
+        } finally {
+            scope.stop(); await control?.stop(); setActiveWorkspaceDb(null); evictWorkspaceDb(id); await Dexie.delete(db.name);
+        }
+    });
+
     it.each(['route', 'workspace', 'account', 'account only', 'authorization only'] as const)('reconciles the latest %s request after teardown and captures intervening writes', async transition => {
         setHookEngine(createTypedHookEngine(createHookEngine()));
         const a = crypto.randomUUID(); const b = crypto.randomUUID();
@@ -54,7 +87,7 @@ describe('sync lifecycle with real local write capture', () => {
         state.dispose = async () => {};
         let control!: { start(id: string): Promise<void>; stop(): Promise<void>; isRunning(): boolean };
         vi.stubGlobal('useRuntimeConfig', () => ({ public: { sync: { enabled: true }, ssrAuthEnabled: false } }));
-        vi.stubGlobal('useNuxtApp', () => ({ provide: (_key: string, value: typeof control) => { control = value; } }));
+        vi.stubGlobal('useNuxtApp', () => ({ vueApp: { onUnmount: onScopeDispose }, provide: (_key: string, value: typeof control) => { control = value; } }));
         vi.stubGlobal('useRouter', () => ({ currentRoute: route }));
         const scope = effectScope();
         let release!: () => void;

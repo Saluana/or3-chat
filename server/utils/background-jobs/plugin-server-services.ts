@@ -21,6 +21,8 @@ import { createOpenRouterClient as buildOpenRouterClient, DEFAULT_HEADERS } from
 import { normalizeOpenRouterBaseUrl } from '~~/shared/openrouter/url';
 import { canonicalHistoryContext } from '../chat/canonical-history-context';
 import { assertServerProjectExecutionSupported } from '../chat/project-policy';
+import { requireNotPaused } from '../../admin/pauses';
+import { requireBackgroundAdmission } from '../../cloud/access';
 
 interface WorkflowJobOrigin { jobId: string; userId: string; workspaceId: string; threadId: string; messageId: string }
 
@@ -107,6 +109,8 @@ export function createTrustedPluginServerServices(requestEvent: H3Event, grants:
                         throw createError({ statusCode: 403, statusMessage: 'Invalid workflow job scope' });
                     }
                     await requireJobWorkspaceAccess(requestEvent, session, workspaceId, 'workspace.write');
+                    await requireNotPaused(requestEvent, 'jobs');
+                    await requireBackgroundAdmission(requestEvent, session);
                     await assertServerProjectExecutionSupported({ subject: userId, workspaceId, threadId: input.threadId, abortSignal: AbortSignal.timeout(10_000) }, 'workspace.write');
                     const id = await provider.createJob({
                         ...input,

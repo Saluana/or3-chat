@@ -1,0 +1,13 @@
+{
+    "extends": "../../.nuxt/tsconfig.app.json",
+    "compilerOptions": { "noEmit": true },
+    "include": [
+        "../../.nuxt/nuxt.d.ts",
+        "../../.nuxt/types/nitro-nuxt.d.ts",
+        "../../.nuxt/types/nitro.d.ts",
+        "../../types/nuxt.d.ts", "../../types/theme-plugin.d.ts", "../../types/theme-generated.d.ts",
+        "../../app/**/*.d.ts", "../../shared/**/*.d.ts",
+        "module.ts", "runtime/**/*.ts", "runtime/**/*.vue", "tests/**/*.ts"
+    ],
+    "exclude": ["node_modules"]
+}

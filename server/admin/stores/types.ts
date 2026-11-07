@@ -41,6 +41,49 @@ export interface WorkspaceSummary {
     memberCount: number;
 }
 
+/** Canonical identity for support inspection. Timestamps are epoch milliseconds. */
+export interface CustomerSummary {
+    userId: string;
+    email?: string;
+    displayName?: string;
+    createdAt: number;
+    /** Latest sync cursor write by this user: server contact, not a completed sync. */
+    lastContactAt: number | null;
+}
+
+export interface SyncObservation {
+    workspaceId: string;
+    lastSuccessAt: number | null;
+    lastSuccessOperation: string | null;
+    lastFailureAt: number | null;
+    lastFailureCode: string | null;
+}
+
+export interface CustomerPage {
+    items: CustomerSummary[];
+    /** Opaque continuation. Pages never claim a global total. */
+    nextCursor: string | null;
+}
+
+export interface CustomerWorkspace {
+    id: string;
+    name: string;
+    role: 'owner' | 'editor' | 'viewer';
+    ownerUserId: string;
+    createdAt: number;
+    deleted: boolean;
+    deletedAt?: number;
+    memberCount: number;
+    lastContactAt: number | null;
+}
+
+export interface StorageGenerationCandidatePage {
+    items: Array<{ generation: import('../../storage/gateway/generation-lifecycle').ExternalStorageGenerationRecord;
+        status: 'eligible' | 'blocked' | 'claimed' | 'deleted'; reason: string | null }>;
+    complete: boolean; nextCursor: string | null; observedAt: number; workspaceId: string; retentionSeconds: number;
+    estimatedLogicalBytes: number | null; scope: 'managed_generations_only'; legacyIncluded: false;
+}
+
 /**
  * Interface for managing workspace membership and access control.
  *
@@ -96,6 +139,20 @@ export interface WorkspaceAccessStore {
         query: string;
         limit?: number;
     }): Promise<Array<{ userId: string; email?: string; displayName?: string }>>;
+    /** Advisory canonical proof only; never returns deletion authority or scans physical storage. */
+    getStorageGenerationCandidates?(input: { workspaceId: string; storageProviderId: 'fs' | 's3'; retentionSeconds: number; limit: number; cursor?: string }): Promise<StorageGenerationCandidatePage>;
+    /** Gateway diagnostics, milliseconds. Missing methods mean no observation coverage. */
+    recordSyncObservation?(input: { userId: string; workspaceId: string; operation: 'push' | 'pull' | 'snapshot' | 'cursor'; observedAt: number; outcome: 'success' | 'failure'; code?: string }): Promise<void>;
+    getCustomerSyncObservations?(input: { userId: string }): Promise<SyncObservation[]>;
+    /**
+     * Optional support reads. Read-only and bounded (at most 50 rows); they never
+     * provision users, workspaces or memberships. Absent methods mean unavailable.
+     */
+    listCustomers?(input: { query?: string; cursor?: string | null; limit: number }): Promise<CustomerPage>;
+    /** Batch lookup by internal user IDs. Unknown IDs are omitted. */
+    getCustomersByIds?(input: { userIds: string[] }): Promise<CustomerSummary[]>;
+    /** Owned workspaces (including retained deleted ones) and memberships. */
+    getCustomerWorkspaces?(input: { userId: string }): Promise<CustomerWorkspace[]>;
 }
 
 /**

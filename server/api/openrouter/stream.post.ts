@@ -37,6 +37,8 @@ import {
 import { resolveSessionContext } from '../../auth/session';
 import { requireCloudMutation } from '../../utils/security/cloud-mutation';
 import { requireCan } from '../../auth/can';
+import { requireCloudAccess, requireBackgroundAdmission } from '../../cloud/access';
+import { requireNotPaused } from '../../admin/pauses';
 import { isSsrAuthEnabled } from '../../utils/auth/is-ssr-auth-enabled';
 import {
     checkAndRecordLlmRequest,
@@ -109,6 +111,12 @@ export default defineEventHandler(async (event) => {
         setResponseStatus(event, 400);
         return { error: 'Router configuration is not accepted in chat requests.', code: 'unsupported_router_configuration' };
     }
+    // The workspace model policy is checked against `model`. OpenRouter's
+    // fallback list would route to models that policy never checked.
+    if (Object.hasOwn(body, 'models') || Object.hasOwn(body, 'route')) {
+        setResponseStatus(event, 400);
+        return { error: 'Fallback model lists are not accepted in chat requests.', code: 'unsupported_model_routing' };
+    }
     const backgroundRequested = isBackgroundModeRequest(body);
     if (!backgroundRequested && body._durableDelegation !== undefined) {
         setResponseStatus(event, 400);
@@ -135,6 +143,9 @@ export default defineEventHandler(async (event) => {
     };
     if (isSsrAuthEnabled(event)) requireCloudMutation(event);
     const modelSession = await getSession();
+    if (backgroundRequested) await requireNotPaused(event, 'jobs');
+    if (backgroundRequested && modelSession) await requireCloudAccess(event, modelSession);
+    if (backgroundRequested && modelSession) await requireBackgroundAdmission(event, modelSession);
     if (modelSession?.authenticated && modelSession.workspace?.id && typeof body.model === 'string')
         await requireWorkspaceModel(event, modelSession.workspace.id, body.model);
     const selected = await resolveChatCredential(event, body.model, await getSession());

@@ -77,7 +77,7 @@ const routeState = reactive({
 });
 
 const watcherStops: Array<() => void> = [];
-const nuxtAppMock = { provide: vi.fn() };
+const nuxtAppMock = { provide: vi.fn(), vueApp: { onUnmount: (cleanup: () => void) => { watcherStops.push(cleanup); } } };
 
 const pluginControl = vi.hoisted(() => {
     let release: () => void = () => undefined;

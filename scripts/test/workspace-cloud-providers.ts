@@ -3,11 +3,11 @@ import { join, resolve, sep } from 'node:path';
 
 /** Resolve the exact provider bytes exercised by disposable cloud profiles. */
 export async function resolveQualificationProvider(
-    app: string, name: 'or3-provider-sqlite' | 'or3-provider-convex' | 'or3-provider-fs',
+    app: string, name: 'or3-provider-sqlite' | 'or3-provider-convex' | 'or3-provider-fs' | 'or3-provider-s3',
     development: boolean, env: Record<string, string | undefined> = process.env,
 ) {
     const sourceKey = name === 'or3-provider-sqlite' ? 'OR3_PROJECT_SQLITE_SOURCE'
-        : name === 'or3-provider-convex' ? 'OR3_PROJECT_CONVEX_SOURCE' : 'OR3_PROJECT_FS_SOURCE';
+        : name === 'or3-provider-convex' ? 'OR3_PROJECT_CONVEX_SOURCE' : name === 'or3-provider-s3' ? 'OR3_PROJECT_S3_SOURCE' : 'OR3_PROJECT_FS_SOURCE';
     const path = development ? resolve(env[sourceKey] ?? join(app, '..', name)) : join(app, 'node_modules', name);
     const pkg = JSON.parse(await readFile(join(path, 'package.json'), 'utf8')) as { name: string; version: string };
     if (pkg.name !== name) throw new Error(`Wrong provider package at ${path}`);

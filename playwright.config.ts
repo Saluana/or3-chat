@@ -13,7 +13,10 @@ const isDelegationLiveHarness = process.env.OR3_DELEGATION_LIVE_E2E === 'true';
 export default defineConfig({
   testDir: './tests/e2e',
   testMatch: ['**/*.spec.ts', '**/*.e2e.ts'],
-  testIgnore: isDelegationLiveHarness ? undefined : '**/chat-delegation-live.spec.ts',
+  testIgnore: [
+    ...isDelegationLiveHarness ? [] : ['**/chat-delegation-live.spec.ts'],
+    ...process.env.OR3_HOSTED_BILLING_ENABLED === 'true' ? [] : ['**/hosted-billing.spec.ts'],
+  ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

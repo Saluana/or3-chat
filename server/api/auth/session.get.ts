@@ -22,6 +22,7 @@ import {
 import { getClientIp, normalizeProxyTrustConfig } from '../../utils/net/request-identity';
 import { enforceRateLimit } from '../../utils/rate-limit/enforce';
 import { getActiveSyncGatewayAdapter } from '../../sync/gateway/registry';
+import { resolveCloudAccess } from '../../cloud/access';
 
 /**
  * GET /api/auth/session
@@ -85,9 +86,11 @@ export default defineEventHandler(async (event) => {
         kind: 'workspace', id: session.workspace?.id,
     }).allowed;
     const workspaceItemCapability = appAccessAllowed && getActiveSyncGatewayAdapter()?.capabilities?.workspaceItems === 'v1' ? 'v1' : undefined;
+    const cloudAccess = session.authenticated ? await resolveCloudAccess(event, session) : undefined;
     return {
         session: clientSession,
         appAccessAllowed,
+        ...(cloudAccess ? { cloudAccess } : {}),
         ...(secrets?.provider ? { secretStoreEnabled: true } : {}),
         ...(workspaceItemCapability ? { workspaceItemCapability } : {}),
     };

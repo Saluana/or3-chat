@@ -317,6 +317,22 @@ async function readLastReceipt() {
   }
 }
 
+/** Read-only allowlist: a recorded snapshot is not current checksum evidence. */
+export function projectRecoveryState(state) {
+  const safeId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(value) ? value : null;
+  const safeTime = value => typeof value === 'string' && value.length <= 64 && Number.isFinite(Date.parse(value)) ? value : null;
+  const snapshotId = safeId(state?.rollback?.backupId);
+  const pending = state?.incompleteOperation;
+  return {
+    observedAt: new Date().toISOString(), source: 'managed_operator',
+    snapshot: snapshotId ? { id: snapshotId, capturedAt: safeTime(state.rollback.createdAt), verification: 'operator_reported' } : null,
+    coverage: ['canonical', 'auth', 'files', 'configuration', 'billing_trials_support', 'credential_escrow', 'independent_copy'].map(component => ({ component, status: 'unknown', verifiedAt: null })),
+    lastRecoveryTestAt: null,
+    incompleteOperation: pending && safeId(pending.id) && ['init', 'update', 'restore', 'adopt', 'credentials-reset', 'backup', 'rollback'].includes(pending.operation)
+      ? { id: pending.id, operation: pending.operation, startedAt: safeTime(pending.startedAt) } : null,
+  };
+}
+
 async function status(includeReceipt = false) {
   const version = await currentVersion();
   const [job, checked] = await Promise.all([readJob(), readReleaseCheck()]);
@@ -992,6 +1008,7 @@ async function main() {
           if (await service.handle(service.controller, request, response)) return;
         } catch { return send(response, 503, { code: 'controller_unavailable' }); }
       }
+      if (request.method === 'GET' && request.url === '/v2/recovery') return send(response, 200, { protocolVersion: 2, recovery: projectRecoveryState(await managedState()) });
       if (request.method === 'GET' && route === '/status') return reply(200, await status(isV2));
       if (request.method === 'POST' && route === '/check') {
         if (!consumeRateLimit(checkAttempts, Date.now(), 30, 60_000)) {

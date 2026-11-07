@@ -1985,8 +1985,8 @@ test('Files management preserves content when removing project associations and 
     await files.getByRole('button', { name: 'Trash', exact: true }).click();
     await item('Managed original').getByRole('button', { name: 'More actions for Managed original', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Remove entry', exact: true }).click();
-    const removal = page.getByRole('dialog', { name: 'Remove catalog entry?' });
-    await expect(removal).toContainText('retained references keep their original bytes');
+    const removal = page.getByRole('dialog', { name: 'Remove from Files?' });
+    await expect(removal).toContainText('Copies used by chats and other saved work will remain available.');
     await removal.getByRole('button', { name: 'Remove catalog entry', exact: true }).click();
     await expect(item('Managed original')).toHaveCount(0);
     await page.reload();
@@ -3156,7 +3156,8 @@ test('PageShell compaction summary reload and original landmark navigation', asy
     if (await card.locator('details').getAttribute('open') === null) await card.locator('summary').click();
     await card.getByRole('button', { name: 'Preserve the exact source path', exact: true }).click();
     await expect(anchor).toBeVisible();
-    await anchor.locator('.tool-call-indicator summary').click();
+    await anchor.locator('summary.tool-call-indicator-summary').click();
+    await anchor.getByText('Technical details', { exact: true }).click();
     await expect(anchor.getByText('Canonical tool evidence: preserve app/example.ts exactly.', { exact: true })).toBeVisible();
     expect(await readRows()).toEqual(saved);
     await expect(page.getByRole('textbox', { name: 'Message input' })).toHaveText('Keep this unsent source draft.');

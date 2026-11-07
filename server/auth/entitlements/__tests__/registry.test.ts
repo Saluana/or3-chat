@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
 import {
     getActiveEntitlementResolver,
+    getEntitlementResolver,
     registerEntitlementResolver,
     resolveEntitlements,
 } from '../registry';
@@ -22,6 +23,19 @@ function makeEvent(): H3Event {
 }
 
 describe('entitlement resolver registry', () => {
+    it('releases owned replacements without removing a newer resolver or reviving a disposed one', () => {
+        const original = async () => ['base'];
+        const disposeBase = registerEntitlementResolver('owned-test', original);
+        const sameCallback = async () => ['paid'];
+        const disposeFirst = registerEntitlementResolver('owned-test', sameCallback);
+        const disposeSecond = registerEntitlementResolver('owned-test', sameCallback);
+        disposeFirst();
+        expect(getEntitlementResolver('owned-test')).toBe(sameCallback);
+        disposeSecond();
+        expect(getEntitlementResolver('owned-test')).toBe(original);
+        disposeBase();
+        expect(getEntitlementResolver('owned-test')).toBeNull();
+    });
     beforeEach(() => {
         useRuntimeConfigMock.mockReset().mockReturnValue({
             public: { sync: { provider: 'default' } },

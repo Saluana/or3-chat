@@ -458,10 +458,10 @@ export function useModelStore() {
     /** Capture validated catalog facts. This prepares metadata only, never a chat turn. */
     async function resolveContextModel(selectedModelId: string, opts?: { signal?: AbortSignal }): Promise<ContextModelReadiness> {
         const signal = opts?.signal;
-        const originDb = getDb();
+        const db = getDb();
         const generation = getWorkspaceGeneration();
         const checkCanceled = () => {
-            if (signal?.aborted || originDb !== getDb() || generation !== getWorkspaceGeneration())
+            if (signal?.aborted || db !== getDb() || generation !== getWorkspaceGeneration())
                 throw new DOMException('Model preparation canceled.', 'AbortError');
         };
         checkCanceled();
@@ -493,8 +493,8 @@ export function useModelStore() {
         let known = lookup();
         if (known) return known;
         try {
-            // Workspace changes clear the in-memory favorites. Recover saved
-            // metadata before requiring a network catalog for admission.
+            // Workspace changes clear memory. A send must also restore saved
+            // model metadata when the picker has not mounted again yet.
             await waitForCatalog(getFavoriteModels(), signal);
             checkCanceled(); known = lookup();
             if (known) return known;
@@ -594,6 +594,19 @@ export function useModelStore() {
         return fetchModels({ force: true });
     }
 
+    /**
+     * The picker publishes the first platform that answers. Callers that choose
+     * or list models must also wait for the slower platform, or they would treat
+     * a partial catalog as complete and substitute another model.
+     */
+    async function ensureCompleteCatalog(opts?: { ttlMs?: number }): Promise<OpenRouterModel[]> {
+        const db = getDb();
+        const generation = getWorkspaceGeneration();
+        if (!catalog.value.length) await fetchModels(opts);
+        if (remainingModelsInFlight) await remainingModelsInFlight;
+        return db === getDb() && generation === getWorkspaceGeneration() ? catalog.value : [];
+    }
+
     return {
         favoriteModels,
         catalog,
@@ -605,6 +618,7 @@ export function useModelStore() {
         loadCachedModels: () => loadFromDexie(MODELS_TTL_MS),
         resolveContextModel,
         refreshModels,
+        ensureCompleteCatalog,
         invalidate,
         getFavoriteModels,
         addFavoriteModel,

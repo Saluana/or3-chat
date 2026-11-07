@@ -31,6 +31,31 @@ import {
 } from './archive';
 import { validateCanonicalBackupReferences } from './references';
 import { assertBackupMatchesDeployment, readManifest, recordedBackupPath } from './manifests';
+import { rebindRestoredGenerations } from './generation-restore';
+
+/** Offline only: the managed caller has stopped writers and extracted this backup. */
+export async function restoreGenerationIdentities(directory: string, state: ManagedState, env: Record<string, string>, backupPath: string, options: { previousSafetySnapshot?: boolean } = {}) {
+  await readManifest(backupPath, directory);
+  const script = `
+const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto');
+const root = path.resolve(process.env.OR3_STORAGE_FS_ROOT || '/data/storage');
+if (root !== '/data' && !root.startsWith('/data/')) throw new Error('Generation restore requires managed storage');
+{
+  const Database = require('/app/.output/server/node_modules/better-sqlite3');
+  const db = new Database(process.env.OR3_SQLITE_DB_PATH, { readonly: true, fileMustExist: true });
+  try {
+    if (db.pragma('quick_check', { simple: true }) !== 'ok') throw new Error('Restored SQLite integrity check failed');
+    (${rebindRestoredGenerations.toString()})(fs, path, crypto, db, root, ${JSON.stringify({ previousSafetySnapshot: options.previousSafetySnapshot === true })});
+  } finally { db.close(); }
+}`;
+  const result = await run('docker', [
+    'run', '--rm', '--network', 'none', '--read-only', '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL',
+    '-v', `${state.volumeName}:/data`, '--env', `OR3_SQLITE_DB_PATH=${env.OR3_SQLITE_DB_PATH ?? ''}`,
+    '--env', `OR3_STORAGE_FS_ROOT=${env.OR3_STORAGE_FS_ROOT ?? '/data/storage'}`,
+    '--entrypoint', 'sh', env.OR3_IMAGE!, ...containerNodeCommand(script).slice(1),
+  ], directory);
+  if (!result.ok) throw new Error(`Restored generation verification failed. ${redact(result.stderr, secretValues(env))}`);
+}
 
 /** Verify committed filesystem objects against the existing content-hash key. */
 export function assertFilesystemPayloadHash(
@@ -192,6 +217,7 @@ export async function restoreBackupData(
   if (!snapshotCheck.ok) {
     throw new Error(`Restored snapshot integrity verification failed. ${redact(snapshotCheck.stderr, secretValues(restoredEnv))}`);
   }
+  await restoreGenerationIdentities(directory, state, restoredEnv, backupPath, { previousSafetySnapshot: options.previousSafetySnapshot });
   // The caller journals the point at which application writes become possible
   // before requesting startup. Recovery snapshots keep their existing phase.
   await options.beforeStart?.();

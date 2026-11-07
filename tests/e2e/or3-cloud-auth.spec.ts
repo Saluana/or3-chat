@@ -322,14 +322,14 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
             data: { workspace_id: workspaceId, hash, mime_type: 'text/plain', size_bytes: bytes.length, file_kind_capability: 'v1' } });
         expect(presignResponse.ok(), await presignResponse.text()).toBe(true);
         const presign = await presignResponse.json();
-        const uploaded = await page.request.fetch(presign.url, { method: presign.method || 'POST', data: bytes, headers: { ...presign.headers, 'content-type': 'text/plain' } });
+        const uploaded = await page.request.fetch(presign.url, { method: presign.method || 'POST', data: bytes, headers: presign.headers ?? { 'content-type': 'text/plain' } });
         const uploadBody = await uploaded.text();
         expect(uploaded.ok(), uploadBody).toBe(true);
         const uploadReceipt = uploadBody ? JSON.parse(uploadBody) : {};
         const storageId = presign.storageId ?? uploadReceipt.storageId;
         expect(typeof storageId).toBe('string');
         const storageProvider = process.env.NUXT_PUBLIC_STORAGE_PROVIDER;
-        expect(['fs', 'convex']).toContain(storageProvider);
+        expect(['fs', 'convex', 's3']).toContain(storageProvider);
         const committed = await page.request.post('/api/storage/commit', { headers, data: {
             workspace_id: workspaceId, hash, storage_id: storageId, intent_id: presign.intentId,
             storage_provider_id: storageProvider, mime_type: 'text/plain', size_bytes: bytes.length,

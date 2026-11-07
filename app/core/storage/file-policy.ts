@@ -1,14 +1,20 @@
 import { useRuntimeConfig } from '#imports';
 import { FilePolicySchema, type FilePolicy } from '~~/shared/storage/file-policy';
 import { withStorageDeadline } from './storage-request';
+import { hasCloudAccess } from '~/core/cloud/access';
 
 const verifiedPolicies = new Map<string, FilePolicy>();
 
-export function isCloudFileStorageEnabled(): boolean {
+export function isCloudFileStorageConfigured(): boolean {
     try {
         const config = useRuntimeConfig().public;
         return config.ssrAuthEnabled === true && (config.storage as { enabled?: boolean } | undefined)?.enabled === true;
     } catch { return false; }
+}
+
+/** Cloud writes require access; existing remote files remain readable after expiry. */
+export function isCloudFileStorageEnabled(): boolean {
+    return isCloudFileStorageConfigured() && hasCloudAccess();
 }
 
 /** Canonical sync also forbids unsafe local replacement when storage is disabled. */

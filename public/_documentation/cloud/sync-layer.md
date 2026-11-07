@@ -303,6 +303,51 @@ through the raw IndexedDB API, and verifies the surviving records, quarantine
 entries, rebuilt operations and what is eventually pushed after reconnect. The
 provider is a stub: no server snapshot or expired cursor is involved.
 
+### Recovering failed changes
+
+An operation that ends `failed_permanent`, `failed_retryable` or legacy `failed`
+stays in `pending_ops` with its payload, and the local record is unchanged.
+Users review these in **Dashboard → Workspaces → Sync status**
+(`?dashboard=workspaces&page=sync`, registered when sync is enabled). A permanent
+failure notification links there with a **Review sync** action scoped to the
+active workspace, and the Cloud backup export note links there too.
+
+The view follows the active workspace database. It shows a bounded list (up to
+50, with the full count) of failed changes, each with a record title or name
+when the payload has one, the record kind, a plain-language reason derived from
+`lastErrorCode`/status, and the failure time. It never shows payload content or
+raw provider errors. A workspace or account switch drops the list, any open
+discard confirmation and any in-progress result.
+
+- **Retry** / **Retry all** requeue the operation as `pending` with its id,
+  stamp and payload, so it goes through the normal authorized push and op-id
+  idempotency.
+- **Discard** needs a second **Discard change** confirmation. It marks the
+  operation `discarded` (an auditable record) and leaves the local record in
+  this browser; other devices will not receive that change.
+- **Save copy** downloads a local backup of this browser's saved work and
+  locally stored originals (`exportWorkspace({ localOnly: true })`) without
+  waiting for the queue to drain. It does not include files kept only in the
+  cloud.
+
+The view uses these exports from `~/core/sync/outbox-manager`, which also back
+`OutboxManager.getFailedOps()`, `retryFailed()` and `discardFailed()`:
+
+```ts
+const { ops, total } = await listFailedOps(db, 50);
+await retryFailedOps(db, { id: op.id, opId: op.stamp.opId }); // number requeued; omit the ref for all
+await discardFailedOp(db, { id: op.id, opId: op.stamp.opId }, 'user_discarded'); // false if no longer failed
+```
+
+Each action reads and writes in one `pending_ops` transaction and accepts a
+row only while it is still failed (and, for the `{ id, opId }` form, still the
+same operation), so a row another tab already retried, acknowledged or
+discarded is never resurrected or overwritten.
+
+Browser coverage: the `a normal user recovers failed changes from the workspace
+sync view` case in `tests/e2e/cloud-offline-recovery.e2e.ts`
+(`bun run test:e2e:sync:cloud`).
+
 ### Read Path (Remote to Local)
 
 1.  **Subscription**: `SubscriptionManager` listens for changes since the last known cursor (`query: sync.watchChanges`).

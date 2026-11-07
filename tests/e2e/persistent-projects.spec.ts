@@ -1170,6 +1170,111 @@ test('project backup restores memories and extracted revision bytes', async ({
     ).toContainText('Backup extraction marker');
 });
 
+// Failure inventory: while a confirmed import waits on storage, its mode,
+// conflict switch or file can still be changed, so the screen shows a policy
+// other than the one running (append silently becoming a destructive replace).
+test('a pending backup import freezes its mode, conflict policy, and file', async ({
+    page,
+}, info) => {
+    test.setTimeout(120000);
+    await page.addInitScript(() => {
+        Object.defineProperty(window, 'showSaveFilePicker', {
+            value: undefined,
+            configurable: true,
+        });
+    });
+    const requests: string[] = [];
+    page.on('request', (request) => requests.push(request.url()));
+    await page.goto('/__or3-projects-journey');
+    await createProject(page, 'Frozen import project');
+    await page
+        .getByRole('button', { name: 'Backup and restore', exact: true })
+        .click();
+    const downloaded = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export', exact: true }).click();
+    const path = info.outputPath('frozen-import.or3.jsonl');
+    await (await downloaded).saveAs(path);
+    await page.locator('input[type=file]').setInputFiles(path);
+    const append = page.getByRole('button', { name: /Append & merge/ });
+    const replace = page.getByRole('button', { name: /Replace workspace/ });
+    const overwrite = page.getByRole('switch', {
+        name: 'Overwrite conflicting records',
+    });
+    await append.click();
+    await overwrite.click();
+    await expect(overwrite).toBeChecked();
+    // Another connection holds every store, as a busy tab would, so the
+    // confirmed import stays pending after its asynchronous preparation.
+    const clientUrl = requests.find((url) => /\/db\/client\.ts(?:\?|$)/.test(url));
+    expect(clientUrl).toBeTruthy();
+    await page.evaluate(async (url) => {
+        const name = (await import(url)).getDb().name as string;
+        await new Promise<void>((resolve, reject) => {
+            const open = indexedDB.open(name);
+            open.onerror = () => reject(open.error);
+            open.onsuccess = () => {
+                const db = open.result;
+                const stores = Array.from(db.objectStoreNames);
+                const tx = db.transaction(stores, 'readwrite');
+                const store = tx.objectStore(stores[0]!);
+                let held = true;
+                const spin = () => {
+                    if (held) store.count().onsuccess = spin;
+                };
+                spin();
+                (window as unknown as { __releaseImportHold: () => Promise<void> })
+                    .__releaseImportHold = () => new Promise<void>((done) => {
+                        tx.oncomplete = () => { db.close(); done(); };
+                        held = false;
+                    });
+                resolve();
+            };
+        });
+    }, clientUrl!);
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
+    await expect(page.getByText(/Applying backup/)).toBeVisible();
+    const frozen: string[] = [];
+    for (const [name, control] of [
+        ['append', append],
+        ['replace', replace],
+        ['overwrite', overwrite],
+        ['change file', page.getByRole('button', { name: 'Change', exact: true })],
+        ['clear file', page.getByRole('button', { name: 'Clear selected file', exact: true })],
+    ] as const) {
+        await expect(control).toBeDisabled();
+        frozen.push(name);
+    }
+    // A change event that bypasses the disabled button cannot retarget the file.
+    await page.locator('input[type=file]').evaluate((input: HTMLInputElement) => {
+        const transfer = new DataTransfer();
+        transfer.items.add(new File(['{}'], 'other-backup.json'));
+        input.files = transfer.files;
+        input.dispatchEvent(new Event('change'));
+    });
+    await expect(append).toHaveAttribute('aria-pressed', 'true');
+    await expect(overwrite).toBeChecked();
+    await expect(page.getByText('frozen-import.or3.jsonl', { exact: true })).toBeVisible();
+    await page.evaluate(() =>
+        (window as unknown as { __releaseImportHold: () => Promise<void> }).__releaseImportHold(),
+    );
+    await expect(page.getByText(/Last import/).first()).toBeVisible({
+        timeout: 60000,
+    });
+    await expect(page.getByText('other-backup.json')).toHaveCount(0);
+    await expect(append).toHaveAttribute('aria-pressed', 'true');
+    await expect(overwrite).toBeChecked();
+    const receiptPath = info.outputPath('frozen-import-receipt.json');
+    await writeFile(receiptPath, JSON.stringify({
+        frozenWhilePending: frozen,
+        modeAfterImport: (await append.getAttribute('aria-pressed')) === 'true' ? 'append' : 'replace',
+        overwriteAfterImport: await overwrite.isChecked(),
+        selectedFile: await page.locator('#dashboard-workspace-import-section .dashboard-list-label').innerText(),
+        importStatus: await page.getByText(/Last import/).first().innerText(),
+    }, null, 2));
+    await info.attach('frozen-import-receipt', { path: receiptPath, contentType: 'application/json' });
+    await page.screenshot({ path: info.outputPath('frozen-import.png'), fullPage: true });
+});
+
 test('project A keeps its captured context while project B opens during streaming', async ({
     page,
 }, info) => {

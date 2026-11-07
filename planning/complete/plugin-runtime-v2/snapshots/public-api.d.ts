@@ -54,7 +54,10 @@ interface AdminPluginState {
     widgets: AdminWidgetDef[];
 }
 export declare const state: AdminPluginState;
+/** Existing admin-plugin API retains its void return contract. */
 export declare function registerAdminPage(def: AdminPageDef): void;
+/** Source modules can release their page on teardown/HMR without removing a replacement. */
+export declare function registerOwnedAdminPage(def: AdminPageDef): () => void;
 export declare function registerAdminWidget(def: AdminWidgetDef): void;
 export declare function useAdminPages(): ComputedRef<AdminPageDef[]>;
 export declare function useAdminWidgets(slot?: AdminWidgetDef['slot']): ComputedRef<AdminWidgetDef[]>;

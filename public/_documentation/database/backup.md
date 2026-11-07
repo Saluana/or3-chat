@@ -27,13 +27,19 @@ reported as an export error.
 
 An export stays bound to the workspace selected when you chose **Export**, including while hooks, the save picker, or the streaming fallback are loading. Switching workspaces during that wait does not retarget the export.
 
+On a Cloud installation, a local recovery export can preserve this browser's
+records and locally available originals even when failed sync writes prevent a
+complete Cloud backup. It does not wait for sync or download remote-only files.
+This `.or3.jsonl` snapshot is for local recovery, not a complete `.or3cloud`
+archive; keep the original workspace and server data until recovery is verified.
+
 Keep the downloaded file in a safe place. Backups can contain private conversations, document content, files, and stored preferences or credentials; they are not encrypted by this export flow. Successful download proves that an export was produced, not that it has been restored successfully on another installation.
 
 ## Local-only import
 
 Choose a backup file; the page validates it and shows its size, table count, and row count. Import mode choices appear only after a file validates. The importer recognizes stream backups and supported older Dexie backup files. Use the same or a newer compatible application schema; backups from a newer database version can be rejected.
 
-Choose the destination workspace before importing and keep it selected for the operation. The backup workflow uses the active browser database; a backup's filename does not authorize or select a Cloud workspace.
+Choose the destination workspace before importing and keep it selected for the operation. Import captures the selected destination, mode, and overwrite setting when it starts; later control changes cannot turn Append into Replace. An account or workspace change during preparation stops the import. The backup workflow uses the captured browser database; a backup's filename does not authorize or select a Cloud workspace.
 
 | Mode | Effect |
 | --- | --- |
@@ -50,6 +56,12 @@ After completion, reopen representative chats and documents and check attachment
 Use `useWorkspaceBackup` from `~/composables/core/useWorkspaceBackup` during client component setup. Its existing dashboard caller is `app/components/dashboard/workspace/WorkspaceBackupApp.vue`.
 
 The workflow is export, or peek metadata → user chooses mode/overwrite → import. Its state contains progress, currentStep, error, and format/metadata. The default local import mode is **append**, so never immediately import after a file is selected without presenting that choice.
+
+`exportWorkspace({ localOnly: true })` explicitly exports the captured browser
+database and local originals through the existing streaming path. It bypasses
+canonical Cloud export and its sync wait while retaining account/workspace
+identity checks on Cloud installations. Calling `exportWorkspace()` without
+options keeps the normal Cloud or local behavior.
 
 Methods can report failure through `state.error`/`currentStep` rather than rejecting. A resolved promise alone does not prove success. Preserve the existing before/after/error/cancelled hooks and `workspace:reloaded` event after successful restore. The local stream codec lives in `app/utils/workspace-backup-stream.ts`; the Cloud framing and validation live in `shared/storage/workspace-archive.ts`. Cloud methods select the safe fresh-workspace flow automatically.
 

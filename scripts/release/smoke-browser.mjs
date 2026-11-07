@@ -21,14 +21,36 @@
  *
  * Exits non-zero with a clear message on any failed assertion.
  */
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomUUID, X509Certificate } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { connect as connectTls } from 'node:tls';
 import { chromium, devices, webkit } from 'playwright';
 
 const baseUrl = (process.env.OR3_SMOKE_URL ?? 'http://127.0.0.1:3017').replace(/\/$/, '');
 const NAV_TIMEOUT = 30_000;
 const SHELL_TIMEOUT = 30_000;
+// Only the disposable local Caddy certificate is trusted by this harness.
+// Real public hosts must still pass the browser's normal TLS verification.
+const origin = new URL(baseUrl);
+const loopback = origin.hostname === '127.0.0.1' || origin.hostname === 'localhost';
+const localTls = origin.protocol === 'https:' && loopback;
+// Chromium service-worker script fetches do not honor ignoreHTTPSErrors.
+// Trust only this disposable loopback peer's public key, without installing a
+// certificate in the machine's trust store or bypassing public-host TLS checks.
+const localCertificatePin = localTls ? await new Promise((resolvePin, reject) => {
+    const socket = connectTls({ host: origin.hostname, port: Number(origin.port || 443), servername: origin.hostname, rejectUnauthorized: false });
+    socket.setTimeout(10_000, () => socket.destroy(new Error('Local test certificate handshake timed out')));
+    socket.once('error', reject);
+    socket.once('secureConnect', () => {
+        try {
+            const certificate = new X509Certificate(socket.getPeerCertificate().raw);
+            resolvePin(createHash('sha256').update(certificate.publicKey.export({ type: 'spki', format: 'der' })).digest('base64'));
+        } catch (error) { reject(error); }
+        finally { socket.end(); }
+    });
+}) : null;
+const chromiumTlsOptions = localCertificatePin ? { args: [`--ignore-certificate-errors-spki-list=${localCertificatePin}`] } : {};
 
 function parseEnv(source) {
     const values = {};
@@ -539,6 +561,82 @@ async function signOutOwner(page) {
     await waitForHidden(accountMenu, 'account menu remained visible after sign-out');
 }
 
+/** Exercise the shipped containment document, relay and worker through Caddy. */
+async function verifyManagedFrames(page, name) {
+    const headers = await page.evaluate(async () => {
+        const result = {};
+        for (const path of ['/or3/portable-frame', '/streamsaver/mitm.html', '/']) {
+            const response = await fetch(path, { cache: 'no-store' });
+            result[path] = {
+                status: response.status,
+                csp: response.headers.get('content-security-policy'),
+                frameOptions: response.headers.get('x-frame-options'),
+            };
+        }
+        return result;
+    });
+    const portable = headers['/or3/portable-frame'];
+    assert(portable.status === 200, `${name}: portable frame is unavailable`);
+    assert(portable.csp?.includes("connect-src 'none'") && portable.csp.includes('sandbox allow-scripts')
+        && portable.csp.includes("frame-ancestors 'self'") && !portable.csp.includes("'unsafe-inline'"),
+    `${name}: proxy replaced the portable frame's containment CSP`);
+    assert(portable.frameOptions === 'SAMEORIGIN', `${name}: proxy blocks the portable frame`);
+    const bridge = headers['/streamsaver/mitm.html'];
+    assert(bridge.status === 200 && bridge.frameOptions === 'SAMEORIGIN'
+        && bridge.csp?.includes("frame-ancestors 'self'"), `${name}: streaming export bridge cannot be framed`);
+    const ordinary = headers['/'];
+    assert(ordinary.status === 200 && ordinary.frameOptions === 'DENY'
+        && ordinary.csp?.includes("frame-ancestors 'none'"), `${name}: ordinary documents lost anti-framing protection`);
+
+    // Portable lifecycle support is qualified for Chromium. Other engines still
+    // verify the proxy headers, without expanding the advertised support matrix.
+    if (!name.endsWith('chromium')) return { headers, portableWorker: 'chromium-only' };
+    const challenge = randomUUID();
+    const roundtrip = await page.evaluate(async (nonce) => {
+        const frame = document.createElement('iframe');
+        frame.hidden = true;
+        frame.sandbox = 'allow-scripts';
+        frame.src = '/or3/portable-frame';
+        const source = `self.addEventListener('message', event => {
+            if (event.data?.managedFrameChallenge) self.postMessage({
+                managedFrameReply: event.data.managedFrameChallenge,
+                nestedWorkersDenied: typeof Worker === 'undefined',
+            });
+        });`;
+        let listener;
+        let timer;
+        try {
+            return await new Promise((resolve, reject) => {
+                timer = setTimeout(() => reject(new Error('Portable frame/worker handshake timed out')), 15_000);
+                listener = (event) => {
+                    if (event.source !== frame.contentWindow) return;
+                    const message = event.data;
+                    if (event.origin !== 'null') return reject(new Error('Portable frame lost its opaque origin'));
+                    if (message?.or3Portable === 'frame-ready') {
+                        frame.contentWindow.postMessage({ or3Portable: 'start', moduleSource: source }, '*');
+                    } else if (message?.or3Portable === 'worker-ready') {
+                        frame.contentWindow.postMessage({ or3Portable: 'rpc', data: { managedFrameChallenge: nonce } }, '*');
+                    } else if (message?.or3Portable === 'rpc' && message.data?.managedFrameReply === nonce) {
+                        resolve({ opaqueOrigin: true, nestedWorkersDenied: message.data.nestedWorkersDenied });
+                    } else if (message?.or3Portable === 'frame-error' || message?.or3Portable === 'worker-error') {
+                        reject(new Error(message.reason));
+                    }
+                };
+                window.addEventListener('message', listener);
+                document.body.appendChild(frame);
+            });
+        } finally {
+            clearTimeout(timer);
+            window.removeEventListener('message', listener);
+            frame.contentWindow?.postMessage({ or3Portable: 'terminate' }, '*');
+            frame.remove();
+        }
+    }, challenge);
+    assert(roundtrip.opaqueOrigin && roundtrip.nestedWorkersDenied,
+        `${name}: portable worker did not preserve containment`);
+    return { headers, portableWorker: roundtrip };
+}
+
 async function verifyHydration() {
     const caddyfile = await readFile(
         process.env.OR3_SMOKE_CADDYFILE ?? new URL('../../packages/or3-cloud/assets/Caddyfile', import.meta.url),
@@ -553,8 +651,11 @@ async function verifyHydration() {
         ['mobile-chromium', chromium, devices['Pixel 7']],
         ['mobile-webkit', webkit, devices['iPhone 13']],
     ]) {
-        const browser = await engine.launch({ headless: true });
-        const context = await browser.newContext({ ...options, serviceWorkers: 'block' });
+        const browser = await engine.launch({ headless: true, ...(engine === chromium ? chromiumTlsOptions : {}) });
+        // The real proxy smoke must permit the bundled download worker. The
+        // Playwright blocker also reads navigator.serviceWorker in the opaque
+        // portable frame, which throws before its containment check completes.
+        const context = await browser.newContext({ ...options, serviceWorkers: origin.protocol === 'https:' ? 'allow' : 'block', ignoreHTTPSErrors: localTls });
         await context.tracing.start({ screenshots: true, snapshots: true });
         const page = await context.newPage();
         const errors = [];
@@ -563,12 +664,11 @@ async function verifyHydration() {
             if (message.type() === 'error') errors.push(message.text().slice(0, 2000));
         });
         let browserBaseUrl = baseUrl;
-        const origin = new URL(baseUrl);
         // Exercise a secure browser origin and the full shipped CSP while the
         // disposable deployment's transport stays on loopback HTTP. This also
         // honors WebKit's upgrade-insecure-requests behavior without weakening
         // the policy or changing the deployment's generated assets.
-        if (origin.hostname === '127.0.0.1' || origin.hostname === 'localhost') {
+        if (origin.protocol === 'http:' && loopback) {
             const secureOrigin = new URL(baseUrl);
             secureOrigin.protocol = 'https:';
             browserBaseUrl = secureOrigin.href.replace(/\/$/, '');
@@ -577,12 +677,13 @@ async function verifyHydration() {
                 if (requestUrl.host !== origin.host) return route.continue();
                 requestUrl.protocol = origin.protocol;
                 const response = await route.fetch({ url: requestUrl.href });
-                await route.fulfill({ response, ...(route.request().isNavigationRequest()
+                await route.fulfill({ response, ...(route.request().isNavigationRequest() && route.request().frame() === page.mainFrame()
                     ? { headers: { ...response.headers(), 'content-security-policy': policy } }
                     : {}) });
             });
         }
         let passed = false;
+        let managedFrames = null;
         try {
             const response = await page.goto(`${browserBaseUrl}/`, { waitUntil: 'networkidle', timeout: NAV_TIMEOUT });
             assert(response?.ok(), `${name}: root did not return HTTP 200`);
@@ -604,12 +705,14 @@ async function verifyHydration() {
                 await openSignInModal(page);
             }
             assert(errors.length === 0, `${name}: ${errors.length} browser errors: ${errors.slice(0, 5).join('; ')}`);
+            if (origin.protocol === 'https:') managedFrames = await verifyManagedFrames(page, name);
+            assert(errors.length === 0, `${name}: ${errors.length} browser errors: ${errors.slice(0, 5).join('; ')}`);
             passed = true;
-            console.log(`PASS ${name}: hydration and UI interaction under production CSP`);
+            console.log(`PASS ${name}: hydration and UI interaction under production CSP${managedFrames ? ', managed frame policies and portable transport' : ' (header overlay; actual proxy frames not qualified)'}`);
         } finally {
             await page.screenshot({ path: resolve(artifactDir, `${name}.png`), fullPage: true });
             await context.tracing.stop({ path: resolve(artifactDir, `${name}-trace.zip`) });
-            await writeFile(resolve(artifactDir, `${name}.json`), JSON.stringify({ baseUrl, browserBaseUrl, name, passed, policy, errors }, null, 2));
+            await writeFile(resolve(artifactDir, `${name}.json`), JSON.stringify({ baseUrl, browserBaseUrl, name, passed, policy, managedFrames, errors }, null, 2));
             await context.close();
             await browser.close();
         }
@@ -631,8 +734,8 @@ async function main() {
         'Managed admin credentials missing from the first-run handoff'
     );
 
-    const browser = await chromium.launch({ headless: true });
-    const context = await browser.newContext();
+    const browser = await chromium.launch({ headless: true, ...chromiumTlsOptions });
+    const context = await browser.newContext({ ignoreHTTPSErrors: localTls });
     const page = await context.newPage();
     page.setDefaultTimeout(NAV_TIMEOUT);
 

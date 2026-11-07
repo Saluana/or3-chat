@@ -270,6 +270,18 @@ describe('normalized application plan', () => {
             expect(ready.plan.modules).toContain('/fixture/sqlite.mjs');
         }
     });
+    it.each([['0', '95'], ['90', '80'], ['invalid', '95']])('rejects invalid capacity defaults %s/%s before producing runtime configuration', async (warning, critical) => {
+        const { buildApplicationPlan } = await import('../../shared/config/application-plan');
+        const input = await inputs({ SSR_AUTH_ENABLED: 'false', OR3_STORAGE_CAPACITY_WARNING_PERCENT: warning, OR3_STORAGE_CAPACITY_CRITICAL_PERCENT: critical });
+        const result = buildApplicationPlan(input);
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.errors.join(' ')).toContain('capacity');
+    });
+    it('uses capacity defaults for empty environment values', async () => {
+        const { buildApplicationPlan } = await import('../../shared/config/application-plan');
+        const input = await inputs({ SSR_AUTH_ENABLED: 'false', OR3_STORAGE_CAPACITY_WARNING_PERCENT: '', OR3_STORAGE_CAPACITY_CRITICAL_PERCENT: '' });
+        expect(buildApplicationPlan(input).ok).toBe(true);
+    });
     it('keeps explicit offline output independent and excludes private values', async () => {
         const { buildApplicationPlan } =
             await import('../../shared/config/application-plan');

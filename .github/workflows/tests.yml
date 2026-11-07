@@ -107,6 +107,8 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
+      - name: Install optional billing dependency for source lint
+        run: bun install --cwd packages/hosted-billing --frozen-lockfile
       - name: Check fixed-profile Docker lockfile
         run: bun scripts/release/check-lock-drift.mjs
       - name: Check banned provider imports
@@ -386,7 +388,9 @@ jobs:
   dev-smoke:
     name: Smoke-test the development image
     needs: dev-image
-    runs-on: ubuntu-latest
+    # Exercise authentication and native bindings on the deployed CPU, rather
+    # than making a successful emulated boot the ARM acceptance contract.
+    runs-on: ${{ needs.dev-image.outputs.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     timeout-minutes: 15
     permissions:
       contents: read
@@ -397,8 +401,6 @@ jobs:
         with:
           node-version: "24.22.1"
           package-manager-cache: false
-      # Required only when the manual dispatch selects linux/arm64.
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io

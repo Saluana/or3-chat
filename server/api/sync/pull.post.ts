@@ -1,3 +1,4 @@
+import { observeSyncRequest } from '../../sync/observations';
 import { hasWorkspaceItemSemantics } from "~~/shared/posts/workspace-item-capability";
 import { requireWorkspaceItemCapability } from "../../utils/sync/workspace-item-capability";
 /**
@@ -79,52 +80,55 @@ export default defineEventHandler(async (event) => {
         id: parsed.data.scope.workspaceId,
     });
 
-    const rateLimitResult = checkSyncRateLimit(session.user.id, 'sync:pull');
-    enforceRateLimit(event, rateLimitResult);
+    const userId = session.user.id;
+    return await observeSyncRequest(event, userId, parsed.data.scope.workspaceId, 'pull', async () => {
+        const rateLimitResult = checkSyncRateLimit(userId, 'sync:pull');
+        enforceRateLimit(event, rateLimitResult);
 
-    const stats = getSyncRateLimitStats(session.user.id, 'sync:pull');
-    if (stats) {
-        setResponseHeader(event, 'X-RateLimit-Limit', String(stats.limit));
-        setResponseHeader(event, 'X-RateLimit-Remaining', String(stats.remaining));
-    }
+        const stats = getSyncRateLimitStats(userId, 'sync:pull');
+        if (stats) {
+            setResponseHeader(event, 'X-RateLimit-Limit', String(stats.limit));
+            setResponseHeader(event, 'X-RateLimit-Remaining', String(stats.remaining));
+        }
 
-    recordSyncRequest(session.user.id, 'sync:pull');
+        recordSyncRequest(userId, 'sync:pull');
 
-    const adapter = getActiveSyncGatewayAdapter();
-    if (!adapter) {
-        throw createError({ statusCode: 500, statusMessage: 'Sync adapter not configured' });
-    }
+        const adapter = getActiveSyncGatewayAdapter();
+        if (!adapter) {
+            throw createError({ statusCode: 500, statusMessage: 'Sync adapter not configured' });
+        }
 
-    const result = PullResponseSchema.safeParse(
-        await adapter.pull(event, parsed.data)
-    );
-    if (!result.success) {
-        throw createError({
-            statusCode: 502,
-            statusMessage: 'Invalid pull response',
-        });
-    }
+        const result = PullResponseSchema.safeParse(
+            await adapter.pull(event, parsed.data)
+        );
+        if (!result.success) {
+            throw createError({
+                statusCode: 502,
+                statusMessage: 'Invalid pull response',
+            });
+        }
 
-    if (getPullResponseContractError(parsed.data, result.data)) {
-        throw createError({
-            statusCode: 502,
-            statusMessage: 'Invalid pull response',
-        });
-    }
+        if (getPullResponseContractError(parsed.data, result.data)) {
+            throw createError({
+                statusCode: 502,
+                statusMessage: 'Invalid pull response',
+            });
+        }
 
-    // Validate the complete page before returning it. An older reader must
-    // receive an explicit update boundary instead of a partially applicable
-    // change list containing the new generic file kind.
-    if (result.data.changes.some((change) =>
-        change.op === 'put' &&
-        isGenericFileMetaPayload(change.tableName, change.payload)
-    )) {
-        requireFileKindCapability(parsed.data.fileKindCapability);
-    }
+        // Validate the complete page before returning it. An older reader must
+        // receive an explicit update boundary instead of a partially applicable
+        // change list containing the new generic file kind.
+        if (result.data.changes.some((change) =>
+            change.op === 'put' &&
+            isGenericFileMetaPayload(change.tableName, change.payload)
+        )) {
+            requireFileKindCapability(parsed.data.fileKindCapability);
+        }
 
-    if (result.data.changes.some(change =>
-        hasWorkspaceItemSemantics(change.tableName, change.payload)
-    )) requireWorkspaceItemCapability(parsed.data.workspaceItemCapability);
+        if (result.data.changes.some(change =>
+            hasWorkspaceItemSemantics(change.tableName, change.payload)
+        )) requireWorkspaceItemCapability(parsed.data.workspaceItemCapability);
 
-    return result.data;
+        return result.data;
+    });
 });

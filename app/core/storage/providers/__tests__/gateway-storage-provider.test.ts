@@ -183,6 +183,16 @@ describe('createGatewayStorageProvider', () => {
         });
     });
 
+    it('distinguishes recoverable account quota from oversized file validation', async () => {
+        const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ data: { code: 'storage_quota_exceeded' } }), { status: 413 }))
+            .mockResolvedValueOnce(new Response(JSON.stringify({ statusMessage: 'File too large' }), { status: 413 }));
+        vi.stubGlobal('fetch', fetchMock);
+        const provider = createGatewayStorageProvider();
+        const input = { workspaceId: 'ws', hash: 'sha256:abc', mimeType: 'text/plain', sizeBytes: 3 };
+        await expect(provider.getPresignedUploadUrl(input)).rejects.toMatchObject({ status: 413, code: 'ERR_STORAGE_QUOTA_EXCEEDED' });
+        await expect(provider.getPresignedUploadUrl(input)).rejects.not.toMatchObject({ code: 'ERR_STORAGE_QUOTA_EXCEEDED' });
+    });
+
     it('preserves status while excluding gateway response text', async () => {
         vi.stubGlobal(
             'fetch',
@@ -191,6 +201,7 @@ describe('createGatewayStorageProvider', () => {
                 status: 500,
                 headers: new Headers(),
                 text: vi.fn(async () => 'Boom'),
+                json: vi.fn(async () => { throw new SyntaxError('Not JSON'); }),
             }))
         );
 

@@ -734,6 +734,18 @@ export class OutboxManager {
             }
 
             const status = httpStatusOf(error);
+            // Connectivity can disappear after flush() claims the batch. A
+            // transport failure while offline must preserve the same retry
+            // budget and op_ids as edits queued before going offline.
+            if (status === null && typeof navigator !== 'undefined' && navigator.onLine === false) {
+                await this.releaseBatchForDeferredRetry(batch, 0);
+                await hooks.doAction('sync.push:action:after', {
+                    scope: this.scope,
+                    successCount: 0,
+                    failCount: 0,
+                });
+                return { successCount: 0, failCount: 0, deferred: true };
+            }
             if (status === 401 || status === 403) {
                 const firstDelay = this.config.retryDelays[0] ?? DEFAULT_RETRY_DELAYS[0] ?? 250;
                 await this.releaseBatchForDeferredRetry(
@@ -1084,63 +1096,18 @@ export class OutboxManager {
     /**
      * Get failed ops
      */
-    async getFailedOps(): Promise<PendingOp[]> {
-        const [legacy, retryable, permanent] = await Promise.all([
-            this.db.pending_ops.where('status').equals('failed').toArray(),
-            this.db.pending_ops.where('status').equals('failed_retryable').toArray(),
-            this.db.pending_ops.where('status').equals('failed_permanent').toArray(),
-        ]);
-        return [...legacy, ...retryable, ...permanent];
+    getFailedOps(): Promise<PendingOp[]> {
+        return readFailedOps(this.db);
     }
 
-    /**
-     * Retry failed ops
-     */
+    /** Requeue one failed op (by row id or op id), or every failed op. */
     async retryFailed(opId?: string): Promise<void> {
-        if (opId) {
-            const failed = (await this.getFailedOps()).find(
-                (op) => op.id === opId || op.stamp.opId === opId
-            );
-            if (!failed) return;
-            await this.db.pending_ops.put({
-                ...failed,
-                status: 'pending',
-                attempts: 0,
-                nextAttemptAt: undefined,
-                lastError: undefined,
-                lastErrorCode: undefined,
-                failureKind: undefined,
-                failedAt: undefined,
-            });
-            return;
-        }
-
-        const failed = await this.getFailedOps();
-        await this.db.pending_ops.bulkPut(failed.map((op) => ({
-            ...op,
-            status: 'pending' as const,
-            attempts: 0,
-            nextAttemptAt: undefined,
-            lastError: undefined,
-            lastErrorCode: undefined,
-            failureKind: undefined,
-            failedAt: undefined,
-        })));
+        await retryFailedOps(this.db, opId);
     }
 
     /** Retain an auditable terminal record of an intentional user discard. */
-    async discardFailed(opId: string, reason = 'user_discarded'): Promise<boolean> {
-        const failed = (await this.getFailedOps()).find(
-            (op) => op.id === opId || op.stamp.opId === opId
-        );
-        if (!failed) return false;
-        await this.db.pending_ops.put({
-            ...failed,
-            status: 'discarded',
-            discardedAt: Date.now(),
-            discardReason: reason,
-        });
-        return true;
+    discardFailed(opId: string, reason = 'user_discarded'): Promise<boolean> {
+        return discardFailedOp(this.db, opId, reason);
     }
 
     /**
@@ -1178,4 +1145,87 @@ export class OutboxManager {
         return discardQuarantined(this.db, id);
     }
 
+}
+
+const FAILED_STATUSES = ['failed', 'failed_retryable', 'failed_permanent'] as const;
+
+/**
+ * A failed op by row id or op id, or as a recovery view listed it. The pair
+ * form refuses a row whose operation changed since it was listed.
+ */
+export type FailedOpRef = string | { id: string; opId: string };
+
+function isFailedOp(op: PendingOp | undefined): op is PendingOp {
+    return !!op && (FAILED_STATUSES as readonly string[]).includes(op.status);
+}
+
+async function readFailedOps(db: Or3DB, limit?: number): Promise<PendingOp[]> {
+    const groups = await Promise.all(FAILED_STATUSES.map((status) => {
+        const rows = db.pending_ops.where('status').equals(status);
+        return (limit === undefined ? rows : rows.limit(limit)).toArray();
+    }));
+    return groups.flat();
+}
+
+async function findFailedOp(db: Or3DB, ref: FailedOpRef): Promise<PendingOp | undefined> {
+    if (typeof ref !== 'string') {
+        const op = await db.pending_ops.get(ref.id);
+        return isFailedOp(op) && op.stamp.opId === ref.opId ? op : undefined;
+    }
+    const direct = await db.pending_ops.get(ref);
+    if (isFailedOp(direct)) return direct;
+    return (await readFailedOps(db)).find((op) => op.stamp.opId === ref);
+}
+
+/**
+ * A bounded sample of failed ops with the total failed count. Reads at most
+ * `limit` rows per failed status, then orders that sample newest first.
+ */
+export async function listFailedOps(db: Or3DB, limit = 50): Promise<{ ops: PendingOp[]; total: number }> {
+    const [ops, counts] = await Promise.all([
+        readFailedOps(db, limit),
+        Promise.all(FAILED_STATUSES.map((status) => db.pending_ops.where('status').equals(status).count())),
+    ]);
+    ops.sort((a, b) => (b.failedAt ?? b.createdAt) - (a.failedAt ?? a.createdAt) || b.id.localeCompare(a.id));
+    return { ops: ops.slice(0, limit), total: counts.reduce((sum, count) => sum + count, 0) };
+}
+
+/**
+ * Requeue one failed op, or every failed op, keeping its id, stamp and payload
+ * so the server's op-id idempotency still applies. The read and write share
+ * one transaction, so a row another tab already settled is never resurrected.
+ * Returns the number requeued.
+ */
+export function retryFailedOps(db: Or3DB, ref?: FailedOpRef): Promise<number> {
+    return db.transaction('rw', ['pending_ops'], async () => {
+        const failed = ref === undefined ? await readFailedOps(db) : [await findFailedOp(db, ref)].filter(isFailedOp);
+        if (failed.length) {
+            await db.pending_ops.bulkPut(failed.map((op) => ({
+                ...op,
+                status: 'pending' as const,
+                attempts: 0,
+                nextAttemptAt: undefined,
+                lastError: undefined,
+                lastErrorDetails: undefined,
+                lastErrorCode: undefined,
+                failureKind: undefined,
+                failedAt: undefined,
+            })));
+        }
+        return failed.length;
+    });
+}
+
+/**
+ * Mark one failed op as intentionally discarded. The row and payload remain
+ * as an auditable record and the local record is untouched. Returns false when
+ * the op is no longer failed (for example, another tab retried it).
+ */
+export function discardFailedOp(db: Or3DB, ref: FailedOpRef, reason = 'user_discarded'): Promise<boolean> {
+    return db.transaction('rw', ['pending_ops'], async () => {
+        const failed = await findFailedOp(db, ref);
+        if (!failed) return false;
+        await db.pending_ops.put({ ...failed, status: 'discarded', discardedAt: Date.now(), discardReason: reason });
+        return true;
+    });
 }

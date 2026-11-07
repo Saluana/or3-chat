@@ -6,6 +6,7 @@ import { resolveSessionContext } from '../auth/session';
 import { isSsrAuthEnabled } from '../utils/auth/is-ssr-auth-enabled';
 import { requireCloudMutation } from '../utils/security/cloud-mutation';
 import { accountStore, requireAccount } from './openrouter';
+import { requiresPersonalAiCredentials } from '../cloud/access';
 
 const KEY_NAME = 'api-key';
 const CONSUMER = '@or3.openai';
@@ -27,7 +28,7 @@ export async function resolveOpenAiCredential(event: H3Event, knownSession?: Ses
             catch (error) { if ((error as { code?: string }).code !== 'not_found') throw unavailable(); }
         }
     } else personal = getHeader(event, OPENAI_KEY_HEADER)?.trim() || undefined;
-    if (personal) return { apiKey: personal, source: 'personal' };
+    if (personal || (cloud && requiresPersonalAiCredentials())) return { apiKey: personal, source: 'personal' };
     const apiKey = config.openaiApiKey || undefined;
     if (apiKey && !cloud) {
         requireCloudMutation(event);
@@ -46,7 +47,7 @@ export async function openAiCredentialOperation(session: SessionContext, body: u
         || (input.operation === 'save'
             ? typeof input.key !== 'string' || !/^sk-[A-Za-z0-9_-]{20,512}$/.test(input.key.trim())
             : input.key !== undefined)) throw createError({ statusCode: 400, statusMessage: 'Invalid OpenAI connection request.' });
-    const instance = Boolean(useRuntimeConfig().openaiApiKey);
+    const instance = Boolean(useRuntimeConfig().openaiApiKey) && !requiresPersonalAiCredentials();
     if (input.operation === 'status' && useRuntimeConfig().secrets.provider === '')
         return { connected: false, available: false, instance };
     const { store, scope, context } = accountStore(session, CONSUMER, unavailable);

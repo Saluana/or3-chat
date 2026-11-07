@@ -93,6 +93,11 @@ OR3_BASIC_AUTH_BOOTSTRAP_EMAIL=admin@example.com
 OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD=replace-with-strong-password
 ```
 
+The bootstrap account is ready before the server accepts requests. Existing
+accounts are preserved on restart; changing the bootstrap password does not
+reset them. If account creation fails, startup stops instead of accepting
+requests with an unusable first login.
+
 Optional refresh/session tuning:
 
 ```bash

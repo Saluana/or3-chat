@@ -6,15 +6,15 @@
     "moduleManifest": "planning/complete/plugin-runtime-v2/compatibility-ledger.modules.json",
     "moduleManifestSha256": "605b4e840d28caee7a2f56b75efddae519707fdc50fbbc4abc984881372ca810",
     "nuxtImportsDeclaration": ".nuxt/imports.d.ts",
-    "scopedNuxtImportsDeclarationSha256": "35e4eff3448bab2dbf812cb07ff064d66e2c85d7f4e7ddea3839359a5bd1433a",
+    "scopedNuxtImportsDeclarationSha256": "5f9f61a6df63ffb99f64d3fad7bd069c1855646164dd3ad03589c4cd45e211dc",
     "behaviorProfiles": "planning/complete/plugin-runtime-v2/compatibility-profiles.json",
     "behaviorProfilesSha256": "aa3af173c77feddccd582212a61b84c4680ad3e2664f2bc10bc40d149376d05a"
   },
   "coverage": {
     "moduleCount": 39,
-    "exportCount": 607,
-    "callableExportCount": 282,
-    "nuxtAutoImportCount": 309
+    "exportCount": 608,
+    "callableExportCount": 283,
+    "nuxtAutoImportCount": 310
   },
   "behaviorProfiles": [
     {
@@ -559,7 +559,7 @@
     },
     {
       "source": "app/composables/admin/useAdminPlugins.ts",
-      "apiSha256": "d116040da88d6871b2b917ea5c252fc4d10bffd073151cbffaeeb28f8c308ca2",
+      "apiSha256": "b93ec1e45e40d9b0a3233d17e76bc7db8e9a9374da4afd6e9387d81eb1a0e660",
       "runtime": "client",
       "publicPaths": [
         "~/composables/admin/useAdminPlugins"
@@ -580,7 +580,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 27,
+              "line": 28,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AdminComponent =\n    | Component\n    | (() => Promise<Component | { default: Component }>);"
             }
@@ -594,7 +594,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 12,
+              "line": 13,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AdminPageDef = {\n    id: string;\n    label: string;\n    path?: string;\n    order?: number;\n    component: AdminComponent;\n};"
             }
@@ -608,7 +608,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 31,
+              "line": 32,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AdminPlugin {\n    id: string;\n    register: (api: AdminPluginApi) => void | Promise<void>;\n}"
             }
@@ -622,7 +622,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 36,
+              "line": 37,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface AdminPluginApi {\n    registerAdminPage: (def: AdminPageDef) => void;\n    registerAdminWidget: (def: AdminWidgetDef) => void;\n}"
             }
@@ -636,7 +636,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 20,
+              "line": 21,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AdminWidgetDef = {\n    id: string;\n    slot: 'overview' | 'workspace' | 'plugins' | 'themes' | 'system';\n    order?: number;\n    component: AdminComponent;\n};"
             }
@@ -653,7 +653,7 @@
               "resolvedReturnType": "AdminPluginApi",
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 169,
+                "line": 182,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createAdminPluginApi(): AdminPluginApi;"
               }
@@ -662,7 +662,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 169,
+              "line": 182,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createAdminPluginApi(): AdminPluginApi;"
             }
@@ -679,7 +679,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 179,
+                "line": 192,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function loadAdminPlugins();"
               }
@@ -688,7 +688,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 179,
+              "line": 192,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function loadAdminPlugins();"
             }
@@ -700,23 +700,23 @@
           "nuxtAutoImport": true,
           "signatures": [
             {
-              "signature": "export function registerAdminPage(def: AdminPageDef);",
-              "declaredReturnType": null,
-              "resolvedReturnType": null,
+              "signature": "(def: AdminPageDef): void",
+              "declaredReturnType": "void",
+              "resolvedReturnType": "void",
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 108,
+                "line": 110,
                 "syntaxKind": "FunctionDeclaration",
-                "text": "export function registerAdminPage(def: AdminPageDef);"
+                "text": "export function registerAdminPage(def: AdminPageDef): void;"
               }
             }
           ],
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 108,
+              "line": 110,
               "syntaxKind": "FunctionDeclaration",
-              "text": "export function registerAdminPage(def: AdminPageDef);"
+              "text": "export function registerAdminPage(def: AdminPageDef): void;"
             }
           ]
         },
@@ -731,7 +731,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 122,
+                "line": 135,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerAdminWidget(def: AdminWidgetDef);"
               }
@@ -740,9 +740,35 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 122,
+              "line": 135,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerAdminWidget(def: AdminWidgetDef);"
+            }
+          ]
+        },
+        {
+          "name": "registerOwnedAdminPage",
+          "kind": "value",
+          "nuxtAutoImport": true,
+          "signatures": [
+            {
+              "signature": "(def: AdminPageDef): () => void",
+              "declaredReturnType": "() => void",
+              "resolvedReturnType": "() => void",
+              "declaration": {
+                "source": "app/composables/admin/useAdminPlugins.ts",
+                "line": 115,
+                "syntaxKind": "FunctionDeclaration",
+                "text": "export function registerOwnedAdminPage(def: AdminPageDef): () => void;"
+              }
+            }
+          ],
+          "declarations": [
+            {
+              "source": "app/composables/admin/useAdminPlugins.ts",
+              "line": 115,
+              "syntaxKind": "FunctionDeclaration",
+              "text": "export function registerOwnedAdminPage(def: AdminPageDef): () => void;"
             }
           ]
         },
@@ -757,7 +783,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 152,
+                "line": 165,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function resolveAdminComponent(def: { id: string; component: AdminComponent });"
               }
@@ -766,7 +792,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 152,
+              "line": 165,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function resolveAdminComponent(def: { id: string; component: AdminComponent });"
             }
@@ -780,7 +806,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 46,
+              "line": 47,
               "syntaxKind": "VariableDeclaration",
               "text": "state: AdminPluginState = reactive({\n    pages: [],\n    widgets: [],\n})"
             }
@@ -797,7 +823,7 @@
               "resolvedReturnType": "ComputedRef<AdminPageDef[]>",
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 135,
+                "line": 148,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAdminPages(): ComputedRef<AdminPageDef[]>;"
               }
@@ -806,7 +832,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 135,
+              "line": 148,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAdminPages(): ComputedRef<AdminPageDef[]>;"
             }
@@ -823,7 +849,7 @@
               "resolvedReturnType": "ComputedRef<AdminWidgetDef[]>",
               "declaration": {
                 "source": "app/composables/admin/useAdminPlugins.ts",
-                "line": 141,
+                "line": 154,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useAdminWidgets(\n    slot?: AdminWidgetDef['slot']\n): ComputedRef<AdminWidgetDef[]>;"
               }
@@ -832,7 +858,7 @@
           "declarations": [
             {
               "source": "app/composables/admin/useAdminPlugins.ts",
-              "line": 141,
+              "line": 154,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useAdminWidgets(\n    slot?: AdminWidgetDef['slot']\n): ComputedRef<AdminWidgetDef[]>;"
             }
@@ -2810,7 +2836,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "922f97eb40a9d1ce919698b31e0403dd9cda7644adaeeba8ebf0e748f79198e4",
+      "apiSha256": "987bd9648dbde721d0444d9c20fe82788c77a617d75b9377cadfe077b354c845",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -4075,7 +4101,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 45,
+              "line": 46,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ImportMetadata {\n    databaseName: string;\n    databaseVersion: number;\n    tables: Array<{ name: string; rowCount: number }>;\n}"
             }
@@ -6735,7 +6761,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAi.ts",
-                "line": 76,
+                "line": 77,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[]; toolDraftId?: () => string | undefined } = {}\n);"
               }
@@ -6744,7 +6770,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAi.ts",
-              "line": 76,
+              "line": 77,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[]; toolDraftId?: () => string | undefined } = {}\n);"
             }
@@ -7781,7 +7807,7 @@
               "resolvedReturnType": "WorkspaceBackupApi",
               "declaration": {
                 "source": "app/composables/core/useWorkspaceBackup.ts",
-                "line": 185,
+                "line": 186,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useWorkspaceBackup(): WorkspaceBackupApi;"
               }
@@ -7790,7 +7816,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 185,
+              "line": 186,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useWorkspaceBackup(): WorkspaceBackupApi;"
             }
@@ -7856,9 +7882,9 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 51,
+              "line": 52,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface WorkspaceBackupApi {\n    state: WorkspaceBackupState;\n    exportWorkspace(): Promise<void>;\n    peekBackup(file: Blob): Promise<void>;\n    importWorkspace(file: Blob): Promise<void>;\n    reset(): void;\n}"
+              "text": "export interface WorkspaceBackupApi {\n    state: WorkspaceBackupState;\n    exportWorkspace(options?: { localOnly?: boolean }): Promise<void>;\n    peekBackup(file: Blob): Promise<void>;\n    importWorkspace(file: Blob): Promise<void>;\n    reset(): void;\n}"
             }
           ]
         },
@@ -7870,7 +7896,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 25,
+              "line": 26,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface WorkspaceBackupState {\n    isExporting: Ref<boolean>;\n    isImporting: Ref<boolean>;\n    progress: Ref<number>; // 0-100\n    currentStep: Ref<\n        | 'idle'\n        | 'peeking'\n        | 'confirm'\n        | 'importing'\n        | 'exporting'\n        | 'done'\n        | 'error'\n    >;\n    importMode: Ref<WorkspaceImportMode>;\n    overwriteValues: Ref<boolean>;\n    backupMeta: Ref<ImportMetadata | null>;\n    backupFormat: Ref<'stream' | 'dexie' | 'cloud' | null>;\n    error: Ref<AppError | null>;\n}"
             }
@@ -7884,7 +7910,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 23,
+              "line": 24,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type WorkspaceImportMode = 'replace' | 'append';"
             }

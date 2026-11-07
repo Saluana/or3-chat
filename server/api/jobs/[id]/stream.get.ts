@@ -986,7 +986,7 @@ export default defineEventHandler(async (event) => {
         },
     }, {
         highWaterMark: MAX_SSE_VIEWER_QUEUE_BYTES,
-        size: (chunk) => chunk.byteLength,
+        size: (chunk?: Uint8Array) => chunk?.byteLength ?? 0,
     });
 
     return sendStream(event, stream);

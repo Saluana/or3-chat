@@ -406,6 +406,7 @@ const navLinks = computed<NavLink[]>(() => {
     if (isSuperAdmin.value) {
         base.push(
             { label: 'Overview', to: '/admin', icon: homeIcon.value, section: 'Site' },
+            { label: 'Customers', to: '/admin/customers', icon: 'i-lucide-users', section: 'Site' },
             { label: 'Registration', to: '/admin/registration', icon: 'i-lucide-user-plus', section: 'Site' },
             { label: 'Administrators', to: '/admin/admin-users', icon: 'i-lucide-shield', section: 'Site' },
             { label: 'Workspaces', to: '/admin/workspaces', icon: workspacesIcon.value, section: 'Site' },
@@ -415,6 +416,8 @@ const navLinks = computed<NavLink[]>(() => {
             { label: 'Plugins', to: '/admin/plugins', icon: pluginsIcon.value, section: 'Extensions' },
             { label: 'Webhooks', to: '/admin/webhooks', icon: pluginsIcon.value, section: 'Extensions' },
             { label: 'Operations', to: '/admin/system', icon: systemIcon.value, section: 'Operations' },
+            { label: 'Storage', to: '/admin/storage', icon: 'i-lucide-database', section: 'Operations' },
+            { label: 'Activity', to: '/admin/activity', icon: 'i-lucide-history', section: 'Operations' },
             { label: 'Advanced Settings', to: '/admin/advanced', icon: advancedIcon, section: 'Operations' }
         );
     }

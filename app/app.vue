@@ -4,6 +4,7 @@
         :toaster="{ position: 'top-right' }"
         :tooltip="{ ignoreNonKeyboardFocus: true }"
     >
+        <ClientOnly><component :is="billingBanner" v-if="billingBanner" /></ClientOnly>
         <!-- Register the PWA web manifest on all pages -->
         <VitePwaManifest />
         <ErrorRecovery />
@@ -18,12 +19,14 @@
 </template>
 <script setup lang="ts">
 import { hasDelegatedChatJobs } from '~/utils/chat/delegated-chat-runtime';
-import { defineAsyncComponent } from 'vue';
+import { defineAsyncComponent, resolveComponent } from 'vue';
 const LazyDelegatedChatHost = defineAsyncComponent(() => import('~/components/chat/DelegatedChatHost.vue'));
 const delegationActive = computed(hasDelegatedChatJobs);
 // Apply initial theme class to <html> so CSS variables cascade app-wide
 const nuxtApp = useNuxtApp();
 const runtimeConfig = useRuntimeConfig();
+const billingBanner = runtimeConfig.public.hostedBillingEnabled === true
+    ? resolveComponent('HostedBillingBanner') : null;
 const appName = computed(
     () => runtimeConfig.public?.branding?.appName || 'OR3'
 );

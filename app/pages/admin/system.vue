@@ -45,6 +45,8 @@
                     />
                 </div>
 
+                <AdminRecovery />
+
                 <AdminSystemUpdateCard v-if="isOwner" :is-owner="isOwner" />
 
                 <section v-if="providerActions.length" class="space-y-3">
@@ -59,6 +61,8 @@
                         :is-owner="isOwner"
                         :running-action-id="runningActionId"
                         :result="providerActionResult"
+                        :warning-percent="Number(capacityConfig.storageCapacityWarningPercent)"
+                        :critical-percent="Number(capacityConfig.storageCapacityCriticalPercent)"
                         @run="runProviderAction"
                     />
                 </section>
@@ -117,6 +121,7 @@ import { useServerRestart } from '~/composables/admin/useServerRestart';
 import { useConfirmDialog } from '~/composables/admin/useConfirmDialog';
 import { parseErrorMessage } from '~/utils/admin/parse-error';
 import type { ProviderAction } from '~/composables/admin/useAdminTypes';
+import AdminRecovery from '~/components/admin/system/AdminRecovery.vue';
 import AdminSystemStatusCard from '~/components/admin/system/AdminSystemStatusCard.vue';
 import AdminSystemOperationsCard from '~/components/admin/system/AdminSystemOperationsCard.vue';
 import AdminSystemProviderActions from '~/components/admin/system/AdminSystemProviderActions.vue';
@@ -131,6 +136,7 @@ definePageMeta({
 const { data: statusData, status: statusFetchStatus } = useAdminSystemStatus();
 const { confirm } = useConfirmDialog();
 const toast = useToast();
+const capacityConfig = useRuntimeConfig().public;
 const route = useRoute();
 const router = useRouter();
 

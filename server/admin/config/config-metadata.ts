@@ -64,6 +64,9 @@ export type ConfigGroup = (typeof CONFIG_GROUPS)[number];
  * intended for editing via the admin dashboard should be registered here.
  */
 export const CONFIG_METADATA: Record<string, ConfigMetadata> = {
+    OR3_STORAGE_CAPACITY_WARNING_PERCENT: { label: 'Capacity warning (%)', description: 'Warn when measured host volume usage reaches this percentage. Advisory only; does not change upload quotas. Applies after page refresh.', group: 'Storage', valueType: 'number' },
+    OR3_STORAGE_CAPACITY_CRITICAL_PERCENT: { label: 'Capacity critical (%)', description: 'Critical warning for measured host volume capacity. Must be greater than the warning percentage. S3 capacity remains unknown.', group: 'Storage', valueType: 'number' },
+
     OR3_CHAT_TOOL_ITERATIONS: { label: 'Instance tool iterations', description: 'Maximum model tool rounds per response.', group: 'Limits & Security', valueType: 'number' },
     OR3_CHAT_GENERATED_IMAGES: { label: 'Instance generated images', description: 'Maximum generated images saved per response.', group: 'Limits & Security', valueType: 'number' },
     // Auth

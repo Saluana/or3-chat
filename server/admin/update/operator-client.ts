@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { request } from 'node:http';
 
 const socketPath = process.env.OR3_DASHBOARD_OPERATOR_SOCKET || '/run/or3-operator/operator.sock';
@@ -318,4 +319,22 @@ export async function previewDashboardUpdate(): Promise<DashboardUpdatePreview> 
         if (error instanceof DashboardOperatorError) throw error;
         throw new DashboardOperatorError(unavailableReason(error));
     }
+}
+
+const RecoverySchema = z.object({
+    protocolVersion: z.literal(2),
+    recovery: z.object({
+        observedAt: z.string().datetime({ offset: true }), source: z.literal('managed_operator'),
+        snapshot: z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/), capturedAt: z.string().max(64).nullable(), verification: z.literal('operator_reported') }).strict().nullable(),
+        coverage: z.array(z.object({ component: z.enum(['canonical', 'auth', 'files', 'configuration', 'billing_trials_support', 'credential_escrow', 'independent_copy']), status: z.literal('unknown'), verifiedAt: z.null() }).strict()).length(7),
+        lastRecoveryTestAt: z.null(),
+        incompleteOperation: z.object({ id: z.string().max(100), operation: z.enum(['init', 'update', 'restore', 'adopt', 'credentials-reset', 'backup', 'rollback']), startedAt: z.string().max(64).nullable() }).strict().nullable(),
+    }).strict(),
+}).strict();
+export type RecoveryStatus = z.infer<typeof RecoverySchema>['recovery'];
+export async function getDashboardRecoveryStatus(): Promise<{ available: true; recovery: RecoveryStatus } | { available: false; reason: string }> {
+    try {
+        const result = await operatorRequest('GET', '/v2/recovery', undefined, value => RecoverySchema.parse(value), { timeoutMs: 2000 });
+        return { available: true, recovery: result.recovery };
+    } catch { return { available: false, reason: 'Recovery receipts are unavailable. Use the pinned Cloud CLI on the deployment host to inspect and verify backups.' }; }
 }

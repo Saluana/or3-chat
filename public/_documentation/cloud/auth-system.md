@@ -38,6 +38,11 @@ If a valid, unexpired invitation is for a different email, registration asks you
 
 Basic Auth registration and password changes show **Use at least 8 characters**. If a password is too long, the form asks you to shorten it. Password limits still apply, including when using emoji or other characters that take more storage space.
 
+Updated Basic Auth providers limit credential request bodies to 16 KiB before
+parsing JSON or form fields. Oversized requests return HTTP `413`, including
+chunked uploads without a declared size. This protection requires the updated
+provider package; a host-only update does not replace the installed provider.
+
 ## Two user identifiers
 
 | Identifier | Used for |
@@ -166,4 +171,4 @@ own private workspaces instead.
 
 ### Coordinated Basic Auth source changes
 
-Basic Auth source development now reads the host shared session and emits `or3:auth-session-changed` so the host owns refresh and account-change reloads. It also clears the pending invitation cookie on sign-out, labels invite-only codes as required, and gives specific password and invitation recovery messages. Production is still pinned to `or3-provider-basic-auth@0.0.13`; these improvements require a new provider release followed by an exact host dependency and lockfile update. Source validation does not make them available in the existing published package.
+The qualified Basic Auth package reads the host shared session and emits `or3:auth-session-changed` so the host owns refresh and account-change reloads. It clears the pending invitation cookie on sign-out, labels invite-only codes as required, and gives specific password and invitation recovery messages. The host pins the published provider and its lockfiles together. Initial account bootstrap completes before the server accepts requests, and an existing account is preserved on restart.

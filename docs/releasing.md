@@ -119,6 +119,18 @@ CSP, fails on browser errors, and retains screenshots, traces and JSON results.
 It publishes only source-qualified candidate evidence; it cannot
 publish npm or the public version images.
 
+The application and operator images currently replace the stable bases' zlib
+with Debian `1:1.3.dfsg+really1.3.2-4`, pinned by architecture and SHA-256 in
+`Dockerfile`. This contains the upstream fix for
+[CVE-2026-76844](https://security-tracker.debian.org/tracker/CVE-2026-76844) and
+[CVE-2026-85091](https://security-tracker.debian.org/tracker/CVE-2026-85091).
+Until the stable Debian feeds record this fix, `scripts/release/zlib.openvex.json`
+records **fixed** status for only those two CVEs and that exact package version
+on amd64/arm64. Older versions and other findings remain blocking. The scan
+artifact retains the full vulnerability report (including modified findings),
+the VEX document, and SBOM even if the gate fails. Remove the package overlay
+and its VEX together once a refreshed base supplies a qualified fixed package.
+
 The manifest contract also starts the exact operator image as an unprivileged,
 read-only container and installs the latest published Cloud CLI in its bounded
 tmpfs. This keeps the operator's pinned npm bootstrap on the pre-tag path;
@@ -134,8 +146,8 @@ in `packages/create-or3-chat/first-party-versions.json` are already available
 on npm:
 
 ```bash
-npm view or3-provider-basic-auth@0.0.18 version
-npm view or3-provider-sqlite@0.0.26 version
+npm view or3-provider-basic-auth@0.0.19 version
+npm view or3-provider-sqlite@0.0.27 version
 npm view or3-provider-fs@0.0.16 version
 ```
 

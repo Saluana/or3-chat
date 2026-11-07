@@ -10,7 +10,8 @@ import { Readable } from 'node:stream';
 // direct-upload attachments; cache-only exports; truncated/corrupt restore;
 // source replacement; large byte buffers or blob persistence in the browser;
 // retained Trash disappearing on export or becoming live after restore.
-// Real auth/SQLite/fs APIs own the behavior; only explicit faults are intercepted.
+// Real auth/SQLite/storage APIs own the behavior; only explicit faults are intercepted.
+const storageProvider = process.env.OR3_STORAGE_PROVIDER === 's3' ? 's3' : 'fs';
 test.setTimeout(180_000);
 test.beforeAll(() => expect(process.env.OR3_FILE_BACKUP_E2E_DIR).toMatch(/^\/tmp\/or3-file-backup-cloud-/));
 
@@ -48,7 +49,10 @@ test('admin limits, interrupted direct upload, and verified retention preserve o
     const denied = await page.request.post('/api/storage/presign-upload', { headers, data: { workspace_id: workspaceId,
         hash: `sha256:${'a'.repeat(64)}`, mime_type: 'image/png', size_bytes: policy.maxUploadBytes + 1 } });
     expect(denied.status()).toBe(413);
-    await page.route('**/api/storage/fs/upload?*', route => route.abort());
+    const uploadUrl = storageProvider === 's3'
+        ? new RegExp('^' + process.env.OR3_STORAGE_S3_ENDPOINT!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/')
+        : '**/api/storage/fs/upload?*';
+    await page.route(uploadUrl, route => route.request().method() === 'PUT' ? route.abort() : route.continue());
     const interruption = await page.evaluate(async url => {
         const { getDb } = await import(url);
         const { createOrRefFile } = await import(new URL('./files.ts', url).href);
@@ -59,7 +63,7 @@ test('admin limits, interrupted direct upload, and verified retention preserve o
             blobs: await getDb().file_blobs.count() };
     }, clientUrl);
     expect(interruption.error).not.toBe(''); expect(interruption.metadata).toBe(0); expect(interruption.blobs).toBe(0);
-    await page.unroute('**/api/storage/fs/upload?*');
+    await page.unroute(uploadUrl);
     const receipt = await page.evaluate(async ({ url, workspaceId, policy }) => {
         const { getDb } = await import(url);
         const db = getDb();
@@ -93,18 +97,23 @@ test('admin limits, interrupted direct upload, and verified retention preserve o
     expect(receipt).toMatchObject({ keptPending: true, evicted: true, redownload: 'original bytes for verified retention', refreshed: true });
     const other = await page.context().newPage();
     await other.goto('/');
-    const admit = async (target: Page, prefix: string) => target.evaluate(async ({ url, workspaceId, policy, prefix }) => {
+    const admit = async (target: Page, prefix: string) => target.evaluate(async ({ url, workspaceId, policy, prefix, storageProvider }) => {
         const db = (await import(url)).getDb();
         const { cacheDownloadedFile } = await import(new URL('../core/storage/file-cache.ts', url).href);
         for (let index = 0; index < 12; index++) {
-            await cacheDownloadedFile(db, workspaceId, 'fs', `${prefix}-${index}`, `object-${index}`, new Blob([new Uint8Array(512 * 1024)]), policy);
+            await cacheDownloadedFile(db, workspaceId, storageProvider, `${prefix}-${index}`, `object-${index}`, new Blob([new Uint8Array(512 * 1024)]), policy);
         }
-    }, { url: clientUrl, workspaceId, policy, prefix });
+    }, { url: clientUrl, workspaceId, policy, prefix, storageProvider });
     await Promise.all([admit(page, 'tab-one'), admit(other, 'tab-two')]);
     const cacheBytes = await page.evaluate(async url => (await import(new URL('../core/storage/file-cache.ts', url).href)).originCacheBytes(), clientUrl);
     expect(cacheBytes).toBeLessThanOrEqual(policy.maxCacheBytes);
     expect(cacheBytes).toBeGreaterThan(3 * 1024 * 1024);
     await other.close();
+    const usage = await page.request.post('/api/admin/system/provider-action', { headers: { origin, 'x-or3-admin-intent': 'admin' },
+        data: { kind: 'storage', actionId: 'storage.usage', workspaceId } });
+    expect(usage.ok(), await usage.text()).toBe(true);
+    const observed = await usage.json();
+    expect(JSON.stringify(observed)).toContain('non_atomic_observation');
     const path = info.outputPath('retention-receipt.json'); await writeFile(path, JSON.stringify({ interruption, receipt, concurrentTabCacheBytes: cacheBytes }, null, 2));
     await info.attach('retention-receipt', { path, contentType: 'application/json' });
     await page.goto(`/admin/workspaces/${workspaceId}`);
@@ -135,7 +144,7 @@ test('complete cloud backup restores independently of browser cache', async ({ p
     test.setTimeout(15 * 60_000);
     const { workspaceId, clientUrl, origin, headers } = await start(page);
     const large = process.env.OR3_BACKUP_LARGE_E2E === 'true';
-    const count = large ? 16 : 2;
+    const count = large ? 16 : 3;
     const size = large ? 128 * 1024 * 1024 : 2 * 1024 * 1024;
     const lifecycle = await (await page.request.get('/api/admin/system/restart-status')).json();
     expect(lifecycle.capability.restart).toBe(true);
@@ -146,9 +155,10 @@ test('complete cloud backup restores independently of browser cache', async ({ p
     const hashes: string[] = [];
     const cookies = (await page.context().cookies()).map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
     for (let index = 0; index < count; index++) {
-        const chunk = Buffer.alloc(1024 * 1024, index + 17);
-        const digest = createHash('sha256'); for (let bytes = 0; bytes < size; bytes += chunk.length) digest.update(chunk);
-        const hash = `sha256:${digest.digest('hex')}`; hashes.push(hash);
+        const chunk = Buffer.alloc(1024 * 1024, !large && index === 1 ? 17 : index + 17);
+        const algorithm = !large && index !== 1 ? 'md5' : 'sha256';
+        const digest = createHash(algorithm); for (let bytes = 0; bytes < size; bytes += chunk.length) digest.update(chunk);
+        const hash = `${algorithm}:${digest.digest('hex')}`; hashes.push(hash);
         const grantResponse = await page.request.post('/api/storage/presign-upload', { headers, data: {
             workspace_id: workspaceId, hash, mime_type: 'text/plain', size_bytes: size, file_kind_capability: 'v1',
         } });
@@ -156,22 +166,33 @@ test('complete cloud backup restores independently of browser cache', async ({ p
         const grant = await grantResponse.json();
         async function* content() { for (let bytes = 0; bytes < size; bytes += chunk.length) yield chunk; }
         const uploaded = await fetch(new URL(grant.url, origin), { method: grant.method ?? 'PUT', headers: {
-            cookie: cookies, 'content-type': 'text/plain', ...grant.headers,
+            ...(storageProvider === 'fs' ? { cookie: cookies, 'content-type': 'text/plain' } : {}), ...grant.headers,
         }, body: Readable.from(content()), duplex: 'half' } as RequestInit);
         expect(uploaded.ok, await uploaded.text()).toBe(true);
         const commit = await page.request.post('/api/storage/commit', { headers, data: {
             workspace_id: workspaceId, hash, storage_id: grant.storageId, intent_id: grant.intentId,
-            storage_provider_id: 'fs', mime_type: 'text/plain', size_bytes: size, name: `original-${index}.txt`, kind: 'file', file_kind_capability: 'v1',
+            storage_provider_id: storageProvider, mime_type: 'text/plain', size_bytes: size, name: `original-${index}.txt`, kind: 'file', file_kind_capability: 'v1',
         } });
         expect(commit.ok(), await commit.text()).toBe(true);
         const id = randomUUID();
         const saved = await page.request.post('/api/sync/push', { headers, data: { scope: { workspaceId }, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [{
             id, tableName: 'file_meta', operation: 'put', pk: hash, payload: { hash, name: `original-${index}.txt`, kind: 'file', mime_type: 'text/plain', size_bytes: size,
-                storage_id: grant.storageId, storage_provider_id: 'fs', ref_count: 0, clock: 1, created_at: 1, updated_at: 1, deleted: false },
+                storage_id: grant.storageId, storage_provider_id: storageProvider, ref_count: 0, clock: 1, created_at: 1, updated_at: 1, deleted: false },
             stamp: { deviceId: 'backup-e2e', opId: id, clock: 1, hlc: `${String(Date.now()).padStart(15, '0')}:000000:backup-e2e` }, createdAt: Date.now(), attempts: 0, status: 'pending',
         }] } });
         expect(saved.ok(), await saved.text()).toBe(true); expect((await saved.json()).results[0].success).toBe(true);
     }
+    // Keep both MD5/SHA256 identities for identical bytes, including nested references.
+    const referencePost = { id: randomUUID(), title: 'Preserved attachment identities', post_type: 'doc',
+        content: JSON.stringify({ type: 'doc', content: [{ type: 'or3Image', attrs: { hash: hashes[0] } }] }),
+        file_hashes: JSON.stringify(hashes.slice(0, 2)), clock: 1, created_at: 1, updated_at: 1, deleted: false };
+    const referenceId = randomUUID();
+    const referenceSaved = await page.request.post('/api/sync/push', { headers, data: { scope: { workspaceId }, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [{
+        id: referenceId, tableName: 'posts', operation: 'put', pk: referencePost.id, payload: referencePost,
+        stamp: { deviceId: 'backup-e2e', opId: referenceId, clock: 1, hlc: `${String(Date.now()).padStart(15, '0')}:000000:backup-e2e` }, createdAt: Date.now(), attempts: 0, status: 'pending',
+    }] } });
+    expect(referenceSaved.ok(), await referenceSaved.text()).toBe(true);
+    expect((await referenceSaved.json()).results[0].applied).toBe(true);
     const trashHash = hashes.at(-1)!;
     const trashId = randomUUID();
     const trashed = await page.request.post('/api/sync/push', { headers, data: { scope: { workspaceId }, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [{
@@ -266,19 +287,24 @@ test('complete cloud backup restores independently of browser cache', async ({ p
         const response = await reloaded.request.post('/api/storage/presign-download', { headers, data: { workspace_id: restored.workspaceId, hash, file_kind_capability: 'v1' } });
         expect(response.ok(), await response.text()).toBe(true);
         const grant = await response.json();
-        const download = await fetch(new URL(grant.url, origin), { headers: { cookie: cookies, ...grant.headers } });
+        const download = await fetch(new URL(grant.url, origin), { headers: { ...(storageProvider === 'fs' ? { cookie: cookies } : {}), ...grant.headers } });
         expect(download.ok).toBe(true);
-        const digest = createHash('sha256'); for await (const bytes of Readable.fromWeb(download.body! as never)) digest.update(bytes);
-        expect(`sha256:${digest.digest('hex')}`).toBe(hash); verified.push(hash);
+        const algorithm = hash.split(':')[0]!;
+        const digest = createHash(algorithm); for await (const bytes of Readable.fromWeb(download.body! as never)) digest.update(bytes);
+        expect(`${algorithm}:${digest.digest('hex')}`).toBe(hash); verified.push(hash);
     }
     const restoredArchivePath = join(process.env.OR3_FILE_BACKUP_E2E_DIR!, 'restored.or3cloud');
     const restoredExport = await fetch(`${origin}/api/workspaces/backup?workspaceId=${restored.workspaceId}`, { headers: { cookie: cookies } });
     expect(restoredExport.ok).toBe(true);
     await writeFile(restoredArchivePath, Readable.fromWeb(restoredExport.body! as never));
     const archivedHashes: string[] = [];
-    let trashPreserved = false;
+    let trashPreserved = false, referencesPreserved = false;
     await scanCloudBackup(await openAsBlob(restoredArchivePath), async frame => {
         if (frame.header.type === 'file') archivedHashes.push(frame.header.hash);
+        if (frame.header.type === 'row' && frame.header.table === 'posts' && frame.row?.id === referencePost.id) {
+            expect(frame.row).toMatchObject({ content: referencePost.content, file_hashes: referencePost.file_hashes });
+            referencesPreserved = true;
+        }
         if (frame.header.type === 'row' && frame.header.table === 'file_meta') {
             const row = frame.row as { hash: string; deleted: boolean };
             if (row.hash === trashHash) trashPreserved = row.deleted === true;
@@ -286,10 +312,11 @@ test('complete cloud backup restores independently of browser cache', async ({ p
     });
     expect(archivedHashes.sort()).toEqual([...hashes].sort());
     expect(trashPreserved).toBe(true);
+    expect(referencesPreserved).toBe(true);
     await rm(restoredArchivePath);
     const source = await reloaded.request.get(`${origin}/api/workspaces`); expect((await source.json()).workspaces.some((row: { id: string }) => row.id === workspaceId)).toBe(true);
     const path = info.outputPath('roundtrip-receipt.json');
-    await writeFile(path, JSON.stringify({ bytes: count * size, count, sourceWorkspace: workspaceId, ...restored,
+    await writeFile(path, JSON.stringify({ storageProvider, referencesPreserved, bytes: count * size, count, sourceWorkspace: workspaceId, ...restored,
         archiveSha256: archiveDigest.digest('hex'), verifiedHashes: verified, archivedHashes, trashPreserved, sourceKept: true, browserReloadVerified: true, clientExport,
         serverRestart: { before: initial.bootId, after: nextBoot.bootId }, truncatedRestoreRejected: rejected }, null, 2));
     await info.attach('roundtrip-receipt', { path, contentType: 'application/json' });
