@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import type { H3Event } from 'h3';
 import type { StorageGatewayAdapter, PresignUploadRequest } from '~~/server/storage/gateway/types';
@@ -25,7 +26,7 @@ describe('account-wide billing quotas with the installed SQLite provider', () =>
     }
     beforeEach(async () => {
         _resetForTest();
-        root = mkdtempSync('/tmp/or3-billing-quota-');
+        root = mkdtempSync(join(tmpdir(), 'or3-billing-quota-'));
         const path = join(root, 'sync.sqlite');
         await runMigrations(await initializeSqliteDb({ path, driver: 'better-sqlite3' }));
         const auth = new SqliteAuthWorkspaceStore();
@@ -35,6 +36,8 @@ describe('account-wide billing quotas with the installed SQLite provider', () =>
         second = (await auth.createWorkspace({ userId: alice, name: 'Second' })).workspaceId;
         third = (await auth.createWorkspace({ userId: bob, name: 'Bob' })).workspaceId;
         store = new BillingStore(join(root, 'billing.sqlite'));
+        store.claimTrial(alice, 'alice@example.test', '192.0.2.1');
+        store.claimTrial(bob, 'bob@example.test', '192.0.2.2');
         quota = new AccountStorageQuota(path, store);
         sync = new SqliteSyncGatewayAdapter();
         adapter = quota.decorate({
@@ -76,6 +79,33 @@ describe('account-wide billing quotas with the installed SQLite provider', () =>
         store.saveSettings({ ...store.settings(), trialStorageGb: 1 });
         await expect(adapter.presignUpload(event(alice, first), input(first, 'd', 1))).rejects.toMatchObject({ statusCode: 413 });
         expect(getRawDb().prepare('SELECT count(*) AS count FROM upload_intents').get()).toMatchObject({ count: 2 });
+    });
+
+    it('holds expired uploads against the owner allowance and permits retrying the same file', async () => {
+        const file = input(first, 'a', 700_000_000);
+        const upload = await adapter.presignUpload(event(alice, first), file);
+        getRawDb().prepare("UPDATE upload_intents SET status = 'expired', expires_at = ? WHERE id = ?")
+            .run(Math.floor(Date.now() / 1000) - 1, upload.intentId);
+        await expect(adapter.presignUpload(event(alice, second), input(second, 'b', 400_000_000)))
+            .rejects.toMatchObject({ statusCode: 413 });
+        expect(quota.usedBytes(alice)).toBe(700_000_000);
+        const retry = await adapter.presignUpload(event(alice, first), file);
+        await sync.consumeUploadIntent(event(alice, first), { ...file, intentId: retry.intentId!, storageId: 'committed' });
+        expect(quota.usedBytes(alice)).toBe(700_000_000);
+        await expect(adapter.presignUpload(event(bob, third), input(third, 'c', 1_000_000_000)))
+            .resolves.toHaveProperty('intentId');
+    });
+
+    it('counts expired active intents but not intents canceled before a signed URL was issued', async () => {
+        const firstUpload = await adapter.presignUpload(event(alice, first), input(first, 'a', 600_000_000));
+        getRawDb().prepare('UPDATE upload_intents SET expires_at = ? WHERE id = ?')
+            .run(Math.floor(Date.now() / 1000) - 1, firstUpload.intentId);
+        expect(quota.usedBytes(alice)).toBe(600_000_000);
+        const canceled = await adapter.presignUpload(event(alice, second), input(second, 'b', 400_000_000));
+        await sync.cancelUploadIntent(event(alice, second), { workspaceId: second, intentId: canceled.intentId! });
+        expect(quota.usedBytes(alice)).toBe(600_000_000);
+        await expect(adapter.presignUpload(event(alice, second), input(second, 'c', 400_000_000)))
+            .resolves.toHaveProperty('intentId');
     });
 
     it('charges shared uploads to the canonical owner and keeps deleted workspaces in the allowance', async () => {

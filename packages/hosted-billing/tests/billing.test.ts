@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import Stripe from 'stripe';
 import { BillingStore } from '../runtime/server/store';
 import { BillingService } from '../runtime/server/service';
@@ -35,8 +36,10 @@ describe('optional hosted billing', () => {
         await store.exclusive('alice', async token => store.update('alice', token, { customer_id: 'cus_1' }));
     }
     beforeEach(() => {
-        root = mkdtempSync('/tmp/or3-billing-');
+        root = mkdtempSync(join(tmpdir(), 'or3-billing-'));
         store = new BillingStore(join(root, 'billing.sqlite'));
+        store.claimTrial('alice', 'alice@example.test', '192.0.2.1');
+        store.claimTrial('bob', 'bob@example.test', '192.0.2.2');
         stripe = new Stripe(config.secretKey);
         service = new BillingService(store, stripe, config);
     });
@@ -44,13 +47,15 @@ describe('optional hosted billing', () => {
 
     it('starts one durable seven-day trial per canonical account, independent of workspace and restart', () => {
         const start = 1_800_000_000_000;
-        const trial = store.status('alice', start);
+        store.claimTrial('charlie', 'charlie@example.test', '192.0.2.3', start);
+        const trial = store.status('charlie', start);
         expect(trial.trialEndsAt).toBe(start + 7 * 86400000);
         expect(trial.storageLimitBytes).toBe(1_000_000_000);
         store.close();
         store = new BillingStore(join(root, 'billing.sqlite'));
-        expect(store.status('alice', start + 7 * 86400000)).toMatchObject({ allowed: false, state: 'expired', trialEndsAt: trial.trialEndsAt });
-        expect(store.status('bob', start + 7 * 86400000)).toMatchObject({ allowed: true, state: 'trial' });
+        expect(store.status('charlie', start + 7 * 86400000)).toMatchObject({ allowed: false, state: 'expired', trialEndsAt: trial.trialEndsAt });
+        store.claimTrial('dave', 'dave@example.test', '192.0.2.4', start + 7 * 86400000);
+        expect(store.status('dave', start + 7 * 86400000)).toMatchObject({ allowed: true, state: 'trial' });
     });
 
     it('changes storage limits immediately, persists settings, and refuses stale admin writes', () => {

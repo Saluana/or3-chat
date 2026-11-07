@@ -6,6 +6,7 @@ import { resolveSessionContext } from '../auth/session';
 import { isSsrAuthEnabled } from '../utils/auth/is-ssr-auth-enabled';
 import { requireCloudMutation } from '../utils/security/cloud-mutation';
 import { getActiveSecretStore } from './registry';
+import { requiresPersonalAiCredentials } from '../cloud/access';
 
 const KEY_NAME = 'api-key';
 const unavailable = () => createError({ statusCode: 503, statusMessage: 'OpenRouter credential storage unavailable. Contact the administrator.' });
@@ -34,8 +35,8 @@ function storageError(error: unknown): never {
 export async function resolveOpenRouterCredential(event: H3Event, knownSession?: SessionContext | null): Promise<{ apiKey: string | undefined; source: 'personal' | 'server' }> {
     const config = useRuntimeConfig(event);
     const cloud = isSsrAuthEnabled(event);
-    const required = config.openrouterRequireUserKey === true;
-    const override = config.openrouterAllowUserOverride !== false;
+    const required = config.openrouterRequireUserKey === true || (cloud && requiresPersonalAiCredentials());
+    const override = required || config.openrouterAllowUserOverride !== false;
     let personal: string | undefined;
     if (cloud) {
         const session = knownSession ?? await resolveSessionContext(event);

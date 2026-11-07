@@ -5,6 +5,18 @@ import { resolveSessionContext } from '~~/server/auth/session';
 import { requireCan } from '~~/server/auth/can';
 import { BillingStore, BillingBusyError } from './store';
 
+// A signed PUT may have succeeded even if its owner never committed it. Keep
+// its potential bytes reserved after expiry until the object is accounted for.
+const ACCOUNT_USAGE_CTE = `WITH owned AS (SELECT id FROM workspaces WHERE owner_user_id = @owner),
+    pending AS (
+        SELECT intent.workspace_id, intent.hash,
+            MAX(0, MAX(intent.size_bytes) - COALESCE(retained.size_bytes, 0)) AS held
+        FROM upload_intents AS intent JOIN owned ON owned.id = intent.workspace_id
+        LEFT JOIN retained_storage AS retained ON retained.workspace_id = intent.workspace_id AND retained.hash = intent.hash
+        WHERE intent.status IN ('active', 'expired')
+        GROUP BY intent.workspace_id, intent.hash
+    )`;
+
 /** SQLite-specific read-only accounting over canonical provider tables (including retained Trash).
  * Only the provider writes sync/storage rows and creates/consumes upload reservations.
  */
@@ -17,9 +29,10 @@ export class AccountStorageQuota {
     }
     close() { this.reader?.close(); }
     usedBytes(userId: string): number {
-        const row = this.db().prepare(`SELECT COALESCE(SUM(used_bytes), 0) AS total
-            FROM storage_usage JOIN workspaces ON workspaces.id = storage_usage.workspace_id
-            WHERE owner_user_id = ?`).get(userId) as { total: number };
+        const row = this.db().prepare(`${ACCOUNT_USAGE_CTE}
+            SELECT COALESCE((SELECT SUM(used_bytes) FROM storage_usage JOIN owned ON owned.id = storage_usage.workspace_id), 0)
+                + COALESCE((SELECT SUM(held) FROM pending), 0) AS total`).get({ owner: userId }) as { total: number };
+        if (!Number.isSafeInteger(row.total) || row.total < 0) throw createError({ statusCode: 503, statusMessage: 'Storage accounting unavailable' });
         return row.total;
     }
 
@@ -47,16 +60,7 @@ export class AccountStorageQuota {
                 const status = this.billing.status(owner);
                 if (!status.allowed) throw createError({ statusCode: 402, statusMessage: 'The workspace owner needs an active subscription' });
                 const hash = input.hash.trim().toLowerCase().replace(/^(sha256|md5):/, '');
-                const totals = this.db().prepare(`
-                    WITH owned AS (SELECT id FROM workspaces WHERE owner_user_id = @owner),
-                    pending AS (
-                        SELECT intent.workspace_id, intent.hash,
-                            MAX(0, MAX(intent.size_bytes) - COALESCE(retained.size_bytes, 0)) AS held
-                        FROM upload_intents AS intent JOIN owned ON owned.id = intent.workspace_id
-                        LEFT JOIN retained_storage AS retained ON retained.workspace_id = intent.workspace_id AND retained.hash = intent.hash
-                        WHERE intent.status = 'active' AND intent.expires_at > @now
-                        GROUP BY intent.workspace_id, intent.hash
-                    )
+                const totals = this.db().prepare(`${ACCOUNT_USAGE_CTE}
                     SELECT
                         COALESCE((SELECT SUM(used_bytes) FROM storage_usage JOIN owned ON owned.id = storage_usage.workspace_id), 0)
                             + COALESCE((SELECT SUM(held) FROM pending), 0) AS total,
@@ -64,7 +68,7 @@ export class AccountStorageQuota {
                             + COALESCE((SELECT SUM(held) FROM pending WHERE workspace_id = @workspace), 0) AS workspace_total,
                         COALESCE((SELECT size_bytes FROM retained_storage WHERE workspace_id = @workspace AND hash = @hash), 0)
                             + COALESCE((SELECT held FROM pending WHERE workspace_id = @workspace AND hash = @hash), 0) AS existing
-                `).get({ owner, workspace: input.workspaceId, hash, now: Math.floor(Date.now() / 1000) }) as { total: number; workspace_total: number; existing: number };
+                `).get({ owner, workspace: input.workspaceId, hash }) as { total: number; workspace_total: number; existing: number };
                 if (!Object.values(totals).every(value => Number.isSafeInteger(value) && value >= 0) ||
                     !Number.isSafeInteger(input.sizeBytes) || input.sizeBytes < 0) throw createError({ statusCode: 503, statusMessage: 'Storage accounting unavailable' });
                 if (totals.total + Math.max(0, input.sizeBytes - totals.existing) > status.storageLimitBytes) {

@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import type { BillingStatus, BillingSettings } from '../types';
 
 const TRIAL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -39,8 +39,14 @@ export class BillingStore {
                 paid_storage_gb INTEGER NOT NULL, revision INTEGER NOT NULL
             );
             INSERT OR IGNORE INTO billing_settings VALUES (1, 1, 50, 1);
+            CREATE TABLE IF NOT EXISTS billing_private_settings (name TEXT PRIMARY KEY, value TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS billing_trial_decisions (
+                user_id TEXT PRIMARY KEY, granted INTEGER NOT NULL,
+                email_hash TEXT UNIQUE, network_hash TEXT UNIQUE
+            );
         `);
         this.db.transaction(() => {
+            this.db.prepare("INSERT OR IGNORE INTO billing_private_settings VALUES ('trial_hash_key', ?)").run(randomBytes(32).toString('hex'));
             const columns = this.db.pragma('table_info(billing_accounts)') as Array<{ name: string }>;
             if (!columns.some(column => column.name === 'renewal_grace_until')) {
                 this.db.exec('ALTER TABLE billing_accounts ADD COLUMN renewal_grace_until INTEGER NOT NULL DEFAULT 0');
@@ -48,11 +54,36 @@ export class BillingStore {
         }).immediate();
     }
 
-    account(userId: string, now = Date.now()): BillingAccount {
+    account(userId: string, _now = Date.now()): BillingAccount {
         const existing = this.db.prepare('SELECT * FROM billing_accounts WHERE user_id = ?').get(userId) as BillingAccount | undefined;
         if (existing) return existing;
-        this.db.prepare('INSERT OR IGNORE INTO billing_accounts (user_id, trial_ends_at) VALUES (?, ?)').run(userId, now + TRIAL_MS);
+        this.db.prepare('INSERT OR IGNORE INTO billing_accounts (user_id, trial_ends_at) VALUES (?, 0)').run(userId);
         return this.db.prepare('SELECT * FROM billing_accounts WHERE user_id = ?').get(userId) as BillingAccount;
+    }
+
+    /** A one-time, atomic decision. The caller supplies normalized, validated identities. */
+    claimTrial(userId: string, email: string | null, network: string | null, now = Date.now()): void {
+        if (!email || !network) return; // A later request with a usable identity can retry.
+        const existingAccount = this.db.prepare('SELECT trial_ends_at, subscription_id, customer_id, paid_until FROM billing_accounts WHERE user_id = ?').get(userId) as BillingAccount | undefined;
+        if (existingAccount && (existingAccount.trial_ends_at || existingAccount.subscription_id || existingAccount.customer_id || existingAccount.paid_until)) return;
+        if (this.db.prepare('SELECT 1 FROM billing_trial_decisions WHERE user_id = ?').get(userId)) return;
+        this.db.transaction(() => {
+            const account = this.account(userId, now);
+            // Preserve existing accounts and never grant a new trial to a subscriber.
+            if (account.trial_ends_at || account.subscription_id || account.customer_id || account.paid_until ||
+                this.db.prepare('SELECT 1 FROM billing_trial_decisions WHERE user_id = ?').get(userId)) return;
+            const { value: key } = this.db.prepare("SELECT value FROM billing_private_settings WHERE name = 'trial_hash_key'").get() as { value: string };
+            const fingerprint = (kind: string, identity: string) => createHmac('sha256', Buffer.from(key, 'hex')).update(kind).update('\0').update(identity).digest('hex');
+            const emailHash = fingerprint('email', email);
+            const networkHash = fingerprint('network', network);
+            const existing = this.db.prepare('SELECT 1 FROM billing_trial_decisions WHERE email_hash = ? OR network_hash = ?').get(emailHash, networkHash);
+            if (existing) {
+                this.db.prepare('INSERT INTO billing_trial_decisions (user_id, granted) VALUES (?, 0)').run(userId);
+                return;
+            }
+            this.db.prepare('INSERT INTO billing_trial_decisions VALUES (?, 1, ?, ?)').run(userId, emailHash, networkHash);
+            this.db.prepare('UPDATE billing_accounts SET trial_ends_at = ? WHERE user_id = ?').run(now + TRIAL_MS, userId);
+        }).immediate();
     }
 
     byCustomer(customerId: string): BillingAccount | undefined {

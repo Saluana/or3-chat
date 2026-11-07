@@ -17,6 +17,10 @@ export default defineNuxtModule({
         config.public.cloudAccessPolicyEnabled = true;
         config.openrouterRequireUserKey = true;
         config.openrouterAllowUserOverride = true;
+        config.public.openRouter.requireUserKey = true;
+        config.public.openRouter.allowUserOverride = true;
+        config.public.openRouter.hasInstanceKey = false;
+        config.public.openai.hasInstanceKey = false;
         addServerPlugin(resolver.resolve('runtime/server/plugin'));
         for (const [name, method] of [['status', 'get'], ['checkout', 'post'], ['portal', 'post'], ['refresh', 'post'], ['webhook', 'post']] as const) {
             addServerHandler({ route: `/api/billing/${name}`, method, handler: resolver.resolve(`runtime/server/routes/${name}`) });

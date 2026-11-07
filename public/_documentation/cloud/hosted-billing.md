@@ -12,9 +12,12 @@ SDK requirement or payment checks.
   and trial/paid deadline, subscribe, or open Stripe's customer portal to manage
   payment details and cancellation. The same page remains available at `/billing`
   for direct links and Stripe return URLs. No administrator access is needed.
-- Each canonical OR3 account receives one **7-day trial**, starting on its first
-  authenticated session/billing check or hosted request after activation. Existing
-  accounts receive the same trial when this module is first enabled.
+- Eligible accounts receive one **7-day trial**, starting on their first
+  authenticated session/billing check or hosted request. Trial eligibility is
+  limited to one per normalized email and network. Existing billing accounts
+  retain their original trial or paid access; their historical trials do not
+  create email or network fingerprints retroactively. Free Local and paid
+  subscriptions remain available to accounts that are not eligible for a trial.
 - The plan notice can be dismissed in this browser. Dismissal is scoped to the
   account, plan state and deadline; it reappears when the trial or paid period
   expires, even in an open tab without waiting for the next status poll.
@@ -22,7 +25,7 @@ SDK requirement or payment checks.
   charges a card. Its original deadline survives restarts and workspace changes.
 - **Subscribe** opens Stripe Checkout for **USD $40/year**. Choosing to subscribe
   charges immediately and starts a paid year; it does not create a second Stripe
-  trial. AI usage is separate, using the customer's OpenRouter balance.
+  trial. AI usage is separate, using the customer's own OpenRouter or OpenAI key.
 - The initial storage allowances are **1 GB during trial** and **50 GB when paid**.
   GB means 1,000,000,000 bytes.
 - **Admin → Hosted billing** (`/admin/extensions/hosted-billing`) lets a global
@@ -36,10 +39,39 @@ SDK requirement or payment checks.
 The paid storage allowance is account-wide across workspaces whose canonical
 `owner_user_id` is that account. Shared uploads use the workspace owner's budget;
 the uploading member also needs their own hosted access. Retained bytes, including
-Trash and soft-deleted workspaces, and active upload reservations count. Creating
-additional workspaces does not multiply the allowance. Physical uncommitted S3
-objects and provider orphan retention can exceed logical accounting; configure
-provider lifecycle cleanup separately. This is not a physical bucket billing cap.
+Trash and soft-deleted workspaces, and active or expired upload reservations count.
+An upload can have reached object storage even when it was never committed, so
+expired reservations remain charged; retrying the same file does not charge it
+again. Failed uploads may therefore use allowance until an operator reviews them.
+There is no automatic reservation-release or object-deletion process. Creating
+additional workspaces does not multiply the allowance. Physical bucket use can
+still exceed logical accounting, for example with object versioning; this is not
+a physical bucket billing cap. Monitor bucket use separately.
+Synced chat and document data stored in SQLite is not included in this file
+allowance. Per-request sync limits do not provide a per-account database quota;
+monitor available disk space and investigate sustained growth before it affects
+the host.
+
+Trial eligibility stores keyed hashes of normalized email and network, not raw
+values. IPv4 addresses and IPv6 /64 networks each receive one trial; a denial
+is retained for that account. The hashing key and decisions live in the billing
+database and must be included in its backups. Configure proxy trust only behind
+a proxy that replaces forwarded client-IP headers, and prevent direct access
+around that proxy. A missing or invalid client IP does not grant a trial.
+Shared networks can cause legitimate denials; support can review them. Basic
+auth does not verify email ownership, and alternate emails or networks can still
+be used to obtain additional trials. Monitor signups and use invite-only
+registration if stronger controls are needed.
+
+To resolve a legitimate trial denial, first verify the canonical user ID and
+make a consistent backup of the billing database. With billing writes stopped,
+an operator may give that account a one-time trial by setting `trial_ends_at`
+on its existing `billing_accounts` row to the current Unix time in milliseconds
+plus 604800000, provided its current value is 0 and it has no paid subscription.
+Keep its `billing_trial_decisions` row so an expired override cannot restart
+automatically. Restart the service and check the account's billing status. Do
+not clear upload reservations based solely on their expiry: a signed upload may
+still have produced an object, and safe cleanup is not enabled.
 
 After the Cloud trial or subscription ends, accounts return to **Free Local**.
 Chats, documents and original files can still be created and edited in this
@@ -85,7 +117,9 @@ billing database. Never clear a hold through client-syncable settings.
 ## Cloud access extension
 
 The trusted host registers `registerCloudAccessPolicy()` from
-`server/cloud/access.ts`. It returns an owner-scoped cleanup handle. The session
+`server/cloud/access.ts`, including a requirement for personal AI credentials.
+The hosted module does not use instance OpenRouter or OpenAI keys for customers,
+including on Free Local. It returns an owner-scoped cleanup handle. The session
 response carries `cloudAccess: { enabled, expiresAt }` (milliseconds since epoch).
 Client scheduling fails closed when `public.cloudAccessPolicyEnabled` is true
 and access is missing, and pauses transport at the deadline even offline.
