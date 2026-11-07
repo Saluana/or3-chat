@@ -594,6 +594,19 @@ export function useModelStore() {
         return fetchModels({ force: true });
     }
 
+    /**
+     * The picker publishes the first platform that answers. Callers that choose
+     * or list models must also wait for the slower platform, or they would treat
+     * a partial catalog as complete and substitute another model.
+     */
+    async function ensureCompleteCatalog(opts?: { ttlMs?: number }): Promise<OpenRouterModel[]> {
+        const db = getDb();
+        const generation = getWorkspaceGeneration();
+        if (!catalog.value.length) await fetchModels(opts);
+        if (remainingModelsInFlight) await remainingModelsInFlight;
+        return db === getDb() && generation === getWorkspaceGeneration() ? catalog.value : [];
+    }
+
     return {
         favoriteModels,
         catalog,
@@ -605,6 +618,7 @@ export function useModelStore() {
         loadCachedModels: () => loadFromDexie(MODELS_TTL_MS),
         resolveContextModel,
         refreshModels,
+        ensureCompleteCatalog,
         invalidate,
         getFavoriteModels,
         addFavoriteModel,

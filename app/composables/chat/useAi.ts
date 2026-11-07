@@ -15,6 +15,7 @@ import { reportError, err } from '~/utils/errors';
 import { errorDiagnostics } from '~~/shared/errors';
 import { ToolIterationLimitError } from '~~/shared/chat/stream-errors';
 import { DEFAULT_CHAT_LIMITS } from '~~/shared/chat/chat-limits';
+import { resolveWorkspaceChatLimits } from '~/utils/chat/workspace-chat-limits';
 import { MAX_CANONICAL_MESSAGE_OUTPUT_BYTES } from '~~/shared/chat/tool-limits';
 import { ChatContextAdmissionError, contextAdmissionFailureReason } from '~~/shared/chat/context-budget';
 import { redactDiagnosticDetails } from '~~/shared/logging/sensitive-metadata';
@@ -109,8 +110,10 @@ export function useChat(
     const { apiKey, connected, setKey } = useUserApiKey();
     const runtimeConfig = useRuntimeConfig();
     const publicChatConfig: { chatToolIterations?: number; chatGeneratedImages?: number } = runtimeConfig.public;
-    const resolveChatLimits = async (workspaceId: string) => runtimeConfig.public.ssrAuthEnabled === true && runtimeConfig.public.sync.enabled && workspaceId !== 'local'
-        ? await $fetch<import('~~/shared/chat/chat-limits').ChatLimits>('/api/chat/limits', { query: { workspaceId } })
+    const resolveChatLimits = async (workspaceId: string, signal?: AbortSignal) => runtimeConfig.public.ssrAuthEnabled === true && runtimeConfig.public.sync.enabled && workspaceId !== 'local'
+        ? await resolveWorkspaceChatLimits(workspaceId,
+            // An explicit result type keeps Nitro's typed-route inference shallow.
+            loadSignal => $fetch<unknown>('/api/chat/limits', { query: { workspaceId }, signal: loadSignal }), signal)
         : { toolIterations: publicChatConfig.chatToolIterations ?? DEFAULT_CHAT_LIMITS.toolIterations,
             generatedImages: publicChatConfig.chatGeneratedImages ?? DEFAULT_CHAT_LIMITS.generatedImages };
     // Nuxt UI resolves its toast service through Vue injection. Capture it
@@ -1052,7 +1055,7 @@ export function useChat(
                     defaultModelId: DEFAULT_AI_MODEL,
                     getSystemPromptContent,
                     useAiSettings,
-                    resolveChatLimits: () => resolveChatLimits(request.workspaceId),
+                    resolveChatLimits: (signal) => resolveChatLimits(request.workspaceId, signal),
                     resolveContextPolicy: async (selectedModelId, signal) => {
                         const preference = await useAiSettings().captureContextPreference();
                         const model = await useModelStore().resolveContextModel(selectedModelId, { signal });

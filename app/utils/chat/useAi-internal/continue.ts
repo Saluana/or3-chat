@@ -125,7 +125,7 @@ export type ContinueMessageContext = {
     defaultModelId: string;
     getSystemPromptContent: () => Promise<string | null>;
     useAiSettings: () => { settings: Ref<ChatSettings | undefined> };
-    resolveChatLimits?: () => Promise<ChatLimits>;
+    resolveChatLimits?: (signal?: AbortSignal) => Promise<ChatLimits>;
     resolveContextPolicy?: (modelId: string, signal: AbortSignal) => Promise<ContextRequestPolicy>;
     /** Catalog facts for a selected model; absent metadata keeps the permissive defaults. */
     catalogModel?: (modelId: string) => Pick<OpenRouterModel, 'architecture' | 'reasoning' | 'supported_parameters'> | undefined;
@@ -691,7 +691,7 @@ export async function continueMessageImpl(
             return;
         }
 
-        const chatLimits = await (ctx.resolveChatLimits?.() ?? Promise.resolve(DEFAULT_CHAT_LIMITS));
+        const chatLimits = await (ctx.resolveChatLimits?.(continuationAbortController.signal) ?? Promise.resolve(DEFAULT_CHAT_LIMITS));
         continuationAbortController.signal.throwIfAborted();
         stopHeartbeat = startForegroundGenerationHeartbeat(
             originDb, messageId, newStreamId, ctx.abortController.value.signal

@@ -111,6 +111,12 @@ export default defineEventHandler(async (event) => {
         setResponseStatus(event, 400);
         return { error: 'Router configuration is not accepted in chat requests.', code: 'unsupported_router_configuration' };
     }
+    // The workspace model policy is checked against `model`. OpenRouter's
+    // fallback list would route to models that policy never checked.
+    if (Object.hasOwn(body, 'models') || Object.hasOwn(body, 'route')) {
+        setResponseStatus(event, 400);
+        return { error: 'Fallback model lists are not accepted in chat requests.', code: 'unsupported_model_routing' };
+    }
     const backgroundRequested = isBackgroundModeRequest(body);
     if (!backgroundRequested && body._durableDelegation !== undefined) {
         setResponseStatus(event, 400);

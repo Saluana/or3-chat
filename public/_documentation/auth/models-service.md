@@ -4,6 +4,9 @@ The catalog opens newest first. **Platforms** are connections such as OpenRouter
 and direct OpenAI; the model maker is separate from that connection. Existing
 saved route IDs remain valid, including `@openai/` IDs. Models appear as each
 platform completes, so a slow or unavailable platform does not delay another.
+Code that chooses or lists models for a request (Document AI, delegated chats,
+and the plugin model list) uses `ensureCompleteCatalog()`, which waits for every
+platform, so a model from the slower platform is never treated as missing.
 
 Choose **Use** on a row to select immediately, or open its details. Favorites,
 Recently used, and Workspace picks narrow the same list. Recent selections are
@@ -15,7 +18,9 @@ Use and favorite actions also work with the keyboard.
 
 Workspace admins can set a default, pin picks and hide models in **Workspace
 settings → Workspace models**. Hidden routes cannot start new chat responses;
-OpenRouter routing variants share their base route's restriction. Existing
+OpenRouter routing variants share their base route's restriction. The chat
+route refuses OpenRouter fallback routing (`models` or `route`), so a fallback
+cannot reach a model the policy never checked. Existing
 history stays intact. Delegated children inherit the admitted workspace policy.
 Personal fixed preferences and explicit chat/project selections retain their
 normal precedence; a hidden selection is refused rather than rerouted silently.
@@ -28,7 +33,7 @@ Because OpenAI's model-list endpoint does not report capacity, OR3 shows only
 models whose limits are in its host table; newly released models require a table update.
 Direct OpenAI chat uses the Responses API, preserving supported sampling,
 structured-output formats, and explicit strict tool schemas while allowing supported models to reason
-while calling tools.
+while calling tools. Only reasoning models request encrypted reasoning state to carry between tool rounds.
 
 The host model service fetches OpenRouter model metadata and supplies small, pure filters. Import it from `~/core/auth/models-service`. It does not manage login, persist keys, send chat requests, or build a search index.
 

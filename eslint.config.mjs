@@ -26,7 +26,7 @@ export default [
             parser: tsParser,
             parserOptions: {
                 project: existingProjects.length
-                    ? [...existingProjects, lintProject, auditProject]
+                    ? [...existingProjects, './tsconfig.eslint.hosted-billing.json', lintProject, auditProject]
                     : [lintProject, auditProject],
                 tsconfigRootDir: import.meta.dirname,
             },

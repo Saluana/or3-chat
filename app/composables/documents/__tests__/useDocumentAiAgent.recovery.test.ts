@@ -17,6 +17,7 @@ vi.mock('~/core/auth/useUserApiKey', () => ({ useUserApiKey: () => ({ apiKey: re
 vi.mock('~/composables/chat/useModelStore', () => ({ useModelStore: () => ({
     catalog: ref([{ id: 'audit-model', name: 'Audit', supported_parameters: ['tools'], context_length: 32000 }]),
     fetchModels: async () => [],
+    ensureCompleteCatalog: async () => [],
 }) }));
 vi.mock('~/composables/core/useTokenizer', () => ({ useTokenizer: () => ({ countTokens: controls.tokens }) }));
 vi.mock('~/composables/documents/useDocumentAiSettings', () => ({

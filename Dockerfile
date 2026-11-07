@@ -15,13 +15,15 @@ FROM docker:27.5.1-cli@sha256:851f91d241214e7c6db86513b270d58776379aacc5eb9c4a87
 # Debian's stable bases still contain the zlib write-error overflow. Install
 # only the checksum-pinned Debian fix (CVE-2026-76844 / CVE-2026-85091), not a
 # moving unstable distribution. Its libc requirements are <= both base images.
+# Fetch from snapshot.debian.org: the live pool removes a version once it is
+# superseded, which would break every later build of this pinned file.
 # Package extraction runs natively; the tiny cleanup uses the target BusyBox
 # through BuildKit emulation when cross-building an image.
 FROM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS operator-base
 FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS patched-zlib
 ARG TARGETARCH
-ADD --checksum=sha256:8506ce550a81ac14b047608e0df121037d9cbb10c3cc28446f68cf8c1d9d31ce https://deb.debian.org/debian/pool/main/z/zlib/zlib1g_1.3.dfsg+really1.3.2-4_amd64.deb /zlib/amd64.deb
-ADD --checksum=sha256:aaf9e8cfc7d86771144c660d544806c886a5ae406f97bd50b62588a0718229ab https://deb.debian.org/debian/pool/main/z/zlib/zlib1g_1.3.dfsg+really1.3.2-4_arm64.deb /zlib/arm64.deb
+ADD --checksum=sha256:8506ce550a81ac14b047608e0df121037d9cbb10c3cc28446f68cf8c1d9d31ce https://snapshot.debian.org/archive/debian/20261026T022331Z/pool/main/z/zlib/zlib1g_1.3.dfsg+really1.3.2-4_amd64.deb /zlib/amd64.deb
+ADD --checksum=sha256:aaf9e8cfc7d86771144c660d544806c886a5ae406f97bd50b62588a0718229ab https://snapshot.debian.org/archive/debian/20261026T022331Z/pool/main/z/zlib/zlib1g_1.3.dfsg+really1.3.2-4_arm64.deb /zlib/arm64.deb
 COPY --from=operator-base /var/lib/dpkg/status /zlib/operator-status
 RUN test "$(dpkg-deb --field /zlib/$TARGETARCH.deb Architecture)" = "$TARGETARCH" && \
     dpkg-deb --extract /zlib/$TARGETARCH.deb /zlib/root && \
