@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type APIRequestContext } from '@playwright/test';
 import Database from 'better-sqlite3';
 import { execFileSync } from 'node:child_process';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -187,7 +187,7 @@ test('trial, editable admin allowances, and expiry preserve billing and data acc
         await expect(page.getByRole('button', { name: 'Upgrade to Cloud', exact: true })).toHaveCount(0);
         expect((await (await page.request.get('/api/auth/session')).json()).cloudAccess.enabled).toBe(false);
         await page.screenshot({ path: info.outputPath('billing-review.png'), fullPage: true });
-    } finally { db.close(); }
+    } finally { inspectorBilling = db; } // Keep the shared WAL open until afterAll, even on failure.
     expect(billingHydrationWarnings).toEqual([]);
 });
 
@@ -218,6 +218,9 @@ test('admin customer inspector explains accounts without provisioning them', asy
             expect(registered.ok(), await registered.text()).toBe(true);
             const session = await (await context.request.get('/api/auth/session')).json();
             users[name] = { id: session.session.user.id, email };
+            if (['paid', 'review', 'expired', 'denied'].includes(name)) {
+                expect((await context.request.get('/api/billing/status')).ok()).toBe(true);
+            }
             if (name === 'member') {
                 // An ordinary signed-in member cannot reach cross-account support data.
                 for (const path of ['/api/admin/customers', `/api/admin/customers/${users.paid!.id}`, `/api/admin/hosted-billing/accounts/${users.paid!.id}`]) {
@@ -229,7 +232,7 @@ test('admin customer inspector explains accounts without provisioning them', asy
             }
         } finally { await context.close(); }
     }
-    const billing = inspectorBilling = new Database(process.env.OR3_BILLING_SQLITE_PATH);
+    const billing = inspectorBilling ??= new Database(process.env.OR3_BILLING_SQLITE_PATH);
     const canonical = new Database(process.env.OR3_SQLITE_DB_PATH, { readonly: true });
     try {
         const paidUntil = Date.now() + 200 * 86_400_000;
@@ -238,8 +241,7 @@ test('admin customer inspector explains accounts without provisioning them', asy
         billing.prepare('UPDATE billing_accounts SET trial_ends_at = ? WHERE user_id = ?').run(Date.now() - 86_400_000, users.expired!.id);
         billing.prepare('DELETE FROM billing_accounts WHERE user_id = ?').run(users.never!.id);
         billing.prepare('DELETE FROM billing_trial_decisions WHERE user_id = ?').run(users.never!.id);
-        // Trial eligibility needs a client network identity, which the source dev server does not expose,
-        // so the denied decision is seeded the same way a repeated identity would record it.
+        // The denied fixture represents a repeated identity regardless of test order.
         billing.prepare('INSERT OR REPLACE INTO billing_trial_decisions (user_id, granted) VALUES (?, 0)').run(users.denied!.id);
         expect(billing.prepare('SELECT COUNT(*) AS n FROM billing_accounts WHERE user_id = ?').get(users.denied!.id)).toEqual({ n: 1 });
         const snapshot = () => ({
@@ -341,13 +343,27 @@ test('operational pauses refuse only new work and are recorded', async ({ page, 
     if (!root || dirname(resolve(root)) !== resolve(tmpdir()) || process.env.OR3_BILLING_SQLITE_PATH !== join(root, 'billing.sqlite')) {
         throw new Error('Use bun run test:e2e:hosted-billing with its disposable databases.');
     }
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
     const headers = { origin: baseURL!, 'x-or3-cloud-intent': 'mutation' };
     const adminHeaders = { origin: baseURL!, 'x-or3-admin-intent': 'admin' };
+    const readSession = async (request: APIRequestContext) => {
+        let response = await request.get('/api/auth/session');
+        if (response.status() === 429) {
+            // Earlier scenarios share this loopback IP and may fill its session window.
+            const retryAfter = Number(response.headers()['retry-after']);
+            expect(retryAfter).toBeGreaterThan(0);
+            expect(retryAfter).toBeLessThanOrEqual(60);
+            await new Promise(resolve => setTimeout(resolve, retryAfter * 1000 + 100));
+            response = await request.get('/api/auth/session');
+        }
+        return response;
+    };
     const user = await browser.newContext({ baseURL });
     const email = `pause-${Date.now()}@example.test`;
     expect((await user.request.post('/api/basic-auth/register', { headers, data: { email, password: 'DisposablePause!123', confirmPassword: 'DisposablePause!123' } })).ok()).toBe(true);
-    const session = await (await user.request.get('/api/auth/session')).json();
+    const sessionResponse = await readSession(user.request);
+    expect(sessionResponse.ok(), await sessionResponse.text()).toBe(true);
+    const session = await sessionResponse.json();
     const userId = session.session.user.id as string;
     const workspaceId = session.session.workspace.id as string;
     try {
@@ -398,7 +414,7 @@ test('operational pauses refuse only new work and are recorded', async ({ page, 
                 const users = () => (canonical.prepare('SELECT COUNT(*) AS n FROM users').get() as { n: number }).n;
                 const before = users();
                 const registered = await newcomer.request.post('/api/basic-auth/register', { headers, data: { email: `paused-${Date.now()}@example.test`, password: 'DisposablePause!123', confirmPassword: 'DisposablePause!123' } });
-                const session = await newcomer.request.get('/api/auth/session');
+                const session = await readSession(newcomer.request);
                 expect([registered.status(), session.status()]).toContain(503);
                 expect(users()).toBe(before);
             } finally { canonical.close(); }
@@ -475,6 +491,8 @@ test('operational pauses refuse only new work and are recorded', async ({ page, 
             }
         }
         await page.goto('/admin/extensions/hosted-billing');
+        const paidAllowance = page.getByLabel('Paid storage (GB)');
+        await paidAllowance.fill(String(Number(await paidAllowance.inputValue()) + 1));
         await page.getByLabel('Reason for storage allowance change').fill('Confirm current cohort allowance policy');
         await page.getByRole('button', { name: 'Preview impact', exact: true }).click();
         const saveResponse = page.waitForResponse(response => response.url().endsWith('/api/admin/hosted-billing') && response.request().method() === 'POST');

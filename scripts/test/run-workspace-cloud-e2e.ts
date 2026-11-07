@@ -87,6 +87,18 @@ try {
     const probe = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response('port probe') });
     const port = probe.port!;
     await probe.stop(true);
+    // Nitro's dev worker has no client socket. Exercise trial eligibility through
+    // the existing loopback proxy, which replaces untrusted forwarding headers.
+    let billingHttpsPort: number | undefined;
+    if (billing && !process.argv.includes('--build')) {
+        const httpsProbe = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response('port probe') });
+        billingHttpsPort = httpsProbe.port!;
+        await httpsProbe.stop(true);
+        const certificate = Bun.spawn(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+            '-keyout', join(root, 'dev.key'), '-out', join(root, 'dev.crt'), '-days', '1', '-subj', '/CN=localhost'],
+        { stdout: 'ignore', stderr: 'ignore' });
+        if (await certificate.exited) throw new Error('Disposable HTTPS certificate generation failed.');
+    }
     if (storageProvider === 's3') bucket = await prepareS3TestBucket(`http://127.0.0.1:${port}`);
     await writeFile(join(root, 'profile.json'), JSON.stringify({ root, origin: `http://127.0.0.1:${port}`, syncProvider: convex ? 'convex' : 'sqlite', storageProvider, providers }));
     const watch = process.argv.includes('--watch');
@@ -121,6 +133,11 @@ try {
             OR3_ADMIN_USERNAME: 'workspace-e2e-admin', OR3_ADMIN_PASSWORD: 'DisposableAdminE2e!123',
             OR3_HOSTED_BILLING_ENABLED: billing ? 'true' : 'false',
             ...(billing ? {
+                ...(billingHttpsPort ? {
+                    OR3_TRUST_PROXY: 'true', OR3_FORWARDED_FOR_HEADER: 'x-forwarded-for',
+                    OR3_DEV_HTTPS_CERT: join(root, 'dev.crt'), OR3_DEV_HTTPS_KEY: join(root, 'dev.key'),
+                    OR3_DEV_HTTPS_PORT: String(billingHttpsPort),
+                } : {}),
                 OR3_BILLING_STRIPE_SECRET_KEY: stripeEnv?.OR3_BILLING_STRIPE_SECRET_KEY ?? 'sk_test_disposable_no_network',
                 OR3_BILLING_STRIPE_WEBHOOK_SECRET: stripeEnv?.OR3_BILLING_STRIPE_WEBHOOK_SECRET ?? 'whsec_disposable_no_network',
                 OR3_BILLING_STRIPE_PRICE_ID: stripeEnv?.OR3_BILLING_STRIPE_PRICE_ID ?? 'price_disposable_no_network',
