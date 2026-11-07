@@ -539,10 +539,6 @@ test.describe('local document recovery faults', () => {
             const { useUserApiKey } = await import(keyURL!);
             useUserApiKey().setKey('synthetic-document-ai-offline-key');
         }, keyURL);
-        const offlineTokenizerRequests: string[] = [];
-        context.on('request', request => {
-            if (/gpt-tokenizer/.test(request.url())) offlineTokenizerRequests.push(request.url());
-        });
         let requests = 0;
         let releaseFirst!: () => void;
         const firstResponse = new Promise<void>(resolve => { releaseFirst = resolve; });
@@ -571,7 +567,6 @@ test.describe('local document recovery faults', () => {
             await prompt.press('Enter');
             await page.waitForTimeout(600);
             expect(requests).toBe(0);
-            expect(offlineTokenizerRequests).toEqual([]);
             await context.setOffline(false);
             await expect(send).toBeEnabled();
             await send.click();

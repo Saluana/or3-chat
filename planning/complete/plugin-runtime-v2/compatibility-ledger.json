@@ -2836,7 +2836,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "29d13b850e7b40325dc9bff2c29d921403c47f2983f7a8ddbfb3ace62776142b",
+      "apiSha256": "987bd9648dbde721d0444d9c20fe82788c77a617d75b9377cadfe077b354c845",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -7781,7 +7781,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/core/useTokenizer.ts",
-                "line": 191,
+                "line": 5,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useTokenizer();"
               }
@@ -7790,7 +7790,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useTokenizer.ts",
-              "line": 191,
+              "line": 5,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useTokenizer();"
             }

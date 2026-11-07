@@ -144,6 +144,15 @@ it.each(['preflight', 'generation'] as const)('retires a disconnected %s and all
     expect(editor.getText()).toBe('Original body\n\nAI appendix');
 });
 
+it('reserves input headroom when an estimated document request approaches the context limit', async () => {
+    controls.tokens.mockResolvedValueOnce(15_000);
+    const { agent } = makeAgent();
+    await agent.submit(submission);
+    expect(agent.error.value).toMatch(/may be too large.*estimate/i);
+    expect(controls.loop).not.toHaveBeenCalled();
+    expect(editor.getText()).toBe('Original body');
+});
+
 it('handles preparation rejection without leaving a busy state or losing the document', async () => {
     controls.load.mockRejectedValueOnce(new Error('Synthetic preparation unavailable'));
     const { agent } = makeAgent();

@@ -69,7 +69,7 @@ export function useChatModelSelection(options: {
     const modelVariant = ref<OpenRouterModelVariant>(DEFAULT_MODEL_VARIANT);
     const thinkingEnabled = ref(true);
     const reasoningEffort = ref<string>();
-    const persistedModel = useLocalStorage(LAST_MODEL_KEY, DEFAULT_MODEL);
+    const persistedModel = useLocalStorage<string | null | undefined>(LAST_MODEL_KEY, DEFAULT_MODEL);
     const modelInherited = ref(true);
     let inheritedProjectModel: string | null = null;
     let policySubscription: Subscription | undefined;
@@ -111,7 +111,7 @@ export function useChatModelSelection(options: {
         const preferred = settings.value.defaultModelMode === 'fixed' &&
             settings.value.fixedModelId
             ? settings.value.fixedModelId
-            : workspaceModels.policy.value.defaultModel ?? persistedModel.value;
+            : workspaceModels.policy.value.defaultModel ?? persistedModel.value ?? DEFAULT_MODEL;
         return isModelHidden(workspaceModels.policy.value, preferred)
             ? workspaceModels.policy.value.defaultModel ?? catalog.value.find(model => isChatModel(model) && !isModelHidden(workspaceModels.policy.value, model.id))?.id ?? preferred
             : preferred;

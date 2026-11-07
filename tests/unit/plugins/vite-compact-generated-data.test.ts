@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import originalRanks from 'gpt-tokenizer/bpeRanks/o200k_base';
 import originalLanguage from '@shikijs/langs/typescript';
 import { afterEach, expect, it } from 'vitest';
 import { build } from 'vite';
@@ -14,7 +13,7 @@ afterEach(() => {
     for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
 
-it('preserves complete tokenizer ranks and grammar values through a real client build', async () => {
+it('preserves grammar values through a real client build', async () => {
     const root = mkdtempSync(join(tmpdir(), 'or3-generated-data-'));
     directories.push(root);
     const grammarDirectory = join(root, 'node_modules/@shikijs/langs/dist');
@@ -28,12 +27,10 @@ it('preserves complete tokenizer ranks and grammar values through a real client 
         JSON.stringify(Array.from({ length: 1000 }, () => ({ name: 'repeated grammar name', match: 'repeated long grammar expression' }))) + '}';
     const largeFixture = join(grammarDirectory, 'large.mjs');
     writeFileSync(largeFixture, `export default Object.freeze(JSON.parse(${JSON.stringify(largeJson)}));`);
-    const ranksUrl = import.meta.resolve('gpt-tokenizer/bpeRanks/o200k_base');
     const languageUrl = import.meta.resolve('@shikijs/langs/typescript');
     const entry = join(root, 'entry.mjs');
     writeFileSync(entry, `export {default as fixture} from ${JSON.stringify(fixture)};
 export {default as largeFixture} from ${JSON.stringify(largeFixture)};
-export {default as ranks} from ${JSON.stringify(fileURLToPath(ranksUrl))};
 export {default as language} from ${JSON.stringify(fileURLToPath(languageUrl))};`);
     await build({
         configFile: false,
@@ -49,10 +46,8 @@ export {default as language} from ${JSON.stringify(fileURLToPath(languageUrl))};
     const result = createRequire(import.meta.url)(join(root, 'dist/entry.cjs')) as {
         fixture: { patterns: { match: string }[]; negativeZero: number };
         largeFixture: { patterns: { match: string }[]; negativeZero: number };
-        ranks: (string | number[])[];
         language: unknown;
     };
-    expect(result.ranks).toStrictEqual(originalRanks);
     expect(result.language).toStrictEqual(originalLanguage);
     for (const [fixture, expected] of [[result.fixture, json], [result.largeFixture, largeJson]] as const) {
         expect(fixture).toStrictEqual(JSON.parse(expected));

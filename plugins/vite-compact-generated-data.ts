@@ -60,7 +60,7 @@ function __or3_decode(v){if(typeof v==="number")return __or3_strings[v];if(!Arra
 const __or3_grammar=__or3_decode(${JSON.stringify(encoded)});\n`;
 }
 
-/** Compact generated data without changing tokens, grammar objects or lazy imports. */
+/** Compact generated grammars without changing objects or lazy imports. */
 export function compactGeneratedDataPlugin(): Plugin {
     let debug = false;
 
@@ -114,24 +114,7 @@ export function compactGeneratedDataPlugin(): Plugin {
                     : '';
                 return { code: declarations + source.replace(grammarJson, () => `(${expression})`), map: null };
             }
-            if (/\/node_modules\/gpt-tokenizer\/esm\/bpeRanks\/[^/]+\.js$/.test(path)) {
-                const code = source.replace(/const (c\d+) = (\[[^\n]+\]);/g, (original: string, name: string, json: string) => {
-                    let tokens: Json;
-                    try { tokens = JSON.parse(json) as Json; }
-                    catch { return original; }
-                    if (!Array.isArray(tokens) || tokens.length < 1000) return original;
-                    const replacements: [number, Json][] = [];
-                    // DEL is one UTF-8 byte. Preserve tokens containing it and
-                    // partial UTF-8 byte arrays explicitly at their original rank.
-                    const packed = tokens.map((token, index) => {
-                        if (typeof token === 'string' && !token.includes('\x7f')) return token;
-                        replacements.push([index, token]);
-                        return '';
-                    }).join('\x7f');
-                    return `const ${name}=${JSON.stringify(packed)}.split("\\x7f");for(const [i,t] of ${JSON.stringify(replacements)})${name}[i]=t;`;
-                });
-                return code === source ? null : { code: code.replace(/\/\/# sourceMappingURL=.*$/m, ''), map: null };
-            }
+
             return null;
         },
     };

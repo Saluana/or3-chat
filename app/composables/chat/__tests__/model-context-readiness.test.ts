@@ -54,6 +54,51 @@ afterEach(async () => {
 // Distinct catalog contract: real service/store/cache and SDK normalization.
 // Only external transport is scripted. No readiness operation is mocked.
 describe('existing catalog context readiness', () => {
+    it('restores saved favorite metadata before admission after returning to a workspace', async () => {
+        const store = useModelStore();
+        const favorite = sdkModelToLocal(sdkModel(32_000, 'favorite/model'));
+        await store.addFavoriteModel(favorite);
+        const other = `catalog-readiness-other-${crypto.randomUUID()}`;
+        const otherName = setActiveWorkspaceDb(other).name;
+        try {
+            await getDb().open();
+            await setActiveWorkspaceDb(workspace).open();
+            expect(store.favoriteModels.value).toEqual([]);
+            list.mockRejectedValue(new Error('Catalog unavailable'));
+            expect(await store.resolveContextModel('favorite/model')).toMatchObject({
+                ok: true, modelId: 'favorite/model', metadata: { context_length: 32_000 },
+            });
+        } finally {
+            evictWorkspaceDb(other);
+            await Dexie.delete(otherName);
+        }
+    });
+    it('cancels favorite-based admission when the workspace changes during hydration', async () => {
+        const store = useModelStore();
+        const favorite = sdkModelToLocal(sdkModel(32_000, 'origin/model'));
+        await kv.set('favorite_models', JSON.stringify([favorite]));
+        let release!: () => void; let entered!: () => void;
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        const started = new Promise<void>(resolve => { entered = resolve; });
+        const hooks = useHooks();
+        const hold: Parameters<typeof hooks.addFilter<'db.kv.getByName:filter:output'>>[1] = async row => {
+            if (row?.name === 'favorite_models') { entered(); await gate; }
+            return row;
+        };
+        hooks.addFilter('db.kv.getByName:filter:output', hold);
+        const pending = store.resolveContextModel('origin/model');
+        const otherId = `catalog-readiness-other-${crypto.randomUUID()}`;
+        try {
+            await started;
+            const other = setActiveWorkspaceDb(otherId);
+            release();
+            await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+            expect(store.favoriteModels.value).toEqual([]);
+            setActiveWorkspaceDb(workspace); evictWorkspaceDb(otherId); await Dexie.delete(other.name);
+        } finally {
+            release(); hooks.removeFilter('db.kv.getByName:filter:output', hold);
+        }
+    });
     it('publishes a cached OpenRouter catalog while OpenAI discovery is still pending', async () => {
         testRuntimeConfig.value.public.ssrAuthEnabled = true;
         browserCache(Date.now());

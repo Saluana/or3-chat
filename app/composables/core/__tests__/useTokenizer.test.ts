@@ -1,52 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { effectScope } from 'vue';
+import { describe, it, expect } from 'vitest';
+import { useTokenizer } from '../useTokenizer';
 
-describe('useTokenizer - SSR fallback', () => {
-    beforeEach(() => {
-        vi.resetModules();
-    });
-
-    it('returns a token count for valid text', async () => {
-        const { useTokenizer } = await import('../useTokenizer');
-
-        const scope = effectScope();
-        const tokenizer = await scope.run(() => useTokenizer())!;
-
-        const count = await tokenizer.countTokens('hello world');
-
-        expect(typeof count).toBe('number');
-        expect(count).toBeGreaterThanOrEqual(0);
-
-        scope.stop();
-    });
-
-    it('handles empty string without error', async () => {
-        const { useTokenizer } = await import('../useTokenizer');
-
-        const scope = effectScope();
-        const tokenizer = await scope.run(() => useTokenizer())!;
-
-        const count = await tokenizer.countTokens('');
-
-        expect(count).toBe(0);
-
-        scope.stop();
-    });
-
-    it('handles multiple sequential calls', async () => {
-        const { useTokenizer } = await import('../useTokenizer');
-
-        const scope = effectScope();
-        const tokenizer = await scope.run(() => useTokenizer())!;
-
-        const count1 = await tokenizer.countTokens('first');
-        const count2 = await tokenizer.countTokens('second');
-        const count3 = await tokenizer.countTokens('third');
-
-        expect(typeof count1).toBe('number');
-        expect(typeof count2).toBe('number');
-        expect(typeof count3).toBe('number');
-
-        scope.stop();
+describe('local token estimates', () => {
+    it('estimates single and batched text without requiring a worker', async () => {
+        const { countTokens, countTokensBatch, isReady } = useTokenizer();
+        expect(isReady.value).toBe(true);
+        expect(await countTokens('hello world')).toBe(3);
+        expect(await countTokens('')).toBe(0);
+        expect(await countTokensBatch([
+            { key: 'first', text: 'hello world' },
+            { key: 'empty', text: '' },
+            { key: 'other', text: 'abcd' },
+        ])).toEqual({ first: 3, empty: 0, other: 1 });
     });
 });
