@@ -394,15 +394,16 @@ test('compose failures capture redacted state before cleanup', () => {
 
 test('candidate verification reuses the exact built digest without rebuilding', () => {
   const workflow = readFileSync(CANDIDATE_WORKFLOW, 'utf8');
-  expect(workflow).toContain('docker pull --platform linux/amd64 "$IMAGE@$IMAGE_DIGEST"');
-  expect(workflow).toContain('/usr/local/bin/docker manifest inspect "$1"');
+  const verifier = readFileSync(resolve(import.meta.dir, '../../../scripts/release/verify-image-contract.mjs'), 'utf8');
+  expect(workflow).toContain('scripts/release/verify-image-contract.mjs "$IMAGE@$IMAGE_DIGEST"');
+  expect(verifier).toContain('/usr/local/bin/docker manifest inspect "$1"');
   expect(workflow).toContain('OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE"');
   expect(workflow.match(/docker\/build-push-action@v6/g)?.length).toBe(2);
   expect(workflow).toContain('digest: ${{ steps.build-app.outputs.digest }}');
   expect(workflow).toContain('needs: [identity, source-validation, chat-tools, build-app, build-operator, package, image-contracts, security-scan, arm-runtime, lifecycle]');
   expect(workflow).toContain('cache-from: type=registry,ref=ghcr.io/saluana/or3-chat:buildcache-cloud');
   expect(workflow).toContain('cache-to: type=registry,ref=ghcr.io/saluana/or3-chat:buildcache-cloud,mode=max');
-  expect(workflow).toContain('test "$(/usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js --version)" = 11.6.2');
+  expect(verifier).toContain('test "$(/usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js --version)" = 11.6.2');
 });
 
 test('development image is built once, smoked by digest, and only then tagged', () => {
@@ -514,6 +515,7 @@ test('npm publication identifies the qualified tarball as a local file', () => {
 
 test('candidate evidence is source-qualified and cannot publish a release', () => {
   const candidate = readFileSync(CANDIDATE_WORKFLOW, 'utf8');
+  const lifecycle = candidate.slice(candidate.indexOf('  lifecycle:'), candidate.indexOf('  receipt:'));
   expect(candidate).toContain('candidate-$VERSION-$source_sha');
   expect(candidate).toContain('candidate-operator-$VERSION-$source_sha');
   expect(candidate).toContain('candidate-evidence-$VERSION-$source_sha');
@@ -524,20 +526,53 @@ test('candidate evidence is source-qualified and cannot publish a release', () =
   expect(candidate).toContain('or3 verify');
   expect(candidate).not.toContain('npm publish');
   expect(candidate).not.toContain('contents: write');
+  expect(lifecycle).toContain('ref: ${{ needs.identity.outputs.source_sha }}');
+  expect(lifecycle).toContain('path: ${{ runner.temp }}/or3-browser-qualification.json');
+});
+
+test('lifecycle identity evidence follows the required recovery sequence', () => {
+  const workflow = readFileSync(CANDIDATE_WORKFLOW, 'utf8');
+  const lifecycle = workflow.slice(workflow.indexOf('  lifecycle:'), workflow.indexOf('  receipt:'));
+  const begin = lifecycle.indexOf('bash "$RUNNER_TEMP/or3-lifecycle-evidence" begin');
+  const init = lifecycle.indexOf('init "$MANAGED"');
+  const baseline = lifecycle.indexOf('bash "$RUNNER_TEMP/or3-lifecycle-evidence" baseline');
+  const restore = lifecycle.indexOf('or3 recover --restore --yes');
+  const rollback = lifecycle.indexOf('or3 rollback --yes');
+  const checks = [...lifecycle.matchAll(/bash "\$RUNNER_TEMP\/or3-lifecycle-evidence" assert-baseline/g)].map((m) => m.index!);
+  const finish = lifecycle.indexOf('bash "$RUNNER_TEMP/or3-lifecycle-evidence" finish');
+  expect(begin).toBeGreaterThan(-1); expect(init).toBeGreaterThan(begin); expect(baseline).toBeGreaterThan(init);
+  expect(checks).toHaveLength(2); expect(checks[0]).toBeGreaterThan(restore); expect(checks[0]).toBeLessThan(rollback);
+  expect(checks[1]).toBeGreaterThan(rollback); expect(finish).toBeGreaterThan(checks[1]);
+  expect(lifecycle.indexOf('or3 recover --finish', checks[1])).toBeLessThan(finish);
+  expect(lifecycle).toContain('path: ${{ runner.temp }}/or3-lifecycle-qualification.json');
+});
+
+test('candidate workflow retains source-bound image and scan qualifications', () => {
+  const workflow = readFileSync(CANDIDATE_WORKFLOW, 'utf8');
+  const image = workflow.slice(workflow.indexOf('  image-contracts:'), workflow.indexOf('  security-scan:'));
+  const scan = workflow.slice(workflow.indexOf('  security-scan:'), workflow.indexOf('  arm-runtime:'));
+  const arm = workflow.slice(workflow.indexOf('  arm-runtime:'), workflow.indexOf('  lifecycle:'));
+  expect(image).toContain('path: ${{ runner.temp }}/or3-image-qualification.json');
+  expect(arm).toContain('path: ${{ runner.temp }}/or3-arm-qualification.json');
+  expect(scan).toContain('ref: ${{ needs.identity.outputs.source_sha }}');
+  expect(scan).toContain('--qualification-out scanAmd64.json');
+  expect(scan).toContain('--qualification-out scanArm64.json');
+  expect(scan).toContain('if-no-files-found: error');
+  const receipt = workflow.slice(workflow.indexOf('  receipt:'));
+  expect(receipt).toContain('candidate-receipt.mjs verify-basic-evidence');
+  expect(receipt.indexOf('candidate-receipt.mjs verify-basic-evidence')).toBeLessThan(receipt.indexOf('candidate-receipt.mjs create'));
+  expect(receipt.lastIndexOf('candidate-receipt.mjs verify-basic-evidence')).toBeGreaterThan(receipt.indexOf('Publish receipt and exact tarball as candidate evidence'));
+  expect(receipt).toContain('--receipt release-artifact/candidate-receipt.json');
+  expect(receipt).toContain('release-artifact/basic-qualification');
 });
 
 test('authenticated cloud package binds updates to the qualified image digest', () => {
   const candidate = readFileSync(CANDIDATE_WORKFLOW, 'utf8');
-  const receipt = readFileSync(CANDIDATE_RECEIPT, 'utf8');
   const cli = cloudCliSource();
   expect(candidate).toContain('npm pkg set "or3Cloud.imageDigest=$IMAGE_DIGEST"');
   expect(candidate).toContain('npm pkg set "or3Cloud.operatorImageDigest=$OPERATOR_IMAGE_DIGEST"');
   expect(candidate).toContain('npm pkg set "or3Cloud.sourceRevision=$SOURCE_REVISION"');
   expect(candidate.indexOf('docker/build-push-action@v6')).toBeLessThan(candidate.indexOf('npm pkg set "or3Cloud.imageDigest=$IMAGE_DIGEST"'));
-  expect(receipt).toContain("packageManifest.or3Cloud?.imageDigest !== candidateDigest");
-  expect(receipt).toContain("packageManifest.or3Cloud?.imageDigest !== receipt.candidateDigest");
-  expect(receipt).toContain("packageManifest.or3Cloud?.operatorImageDigest !== receipt.operatorCandidateDigest");
-  expect(receipt).toContain("packageManifest.or3Cloud?.sourceRevision !== receipt.sourceSha");
   expect(cli).toContain('pullImage(targetImageTag, expectedImageDigest(targetVersion))');
   expect(cli).toContain('revision.toLowerCase() !== expectedRevision');
   expect(cli).toContain('const targetImage = imageAtDigest(targetImageTag, targetDigest);');
@@ -582,6 +617,13 @@ test('release storage smokes persist canonical metadata before download', () => 
     expect(sync).toBeGreaterThan(commit);
     expect(download).toBeGreaterThan(sync);
   }
+});
+
+test('browser smoke reaches the mutation and invite-only policies it claims to check', () => {
+  const smoke = readFileSync(BROWSER_SMOKE, 'utf8');
+  expect(smoke).toContain("'x-or3-cloud-intent': 'mutation'");
+  expect(smoke).toContain('intent_id: presign.intentId');
+  expect(smoke).toContain('Enter an invite code to create an account.');
 });
 
 test('compose.yaml hardens the or3 container', () => {

@@ -1,7 +1,8 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { lstat, readdir } from 'node:fs/promises';
 import { isAbsolute, join, resolve } from 'node:path';
 import { verifiedManagedAssetContents } from '../deployment/assets';
+import { managedProviderProfile, parseEnv, restoreStorageConfiguration } from '../deployment/env';
 import type {
   BackupEntry,
   BackupInventory,
@@ -14,6 +15,8 @@ import { assertDeploymentIdentity, DEPLOYMENT_ENV_KEYS, isVersion } from '../dep
 import { backupDirectory, deploymentPaths } from '../deployment/paths';
 import { lifecycleFaults } from '../lifecycle-faults';
 import { fileExists, readText, sha256File, writeSecure } from '../util/fs';
+import { remoteSource } from './remote';
+import { backupHasVaultCoverage } from './vault';
 
 export const BACKUP_ID_PATTERN = /^backup-[0-9A-Za-z-]+$/;
 
@@ -131,7 +134,7 @@ export async function inspectBackupEntry(backupsRoot: string, entry: string, dir
   }
   try {
     const raw = JSON.parse(await readText(join(path, 'manifest.json'))) as { schemaVersion?: unknown };
-    if (typeof raw.schemaVersion === 'number' && raw.schemaVersion > 1) {
+    if (typeof raw.schemaVersion === 'number' && raw.schemaVersion > 2) {
       return {
         kind: 'unsupported',
         entryName: entry,
@@ -161,9 +164,12 @@ export async function inspectBackupEntry(backupsRoot: string, entry: string, dir
       };
     }
     let bytes = 0;
-    for (const file of ['data.tgz', 'config.env', 'manifest.json', 'manifest.auth', ...(manifest.vaultSha256 ? ['vault.backup'] : [])]) {
+    for (const file of ['data.tgz', 'config.env', 'manifest.json', 'manifest.auth', ...(manifest.vaultSha256 ? ['vault.backup'] : []), ...(manifest.schemaVersion === 2 ? [manifest.remote.file] : [])]) {
       bytes += (await lstat(join(path, file))).size;
     }
+    const savedConfig = await readText(join(path, 'config.env'));
+    if (createHash('sha256').update(savedConfig).digest('hex') !== manifest.configSha256) throw new Error(`Backup configuration changed during inventory for ${manifest.backupId}.`);
+    const recoveryArtifactsComplete = Boolean(manifest.managedAssetSha256) && backupHasVaultCoverage(manifest, parseEnv(savedConfig));
     return {
       kind: 'verified',
       backup: {
@@ -173,6 +179,10 @@ export async function inspectBackupEntry(backupsRoot: string, entry: string, dir
         path,
         bytes,
         dataSha256: manifest.dataSha256,
+        schemaVersion: manifest.schemaVersion,
+        recoveryArtifactsComplete,
+        ...(manifest.snapshotKind ? { snapshotKind: manifest.snapshotKind } : {}),
+        ...(manifest.schemaVersion === 2 ? { remoteKind: manifest.remote.kind } : {}),
       },
     };
   } catch (error) {
@@ -237,6 +247,10 @@ export function assertBackupMatchesDeployment(manifest: Partial<BackupManifest>,
     throw new Error(`Backup ${manifest.backupId} does not match the managed deployment mode.`);
   }
   assertDeploymentIdentity(state, env);
+  if (managedProviderProfile(backupEnv) !== managedProviderProfile(env)) {
+    throw new Error('backup-profile-mismatch: backup and deployment use different managed provider profiles.');
+  }
+  restoreStorageConfiguration(backupEnv, env);
   const expected: Record<string, string | undefined> = {
     OR3_COMPOSE_PROJECT: state.composeProject,
     OR3_VOLUME_NAME: state.volumeName,
@@ -287,8 +301,9 @@ export async function readManifest(backupPath: string, authenticatedForDirectory
   if (authenticatedForDirectory) await assertBackupAuthentication(authenticatedForDirectory, backupPath, manifestContents);
   const manifest = JSON.parse(manifestContents) as BackupManifest;
   if (
-    (manifest.schemaVersion as unknown) !== 1 ||
+    (manifest.schemaVersion !== 1 && manifest.schemaVersion !== 2) ||
     !BACKUP_ID_PATTERN.test(manifest.backupId) ||
+    (manifest.snapshotKind !== undefined && manifest.snapshotKind !== 'full' && manifest.snapshotKind !== 'safety') ||
     !Number.isFinite(Date.parse(manifest.createdAt)) ||
     !isVersion(manifest.appVersion) ||
     !manifest.image ||
@@ -305,6 +320,31 @@ export async function readManifest(backupPath: string, authenticatedForDirectory
   if (manifest.configSha256) {
     const configActual = await sha256File(join(backupPath, 'config.env'));
     if (configActual !== manifest.configSha256) throw new Error(`Backup configuration checksum mismatch for ${manifest.backupId}.`);
+  }
+  const config = parseEnv(await readText(join(backupPath, 'config.env')));
+  const storage = (config.NUXT_PUBLIC_STORAGE_PROVIDER ?? '').trim().toLowerCase();
+  if (manifest.schemaVersion === 1 && storage === 's3') {
+    throw new Error(`Invalid backup manifest for ${manifest.backupId}: schema-1 S3 snapshots do not contain recoverable remote objects.`);
+  }
+  if (manifest.schemaVersion === 2) {
+    const remote = manifest.remote;
+    if (manifest.storage !== 's3' || storage !== 's3' || !remote ||
+        !(remote.kind === 's3-copy-v1' && remote.file === 'remote-objects.tar' || remote.kind === 's3-reference-v1' && remote.file === 'remote-inventory.json') ||
+        !/^[a-f0-9]{64}$/.test(remote.sha256) || !/^[a-f0-9]{64}$/.test(remote.inventorySha256) ||
+        !Number.isSafeInteger(remote.bytes) || remote.bytes < 1 || !Number.isSafeInteger(remote.objectCount) || remote.objectCount < 0 || remote.objectCount > 100_000 ||
+        !Number.isSafeInteger(remote.payloadBytes) || remote.payloadBytes < 0 || remote.payloadBytes > remote.objectCount * 2 ** 30 ||
+        remote.providerVersion !== '0.0.15' || remote.kind === 's3-reference-v1' && (remote.bytes > 64 * 1024 * 1024 || remote.inventorySha256 !== remote.sha256)) {
+      throw new Error(`Invalid backup manifest for ${manifest.backupId}: invalid S3 remote snapshot.`);
+    }
+    const source = remoteSource(config);
+    if (!remote.source || remote.source.endpointOrigin !== source.endpointOrigin || remote.source.bucket !== source.bucket || remote.source.keyPrefix !== source.keyPrefix) {
+      throw new Error(`Invalid backup manifest for ${manifest.backupId}: S3 source differs from the authenticated configuration.`);
+    }
+    const file = join(backupPath, remote.file);
+    const info = await lstat(file);
+    if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size !== remote.bytes || await sha256File(file) !== remote.sha256) {
+      throw new Error(`Backup remote checksum mismatch or size mismatch for ${manifest.backupId}.`);
+    }
   }
   if (manifest.vaultSha256 && await sha256File(join(backupPath, 'vault.backup')) !== manifest.vaultSha256) throw new Error(`Vault backup checksum mismatch for ${manifest.backupId}.`);
   await verifiedManagedAssetContents(backupPath, manifest);

@@ -1,10 +1,20 @@
 export type Mode = 'local' | 'public';
+export type RemoteSource = { endpointOrigin: string; bucket: string; keyPrefix: string };
+export type RemoteSnapshot = {
+  sha256: string;
+  bytes: number;
+  inventorySha256: string;
+  objectCount: number;
+  payloadBytes: number;
+  source: RemoteSource;
+  providerVersion: string;
+} & ({ kind: 's3-copy-v1'; file: 'remote-objects.tar' } | { kind: 's3-reference-v1'; file: 'remote-inventory.json' });
 export type Operation = 'init' | 'update' | 'restore' | 'adopt' | 'credentials-reset';
 export type PendingOperation = NonNullable<ManagedState['incompleteOperation']>;
 
 /** Last observed backup milestone, not a promise of current service health. */
 export type BackupProgress = {
-  stage: 'preflight' | 'maintenance' | 'capturing' | 'restarting' | 'verifying' | 'cleanup' | 'complete' | 'failed';
+  stage: 'preflight' | 'maintenance' | 'capturing' | 'restarting' | 'remote-capture' | 'verifying' | 'cleanup' | 'complete' | 'failed';
   service: 'running' | 'stopped' | 'restarting' | 'healthy' | 'unknown';
   artifact: 'not-created' | 'partial' | 'captured' | 'verified' | 'removed' | 'unknown';
   message: string;
@@ -59,6 +69,8 @@ export type ManagedState = {
     /** Whether the managed app was running before a standalone backup. */
     initialAppRunning?: boolean;
     backupProgress?: BackupProgress;
+    /** Known additive writes completed before the operation was journaled. */
+    remoteReconcile?: { uploaded: number; markersCreated: number };
     /** Whether an adopted source should be restarted if adoption fails. */
     sourceInitiallyRunning?: boolean;
     targetVersion?: string;
@@ -74,8 +86,9 @@ export type ManagedState = {
 };
 
 export type BackupManifest = {
-  schemaVersion: 1;
   backupId: string;
+  /** Full snapshots completed canonical inspection; safety snapshots preserve bytes only. */
+  snapshotKind?: 'full' | 'safety';
   createdAt: string;
   appVersion: string;
   image: string;
@@ -98,7 +111,7 @@ export type BackupManifest = {
   caddyConfigVolume?: string;
   deploymentId?: string;
   port?: number;
-};
+} & ({ schemaVersion: 1; storage?: never; remote?: never } | { schemaVersion: 2; storage: 's3'; remote: RemoteSnapshot });
 
 type RollbackPoint = {
   appVersion: string;
@@ -283,4 +296,9 @@ export type BackupListing = {
   path: string;
   bytes: number;
   dataSha256: string;
+  schemaVersion: 1 | 2;
+  remoteKind?: RemoteSnapshot['kind'];
+  snapshotKind?: 'full' | 'safety';
+  /** Authenticated assets and vault coverage exist; not proof of a restore drill. */
+  recoveryArtifactsComplete?: boolean;
 };

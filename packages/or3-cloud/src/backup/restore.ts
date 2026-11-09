@@ -1,11 +1,13 @@
 import { join } from 'node:path';
+import { assertExistingVaultCustody } from './vault';
+import { assertSupportedBackupProfile, validateCanonicalBackupReferences } from './references';
 import {
   assertRestorableManagedAssets,
   MANAGED_ASSET_INVENTORY_VERSION,
   restoreManagedAssets,
 } from '../deployment/assets';
 import type { BackupManifest, ManagedState } from '../deployment/contracts';
-import { dashboardUpdatesEnabled, parseEnv, secretValues, serializeEnv, withoutDashboardOperator } from '../deployment/env';
+import { dashboardUpdatesEnabled, parseEnv, restoreStorageConfiguration, secretValues, serializeEnv, withoutDashboardOperator } from '../deployment/env';
 import { imageAtDigest } from '../deployment/identity';
 import { deploymentPaths } from '../deployment/paths';
 import { updatePending } from '../deployment/state-store';
@@ -29,9 +31,9 @@ import {
   restoreVolumeArchive,
   validateVolumeArchive,
 } from './archive';
-import { validateCanonicalBackupReferences } from './references';
 import { assertBackupMatchesDeployment, readManifest, recordedBackupPath } from './manifests';
 import { rebindRestoredGenerations } from './generation-restore';
+import { checkRemoteCopyTarget, checkRemoteTarget } from './remote';
 
 /** Offline only: the managed caller has stopped writers and extracted this backup. */
 export async function restoreGenerationIdentities(directory: string, state: ManagedState, env: Record<string, string>, backupPath: string, options: { previousSafetySnapshot?: boolean } = {}) {
@@ -82,8 +84,10 @@ const VERIFY_RESTORED_DATA_SCRIPT = `
 const fs = require('node:fs');
 const Database = require('/app/.output/server/node_modules/better-sqlite3');
 const validFilesystemPayload = ${assertFilesystemPayloadHash.toString()};
-const paths = [process.env.OR3_BASIC_AUTH_DB_PATH, process.env.OR3_SQLITE_DB_PATH].filter(Boolean);
-if (paths.length !== 2) throw new Error('Both managed database paths must be configured');
+const auth = process.env.AUTH_PROVIDER || 'basic-auth', storage = process.env.NUXT_PUBLIC_STORAGE_PROVIDER || 'fs';
+if (!(auth === 'basic-auth' && storage === 'fs' || auth === 'clerk' && storage === 's3')) throw new Error('Unsupported restored provider profile');
+const paths = auth === 'basic-auth' ? [process.env.OR3_BASIC_AUTH_DB_PATH, process.env.OR3_SQLITE_DB_PATH] : [process.env.OR3_SQLITE_DB_PATH];
+if (paths.some(path => !path)) throw new Error('Managed database paths must be configured');
 for (const path of paths) {
   const databasePath = fs.realpathSync(path);
   if (!fs.statSync(databasePath).isFile()) throw new Error('Restored database payload must be a regular file');
@@ -104,7 +108,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const storageRoot = path.resolve(process.env.OR3_STORAGE_FS_ROOT || '/data/storage');
 const workspacesRoot = path.join(storageRoot, 'workspaces');
-if ((storageRoot === '/data' || storageRoot.startsWith('/data/')) && fs.existsSync(workspacesRoot)) {
+if (storage === 'fs' && (storageRoot === '/data' || storageRoot.startsWith('/data/')) && fs.existsSync(workspacesRoot)) {
   const chunk = Buffer.alloc(65536);
   for (const workspace of fs.readdirSync(workspacesRoot, { withFileTypes: true }).filter(entry => /^[a-zA-Z0-9_-]+$/.test(entry.name))) {
     const directory = path.join(workspacesRoot, workspace.name);
@@ -147,7 +151,7 @@ export async function restoreBackupData(
   state: ManagedState,
   env: Record<string, string>,
   backupPath: string,
-  options: { recreateDataVolume?: boolean; beforeStart?: () => Promise<void>; previousSafetySnapshot?: boolean } = {},
+  options: { recreateDataVolume?: boolean; beforeStart?: () => Promise<void>; previousSafetySnapshot?: boolean; remoteReferencePolicy?: 'warn' } = {},
 ) {
   const manifest = await readManifest(backupPath, directory);
   assertRestorableManagedAssets(manifest);
@@ -156,9 +160,25 @@ export async function restoreBackupData(
     throw new Error(`Backup ${manifest.backupId} configuration does not match its manifest.`);
   }
   assertBackupMatchesDeployment(manifest, backupEnv, state, env);
+  if (manifest.schemaVersion === 1) assertSupportedBackupProfile(backupEnv);
+  else if ((!options.beforeStart && options.remoteReferencePolicy !== 'warn') ||
+      (options.remoteReferencePolicy === 'warn' && (!options.previousSafetySnapshot || options.beforeStart)) ||
+      (options.previousSafetySnapshot && manifest.remote.kind !== 's3-reference-v1')) {
+    throw new Error('S3 restore requires a journaled startup or a reference-only safety snapshot.');
+  }
   if (manifest.imageDigest) await requireImageDigest(manifest.image, manifest.imageDigest, `Backup ${manifest.backupId}`);
+  await assertExistingVaultCustody(directory, state, manifest, backupPath, backupEnv);
   await validateVolumeArchive(directory, state.mode, env, backupPath, backupEnv.OR3_STORAGE_FS_ROOT);
-  if (!options.previousSafetySnapshot) {
+  if (manifest.schemaVersion === 2 && manifest.remote.kind === 's3-copy-v1') {
+    const result = await checkRemoteCopyTarget(directory, manifest, env, backupPath, manifest.remote);
+    if (result.missing || result.mismatched) throw new Error('S3 restore target has missing or mismatched objects.');
+  } else if (manifest.schemaVersion === 2 && manifest.remote.kind === 's3-reference-v1') {
+    const result = await checkRemoteTarget(directory, manifest, env, backupPath, manifest.remote);
+    if (result.missing || result.mismatched) {
+      if (options.remoteReferencePolicy !== 'warn') throw new Error('S3 reference target has missing or mismatched objects.');
+      console.warn(`Restoring the pre-mutation snapshot with ${result.missing} missing and ${result.mismatched} mismatched S3 objects; attachment completeness is not certified.`);
+    }
+  } else if (!options.previousSafetySnapshot) {
     await validateCanonicalBackupReferences(directory, { ...backupEnv, OR3_IMAGE: imageAtDigest(manifest.image, manifest.imageDigest) }, backupPath);
   } else {
     // Recovery preserves the exact prior byte state, including pre-existing
@@ -178,11 +198,11 @@ export async function restoreBackupData(
     && Boolean(manifest.managedAssetSha256?.['compose.operator.yaml']);
   const restoredEnv = restoresOperatorOverlay
     ? {
-        ...backupEnv,
+        ...restoreStorageConfiguration(backupEnv, env),
         OR3_IMAGE: imageAtDigest(manifest.image, manifest.imageDigest),
       }
     : withoutDashboardOperator({
-        ...backupEnv,
+        ...restoreStorageConfiguration(backupEnv, env),
         OR3_IMAGE: imageAtDigest(manifest.image, manifest.imageDigest),
       });
 
@@ -210,6 +230,8 @@ export async function restoreBackupData(
     '-v', `${state.volumeName}:/data`,
     '--env', `OR3_BASIC_AUTH_DB_PATH=${restoredEnv.OR3_BASIC_AUTH_DB_PATH ?? ''}`,
     '--env', `OR3_SQLITE_DB_PATH=${restoredEnv.OR3_SQLITE_DB_PATH ?? ''}`,
+    '--env', `AUTH_PROVIDER=${restoredEnv.AUTH_PROVIDER ?? restoredEnv.OR3_AUTH_PROVIDER ?? 'basic-auth'}`,
+    '--env', `NUXT_PUBLIC_STORAGE_PROVIDER=${restoredEnv.NUXT_PUBLIC_STORAGE_PROVIDER ?? 'fs'}`,
     '--env', `OR3_STORAGE_FS_ROOT=${restoredEnv.OR3_STORAGE_FS_ROOT ?? '/data/storage'}`,
     '--entrypoint', 'sh', restoredEnv.OR3_IMAGE,
     ...containerNodeCommand(VERIFY_RESTORED_DATA_SCRIPT).slice(1),
@@ -217,11 +239,18 @@ export async function restoreBackupData(
   if (!snapshotCheck.ok) {
     throw new Error(`Restored snapshot integrity verification failed. ${redact(snapshotCheck.stderr, secretValues(restoredEnv))}`);
   }
-  await restoreGenerationIdentities(directory, state, restoredEnv, backupPath, { previousSafetySnapshot: options.previousSafetySnapshot });
+  if (manifest.schemaVersion === 1) await restoreGenerationIdentities(directory, state, restoredEnv, backupPath, { previousSafetySnapshot: options.previousSafetySnapshot });
   // The caller journals the point at which application writes become possible
   // before requesting startup. Recovery snapshots keep their existing phase.
   await options.beforeStart?.();
   await startProject(directory, state.mode, restoredEnv);
+  if (manifest.schemaVersion === 2 && manifest.remote.kind === 's3-copy-v1') {
+    const result = await checkRemoteCopyTarget(directory, manifest, restoredEnv, backupPath, manifest.remote);
+    if (result.missing || result.mismatched) throw new Error('S3 restore target has missing or mismatched objects after startup.');
+  } else if (manifest.schemaVersion === 2 && manifest.remote.kind === 's3-reference-v1' && options.remoteReferencePolicy !== 'warn') {
+    const result = await checkRemoteTarget(directory, manifest, restoredEnv, backupPath, manifest.remote);
+    if (result.missing || result.mismatched) throw new Error('S3 reference target has missing or mismatched objects after startup.');
+  }
   return manifest;
 }
 
@@ -240,13 +269,13 @@ export async function restorePreMutationSnapshot(
   const previous = await recordedBackupPath(directory, pending);
   await updatePending(directory, state, { phase: 'restoring-previous' });
   if (pending.recreateDataVolume) {
-    await restoreBackupData(directory, state, env, previous.path, { recreateDataVolume: true, previousSafetySnapshot: true });
+    await restoreBackupData(directory, state, env, previous.path, { recreateDataVolume: true, previousSafetySnapshot: true, remoteReferencePolicy: 'warn' });
     return previous;
   }
   if (pending.previousRootOwnership) {
     await pullAndRequireImage(state.image, state.imageDigest, 'Previous deployment');
     await setManagedVolumeRootOwnership(directory, state, env, state.image, pending.previousRootOwnership);
   }
-  await restoreBackupData(directory, state, env, previous.path, { previousSafetySnapshot: true });
+  await restoreBackupData(directory, state, env, previous.path, { previousSafetySnapshot: true, remoteReferencePolicy: 'warn' });
   return previous;
 }

@@ -24,6 +24,28 @@ const outPath = flagValue('--out');
 const syftPath = flagValue('--syft');
 const trivyPath = flagValue('--trivy');
 const platform = flagValue('--platform');
+const qualificationPath = flagValue('--qualification-out');
+const profile = flagValue('--profile');
+const sourceSha = flagValue('--source-sha');
+const runId = flagValue('--run-id');
+const expectedDigest = flagValue('--candidate-digest');
+
+if (qualificationPath) {
+  const allowed = new Set(['--out', '--syft', '--trivy', '--platform', '--qualification-out', '--profile', '--source-sha', '--run-id', '--candidate-digest']);
+  const seen = new Set();
+  let valid = args[0] === image;
+  for (let i = 1; i < args.length; i += 2) {
+    if (!allowed.has(args[i]) || seen.has(args[i]) || !args[i + 1] || args[i + 1].startsWith('--')) valid = false;
+    seen.add(args[i]);
+  }
+  const suffix = profile === 'basic-sqlite-fs' ? '' : profile === 'clerk-sqlite-s3' ? 'clerk-s3-' : null;
+  const candidate = suffix !== null && /^[0-9a-f]{40}$/.test(sourceSha ?? '') && /^sha256:[0-9a-f]{64}$/.test(expectedDigest ?? '')
+    ? new RegExp(`^ghcr\\.io/saluana/or3-chat:candidate-${suffix}\\d+\\.\\d+\\.\\d+-${sourceSha}@${expectedDigest}$`) : null;
+  if (!valid || !candidate?.test(image ?? '') || !/^\d+$/.test(runId ?? '') || !['linux/amd64', 'linux/arm64'].includes(platform) || (outPath && resolve(outPath) === resolve(qualificationPath))) {
+    console.error('Qualification requires a pinned candidate image with matching profile, source, digest, run and architecture.');
+    process.exit(2);
+  }
+}
 
 if (!image) {
   console.error('Usage: node scripts/release/scan-image.mjs <image> [--out <evidence.json>] [--syft <path>] [--trivy <path>] [--platform <linux/arch>]');
@@ -85,6 +107,12 @@ async function runSyft() {
     const detail = result.stderr.trim() || result.stdout.trim();
     return { sbomPath: null, note: detail ? `syft failed: ${detail}` : 'syft is not installed; SBOM skipped.' };
   }
+  if (qualificationPath) {
+    try {
+      const sbom = JSON.parse(result.stdout);
+      if (typeof sbom.spdxVersion !== 'string' || !Array.isArray(sbom.packages) || !sbom.packages.length) throw new Error('invalid SBOM');
+    } catch { return { sbomPath: null, note: 'syft did not produce a usable SPDX SBOM.' }; }
+  }
   const sbomPath = resolve(`or3-sbom-${Date.now()}.spdx.json`);
   await writeFile(sbomPath, result.stdout);
   return { sbomPath, note: null };
@@ -111,6 +139,7 @@ async function runTrivy() {
   let parsed;
   try {
     parsed = JSON.parse(result.stdout);
+    if (qualificationPath && (parsed?.SchemaVersion !== 2 || !Array.isArray(parsed.Results) || !parsed.Results.length || parsed.Results.some((entry) => !entry || typeof entry.Target !== 'string' || !entry.Target || (entry.Vulnerabilities !== undefined && (!Array.isArray(entry.Vulnerabilities) || entry.Vulnerabilities.some((v) => !v || !['VulnerabilityID', 'PkgName', 'InstalledVersion'].every((key) => typeof v[key] === 'string' && v[key]) || !['UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(v.Severity))))))) throw new Error('invalid Trivy report');
   } catch {
     return {
       scanner: 'trivy',
@@ -182,9 +211,13 @@ if (outPath) {
   process.stdout.write(serialized);
 }
 
+const slsa = evidence.provenance?.[platform]?.SLSA ?? evidence.provenance?.SLSA;
+const provenanceBuildType = slsa?.buildType ?? slsa?.buildDefinition?.buildType;
 const incomplete = [
   !evidence.digest && 'image digest could not be resolved',
+  qualificationPath && evidence.digest !== expectedDigest && 'registry digest does not match the candidate',
   !evidence.provenance && 'build provenance could not be resolved',
+  qualificationPath && (typeof provenanceBuildType !== 'string' || !provenanceBuildType) && 'selected platform build provenance is missing or invalid',
   !evidence.sbomPath && 'SBOM generation did not complete',
   !trivy.counts && 'vulnerability scan did not produce counts',
 ].filter(Boolean);
@@ -196,5 +229,10 @@ const gate = (evidence.high ?? 0) + (evidence.critical ?? 0);
 if (gate > 0) {
   console.error(`Release gate failed: ${evidence.high} high and ${evidence.critical} critical vulnerabilities in ${image}.`);
   process.exit(1);
+}
+if (qualificationPath) {
+  const artifact = { schemaVersion: 1, profile, check: platform === 'linux/amd64' ? 'scanAmd64' : 'scanArm64', result: 'passed', sourceSha, workflowRunId: runId, candidateDigest: expectedDigest };
+  await writeFile(resolve(qualificationPath), `${JSON.stringify(artifact, null, 2)}\n`, { flag: 'wx' });
+  console.log(`Wrote scan qualification to ${qualificationPath}`);
 }
 console.log(`Scan complete: ${evidence.high} high, ${evidence.critical} critical, ${evidence.medium} medium, ${evidence.low} low.`);

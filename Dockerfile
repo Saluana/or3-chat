@@ -15,17 +15,18 @@ FROM docker:27.5.1-cli@sha256:851f91d241214e7c6db86513b270d58776379aacc5eb9c4a87
 # Debian's stable bases still contain the zlib write-error overflow. Install
 # only the checksum-pinned Debian fix (CVE-2026-76844 / CVE-2026-85091), not a
 # moving unstable distribution. Its libc requirements are <= both base images.
-# Fetch from snapshot.debian.org: the live pool removes a version once it is
-# superseded, which would break every later build of this pinned file.
+# The exact snapshot.debian.org packages are vendored so a cold build does not
+# depend on the snapshot service; verify their checksums before extraction.
 # Package extraction runs natively; the tiny cleanup uses the target BusyBox
 # through BuildKit emulation when cross-building an image.
 FROM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS operator-base
 FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS patched-zlib
 ARG TARGETARCH
-ADD --checksum=sha256:8506ce550a81ac14b047608e0df121037d9cbb10c3cc28446f68cf8c1d9d31ce https://snapshot.debian.org/archive/debian/20261026T022331Z/pool/main/z/zlib/zlib1g_1.3.dfsg+really1.3.2-4_amd64.deb /zlib/amd64.deb
-ADD --checksum=sha256:aaf9e8cfc7d86771144c660d544806c886a5ae406f97bd50b62588a0718229ab https://snapshot.debian.org/archive/debian/20261026T022331Z/pool/main/z/zlib/zlib1g_1.3.dfsg+really1.3.2-4_arm64.deb /zlib/arm64.deb
+COPY scripts/docker/vendor/zlib/ /zlib/
 COPY --from=operator-base /var/lib/dpkg/status /zlib/operator-status
-RUN test "$(dpkg-deb --field /zlib/$TARGETARCH.deb Architecture)" = "$TARGETARCH" && \
+RUN echo '8506ce550a81ac14b047608e0df121037d9cbb10c3cc28446f68cf8c1d9d31ce  /zlib/amd64.deb' | sha256sum -c - && \
+    echo 'aaf9e8cfc7d86771144c660d544806c886a5ae406f97bd50b62588a0718229ab  /zlib/arm64.deb' | sha256sum -c - && \
+    test "$(dpkg-deb --field /zlib/$TARGETARCH.deb Architecture)" = "$TARGETARCH" && \
     dpkg-deb --extract /zlib/$TARGETARCH.deb /zlib/root && \
     dpkg-deb --control /zlib/$TARGETARCH.deb /zlib/control && \
     mkdir -p /zlib/distroless/var/lib/dpkg/status.d /zlib/operator/var/lib/dpkg/info && \
@@ -61,12 +62,15 @@ WORKDIR /operator
 # build below still receives the real release version from COPY . . .
 FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS dependency-manifests
 WORKDIR /app
-COPY package.json package-lock.json ./
+ARG OR3_DOCKER_PROFILE=basic-sqlite-fs
+ENV OR3_DOCKER_PROFILE=$OR3_DOCKER_PROFILE
+COPY package.json package-lock.json package-lock.clerk-sqlite-s3.json ./
 COPY packages/create-or3-chat/first-party-versions.json ./packages/create-or3-chat/first-party-versions.json
 COPY scripts/docker/prepare-manifest.mjs ./scripts/docker/prepare-manifest.mjs
 COPY scripts/release/check-lock-drift.mjs ./scripts/release/check-lock-drift.mjs
 RUN node scripts/docker/prepare-manifest.mjs package.json && \
     node scripts/release/check-lock-drift.mjs && \
+    if [ "$OR3_DOCKER_PROFILE" = clerk-sqlite-s3 ]; then cp package-lock.clerk-sqlite-s3.json package-lock.json; fi && \
     npm pkg set version=0.0.0-docker-dependencies && \
     node -e 'const fs=require("node:fs");const p="package-lock.json";const lock=JSON.parse(fs.readFileSync(p,"utf8"));lock.version="0.0.0-docker-dependencies";lock.packages[""].version=lock.version;fs.writeFileSync(p,JSON.stringify(lock,null,2)+"\n")'
 
@@ -75,7 +79,9 @@ RUN node scripts/docker/prepare-manifest.mjs package.json && \
 # only the runtime and static operator tools vary across output architectures.
 FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS build
 WORKDIR /app
-ENV NODE_ENV=development \
+ARG OR3_DOCKER_PROFILE=basic-sqlite-fs
+ENV OR3_DOCKER_PROFILE=$OR3_DOCKER_PROFILE \
+    NODE_ENV=development \
     NODE_OPTIONS=--max-old-space-size=4096 \
     NPM_CONFIG_FETCH_RETRIES=5 \
     NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
@@ -86,9 +92,8 @@ RUN npm install --global npm@11.6.2
 COPY --from=dependency-manifests /app/package.json /app/package-lock.json ./
 COPY packages/plugin-sdk ./packages/plugin-sdk
 COPY scripts/docker/preflight-registry.mjs ./scripts/docker/preflight-registry.mjs
-# The committed package-lock.json is the FIXED-PROFILE lock: it is generated
-# from the pruned manifest (pinned first-party versions, inactive provider
-# stacks removed) and intentionally differs from the contributor manifest,
+# The selected lock is generated from the pruned manifest (pinned first-party
+# versions, inactive provider stacks removed) and differs from the contributor manifest,
 # which still lists every provider. The build never re-resolves the tree; the
 # drift check fails qualification if the committed lock no longer matches the
 # pruned manifest, then npm ci installs from that exact lock. Lifecycle scripts
@@ -104,6 +109,7 @@ COPY . .
 # dependency fixes as the contributor postinstall before compiling the app.
 RUN node node_modules/patch-package/index.js --error-on-fail
 RUN node scripts/docker/prepare-backup-inspection.mjs
+RUN node scripts/docker/prepare-remote-helper.mjs /tmp/or3-recovery-tools
 # Restore the real release version while retaining the fixed production
 # provider graph used for dependency installation.
 RUN node scripts/docker/prepare-manifest.mjs package.json
@@ -127,10 +133,25 @@ ENV SSR_AUTH_ENABLED=$SSR_AUTH_ENABLED \
     OR3_SYNC_PROVIDER=$OR3_SYNC_PROVIDER \
     OR3_STORAGE_ENABLED=$OR3_STORAGE_ENABLED \
     NUXT_PUBLIC_STORAGE_PROVIDER=$NUXT_PUBLIC_STORAGE_PROVIDER
+RUN if [ "$OR3_DOCKER_PROFILE" = clerk-sqlite-s3 ]; then \
+      test "$SSR_AUTH_ENABLED" = true && test "$AUTH_PROVIDER" = clerk && \
+      test "$OR3_GUEST_ACCESS_ENABLED" = false && test "$OR3_AUTH_REGISTRATION_MODE" = invite_only && \
+      test "$OR3_AUTH_AUTO_PROVISION" = false && test "$OR3_SYNC_ENABLED" = true && \
+      test "$OR3_SYNC_PROVIDER" = sqlite && test "$OR3_STORAGE_ENABLED" = true && \
+      test "$NUXT_PUBLIC_STORAGE_PROVIDER" = s3; \
+    fi
 # Cloud providers are initialized while Nitro prerenders routes. Supply only
 # disposable build-time values here: real credentials and paths remain runtime
 # environment values from Compose and are never copied into the image.
-RUN mkdir -p /tmp/or3-build/storage /tmp/or3-runtime-data/admin /tmp/or3-runtime-data/extensions && \
+RUN if [ "$OR3_DOCKER_PROFILE" = clerk-sqlite-s3 ]; then \
+      export NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_ZXhhbXBsZS5pbnZhbGlkJA \
+        NUXT_CLERK_SECRET_KEY=sk_test_build_only OR3_PUBLIC_DOMAIN=chat.example.invalid \
+        OR3_AUTH_INVITE_TOKEN_SECRET=or3-build-only-invite-token-not-for-runtime \
+        OR3_STORAGE_S3_REGION=build-only OR3_STORAGE_S3_BUCKET=build-only-bucket \
+        OR3_STORAGE_S3_ENDPOINT=https://storage.example.invalid \
+        OR3_STORAGE_S3_ACCESS_KEY_ID=build-only OR3_STORAGE_S3_SECRET_ACCESS_KEY=build-only; \
+    fi && \
+    mkdir -p /tmp/or3-build/storage /tmp/or3-runtime-data/admin /tmp/or3-runtime-data/extensions && \
     chown -R 65532:65532 /tmp/or3-runtime-data && \
     OR3_BASIC_AUTH_DB_PATH=/tmp/or3-build/auth.sqlite \
     OR3_BASIC_AUTH_JWT_SECRET=or3-build-only-jwt-secret-not-for-runtime \
@@ -167,6 +188,7 @@ COPY scripts/docker/vault-entrypoint.mjs /app/vault/entrypoint.mjs
 COPY --from=build --chown=65532:65532 /app/.output ./.output
 COPY --from=build --chown=65532:65532 /app/scripts/docker/runtime-entrypoint.mjs ./scripts/docker/runtime-entrypoint.mjs
 COPY --from=build --chown=65532:65532 /app/scripts/docker/backup-inspect.mjs /app/scripts/docker/backup-inspection-profile.json ./scripts/docker/
+COPY --from=build --chown=65532:65532 /tmp/or3-recovery-tools/ ./scripts/docker/
 COPY --from=build --chown=65532:65532 /tmp/or3-runtime-data /data
 COPY --from=runtime-tools /bin/ /bin/
 

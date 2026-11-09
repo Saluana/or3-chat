@@ -17,6 +17,7 @@ test('every mutating command holds the deployment lease', () => {
     ['backup'],
     ['backup', 'prune'],
     ['backup', 'export', 'id', 'destination'],
+    ['vault-key', 'export', '--out', '/private/master.key'],
     ['verify'],
     ['verify', '--public'],
     ['restore', 'backup-id', '--yes'],
@@ -59,7 +60,7 @@ test('only read-only invocations and observation commands bypass the lease', () 
 test('the lease policy table lists exactly the commands that can change a deployment', () => {
   expect([...MUTATING_COMMANDS].sort()).toEqual([
     'adopt', 'backup', 'credentials', 'init', 'recover', 'remove', 'restart', 'restore',
-    'rollback', 'start', 'stop', 'update', 'verify',
+    'rollback', 'start', 'stop', 'update', 'vault-key', 'verify',
   ]);
 });
 

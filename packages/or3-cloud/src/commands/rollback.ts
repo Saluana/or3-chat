@@ -1,6 +1,9 @@
 import { join } from 'node:path';
 import { createPreMutationSnapshot } from '../backup/create';
 import { validateVolumeArchive } from '../backup/archive';
+import { assertExistingVaultCustody, assertVaultVolumesExist } from '../backup/vault';
+import { preflightRemoteRestore } from '../backup/remote';
+import { assertBackupSourceProfile, assertSupportedBackupProfile } from '../backup/references';
 import { assertBackupMatchesDeployment, readManifest, resolveBackup } from '../backup/manifests';
 import { assertRestoreFreeSpace, restoreBackupData, restorePreMutationSnapshot } from '../backup/restore';
 import { boolFlag, type Flags } from '../cli/args';
@@ -21,7 +24,7 @@ import {
 } from '../deployment/state-store';
 import { ensureDocker } from '../runtime/docker';
 import { assertSupportedHostArchitecture, imageDigest, pullAndRequireImage } from '../runtime/images';
-import { startProject } from '../runtime/project';
+import { managedVaultEnabled, startProject } from '../runtime/project';
 import { restoreRequiresVolumeRecreation } from '../runtime/volumes';
 import { readText } from '../util/fs';
 import { id, now, redact } from '../util/primitives';
@@ -44,13 +47,19 @@ export async function rollbackCommand(directory: string, flags: Flags) {
     throw new Error(`Backup ${manifest.backupId} configuration does not match its manifest.`);
   }
   assertBackupMatchesDeployment(manifest, backupEnv, loaded.state, loaded.env);
+  assertSupportedBackupProfile(loaded.env);
+  await assertBackupSourceProfile(loaded.directory, loaded.state, loaded.env);
   const recreateDataVolume = restoreRequiresVolumeRecreation(loaded.env, backupEnv);
   await pullAndRequireImage(point.image, point.imageDigest, 'Rollback');
   await assertSupportedHostArchitecture(point.image);
+  await assertExistingVaultCustody(loaded.directory, loaded.state, manifest, backupPath, backupEnv);
   await assertRestoreFreeSpace(loaded.directory, loaded.state, loaded.env, manifest, backupPath);
   // Snapshot capture already stops the app. Validate before journaling/capture,
   // using the authenticated archived FS root and retaining the later recheck.
   await validateVolumeArchive(loaded.directory, loaded.state.mode, loaded.env, backupPath, backupEnv.OR3_STORAGE_FS_ROOT);
+  const remotePreflight = manifest.schemaVersion === 2 ? await preflightRemoteRestore(loaded.directory, manifest, loaded.env, backupPath) : undefined;
+  const remoteReconcile = remotePreflight && 'uploaded' in remotePreflight ? remotePreflight : undefined;
+  if (remoteReconcile) console.log(`S3 reconciliation added ${remoteReconcile.uploaded} objects and ${remoteReconcile.markersCreated} markers; added objects remain if rollback fails.`);
   // The authenticated immediate rollback point is an internal byte-preservation
   // snapshot. Its previous published image may predate the canonical inspector.
   // Preserve that recovery path, with physical integrity checks still enforced.
@@ -67,6 +76,7 @@ export async function rollbackCommand(directory: string, flags: Flags) {
     targetImage: point.image,
     targetImageDigest: point.imageDigest,
     recreateDataVolume,
+    remoteReconcile,
     phase: 'prepared',
   };
   await markPending(loaded.directory, loaded.state, pending);
@@ -120,6 +130,7 @@ export async function rollbackCommand(directory: string, flags: Flags) {
       throw new Error(recoveredMessage!);
     }
     try {
+      if (managedVaultEnabled(loaded.directory, loaded.env)) await assertVaultVolumesExist(loaded.directory, loaded.state);
       await startProject(loaded.directory, loaded.state.mode, loaded.env);
       loaded.state.lastError = `Rollback to ${point.appVersion} stopped before data replacement: ${original}`;
       await clearPending(loaded.directory, loaded.state);

@@ -1,15 +1,16 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import type { ManagedProviderProfile } from '../deployment/env';
 
 type VerificationHealth = {
   status: 'ok';
   providers: {
-    auth: { provider: 'basic-auth' };
+    auth: { provider: 'basic-auth' | 'clerk' };
     sync: { provider: 'sqlite' };
-    storage: { provider: 'fs' };
+    storage: { provider: 'fs' | 's3' };
   };
 };
 
-export function validateVerificationHealth(value: unknown): VerificationHealth {
+export function validateVerificationHealth(value: unknown, profile: ManagedProviderProfile = 'basic-sqlite-fs'): VerificationHealth {
   const health = value as {
     status?: unknown;
     providers?: {
@@ -21,11 +22,11 @@ export function validateVerificationHealth(value: unknown): VerificationHealth {
   if (
     !health ||
     health.status !== 'ok' ||
-    health.providers?.auth?.provider !== 'basic-auth' ||
+    health.providers?.auth?.provider !== (profile === 'basic-sqlite-fs' ? 'basic-auth' : 'clerk') ||
     health.providers.sync?.provider !== 'sqlite' ||
-    health.providers.storage?.provider !== 'fs'
+    health.providers.storage?.provider !== (profile === 'basic-sqlite-fs' ? 'fs' : 's3')
   ) {
-    throw new Error('Public deep health does not report the managed Basic Auth + SQLite + filesystem profile.');
+    throw new Error(`Public deep health does not report the managed ${profile === 'basic-sqlite-fs' ? 'Basic Auth + SQLite + filesystem' : 'Clerk + SQLite + S3'} profile.`);
   }
   return health as VerificationHealth;
 }

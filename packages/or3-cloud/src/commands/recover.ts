@@ -1,13 +1,12 @@
-import { join } from 'node:path';
 import { restoreVolumeArchive } from '../backup/archive';
 import { cleanupJournaledPartialBackup, inspectUnclaimedBackupArtifacts } from '../backup/create';
 import { readManifest, resolveBackup } from '../backup/manifests';
 import { restorePreMutationSnapshot } from '../backup/restore';
+import { assertVaultVolumesExist } from '../backup/vault';
 import { boolFlag, type Flags } from '../cli/args';
 import { applyCredentialReset } from '../credentials/reset';
-import { restartSource, sourceMode } from '../deployment/adoption-source';
 import { emitOperationResult, type Mode, type OperationOutcome } from '../deployment/contracts';
-import { parseEnv, secretValues, serializeEnv, withoutProvisioningCredentials } from '../deployment/env';
+import { assertLegacyManagedProfile, parseEnv, secretValues, serializeEnv, withoutProvisioningCredentials } from '../deployment/env';
 import { observationFindings, observeDeployment } from '../deployment/observation';
 import { deploymentPaths } from '../deployment/paths';
 import {
@@ -22,12 +21,13 @@ import {
   commitRecoveredState,
   loadManaged,
   stateFromEnv,
+  updatePending,
   writeState,
 } from '../deployment/state-store';
-import { compose } from '../runtime/compose';
 import { ensureDocker } from '../runtime/docker';
+import { assertLegacyComposeProfile } from '../runtime/compose';
 import { imageDigest, pullAndRequireImage } from '../runtime/images';
-import { startProject, stopProject } from '../runtime/project';
+import { managedVaultEnabled, startProject, stopProject } from '../runtime/project';
 import { provisionManagedCredentials } from '../runtime/verification';
 import { readText, writeSecure } from '../util/fs';
 import { redact } from '../util/primitives';
@@ -114,6 +114,7 @@ async function runRecovery(
   const loaded = await loadManaged(directory);
   const pending = loaded.state.incompleteOperation;
   const decision = decideRecoveryAction(loaded.state);
+  if (pending || decision.action === 'reconcile-handoff') assertLegacyManagedProfile(loaded.env);
   // Handoff reconciliation is evaluated before the no-pending early return: an
   // application commit can be complete while its privileged handoff is not, and
   // that state records no pending operation.
@@ -142,9 +143,27 @@ async function runRecovery(
     const detail = await finishTargetReadyUpdate(loaded.directory, loaded.state, loaded.env, report);
     return { kind: 'recovered', operation: 'update', detail };
   }
+  // A resumed existing deployment must never let Compose create a missing
+  // custody volume and initialize a new vault. Init/adopt are excluded because
+  // their first startup intentionally creates a new vault. This existence check
+  // does not certify the contents; the restore path performs its own audit.
+  const resumesExistingVault = pending.operation === 'credentials-reset' || (pending.operation === 'backup'
+    ? pending.initialAppRunning !== false
+    : ['update', 'restore', 'rollback'].includes(pending.operation)
+      && (pending.phase === 'prepared' || pending.phase === 'snapshot-created'));
+  if (resumesExistingVault && managedVaultEnabled(loaded.directory, loaded.env)) await assertVaultVolumesExist(loaded.directory, loaded.state);
+  if (resumesExistingVault || pending.operation === 'init' || pending.operation === 'adopt') {
+    await assertLegacyComposeProfile(loaded.directory, loaded.state.mode, loaded.env);
+  }
+  if (pending.operation === 'credentials-reset' && pending.credentialReset?.nextEnv) assertLegacyManagedProfile(pending.credentialReset.nextEnv);
   // Plain recover finishes only proven non-destructive work. A deployment that
   // may have replaced data requires the explicit `--restore --yes` choice.
   const requiresExplicitRestore = decision.action === 'require-explicit-restore';
+  // This refusal must precede the catch handler: that handler can stop the
+  // target or restart the source, either of which changes a live adoption.
+  if (pending.operation === 'adopt' && requiresExplicitRestore && !explicitRestore) {
+    throw new Error('The adoption target may contain newer writes. Nothing was changed. Review recover --dry-run; recover --restore --yes explicitly discards target writes after the source backup.');
+  }
   try {
     if (pending.operation === 'backup') {
       // A failed artifact deletion must not strand a known-good deployment in
@@ -294,6 +313,7 @@ async function runRecovery(
       ) {
         throw new Error(`Source backup ${sourceManifest.backupId} does not match the managed adoption target.`);
       }
+      await updatePending(loaded.directory, loaded.state, { phase: 'target-mutating' });
       await stopProject(loaded.directory, loaded.state.mode);
       await restoreVolumeArchive(loaded.directory, loaded.state.mode, loaded.env, sourceBackupPath);
     }
@@ -344,20 +364,9 @@ async function runRecovery(
       ? secretValues(pending.credentialReset?.nextEnv ?? loaded.env)
       : secretValues(loaded.env);
     loaded.state.lastError = redact(error instanceof Error ? error.message : String(error), recoverySecrets);
-    if (pending.operation === 'adopt' && pending.sourceDirectory) {
-      try {
-        await compose(loaded.directory, loaded.state.mode, ['down']).catch(() => undefined);
-        const sourceEnv = parseEnv(await readText(join(pending.sourceDirectory, '.env')));
-        const sourceFiles = ['-f', join(pending.sourceDirectory, 'compose.yaml')];
-        const sourceModeValue = sourceMode(pending.sourceDirectory, sourceEnv) as Mode;
-        if (sourceModeValue === 'public') sourceFiles.push('-f', join(pending.sourceDirectory, 'compose.public.yaml'));
-        if (pending.sourceInitiallyRunning !== false) {
-          await restartSource(pending.sourceDirectory, sourceFiles, secretValues(sourceEnv));
-        }
-      } catch (recovery) {
-        loaded.state.lastError += ` Original deployment recovery failed: ${recovery instanceof Error ? recovery.message : String(recovery)}`;
-      }
-    }
+    // An interrupted adoption may already have served writes on the target.
+    // Do not automatically stop it or restart the old source after a failed
+    // recovery; their actual state must be inspected by the operator.
     await writeState(loaded.directory, loaded.state);
     throw new Error(`Recovery could not safely complete ${pending.operation}. Keep the operation record and run doctor. ${loaded.state.lastError}`);
   }

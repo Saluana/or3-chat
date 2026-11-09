@@ -26,6 +26,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { connect as connectTls } from 'node:tls';
 import { chromium, devices, webkit } from 'playwright';
+import { browserUploadFixture } from './browser-upload-fixture.mjs';
 
 const baseUrl = (process.env.OR3_SMOKE_URL ?? 'http://127.0.0.1:3017').replace(/\/$/, '');
 const NAV_TIMEOUT = 30_000;
@@ -168,6 +169,7 @@ async function browserJsonRequest(page, path, { body, method = 'POST' } = {}) {
         headers: {
             accept: 'application/json',
             ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+            ...(method === 'GET' ? {} : { 'x-or3-cloud-intent': 'mutation' }),
         },
         ...(body === undefined ? {} : { bodyText: JSON.stringify(body) }),
     });
@@ -243,12 +245,8 @@ async function dismissWelcomeCard(page) {
     await waitForHidden(backdrop, 'welcome card did not dismiss');
 }
 
-const uploadBytes = Buffer.from(
-    '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489',
-    'hex'
-);
-
 async function verifyStorageRoundTrip(page, workspaceId) {
+    const uploadBytes = browserUploadFixture();
     const hash = `sha256:${createHash('sha256').update(uploadBytes).digest('hex')}`;
     const presign = await browserJsonRequest(page, '/api/storage/presign-upload', {
         body: {
@@ -278,6 +276,7 @@ async function verifyStorageRoundTrip(page, workspaceId) {
             workspace_id: workspaceId,
             hash,
             storage_id: presign.storageId,
+            intent_id: presign.intentId,
             storage_provider_id: 'fs',
             mime_type: 'image/png',
             size_bytes: uploadBytes.length,
@@ -427,7 +426,7 @@ async function verifyAnonymousRegistrationDenied(page) {
         },
     );
     assert(
-        response.status === 403,
+        response.status === 403 && response.bodyText.includes('Enter an invite code to create an account.'),
         `anonymous registration was not denied: ${response.status} ${response.bodyText.slice(0, 300)}`,
     );
 }
@@ -458,6 +457,23 @@ async function verifySecurityHeaders(page) {
         headers.contentSecurityPolicy?.includes("connect-src 'self' https://openrouter.ai"),
         'Content-Security-Policy does not allow the OpenRouter connection origin',
     );
+}
+
+// The candidate qualification combines an authenticated local journey with a
+// separate, package-bound loopback Caddy proxy. Probe the actual proxy headers
+// in an isolated TLS context rather than requiring proxy headers on the app's
+// direct loopback port. Other runs retain their original same-origin check.
+async function verifyJourneySecurityHeaders(page, browser) {
+    const securityOrigin = process.env.OR3_SMOKE_SECURITY_ORIGIN;
+    if (!securityOrigin) return await verifySecurityHeaders(page);
+    assert(baseUrl === 'http://127.0.0.1:3017' && securityOrigin === 'https://localhost:3018', 'security proxy override is only supported for the disposable candidate journey');
+    const securityContext = await browser.newContext({ ignoreHTTPSErrors: true });
+    try {
+        const securityPage = await securityContext.newPage();
+        const response = await securityPage.goto(`${securityOrigin}/`, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT });
+        assert(response?.ok(), 'security proxy root did not return HTTP 200');
+        await verifySecurityHeaders(securityPage);
+    } finally { await securityContext.close(); }
 }
 
 /**
@@ -752,7 +768,7 @@ async function main() {
             'anonymous visitor had an authenticated session'
         );
         await verifyAnonymousRegistrationDenied(page);
-        await verifySecurityHeaders(page);
+        await verifyJourneySecurityHeaders(page, browser);
         console.log('PASS anonymous visit shows the invite-only sign-in gate');
 
         // 2. Owner sign-in via the UI.

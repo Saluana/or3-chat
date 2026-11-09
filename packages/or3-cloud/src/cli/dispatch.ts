@@ -12,12 +12,14 @@ import { rollbackCommand } from '../commands/rollback';
 import { logsCommand, statusCommand } from '../commands/status';
 import { updateCommand, updatePreviewCommand } from '../commands/update';
 import { verifyCommand, verifyReadOnlyCommand } from '../commands/verify';
+import { vaultKeyCommand } from '../commands/vault-key';
 import { type Flags, type ParsedArgs, boolFlag, requireStringFlag, verifyIsReadOnly } from './args';
 
 export const MUTATING_COMMANDS = new Set([
   'init',
   'update',
   'backup',
+  'vault-key',
   'verify',
   'restore',
   'rollback',
@@ -60,6 +62,7 @@ export async function dispatchCommand(command: string, parsed: ParsedArgs) {
     return await updateCommand(process.cwd(), parsed.flags);
   }
   if (command === 'backup') return await backupCommand(process.cwd(), parsed.positionals, parsed.flags);
+  if (command === 'vault-key') return await vaultKeyCommand(process.cwd(), parsed.positionals, parsed.flags);
   if (command === 'restore') return await restoreCommand(process.cwd(), parsed.flags, parsed.positionals);
   if (command === 'rollback') return await rollbackCommand(process.cwd(), parsed.flags);
   if (command === 'credentials') return await credentialsCommand(process.cwd(), parsed.positionals, parsed.flags);

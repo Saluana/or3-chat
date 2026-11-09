@@ -49,6 +49,36 @@ export type FakeDockerConfig = {
   volumeAllocatedKiB?: number;
   volumeFreeKiB?: number;
   scratchFreeKiB?: number;
+  s3Verification?: unknown;
+  s3InventoryVerification?: unknown;
+  s3Check?: unknown;
+  vaultId?: string;
+  realArchiveValidation?: boolean;
+  sourceEnvOverrides?: Record<string, string>;
+  sourceComposeOverrides?: Record<string, string>;
+  sourceComposeOmit?: string[];
+  sourceVolumeOverride?: string;
+  sourceContainerMissing?: boolean;
+  sourceContainerIds?: string;
+  sourceNestedMount?: boolean;
+  sourceImageOverride?: string;
+  sourceProjectOverride?: string;
+  sourceVaultVolumeOverride?: string;
+  sourceVaultComposeOverride?: string;
+  sourceAppSocketOverride?: string;
+  sourceVaultMissing?: boolean;
+  sourceCommandOverride?: boolean;
+  sourceComposeCommandOverride?: boolean;
+  sourceWritableRoot?: boolean;
+  sourceCodeMount?: boolean;
+  sourceTmpfsOverride?: boolean;
+  sourceComposeTmpfsOverride?: boolean;
+  sourceVolumeSubpath?: boolean;
+  sourceComposeVolumeSubpath?: boolean;
+  sourceExtraComposeMounts?: string;
+  sourceExtraVaultComposeMounts?: string;
+  sourceVaultEnvOverrides?: Record<string, string>;
+  sourceVaultComposeOverrides?: Record<string, string>;
 };
 
 const FAKE_DOCKER = String.raw`#!/usr/bin/env bun
@@ -108,7 +138,11 @@ if (args[0] === 'manifest') { out(JSON.stringify({ manifests: [{ platform: { arc
 
 if (args[0] === 'image' && args[1] === 'inspect') {
   const ref = refOf(last);
-  if (joined.includes('.RepoDigests')) out(JSON.stringify([repoOf(ref) + '@' + digestOf(ref)]));
+  if (joined.includes('.Config.Entrypoint')) {
+    out(JSON.stringify(['/nodejs/bin/node','/app/scripts/docker/runtime-entrypoint.mjs']));
+    out(JSON.stringify(['/nodejs/bin/node','.output/server/index.mjs']));
+    out(JSON.stringify('/app')); out(JSON.stringify([]));
+  } else if (joined.includes('.RepoDigests')) out(JSON.stringify([repoOf(ref) + '@' + digestOf(ref)]));
   else if (joined.includes('.Config.Labels')) {
     out(JSON.stringify({ ...labels, 'org.opencontainers.image.version': ref.match(/:(\d+\.\d+\.\d+)$/)?.[1] ?? config.version, 'org.opencontainers.image.revision': config.sourceRevision ?? '1'.repeat(40) }));
   } else if (joined.includes('.Architecture')) out('arm64');
@@ -117,8 +151,42 @@ if (args[0] === 'image' && args[1] === 'inspect') {
   process.exit(0);
 }
 
+if (args[0] === 'diff') process.exit(0);
+
 if (args[0] === 'inspect') {
-  if (joined.includes('{{.Image}}')) out(idOf(state.runningImage));
+  if (joined.includes('.HostConfig.ReadonlyRootfs')) {
+    const vault = last === 'vault0000001';
+    out(JSON.stringify(vault ? ['/nodejs/bin/node','/app/vault/entrypoint.mjs'] : ['/nodejs/bin/node','/app/scripts/docker/runtime-entrypoint.mjs']));
+    out(JSON.stringify(config.sourceCommandOverride ? ['sh','-c','different'] : vault ? null : ['/nodejs/bin/node','.output/server/index.mjs']));
+    out(JSON.stringify('/app')); out(JSON.stringify(!config.sourceWritableRoot));
+    if (joined.includes('.HostConfig.Tmpfs')) out(JSON.stringify(config.sourceTmpfsOverride ? {'/data/storage':'size=1m'} : {'/tmp':'size=256m'}));
+    if (joined.includes('.HostConfig.Mounts')) out(JSON.stringify(config.sourceVolumeSubpath ? [{Type:'volume',Target:'/data',VolumeOptions:{Subpath:'alternate'}}] : []));
+  } else if (joined.includes('.Config.Env')) {
+    const env = { ...readEnv(process.cwd() + '/.env') };
+    env.NUXT_SECRETS_PROVIDER ??= 'or3-secrets';
+    env.NUXT_SECRETS_SOCKET_PATH = '/run/or3-secrets/api.sock';
+    env.NUXT_SECRETS_TOKEN_FILE = '/run/or3-secrets-client/service.token';
+    env.OR3_MANAGED_VAULT_CONFIG = '/run/or3-secrets-client/config.json';
+    env.OR3_ADMIN_DATA_DIR = '/data/admin';
+    env.OR3_EXTENSIONS_ROOT = '/data/extensions';
+    const vault = last === 'vault0000001';
+    if (vault) env.OR3_VAULT_NAMESPACE = env.NUXT_SECRETS_NAMESPACE || 'or3';
+    Object.assign(env, vault ? config.sourceVaultEnvOverrides : config.sourceEnvOverrides);
+    out(JSON.stringify(Object.entries(env).map(([key,value]) => key + '=' + value)));
+    out(JSON.stringify(idOf(config.sourceImageOverride ?? env.OR3_IMAGE)));
+    const volumes = vault ? [
+      {Type:'volume',Name:config.sourceVaultVolumeOverride ?? env.OR3_VOLUME_NAME+'-vault-data',Destination:'/vault-data'},
+      {Type:'volume',Name:env.OR3_VOLUME_NAME+'-vault-key',Destination:'/vault-key'},
+      {Type:'volume',Name:env.OR3_VOLUME_NAME+'-vault-run',Destination:'/run/or3-secrets'},
+      {Type:'volume',Name:env.OR3_VOLUME_NAME+'-vault-client',Destination:'/run/or3-secrets-client'},
+    ] : [{Type:'volume', Name:config.sourceVolumeOverride ?? env.OR3_VOLUME_NAME, Destination:'/data'},
+      {Type:'volume',Name:config.sourceAppSocketOverride ?? env.OR3_VOLUME_NAME+'-vault-run',Destination:'/run/or3-secrets'},
+      {Type:'volume',Name:env.OR3_VOLUME_NAME+'-vault-client',Destination:'/run/or3-secrets-client'},
+      ...(config.sourceNestedMount ? [{Type:'bind',Destination:'/data/storage'}] : [])];
+    if (config.sourceCodeMount) volumes.push({Type:'bind',Destination:'/app'});
+    out(JSON.stringify(volumes));
+    out(JSON.stringify({'com.docker.compose.project':config.sourceProjectOverride ?? env.OR3_COMPOSE_PROJECT,'com.docker.compose.service':vault?'or3-vault':'or3'}));
+  } else if (joined.includes('{{.Image}}')) out(idOf(state.runningImage));
   else out('{"Status":"running"}');
   process.exit(0);
 }
@@ -134,7 +202,22 @@ if (args[0] === 'volume') {
 }
 
 const containerScript = () => {
-  if (joined.includes('/app/vault/entrypoint.mjs backup')) return out('encrypted-fixture-vault-backup');
+  if (config.realArchiveValidation && joined.includes('OR3_TAR_RESULT:')) {
+    const index = args.indexOf('-c');
+    const child = Bun.spawnSync(['sh', '-c', ...args.slice(index + 1)], { stdin, stdout: 'pipe', stderr: 'pipe' });
+    process.stdout.write(child.stdout); process.stderr.write(child.stderr);
+    if (child.exitCode !== 0) process.exit(child.exitCode);
+    return;
+  }
+  if (joined.includes('OR3_EXPECTED_VAULT_ID')) {
+    if (!args.includes('OR3_EXPECTED_VAULT_ID=' + (config.vaultId ?? 'a'.repeat(32)))) fail('fixture vault identity mismatch');
+    return;
+  }
+  if (joined.includes('/vault-key/master.key') && joined.includes('process.stdout.write')) return process.stdout.write(Buffer.alloc(32, 0x31));
+  if (joined.includes('/app/vault/entrypoint.mjs backup')) {
+    const backup = Buffer.alloc(113); backup.write('OR3BAK01'); backup.write('a'.repeat(32), 8); backup.writeBigUInt64BE(1n, 84);
+    return process.stdout.write(backup);
+  }
   if (joined.includes('stat -c')) return out('65532:65532');
   if (joined.includes('du -sb')) return out((config.volumeApparentBytes ?? 1000) + '\t/data');
   if (joined.includes('du -sk')) return out((config.volumeAllocatedKiB ?? 1) + '\t/data');
@@ -152,8 +235,16 @@ const containerScript = () => {
 
 if (args[0] === 'run') { containerScript(); process.exit(0); }
 if (args[0] === 'exec') {
-  if (joined.includes('backup-inspect.mjs inventory')) out(JSON.stringify({selected:['./sync.sqlite'],bytes:1000}));
+  if (joined.includes('__probe_env__')) out(sha(process.env.OR3_STORAGE_S3_SECRET_ACCESS_KEY ?? ''));
+  else if (joined.includes('backup-inspect.mjs inventory')) out(JSON.stringify({selected:['./sync.sqlite'],bytes:1000}));
   else if (joined.includes('backup-inspect.mjs references')) out(JSON.stringify({contract:1,complete:true,liveAttachments:0}));
+  else if (joined.includes('backup-inspect.mjs s3-summary')) out(JSON.stringify({contract:2,references:1,payloadBytes:23}));
+  else if (joined.includes('remote-objects.mjs capture')) process.stdout.write('fixture-remote-archive');
+  else if (joined.includes('remote-objects.mjs inventory')) process.stdout.write('fixture-remote-inventory');
+  else if (joined.includes('remote-objects.mjs verify-inventory')) out(JSON.stringify(config.s3InventoryVerification ?? {contract:2,kind:'s3-reference-v1',objectCount:1,payloadBytes:23,inventorySha256:sha('fixture-remote-inventory').slice(7)}));
+  else if (joined.includes('remote-objects.mjs reconcile')) out(JSON.stringify({checked:1,uploaded:1,markersCreated:1}));
+  else if (joined.includes('remote-objects.mjs check')) out(JSON.stringify(config.s3Check ?? {checked:1,missing:[],mismatched:[]}));
+  else if (joined.includes('remote-objects.mjs verify')) out(JSON.stringify(config.s3Verification ?? {contract:2,kind:'s3-copy-v1',objectCount:1,payloadBytes:23,inventorySha256:'c'.repeat(64)}));
   else containerScript();
   process.exit(0);
 }
@@ -166,17 +257,21 @@ if (args[0] === 'compose') {
   const envFile = args[args.indexOf('--env-file') + 1];
   if (sub === 'config') {
     const env = readEnv(envFile);
+    const appEnv = Object.fromEntries(Object.entries(env).filter(([key]) => !(config.sourceComposeOmit ?? []).includes(key)));
     const label = { 'io.or3.cloud.deployment-id': env.OR3_DEPLOYMENT_ID };
     out(JSON.stringify({
       name: env.OR3_COMPOSE_PROJECT,
-      services: { or3: { image: env.OR3_IMAGE, labels: label, ports: [{ target: 3000, published: Number(env.OR3_PORT), host_ip: '127.0.0.1', protocol: 'tcp' }], volumes: [{ type: 'volume', source: 'or3-data', target: '/data' }] } },
-      volumes: { 'or3-data': { name: env.OR3_VOLUME_NAME, labels: label } },
+      services: {
+        or3: { image: env.OR3_IMAGE, ...(config.sourceExtraComposeMounts ? {[config.sourceExtraComposeMounts]:['other']} : {}), ...(config.sourceComposeCommandOverride ? {command:['sh','-c','different']} : {}), read_only:true, tmpfs:config.sourceComposeTmpfsOverride ? ['/data/storage:size=1m'] : ['/tmp:size=256m'], environment: { ...appEnv, OR3_ADMIN_DATA_DIR:'/data/admin', OR3_EXTENSIONS_ROOT:'/data/extensions', OR3_MANAGED_VAULT_CONFIG:'/run/or3-secrets-client/config.json', NUXT_SECRETS_PROVIDER: env.NUXT_SECRETS_PROVIDER ?? 'or3-secrets', NUXT_SECRETS_SOCKET_PATH:'/run/or3-secrets/api.sock', NUXT_SECRETS_TOKEN_FILE:'/run/or3-secrets-client/service.token', ...config.sourceComposeOverrides }, labels: label, ports: [{ target: 3000, published: Number(env.OR3_PORT), host_ip: '127.0.0.1', protocol: 'tcp' }], volumes: [{ type: 'volume', source: 'or3-data', target: '/data', ...(config.sourceComposeVolumeSubpath ? {volume:{subpath:'alternate'}} : {}) }, {type:'volume',source:'or3-vault-run',target:'/run/or3-secrets'}, {type:'volume',source:'or3-vault-client',target:'/run/or3-secrets-client'}] },
+        'or3-vault': { image: env.OR3_IMAGE, ...(config.sourceExtraVaultComposeMounts ? {[config.sourceExtraVaultComposeMounts]:['other']} : {}), entrypoint:['/nodejs/bin/node','/app/vault/entrypoint.mjs'], read_only:true, tmpfs:['/tmp:size=16m'], environment: {OR3_VAULT_NAMESPACE: env.NUXT_SECRETS_NAMESPACE || 'or3', ...config.sourceVaultComposeOverrides}, labels: label, volumes: [{type:'volume',source:'or3-vault-data',target:'/vault-data'}, {type:'volume',source:'or3-vault-key',target:'/vault-key'}, {type:'volume',source:'or3-vault-run',target:'/run/or3-secrets'}, {type:'volume',source:'or3-vault-client',target:'/run/or3-secrets-client'}] },
+      },
+      volumes: { 'or3-data': { name: env.OR3_VOLUME_NAME, labels: label }, 'or3-vault-data': {name:config.sourceVaultComposeOverride ?? env.OR3_VOLUME_NAME+'-vault-data'}, 'or3-vault-key': {name:env.OR3_VOLUME_NAME+'-vault-key'}, 'or3-vault-run': {name:env.OR3_VOLUME_NAME+'-vault-run'}, 'or3-vault-client': {name:env.OR3_VOLUME_NAME+'-vault-client'} },
     }));
   } else if (sub === 'up') { state.running = true; state.runningImage = readEnv(envFile).OR3_IMAGE; save(); }
   else if (sub === 'restart') { state.running = true; save(); }
   else if (sub === 'stop' || sub === 'down') { state.running = false; save(); }
   else if (sub === 'ps') {
-    if (rest.includes('-aq')) out('c0ffee000001');
+    if (rest.includes('-aq')) { if (rest.includes('or3-vault')) {if (!config.sourceVaultMissing) out('vault0000001');} else if (!(config.sourceContainerMissing && rest.includes('or3'))) out(config.sourceContainerIds ?? 'c0ffee000001'); }
     else if (rest.includes('-q')) { if (state.running) out('c0ffee000001'); }
     else out('NAME STATUS\nor3 ' + (state.running ? 'running' : 'exited'));
   } else if (sub === 'logs') out('fixture log line');

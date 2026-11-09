@@ -1,6 +1,8 @@
 import { join } from 'node:path';
 import { createPreMutationSnapshot } from '../backup/create';
-import { validateCanonicalBackupReferences } from '../backup/references';
+import { assertBackupSourceProfile, assertSupportedBackupProfile, validateCanonicalBackupReferences } from '../backup/references';
+import { assertExistingVaultCustody, assertVaultVolumesExist } from '../backup/vault';
+import { preflightRemoteRestore } from '../backup/remote';
 import { validateVolumeArchive } from '../backup/archive';
 import { assertBackupMatchesDeployment, readManifest, resolveBackup } from '../backup/manifests';
 import { assertRestoreFreeSpace, restoreBackupData, restorePreMutationSnapshot } from '../backup/restore';
@@ -23,7 +25,7 @@ import {
 } from '../deployment/state-store';
 import { ensureDocker } from '../runtime/docker';
 import { assertSupportedHostArchitecture, imageDigest, pullAndRequireImage } from '../runtime/images';
-import { startProject } from '../runtime/project';
+import { managedVaultEnabled, startProject } from '../runtime/project';
 import { restoreRequiresVolumeRecreation } from '../runtime/volumes';
 import { readText } from '../util/fs';
 import { id, now, redact } from '../util/primitives';
@@ -43,16 +45,22 @@ export async function restoreCommand(directory: string, flags: Flags, positional
     throw new Error(`Backup ${manifest.backupId} configuration does not match its manifest.`);
   }
   assertBackupMatchesDeployment(manifest, backupEnv, loaded.state, loaded.env);
+  assertSupportedBackupProfile(loaded.env);
+  await assertBackupSourceProfile(loaded.directory, loaded.state, loaded.env);
   const recreateDataVolume = restoreRequiresVolumeRecreation(loaded.env, backupEnv);
   if (manifest.imageDigest) await pullAndRequireImage(manifest.image, manifest.imageDigest, `Backup ${manifest.backupId}`);
   await assertSupportedHostArchitecture(manifest.image);
+  await assertExistingVaultCustody(loaded.directory, loaded.state, manifest, backupPath, backupEnv);
   // Do this before recording a recovery operation: a capacity refusal has not
   // touched the live deployment and should not require an operator recovery.
   await assertRestoreFreeSpace(loaded.directory, loaded.state, loaded.env, manifest, backupPath);
   // Snapshot capture already stops the app. Refuse invalid archive inventories
   // before journaling or creating that snapshot; retain the later recheck too.
   await validateVolumeArchive(loaded.directory, loaded.state.mode, loaded.env, backupPath, backupEnv.OR3_STORAGE_FS_ROOT);
-  await validateCanonicalBackupReferences(loaded.directory, { ...backupEnv, OR3_IMAGE: imageAtDigest(manifest.image, manifest.imageDigest) }, backupPath);
+  const remotePreflight = manifest.schemaVersion === 2 ? await preflightRemoteRestore(loaded.directory, manifest, loaded.env, backupPath) : undefined;
+  if (manifest.schemaVersion === 1) await validateCanonicalBackupReferences(loaded.directory, { ...backupEnv, OR3_IMAGE: imageAtDigest(manifest.image, manifest.imageDigest) }, backupPath);
+  const remoteReconcile = remotePreflight && 'uploaded' in remotePreflight ? remotePreflight : undefined;
+  if (remoteReconcile) console.log(`S3 reconciliation added ${remoteReconcile.uploaded} objects and ${remoteReconcile.markersCreated} markers; added objects remain if restore fails.`);
   const pending: PendingOperation = {
     id: id('restore'),
     operation: 'restore',
@@ -66,6 +74,7 @@ export async function restoreCommand(directory: string, flags: Flags, positional
     targetImage: manifest.image,
     targetImageDigest: manifest.imageDigest,
     recreateDataVolume,
+    remoteReconcile,
     phase: 'prepared',
   };
   await markPending(loaded.directory, loaded.state, pending);
@@ -122,6 +131,7 @@ export async function restoreCommand(directory: string, flags: Flags, positional
     // but OR3 may be down; return the original deployment to health before
     // removing the no-longer-actionable operation record.
     try {
+      if (managedVaultEnabled(loaded.directory, loaded.env)) await assertVaultVolumesExist(loaded.directory, loaded.state);
       await startProject(loaded.directory, loaded.state.mode, loaded.env);
       loaded.state.lastError = `Restore of ${manifest.backupId} stopped before data replacement: ${original}`;
       await clearPending(loaded.directory, loaded.state);

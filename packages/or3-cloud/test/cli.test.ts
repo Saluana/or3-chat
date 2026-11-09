@@ -9,7 +9,6 @@ import { assertPurgeBackupFreshness } from '../src/backup/export';
 import { assertBackupMatchesDeployment, enumerateBackups, inventoryBackups, recordedBackupPath } from '../src/backup/manifests';
 import { assertRemovableArtifactName, planRetention, selectPruneTargets } from '../src/backup/retention';
 import { assertCommandFlags, assertCommandPositionals, parseFlags } from '../src/cli/args';
-import { purgeVolumesFromState } from '../src/commands/remove';
 import { assessUpdate } from '../src/commands/update';
 import { validatePassword } from '../src/credentials/inputs';
 import { buildCredentialsResetScript } from '../src/credentials/reset-script';
@@ -19,6 +18,7 @@ import { STATE_SCHEMA_COMPATIBILITY, assertKnownStateSchema } from '../src/deplo
 import {
   buildEnv,
   parseEnv,
+  secretValues,
   serializeInitialCredentials,
   serializeEnv,
   withoutProvisioningCredentials,
@@ -35,6 +35,7 @@ import { assertVerificationGrant, sameOriginVerificationUrl, validateVerificatio
 import { restoreRequiresVolumeRecreation, updateRequiresVolumeRecreation } from '../src/runtime/volumes';
 import { redact } from '../src/util/primitives';
 import type { ManagedState } from '../src/deployment/contracts';
+import * as deploymentEnvironment from '../src/deployment/env';
 import { ADMIN_PASSWORD_POLICY_VECTORS } from '../../../shared/cloud/wizard/admin-password-policy-vectors';
 import { MANAGED_PROFILE_SHARED_ENV } from '../../../shared/cloud/wizard/managed-profile-contract';
 
@@ -129,6 +130,7 @@ test.each(
         password: 'FixturePassword123!',
         port: 3197,
       });
+      env.NUXT_SECRETS_PROVIDER = '';
       const state = stateFromEnv(directory, env, 'local', 'init', digest);
       if (operation === 'recover') {
         state.incompleteOperation = {
@@ -189,12 +191,22 @@ const args = process.argv.slice(2);
 appendFileSync(${JSON.stringify(trace)}, JSON.stringify(args) + '\\n');
 if (args.includes('-i')) await Bun.stdin.bytes();
 const text = args.join(' ');
+const fixtureEnv = ${JSON.stringify(env)};
+fixtureEnv.OR3_ADMIN_DATA_DIR = '/data/admin'; fixtureEnv.OR3_EXTENSIONS_ROOT = '/data/extensions';
 if (text.includes('tar czf')) { await Bun.stdout.write(gzipSync(Buffer.from('fixture archive bytes'))); }
 else if (text.includes('backup-inspect.mjs inventory')) console.log(JSON.stringify({selected:['./sync.sqlite'],bytes:1000}));
 else if (text.includes('backup-inspect.mjs references')) console.log(JSON.stringify({contract:1,complete:true,liveAttachments:0}));
 else if (args[0] === 'volume' && args[1] === 'inspect') {
   console.log(text.includes('.Labels') ? ${JSON.stringify(JSON.stringify(labels))} : ${JSON.stringify(state.volumeName)});
-} else if (text.includes('.RepoDigests')) console.log(JSON.stringify([${JSON.stringify(manifest.image)}]));
+} else if (args[0] === 'inspect' && text.includes('.HostConfig.ReadonlyRootfs')) {
+  for (const value of [['/entrypoint'], ['serve'], '/app', true, null, null]) console.log(JSON.stringify(value));
+} else if (args[0] === 'inspect' && text.includes('.Config.Env')) {
+  for (const value of [Object.entries(fixtureEnv).map(([k,v]) => k+'='+v), 'sha256:fixture-image', [{Type:'volume',Name:fixtureEnv.OR3_VOLUME_NAME,Destination:'/data'}], {'com.docker.compose.project':fixtureEnv.OR3_COMPOSE_PROJECT,'com.docker.compose.service':'or3'}]) console.log(JSON.stringify(value));
+} else if (args[0] === 'image' && text.includes('.Config.Entrypoint')) {
+  for (const value of [['/entrypoint'], ['serve'], '/app', []]) console.log(JSON.stringify(value));
+} else if (args[0] === 'image' && text.includes('{{.Id}}')) console.log('sha256:fixture-image');
+else if (args[0] === 'compose' && args.includes('ps') && args.includes('-aq')) console.log('fixture-container');
+else if (text.includes('.RepoDigests')) console.log(JSON.stringify([${JSON.stringify(manifest.image)}]));
 else if (text.includes('.Architecture')) console.log(args[0] === 'image' ? 'arm64' : 'aarch64');
 else if (text.includes('imagetools inspect')) console.log(JSON.stringify({architecture:'arm64',manifests:[{platform:{architecture:'arm64'}},{platform:{architecture:'amd64'}}]}));
 else if (text.includes('df -Pk')) console.log('1000000');
@@ -202,7 +214,7 @@ else if (text.includes('du -sb')) console.log('1000');
 else if (text.includes('du -sk')) console.log('1');
 else if (text.includes('stat -c')) console.log('0:0');
 else if (args[0] === 'compose' && args.includes('config')) {
-  console.log(JSON.stringify({services:{or3:{image:${JSON.stringify(manifest.image)},labels:{'io.or3.cloud.deployment-id':${JSON.stringify(env.OR3_DEPLOYMENT_ID)}},ports:[{target:3000,published:3197,host_ip:'127.0.0.1',protocol:'tcp'}],volumes:[{type:'volume',source:'or3-data',target:'/data'}]}},volumes:{'or3-data':{name:${JSON.stringify(state.volumeName)},labels:{'io.or3.cloud.deployment-id':${JSON.stringify(env.OR3_DEPLOYMENT_ID)}}}}}));
+  console.log(JSON.stringify({services:{or3:{image:${JSON.stringify(manifest.image)},read_only:true,environment:fixtureEnv,labels:{'io.or3.cloud.deployment-id':${JSON.stringify(env.OR3_DEPLOYMENT_ID)}},ports:[{target:3000,published:3197,host_ip:'127.0.0.1',protocol:'tcp'}],volumes:[{type:'volume',source:'or3-data',target:'/data'}]}},volumes:{'or3-data':{name:${JSON.stringify(state.volumeName)},labels:{'io.or3.cloud.deployment-id':${JSON.stringify(env.OR3_DEPLOYMENT_ID)}}}}}));
 } else if (args[0] === 'compose' && args.includes('up')) { console.error('Fixture refuses runtime start'); process.exit(1); }
 `,
         { mode: 0o755 }
@@ -244,7 +256,8 @@ else if (args[0] === 'compose' && args.includes('config')) {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
-  }
+  },
+  20_000,
 );
 
 test('retention preserves legacy adoption directories without trusting them as backups', async () => {
@@ -794,6 +807,42 @@ test('accepts only the fixed managed provider profile during production verifica
   );
 });
 
+test('deep-health verification checks the requested complete managed profile', () => {
+  const clerk = { status: 'ok', providers: { auth: { provider: 'clerk' }, sync: { provider: 'sqlite' }, storage: { provider: 's3' } } };
+  expect(validateVerificationHealth(clerk, 'clerk-sqlite-s3')).toEqual(clerk);
+  expect(() => validateVerificationHealth(clerk)).toThrow();
+  expect(() => validateVerificationHealth({ ...clerk, providers: { ...clerk.providers, storage: { provider: 'fs' } } }, 'clerk-sqlite-s3')).toThrow();
+  expect(() => validateVerificationHealth({ ...clerk, status: 'degraded' }, 'clerk-sqlite-s3')).toThrow();
+});
+
+test('target-ready checks accept only the database count required by the managed profile', async () => {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'or3-profile-ready-')));
+  try {
+    const bin = join(directory, 'bin');
+    await mkdir(bin);
+    await writeFile(join(directory, '.env'), 'OR3_COMPOSE_PROJECT=fixture\n');
+    await writeFile(join(bin, 'docker'), `#!/usr/bin/env bun
+const args = process.argv.slice(2), text = args.join(' ');
+if (args.includes('ps')) console.log('fixture-container');
+else if (text.includes('quick_check')) console.log(JSON.stringify(Array.from({length:Number(process.env.OR3_FIXTURE_DB_COUNT)}, (_,i) => ({path:'fixture-'+i,quickCheck:'ok',tables:1}))));
+else if (!args.includes('exec')) process.exit(1);
+`, { mode: 0o755 });
+    const script = `import {collectTargetReadyChecks} from ${JSON.stringify(join(import.meta.dir, '../src/deployment/recovery.ts'))}; const env = JSON.parse(process.env.FIXTURE_PROFILE); console.log(JSON.stringify(await collectTargetReadyChecks(process.cwd(), 'local', env)));`;
+    for (const [auth, storage, count, expected] of [
+      ['basic-auth', 'fs', 2, 'passed'], ['basic-auth', 'fs', 1, 'failed'],
+      ['clerk', 's3', 1, 'passed'], ['clerk', 's3', 2, 'failed'],
+    ] as const) {
+      await writeFile(join(directory, '.env'), `OR3_COMPOSE_PROJECT=fixture\nOR3_FIXTURE_DB_COUNT=${count}\n`);
+      const child = Bun.spawn([process.execPath, '-e', script], { cwd: directory, env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_DB_COUNT: String(count), FIXTURE_PROFILE: JSON.stringify({ AUTH_PROVIDER: auth, OR3_AUTH_PROVIDER: auth, OR3_SYNC_PROVIDER: 'sqlite', NUXT_PUBLIC_STORAGE_PROVIDER: storage }) }, stdout: 'pipe', stderr: 'pipe' });
+      const [exitCode, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+      expect(exitCode, stderr).toBe(0);
+      expect(JSON.parse(stdout).checks.find((check: {code: string}) => check.code === 'database-integrity').status, stdout).toBe(expected);
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('verification keeps authenticated storage grants same-origin and fixed-profile', () => {
   const base = new URL('https://chat.example.com');
   expect(sameOriginVerificationUrl(base, '/api/storage/fs/upload?token=one', 'upload').origin).toBe(base.origin);
@@ -810,6 +859,33 @@ test('redacts known values and secret-shaped environment output', () => {
   expect(redact('OR3_ADMIN_PASSWORD=A secret with spaces & punctuation!\nnext=visible')).toBe(
     'OR3_ADMIN_PASSWORD=[REDACTED]\nnext=visible',
   );
+  // SDK errors may quote raw credential values without their environment keys.
+  const env = {
+    OR3_STORAGE_S3_ACCESS_KEY_ID: 'test-access-value',
+    OR3_STORAGE_S3_SECRET_ACCESS_KEY: 'test-secret-value',
+    OR3_STORAGE_S3_SESSION_TOKEN: 'test-session-value',
+  };
+  expect(redact(Object.values(env).join(' '), secretValues(env))).toBe('[REDACTED] [REDACTED] [REDACTED]');
+  const launchSecrets = { NUXT_CLERK_SECRET_KEY: 'sk_fixture_clerk', OR3_LIBRARY_LINK_SECRET: 'fixture-library-key', NUXT_ADMIN_LIBRARY_LINK_SECRET: 'fixture-runtime-key' };
+  expect(redact(Object.values(launchSecrets).join(' '), secretValues(launchSecrets))).toBe('[REDACTED] [REDACTED] [REDACTED]');
+  // Raw child-process errors can contain values without their environment
+  // names; cover both documented operator keys and their runtime translations.
+  const runtimeSecrets = Object.fromEntries([
+    'OR3_PLUGIN_CONNECTION_SECRET', 'NUXT_ADMIN_PLUGIN_CONNECTION_SECRET',
+    'OR3_BACKGROUND_ENCRYPTION_KEY', 'NUXT_BACKGROUND_JOBS_ENCRYPTION_KEY',
+    'OR3_WEBHOOKS_ENCRYPTION_KEY', 'NUXT_WEBHOOKS_ENCRYPTION_KEY', 'OR3_CONNECT_ENCRYPTION_KEY', 'NUXT_CONNECT_ENCRYPTION_KEY', 'OR3_CONNECT_CLOUDFLARE_API_TOKEN', 'NUXT_CONNECT_CLOUDFLARE_API_TOKEN',
+    'OPENROUTER_API_KEY', 'NUXT_OPENROUTER_API_KEY', 'OR3_OPENAI_API_KEY', 'NUXT_OPENAI_API_KEY',
+    'OR3_BILLING_STRIPE_SECRET_KEY', 'OR3_BILLING_STRIPE_WEBHOOK_SECRET', 'CONVEX_SELF_HOSTED_ADMIN_KEY', 'CONVEX_DEPLOY_KEY',
+    'NUXT_AUTH_INVITE_TOKEN_SECRET', 'NUXT_ADMIN_AUTH_PASSWORD', 'NUXT_ADMIN_AUTH_JWT_SECRET',
+  ].map((key, index) => [key, `private-fixture-value-${index}-end`]));
+  expect(redact(Object.values(runtimeSecrets).join(' '), secretValues(runtimeSecrets))).toBe(Object.keys(runtimeSecrets).map(() => '[REDACTED]').join(' '));
+  // Unsupported settings can still appear in a failed Compose diagnostic
+  // before adoption has had a chance to refuse them.
+  const unknownSecrets = { NITRO_OPENROUTER_API_KEY: 'fixture-unknown-api-key', CUSTOM_OAUTH_TOKEN: 'fixture-unknown-token', CUSTOM_DATABASE_PASSWORD: 'fixture-unknown-password' };
+  expect(redact(Object.values(unknownSecrets).join(' '), secretValues(unknownSecrets))).toBe('[REDACTED] [REDACTED] [REDACTED]');
+  // Mask every overlap so no fragment of another secret remains visible.
+  expect(redact('abcdef and abc', ['abc', 'abcdef'])).toBe('[REDACTED] and [REDACTED]');
+  expect(redact('abcdefg', ['abcde', 'cdefg'])).toBe('[REDACTED]');
 });
 
 test('records immutable state metadata', () => {
@@ -842,13 +918,18 @@ test('rejects any resolved Compose binding that exposes OR3 beyond loopback', ()
 });
 
 test('accepts only the fixed V1 Compose data layout', () => {
+  const source = { AUTH_PROVIDER: 'basic-auth', OR3_SYNC_PROVIDER: 'sqlite', NUXT_PUBLIC_STORAGE_PROVIDER: 'fs', OR3_AUTH_REGISTRATION_MODE: 'invite_only', OR3_AUTH_AUTO_PROVISION: 'false', SSR_AUTH_ENABLED: 'true', OR3_SYNC_ENABLED: 'true', OR3_STORAGE_ENABLED: 'true', NUXT_SECRETS_PROVIDER: '', OR3_INSTANCE_ID: 'stable-instance' };
+  const image = 'ghcr.io/saluana/or3-chat:0.1.94';
   const config = JSON.stringify({
     services: {
       or3: {
+        image,
         environment: {
+          ...source,
           OR3_BASIC_AUTH_DB_PATH: '/data/auth.sqlite',
           OR3_SQLITE_DB_PATH: '/data/sync.sqlite',
           OR3_STORAGE_FS_ROOT: '/data/storage',
+          OR3_ADMIN_DATA_DIR: '/data/admin', OR3_EXTENSIONS_ROOT: '/data/extensions',
         },
         ports: [{ target: 3000, published: 3000, host_ip: '127.0.0.1', protocol: 'tcp' }],
         volumes: [{ type: 'volume', source: 'or3-data', target: '/data' }],
@@ -856,9 +937,191 @@ test('accepts only the fixed V1 Compose data layout', () => {
     },
     volumes: { 'or3-data': { name: 'source-data' } },
   });
-  expect(() => assertSupportedSourceCompose(config, 'source-data', 3000)).not.toThrow();
-  expect(() => assertSupportedSourceCompose(config.replace('/data/storage', '/tmp/storage'), 'source-data', 3000)).toThrow('custom data layouts');
+  expect(() => assertSupportedSourceCompose(config, 'source-data', 3000, source, [image])).not.toThrow();
+  expect(() => assertSupportedSourceCompose(config.replace('/data/storage', '/tmp/storage'), 'source-data', 3000, source, [image])).toThrow('custom data layouts');
+  for (const [path, foreign] of [['/data/admin', '/data/custom-admin'], ['/data/extensions', '/data/custom-extensions']]) {
+    expect(() => assertSupportedSourceCompose(config.replace(path!, foreign!), 'source-data', 3000, source, [image])).toThrow('custom data layouts');
+    const omitted = JSON.parse(config); delete omitted.services.or3.environment[path === '/data/admin' ? 'OR3_ADMIN_DATA_DIR' : 'OR3_EXTENSIONS_ROOT'];
+    expect(() => assertSupportedSourceCompose(JSON.stringify(omitted), 'source-data', 3000, source, [image])).toThrow('custom data layouts');
+  }
 });
+
+// Failure inventory: Compose may override the validated source env, omit a
+// required selector, or attach source vault custody which adoption does not
+// archive. Every such source must be refused before it is stopped.
+test('adoption refuses effective provider drift and untransferred vault custody', () => {
+  const image = 'ghcr.io/saluana/or3-chat:0.1.94';
+  const env: Record<string, string> = {
+    AUTH_PROVIDER: 'basic-auth', OR3_AUTH_PROVIDER: 'basic-auth', OR3_SYNC_PROVIDER: 'sqlite',
+    NUXT_PUBLIC_STORAGE_PROVIDER: 'fs', OR3_AUTH_REGISTRATION_MODE: 'invite_only', OR3_AUTH_AUTO_PROVISION: 'false',
+    SSR_AUTH_ENABLED: 'true', OR3_SYNC_ENABLED: 'true', OR3_STORAGE_ENABLED: 'true', NUXT_SECRETS_PROVIDER: '', OR3_INSTANCE_ID: 'stable-instance',
+  };
+  const base = {
+    services: { or3: { image, environment: { ...env, OR3_BASIC_AUTH_DB_PATH: '/data/auth.sqlite', OR3_SQLITE_DB_PATH: '/data/sync.sqlite', OR3_STORAGE_FS_ROOT: '/data/storage', OR3_ADMIN_DATA_DIR: '/data/admin', OR3_EXTENSIONS_ROOT: '/data/extensions' }, ports: [{ target: 3000, published: 3000, host_ip: '127.0.0.1', protocol: 'tcp' }], volumes: [{ type: 'volume', source: 'or3-data', target: '/data' }] } },
+    volumes: { 'or3-data': { name: 'source-data' } },
+  };
+  const check = (config: unknown, source: Record<string, string> = env) => assertSupportedSourceCompose(JSON.stringify(config), 'source-data', 3000, source, [image]);
+  expect(() => check(base)).not.toThrow();
+  const tmpfs = structuredClone(base) as typeof base & { services: { or3: { tmpfs?: string[] } } };
+  tmpfs.services.or3.tmpfs = ['/data/storage:size=1m'];
+  expect(() => check(tmpfs)).toThrow(/temporary filesystem/i);
+  const subpath = structuredClone(base);
+  Object.assign(subpath.services.or3.volumes[0]!, { volume: { subpath: 'other' } });
+  expect(() => check(subpath)).toThrow(/subpath/i);
+  const foreignImage = structuredClone(base);
+  foreignImage.services.or3.image = 'example.invalid/custom:latest';
+  expect(() => check(foreignImage)).toThrow(/image/i);
+  for (const [key, value] of Object.entries({ AUTH_PROVIDER: 'clerk', OR3_AUTH_PROVIDER: 'clerk', OR3_SYNC_PROVIDER: 'convex', NUXT_PUBLIC_STORAGE_PROVIDER: 's3', OR3_AUTH_REGISTRATION_MODE: 'open', OR3_AUTH_AUTO_PROVISION: 'true', SSR_AUTH_ENABLED: 'false', NUXT_SECRETS_PROVIDER: 'or3-secrets' })) {
+    const config = structuredClone(base);
+    (config.services.or3.environment as Record<string, string>)[key] = value;
+    expect(() => check(config), key).toThrow();
+  }
+  for (const [key, value] of Object.entries({ NUXT_AUTH_PROVIDER: 'clerk', NUXT_PUBLIC_AUTH_PROVIDER: 'clerk', NUXT_SYNC_PROVIDER: 'convex', NUXT_PUBLIC_SYNC_PROVIDER: 'convex', OR3_STORAGE_PROVIDER: 's3', NUXT_STORAGE_PROVIDER: 's3', NUXT_AUTH_ENABLED: 'false', NUXT_AUTH_REGISTRATION_MODE: 'open', NUXT_AUTH_AUTO_PROVISION: 'true', NUXT_SYNC_ENABLED: 'false', NUXT_STORAGE_ENABLED: 'false', NITRO_SECRETS_PROVIDER: 'or3-secrets', NITRO_AUTH_PROVIDER: 'clerk', NITRO_ENV_PREFIX: 'OTHER_', NUXT_AUTH: '{"provider":"clerk"}', NUXT_PUBLIC: '{"storageProvider":"s3"}', NITRO_STORAGE: '{"provider":"s3"}', NUXT_ADMIN: '{"libraryLinkSecret":"private"}', NITRO_ADMIN_LIBRARY_LINK_SECRET: 'private', NUXT_ADMIN_AUTH_PASSWORD: 'private', NUXT_ADMIN_AUTH_USERNAME: 'private' })) {
+    const config = structuredClone(base);
+    (config.services.or3.environment as Record<string, string>)[key] = value;
+    expect(() => check(config), key).toThrow();
+  }
+  for (const key of ['NUXT_ADMIN_AUTH', 'NUXT_AUTH_INVITE', 'NUXT_BACKGROUND_JOBS', 'NUXT_CONNECT', 'NUXT_CONNECT_CLOUDFLARE', 'NUXT_WEBHOOKS', 'NITRO_BACKGROUND_JOBS_ENCRYPTION_KEY', 'NITRO_CONNECT_ENCRYPTION_KEY', 'NITRO_WEBHOOKS_ENCRYPTION_KEY']) {
+    const config = structuredClone(base);
+    (config.services.or3.environment as Record<string, string>)[key] = '{"encryptionKey":"fixture-private"}';
+    expect(() => check(config), key).toThrow();
+  }
+  for (const [key, value] of Object.entries({ OR3_SQLITE_DRIVER: 'turso', OR3_WEBHOOKS_ENABLED: 'true', OR3_CONNECT_ENABLED: 'true', NUXT_ADMIN_PLUGIN_ISOLATION_ENABLED: 'true', NUXT_OPENAI_BASE_URL: 'https://example.invalid', NITRO_OPENROUTER_API_KEY: 'fixture-private', NITRO_SECURITY_PROXY_TRUST_PROXY: 'true' })) {
+    const config = structuredClone(base);
+    (config.services.or3.environment as Record<string, string>)[key] = value;
+    expect(() => check(config), key).toThrow();
+  }
+  const supportedDriver = structuredClone(base);
+  (supportedDriver.services.or3.environment as Record<string, string>).OR3_SQLITE_DRIVER = 'better-sqlite3';
+  expect(() => check(supportedDriver, { ...env, OR3_SQLITE_DRIVER: 'better-sqlite3' })).not.toThrow();
+  for (const value of ['TRUE', ' true ', 'yes']) {
+    const config = structuredClone(base);
+    (config.services.or3.environment as Record<string, string>).OR3_GUEST_ACCESS_ENABLED = value;
+    expect(() => check(config), value).toThrow();
+  }
+  const omitted = structuredClone(base);
+  delete (omitted.services.or3.environment as Record<string, string>).NUXT_SECRETS_PROVIDER;
+  expect(() => check(omitted)).toThrow();
+  for (const key of ['SSR_AUTH_ENABLED', 'OR3_SYNC_ENABLED', 'OR3_STORAGE_ENABLED']) {
+    const config = structuredClone(base);
+    delete (config.services.or3.environment as Record<string, string>)[key];
+    const source = { ...env }; delete source[key];
+    expect(() => check(config, source), key).toThrow();
+  }
+  const mounted = structuredClone(base);
+  mounted.services.or3.volumes.push({ type: 'volume', source: 'custody', target: '/run/or3-secrets' });
+  expect(() => check(mounted)).toThrow(/vault|secret/i);
+  const withVaultService = { ...base, services: { ...base.services, 'or3-vault': {} } };
+  expect(() => check(withVaultService)).toThrow(/vault|secret/i);
+  for (const extra of ['auxiliary-worker', 'caddy']) {
+    const withExtraService = { ...base, services: { ...base.services, [extra]: {} } };
+    expect(() => check(withExtraService), extra).toThrow(/service/i);
+  }
+  expect(() => check(base, { ...env, NUXT_SECRETS_PROVIDER: 'or3-secrets' })).toThrow(/vault|secret/i);
+});
+
+// Failure inventory: losing an encryption key makes existing records
+// unreadable; a stale source file can silently substitute a different key.
+// An effective-only key is equally unsafe because adoption would drop it.
+test('adoption retains supported application secrets and refuses secret drift', () => {
+  const keys = [
+    'OR3_BASIC_AUTH_JWT_SECRET', 'OR3_BASIC_AUTH_REFRESH_SECRET', 'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD',
+    'OR3_AUTH_INVITE_TOKEN_SECRET', 'OR3_STORAGE_FS_TOKEN_SECRET', 'OR3_ADMIN_PASSWORD', 'OR3_ADMIN_JWT_SECRET',
+    'NUXT_AUTH_INVITE_TOKEN_SECRET', 'NUXT_ADMIN_AUTH_JWT_SECRET',
+    'OR3_LIBRARY_LINK_SECRET', 'NUXT_ADMIN_LIBRARY_LINK_SECRET',
+    'OR3_PLUGIN_CONNECTION_SECRET', 'NUXT_ADMIN_PLUGIN_CONNECTION_SECRET',
+    'OR3_BACKGROUND_ENCRYPTION_KEY', 'NUXT_BACKGROUND_JOBS_ENCRYPTION_KEY',
+    'OR3_WEBHOOKS_ENCRYPTION_KEY', 'NUXT_WEBHOOKS_ENCRYPTION_KEY',
+    'OR3_CONNECT_ENCRYPTION_KEY', 'NUXT_CONNECT_ENCRYPTION_KEY',
+    'OR3_CONNECT_CLOUDFLARE_API_TOKEN', 'NUXT_CONNECT_CLOUDFLARE_API_TOKEN',
+    'OPENROUTER_API_KEY', 'NUXT_OPENROUTER_API_KEY', 'OR3_OPENAI_API_KEY', 'NUXT_OPENAI_API_KEY',
+  ];
+  const image = 'ghcr.io/saluana/or3-chat:0.1.94';
+  const source: Record<string, string> = { AUTH_PROVIDER: 'basic-auth', OR3_SYNC_PROVIDER: 'sqlite', NUXT_PUBLIC_STORAGE_PROVIDER: 'fs', OR3_AUTH_REGISTRATION_MODE: 'invite_only', OR3_AUTH_AUTO_PROVISION: 'false', SSR_AUTH_ENABLED: 'true', OR3_SYNC_ENABLED: 'true', OR3_STORAGE_ENABLED: 'true', NUXT_SECRETS_PROVIDER: '', OR3_INSTANCE_ID: 'stable-instance' };
+  const config = { services: { or3: { image, environment: { ...source, OR3_BASIC_AUTH_DB_PATH: '/data/auth.sqlite', OR3_SQLITE_DB_PATH: '/data/sync.sqlite', OR3_STORAGE_FS_ROOT: '/data/storage', OR3_ADMIN_DATA_DIR: '/data/admin', OR3_EXTENSIONS_ROOT: '/data/extensions' } as Record<string, string>, ports: [{ target: 3000, published: 3000, host_ip: '127.0.0.1', protocol: 'tcp' }], volumes: [{ type: 'volume', source: 'data', target: '/data' }] } }, volumes: { data: { name: 'source-data' } } };
+  for (const key of keys) {
+    expect(deploymentEnvironment.ALLOWED_ENV_KEYS.has(key), key).toBe(true);
+    const env = { ...source, [key]: 'fixture-private-value' };
+    config.services.or3.environment[key] = env[key]!;
+    expect(() => assertSupportedSourceCompose(JSON.stringify(config), 'source-data', 3000, env, [image]), key).not.toThrow();
+    config.services.or3.environment[key] = 'fixture-different-private-value';
+    expect(() => assertSupportedSourceCompose(JSON.stringify(config), 'source-data', 3000, env, [image]), key).toThrow(/drift/i);
+    expect(() => assertSupportedSourceCompose(JSON.stringify(config), 'source-data', 3000, source, [image]), key).toThrow(/drift/i);
+    delete config.services.or3.environment[key];
+    expect(() => assertSupportedSourceCompose(JSON.stringify(config), 'source-data', 3000, env, [image]), key).toThrow(/drift/i);
+  }
+});
+
+// Registry trust and stable acquisition identity must survive a relocation;
+// a hostname-derived identity changes when the target container is created.
+test('adoption retains registry configuration and requires stable acquisition identity', () => {
+  const keys = ['OR3_MARKETPLACE_REGISTRY_ORIGIN', 'OR3_MARKETPLACE_INSTALL_ENABLED', 'OR3_MARKETPLACE_RELEASE_KEYS', 'OR3_INSTANCE_ID',
+    'OR3_MARKETPLACE_MAX_ARTIFACT_BYTES', 'OR3_MARKETPLACE_RESERVE_BYTES',
+    'OR3_BACKGROUND_STREAMING_ENABLED', 'OR3_BACKGROUND_STREAMING_PROVIDER', 'OR3_BACKGROUND_MAX_JOBS', 'OR3_BACKGROUND_MAX_JOBS_PER_USER', 'OR3_BACKGROUND_JOB_TIMEOUT',
+    'NUXT_BACKGROUND_JOBS_ENABLED', 'NUXT_PUBLIC_BACKGROUND_STREAMING_ENABLED', 'NUXT_BACKGROUND_JOBS_STORAGE_PROVIDER', 'NUXT_BACKGROUND_JOBS_MAX_CONCURRENT_JOBS', 'NUXT_BACKGROUND_JOBS_MAX_CONCURRENT_JOBS_PER_USER', 'NUXT_BACKGROUND_JOBS_JOB_TIMEOUT_MS',
+    'OR3_PLUGIN_ALLOWED_MODELS', 'OR3_PLUGIN_MODEL_PRICES', 'NUXT_ADMIN_PLUGIN_ALLOWED_MODELS', 'NUXT_ADMIN_PLUGIN_MODEL_PRICES',
+    'OR3_BASIC_AUTH_BOOTSTRAP_EMAIL', 'OR3_ADMIN_USERNAME', 'OR3_BASIC_AUTH_ACCESS_TTL_SECONDS', 'OR3_SQLITE_STRICT', 'OR3_STORAGE_FS_URL_TTL_SECONDS', 'OR3_ADMIN_JWT_EXPIRY'];
+  const image = 'ghcr.io/saluana/or3-chat:0.1.94';
+  const source: Record<string, string> = { AUTH_PROVIDER: 'basic-auth', OR3_SYNC_PROVIDER: 'sqlite', NUXT_PUBLIC_STORAGE_PROVIDER: 'fs', OR3_AUTH_REGISTRATION_MODE: 'invite_only', OR3_AUTH_AUTO_PROVISION: 'false', SSR_AUTH_ENABLED: 'true', OR3_SYNC_ENABLED: 'true', OR3_STORAGE_ENABLED: 'true', NUXT_SECRETS_PROVIDER: '', OR3_INSTANCE_ID: 'stable-instance' };
+  const config = { services: { or3: { image, environment: { ...source, OR3_BASIC_AUTH_DB_PATH: '/data/auth.sqlite', OR3_SQLITE_DB_PATH: '/data/sync.sqlite', OR3_STORAGE_FS_ROOT: '/data/storage', OR3_ADMIN_DATA_DIR: '/data/admin', OR3_EXTENSIONS_ROOT: '/data/extensions' } as Record<string, string>, ports: [{ target: 3000, published: 3000, host_ip: '127.0.0.1', protocol: 'tcp' }], volumes: [{ type: 'volume', source: 'data', target: '/data' }] } }, volumes: { data: { name: 'source-data' } } };
+  for (const key of keys) {
+    expect(deploymentEnvironment.ALLOWED_ENV_KEYS.has(key), key).toBe(true);
+    const env = { ...source, [key]: 'fixture-value' };
+    config.services.or3.environment[key] = env[key]!;
+    expect(() => assertSupportedSourceCompose(JSON.stringify(config), 'source-data', 3000, env, [image]), key).not.toThrow();
+    config.services.or3.environment[key] = 'different';
+    expect(() => assertSupportedSourceCompose(JSON.stringify(config), 'source-data', 3000, env, [image]), key).toThrow(/drift/i);
+    if (key === 'OR3_INSTANCE_ID') config.services.or3.environment[key] = source.OR3_INSTANCE_ID!;
+    else delete config.services.or3.environment[key];
+  }
+  const missing = { ...source }; delete missing.OR3_INSTANCE_ID; delete config.services.or3.environment.OR3_INSTANCE_ID;
+  expect(() => assertSupportedSourceCompose(JSON.stringify(config), 'source-data', 3000, missing, [image])).toThrow(/identity/i);
+});
+
+// A stopped or running container can retain older environment and mounts even
+// after its Compose files change. Inspection must reject that drift without
+// printing credentials from the inspected environment.
+test('adoption inspects existing source container custody and configuration', async () => {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'or3-adopt-container-')));
+  try {
+    const bin = join(directory, 'bin'); await mkdir(bin);
+    await writeFile(join(directory, '.env'), 'OR3_FIXTURE=1\n');
+    await writeFile(join(bin, 'docker'), `#!/usr/bin/env bun
+const args=process.argv.slice(2);
+if(args[0]==='compose') console.log(process.env.OR3_FIXTURE_CONTAINER === 'missing' ? '' : process.env.OR3_FIXTURE_CONTAINER || 'container');
+else if(args[0]==='inspect') { const f=JSON.parse(process.env.FIXTURE_INSPECT); console.log(JSON.stringify(f.image)); console.log(JSON.stringify(f.env)); console.log(JSON.stringify(f.mounts)); console.log(JSON.stringify(f.labels)); if(args.join(' ').includes('.Config.Entrypoint')) { console.log(JSON.stringify(f.entrypoint)); console.log(JSON.stringify(f.cmd)); } if(args.join(' ').includes('.Config.WorkingDir')) console.log(JSON.stringify(f.cwd)); if(args.join(' ').includes('.HostConfig.ReadonlyRootfs')) console.log(JSON.stringify(f.readonly)); if(args.join(' ').includes('.HostConfig.Tmpfs')) console.log(JSON.stringify(f.tmpfs ?? null)); if(args.join(' ').includes('.HostConfig.Mounts')) console.log(JSON.stringify(f.hostMounts ?? null)); }
+else if(args[0]==='image' && args[1]==='inspect') { console.log('sha256:matching'); if(args.join(' ').includes('.Config.Entrypoint')) { console.log(JSON.stringify(['/entrypoint'])); console.log(JSON.stringify(['serve'])); } if(args.join(' ').includes('.Config.WorkingDir')) { console.log(JSON.stringify('/app')); console.log(JSON.stringify([])); } }
+else if(args[0]==='diff') process.stdout.write(JSON.parse(process.env.FIXTURE_INSPECT).diff || '');
+else process.exit(1);
+`, { mode: 0o755 });
+    const source = { AUTH_PROVIDER: 'basic-auth', OR3_SYNC_PROVIDER: 'sqlite', NUXT_PUBLIC_STORAGE_PROVIDER: 'fs', OR3_AUTH_REGISTRATION_MODE: 'invite_only', OR3_AUTH_AUTO_PROVISION: 'false', SSR_AUTH_ENABLED: 'true', OR3_SYNC_ENABLED: 'true', OR3_STORAGE_ENABLED: 'true', NUXT_SECRETS_PROVIDER: '', OR3_INSTANCE_ID: 'stable-instance' };
+    const image = 'example.test/or3@sha256:' + 'a'.repeat(64);
+    const config = { name: 'source', services: { or3: { image, environment: { ...source, OR3_BASIC_AUTH_DB_PATH: '/data/auth.sqlite', OR3_SQLITE_DB_PATH: '/data/sync.sqlite', OR3_STORAGE_FS_ROOT: '/data/storage', OR3_ADMIN_DATA_DIR: '/data/admin', OR3_EXTENSIONS_ROOT: '/data/extensions' }, ports: [{ target: 3000, published: 3000, host_ip: '127.0.0.1', protocol: 'tcp' }], volumes: [{ type: 'volume', source: 'data', target: '/data' }] } }, volumes: { data: { name: 'source-data' } } };
+    const inspected = { image: 'sha256:matching', env: Object.entries({ ...config.services.or3.environment, PRIVATE_TEST_SECRET: 'never-print-this-secret' }).map(([key, value]) => `${key}=${value}`), mounts: [{ Type: 'volume', Name: 'source-data', Destination: '/data' }], labels: { 'com.docker.compose.project': 'source', 'com.docker.compose.service': 'or3' }, entrypoint: ['/entrypoint'], cmd: ['serve'], cwd: '/app', readonly: true, diff: '' };
+    const wrongEnv = structuredClone(inspected); wrongEnv.env.push('NITRO_SECRETS_PROVIDER=or3-secrets');
+    const wrongMount = structuredClone(inspected); wrongMount.mounts[0]!.Name = 'foreign-data';
+    const aliasMount = structuredClone(inspected); aliasMount.mounts[0]!.Name = 'data';
+    const wrongLabel = structuredClone(inspected); wrongLabel.labels['com.docker.compose.project'] = 'foreign';
+    const wrongImage = { ...inspected, image: 'sha256:foreign' };
+    const codeMount = structuredClone(inspected); codeMount.mounts.push({ Type: 'bind', Name: '', Destination: '/app' });
+    const wrongEntrypoint = { ...inspected, entrypoint: ['/custom'] };
+    const wrongCommand = { ...inspected, cmd: ['custom'] };
+    const wrongCwd = { ...inspected, cwd: '/data' };
+    const preload = structuredClone(inspected); preload.env.push('NODE_OPTIONS=--require=/data/custom.cjs');
+    const writable = { ...inspected, readonly: false };
+    const changedCode = { ...inspected, diff: 'C /app/.output/server/index.mjs\n' };
+    const hiddenTmpfs = { ...inspected, tmpfs: { '/data/storage': 'size=1m' } };
+    const volumeSubpath = { ...inspected, hostMounts: [{ Type: 'volume', Target: '/data', VolumeOptions: { Subpath: 'other' } }] };
+    const script = `import {assertSourceContainer} from ${JSON.stringify(join(import.meta.dir, '../src/deployment/adoption-source.ts'))}; await assertSourceContainer(process.cwd(), ['-f','compose.yaml'], process.env.FIXTURE_IMAGE, process.env.FIXTURE_CONFIG, 'source-data', 3000, JSON.parse(process.env.FIXTURE_SOURCE));`;
+    for (const [input, expected, container] of [[inspected, 0, 'container'], [wrongEnv, 1, 'container'], [wrongMount, 1, 'container'], [aliasMount, 1, 'container'], [wrongLabel, 1, 'container'], [wrongImage, 1, 'container'], [codeMount, 1, 'container'], [wrongEntrypoint, 1, 'container'], [wrongCommand, 1, 'container'], [wrongCwd, 1, 'container'], [preload, 1, 'container'], [writable, 1, 'container'], [changedCode, 1, 'container'], [hiddenTmpfs, 1, 'container'], [volumeSubpath, 1, 'container'], [inspected, 1, 'missing'], [inspected, 1, 'first second']] as const) {
+      await writeFile(join(directory, '.env'), `OR3_FIXTURE_CONTAINER='${container}'\n`);
+      const child = Bun.spawn([process.execPath, '-e', script], { cwd: directory, env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_INSPECT: JSON.stringify(input), FIXTURE_IMAGE: image, FIXTURE_CONFIG: JSON.stringify(config), FIXTURE_SOURCE: JSON.stringify(source) }, stdout: 'pipe', stderr: 'pipe' });
+      const [exit, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+      expect(exit, stderr).toBe(expected);
+      expect(stdout + stderr).not.toContain('never-print-this-secret');
+    }
+  } finally { await rm(directory, { recursive: true, force: true }); }
+}, 30_000);
 
 test('refuses a backup whose deployment identity does not match the live volume', () => {
   const env = buildEnv({
@@ -881,6 +1144,25 @@ test('refuses a backup whose deployment identity does not match the live volume'
     dataSha256: 'sha256:test',
     mode: 'local',
   }, backupEnv, state, env)).toThrow('different deployment identity');
+});
+
+test('restore refuses an authentication or sync provider change before mutation', () => {
+  const env = buildEnv({ mode: 'local', version: '0.1.12', directory: '/tmp/or3-profile-test', email: 'admin@example.com', password: 'AValidPassword123', port: 3000 });
+  const state = stateFromEnv('/tmp/or3-profile-test', env, 'local', 'init', `sha256:${'a'.repeat(64)}`);
+  const manifest = { schemaVersion: 1 as const, backupId: 'backup-test', appVersion: state.appVersion, image: state.image, mode: 'local' as const, deploymentId: state.deploymentId };
+  expect(() => assertBackupMatchesDeployment(manifest, env, state, env)).not.toThrow();
+  expect(() => assertBackupMatchesDeployment(manifest, { ...env, AUTH_PROVIDER: 'clerk', OR3_AUTH_PROVIDER: 'clerk' }, state, env)).toThrow(/profile/i);
+  expect(() => assertBackupMatchesDeployment(manifest, { ...env, OR3_SYNC_PROVIDER: 'convex' }, state, env)).toThrow(/profile/i);
+  expect(() => assertBackupMatchesDeployment(manifest, { ...env, OR3_AUTH_PROVIDER: 'clerk' }, state, env)).toThrow(/profile/i);
+});
+
+test('restore keeps the current S3 destination and refuses profile or prefix drift', () => {
+  const backup = { NUXT_PUBLIC_STORAGE_PROVIDER: 's3', OR3_STORAGE_S3_KEY_PREFIX: 'uploads/', OR3_STORAGE_S3_BUCKET: 'source', OR3_STORAGE_S3_SECRET_ACCESS_KEY: 'old-secret', OR3_STORAGE_S3_SESSION_TOKEN: 'old-token', UNRELATED: 'saved' };
+  const current = { NUXT_PUBLIC_STORAGE_PROVIDER: 's3', OR3_STORAGE_S3_KEY_PREFIX: '/uploads', OR3_STORAGE_S3_BUCKET: 'target', OR3_STORAGE_S3_SECRET_ACCESS_KEY: 'new-secret' };
+  expect(deploymentEnvironment.restoreStorageConfiguration(backup, current)).toEqual({ NUXT_PUBLIC_STORAGE_PROVIDER: 's3', OR3_STORAGE_S3_KEY_PREFIX: '/uploads', OR3_STORAGE_S3_BUCKET: 'target', OR3_STORAGE_S3_SECRET_ACCESS_KEY: 'new-secret', UNRELATED: 'saved' });
+  expect(() => deploymentEnvironment.restoreStorageConfiguration(backup, { ...current, OR3_STORAGE_S3_KEY_PREFIX: 'other/' })).toThrow('backup-prefix-mismatch');
+  expect(() => deploymentEnvironment.restoreStorageConfiguration(backup, { ...current, NUXT_PUBLIC_STORAGE_PROVIDER: 'fs' })).toThrow('backup-profile-mismatch');
+  expect(deploymentEnvironment.restoreStorageConfiguration({ NUXT_PUBLIC_STORAGE_PROVIDER: 'fs', UNRELATED: 'saved' }, { NUXT_PUBLIC_STORAGE_PROVIDER: 'fs' })).toEqual({ NUXT_PUBLIC_STORAGE_PROVIDER: 'fs', UNRELATED: 'saved' });
 });
 
 test('permits only a journaled target environment while recovery is pending', () => {
@@ -954,6 +1236,25 @@ test('refuses unsupported V1 provider modules before adoption', () => {
   );
 });
 
+// Adoption must not accept contradictory auth selectors and silently carry a
+// different provider into a Basic Auth deployment. A single legacy selector
+// and two agreeing selectors remain supported; absent or unknown auth refuses.
+test('adoption requires all specified auth selectors to agree on Basic Auth', () => {
+  const base = {
+    OR3_AUTH_REGISTRATION_MODE: 'invite_only', OR3_AUTH_AUTO_PROVISION: 'false',
+    OR3_SYNC_PROVIDER: 'sqlite', OR3_STORAGE_FS_ROOT: '/data/storage', NUXT_PUBLIC_STORAGE_PROVIDER: 'fs',
+    OR3_BASIC_AUTH_BOOTSTRAP_EMAIL: 'admin@example.com', OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD: 'AValidPassword123', OR3_VERSION: '0.1.94',
+  };
+  const providers = 'or3-provider-basic-auth/nuxt\nor3-provider-sqlite/nuxt\nor3-provider-fs/nuxt';
+  const check = (auth: Record<string, string>) => assertSupportedSource('/tmp/v1', { ...base, ...auth }, providers);
+  expect(() => check({ AUTH_PROVIDER: 'basic-auth' })).not.toThrow();
+  expect(() => check({ OR3_AUTH_PROVIDER: 'basic-auth' })).not.toThrow();
+  expect(() => check({ AUTH_PROVIDER: 'basic-auth', OR3_AUTH_PROVIDER: 'basic-auth' })).not.toThrow();
+  for (const auth of [{}, { AUTH_PROVIDER: 'clerk' }, { AUTH_PROVIDER: 'basic-auth', OR3_AUTH_PROVIDER: 'clerk' }, { AUTH_PROVIDER: 'clerk', OR3_AUTH_PROVIDER: 'basic-auth' }]) {
+    expect(() => check(auth)).toThrow(/auth provider|basic auth/i);
+  }
+});
+
 test('requires archive space plus reserve headroom before destructive ops', () => {
   const required = 100 * 1024 * 1024;
   const headroom = Math.max(required / 2, 64 * 1024 * 1024);
@@ -989,34 +1290,7 @@ test('prunes newest-first retention while protecting rollback and pending backup
   expect(() => selectPruneTargets(backups, 1.5, new Set())).toThrow('at least 1');
 });
 
-test('purge targets derive only from validated state and refuse without a recent backup', () => {
-  const localEnv = buildEnv({
-    mode: 'local',
-    version: '0.1.12',
-    directory: '/tmp/or3-cloud-purge-local',
-    email: 'admin@example.com',
-    password: 'AValidPassword123',
-    port: 3000,
-  });
-  const localState = stateFromEnv('/tmp/or3-cloud-purge-local', localEnv, 'local', 'init', 'sha256:test');
-  expect(purgeVolumesFromState(localState)).toEqual([localState.volumeName]);
-
-  const publicEnv = buildEnv({
-    mode: 'public',
-    version: '0.1.12',
-    directory: '/tmp/or3-cloud-purge-public',
-    email: 'admin@example.com',
-    password: 'AValidPassword123',
-    domain: 'cloud.example.com',
-    port: 3000,
-  });
-  const publicState = stateFromEnv('/tmp/or3-cloud-purge-public', publicEnv, 'public', 'init', 'sha256:test');
-  expect(purgeVolumesFromState(publicState)).toEqual([
-    publicState.volumeName,
-    publicState.caddyDataVolume as string,
-    publicState.caddyConfigVolume as string,
-  ]);
-
+test('purge freshness rejects stale and future timestamps', () => {
   const now = Date.now();
   expect(() => assertPurgeBackupFreshness([], now)).toThrow('backup newer than 24 hours');
   expect(() => assertPurgeBackupFreshness(
@@ -1027,6 +1301,10 @@ test('purge targets derive only from validated state and refuse without a recent
     [{ backupId: 'backup-fresh', createdAt: new Date(now - 60 * 60 * 1000).toISOString() }],
     now,
   )).not.toThrow();
+  expect(() => assertPurgeBackupFreshness(
+    [{ backupId: 'backup-future', createdAt: new Date(now + 60_000).toISOString() }],
+    now,
+  )).toThrow('backup newer than 24 hours');
 });
 
 test('credentials reset script rewrites the owner hash, revokes sessions, and rotates admin credentials', () => {
@@ -1122,7 +1400,7 @@ test('status projection never exposes credential-reset secrets or raw configurat
   const state = stateFromEnv('/tmp/or3-projection', env, 'local', 'init', `sha256:${'a'.repeat(64)}`);
   state.incompleteOperation = {
     id: 'credentials-reset-1', operation: 'credentials-reset', startedAt: new Date().toISOString(),
-    message: 'resetting', credentialReset: { nextEnv: { OR3_ADMIN_PASSWORD: 'AdminSecretPassword123', OR3_BASIC_AUTH_JWT_SECRET: 'jwt-secret-value', OR3_STORAGE_FS_TOKEN_SECRET: 'storage-secret' } },
+    message: 'resetting', remoteReconcile: { uploaded: 2, markersCreated: 1 }, credentialReset: { nextEnv: { OR3_ADMIN_PASSWORD: 'AdminSecretPassword123', OR3_BASIC_AUTH_JWT_SECRET: 'jwt-secret-value', OR3_STORAGE_FS_TOKEN_SECRET: 'storage-secret' } },
   };
   state.lastError = 'OR3_ADMIN_PASSWORD=leaked-in-error';
   const serialized = JSON.stringify(publicStateProjection(state));
@@ -1132,6 +1410,7 @@ test('status projection never exposes credential-reset secrets or raw configurat
   expect(serialized).not.toContain('leaked-in-error');
   expect(serialized).toContain('credentials-reset-1');
   expect(serialized).toContain('credentials-reset');
+  expect(publicStateProjection(state).incompleteOperation?.remoteReconcile).toEqual({ uploaded: 2, markersCreated: 1 });
 });
 
 test('lifecycle phase policy blocks start/restart but allows stop during a pending operation', () => {

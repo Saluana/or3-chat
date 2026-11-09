@@ -55,6 +55,7 @@ const COMMAND_FLAGS: Record<string, readonly string[]> = {
   init: ['local', 'public', 'domain', 'admin-email', 'admin-password', 'admin-password-file', 'port'],
   update: ['to', 'dry-run', 'json'],
   backup: ['keep', 'force', 'yes', 'json'],
+  'vault-key': ['out'],
   restore: ['yes'],
   rollback: ['yes'],
   doctor: [],
@@ -90,7 +91,7 @@ export function assertCommandFlags(command: string, flags: Flags) {
 
 /** Reject positional typos before any command can act on the current directory. */
 export function assertCommandPositionals(command: string, positionals: string[]) {
-  if (command === 'backup' || command === 'credentials') return;
+  if (command === 'backup' || command === 'credentials' || command === 'vault-key') return;
   if (command === 'init' || command === 'adopt') {
     if (positionals.length > 1) throw new Error(`${command} accepts at most one target directory.`);
     return;

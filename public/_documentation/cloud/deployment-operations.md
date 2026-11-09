@@ -6,6 +6,30 @@ It accepts the current complete history through `032_sync_observations`
 and selected earlier histories through 024, 026, 028, 029, and 031. An incomplete or
 unknown history is refused; see [SQLite operations](/documentation/cloud/provider-sqlite).
 
+The experimental `clerk-sqlite-s3` image build profile is not yet supported for
+managed deployment. Its image includes experimental S3 inspection helpers;
+they do not certify managed backup and restore until recovery is integrated and
+qualified.
+The managed backup, update, restore, and rollback paths also refuse this profile
+before creating a safety snapshot; a database-only snapshot is not an S3 backup.
+An older schema-1 snapshot whose saved configuration selects S3 is preserved but
+is not listed as a verified recovery point or accepted for export and restore.
+Restore refuses a filesystem/S3 provider change and an S3 key-prefix mismatch;
+for S3 configuration it preserves the current deployment's target settings and
+credentials. These guards do not enable or certify S3 recovery.
+
+For the supported filesystem profile, backup and the safety snapshots used by
+update, restore and rollback inspect the existing app and managed vault
+containers. They refuse mismatched startup settings or vault connections,
+uncaptured mounts, temporary overlays outside `/tmp`, and volume subdirectories.
+If a container or vault custody is missing, preserve the existing data and
+backups for a separate recovery procedure; creating empty vault volumes does
+not restore saved credentials. Start, restart, credential reset, and recovery
+refuse unsupported provider selections under legacy managed state, which cannot
+record a Clerk/S3 profile. These checks include saved and resolved Compose
+settings where the operation may recreate the app; they require real-Docker
+qualification.
+
 ## Start with the right operator
 
 For managed installations, follow [Set up Cloud](/documentation/cloud/setup) and the canonical [installation guide](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/installation.md). The fixed profile owns its image, generated configuration, and persistent volume. Optional provider configuration belongs to the [source path](/documentation/cloud/configure), not a partial environment recipe copied into a managed installation.
@@ -40,9 +64,10 @@ required reserve and free space available before retrying a capacity refusal.
 
 - Liveness/readiness endpoint: `GET /api/health`
 - Deep checks: `GET /api/health?deep=true`
-- The managed container probe also requires read/write access to `/data` and
-  opens the Basic Auth and sync SQLite files read/write. An HTTP-only green
-  response cannot hide a volume-ownership or database-open failure.
+- The managed container probe requires read/write access to `/data`, opens the
+  sync SQLite file and, for Basic Auth, the auth SQLite file read/write, and
+  checks the reported provider identities. A green HTTP status alone cannot
+  hide a provider mismatch or database-open failure.
 - Managed backups include an authentication tag bound to a deployment-local
   key as well as checksummed Compose/Caddy assets. Restore/export rejects a
   modified or foreign archive. `update` installs the target CLI's generated
@@ -50,8 +75,25 @@ required reserve and free space available before retrying a capacity refusal.
   recovery reinstall the matching backed-up assets.
   Backup creation journals the exact artifact before archiving, validates the
   completed artifact through the restore reader before reporting success, and
-  lets `recover` remove only a journal-bound incomplete artifact. Standalone
+  lets `recover` remove only a journal-bound incomplete artifact. It refuses
+  unsupported or ambiguous runtime auth, sync and storage overrides before
+  recording a backup. Standalone
   backup and failed adoption preserve an intentionally stopped source service.
+  Adoption requires the resolved source Compose profile to match its `.env`
+  and the existing source container to match the authenticated published image.
+  Ordinary source-built V1 deployments are not qualified. Adoption also refuses
+  sources that may use a secret vault, because the source archive does not
+  migrate vault custody. Those sources need a separate reviewed migration and
+  recovery procedure. Sources with additional services, including Caddy, are
+  also refused. Supported application encryption and API credentials
+  are copied only when the source file, resolved Compose environment and
+  existing container agree; a mismatch stops adoption without printing them.
+  The source must use the managed admin and extension paths, the supported
+  SQLite driver, and an explicit, previously used acquisition identity. Unknown
+  effective application settings are refused rather than silently dropped.
+  Plain recovery refuses an interrupted
+  adoption because replaying its source snapshot can discard target writes;
+  inspect both deployments before choosing `recover --restore --yes`.
   Docker operations are deadline-bound, daemon architecture is authoritative,
   and lifecycle rename commits fsync both content and parent directories.
   Assetless legacy restores fail with historical-release recovery guidance;
@@ -60,7 +102,9 @@ required reserve and free space available before retrying a capacity refusal.
   `npx --yes @or3/cloud@<exact-version> update --to <exact-version>`.
 - The backup authentication key is not included in an exported archive. Escrow
   an owner-only copy of `.or3-cloud/backup-auth.key` separately in an encrypted
-  secret store and restore it before using an off-host archive.
+  secret store and restore it before using an off-host archive. Data purge is
+  disabled until the CLI supports and qualifies reconstruction from an export;
+  a local key alone does not establish off-host recovery.
 - The canonical update procedure — including the development-image workflow used
   for routine source changes — is the repository's
   [Updating OR3](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/cloud-updates.md)
@@ -122,10 +166,21 @@ completion proof requires the explicit choice.
 
 `backup list` classifies every backup-store entry (`verified`,
 `legacy-unsigned`, `legacy-adoption`, `unsupported`, `invalid`, `unreadable`)
-instead of aborting or silently skipping. Only `verified` entries are trusted
-restore points; legacy and suspect entries are preserved and labelled.
-`backup list --json` returns the same classification as one object. Automatic
-retention protects the rollback point, the pending update snapshot, and every
+instead of aborting or silently skipping. A `verified` classification means its
+manifest and files passed their authentication and checksum checks; it does
+not by itself prove a successful recovery. The list identifies S3 reference-only
+snapshots, which depend on the original bucket and cannot be exported as recovery
+copies. Managed S3 recovery remains unavailable as described above. Legacy and
+suspect entries are preserved and labelled. `backup list --json` returns the
+same classification as one object, including `snapshotKind` (`full`, `safety`,
+or `null` for unmarked) and `recoveryArtifactsComplete`. Coverage only indicates
+the required saved assets and vault archive are present; it does not certify a
+restore. Retention preserves future-dated, older unmarked, and
+artifact-incomplete snapshots without letting them displace current backups. It
+counts fully inspected backups, safety snapshots, and S3 reference snapshots
+separately, so they cannot displace one another.
+Automatic retention protects the rollback point,
+the pending update snapshot, and every
 restore/rollback source; it defers when a suspect entry is present, and no
 `--force` path can remove a protected recovery source. Legacy `adopt-source-*`
 directories and pre-authentication `backup-*` archives (no `manifest.auth`)
@@ -165,6 +220,14 @@ Standalone `npx @or3/cloud backup` reports separate preflight, maintenance,
 capture, restart, verification, and retention steps. The pending operation's
 `backupProgress` in `status --json` records the last observed service and
 artifact states separately; a recorded milestone is not a fresh health probe.
+The JSON `recoveryPoint` field identifies the newest locally authenticated,
+fully inspected filesystem snapshot with managed assets and required vault
+backup. Safety snapshots, older unmarked snapshots, S3 snapshots while managed
+S3 recovery is disabled, and future timestamps are excluded. It is `null` if
+none can be established. A monitor can use
+its `createdAt` for a freshness alert, but this field does not prove off-host
+custody, vault-key availability, or a successful restore rehearsal. S3 restore
+remains unavailable until its recovery path has been qualified.
 
 The service is stopped while the complete `/data` archive, configuration, and
 managed assets are captured. This includes the separate Basic Auth and sync

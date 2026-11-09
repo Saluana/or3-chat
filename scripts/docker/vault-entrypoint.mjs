@@ -3,7 +3,8 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { createConnection } from 'node:net';
-import { createReadStream, lstatSync, readdirSync, readFileSync, writeFileSync, chmodSync, chownSync, openSync, closeSync, fsyncSync, fchownSync, renameSync, unlinkSync, existsSync } from 'node:fs';
+import { constants, createReadStream, createWriteStream, lstatSync, fstatSync, readdirSync, readFileSync, readSync, writeFileSync, chmodSync, chownSync, openSync, closeSync, fsyncSync, fchownSync, renameSync, unlinkSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 process.umask(0o077);
@@ -48,6 +49,64 @@ if (process.argv[2] === 'health') {
     cli(['backup', '--vault-dir', vault, '--key-file', key, '--out-file', output]);
     await pipeline(createReadStream(output), process.stdout);
     unlinkSync(output); sync(data);
+} else if (process.argv[2] === 'restore-empty') {
+    let temp, incoming, incomingIdentity, oldKey;
+    try {
+        if (process.getuid() !== 0) fail();
+        process.setgroups([]);
+        const encoded = process.env.OR3_VAULT_RESTORE_KEY_B64;
+        const expected = process.env.OR3_VAULT_RESTORE_EXPECTED_ID;
+        delete process.env.OR3_VAULT_RESTORE_KEY_B64;
+        if (typeof encoded !== 'string' || !/^[A-Za-z0-9+/]{43}=$/.test(encoded) || !/^[a-f0-9]{32}$/.test(expected || '')) fail();
+        oldKey = Buffer.from(encoded, 'base64');
+        if (oldKey.length !== 32 || oldKey.toString('base64') !== encoded) fail();
+        // Only an operation with newly created empty volumes may invoke this.
+        for (const path of [data, custody]) {
+            const st = lstatSync(path);
+            if (!st.isDirectory() || st.isSymbolicLink() || readdirSync(path).length) fail();
+        }
+        directory(data, uid, 0o700); directory(custody, uid, 0o700);
+        temp = mkdtempSync('/tmp/or3-vault-restore-'); chownSync(temp, uid, gid); chmodSync(temp, 0o700);
+        const keyPath = `${temp}/old.key`, keyFd = openSync(keyPath, 'wx', 0o600);
+        try { fchownSync(keyFd, uid, gid); writeFileSync(keyFd, oldKey); fsyncSync(keyFd); } finally { closeSync(keyFd); oldKey.fill(0); oldKey = undefined; }
+        incoming = `${data}/incoming-${randomUUID()}.backup`;
+        const fd = openSync(incoming, 'wx', 0o600);
+        try {
+            incomingIdentity = fstatSync(fd);
+            fchownSync(fd, uid, gid);
+            let bytes = 0;
+            const limit = new Transform({ transform(chunk, _encoding, done) { bytes += chunk.length; done(bytes <= 2 ** 30 + 1024 ? null : new Error('backup limit'), chunk); } });
+            await pipeline(process.stdin, limit, createWriteStream(incoming, { fd, autoClose: false }));
+            fsyncSync(fd);
+        } finally { closeSync(fd); }
+        // The manifest authenticates the entire encrypted backup. Reject an
+        // obvious identity mismatch before the provider creates new custody;
+        // the provider still authenticates the complete header and ciphertext.
+        const input = openSync(incoming, constants.O_RDONLY | constants.O_NOFOLLOW);
+        try {
+            const current = fstatSync(input), header = Buffer.alloc(40);
+            if (current.dev !== incomingIdentity.dev || current.ino !== incomingIdentity.ino || readSync(input, header, 0, header.length, 0) !== header.length || !header.subarray(0, 8).equals(Buffer.from('OR3BAK01')) || !header.subarray(8).equals(Buffer.from(expected, 'ascii'))) fail();
+        } finally { closeSync(input); }
+        const result = cli(['restore', '--backup-file', incoming, '--key-file', keyPath, '--destination', vault, '--new-key-file', key, '--operator-file', operator]);
+        if (result.vaultId !== expected) fail();
+        privateFile(key, uid); privateFile(operator, uid); privateFile(`${vault}/complete`, uid);
+        if (readFileSync(`${vault}/complete`, 'utf8').trim() !== expected) fail();
+        process.stdout.write(`${JSON.stringify({ vaultId: result.vaultId })}\n`);
+    } catch {
+        process.stderr.write('Vault restore refused; preserve custody and the encrypted backup.\n');
+        process.exitCode = 1;
+    } finally {
+        oldKey?.fill(0);
+        try {
+            if (incomingIdentity && incoming && existsSync(incoming)) {
+                const current = lstatSync(incoming);
+                if (current.dev !== incomingIdentity.dev || current.ino !== incomingIdentity.ino || !current.isFile() || current.isSymbolicLink()) {
+                    process.stderr.write('Vault restore cleanup refused a changed incoming file.\n');
+                    process.exitCode = 1;
+                } else { unlinkSync(incoming); sync(data); }
+            }
+        } finally { if (temp) rmSync(temp, { recursive: true, force: true }); }
+    }
 } else {
     let service;
     let renewal;

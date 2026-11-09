@@ -6,6 +6,7 @@ Usage:
   npx @or3/cloud init [directory] --public --domain <hostname>
   npx @or3/cloud update [--to <exact-version>] [--dry-run] [--json]
   npx @or3/cloud backup [list [--json]|prune [--keep <n>]|export <backup-id> <destination-dir>]
+  npx @or3/cloud vault-key export --out <absolute-path>
   npx @or3/cloud restore <backup-id-or-path> --yes
   npx @or3/cloud rollback --yes
   npx @or3/cloud credentials reset --yes [--owner-password-file <path> --admin-password-file <path>]
@@ -28,6 +29,7 @@ Options:
   --verification-password-file <path>  Read the current owner password for this verification
   --port <port>                  Local OR3 port (default: 3000)
   --keep <n>                     Backups to retain when pruning (default: 5)
+  --out <absolute-path>          New owner-only vault-key export destination
   --force                        Bypass suspect-entry deferral; protected recovery backups remain protected
   --tail <n>                     Log lines to show (default: 200)
   --public                       Require verification through the public HTTPS origin
@@ -36,7 +38,7 @@ Options:
   --finish                       Commit a proven completed replacement without restoring data
   --restore                      Explicitly restore the recorded snapshot (requires --yes)
   --json                         Emit one machine-readable result object on stdout
-  --purge-data                   Remove data volumes and managed files (with remove)
+  --purge-data                   Currently disabled pending export reconstruction support
   --yes                          Confirm a destructive restore, rollback, credentials reset, or purge
   --help                         Show this help
   --version                      Show the Cloud package version

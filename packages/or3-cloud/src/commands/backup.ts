@@ -1,4 +1,6 @@
 import { createBackup } from '../backup/create';
+import { assertVaultVolumesExist } from '../backup/vault';
+import { assertBackupSourceProfile, assertSupportedBackupProfile } from '../backup/references';
 import { exportBackup } from '../backup/export';
 import { inventoryBackups } from '../backup/manifests';
 import { BACKUP_RETENTION_KEEP, pruneBackups } from '../backup/retention';
@@ -15,7 +17,7 @@ import {
   writeState,
 } from '../deployment/state-store';
 import { ensureDocker } from '../runtime/docker';
-import { projectServiceRunning } from '../runtime/project';
+import { managedVaultEnabled, projectServiceRunning } from '../runtime/project';
 import { id, now, redact } from '../util/primitives';
 
 function parseKeep(flags: Flags) {
@@ -29,6 +31,9 @@ async function backupCreateCommand(directory: string) {
   await ensureDocker();
   const loaded = await loadManaged(directory);
   assertNoPending(loaded.state);
+  assertSupportedBackupProfile(loaded.env);
+  await assertBackupSourceProfile(loaded.directory, loaded.state, loaded.env);
+  if (managedVaultEnabled(loaded.directory, loaded.env)) await assertVaultVolumesExist(loaded.directory, loaded.state);
   const backupId = id('backup');
   const initialAppRunning = await projectServiceRunning(loaded.directory, loaded.state.mode);
   const pending: PendingOperation = {
@@ -109,6 +114,10 @@ async function backupListCommand(directory: string, flags: Flags = {}) {
         appVersion: backup.appVersion,
         bytes: backup.bytes,
         dataSha256: backup.dataSha256,
+        manifestSchemaVersion: backup.schemaVersion,
+        snapshotKind: backup.snapshotKind ?? null,
+        recoveryArtifactsComplete: backup.recoveryArtifactsComplete === true,
+        ...(backup.remoteKind ? { remoteKind: backup.remoteKind } : {}),
         trust: 'verified',
       })),
       findings: findings.map((entry) => ({ entryName: entry.entryName, kind: entry.kind, code: entry.code, message: entry.message })),
@@ -124,12 +133,17 @@ async function backupListCommand(directory: string, flags: Flags = {}) {
     console.log(`No authenticated backups are available for ${loaded.directory}.`);
   } else {
     console.log(`OR3 Cloud backups for ${loaded.directory} (${verified.length} verified):`);
-    console.log('backupId                      createdAt                      version  bytes     trust     checksum');
+    console.log('backupId                      createdAt                      version  bytes     kind                snapshot  coverage    trust     checksum');
     for (const backup of verified) {
+      const kind = backup.remoteKind === 's3-reference-v1' ? 'reference-only' : backup.remoteKind === 's3-copy-v1' ? 's3-copy' : 'filesystem';
+      const snapshot = backup.snapshotKind ?? 'unmarked';
+      const coverage = backup.recoveryArtifactsComplete ? 'complete' : 'incomplete';
       console.log(
-        `${backup.backupId.padEnd(30)} ${backup.createdAt.padEnd(30)} ${backup.appVersion.padEnd(8)} ${String(backup.bytes).padStart(9)}  ${'verified'.padEnd(9)} ${backup.dataSha256.slice(0, 12)}`,
+        `${backup.backupId.padEnd(30)} ${backup.createdAt.padEnd(30)} ${backup.appVersion.padEnd(8)} ${String(backup.bytes).padStart(9)}  ${kind.padEnd(19)} ${snapshot.padEnd(9)} ${coverage.padEnd(11)} ${'verified'.padEnd(9)} ${backup.dataSha256.slice(0, 12)}`,
       );
     }
+    console.log('Verified checksums and artifact coverage are not proof of a successful recovery.');
+    if (verified.some(backup => backup.remoteKind === 's3-reference-v1')) console.log('Reference-only snapshots require their original bucket and cannot be exported as recovery copies.');
   }
   if (findings.length > 0) {
     console.log(`\nPreserved history (${findings.length}; never trusted for restore):`);

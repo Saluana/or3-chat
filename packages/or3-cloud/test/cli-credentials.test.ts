@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildCredentialsResetScript } from '../src/credentials/reset-script';
-import { parseEnv } from '../src/deployment/env';
+import { parseEnv, serializeEnv } from '../src/deployment/env';
 import { createSandbox } from './process-harness';
 import type { Sandbox } from './process-harness';
 
@@ -37,6 +37,71 @@ async function artifactText(fixture: Sandbox) {
   const files = [join(fixture.directory, '.env'), join(fixture.cloud, 'state.json'), join(fixture.directory, '.or3-initial-credentials')];
   return (await Promise.all(files.map((file) => readFile(file, 'utf8').catch(() => '')))).join('\n');
 }
+
+test('credential reset refuses missing vault custody before recording or changing credentials', async () => {
+  const fixture = await sandbox();
+  const beforeState = await fixture.readStateText(), beforeEnv = await fixture.readEnvText();
+  await fixture.configure({ failures: [{ match: `volume inspect ${fixture.state.volumeName}-vault-data`, message: 'fixture custody volume missing' }] });
+  await fixture.reset();
+  const result = await fixture.cli(['credentials', 'reset', '--yes', ...await passwordFiles(fixture)]);
+  expect(result.exitCode, result.output).toBe(1);
+  expect(result.output).toMatch(/vault.*custody/i);
+  expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+  expect(await fixture.readStateText()).toBe(beforeState);
+  expect(await fixture.readEnvText()).toBe(beforeEnv);
+});
+
+test('credential reset refuses provider drift before journaling or changing credentials', async () => {
+  const fixture = await sandbox();
+  await writeFile(join(fixture.directory, '.env'), serializeEnv({ ...fixture.env, NUXT_AUTH_PROVIDER: 'clerk' }));
+  const beforeState = await fixture.readStateText(), beforeEnv = await fixture.readEnvText();
+  await fixture.reset();
+  const result = await fixture.cli(['credentials', 'reset', '--yes', ...await passwordFiles(fixture)]);
+  expect(result.exitCode, result.output).toBe(1);
+  expect(result.output).toMatch(/profile|provider/i);
+  expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+  expect(await fixture.readStateText()).toBe(beforeState);
+  expect(await fixture.readEnvText()).toBe(beforeEnv);
+});
+
+test('credential recovery refuses an unsupported journal target before changing credentials', async () => {
+  const fixture = await sandbox();
+  const base = await fixture.readState();
+  await fixture.writeState({ ...base, incompleteOperation: { id: 'credentials-profile', operation: 'credentials-reset', startedAt: base.updatedAt, message: 'fixture', credentialReset: { nextEnv: { ...fixture.env, NUXT_AUTH_PROVIDER: 'clerk', OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD: OWNER_PASSWORD, OR3_ADMIN_PASSWORD: ADMIN_PASSWORD } } } });
+  const beforeState = await fixture.readStateText(), beforeEnv = await fixture.readEnvText();
+  await fixture.reset();
+  const result = await fixture.cli(['recover']);
+  expect(result.exitCode, result.output).toBe(1);
+  expect(result.output).toMatch(/profile|provider/i);
+  expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+  expect(await fixture.readStateText()).toBe(beforeState);
+  expect(await fixture.readEnvText()).toBe(beforeEnv);
+});
+
+test('credential reset refuses a Compose provider override before journaling', async () => {
+  const fixture = await sandbox();
+  await fixture.configure({ sourceComposeOverrides: { NUXT_AUTH_PROVIDER: 'clerk' } });
+  const before = await fixture.readStateText();
+  await fixture.reset();
+  const result = await fixture.cli(['credentials', 'reset', '--yes', ...await passwordFiles(fixture)]);
+  expect(result.exitCode, result.output).toBe(1);
+  expect(result.output).toMatch(/profile|provider/i);
+  expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+  expect(await fixture.readStateText()).toBe(before);
+});
+
+test('credential reset retains its journal if custody disappears before restart', async () => {
+  const fixture = await sandbox();
+  await fixture.configure({ failures: [{ match: `volume inspect ${fixture.state.volumeName}-vault-key`, skip: 2, message: 'fixture custody volume missing' }] });
+  await fixture.reset();
+  const result = await fixture.cli(['credentials', 'reset', '--yes', ...await passwordFiles(fixture)]);
+  expect(result.exitCode, result.output).toBe(1);
+  expect(result.output).toMatch(/vault.*custody/i);
+  const trace = await fixture.traceText();
+  expect(trace).toContain('OR3_RESET_OWNER_PASSWORD');
+  expect(trace).not.toMatch(/\bup -d\b/);
+  expect((await fixture.readState()).incompleteOperation?.operation).toBe('credentials-reset');
+});
 
 test('credentials reset rotates both credentials, restarts, verifies, and leaves no recovery secrets', async () => {
   const fixture = await sandbox();

@@ -1,8 +1,9 @@
 import { boolFlag, type Flags } from '../cli/args';
+import { assertVaultVolumesExist } from '../backup/vault';
 import { resolveResetPasswords } from '../credentials/inputs';
 import { applyCredentialReset } from '../credentials/reset';
 import type { PendingOperation } from '../deployment/contracts';
-import { secretValues } from '../deployment/env';
+import { assertLegacyManagedProfile, secretValues } from '../deployment/env';
 import { assertDeploymentDirectoryIdentity } from '../deployment/identity';
 import {
   assertNoPending,
@@ -12,6 +13,8 @@ import {
   writeState,
 } from '../deployment/state-store';
 import { ensureDocker } from '../runtime/docker';
+import { assertLegacyComposeProfile } from '../runtime/compose';
+import { managedVaultEnabled } from '../runtime/project';
 import { id, now, randomSecret, redact } from '../util/primitives';
 
 async function credentialsResetCommand(directory: string, flags: Flags) {
@@ -20,6 +23,9 @@ async function credentialsResetCommand(directory: string, flags: Flags) {
   const loaded = await loadManaged(directory);
   assertDeploymentDirectoryIdentity(directory, loaded.state);
   assertNoPending(loaded.state);
+  assertLegacyManagedProfile(loaded.env);
+  await assertLegacyComposeProfile(loaded.directory, loaded.state.mode, loaded.env);
+  if (managedVaultEnabled(loaded.directory, loaded.env)) await assertVaultVolumesExist(loaded.directory, loaded.state);
   const ownerEmail = loaded.env.OR3_MANAGED_OWNER_EMAIL || loaded.env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL;
   const adminUsername = loaded.env.OR3_ADMIN_USERNAME;
   if (!ownerEmail) throw new Error('The managed owner email is missing from .env, so the owner account cannot be reset.');

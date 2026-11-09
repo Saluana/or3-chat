@@ -17,9 +17,89 @@ export const SECRET_KEYS = [
   'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD',
   'OR3_AUTH_INVITE_TOKEN_SECRET',
   'OR3_STORAGE_FS_TOKEN_SECRET',
+  'OR3_STORAGE_S3_ACCESS_KEY_ID',
+  'OR3_STORAGE_S3_SECRET_ACCESS_KEY',
+  'OR3_STORAGE_S3_SESSION_TOKEN',
+  'NUXT_CLERK_SECRET_KEY',
+  'NUXT_AUTH_INVITE_TOKEN_SECRET',
+  'NUXT_ADMIN_AUTH_PASSWORD',
+  'NUXT_ADMIN_AUTH_JWT_SECRET',
+  'OR3_LIBRARY_LINK_SECRET',
+  'NUXT_ADMIN_LIBRARY_LINK_SECRET',
+  'OR3_PLUGIN_CONNECTION_SECRET',
+  'NUXT_ADMIN_PLUGIN_CONNECTION_SECRET',
+  'OR3_BACKGROUND_ENCRYPTION_KEY',
+  'NUXT_BACKGROUND_JOBS_ENCRYPTION_KEY',
+  'OR3_WEBHOOKS_ENCRYPTION_KEY',
+  'NUXT_WEBHOOKS_ENCRYPTION_KEY',
+  'OR3_CONNECT_ENCRYPTION_KEY',
+  'NUXT_CONNECT_ENCRYPTION_KEY',
+  'OR3_CONNECT_CLOUDFLARE_API_TOKEN',
+  'NUXT_CONNECT_CLOUDFLARE_API_TOKEN',
+  'OPENROUTER_API_KEY',
+  'NUXT_OPENROUTER_API_KEY',
+  'OR3_OPENAI_API_KEY',
+  'NUXT_OPENAI_API_KEY',
+  'OR3_BILLING_STRIPE_SECRET_KEY',
+  'OR3_BILLING_STRIPE_WEBHOOK_SECRET',
+  'CONVEX_SELF_HOSTED_ADMIN_KEY',
+  'CONVEX_DEPLOY_KEY',
   'OR3_ADMIN_JWT_SECRET',
   'OR3_ADMIN_PASSWORD',
 ];
+
+export type ManagedProviderProfile = 'basic-sqlite-fs' | 'clerk-sqlite-s3';
+
+/** The managed backup contract supports only these complete provider profiles. */
+export function managedProviderProfile(env: Record<string, string>): ManagedProviderProfile {
+  const auth = env.AUTH_PROVIDER ?? env.OR3_AUTH_PROVIDER ?? 'basic-auth';
+  const sync = env.OR3_SYNC_PROVIDER ?? 'sqlite';
+  const storage = env.NUXT_PUBLIC_STORAGE_PROVIDER ?? 'fs';
+  if (env.AUTH_PROVIDER && env.OR3_AUTH_PROVIDER && env.AUTH_PROVIDER !== env.OR3_AUTH_PROVIDER || sync !== 'sqlite') {
+    throw new Error('backup-profile-mismatch: unsupported or inconsistent managed provider profile.');
+  }
+  if (auth === 'basic-auth' && storage === 'fs') return 'basic-sqlite-fs';
+  if (auth === 'clerk' && storage === 's3') return 'clerk-sqlite-s3';
+  throw new Error('backup-profile-mismatch: unsupported managed provider profile.');
+}
+
+/** Schemas 1 and 2 cannot record or authorize a different provider profile. */
+export function assertLegacyManagedProfile(env: Record<string, string>) {
+  const overrides: Record<string, string> = {
+    SSR_AUTH_ENABLED: 'true', OR3_SYNC_ENABLED: 'true', OR3_CLOUD_SYNC_ENABLED: 'true',
+    OR3_STORAGE_ENABLED: 'true', OR3_CLOUD_STORAGE_ENABLED: 'true', OR3_SQLITE_DRIVER: 'better-sqlite3',
+    OR3_STORAGE_PROVIDER: 'fs', NUXT_AUTH_ENABLED: 'true', NUXT_AUTH_PROVIDER: 'basic-auth', NUXT_PUBLIC_AUTH_PROVIDER: 'basic-auth', NUXT_PUBLIC_SSR_AUTH_ENABLED: 'true',
+    NUXT_SYNC_ENABLED: 'true', NUXT_PUBLIC_SYNC_ENABLED: 'true', NUXT_SYNC_PROVIDER: 'sqlite', NUXT_PUBLIC_SYNC_PROVIDER: 'sqlite',
+    NUXT_STORAGE_ENABLED: 'true', NUXT_PUBLIC_STORAGE_ENABLED: 'true', NUXT_STORAGE_PROVIDER: 'fs',
+  };
+  const ambiguous = /^(?:RUNTIME_CONFIG$|NUXT_(?:AUTH|SYNC|STORAGE|PUBLIC)$|NITRO_ENV_(?:PREFIX|EXPANSION)$|NITRO_(?:AUTH|SYNC|STORAGE|PUBLIC)(?:_|$))/;
+  if (managedProviderProfile(env) !== 'basic-sqlite-fs' ||
+      Object.entries(overrides).some(([key, expected]) => env[key] !== undefined && env[key] !== expected) ||
+      Object.keys(env).some((key) => ambiguous.test(key))) {
+    throw new Error('Legacy managed state supports only the Basic/SQLite/filesystem profile; provider conversion requires a separate qualified deployment.');
+  }
+}
+
+/** Retain the deployment-local S3 target when restoring authenticated config. */
+export function restoreStorageConfiguration(backup: Record<string, string>, current: Record<string, string>): Record<string, string> {
+  const sourceProvider = backup.NUXT_PUBLIC_STORAGE_PROVIDER;
+  const targetProvider = current.NUXT_PUBLIC_STORAGE_PROVIDER;
+  if (sourceProvider !== targetProvider && (sourceProvider === 's3' || targetProvider === 's3' || sourceProvider && targetProvider)) {
+    throw new Error('backup-profile-mismatch: backup and deployment use different storage providers.');
+  }
+  if (sourceProvider !== 's3') return { ...backup };
+  // Match the S3 provider's prefix normalization; stored IDs include it.
+  const prefix = (value: string | undefined) => {
+    const trimmed = (value ?? '').trim().replace(/^\/+/, '').replace(/\/+$/, '');
+    return trimmed ? `${trimmed}/` : '';
+  };
+  if (prefix(backup.OR3_STORAGE_S3_KEY_PREFIX) !== prefix(current.OR3_STORAGE_S3_KEY_PREFIX)) {
+    throw new Error('backup-prefix-mismatch: backup and target S3 key prefixes differ.');
+  }
+  const restored = Object.fromEntries(Object.entries(backup).filter(([key]) => !key.startsWith('OR3_STORAGE_S3_')));
+  for (const [key, value] of Object.entries(current)) if (key.startsWith('OR3_STORAGE_S3_')) restored[key] = value;
+  return restored;
+}
 
 export type DashboardOperatorEnv = {
   OR3_DASHBOARD_UPDATES_ENABLED: 'true';
@@ -31,7 +111,32 @@ export type DashboardOperatorEnv = {
   OR3_DOCKER_GID: string;
 };
 
+// Adoption copies these values only after both resolved Compose and the
+// existing container have been checked against the source environment.
+export const ADOPTION_SECRET_KEYS = [
+  'OR3_BASIC_AUTH_JWT_SECRET', 'OR3_BASIC_AUTH_REFRESH_SECRET', 'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD',
+  'OR3_AUTH_INVITE_TOKEN_SECRET', 'OR3_STORAGE_FS_TOKEN_SECRET', 'OR3_ADMIN_PASSWORD', 'OR3_ADMIN_JWT_SECRET',
+  'NUXT_AUTH_INVITE_TOKEN_SECRET', 'NUXT_ADMIN_AUTH_JWT_SECRET',
+  'OR3_LIBRARY_LINK_SECRET', 'NUXT_ADMIN_LIBRARY_LINK_SECRET',
+  'OR3_PLUGIN_CONNECTION_SECRET', 'NUXT_ADMIN_PLUGIN_CONNECTION_SECRET',
+  'OR3_BACKGROUND_ENCRYPTION_KEY', 'NUXT_BACKGROUND_JOBS_ENCRYPTION_KEY',
+  'OR3_WEBHOOKS_ENCRYPTION_KEY', 'NUXT_WEBHOOKS_ENCRYPTION_KEY',
+  'OR3_CONNECT_ENCRYPTION_KEY', 'NUXT_CONNECT_ENCRYPTION_KEY',
+  'OR3_CONNECT_CLOUDFLARE_API_TOKEN', 'NUXT_CONNECT_CLOUDFLARE_API_TOKEN',
+  'OPENROUTER_API_KEY', 'NUXT_OPENROUTER_API_KEY', 'OR3_OPENAI_API_KEY', 'NUXT_OPENAI_API_KEY',
+] as const;
+
+export const ADOPTION_RUNTIME_KEYS = [
+  'OR3_MARKETPLACE_REGISTRY_ORIGIN', 'OR3_MARKETPLACE_INSTALL_ENABLED',
+  'OR3_MARKETPLACE_RELEASE_KEYS', 'OR3_INSTANCE_ID', 'OR3_MARKETPLACE_MAX_ARTIFACT_BYTES', 'OR3_MARKETPLACE_RESERVE_BYTES',
+  'OR3_BACKGROUND_STREAMING_ENABLED', 'OR3_BACKGROUND_STREAMING_PROVIDER', 'OR3_BACKGROUND_MAX_JOBS', 'OR3_BACKGROUND_MAX_JOBS_PER_USER', 'OR3_BACKGROUND_JOB_TIMEOUT',
+  'NUXT_BACKGROUND_JOBS_ENABLED', 'NUXT_PUBLIC_BACKGROUND_STREAMING_ENABLED', 'NUXT_BACKGROUND_JOBS_STORAGE_PROVIDER', 'NUXT_BACKGROUND_JOBS_MAX_CONCURRENT_JOBS', 'NUXT_BACKGROUND_JOBS_MAX_CONCURRENT_JOBS_PER_USER', 'NUXT_BACKGROUND_JOBS_JOB_TIMEOUT_MS',
+  'OR3_PLUGIN_ALLOWED_MODELS', 'OR3_PLUGIN_MODEL_PRICES', 'NUXT_ADMIN_PLUGIN_ALLOWED_MODELS', 'NUXT_ADMIN_PLUGIN_MODEL_PRICES',
+] as const;
+
 export const ALLOWED_ENV_KEYS = new Set([
+  ...ADOPTION_SECRET_KEYS,
+  ...ADOPTION_RUNTIME_KEYS,
   'SSR_AUTH_ENABLED',
   'NUXT_SECRETS_PROVIDER',
   'NUXT_SECRETS_NAMESPACE',
@@ -48,6 +153,7 @@ export const ALLOWED_ENV_KEYS = new Set([
   'OR3_BASIC_AUTH_REFRESH_SECRET',
   'OR3_BASIC_AUTH_ACCESS_TTL_SECONDS',
   'OR3_BASIC_AUTH_REFRESH_TTL_SECONDS',
+  'OR3_SQLITE_DRIVER',
   'OR3_BASIC_AUTH_DB_PATH',
   'OR3_BASIC_AUTH_BOOTSTRAP_EMAIL',
   'OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD',
@@ -236,5 +342,7 @@ export function buildEnv(input: {
 }
 
 export function secretValues(env: Record<string, string>) {
-  return SECRET_KEYS.map((key) => env[key]).filter((value): value is string => Boolean(value));
+  const known = new Set(SECRET_KEYS);
+  const secretName = /(?:^|_)(?:PASSWORD|SECRET|TOKEN|PRIVATE_KEY|API_KEY|ACCESS_KEY|AUTH_KEY)(?:_|$)/i;
+  return Object.entries(env).filter(([key, value]) => Boolean(value) && (known.has(key) || secretName.test(key))).map(([, value]) => value);
 }
