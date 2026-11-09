@@ -337,7 +337,8 @@ export function useSidebarProjects() {
  * Provides access to the reactive threads list.
  *
  * Behavior:
- * Returns the threads reference from the sidebar environment.
+ * Returns the sidebar's search-scoped threads reference. It is empty without
+ * a sidebar query and may populate asynchronously while search is active.
  *
  * Constraints:
  * - Requires a provided sidebar environment
@@ -357,7 +358,8 @@ export function useSidebarThreads() {
  * Provides access to the reactive documents list.
  *
  * Behavior:
- * Returns the documents reference from the sidebar environment.
+ * Returns the sidebar's search-scoped documents reference. It is empty without
+ * a sidebar query and may populate asynchronously while search is active.
  *
  * Constraints:
  * - Requires a provided sidebar environment
