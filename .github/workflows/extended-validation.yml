@@ -391,6 +391,28 @@ jobs:
           # A real V1 source retains bootstrap credentials in .env. Managed V2
           # moves them to the owner-only handoff file after provisioning.
           grep '^OR3_BASIC_AUTH_BOOTSTRAP_' "$managed/.or3-initial-credentials" >> "$managed/.env"
+          # Convert this disposable fixture to the supported V1 source shape.
+          # Managed V2 has vault services/mounts that adoption must refuse.
+          docker compose --project-directory "$managed" --env-file "$managed/.env" -f "$managed/compose.yaml" config --format json > "$RUNNER_TEMP/v1-source-compose.json"
+          docker compose --profile or3-vault --project-directory "$managed" --env-file "$managed/.env" -f "$managed/compose.yaml" down --remove-orphans
+          bun -e '
+            import { readFileSync, writeFileSync } from "node:fs";
+            import { ALLOWED_ENV_KEYS, parseEnv, serializeEnv } from "./packages/or3-cloud/src/deployment/env.ts";
+            const [dir, input] = process.argv.slice(1);
+            const config = JSON.parse(readFileSync(input, "utf8"));
+            const managed = new Set(["OR3_VERSION", "OR3_IMAGE", "OR3_PORT", "OR3_COMPOSE_PROJECT", "OR3_VOLUME_NAME", "OR3_DEPLOYMENT_ID"]);
+            const env = Object.fromEntries(Object.entries(parseEnv(readFileSync(`${dir}/.env`, "utf8"))).filter(([key]) => (ALLOWED_ENV_KEYS.has(key) || managed.has(key)) && !key.startsWith("NUXT_SECRETS_")));
+            Object.assign(env, { NUXT_SECRETS_PROVIDER: "", OR3_INSTANCE_ID: "disposable-v1-adoption", OR3_BASIC_AUTH_DB_PATH: "/data/auth.sqlite", OR3_SQLITE_DB_PATH: "/data/sync.sqlite", OR3_STORAGE_FS_ROOT: "/data/storage", OR3_ADMIN_DATA_DIR: "/data/admin", OR3_EXTENSIONS_ROOT: "/data/extensions" });
+            const app = config.services.or3;
+            delete app.depends_on;
+            app.environment = env;
+            app.volumes = app.volumes.filter(mount => mount.target === "/data");
+            config.services = { or3: app };
+            config.volumes = Object.fromEntries(Object.entries(config.volumes).filter(([key]) => key === app.volumes[0].source));
+            writeFileSync(`${dir}/.env`, serializeEnv(env), { mode: 0o600 });
+            writeFileSync(`${dir}/compose.yaml`, JSON.stringify(config));
+          ' "$managed" "$RUNNER_TEMP/v1-source-compose.json"
+          docker compose --project-directory "$managed" --env-file "$managed/.env" -f "$managed/compose.yaml" up -d --wait or3
           adopted="$RUNNER_TEMP/or3-cloud-adopted"
           OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true \
             node packages/or3-cloud/dist/cli.mjs adopt --from "$managed" "$adopted"
