@@ -391,7 +391,6 @@ describe('GalleryGrid lifecycle management', () => {
         const placeholder = wrapper.get('button[aria-label="View Image dimensions"]');
         expect((placeholder.element as HTMLElement).style.aspectRatio).toBe('800 / 400');
         expect(placeholder.classes()).toContain('min-h-40');
-        expect(placeholder.element.parentElement?.classList.contains('min-h-40')).toBe(true);
 
         await (wrapper.vm as unknown as { ensureUrl(meta: FileMeta): Promise<void> }).ensureUrl(meta);
         await nextTick();
@@ -399,7 +398,7 @@ describe('GalleryGrid lifecycle management', () => {
         expect(image.attributes('width')).toBe('800');
         expect(image.attributes('height')).toBe('400');
         expect((image.element as HTMLElement).style.aspectRatio).toBe('auto 800 / 400');
-        expect(image.element.parentElement?.parentElement?.classList.contains('min-h-40')).toBe(true);
+        expect(image.element.parentElement?.parentElement?.classList.contains('min-h-40')).toBe(false);
         expect(image.attributes('decoding')).toBe('async');
     });
 

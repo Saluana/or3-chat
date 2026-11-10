@@ -159,7 +159,7 @@ const attachmentItemProps = useThemeOverrides({
 });
 
 // Shared object URL cache across chat surfaces
-const cacheKey = (hash: string) => `attachment-thumb:${hash}`;
+const cacheKey = (hash: string) => `attachment-grid:${hash}`;
 const thumbUrlCache = useThumbnailUrlCache({ graceMs: 30000 });
 
 const thumbs = reactive<Record<string, LocalThumbState>>({});
@@ -198,7 +198,7 @@ async function ensure(h: string, owner: object) {
         const blob = await getFileBlob(h);
         if (!cacheCurrent()) return null;
         thumbUrlCache.setIntrinsicSize(cacheKey(h), m.width, m.height);
-        return blob ? resizePreview(blob, 160, cacheCurrent, undefined, signal) : blob;
+        return blob ? resizePreview(blob, 480, cacheCurrent, undefined, signal) : blob;
     });
     if (!current()) return;
     if (state) {
