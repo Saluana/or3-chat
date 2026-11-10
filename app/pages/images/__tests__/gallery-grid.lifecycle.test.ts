@@ -44,6 +44,7 @@ vi.mock(
     createErrorsMock
 );
 
+
 const mocks = getMocks();
 const wrappers: VueWrapper[] = [];
 
@@ -97,6 +98,317 @@ describe('GalleryGrid lifecycle management', () => {
         vi.restoreAllMocks();
         vi.unstubAllGlobals();
         vi.useRealTimers();
+    });
+
+    it('keeps a shared pending tile alive until its last gallery leaves, including rapid reentry', async () => {
+        let sequence = 0;
+        const revoke = vi.fn();
+        stubObjectUrl(vi.fn(() => `blob:shared-${++sequence}`), revoke);
+        const callbacks: IntersectionObserverCallback[] = [];
+        vi.stubGlobal('IntersectionObserver', vi.fn(function (cb: IntersectionObserverCallback) {
+            callbacks.push(cb); return { observe: vi.fn(), disconnect: vi.fn() };
+        }));
+        vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { cb(0); return 1; });
+        Object.assign(window, { requestIdleCallback: (cb: IdleRequestCallback) => { cb({ didTimeout: false, timeRemaining: () => 5 }); return 1; }, cancelIdleCallback: vi.fn() });
+        const finish: Array<(blob: Blob) => void> = [];
+        mocks.getFileBlob.mockImplementation(() => new Promise<Blob>(resolve => finish.push(resolve)));
+        const a = await mountGrid([makeMeta('shared')]);
+        const b = await mountGrid([makeMeta('shared')]);
+        const send = (index: number, wrapper: VueWrapper, visible: boolean) => callbacks[index]!([{ target: wrapper.get('[data-hash]').element, isIntersecting: visible } as IntersectionObserverEntry], {} as IntersectionObserver);
+        send(0, a, true); send(1, b, true);
+        expect(finish).toHaveLength(1);
+        send(1, b, false);
+        finish[0]!(new Blob(['first']));
+        await flushPromises();
+        expect(a.get('img').attributes('src')).toBe('blob:shared-1');
+        send(0, a, false);
+        await a.setProps({ items: [] });
+        await b.setProps({ items: [] });
+        await a.setProps({ items: [makeMeta('again')] });
+        await b.setProps({ items: [makeMeta('again')] });
+        send(0, a, true); send(1, b, true);
+        expect(finish).toHaveLength(2);
+        send(0, a, false); send(1, b, false);
+        send(0, a, true);
+        expect(finish).toHaveLength(3);
+        finish[1]!(new Blob(['obsolete']));
+        await flushPromises();
+        expect(a.find('img').exists()).toBe(false);
+        finish[2]!(new Blob(['replacement']));
+        await flushPromises();
+        expect(a.get('img').attributes('src')).toBe('blob:shared-3');
+        expect(revoke).toHaveBeenCalledWith('blob:shared-2');
+    });
+
+    it.each(['offscreen', 'items', 'unmount'])('keeps a joined gallery loading when the initiating gallery leaves by %s', async (exit) => {
+        stubObjectUrl(vi.fn(() => 'blob:survivor'), vi.fn());
+        const callbacks: IntersectionObserverCallback[] = [];
+        vi.stubGlobal('IntersectionObserver', vi.fn(function (cb: IntersectionObserverCallback) {
+            callbacks.push(cb); return { observe: vi.fn(), disconnect: vi.fn() };
+        }));
+        vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { cb(0); return 1; });
+        Object.assign(window, { requestIdleCallback: (cb: IdleRequestCallback) => { cb({ didTimeout: false, timeRemaining: () => 5 }); return 1; }, cancelIdleCallback: vi.fn() });
+        let finish!: (blob: Blob) => void;
+        mocks.getFileBlob.mockImplementation(() => new Promise<Blob>(resolve => { finish = resolve; }));
+        const a = await mountGrid([makeMeta('survivor')]);
+        const b = await mountGrid([makeMeta('survivor')]);
+        const send = (index: number, wrapper: VueWrapper, visible: boolean) => callbacks[index]!([{ target: wrapper.get('[data-hash]').element, isIntersecting: visible } as IntersectionObserverEntry], {} as IntersectionObserver);
+        send(0, a, true); send(1, b, true);
+        if (exit === 'offscreen') send(0, a, false);
+        if (exit === 'items') await a.setProps({ items: [] });
+        if (exit === 'unmount') a.unmount();
+        finish(new Blob(['survivor']));
+        await flushPromises();
+        expect(b.get('img').attributes('src')).toBe('blob:survivor');
+        expect(mocks.getFileBlob).toHaveBeenCalledTimes(1);
+    });
+
+    it('loads a local tile while visible remote blobs are stalled and discards stale completions', async () => {
+        const create = vi.fn(() => `blob:${Math.random()}`);
+        const revoke = vi.fn();
+        stubObjectUrl(create, revoke);
+        let callback!: IntersectionObserverCallback;
+        vi.stubGlobal('IntersectionObserver', vi.fn(function (cb: IntersectionObserverCallback) {
+            callback = cb; return { observe: vi.fn(), disconnect: vi.fn() };
+        }));
+        vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { cb(0); return 1; });
+        Object.assign(window, { requestIdleCallback: (cb: IdleRequestCallback) => { cb({ didTimeout: false, timeRemaining: () => 5 }); return 1; }, cancelIdleCallback: vi.fn() });
+        const finish: Array<(blob: Blob) => void> = [];
+        mocks.getFileBlob.mockImplementation((hash: string) => hash.startsWith('remote')
+            ? new Promise<Blob>(resolve => finish.push(resolve)) : Promise.resolve(new Blob(['local'])));
+        const wrapper = await mountGrid(['remote-0', 'remote-1', 'remote-2', 'local'].map(makeMeta));
+        await nextTick();
+        const tiles = wrapper.findAll('[data-hash]').map(w => w.element);
+        const send = (elements: Element[], isIntersecting: boolean) => callback(elements.map(target => ({ target, isIntersecting }) as IntersectionObserverEntry), {} as IntersectionObserver);
+        send(tiles, true);
+        await flushPromises();
+        expect(finish).toHaveLength(3);
+        expect(wrapper.find('[data-hash="local"] img').exists()).toBe(true);
+        send([tiles[0]!], false);
+        setActiveWorkspaceDb('grid-isolation-b');
+        finish.forEach(resolve => resolve(new Blob(['remote'])));
+        await flushPromises();
+        expect(wrapper.findAll('img')).toHaveLength(0);
+        wrapper.unmount();
+        expect(revoke).toHaveBeenCalledTimes(create.mock.calls.length);
+    });
+
+    it('loads newly visible tiles while obsolete downloads are stalled', async () => {
+        stubObjectUrl(vi.fn(() => `blob:${Math.random()}`), vi.fn());
+        let callback!: IntersectionObserverCallback;
+        vi.stubGlobal('IntersectionObserver', vi.fn(function (cb: IntersectionObserverCallback) {
+            callback = cb; return { observe: vi.fn(), disconnect: vi.fn() };
+        }));
+        vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { cb(0); return 1; });
+        Object.assign(window, { requestIdleCallback: (cb: IdleRequestCallback) => { cb({ didTimeout: false, timeRemaining: () => 5 }); return 1; }, cancelIdleCallback: vi.fn() });
+        const finish: Array<(blob: Blob) => void> = [];
+        mocks.getFileBlob.mockImplementation((hash: string) => hash.startsWith('remote')
+            ? new Promise<Blob>(resolve => finish.push(resolve)) : Promise.resolve(new Blob(['local'])));
+        const items = ['remote-0', 'remote-1', 'remote-2', 'local'].map(makeMeta);
+        const wrapper = await mountGrid(items);
+        const tiles = wrapper.findAll('[data-hash]').map(w => w.element);
+        const send = (elements: Element[], isIntersecting: boolean) => callback(elements.map(target => ({ target, isIntersecting }) as IntersectionObserverEntry), {} as IntersectionObserver);
+        send(tiles.slice(0, 3), true);
+        await flushPromises();
+        expect(finish).toHaveLength(3);
+        send(tiles.slice(0, 3), false);
+        send([tiles[3]!], true);
+        await flushPromises();
+        expect(wrapper.findAll('img')).toHaveLength(1);
+        mocks.getFileBlob.mockResolvedValue(new Blob(['reentered']));
+        send([tiles[0]!], true);
+        await flushPromises();
+        expect(wrapper.findAll('img')).toHaveLength(2);
+        const reentered = wrapper.get('[data-hash="remote-0"] img').attributes('src');
+        finish.forEach(resolve => resolve(new Blob(['remote'])));
+        await flushPromises();
+        expect(wrapper.findAll('img')).toHaveLength(2);
+        expect(wrapper.get('[data-hash="remote-0"] img').attributes('src')).toBe(reentered);
+    });
+
+    it('keeps obsolete resizes within the concurrency limit', async () => {
+        stubObjectUrl(vi.fn(() => `blob:${Math.random()}`), vi.fn());
+        let callback!: IntersectionObserverCallback;
+        vi.stubGlobal('IntersectionObserver', vi.fn(function (cb: IntersectionObserverCallback) {
+            callback = cb; return { observe: vi.fn(), disconnect: vi.fn() };
+        }));
+        mocks.getFileBlob.mockResolvedValue(new Blob([new Uint8Array([255, 216, 255]), 'image'], { type: 'image/jpeg' }));
+        const pending: Array<() => void> = [];
+        let active = 0, max = 0;
+        vi.stubGlobal('createImageBitmap', vi.fn(() => new Promise(resolve => {
+            active++; max = Math.max(max, active);
+            pending.push(() => { active--; resolve({ width: 100, height: 100, close() {} }); });
+        })));
+        const wrapper = await mountGrid(Array.from({ length: 4 }, (_, i) => makeMeta(`resize-${i}`)));
+        await nextTick();
+        const tiles = wrapper.findAll('[data-hash]').map(w => w.element);
+        const send = (elements: Element[], isIntersecting: boolean) => callback(elements.map(target => ({ target, isIntersecting }) as IntersectionObserverEntry), {} as IntersectionObserver);
+        send(tiles.slice(0, 3), true);
+        await flushPromises();
+        await vi.waitFor(() => expect(active).toBe(3));
+        send(tiles.slice(0, 3), false);
+        send([tiles[3]!], true);
+        await flushPromises();
+        expect(active).toBe(3);
+        pending.shift()!();
+        await vi.waitFor(() => expect(active).toBe(3));
+        expect(max).toBe(3);
+        pending.splice(0).forEach(finish => finish());
+        await flushPromises();
+        expect(wrapper.findAll('img')).toHaveLength(1);
+    });
+
+    it('bounds visible resize work and drops queued tiles that leave view', async () => {
+        stubObjectUrl(vi.fn(() => `blob:${Math.random()}`), vi.fn());
+        let callback!: IntersectionObserverCallback;
+        let options: IntersectionObserverInit | undefined;
+        vi.stubGlobal('IntersectionObserver', vi.fn(function (cb: IntersectionObserverCallback, opts: IntersectionObserverInit) {
+            callback = cb; options = opts;
+            return { observe: vi.fn(), disconnect: vi.fn() };
+        }));
+        vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { cb(0); return 1; });
+        Object.assign(window, { requestIdleCallback: (cb: IdleRequestCallback) => { cb({ didTimeout: false, timeRemaining: () => 5 }); return 1; }, cancelIdleCallback: vi.fn() });
+        mocks.getFileBlob.mockResolvedValue(new Blob([new Uint8Array([255, 216, 255]), 'image'], { type: 'image/jpeg' }));
+        const pending: Array<() => void> = [];
+        let active = 0, max = 0;
+        vi.stubGlobal('createImageBitmap', vi.fn(() => new Promise(resolve => {
+            active++; max = Math.max(max, active);
+            pending.push(() => { active--; resolve({ width: 100, height: 100, close() {} }); });
+        })));
+        const items = Array.from({ length: 12 }, (_, i) => makeMeta(`queue-${i}`));
+        const wrapper = await mountGrid(items);
+        await nextTick();
+        const tiles = wrapper.findAll('[data-hash]').map(w => w.element);
+        const send = (elements: Element[], isIntersecting: boolean) => callback(elements.map(target => ({ target, isIntersecting }) as IntersectionObserverEntry), {} as IntersectionObserver);
+        send(tiles, true);
+        await flushPromises();
+        await vi.waitFor(() => expect(pending).toHaveLength(3));
+        expect(max).toBeLessThanOrEqual(3);
+        expect(options?.root ?? null).toBeNull();
+        send([tiles[11]!], false);
+        for (let i = 0; i < 11; i++) {
+            await vi.waitFor(() => expect(pending.length).toBeGreaterThan(0));
+            pending.shift()!();
+            await flushPromises();
+        }
+        expect(mocks.getFileBlob).toHaveBeenCalledTimes(12);
+        expect(wrapper.findAll('img')).toHaveLength(11);
+        send([tiles[11]!], true);
+        await flushPromises();
+        await vi.waitFor(() => expect(pending.length).toBeGreaterThan(0));
+        pending.shift()!();
+        await vi.waitFor(() => expect(wrapper.findAll('img')).toHaveLength(12));
+    });
+
+    it.each(['workspace', 'items', 'unmount'])('does not resize queued work after %s changes', async (change) => {
+        const revoke = vi.fn();
+        stubObjectUrl(vi.fn(() => 'blob:held'), revoke);
+        let callback!: IntersectionObserverCallback;
+        vi.stubGlobal('IntersectionObserver', vi.fn(function (cb: IntersectionObserverCallback) {
+            callback = cb; return { observe: vi.fn(), disconnect: vi.fn() };
+        }));
+        vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { cb(0); return 1; });
+        Object.assign(window, { requestIdleCallback: (cb: IdleRequestCallback) => { cb({ didTimeout: false, timeRemaining: () => 5 }); return 1; }, cancelIdleCallback: vi.fn() });
+        mocks.getFileBlob.mockResolvedValue(new Blob([new Uint8Array([255, 216, 255]), 'image'], { type: 'image/jpeg' }));
+        const pending: Array<() => void> = [];
+        const decode = vi.fn(() => new Promise(resolve => pending.push(() => resolve({ width: 100, height: 100, close() {} }))));
+        vi.stubGlobal('createImageBitmap', decode);
+        const wrapper = await mountGrid(Array.from({ length: 8 }, (_, i) => makeMeta(`stale-${i}`)));
+        const tiles = wrapper.findAll('[data-hash]');
+        callback(tiles.map(w => ({ target: w.element, isIntersecting: true }) as IntersectionObserverEntry), {} as IntersectionObserver);
+        await flushPromises();
+        await vi.waitFor(() => expect(pending).toHaveLength(3));
+        if (change === 'workspace') setActiveWorkspaceDb('grid-isolation-b');
+        if (change === 'items') await wrapper.setProps({ items: [] });
+        if (change === 'unmount') wrapper.unmount();
+        pending.splice(0).forEach(finish => finish());
+        await flushPromises();
+        expect(mocks.getFileBlob).toHaveBeenCalledTimes(8);
+        expect(decode).toHaveBeenCalledTimes(3);
+        expect(wrapper.findAll('img')).toHaveLength(0);
+        expect(revoke).toHaveBeenCalledTimes(8);
+    });
+
+    it('shares decode admission with message thumbnail prefetch', async () => {
+        stubObjectUrl(vi.fn(() => `blob:${Math.random()}`), vi.fn());
+        let callback!: IntersectionObserverCallback;
+        vi.stubGlobal('IntersectionObserver', vi.fn(function (cb: IntersectionObserverCallback) {
+            callback = cb; return { observe: vi.fn(), disconnect: vi.fn() };
+        }));
+        const blob = new Blob([new Uint8Array([255, 216, 255]), 'image'], { type: 'image/jpeg' });
+        mocks.getFileBlob.mockResolvedValue(blob);
+        const pending: Array<() => void> = [];
+        let active = 0, max = 0;
+        const decode = vi.fn(() => new Promise(resolve => {
+            active++; max = Math.max(max, active);
+            pending.push(() => { active--; resolve({ width: 100, height: 100, close() {} }); });
+        }));
+        vi.stubGlobal('createImageBitmap', decode);
+        const wrapper = await mountGrid([makeMeta('tile-a'), makeMeta('tile-b')]);
+        callback(wrapper.findAll('[data-hash]').map(w => ({ target: w.element, isIntersecting: true }) as IntersectionObserverEntry), {} as IntersectionObserver);
+        const { createMessageMediaPrefetchController } = await import('~/composables/chat/useMessageMediaPrefetch');
+        const controller = createMessageMediaPrefetchController({
+            loadMeta: async () => ({ kind: 'image', mime_type: 'image/jpeg' }),
+            loadBlob: async () => blob,
+        });
+        try {
+            controller.updateRange([{ role: 'user', file_hashes: ['thumb-a', 'thumb-b', 'thumb-c'] }], { startIndex: 0, endIndex: 0 });
+            await vi.waitFor(() => expect(pending).toHaveLength(3));
+            for (let i = 0; i < 5; i++) {
+                await vi.waitFor(() => expect(pending.length).toBeGreaterThan(0));
+                pending.shift()!();
+            }
+            await controller.whenIdle();
+            await vi.waitFor(() => expect(wrapper.findAll('img')).toHaveLength(2));
+            expect(decode).toHaveBeenCalledTimes(5);
+            expect(max).toBe(3);
+        } finally {
+            controller.dispose();
+            pending.splice(0).forEach(finish => finish());
+        }
+    });
+
+    it('keeps the gallery tile separate from the full-size cache entry', async () => {
+        const create = vi.fn().mockReturnValueOnce('blob:original').mockReturnValueOnce('blob:tile');
+        stubObjectUrl(create, vi.fn());
+        const blob = new Blob(['original'], { type: 'image/jpeg' });
+        mocks.getFileBlob.mockResolvedValue(blob);
+        const cache = (await import('~/composables/core/usePreviewCache')).useSharedPreviewCache()!;
+        await cache.ensure('variant', async () => ({ url: URL.createObjectURL(blob), bytes: blob.size }), 1);
+        const meta = makeMeta('variant');
+        const wrapper = await mountGrid([meta]);
+        await (wrapper.vm as unknown as { ensureUrl(meta: FileMeta): Promise<void> }).ensureUrl(meta);
+        await nextTick();
+        expect(wrapper.get('img').attributes('src')).toBe('blob:tile');
+        expect(cache.peek('variant')).toBe('blob:original');
+    });
+
+    it('reserves the same dimensions before and after a preview loads', async () => {
+        stubObjectUrl(vi.fn(() => 'blob:dimensions'), vi.fn());
+        mocks.getFileBlob.mockResolvedValue(new Blob(['image']));
+        const meta = { ...makeMeta('dimensions'), width: 800, height: 400 };
+        const wrapper = await mountGrid([meta]);
+        const placeholder = wrapper.get('button[aria-label="View Image dimensions"]');
+        expect((placeholder.element as HTMLElement).style.aspectRatio).toBe('800 / 400');
+        expect(placeholder.classes()).toContain('min-h-40');
+
+        await (wrapper.vm as unknown as { ensureUrl(meta: FileMeta): Promise<void> }).ensureUrl(meta);
+        await nextTick();
+        const image = wrapper.get('img');
+        expect(image.attributes('width')).toBe('800');
+        expect(image.attributes('height')).toBe('400');
+        expect((image.element as HTMLElement).style.aspectRatio).toBe('auto 800 / 400');
+        expect(image.element.parentElement?.parentElement?.classList.contains('min-h-40')).toBe(false);
+        expect(image.attributes('decoding')).toBe('async');
+    });
+
+    it.each([
+        [undefined, undefined], [0, 10], [10, 0], [-1, 10], [NaN, 10], [Infinity, 10],
+    ])('keeps the fallback for invalid dimensions %s by %s', async (width, height) => {
+        const wrapper = await mountGrid([{ ...makeMeta('fallback'), width, height }]);
+        const placeholder = wrapper.get('button[aria-label="View Image fallback"]');
+        expect(placeholder.classes()).toContain('min-h-40');
+        expect((placeholder.element as HTMLElement).style.aspectRatio).toBe('');
     });
 
     it('discards a held preview and clears displayed URLs when switching workspaces', async () => {

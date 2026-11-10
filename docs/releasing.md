@@ -9,7 +9,7 @@ digest-pinned dashboard-operator image, and the operator package. The release
 version must match in:
 
 - `package.json` at the repository root;
-- root version metadata in `package-lock.json`;
+- root version metadata in `package-lock.json` and `package-lock.clerk-sqlite-s3.json`;
 - `packages/or3-cloud/package.json`;
 - `packages/or3-cloud/src/package-info.ts` (`PACKAGE_VERSION`);
 - `ghcr.io/saluana/or3-chat:<version>` and
@@ -78,11 +78,20 @@ release contract tests, type errors, or documentation drift. It writes a small
 machine-readable report with per-check timings to
 `output/release/preflight.json`. The candidate Docker build is the
 authoritative production build; this gate does not build a second host copy.
+Checks run with an isolated managed Basic Auth/SQLite/filesystem profile and
+synthetic build credentials. The worktree must not contain local `.env` files.
 
 The gate also checks the generated plugin compatibility inventory and the installed
 SQLite/filesystem versions against the offline backup inspector's qualified profile.
 When upgrading those providers, qualify
 their actual migration history and update the inspector before building an image.
+
+`OR3_DOCKER_PROFILE=clerk-sqlite-s3` is an experimental image build input, not a
+release-qualified managed profile. The image includes S3 inspection helpers,
+but they do not certify managed backup or restore until the lifecycle and
+recovery paths are fully integrated and qualified. Do
+not publish or deploy this profile based on a successful build alone. Candidate
+promotion and the managed CLI still need profile-specific qualification.
 
 Use `--full` only for a local deep-validation run. The scheduled **Extended
 validation** workflow owns full tests, browser suites, production asset
@@ -113,9 +122,22 @@ and the digest-bound tarball, then runs manifest/anonymous-pull checks, security
 scans, ARM runtime checks, and upgrade/rollback/restart/persistence checks as
 independent jobs. The final job records immutable source/image/tarball
 identities in `candidate-receipt.json` only after every required verifier
-passes. The lifecycle job also checks fresh desktop Chromium, mobile Chromium
-and mobile WebKit hydration and a UI interaction under the shipped production
-CSP, fails on browser errors, and retains screenshots, traces and JSON results.
+passes. The lifecycle job checks fresh desktop Chromium, mobile Chromium and
+mobile WebKit hydration through the shipped Caddy proxy. It also runs the Basic
+profile's owner sign-in, admin, storage and sign-out/re-login journey on the
+disposable local deployment, binding the observed app, operator and CLI package
+to its browser qualification artifact. Screenshots, traces and JSON results are
+retained. This does not qualify authenticated public ingress or the Clerk/S3
+profile. A browser timeout fails qualification; detached browser cleanup relies
+on disposal of the hosted runner. The Basic lifecycle job also retains a
+source, image, operator and package-bound result after the required steps. It
+captures the previous release's image identities before updating and checks
+them after recovery and rollback. Its restart is an app-container restart, and
+its target-ready interruption is a synthetic journal fixture; neither alone
+establishes managed restart or crash-time evidence generation. The receipt job
+validates and retains the six Basic qualification files as a current-run Actions
+artifact. The existing schema-1 registry receipt does not bind their hashes; on
+a rerun, any reused receipt must identify the same run as the retained files.
 It publishes only source-qualified candidate evidence; it cannot
 publish npm or the public version images.
 
@@ -124,12 +146,29 @@ with Debian `1:1.3.dfsg+really1.3.2-4`, pinned by architecture and SHA-256 in
 `Dockerfile`. This contains the upstream fix for
 [CVE-2026-76844](https://security-tracker.debian.org/tracker/CVE-2026-76844) and
 [CVE-2026-85091](https://security-tracker.debian.org/tracker/CVE-2026-85091).
+The two packages in `scripts/docker/vendor/zlib/` come from the Debian snapshot
+dated `20261026T022331Z`; the Docker build verifies both SHA-256 digests before
+extracting the selected architecture. Keep the artifacts and checksums in sync.
 Until the stable Debian feeds record this fix, `scripts/release/zlib.openvex.json`
 records **fixed** status for only those two CVEs and that exact package version
 on amd64/arm64. Older versions and other findings remain blocking. The scan
 artifact retains the full vulnerability report (including modified findings),
 the VEX document, and SBOM even if the gate fails. Remove the package overlay
 and its VEX together once a refreshed base supplies a qualified fixed package.
+
+The scan utility also has an opt-in `--qualification-out` for the unfinished
+two-profile receipt path. It requires `--profile`, `--source-sha`, `--run-id`,
+`--candidate-digest`, a matching digest-pinned candidate image and a supported
+`--platform`. It writes a new receipt-compatible scan result only after its
+scan gate passes. This local producer is not connected to candidate promotion;
+the actual workflow, image-label verification and all other profile-specific
+qualification remain required.
+
+The candidate workflow's image-contract and arm64 runtime checks use shared
+verifiers that can emit the corresponding profile-bound evidence. The
+image-contract result also identifies the operator digest. The current
+workflow runs those checks for the Basic profile only; emitting these files does
+not enable two-profile promotion or establish a launch-profile qualification.
 
 The manifest contract also starts the exact operator image as an unprivileged,
 read-only container and installs the latest published Cloud CLI in its bounded

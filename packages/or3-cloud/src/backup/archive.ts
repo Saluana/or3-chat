@@ -114,10 +114,15 @@ export async function restoreVolumeArchive(directory: string, mode: Mode, env: R
 }
 
 export async function validateVolumeArchive(directory: string, _mode: Mode, env: Record<string, string>, backupPath: string, archivedStorageRoot?: string) {
+  const auth = env.AUTH_PROVIDER ?? env.OR3_AUTH_PROVIDER ?? 'basic-auth';
+  const sync = env.OR3_SYNC_PROVIDER ?? 'sqlite';
+  const storage = env.NUXT_PUBLIC_STORAGE_PROVIDER ?? 'fs';
+  if (env.AUTH_PROVIDER && env.OR3_AUTH_PROVIDER && env.AUTH_PROVIDER !== env.OR3_AUTH_PROVIDER || sync !== 'sqlite' || !(auth === 'basic-auth' && storage === 'fs' || auth === 'clerk' && storage === 's3')) throw new Error('Unsupported backup archive provider profile.');
+  const requireAuth = auth === 'basic-auth';
   const storageRoot = posix.relative('/data', archivedStorageRoot ?? env.OR3_STORAGE_FS_ROOT ?? '/data/storage');
   // Only the managed /data tree is captured. Do not interpret unrelated
   // metadata or opaque generation artifacts as current filesystem objects.
-  const storagePrefix = storageRoot === '..' || storageRoot.startsWith('../') || posix.isAbsolute(storageRoot)
+  const storagePrefix = storage !== 'fs' || storageRoot === '..' || storageRoot.startsWith('../') || posix.isAbsolute(storageRoot)
     ? '' : `${storageRoot ? `${storageRoot}/` : ''}workspaces/`;
   await streamFileToCommand(
     'docker',
@@ -127,14 +132,14 @@ export async function validateVolumeArchive(directory: string, _mode: Mode, env:
       '--entrypoint', 'sh', env.OR3_IMAGE, '-c',
       // A structurally valid archive can still omit a database. Starting the
       // app may create an empty replacement and make deep health green while
-      // accounts or canonical workspace data have been lost. Require both
-      // fixed-profile payloads before extraction can clear the live volume.
+      // canonical workspace data has been lost. Basic Auth also requires its
+      // database; Clerk has no managed auth.sqlite.
       // A committed FS sidecar also requires its canonical blob entry. Orphan
       // uploads and temporary/opaque generation artifacts remain valid. awk
       // is already part of the managed image's free-space probe contract.
       // Pass tar's exit status through the stream too: legacy /bin/sh may not
       // support pipefail, and a listing error must never be hidden by a reader.
-      `{ tar tzf -; printf '\\nOR3_TAR_RESULT:%s\\n' "$?"; } | awk -v prefix="$1" '
+      `{ tar tzf -; printf '\\nOR3_TAR_RESULT:%s\\n' "$?"; } | awk -v prefix="$1" -v require_auth="$2" '
 {
   entry = $0
   sub(/^\\.\\//, "", entry)
@@ -159,8 +164,8 @@ export async function validateVolumeArchive(directory: string, _mode: Mode, env:
 }
 END {
   if (!seen_status || tar_status != "0") exit 1
-  if (!auth || !sync) {
-    print "Backup archive is missing required managed database payloads (auth.sqlite and sync.sqlite)." > "/dev/stderr"
+  if (!sync || (require_auth == "1" && !auth)) {
+    print "Backup archive is missing required managed database payloads for its provider profile." > "/dev/stderr"
     exit 1
   }
   for (entry in metadata) {
@@ -171,7 +176,7 @@ END {
       exit 1
     }
   }
-}'`, 'or3-archive-validation', storagePrefix,
+}'`, 'or3-archive-validation', storagePrefix, requireAuth ? '1' : '0',
     ],
     join(backupPath, 'data.tgz'),
     directory,

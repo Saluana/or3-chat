@@ -44,6 +44,23 @@ export type DeploymentObservation = {
   partial: boolean;
 };
 
+/** An authenticated full local snapshot, not proof of off-host recovery. */
+export function latestFullSnapshot(backups: BackupInventory | null, observedAt: string) {
+  const cutoff = Date.parse(observedAt);
+  const candidates = (backups?.entries ?? [])
+    .filter((entry) => entry.kind === 'verified')
+    .map((entry) => entry.backup)
+    .filter((backup) => backup.recoveryArtifactsComplete === true && backup.snapshotKind === 'full' && backup.schemaVersion === 1 && Date.parse(backup.createdAt) <= cutoff)
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || a.backupId.localeCompare(b.backupId));
+  const backup = candidates[0];
+  return backup ? {
+    backupId: backup.backupId,
+    createdAt: backup.createdAt,
+    schemaVersion: backup.schemaVersion,
+    remoteKind: backup.remoteKind ?? 'none',
+  } : null;
+}
+
 export async function observeDeployment(
   directory: string,
   options: { checkDocker?: boolean; checkImage?: boolean } = {},
@@ -186,6 +203,7 @@ export function publicStateProjection(state: ManagedState) {
           dashboardJobId: pending.dashboardJobId ?? null,
           targetVersion: pending.targetVersion ?? null,
           targetImageDigest: pending.targetImageDigest ?? null,
+          remoteReconcile: pending.remoteReconcile ?? null,
           backupProgress: pending.backupProgress ? {
             stage: pending.backupProgress.stage,
             service: pending.backupProgress.service,

@@ -2,7 +2,7 @@ import { boolFlag, type Flags, stringFlag } from '../cli/args';
 import type { Mode } from '../deployment/contracts';
 import { secretValues } from '../deployment/env';
 import { assertDeploymentDirectoryIdentity } from '../deployment/identity';
-import { observationFindings, observeDeployment, publicStateProjection } from '../deployment/observation';
+import { latestFullSnapshot, observationFindings, observeDeployment, publicStateProjection } from '../deployment/observation';
 import { loadManaged } from '../deployment/state-store';
 import { run } from '../runtime/command-runner';
 import { composeArgs } from '../runtime/compose';
@@ -39,6 +39,7 @@ export async function statusCommand(directory: string, flags: Flags = {}) {
       identityMatches: observation.identityMatches,
       lastReceipt: state?.lastReceipt ?? null,
       backups: observation.backups,
+      recoveryPoint: latestFullSnapshot(observation.backups, observation.observedAt),
       findings,
     }, null, 2));
     return;

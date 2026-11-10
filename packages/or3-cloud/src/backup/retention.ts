@@ -100,12 +100,20 @@ export function planRetention(
     });
     if (automatic) canPrune = false;
   }
+  const observedAt = Date.now();
   const verified = entries
     .filter((entry): entry is { kind: 'verified'; backup: BackupListing } => entry.kind === 'verified')
     .map((entry) => entry.backup)
-    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
-  const removable = verified.filter((backup) => !protectedIds.has(backup.backupId));
-  const remove = removable.slice(keep).map((backup) => backup.backupId);
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  // Future timestamps can result from a corrected clock. Preserve them without
+  // allowing them to displace a backup usable as a current recovery point.
+  const removable = verified.filter((backup) => !protectedIds.has(backup.backupId) && Date.parse(backup.createdAt) <= observedAt);
+  // Reference-only snapshots depend on their source bucket. They must not
+  // consume the retention budget for independently copied backup data.
+  const full = removable.filter((backup) => backup.recoveryArtifactsComplete === true && backup.snapshotKind === 'full' && backup.remoteKind !== 's3-reference-v1');
+  const safety = removable.filter((backup) => backup.recoveryArtifactsComplete === true && backup.snapshotKind === 'safety' && backup.remoteKind !== 's3-reference-v1');
+  const references = removable.filter((backup) => backup.recoveryArtifactsComplete === true && backup.snapshotKind === 'safety' && backup.remoteKind === 's3-reference-v1');
+  const remove = [...full.slice(keep), ...safety.slice(keep), ...references.slice(keep)].map((backup) => backup.backupId);
   const removeSet = new Set(remove);
   return {
     keep: verified.filter((backup) => !removeSet.has(backup.backupId)).map((backup) => backup.backupId),
@@ -171,7 +179,7 @@ export async function pruneBackups(
     if (!backup) throw new Error(`Retention selected backup ${backupId}, but its verified path disappeared before deletion.`);
     const revalidated = await inspectBackupEntry(deploymentPaths(directory).backups, backupId, directory);
     const current = revalidated.kind === 'verified' ? revalidated.backup : undefined;
-    if (!current || current.path !== backup.path || current.dataSha256 !== backup.dataSha256) {
+    if (!current || current.path !== backup.path || current.dataSha256 !== backup.dataSha256 || current.createdAt !== backup.createdAt || current.schemaVersion !== backup.schemaVersion || current.remoteKind !== backup.remoteKind || current.snapshotKind !== backup.snapshotKind || current.recoveryArtifactsComplete !== backup.recoveryArtifactsComplete) {
       throw new Error(`Backup ${backupId} changed while pruning was in progress. Aborting retention before deletion.`);
     }
     await removeEnumeratedBackupArtifact(directory, current);

@@ -63,6 +63,8 @@ export function usePreviewCache(opts: Partial<PreviewCacheOptions> = {}) {
 
     const map = new Map<string, CacheEntry>();
     const inflight = new Map<string, PendingLoad>();
+    const owners = new Map<string, number>();
+    const tileOwners = new Map<string, Set<object>>();
     let totalBytes = 0;
     let hits = 0;
     let misses = 0;
@@ -185,6 +187,40 @@ export function usePreviewCache(opts: Partial<PreviewCacheOptions> = {}) {
         }
     }
 
+    function retain(key: string) {
+        owners.set(key, (owners.get(key) ?? 0) + 1);
+    }
+
+    function releaseOwner(key: string) {
+        const count = owners.get(key) ?? 0;
+        if (count <= 1) owners.delete(key);
+        else owners.set(key, count - 1);
+    }
+
+    function acquireTile(key: string) {
+        let group = tileOwners.get(key);
+        if (!group) tileOwners.set(key, group = new Set());
+        const ownersForTask = group;
+        const owner = {};
+        ownersForTask.add(owner);
+        retain(key);
+        let released = false;
+        return {
+            current: () => tileOwners.get(key) === ownersForTask && ownersForTask.size > 0,
+            release: () => {
+                if (released) return false;
+                released = true;
+                if (tileOwners.get(key) !== ownersForTask) return false;
+                ownersForTask.delete(owner);
+                releaseOwner(key);
+                if (ownersForTask.size) return false;
+                tileOwners.delete(key);
+                if (inflight.has(key)) drop(key);
+                return true;
+            },
+        };
+    }
+
     function promote(key: string, pin = 1) {
         const entry = map.get(key);
         if (!entry) return;
@@ -226,7 +262,7 @@ export function usePreviewCache(opts: Partial<PreviewCacheOptions> = {}) {
         // This is O(k) where k = unpinned count, rather than O(n) sorting all entries
         const unpinned: [string, CacheEntry][] = [];
         for (const [key, entry] of map) {
-            if (entry.pin <= 0) {
+            if (entry.pin <= 0 && !owners.has(key)) {
                 unpinned.push([key, entry]);
             }
         }
@@ -249,6 +285,8 @@ export function usePreviewCache(opts: Partial<PreviewCacheOptions> = {}) {
     }
 
     function flushAll(): string[] {
+        owners.clear();
+        tileOwners.clear();
         for (const pending of inflight.values()) pending.cancelled = true;
         inflight.clear();
         const removed: string[] = [];
@@ -268,6 +306,10 @@ export function usePreviewCache(opts: Partial<PreviewCacheOptions> = {}) {
         ensure,
         promote,
         release,
+        retain,
+        releaseOwner,
+        acquireTile,
+        dropIfUnowned: (key: string) => { if (!owners.has(key)) drop(key); },
         flushAll,
         evictIfNeeded,
         metrics,

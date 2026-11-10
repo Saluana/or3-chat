@@ -4,7 +4,7 @@
         <div class="flex flex-wrap items-start justify-between gap-3">
             <div class="min-w-[12rem] flex-1">
                 <h2 class="text-lg font-semibold flex items-center gap-2 whitespace-nowrap">
-                    <UIcon :name="useIcon('ui.sync').value" class="w-5 h-5" />
+                    <UIcon :name="hoistedUiSyncIcon" class="w-5 h-5" />
                     Hook Inspector
                 </h2>
                 <p class="text-sm opacity-70 mt-1">
@@ -16,7 +16,7 @@
                     size="sm"
                     variant="outline"
                     class="whitespace-nowrap"
-                    :icon="useIcon('ui.refresh').value"
+                    :icon="hoistedUiRefreshIcon"
                     :disabled="autoRefresh"
                     @click="refresh"
                 >
@@ -28,8 +28,8 @@
                     :variant="autoRefresh ? 'solid' : 'outline'"
                     :icon="
                         autoRefresh
-                            ? useIcon('ui.checkbox.on').value
-                            : useIcon('ui.checkbox.off').value
+                            ? hoistedUiCheckboxOnIcon
+                            : hoistedUiCheckboxOffIcon
                     "
                     @click="toggleAutoRefresh"
                 >
@@ -39,7 +39,7 @@
                     size="sm"
                     variant="outline"
                     class="whitespace-nowrap"
-                    :icon="useIcon('ui.trash').value"
+                    :icon="hoistedUiTrashIcon"
                     color="error"
                     @click="clearTimings"
                 >
@@ -54,7 +54,7 @@
         >
             <div class="flex items-start gap-2">
                 <UIcon
-                    :name="useIcon('ui.book').value"
+                    :name="hoistedUiBookIcon"
                     class="w-4 h-4 mt-0.5 opacity-60"
                 />
                 <div class="text-sm flex-1">
@@ -199,6 +199,13 @@
 </template>
 
 <script setup lang="ts">
+const hoistedUiSyncIcon = useIcon('ui.sync');
+const hoistedUiRefreshIcon = useIcon('ui.refresh');
+const hoistedUiCheckboxOnIcon = useIcon('ui.checkbox.on');
+const hoistedUiCheckboxOffIcon = useIcon('ui.checkbox.off');
+const hoistedUiTrashIcon = useIcon('ui.trash');
+const hoistedUiBookIcon = useIcon('ui.book');
+
 import { ref, computed, onMounted, onUnmounted, reactive } from 'vue';
 import { useIcon } from '~/composables/useIcon';
 import {

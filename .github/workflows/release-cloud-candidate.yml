@@ -338,6 +338,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.identity.outputs.source_sha }}
       - uses: actions/setup-node@v7
         with:
           node-version: "24.22.1"
@@ -350,40 +353,22 @@ jobs:
           IMAGE_DIGEST: ${{ needs.build-app.outputs.digest }}
           OPERATOR: ${{ needs.identity.outputs.operator }}
           OPERATOR_DIGEST: ${{ needs.build-operator.outputs.digest }}
+          SOURCE_SHA: ${{ needs.identity.outputs.source_sha }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
           started=$SECONDS
-          inspect="$(docker buildx imagetools inspect "$IMAGE")"
-          grep -q 'linux/amd64' <<<"$inspect"
-          grep -q 'linux/arm64' <<<"$inspect"
-          test "$(awk '$1 == "Digest:" { print $2; exit }' <<<"$inspect")" = "$IMAGE_DIGEST"
-          operator_inspect="$(docker buildx imagetools inspect "$OPERATOR")"
-          grep -q 'linux/amd64' <<<"$operator_inspect"
-          grep -q 'linux/arm64' <<<"$operator_inspect"
-          test "$(awk '$1 == "Digest:" { print $2; exit }' <<<"$operator_inspect")" = "$OPERATOR_DIGEST"
-          docker pull --platform linux/amd64 "$IMAGE@$IMAGE_DIGEST"
-          docker pull --platform linux/amd64 "$OPERATOR@$OPERATOR_DIGEST"
-          expected_node="$(node --version)"
-          test "$(docker run --rm --platform linux/amd64 --entrypoint /nodejs/bin/node "$IMAGE@$IMAGE_DIGEST" --version)" = "$expected_node"
-          test "$(docker run --rm --platform linux/amd64 --entrypoint /usr/local/bin/node "$OPERATOR@$OPERATOR_DIGEST" --version)" = "$expected_node"
-          previous_version="$(npm view @or3/cloud version)"
-          docker run --rm --platform linux/amd64 --read-only --tmpfs /tmp:size=128m --user 1001:1001 \
-            --entrypoint /bin/sh "$OPERATOR@$OPERATOR_DIGEST" -ec '
-              install_dir=/tmp/operator-package-probe
-              mkdir -m 700 "$install_dir"
-              HOME="$install_dir" /usr/local/bin/docker manifest inspect "$1" >/dev/null
-              node -e '\''require("node:fs").writeFileSync(process.argv[1], JSON.stringify({private:true,dependencies:{"@or3/cloud":process.argv[2]}}))'\'' "$install_dir/package.json" "$2"
-              cd "$install_dir"
-              HOME="$install_dir" NPM_CONFIG_CACHE="$install_dir/npm-cache" NPM_CONFIG_LOGLEVEL=error \
-                NPM_CONFIG_REGISTRY=https://registry.npmjs.org/ NPM_CONFIG_IGNORE_SCRIPTS=true \
-                NPM_CONFIG_AUDIT=false NPM_CONFIG_FUND=false \
-                NPM_CONFIG_USERCONFIG="$install_dir/disabled-user.npmrc" \
-                NPM_CONFIG_GLOBALCONFIG="$install_dir/disabled-global.npmrc" \
-                /usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js install \
-                  --save-exact --package-lock=true --ignore-scripts --no-audit --no-fund
-              test "$(/usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js --version)" = 11.6.2
-            ' _ "$IMAGE@$IMAGE_DIGEST" "$previous_version"
+          node scripts/release/verify-image-contract.mjs "$IMAGE@$IMAGE_DIGEST" \
+            --operator "$OPERATOR@$OPERATOR_DIGEST" --profile basic-sqlite-fs \
+            --source-sha "$SOURCE_SHA" --run-id "$RUN_ID" --candidate-digest "$IMAGE_DIGEST" \
+            --operator-digest "$OPERATOR_DIGEST" --qualification-out "$RUNNER_TEMP/or3-image-qualification.json"
           echo "Manifest and anonymous-pull verification completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Retain the successful Basic image qualification
+        uses: actions/upload-artifact@v7
+        with:
+          name: or3-cloud-image-qualification-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
+          path: ${{ runner.temp }}/or3-image-qualification.json
+          if-no-files-found: error
 
   security-scan:
     name: Scan both runtime architectures
@@ -392,6 +377,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.identity.outputs.source_sha }}
       - uses: actions/setup-node@v7
         with:
           node-version: "24.22.1"
@@ -407,14 +394,23 @@ jobs:
       - name: Scan exact application digest
         env:
           OR3_IMAGE: ${{ needs.identity.outputs.image }}@${{ needs.build-app.outputs.digest }}
+          SOURCE_SHA: ${{ needs.identity.outputs.source_sha }}
+          IMAGE_DIGEST: ${{ needs.build-app.outputs.digest }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
           started=$SECONDS
           mkdir -p release-artifact
           (cd release-artifact && node "$GITHUB_WORKSPACE/scripts/release/scan-image.mjs" "$OR3_IMAGE" \
-            --platform linux/amd64 --syft "${{ steps.syft.outputs.cmd }}" --out release-evidence-amd64.json)
+            --platform linux/amd64 --syft "${{ steps.syft.outputs.cmd }}" --out release-evidence-amd64.json \
+            --profile basic-sqlite-fs --source-sha "$SOURCE_SHA" --run-id "$RUN_ID" \
+            --candidate-digest "$IMAGE_DIGEST" --qualification-out scanAmd64.json)
           (cd release-artifact && node "$GITHUB_WORKSPACE/scripts/release/scan-image.mjs" "$OR3_IMAGE" \
-            --platform linux/arm64 --syft "${{ steps.syft.outputs.cmd }}" --out release-evidence-arm64.json)
+            --platform linux/arm64 --syft "${{ steps.syft.outputs.cmd }}" --out release-evidence-arm64.json \
+            --profile basic-sqlite-fs --source-sha "$SOURCE_SHA" --run-id "$RUN_ID" \
+            --candidate-digest "$IMAGE_DIGEST" --qualification-out scanArm64.json)
+          test -s release-artifact/scanAmd64.json
+          test -s release-artifact/scanArm64.json
           echo "Two-architecture security scan completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
         if: ${{ always() }}
@@ -430,21 +426,35 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.identity.outputs.source_sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24.22.1"
+          package-manager-cache: false
       - uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
       - name: Exercise exact arm64 image digest
         env:
           OR3_IMAGE: ${{ needs.identity.outputs.image }}@${{ needs.build-app.outputs.digest }}
+          SOURCE_SHA: ${{ needs.identity.outputs.source_sha }}
+          IMAGE_DIGEST: ${{ needs.build-app.outputs.digest }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
           started=$SECONDS
-          docker run --rm --platform linux/arm64 --user 65532:65532 --read-only --cap-drop ALL \
-            --security-opt no-new-privileges --tmpfs /tmp:rw,noexec,nosuid,size=64m --volume /data \
-            --entrypoint /bin/sh "$OR3_IMAGE" -c 'printf runtime-contract > /data/probe && tar czf /tmp/data.tgz -C /data . && find /data -mindepth 1 -delete && tar xzf /tmp/data.tgz -C /data && test -f /data/probe'
-          docker run --rm --platform linux/arm64 --entrypoint /nodejs/bin/node "$OR3_IMAGE" -e \
-            'if(process.version!=="v24.22.1")throw Error("Unexpected Node runtime: "+process.version); const D=require("/app/.output/server/node_modules/better-sqlite3"); const d=new D(":memory:"); if(d.prepare("select 42 value").get().value!==42)process.exit(1); d.close()'
+          node scripts/release/verify-arm-runtime.mjs "$OR3_IMAGE" \
+            --profile basic-sqlite-fs --source-sha "$SOURCE_SHA" --run-id "$RUN_ID" \
+            --candidate-digest "$IMAGE_DIGEST" --qualification-out "$RUNNER_TEMP/or3-arm-qualification.json"
           echo "arm64 runtime verification completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Retain the successful Basic arm64 qualification
+        uses: actions/upload-artifact@v7
+        with:
+          name: or3-cloud-arm-qualification-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
+          path: ${{ runner.temp }}/or3-arm-qualification.json
+          if-no-files-found: error
 
   lifecycle:
     name: Upgrade, rollback, restart, and persistence
@@ -457,8 +467,11 @@ jobs:
       CANDIDATE_TARBALL: ${{ github.workspace }}/release-artifact/or3-cloud-${{ needs.identity.outputs.version }}.tgz
       VERSION: ${{ needs.identity.outputs.version }}
       OPERATOR_DIGEST: ${{ needs.build-operator.outputs.digest }}
+      CANDIDATE_SOURCE_SHA: ${{ needs.identity.outputs.source_sha }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.identity.outputs.source_sha }}
       - uses: actions/setup-node@v7
         with:
           node-version: "24.22.1"
@@ -479,9 +492,24 @@ jobs:
           set -euo pipefail
           started=$SECONDS
           previous_version="$(npm view @or3/cloud version)"
+          export PREVIOUS_VERSION="$previous_version"
           echo "PREVIOUS_VERSION=$previous_version" >> "$GITHUB_ENV"
+          test ! -e "$MANAGED"
+          mkdir -m 700 "$MANAGED"
+          cat > "$RUNNER_TEMP/or3-lifecycle-evidence" <<'SH'
+          set -euo pipefail
+          exec node "$GITHUB_WORKSPACE/scripts/release/lifecycle-evidence.mjs" "$1" \
+            --deployment "$MANAGED" --image "$CANDIDATE_IMAGE" --operator "$CANDIDATE_OPERATOR_IMAGE" \
+            --source-sha "$CANDIDATE_SOURCE_SHA" --run-id "$GITHUB_RUN_ID" --previous-version "$PREVIOUS_VERSION" \
+            --candidate-digest "${CANDIDATE_IMAGE##*@}" --operator-digest "$OPERATOR_DIGEST" \
+            --tarball "$CANDIDATE_TARBALL" --inputs "$RUNNER_TEMP/or3-lifecycle-inputs.json" \
+            --baseline "$RUNNER_TEMP/or3-lifecycle-baseline.json" --browser "$RUNNER_TEMP/or3-browser-qualification.json" \
+            --qualification-out "$RUNNER_TEMP/or3-lifecycle-qualification.json"
+          SH
+          bash "$RUNNER_TEMP/or3-lifecycle-evidence" begin
           docker pull --platform linux/amd64 "$CANDIDATE_IMAGE"
           timeout --signal=TERM 5m npx --yes "@or3/cloud@$previous_version" init "$MANAGED" --local --port 3017 --admin-email smoke@example.com
+          bash "$RUNNER_TEMP/or3-lifecycle-evidence" baseline
           (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
           (cd "$MANAGED" && timeout --signal=TERM 4m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
           (cd "$MANAGED" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$previous_version" backup)
@@ -518,7 +546,7 @@ jobs:
           (cd "$MANAGED" && OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE" OR3_CLOUD_TEST_OPERATOR_IMAGE="$CANDIDATE_OPERATOR_IMAGE" OR3_EXPECTED_OPERATOR_IMAGE_DIGEST="$OPERATOR_DIGEST" \
             timeout --signal=TERM 8m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 update --to "$VERSION")
           echo "Candidate update completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
-      - name: Verify hydration and portable frames through the shipped Caddy proxy
+      - name: Verify proxy hydration and the disposable Basic browser journey
         run: |
           set -euo pipefail
           container="$(docker compose --project-directory "$MANAGED" --env-file "$MANAGED/.env" -f "$MANAGED/compose.yaml" ps -q or3)"
@@ -539,17 +567,27 @@ jobs:
             sleep 1
           done
           curl --insecure --fail --silent https://localhost:3018/ >/dev/null
-          cp scripts/release/smoke-browser.mjs "$RUNNER_TEMP/or3-browser/smoke-browser.mjs"
-          OR3_SMOKE_URL=https://localhost:3018 OR3_SMOKE_HYDRATION_ONLY=1 \
-            OR3_SMOKE_CADDYFILE="$RUNNER_TEMP/or3-browser/Caddyfile" \
+          cp scripts/release/{smoke-browser,verify-browser-qualification,browser-process,browser-upload-fixture}.mjs "$RUNNER_TEMP/or3-browser/"
+          OR3_SMOKE_CADDYFILE="$RUNNER_TEMP/or3-browser/Caddyfile" \
             OR3_SMOKE_ARTIFACT_DIR="$GITHUB_WORKSPACE/output/browser-smoke" \
-            node "$RUNNER_TEMP/or3-browser/smoke-browser.mjs"
+            node "$RUNNER_TEMP/or3-browser/verify-browser-qualification.mjs" \
+              --deployment "$MANAGED" --image "$CANDIDATE_IMAGE" --operator "$CANDIDATE_OPERATOR_IMAGE" \
+              --profile basic-sqlite-fs --source-sha "${{ needs.identity.outputs.source_sha }}" \
+              --run-id "$GITHUB_RUN_ID" --candidate-digest "${CANDIDATE_IMAGE##*@}" \
+              --operator-digest "$OPERATOR_DIGEST" --tarball "$CANDIDATE_TARBALL" \
+              --qualification-out "$RUNNER_TEMP/or3-browser-qualification.json"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: or3-cloud-browser-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
           path: output/browser-smoke
           if-no-files-found: ignore
+      - name: Retain the successful Basic browser qualification
+        uses: actions/upload-artifact@v7
+        with:
+          name: or3-cloud-browser-qualification-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
+          path: ${{ runner.temp }}/or3-browser-qualification.json
+          if-no-files-found: error
       - name: Verify operator bridge and persisted data
         run: |
           set -euo pipefail
@@ -621,6 +659,7 @@ jobs:
             if (state.incompleteOperation || state.appVersion !== process.env.PREVIOUS_VERSION) throw new Error("Recovery did not restore the previous release and clear the journal");'
           (cd "$MANAGED" && timeout --signal=TERM 4m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 doctor)
           (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+          bash "$RUNNER_TEMP/or3-lifecycle-evidence" assert-baseline
           (cd "$MANAGED" && OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE" OR3_CLOUD_TEST_OPERATOR_IMAGE="$CANDIDATE_OPERATOR_IMAGE" OR3_EXPECTED_OPERATOR_IMAGE_DIGEST="$OPERATOR_DIGEST" \
             timeout --signal=TERM 8m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 update --to "$VERSION")
       - name: Roll back and verify previous release
@@ -630,6 +669,7 @@ jobs:
           (cd "$MANAGED" && timeout --signal=TERM 6m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 rollback --yes)
           (cd "$MANAGED" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$PREVIOUS_VERSION" verify)
           (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+          bash "$RUNNER_TEMP/or3-lifecycle-evidence" assert-baseline
           echo "Rollback and previous-release verification completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Reapply candidate, restart, and verify persistence
         run: |
@@ -704,6 +744,13 @@ jobs:
           # Repeating recovery must not replay replacement or delete the rollback point.
           (cd "$MANAGED" && timeout --signal=TERM 2m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 recover --finish)
           (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+          bash "$RUNNER_TEMP/or3-lifecycle-evidence" finish
+      - name: Retain the successful Basic lifecycle qualification
+        uses: actions/upload-artifact@v7
+        with:
+          name: or3-cloud-lifecycle-qualification-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
+          path: ${{ runner.temp }}/or3-lifecycle-qualification.json
+          if-no-files-found: error
       - name: Capture lifecycle diagnostics
         if: failure()
         run: |
@@ -736,6 +783,8 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.identity.outputs.source_sha }}
       - uses: actions/setup-node@v7
         with:
           node-version: "24.22.1"
@@ -751,12 +800,49 @@ jobs:
         with:
           name: or3-cloud-scans-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
           path: release-artifact/scans
+      - uses: actions/download-artifact@v8
+        with:
+          name: or3-cloud-image-qualification-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
+          path: ${{ runner.temp }}/or3-qualification-image
+      - uses: actions/download-artifact@v8
+        with:
+          name: or3-cloud-arm-qualification-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
+          path: ${{ runner.temp }}/or3-qualification-arm
+      - uses: actions/download-artifact@v8
+        with:
+          name: or3-cloud-browser-qualification-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
+          path: ${{ runner.temp }}/or3-qualification-browser
+      - uses: actions/download-artifact@v8
+        with:
+          name: or3-cloud-lifecycle-qualification-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
+          path: ${{ runner.temp }}/or3-qualification-lifecycle
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Validate the complete Basic qualification set
+        env:
+          CANDIDATE_IMAGE: ${{ needs.identity.outputs.image }}
+          CANDIDATE_OPERATOR_IMAGE: ${{ needs.identity.outputs.operator }}
+          CANDIDATE_DIGEST: ${{ needs.build-app.outputs.digest }}
+          OPERATOR_DIGEST: ${{ needs.build-operator.outputs.digest }}
+          CANDIDATE_TARBALL: release-artifact/or3-cloud-${{ needs.identity.outputs.version }}.tgz
+        run: |
+          set -euo pipefail
+          mkdir -m 700 release-artifact/basic-qualification
+          cp "$RUNNER_TEMP/or3-qualification-image/or3-image-qualification.json" release-artifact/basic-qualification/imageContract.json
+          cp "$RUNNER_TEMP/or3-qualification-arm/or3-arm-qualification.json" release-artifact/basic-qualification/nativeAddonArm64.json
+          cp "$RUNNER_TEMP/or3-qualification-browser/or3-browser-qualification.json" release-artifact/basic-qualification/browser.json
+          cp "$RUNNER_TEMP/or3-qualification-lifecycle/or3-lifecycle-qualification.json" release-artifact/basic-qualification/lifecycle.json
+          cp release-artifact/scans/scanAmd64.json release-artifact/basic-qualification/scanAmd64.json
+          cp release-artifact/scans/scanArm64.json release-artifact/basic-qualification/scanArm64.json
+          node scripts/release/candidate-receipt.mjs verify-basic-evidence \
+            --version "${{ needs.identity.outputs.version }}" --source-sha "${{ needs.identity.outputs.source_sha }}" \
+            --run-id "$GITHUB_RUN_ID" --image "$CANDIDATE_IMAGE" --operator-image "$CANDIDATE_OPERATOR_IMAGE" \
+            --candidate-digest "$CANDIDATE_DIGEST" --operator-digest "$OPERATOR_DIGEST" \
+            --tarball "$CANDIDATE_TARBALL" --evidence-dir release-artifact/basic-qualification
       - name: Create the receipt after every required verifier passes
         env:
           CANDIDATE_IMAGE: ${{ needs.identity.outputs.image }}
@@ -810,6 +896,20 @@ jobs:
             docker build --tag "$EVIDENCE_IMAGE" "$evidence"
             docker push "$EVIDENCE_IMAGE"
           fi
+      - name: Check the retained receipt against the Basic qualification set
+        env:
+          CANDIDATE_IMAGE: ${{ needs.identity.outputs.image }}
+          CANDIDATE_OPERATOR_IMAGE: ${{ needs.identity.outputs.operator }}
+          CANDIDATE_DIGEST: ${{ needs.build-app.outputs.digest }}
+          OPERATOR_DIGEST: ${{ needs.build-operator.outputs.digest }}
+          CANDIDATE_TARBALL: release-artifact/or3-cloud-${{ needs.identity.outputs.version }}.tgz
+        run: |
+          node scripts/release/candidate-receipt.mjs verify-basic-evidence \
+            --version "${{ needs.identity.outputs.version }}" --source-sha "${{ needs.identity.outputs.source_sha }}" \
+            --run-id "$GITHUB_RUN_ID" --image "$CANDIDATE_IMAGE" --operator-image "$CANDIDATE_OPERATOR_IMAGE" \
+            --candidate-digest "$CANDIDATE_DIGEST" --operator-digest "$OPERATOR_DIGEST" \
+            --tarball "$CANDIDATE_TARBALL" --evidence-dir release-artifact/basic-qualification \
+            --receipt release-artifact/candidate-receipt.json
       - uses: actions/upload-artifact@v7
         with:
           name: or3-cloud-candidate-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}

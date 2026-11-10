@@ -157,8 +157,9 @@ async function load() {
     if (!cache) return;
     const nextMeta = props.meta;
     if (currentHash.value && currentHash.value !== nextMeta?.hash) {
-        cache.release(currentHash.value);
+        cache.releaseOwner(currentHash.value);
     }
+    if (nextMeta && currentHash.value !== nextMeta.hash) cache.retain(nextMeta.hash);
     currentHash.value = nextMeta?.hash ?? null;
     state.url = undefined;
     state.failed = false;
@@ -174,7 +175,6 @@ async function load() {
         });
         if (isCurrent() && url && props.modelValue && props.meta?.hash === nextMeta.hash) {
             state.url = url;
-            cache.promote(nextMeta.hash, 2);
         }
     } catch (error) {
         if (!isCurrent()) return;
@@ -194,7 +194,7 @@ async function load() {
 
 function downgrade() {
     if (!cache || !currentHash.value) return;
-    cache.release(currentHash.value);
+    cache.releaseOwner(currentHash.value);
     currentHash.value = null;
 }
 
@@ -204,6 +204,7 @@ onBeforeUnmount(() => {
 });
 
 function close() {
+    loadToken += 1;
     downgrade();
     emit('update:modelValue', false);
 }
@@ -212,7 +213,7 @@ watch(
     [() => props.meta?.hash, () => props.modelValue],
     ([, open]) => {
         if (open) void load();
-        else { downgrade(); state.url = undefined; }
+        else { loadToken += 1; downgrade(); state.url = undefined; }
     },
     { immediate: true }
 );

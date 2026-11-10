@@ -14,6 +14,12 @@ const execFile = promisify(execFileCallback);
 
 const COMMAND_TIMEOUT_MS = 180_000;
 const STREAM_COMMAND_TIMEOUT_MS = 15 * 60_000;
+const MAX_STREAM_COMMAND_TIMEOUT_MS = 4 * 60 * 60_000;
+
+function streamDeadline(timeoutMs: number) {
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_STREAM_COMMAND_TIMEOUT_MS) throw new Error('Invalid archive stream deadline.');
+  return timeoutMs;
+}
 
 type CommandResult = {
   ok: boolean;
@@ -129,7 +135,10 @@ export async function streamCommandToFile(
   destination: string,
   cwd?: string,
   secrets: string[] = [],
+  environment?: NodeJS.ProcessEnv,
+  timeoutMs = STREAM_COMMAND_TIMEOUT_MS,
 ) {
+  streamDeadline(timeoutMs);
   if (await fileExists(destination)) {
     throw new Error(`Refusing to overwrite existing archive ${destination}.`);
   }
@@ -137,7 +146,7 @@ export async function streamCommandToFile(
   const temporary = `${destination}.${randomBytes(8).toString('hex')}.partial`;
   const child = spawn(command, args, {
     cwd,
-    env: commandEnvironment(command, args, cwd),
+    env: commandEnvironment(command, args, cwd, environment),
     detached: process.platform !== 'win32',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -147,7 +156,7 @@ export async function streamCommandToFile(
   const timeout = setTimeout(() => {
     timedOut = true;
     terminateChildProcess(child);
-  }, STREAM_COMMAND_TIMEOUT_MS);
+  }, timeoutMs);
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (chunk: string) => {
     stderr = `${stderr}${chunk}`.slice(-64 * 1024);
@@ -162,7 +171,7 @@ export async function streamCommandToFile(
       exit,
       transfer,
     ]);
-    if (hasTimedOut()) throw new Error(`${command} exceeded the ${STREAM_COMMAND_TIMEOUT_MS / 1000}-second archive deadline.`);
+    if (hasTimedOut()) throw new Error(`${command} exceeded the ${timeoutMs / 1000}-second archive deadline.`);
     if (exitCode !== 0) {
       throw new Error(`${command} ${args.join(' ')} exited with ${exitCode}. ${redact(stderr, secrets)}`.trim());
     }
@@ -198,10 +207,13 @@ export async function streamFileToCommand(
   source: string,
   cwd?: string,
   secrets: string[] = [],
+  environment?: NodeJS.ProcessEnv,
+  timeoutMs = STREAM_COMMAND_TIMEOUT_MS,
 ) {
+  streamDeadline(timeoutMs);
   const child = spawn(command, args, {
     cwd,
-    env: commandEnvironment(command, args, cwd),
+    env: commandEnvironment(command, args, cwd, environment),
     detached: process.platform !== 'win32',
     stdio: ['pipe', 'ignore', 'pipe'],
   });
@@ -211,7 +223,7 @@ export async function streamFileToCommand(
   const timeout = setTimeout(() => {
     timedOut = true;
     terminateChildProcess(child);
-  }, STREAM_COMMAND_TIMEOUT_MS);
+  }, timeoutMs);
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (chunk: string) => {
     stderr = `${stderr}${chunk}`.slice(-64 * 1024);
@@ -225,13 +237,13 @@ export async function streamFileToCommand(
       exit,
       pipeline(createReadStream(source), child.stdin),
     ]);
-    if (hasTimedOut()) throw new Error(`${command} exceeded the ${STREAM_COMMAND_TIMEOUT_MS / 1000}-second archive deadline.`);
+    if (hasTimedOut()) throw new Error(`${command} exceeded the ${timeoutMs / 1000}-second archive deadline.`);
     if (exitCode !== 0) {
       throw new Error(`${command} ${args.join(' ')} exited with ${exitCode}. ${redact(stderr, secrets)}`.trim());
     }
   } catch (error) {
     terminateChildProcess(child);
-    const detail = error instanceof Error ? error.message : String(error);
+    const detail = redact(error instanceof Error ? error.message : String(error), secrets);
     throw new Error(`${detail}${stderr && !detail.includes(stderr) ? `\n${redact(stderr, secrets)}` : ''}`);
   } finally {
     clearTimeout(timeout);

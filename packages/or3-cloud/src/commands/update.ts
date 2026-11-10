@@ -2,6 +2,7 @@ import { readFile, statfs } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { restoreVolumeArchive } from '../backup/archive';
 import { createBackup } from '../backup/create';
+import { assertBackupSourceProfile, assertSupportedBackupProfile } from '../backup/references';
 import { restoreBackupData, restoreGenerationIdentities } from '../backup/restore';
 import {
   BACKUP_RETENTION_KEEP,
@@ -291,6 +292,8 @@ async function runUpdateCommand(directory: string, flags: Flags, asJson: boolean
     else progress(`OR3 ${targetVersion} is already installed. Nothing to do.`);
     return;
   }
+  assertSupportedBackupProfile(env);
+  await assertBackupSourceProfile(loaded.directory, state, env);
   // Shared preflight: the same assessment the dashboard previews now runs at
   // execution time under the lease and blocks before any pull or data change.
   const preflight = await assessUpdate(loaded.directory, targetVersion, { underLease: true, checkDocker: true });
@@ -407,6 +410,7 @@ async function runUpdateCommand(directory: string, flags: Flags, asJson: boolean
         await restoreBackupData(loaded.directory, state, oldEnv, backup.backupDir, {
           recreateDataVolume,
           previousSafetySnapshot: true,
+          remoteReferencePolicy: 'warn',
         });
       } catch (restoreError) {
         throw new Error(`Update to ${targetVersion} failed, and automatic backup restoration also failed: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}. Original update error: ${error instanceof Error ? error.message : String(error)}`);

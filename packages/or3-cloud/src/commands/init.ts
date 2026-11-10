@@ -12,7 +12,7 @@ import {
   serializeInitialCredentials,
   withoutProvisioningCredentials,
 } from '../deployment/env';
-import { composeProjectNames, imageAtDigest, imageFor } from '../deployment/identity';
+import { composeProjectNames, imageAtDigest, imageFor, managedVaultVolumeNames } from '../deployment/identity';
 import { deploymentPaths, readDirectoryEmpty } from '../deployment/paths';
 import { clearPending, markPending, stateFromEnv, writeState } from '../deployment/state-store';
 import { expectedImageDigest, PACKAGE_VERSION } from '../package-info';
@@ -60,7 +60,7 @@ export async function initCommand(positionals: string[], flags: Flags) {
   await ensureDocker();
   const names = composeProjectNames(directory);
   await assertDockerProjectAbsent(names.project);
-  for (const volume of [names.volume, ...(mode === 'public' ? [names.caddyData, names.caddyConfig] : [])]) {
+  for (const volume of [names.volume, ...managedVaultVolumeNames(names.volume), ...(mode === 'public' ? [names.caddyData, names.caddyConfig] : [])]) {
     const existing = await run('docker', ['volume', 'inspect', volume]);
     if (existing.ok) throw new Error(`Docker volume ${volume} already exists. Choose a new directory or inspect it before initializing.`);
     if (existing.exitCode !== 1 || !/no such volume/i.test(`${existing.stdout}\n${existing.stderr}`)) {

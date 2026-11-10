@@ -5,13 +5,18 @@ import { captureComposeDiagnostics, composeArgs, diagnostics } from './compose';
 
 const DEEP_HEALTH_TIMEOUT_MS = 180_000;
 
-export const HEALTH_SCRIPT = "const fs=require('node:fs');try{fs.accessSync('/data',fs.constants.R_OK|fs.constants.W_OK);for(const path of [process.env.OR3_BASIC_AUTH_DB_PATH,process.env.OR3_SQLITE_DB_PATH].filter(Boolean)){const fd=fs.openSync(path,'r+');fs.closeSync(fd)}}catch{process.exit(1)}fetch('http://127.0.0.1:3000/api/health?deep=true').then(async response=>{const body=await response.json().catch(()=>({}));if(!response.ok||body.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))";
+export const HEALTH_SCRIPT = "const fs=require('node:fs');try{const auth=process.env.AUTH_PROVIDER||process.env.OR3_AUTH_PROVIDER||'basic-auth',storage=process.env.NUXT_PUBLIC_STORAGE_PROVIDER||'fs',sync=process.env.OR3_SYNC_PROVIDER||'sqlite';if(sync!=='sqlite'||!(auth==='basic-auth'&&storage==='fs'||auth==='clerk'&&storage==='s3')||process.env.AUTH_PROVIDER&&process.env.OR3_AUTH_PROVIDER&&process.env.AUTH_PROVIDER!==process.env.OR3_AUTH_PROVIDER)throw Error('profile');fs.accessSync('/data',fs.constants.R_OK|fs.constants.W_OK);const paths=auth==='basic-auth'?[process.env.OR3_BASIC_AUTH_DB_PATH,process.env.OR3_SQLITE_DB_PATH]:[process.env.OR3_SQLITE_DB_PATH];if(paths.some(p=>!p))throw Error('database path');for(const path of paths){const fd=fs.openSync(path,'r+');fs.closeSync(fd)}}catch{process.exit(1)}fetch('http://127.0.0.1:3000/api/health?deep=true').then(async response=>{const body=await response.json().catch(()=>({}));if(!response.ok||body.status!=='ok'||body.providers?.auth?.provider!==(process.env.AUTH_PROVIDER||process.env.OR3_AUTH_PROVIDER||'basic-auth')||body.providers?.sync?.provider!=='sqlite'||body.providers?.storage?.provider!==(process.env.NUXT_PUBLIC_STORAGE_PROVIDER||'fs'))process.exit(1)}).catch(()=>process.exit(1))";
 
 export const VERIFY_DATABASES_SCRIPT = `
 const fs = require('node:fs');
 const Database = require('/app/.output/server/node_modules/better-sqlite3');
 const results = [];
-for (const path of [process.env.OR3_BASIC_AUTH_DB_PATH, process.env.OR3_SQLITE_DB_PATH].filter(Boolean)) {
+const auth = process.env.AUTH_PROVIDER || process.env.OR3_AUTH_PROVIDER || 'basic-auth';
+const storage = process.env.NUXT_PUBLIC_STORAGE_PROVIDER || 'fs', sync = process.env.OR3_SYNC_PROVIDER || 'sqlite';
+if (sync !== 'sqlite' || !(auth === 'basic-auth' && storage === 'fs' || auth === 'clerk' && storage === 's3') || process.env.AUTH_PROVIDER && process.env.OR3_AUTH_PROVIDER && process.env.AUTH_PROVIDER !== process.env.OR3_AUTH_PROVIDER) throw new Error('Unsupported auth profile');
+const paths = auth === 'basic-auth' ? [process.env.OR3_BASIC_AUTH_DB_PATH, process.env.OR3_SQLITE_DB_PATH] : [process.env.OR3_SQLITE_DB_PATH];
+if (paths.some(path => !path)) throw new Error('Missing managed database path');
+for (const path of paths) {
   const info = fs.statSync(path);
   if (info.uid !== 65532 || info.gid !== 65532) throw new Error(path + ' must be owned by 65532:65532');
   const db = new Database(path, { readonly: true, fileMustExist: true });

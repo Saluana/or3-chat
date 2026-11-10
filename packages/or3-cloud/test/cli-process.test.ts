@@ -2,8 +2,9 @@ import { afterEach, expect, setDefaultTimeout, test } from 'bun:test';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { PACKAGE_VERSION } from '../src/package-info';
-import { createSandbox, deadPid, writeLease } from './process-harness';
+import { PACKAGE_VERSION, packagedSourceRevision } from '../src/package-info';
+import { parseEnv, serializeEnv } from '../src/deployment/env';
+import { createSandbox, deadPid, NEW_DIGEST, REPOSITORY, writeLease } from './process-harness';
 import type { Sandbox } from './process-harness';
 
 // Each test drives several real CLI processes.
@@ -21,6 +22,122 @@ afterEach(async () => {
 
 const LEASE_REFUSAL = 'Another OR3 Cloud operation owns';
 const DOCKER_MUTATIONS = /compose .* (up|stop|down|restart)\b|volume rm|tar xzf|find \/data/;
+
+// Drive the real command against synthetic Docker and sign-in responses. The
+// archive and extraction are fakes: this checks orchestration and protected
+// configuration, not preservation or use of real application data.
+test.each(['source-stop', 'target-start', 'none'] as const)('adoption handles configuration and orchestration with %s', async (failure) => {
+  const fixture = await sandbox();
+  const source = join(fixture.root, 'source'); const target = join(fixture.root, 'adopted');
+  await mkdir(source);
+  const app = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch(request) {
+    const path = new URL(request.url).pathname;
+    if (path === '/api/basic-auth/sign-in' || path === '/api/admin/auth/login') return Response.json({}, { headers: { 'set-cookie': 'fixture=session; Path=/' } });
+    if (path === '/api/auth/session') return Response.json({ session: { user: { email: 'owner@example.test' }, workspace: { id: 'fixture-workspace' } } });
+    return Response.json({});
+  } });
+  const image = `${REPOSITORY}:${PACKAGE_VERSION}`;
+  const sourceEnv = {
+    AUTH_PROVIDER: 'basic-auth', OR3_AUTH_PROVIDER: 'basic-auth', OR3_SYNC_PROVIDER: 'sqlite',
+    NUXT_PUBLIC_STORAGE_PROVIDER: 'fs', OR3_AUTH_REGISTRATION_MODE: 'invite_only', OR3_AUTH_AUTO_PROVISION: 'false',
+    SSR_AUTH_ENABLED: 'true', OR3_SYNC_ENABLED: 'true', OR3_STORAGE_ENABLED: 'true', NUXT_SECRETS_PROVIDER: '',
+    OR3_BASIC_AUTH_DB_PATH: '/data/auth.sqlite', OR3_SQLITE_DB_PATH: '/data/sync.sqlite', OR3_STORAGE_FS_ROOT: '/data/storage',
+    OR3_ADMIN_DATA_DIR: '/data/admin', OR3_EXTENSIONS_ROOT: '/data/extensions', OR3_INSTANCE_ID: 'stable-fixture',
+    OR3_VERSION: PACKAGE_VERSION, OR3_IMAGE: image, OR3_PORT: String(app.port),
+    OR3_BASIC_AUTH_BOOTSTRAP_EMAIL: 'owner@example.test', OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD: 'Fixture-password-123!',
+    OR3_ADMIN_USERNAME: 'owner', OR3_ADMIN_PASSWORD: 'Fixture-admin-123!',
+    OR3_LIBRARY_LINK_SECRET: 'fixture-library-private', NUXT_ADMIN_PLUGIN_CONNECTION_SECRET: 'fixture-plugin-private',
+    NUXT_AUTH_INVITE_TOKEN_SECRET: 'fixture-invite-private', OR3_MARKETPLACE_REGISTRY_ORIGIN: 'https://market.example.test',
+    OR3_MARKETPLACE_INSTALL_ENABLED: 'true', OR3_MARKETPLACE_RELEASE_KEYS: 'fixture-public-keys',
+    OR3_BACKGROUND_STREAMING_ENABLED: 'true', OR3_PLUGIN_ALLOWED_MODELS: 'example/model',
+  };
+  await writeFile(join(source, '.env'), serializeEnv(sourceEnv), { mode: 0o600 });
+  await writeFile(join(source, 'or3-release.json'), JSON.stringify({ or3Version: PACKAGE_VERSION }));
+  await writeFile(join(source, 'or3.providers.generated.ts'), ['or3-provider-basic-auth/nuxt', 'or3-provider-sqlite/nuxt', 'or3-provider-fs/nuxt'].join('\n'));
+  await writeFile(join(source, 'compose.yaml'), 'fixture\n');
+  const resolved = { name: 'source', services: { or3: { image, environment: sourceEnv, ports: [{ target: 3000, published: app.port, host_ip: '127.0.0.1', protocol: 'tcp' }], volumes: [{ type: 'volume', source: 'data', target: '/data' }] } }, volumes: { data: { name: 'source-data' } } };
+  const fakeConfig = join(fixture.root, 'adoption-docker.json');
+  const trace = join(fixture.root, 'adoption-trace.jsonl');
+  await writeFile(fakeConfig, JSON.stringify({ env: sourceEnv, config: resolved, repo: REPOSITORY, digest: NEW_DIGEST, version: PACKAGE_VERSION, revision: packagedSourceRevision(PACKAGE_VERSION) ?? '1'.repeat(40), failure, source, target, trace }), { mode: 0o600 });
+  await writeFile(join(fixture.root, 'bin', 'docker'), `#!/usr/bin/env bun
+import {appendFileSync,readFileSync} from 'node:fs';
+import {gzipSync} from 'node:zlib';
+const f=JSON.parse(readFileSync(${JSON.stringify(fakeConfig)},'utf8')), a=process.argv.slice(2), s=a.join(' '), env=f.env;
+appendFileSync(f.trace,JSON.stringify(a)+'\\n');
+const targetEnv=()=>Object.fromEntries(readFileSync(f.target+'/.env','utf8').split('\\n').map(x=>x.match(/^([A-Za-z_][A-Za-z0-9_]*)='(.*)'$/)).filter(Boolean).map(m=>[m[1],m[2]]));
+if(a[0]==='info') console.log(s.includes('.Architecture') ? 'arm64' : 'fixture');
+else if(a[0]==='network' || a[0]==='ps' || a[0]==='diff') {}
+else if(a[0]==='context') console.log('tcp://fixture');
+else if(a[0]==='volume' && a[1]==='ls') console.log('source-data');
+else if(a[0]==='volume' && a[1]==='inspect') {
+  if(s.includes('{{.Name}}')) console.log(a[2]);
+  else if(s.includes('.Labels')) {const e=targetEnv(); console.log(JSON.stringify({'com.docker.compose.project':e.OR3_COMPOSE_PROJECT,'com.docker.compose.volume':'or3-data','io.or3.cloud.deployment-id':e.OR3_DEPLOYMENT_ID}));}
+  else { console.error('Error: No such volume'); process.exit(1); }
+}
+else if(a[0]==='run') { if(s.includes('tar czf')) process.stdout.write(gzipSync(Buffer.from('fixture-data'))); }
+else if(a[0]==='image' && a[1]==='inspect') {
+  if(s.includes('.RepoDigests')) console.log(JSON.stringify([f.repo+'@'+f.digest]));
+  else if(s.includes('.Architecture')) console.log('arm64');
+  else if(s.includes('.Config.Labels')) console.log(JSON.stringify({'org.opencontainers.image.source':'https://github.com/Saluana/or3-chat','org.opencontainers.image.version':f.version,'org.opencontainers.image.revision':f.revision}));
+  else if(s.includes('.Config.Entrypoint')) { console.log('sha256:fixture'); console.log(JSON.stringify(['/entrypoint'])); console.log(JSON.stringify(['serve'])); console.log(JSON.stringify('/app')); console.log('[]'); }
+  else console.log('[]');
+} else if(a[0]==='inspect') {
+  if(s.includes('com.docker.compose.project') && !s.includes('.Mounts')) console.log('source');
+  else if(s.includes('{{.Image}}')) console.log('sha256:fixture');
+  else if(s.includes('.State')) console.log('{}');
+  else { for(const x of ['sha256:fixture',Object.entries(env).map(([k,v])=>k+'='+v),[{Type:'volume',Name:'source-data',Destination:'/data'}],{'com.docker.compose.project':'source','com.docker.compose.service':'or3'},['/entrypoint'],['serve'],'/app',true,null,null]) console.log(JSON.stringify(x)); }
+} else if(a[0]==='compose' && a[1]==='version') console.log('Docker Compose v2');
+else if(a[0]==='compose' && s.includes(' config ')) { if(a[a.indexOf('--project-directory')+1]===f.source) console.log(JSON.stringify(f.config)); else {const e=targetEnv(), labels={'io.or3.cloud.deployment-id':e.OR3_DEPLOYMENT_ID}; console.log(JSON.stringify({name:e.OR3_COMPOSE_PROJECT,services:{or3:{image:e.OR3_IMAGE,labels,ports:[{target:3000,published:Number(e.OR3_PORT),host_ip:'127.0.0.1',protocol:'tcp'}],volumes:[{type:'volume',source:'data',target:'/data'}]}},volumes:{data:{name:e.OR3_VOLUME_NAME,labels}}}));} }
+else if(a[0]==='compose' && s.includes(' ps ')) { if(s.includes('-aq') || s.includes(' ps -q ') || (f.failure==='target-start' && s.includes('--status running'))) console.log('container'); }
+else if(a[0]==='compose' && s.endsWith(' stop')) { if(f.failure==='source-stop'){ console.error('fixture source stop failure'); process.exit(1); } }
+else if(a[0]==='compose' && s.includes(' up ')) { if(f.failure==='target-start'){ console.error('fixture target start failure'); process.exit(1); } }
+else if(a[0]==='compose' && (s.includes(' exec ') || s.includes(' stop '))) {}
+else if(a[0]==='compose' && (s.includes(' logs ') || s.endsWith(' start'))) {}
+else if(a[0]==='compose' && s.endsWith(' down')) {}
+else { console.error('fixture unsupported docker operation'); process.exit(1); }
+`, { mode: 0o755 });
+  const result = await fixture.cli(['adopt', target, '--from', source], { cwd: fixture.root }).finally(() => app.stop(true));
+  expect(result.exitCode, result.output).toBe(failure === 'none' ? 0 : 1);
+  if (failure !== 'none') expect(result.stderr).toContain(failure === 'source-stop' ? 'fixture source stop failure' : 'fixture target start failure');
+  const targetEnv = parseEnv(await readFile(join(target, '.env'), 'utf8'));
+  for (const key of ['OR3_LIBRARY_LINK_SECRET', 'NUXT_ADMIN_PLUGIN_CONNECTION_SECRET', 'NUXT_AUTH_INVITE_TOKEN_SECRET', 'OR3_MARKETPLACE_REGISTRY_ORIGIN', 'OR3_MARKETPLACE_INSTALL_ENABLED', 'OR3_MARKETPLACE_RELEASE_KEYS', 'OR3_INSTANCE_ID', 'OR3_BACKGROUND_STREAMING_ENABLED', 'OR3_PLUGIN_ALLOWED_MODELS'] as const) {
+    expect(targetEnv[key], key).toBe(sourceEnv[key]);
+    if (key.includes('SECRET')) expect(result.output).not.toContain(sourceEnv[key]);
+  }
+  expect((await stat(join(target, '.env'))).mode & 0o777).toBe(0o600);
+  if (failure === 'target-start') {
+    expect(result.stderr).toContain('target may contain new writes');
+    const calls = (await readFile(trace, 'utf8')).trim().split('\n').map((line) => (JSON.parse(line) as string[]).join(' '));
+    const up = calls.findIndex((call) => /compose .* up /.test(call));
+    expect(up).toBeGreaterThan(-1);
+    expect(calls.slice(up + 1).join('\n')).not.toMatch(/compose .* (down|start)\b/);
+    const state = JSON.parse(await readFile(join(target, '.or3-cloud', 'state.json'), 'utf8'));
+    expect(state.incompleteOperation).toMatchObject({ operation: 'adopt', phase: 'target-mutating' });
+  } else if (failure === 'none') {
+    const state = JSON.parse(await readFile(join(target, '.or3-cloud', 'state.json'), 'utf8'));
+    expect(state.incompleteOperation).toBeUndefined();
+    expect(targetEnv.OR3_ADMIN_PASSWORD).toBeUndefined();
+    expect(await readFile(join(source, '.env'), 'utf8')).toBe(serializeEnv(sourceEnv));
+  }
+});
+
+// Fresh deployments must not reuse any pre-existing vault volume: data/key
+// collisions could attach another vault, while run/client collisions can carry
+// another deployment's socket or token. Docker errors other than explicit
+// not-found are also not evidence that a volume is free.
+test.each(['vault-data', 'vault-key', 'vault-run', 'vault-client'] as const)('init refuses a pre-existing %s volume before writing deployment files', async (suffix) => {
+  const fixture = await sandbox();
+  const name = 'fresh-custody';
+  const target = join(fixture.root, name);
+  const index = ['vault-data', 'vault-key', 'vault-run', 'vault-client'].indexOf(suffix);
+  await fixture.configure({ failures: [{ match: `volume inspect ${name}-or3-data`, times: index + 1, message: 'Error: No such volume' }] });
+  await fixture.reset();
+  const result = await fixture.cli(['init', target, '--local', '--port', '39741'], { cwd: fixture.root });
+  expect(result.exitCode, result.output).toBe(1);
+  expect(result.stderr).toContain(`${name}-or3-data-${suffix} already exists`);
+  expect(await fixture.traceText()).not.toMatch(DOCKER_MUTATIONS);
+  expect(existsSync(join(target, '.env'))).toBe(false);
+});
 
 test('dispatch prints the version without touching the deployment', async () => {
   const fixture = await sandbox();

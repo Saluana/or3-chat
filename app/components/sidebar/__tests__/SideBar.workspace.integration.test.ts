@@ -64,6 +64,38 @@ afterEach(async () => {
 });
 
 describe('mounted sidebar workspace isolation', () => {
+    // Idle mutations must not hydrate the entire workspace just to maintain search.
+    it('avoids full thread and document reads on idle updates', async () => {
+        setHookEngine(createTypedHookEngine(createHookEngine()));
+        const id = `sidebar-idle-${crypto.randomUUID()}`; const db = setActiveWorkspaceDb(id); await db.open();
+        workspaces.push({ id, name: db.name });
+        const base = { status: 'ready', deleted: false, pinned: false, forked: false, created_at: 1, updated_at: 1, clock: 1 };
+        await db.threads.bulkPut(Array.from({ length: 100 }, (_, i) => ({ ...base, id: `idle-${i}`, title: `Thread ${i}` })));
+        const docs = await Promise.all(Array.from({ length: 20 }, (_, i) => createDocumentInDb(db, { title: `Doc ${i}` })));
+        let threads = 0, posts = 0;
+        const readThread = (row: unknown) => { threads++; return row; };
+        const readPost = (row: unknown) => { posts++; return row; };
+        db.threads.hook('reading', readThread); db.posts.hook('reading', readPost);
+        try {
+            wrapper = shallowMount(SideBar, { global: { stubs: { SidebarSideNavContent: Content,
+                SidebarSideNavContentCollapsed: true, SidebarSideMobileBottomNav: true, SidebarEntityModals: true, UModal: true } } });
+            await new Promise(resolve => setTimeout(resolve, 500));
+            threads = 0; posts = 0;
+            await db.threads.update('idle-0', { title: 'Updated thread' });
+            await db.posts.update(docs[0]!.id, { title: 'Updated document' });
+            await new Promise(resolve => setTimeout(resolve, 500));
+            console.log(`sidebar idle reads: threads=${threads} posts=${posts}`);
+            expect(threads).toBeLessThan(100);
+            expect(posts).toBeLessThan(20);
+            const view = wrapper.getComponent(Content);
+            view.vm.$emit('update:sidebar-query', 'Updated');
+            await vi.waitFor(() => expect(view.props('displayDocuments').map((d: { title: string }) => d.title)).toContain('Updated document'));
+            await vi.waitFor(() => expect(view.props('items').some((t: { title: string }) => t.title === 'Updated thread')).toBe(true));
+            view.vm.$emit('update:sidebar-query', '');
+            await vi.waitFor(() => expect(view.props('items')).toHaveLength(0));
+            expect(view.props('docs')).toHaveLength(0);
+        } finally { db.threads.hook('reading').unsubscribe(readThread); db.posts.hook('reading').unsubscribe(readPost); }
+    });
     // One journey crosses both database batch boundaries, exact UI pages,
     // and the partial final page while checking repeated-event admission.
     it('admits one pending page and reaches the final thread across database batches', async () => {
@@ -295,6 +327,7 @@ describe('mounted sidebar workspace isolation', () => {
                 SidebarSideMobileBottomNav: true, SidebarEntityModals: true, UModal: true,
             } } });
             const view = wrapper.getComponent(Content);
+            view.vm.$emit('update:sidebar-query', 'Recoverable');
             await vi.waitFor(() => expect(view.props('docs')).toHaveLength(1));
             view.vm.$emit('delete-document', { id: document.id, title: document.title });
             wrapper.getComponent({ name: 'SidebarEntityModals' }).vm.$emit('deleteDocument');
@@ -324,8 +357,8 @@ describe('mounted sidebar workspace isolation', () => {
             } },
         });
         const view = wrapper.getComponent(Content);
-        await vi.waitFor(() => expect(view.props('docs').map((doc: { title: string }) => doc.title)).toEqual(['Workspace A private title']));
         view.vm.$emit('update:sidebar-query', 'Workspace A private');
+        await vi.waitFor(() => expect(view.props('docs').map((doc: { title: string }) => doc.title)).toEqual(['Workspace A private title']));
         await vi.waitFor(() => expect(view.props('displayDocuments').map((doc: { title: string }) => doc.title)).toEqual(['Workspace A private title']));
         setActiveWorkspaceDb(idB);
         await vi.waitFor(() => expect(view.props('docs').map((doc: { title: string }) => doc.title)).toEqual(['Workspace B title']));
@@ -354,6 +387,7 @@ describe('mounted sidebar workspace isolation', () => {
                 SidebarSideMobileBottomNav: true, SidebarEntityModals: Modals, UModal: true,
             } } });
             const view = wrapper.getComponent(Content);
+            view.vm.$emit('update:sidebar-query', 'Original');
             await vi.waitFor(() => expect(view.props('docs')).toHaveLength(1));
             const modals = wrapper.getComponent(Modals);
             view.vm.$emit('rename-document', { id: document.id, title: document.title, postType: 'doc' });

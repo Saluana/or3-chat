@@ -1,3 +1,4 @@
+import { resizePreview } from '~/utils/files/resizePreview';
 import { subscribeActiveWorkspaceDb } from '~/db/client';
 import { getFileBlob, getFileMeta } from '~/db/files';
 import { parseHashes } from '~/utils/files/attachments';
@@ -44,8 +45,9 @@ export function createMessageMediaPrefetchController(
     let disposed = false;
     let desiredHashes = new Set<string>();
     const retainedHashes = new Set<string>();
-    const queuedTokens = new Set<string>();
-    const queue: Array<{ hash: string; epoch: number; token: string }> = [];
+    type Task = { hash: string; epoch: number };
+    const tasks = new Map<string, Task>();
+    const queue: Task[] = [];
     const idleResolvers = new Set<() => void>();
 
     const notifyIdle = () => {
@@ -65,40 +67,47 @@ export function createMessageMediaPrefetchController(
         return isSupportedRasterMimeType(meta.mime_type ?? '');
     };
 
-    const load = async (hash: string, taskEpoch: number) => {
+    const load = async (task: Task) => {
+        const { hash: key, epoch: taskEpoch } = task;
+        const thumbnail = key.startsWith('attachment-thumb:');
+        const hash = thumbnail ? key.slice('attachment-thumb:'.length) : key;
         const meta = await loadMeta(hash).catch(() => undefined);
         if (
             disposed ||
             taskEpoch !== epoch ||
-            !desiredHashes.has(hash) ||
+            tasks.get(key) !== task ||
+            !desiredHashes.has(key) ||
             !isImageMeta(meta)
         ) {
             // Reset already releases the old epoch. Do not let a stale task
             // release a same-hash retention acquired by the current thread.
             if (
                 taskEpoch === epoch &&
-                retainedHashes.delete(hash)
+                tasks.get(key) === task &&
+                retainedHashes.delete(key)
             ) {
-                cache.release(hash);
+                cache.release(key);
             }
             return;
         }
-        cache.setIntrinsicSize(hash, meta?.width, meta?.height);
-        await cache.ensure(hash, () => loadBlob(hash));
+        cache.setIntrinsicSize(key, meta?.width, meta?.height);
+        await cache.ensure(key, async (current, signal) => {
+            const blob = await loadBlob(hash);
+            return blob && thumbnail ? resizePreview(blob, 160, current, undefined, signal) : blob;
+        });
     };
 
     const pump = () => {
         while (!disposed && activeLoads < concurrency && queue.length) {
             const task = queue.shift();
             if (!task) break;
-            if (task.epoch !== epoch || !desiredHashes.has(task.hash)) {
-                queuedTokens.delete(task.token);
+            if (task.epoch !== epoch || tasks.get(task.hash) !== task || !desiredHashes.has(task.hash)) {
                 continue;
             }
             activeLoads++;
-            void load(task.hash, task.epoch).finally(() => {
+            void load(task).finally(() => {
                 activeLoads--;
-                queuedTokens.delete(task.token);
+                if (tasks.get(task.hash) === task) tasks.delete(task.hash);
                 pump();
                 notifyIdle();
             });
@@ -108,10 +117,10 @@ export function createMessageMediaPrefetchController(
 
     const enqueue = (hash: string) => {
         if (cache.get(hash)?.status === 'ready') return;
-        const token = `${epoch}:${hash}`;
-        if (queuedTokens.has(token)) return;
-        queuedTokens.add(token);
-        queue.push({ hash, epoch, token });
+        if (tasks.has(hash)) return;
+        const task = { hash, epoch };
+        tasks.set(hash, task);
+        queue.push(task);
     };
 
     const updateRange = (
@@ -129,13 +138,14 @@ export function createMessageMediaPrefetchController(
             const message = messages[index];
             const hashes = parseHashes(message?.file_hashes);
             for (const hash of message?.role === 'assistant' ? hashes : hashes.slice(0, 4)) {
-                next.add(hash);
+                next.add(message?.role === 'assistant' ? hash : `attachment-thumb:${hash}`);
             }
         }
 
         for (const hash of retainedHashes) {
             if (next.has(hash)) continue;
             retainedHashes.delete(hash);
+            tasks.delete(hash);
             cache.release(hash);
         }
         desiredHashes = next;
@@ -153,7 +163,7 @@ export function createMessageMediaPrefetchController(
         epoch++;
         desiredHashes.clear();
         queue.length = 0;
-        queuedTokens.clear();
+        tasks.clear();
         for (const hash of retainedHashes) cache.release(hash);
         retainedHashes.clear();
         notifyIdle();

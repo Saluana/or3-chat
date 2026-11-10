@@ -224,6 +224,16 @@ snapshot. If replacement fails after mutation, the CLI attempts to restore that
 snapshot. Automatic recovery can also fail and may require manual action. Preserve
 the journal, backups and error details, and verify recovery status and restored
 data before resuming normal service.
+Older backups without a full-inspection marker are preserved but do not count
+as complete recovery points or authorize a purge. Create a new verified backup
+and export after upgrading. A saved configuration that requires the managed
+vault must have an authenticated vault archive for restore or rollback.
+For the supported filesystem profile, these operations require the existing
+app container and, when enabled, the managed vault container and custody
+volumes. They refuse changed startup settings, uncaptured mounts, temporary
+overlays and volume subdirectories. A missing container or lost vault custody
+needs a separate recovery procedure; do not create empty vault volumes to
+work around the refusal.
 Restore requires explicit confirmation:
 
 ```bash
@@ -258,12 +268,9 @@ npx @or3/cloud backup list
 npx @or3/cloud backup export <backup-id> /mnt/or3-backups/<backup-id>
 ```
 
-OR3 rechecks that export and its checksums before it allows an irreversible
-purge. A same-filesystem copy is useful but cannot authorize data deletion.
-
-```bash
-npx @or3/cloud remove --purge-data --yes
-```
+Keep the export off-host. `remove --purge-data` is disabled until a qualified
+procedure can reconstruct a managed deployment from that export; retaining an
+export alone does not establish that the current CLI can recover it.
 
 Protected rollback and pending-recovery backups cannot be removed by pruning,
 including with `--force`. Force bypasses suspect-entry deferral so pruning can
@@ -287,8 +294,16 @@ with their exact target CLI; recovery refuses to guess for any other operation.
 
 ## Adopt an existing generated deployment
 
-Existing `create-or3-chat` projects are not overwritten. For the documented
-Basic Auth + SQLite + filesystem profile, create a separate managed deployment:
+Existing `create-or3-chat` projects are not overwritten. Adoption is limited
+to the Basic Auth + SQLite + filesystem profile when the existing Compose
+service and container use the matching authenticated published image. Standard
+source-built `create-or3-chat` deployments are not qualified for this path;
+keep them intact until a separate migration is reviewed and tested. For a
+qualified source, the existing container must have a read-only root filesystem,
+an unchanged writable layer, the image's original startup configuration, and
+only its named `/data` mount. Temporary overlays outside `/tmp` and volume
+subdirectories are refused because an archive of the volume root would miss
+the data in use. Create a separate managed deployment:
 
 ```bash
 npx @or3/cloud adopt \
@@ -299,7 +314,26 @@ npx @or3/cloud adopt \
 Adoption inspects the source first, backs up `.env` and `/data`, preserves the
 source directory, transfers data into a new named volume, and verifies deep
 health before reporting success. Custom, Clerk/Convex, S3, or modified
-provider layouts are refused before the source is stopped.
+provider layouts are refused before the source is stopped. Adoption also
+refuses a source that may use a secret vault: it copies `/data`, not vault
+custody. The resolved source Compose configuration must explicitly disable
+the secret provider with `NUXT_SECRETS_PROVIDER=` and must not contain vault
+mounts or a vault service. Keep a vault-bearing source intact until a separate
+custody migration and recovery procedure has been reviewed and tested.
+Only a single-service source is qualified; projects with Caddy or other
+additional services need a separately reviewed migration.
+Supported application encryption and API credentials are copied from the
+source environment. Adoption refuses when any of those values differ between
+the source file, resolved Compose configuration and existing container; it does
+not print the values. The source must use the managed `/data/admin` and
+`/data/extensions` paths and an explicit, already-used `OR3_INSTANCE_ID` for
+plugin acquisition. It must use the supported `better-sqlite3` driver and
+cannot contain application environment settings that the managed target does
+not know how to preserve. Merely adding a new identity does not migrate records
+created under a hostname-derived identity. Verify application features and
+linked services before cutting over. If adoption is interrupted, inspect both
+deployments: `recover --restore --yes` replays the source snapshot and can
+discard newer writes on the target. Plain `recover` refuses this choice.
 
 ## Remote Connect scope
 

@@ -7,7 +7,7 @@
             color="neutral"
             variant="link"
             class="self-start"
-            :icon="useIcon('ui.chevron.left').value"
+            :icon="hoistedUiChevronLeftIcon"
             @click="closeView"
             >AI Settings</UButton
         >
@@ -302,6 +302,8 @@
 </template>
 
 <script setup lang="ts">
+const hoistedUiChevronLeftIcon = useIcon('ui.chevron.left');
+
 import { ref, computed, watch, onMounted, onBeforeUnmount, inject, nextTick } from 'vue';
 import { useIcon } from '#imports';
 import { useAiSettings } from '~/composables/chat/useAiSettings';

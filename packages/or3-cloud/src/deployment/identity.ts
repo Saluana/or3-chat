@@ -76,6 +76,11 @@ export function composeProjectNames(directory: string) {
   };
 }
 
+/** Named vault volumes created by the managed Compose asset. */
+export function managedVaultVolumeNames(dataVolume: string) {
+  return ['vault-data', 'vault-key', 'vault-run', 'vault-client'].map((suffix) => `${dataVolume}-${suffix}`);
+}
+
 export function assertDeploymentIdentity(state: ManagedState, env: Record<string, string>) {
   const expected: Record<string, string | undefined> = {
     OR3_COMPOSE_PROJECT: state.composeProject,

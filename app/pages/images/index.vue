@@ -1,4 +1,9 @@
 <script setup lang="ts">
+const hoistedDashboardRestoreIcon = useIcon('dashboard.restore');
+const hoistedImageMultipleIcon = useIcon('image.multiple');
+const hoistedUiWarningIcon = useIcon('ui.warning');
+const hoistedDashboardImagesIcon = useIcon('dashboard.images');
+
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import type { FileMeta } from '../../db/schema';
 import { updateFileName } from '../../db/files-select';
@@ -81,7 +86,7 @@ const libraryViews: Array<{
     label: string;
     icon: string;
 }> = [
-    { id: 'all', label: 'All images', icon: useIcon('image.multiple').value },
+    { id: 'all', label: 'All images', icon: hoistedImageMultipleIcon.value },
     {
         id: 'uploads',
         label: 'Uploads',
@@ -742,7 +747,7 @@ const searchInputProps = computed(() => {
                     @click="openUploadPicker"
                 >
                     <UIcon
-                        :name="useIcon('dashboard.restore').value"
+                        :name="hoistedDashboardRestoreIcon"
                         class="mr-0.5"
                     />
                     Upload images
@@ -754,7 +759,7 @@ const searchInputProps = computed(() => {
                     :disabled="isMutating"
                 >
                     <UIcon
-                        :name="useIcon('image.multiple').value"
+                        :name="hoistedImageMultipleIcon"
                         class="mr-0.5"
                     />
                     {{ selectionMode ? 'Cancel' : 'Select' }}
@@ -815,7 +820,7 @@ const searchInputProps = computed(() => {
                     class="image-library-error"
                     role="alert"
                 >
-                    <UIcon :name="useIcon('ui.warning').value" class="h-4 w-4 shrink-0" />
+                    <UIcon :name="hoistedUiWarningIcon" class="h-4 w-4 shrink-0" />
                     <span class="min-w-0 flex-1">
                         {{
                             pageError
@@ -944,7 +949,7 @@ const searchInputProps = computed(() => {
                     class="image-library-empty"
                 >
                     <UIcon
-                        :name="useIcon('dashboard.images').value"
+                        :name="hoistedDashboardImagesIcon"
                         class="h-8 w-8"
                     />
                     <strong>{{ searchQuery ? 'No images found' : trashMode ? 'Trash is empty' : 'No images yet' }}</strong>

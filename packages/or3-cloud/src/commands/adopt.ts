@@ -7,6 +7,7 @@ import { validateEmail, validatePassword } from '../credentials/inputs';
 import {
   assertSupportedSource,
   assertSupportedSourceCompose,
+  assertSourceContainer,
   readSourceVolume,
   restartSource,
   sourceComposeArgs,
@@ -31,6 +32,7 @@ import {
   imageAtDigest,
   imageFor,
   isVersion,
+  managedVaultVolumeNames,
   sanitizeName,
 } from '../deployment/identity';
 import { backupDirectory, deploymentPaths, readDirectoryEmpty } from '../deployment/paths';
@@ -102,11 +104,12 @@ export async function adoptCommand(positionals: string[], flags: Flags) {
   const sourcePort = Number(sourceEnv.OR3_PORT ?? DEFAULT_PORT);
   if (!Number.isInteger(sourcePort) || sourcePort < 1 || sourcePort > 65535) throw new Error('V1 project has an invalid OR3 port.');
   if (mode === 'public' && [80, 443].includes(sourcePort)) throw new Error('V1 public deployment uses a Caddy port for OR3; adoption requires a separate OR3 port.');
-  assertSupportedSourceCompose(sourceConfig.stdout, sourceVolume, sourcePort);
+  assertSupportedSourceCompose(sourceConfig.stdout, sourceVolume, sourcePort, sourceEnv, [sourceImage, image]);
   const sourceInitiallyRunning = await sourceServiceRunning(sourceDirectory, sourceComposeFiles);
+  await assertSourceContainer(sourceDirectory, sourceComposeFiles, image, sourceConfig.stdout, sourceVolume, sourcePort, sourceEnv);
   const targetNames = composeProjectNames(targetDirectory);
   await assertDockerProjectAbsent(targetNames.project);
-  for (const volume of [targetNames.volume, ...(mode === 'public' ? [targetNames.caddyData, targetNames.caddyConfig] : [])]) {
+  for (const volume of [targetNames.volume, ...managedVaultVolumeNames(targetNames.volume), ...(mode === 'public' ? [targetNames.caddyData, targetNames.caddyConfig] : [])]) {
     const existing = await run('docker', ['volume', 'inspect', volume]);
     if (existing.ok) throw new Error(`Docker volume ${volume} already exists. Choose a new adoption target directory.`);
     if (existing.exitCode !== 1 || !/no such volume/i.test(`${existing.stdout}\n${existing.stderr}`)) {
@@ -175,6 +178,7 @@ export async function adoptCommand(positionals: string[], flags: Flags) {
     phase: 'prepared',
   });
   let sourceStopAttempted = false;
+  let targetMayHaveStarted = false;
   try {
     sourceStopAttempted = true;
     const sourceStop = await run('docker', [...sourceComposeArgs(sourceDirectory, sourceComposeFiles), 'stop'], sourceDirectory);
@@ -211,7 +215,9 @@ export async function adoptCommand(positionals: string[], flags: Flags) {
     await writeBackupAuthentication(targetDirectory, sourceBackupDir, sourceManifestContents);
     await readManifest(sourceBackupDir, targetDirectory);
     await updatePending(targetDirectory, state, { phase: 'snapshot-created' });
+    await updatePending(targetDirectory, state, { phase: 'target-mutating' });
     await restoreVolumeArchive(targetDirectory, mode, targetEnv, sourceBackupDir);
+    targetMayHaveStarted = true;
     await startProject(targetDirectory, mode, targetEnv);
     await provisionManagedCredentials(
       mode === 'public' ? new URL(`https://${domain}`) : new URL(`http://127.0.0.1:${sourcePort}`),
@@ -229,9 +235,9 @@ export async function adoptCommand(positionals: string[], flags: Flags) {
     console.log(`Source backup: ${sourceBackupDir}`);
     console.log(`The original deployment is preserved and stopped. Verify sign-in, chat, and file access before removing anything.`);
   } catch (error) {
-    await compose(targetDirectory, mode, ['down']).catch(() => undefined);
+    if (!targetMayHaveStarted) await compose(targetDirectory, mode, ['down']).catch(() => undefined);
     let sourceRecoveryError = '';
-    if (sourceStopAttempted && sourceInitiallyRunning) {
+    if (!targetMayHaveStarted && sourceStopAttempted && sourceInitiallyRunning) {
       try {
         await restartSource(sourceDirectory, sourceComposeFiles, secretValues(sourceEnv));
       } catch (recovery) {
@@ -240,6 +246,10 @@ export async function adoptCommand(positionals: string[], flags: Flags) {
     }
     state.lastError = redact(`${error instanceof Error ? error.message : String(error)}${sourceRecoveryError}`, secretValues(targetEnv));
     await writeState(targetDirectory, state);
-    throw new Error(`${state.lastError}\n${sourceRecoveryError ? 'The original V1 deployment needs manual recovery. ' : 'The original V1 deployment was restarted and deeply healthy. '}Managed files remain at ${targetDirectory}.${sourceBackupDir ? ` Source backup: ${sourceBackupDir}.` : ''}`);
+    const recoveryDetail = targetMayHaveStarted
+      ? 'The target may contain new writes. Both deployments were left as found; inspect the operation before deciding which data to retain. '
+      : sourceRecoveryError ? 'The original V1 deployment needs manual recovery. '
+        : sourceInitiallyRunning ? 'The original V1 deployment was restarted and deeply healthy. ' : 'The original V1 deployment remains stopped. ';
+    throw new Error(`${state.lastError}\n${recoveryDetail}Managed files remain at ${targetDirectory}.${sourceBackupDir ? ` Source backup: ${sourceBackupDir}.` : ''}`);
   }
 }

@@ -26,7 +26,7 @@
                 >
                     <UIcon
                         v-if="activeMode === 'light'"
-                        :name="useIcon('ui.check').value"
+                        :name="hoistedUiCheckIcon"
                         class="h-4 w-4"
                     />
                     Light
@@ -40,7 +40,7 @@
                 >
                     <UIcon
                         v-if="activeMode === 'dark'"
-                        :name="useIcon('ui.check').value"
+                        :name="hoistedUiCheckIcon"
                         class="h-4 w-4"
                     />
                     Dark
@@ -51,6 +51,8 @@
 </template>
 
 <script setup lang="ts">
+const hoistedUiCheckIcon = useIcon('ui.check');
+
 import { useIcon } from '#imports';
 import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 

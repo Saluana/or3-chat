@@ -343,6 +343,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         return;
     }
     const stops = new WeakMap<HTMLElement, WatchStopHandle>();
+    const latest = new WeakMap<HTMLElement, { binding: any; vnode: VNode }>();
 
     /**
      * Apply theme directive logic
@@ -403,11 +404,9 @@ export default defineNuxtPlugin((nuxtApp) => {
                 return;
             }
 
-            // Resolve overrides
-            const resolved = resolver.resolve(params);
+            const props = resolver.resolve(params).props;
 
-            // Apply to component or element (use target element)
-            applyOverrides(targetEl, vnode, resolved.props, identifier);
+            applyOverrides(targetEl, vnode, props, identifier);
 
         } catch (error) {
             // Graceful degradation
@@ -428,6 +427,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         },
 
         mounted(el, binding, vnode) {
+            latest.set(el, { binding, vnode });
             applyThemeDirective(el, binding, vnode);
             stops.set(
                 el,
@@ -436,19 +436,24 @@ export default defineNuxtPlugin((nuxtApp) => {
                         () => themePlugin.activeTheme.value,
                         () => themePlugin.resolversVersion.value,
                     ],
-                    () => applyThemeDirective(el, binding, vnode)
+                    () => {
+                        const current = latest.get(el);
+                        if (current) applyThemeDirective(el, current.binding, current.vnode);
+                    }
                 )
             );
         },
 
         // Update when binding value changes
         updated(el, binding, vnode) {
+            latest.set(el, { binding, vnode });
             applyThemeDirective(el, binding, vnode);
         },
 
         beforeUnmount(el) {
             stops.get(el)?.();
             stops.delete(el);
+            latest.delete(el);
             lastAppliedResolution.delete(el);
             restoreDomTheme(el);
             // Clean up data attributes

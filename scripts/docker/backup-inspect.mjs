@@ -6,6 +6,7 @@ import { resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const INSPECTION_PROFILE = Object.freeze({ contract: 1, sqlite: '0.0.28', filesystem: '0.0.17' });
+export const S3_INSPECTION_PROFILE = Object.freeze({ contract: 2, sqlite: '0.0.28', s3: '0.0.15' });
 export const QUALIFIED_MIGRATIONS = ['001_init', '002_sync_tables', '003_sync_hardening', '004_auth_invites', '005_admin_stores', '006_sync_snapshots', '007_device_cursor_ownership', '008_upload_intents', '009_or3_connect', '010_connect_user_code_hmac', '011_connect_environment_scope_indexes', '012_connect_credential_redelivery', '013_connect_environment_lifecycle', '014_connect_retention_activation', '015_rate_limits', '016_connect_runtime_binding', '017_background_jobs', '018_background_admission_cancels', '019_background_generation_history', '020_background_generation_receipts', '021_background_request_usage', '022_canonical_chat_reader', '023_legacy_chat_seek_index', '024_signup_invites', '025_background_shutdown_accounting', '026_retained_storage_usage', '027_verified_storage_usage', '028_user_scoped_device_cursors', '029_delegation_wait', '030_storage_generations', '031_storage_generation_uploads', '032_sync_observations'];
 const MAX_ENTRIES = 100_000;
 const MAX_DATABASE_BYTES = 192 * 1024 * 1024;
@@ -16,6 +17,17 @@ export function assertInspectionProfile(profile) {
   if (profile?.contract !== 1 || profile.sqlite !== INSPECTION_PROFILE.sqlite || profile.filesystem !== INSPECTION_PROFILE.filesystem) {
     throw new Error(`Unsupported offline backup inspection profile; qualified SQLite ${INSPECTION_PROFILE.sqlite} and FS ${INSPECTION_PROFILE.filesystem} image required`);
   }
+}
+
+export function assertS3InspectionProfile(profile) {
+  if (profile?.contract !== S3_INSPECTION_PROFILE.contract || profile.sqlite !== S3_INSPECTION_PROFILE.sqlite || profile.s3 !== S3_INSPECTION_PROFILE.s3) {
+    throw new Error(`Unsupported offline S3 inspection profile; qualified SQLite ${S3_INSPECTION_PROFILE.sqlite} and S3 ${S3_INSPECTION_PROFILE.s3} image required`);
+  }
+}
+
+export function assertArchiveInspectionProfile(profile) {
+  if (profile?.contract === 2) assertS3InspectionProfile(profile);
+  else assertInspectionProfile(profile);
 }
 
 // The managed image pins BusyBox's verbose tar format. Unsupported/ambiguous
@@ -53,17 +65,12 @@ export function readBackupInventory(text) {
   return { entries, selected, bytes };
 }
 
-export function inspectCanonicalReferences(Database, databasePath, inventory, storageRoot) {
-  const root = relative('/data', resolve(storageRoot));
-  if (root === '..' || root.startsWith('../') || root.startsWith('/')) throw new Error('Unsupported offline backup storage root outside /data');
+function openCanonicalDatabase(Database, databasePath) {
   for (const path of [databasePath, `${databasePath}-wal`]) {
     try { if (!lstatSync(path).isFile()) throw new Error('Backup inspection database input must be regular'); }
     catch (error) { if (error.code !== 'ENOENT' || path === databasePath) throw error; }
   }
   const db = new Database(databasePath, { readonly: true, fileMustExist: true });
-  let live = 0;
-  let inspected = 0;
-  const started = Date.now();
   try {
     db.pragma('trusted_schema=OFF');
     db.pragma('query_only=ON');
@@ -80,6 +87,21 @@ export function inspectCanonicalReferences(Database, databasePath, inventory, st
     for (const [name, type, pk] of [['workspace_id', 'TEXT', 1], ['id', 'TEXT', 2], ['data_json', 'TEXT', 0], ['deleted', 'INTEGER', 0]]) {
       if (!columns.some(column => column.name === name && column.type === type && column.pk === pk)) throw new Error('Unsupported offline canonical SQLite columns');
     }
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
+  }
+}
+
+export function inspectCanonicalReferences(Database, databasePath, inventory, storageRoot) {
+  const root = relative('/data', resolve(storageRoot));
+  if (root === '..' || root.startsWith('../') || root.startsWith('/')) throw new Error('Unsupported offline backup storage root outside /data');
+  const db = openCanonicalDatabase(Database, databasePath);
+  let live = 0;
+  let inspected = 0;
+  const started = Date.now();
+  try {
     const requireEntry = (name, size) => {
       if (inventory.entries.get(name)?.type !== '-') throw new Error('Backup is missing a regular payload or sidecar required by live canonical attachment metadata');
       if (size !== undefined && inventory.entries.get(name).size !== size) throw new Error('Backup canonical attachment size mismatch');
@@ -136,16 +158,73 @@ export function inspectCanonicalReferences(Database, databasePath, inventory, st
   } finally { db.close(); }
 }
 
+// This inventory does not certify a backup: it only identifies the objects
+// that a complete S3 capture and offline verification must subsequently prove.
+export function* iterateS3References(Database, databasePath, { keyPrefix }) {
+  if (typeof keyPrefix !== 'string' || keyPrefix.length > 512 || /[\x00-\x1f\\]/.test(keyPrefix) ||
+      (keyPrefix && (keyPrefix.startsWith('/') || !keyPrefix.endsWith('/') || keyPrefix.slice(0, -1).split('/').some(part => !part || part === '.' || part === '..')))) {
+    throw new Error('Invalid canonical S3 key prefix');
+  }
+  const db = openCanonicalDatabase(Database, databasePath);
+  let started = Date.now();
+  const keys = new Set();
+  let inspected = 0;
+  try {
+    const rows = db.prepare('SELECT workspace_id,id,deleted,length(CAST(data_json AS BLOB)) AS bytes,CASE WHEN length(CAST(data_json AS BLOB)) <= ? THEN data_json ELSE NULL END AS data_json FROM s_file_meta WHERE deleted IS NOT 1 ORDER BY workspace_id,id').iterate(MAX_ROW_BYTES);
+    for (const row of rows) {
+      if (++inspected > MAX_ENTRIES || Date.now() - started > 60_000 || row.bytes > MAX_ROW_BYTES) throw new Error('Backup canonical reference inspection resource limit exceeded');
+      if (row.deleted !== 0) throw new Error('Invalid canonical attachment deletion state');
+      const payload = JSON.parse(row.data_json);
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('Invalid canonical attachment metadata');
+      const sizeBytes = payload.size_bytes ?? payload.sizeBytes;
+      if (!Number.isSafeInteger(sizeBytes) || sizeBytes < 0 || sizeBytes > 2 ** 30) throw new Error('Invalid canonical attachment size');
+      const storageId = payload.storage_id ?? payload.storageId;
+      if (storageId === undefined || storageId === null || typeof storageId === 'string' && storageId.trim() === '') continue;
+      if (typeof row.workspace_id !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(row.workspace_id)) throw new Error('Invalid canonical attachment workspace');
+      const value = typeof row.id === 'string' ? row.id.trim().toLowerCase() : '';
+      const match = /^(?:(sha256|md5):)?([a-f0-9]+)$/.exec(value);
+      const algorithm = match?.[1] ?? (match?.[2].length === 64 ? 'sha256' : match?.[2].length === 32 ? 'md5' : undefined);
+      if (!match || !algorithm || match[2].length !== (algorithm === 'sha256' ? 64 : 32)) throw new Error('Invalid canonical S3 hash');
+      const hash = `${algorithm}:${match[2]}`;
+      if (storageId !== `${keyPrefix}${row.workspace_id}/${hash}` || keys.has(storageId)) throw new Error('Invalid canonical S3 storage ID');
+      keys.add(storageId);
+      // Consumers may spend hours transferring this object before requesting
+      // the next row. Only active database inspection counts toward the limit.
+      const suspendedAt = Date.now();
+      yield { workspaceId: row.workspace_id, hash, storageId, sizeBytes };
+      started += Math.max(0, Date.now() - suspendedAt);
+    }
+  } finally { db.close(); }
+}
+
+// This is a capacity estimate only, not certification of remote file bytes.
+export function summarizeS3References(Database, databasePath, options) {
+  let references = 0, payloadBytes = 0;
+  for (const ref of iterateS3References(Database, databasePath, options)) {
+    references++;
+    payloadBytes += ref.sizeBytes;
+  }
+  return { contract: 2, references, payloadBytes };
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    assertInspectionProfile(JSON.parse(readFileSync(new URL('./backup-inspection-profile.json', import.meta.url), 'utf8')));
-    const inventory = readBackupInventory(readFileSync('/scratch/inventory', 'utf8'));
-    if (process.argv[2] === 'inventory') {
-      console.log(JSON.stringify({ selected: inventory.selected, bytes: inventory.bytes }));
-    } else if (process.argv[2] === 'references') {
+    const profile = JSON.parse(readFileSync(new URL('./backup-inspection-profile.json', import.meta.url), 'utf8'));
+    if (process.argv[2] === 's3-summary') {
+      assertS3InspectionProfile(profile);
       const Database = createRequire(import.meta.url)('/app/.output/server/node_modules/better-sqlite3');
-      console.log(JSON.stringify(inspectCanonicalReferences(Database, '/scratch/sync.sqlite', inventory, process.argv[3])));
-    } else throw new Error('Unsupported backup inspection operation');
+      console.log(JSON.stringify(summarizeS3References(Database, '/scratch/sync.sqlite', { keyPrefix: process.argv[3] })));
+    } else {
+      if (process.argv[2] === 'inventory') assertArchiveInspectionProfile(profile);
+      else assertInspectionProfile(profile);
+      const inventory = readBackupInventory(readFileSync('/scratch/inventory', 'utf8'));
+      if (process.argv[2] === 'inventory') {
+        console.log(JSON.stringify({ selected: inventory.selected, bytes: inventory.bytes }));
+      } else if (process.argv[2] === 'references') {
+        const Database = createRequire(import.meta.url)('/app/.output/server/node_modules/better-sqlite3');
+        console.log(JSON.stringify(inspectCanonicalReferences(Database, '/scratch/sync.sqlite', inventory, process.argv[3])));
+      } else throw new Error('Unsupported backup inspection operation');
+    }
   } catch (error) {
     // No archived JSON/path values or private record contents enter diagnostics.
     console.error(error instanceof SyntaxError ? 'Invalid canonical backup metadata JSON' : error.message);

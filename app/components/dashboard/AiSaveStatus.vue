@@ -2,7 +2,7 @@
     <span class="ai-save-status" role="status" :data-status="status">
         <template v-if="status === 'saving'">Saving…</template>
         <template v-else-if="status === 'saved'">
-            <UIcon :name="useIcon('ui.check').value" class="h-4 w-4" />
+            <UIcon :name="hoistedUiCheckIcon" class="h-4 w-4" />
             Saved
         </template>
         <template v-else-if="status === 'error'">
@@ -20,6 +20,8 @@
 </template>
 
 <script setup lang="ts">
+const hoistedUiCheckIcon = useIcon('ui.check');
+
 import { useIcon } from '#imports';
 
 defineProps<{

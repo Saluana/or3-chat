@@ -137,6 +137,11 @@ export class RuntimeResolver {
         this.cache = new LRUCache(100);
     }
 
+    /** Whether resolving this component can depend on live element attributes. */
+    hasElementDependencies(component: string): boolean {
+        return this.componentsWithAttributes.has(component);
+    }
+
     /**
      * Resolves overrides for a component instance.
      */

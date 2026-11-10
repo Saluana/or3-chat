@@ -206,9 +206,9 @@
 
                     <EditorContent v-if="editor" :editor="editor" class="document-content or3-prose" :class="{ 'document-content--readonly': editorLocked }" />
 
-                    <!-- TipTap detaches the menu element. Keep Vue's conditional on a stable parent. -->
+                    <!-- TipTap detaches the menu; keep its conditional stable and position it outside the inverse-zoomed prose. -->
                     <div v-if="editor && !editorLocked">
-                        <BubbleMenu v-theme="'document.selection-menu'" :editor="editor" :should-show="shouldShowTextSelection" :options="{ placement: 'top' }" class="selection-menu">
+                        <BubbleMenu v-theme="'document.selection-menu'" :editor="editor" :should-show="shouldShowTextSelection" :append-to="() => editorScroll!" :options="{ placement: 'top', scrollTarget: editorScroll }" class="selection-menu">
                             <UButton :icon="icons.bold" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('bold') }" aria-label="Bold" @click="runToolbarAction(() => editor?.chain().focus().toggleBold().run())" />
                             <UButton :icon="icons.italic" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('italic') }" aria-label="Italic" @click="runToolbarAction(() => editor?.chain().focus().toggleItalic().run())" />
                             <UButton :icon="icons.underline" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('underline') }" aria-label="Underline" @click="runToolbarAction(() => editor?.chain().focus().toggleUnderline().run())" />
@@ -329,6 +329,7 @@ import { getSchema, isTextSelection } from '@tiptap/core';
 import type { BubbleMenuPluginProps } from '@tiptap/extension-bubble-menu';
 import { downloadBlob } from '~/utils/download-blob';
 import { MAX_SYNC_PAYLOAD_BYTES, sanitizePayloadForSync } from '~~/shared/sync/sanitize';
+import { isSyncPayloadTooLarge } from '~/core/sync/sync-payload-size';
 import { Editor, EditorContent, type JSONContent } from '@tiptap/vue-3';
 import { Selection } from '@tiptap/pm/state';
 import { BubbleMenu } from '@tiptap/vue-3/menus';
@@ -514,7 +515,7 @@ watch([documentId, editorDb], ([id, db]) => {
     tooLargeToSync.value = false;
     itemSubscription = liveQuery(() => db.posts.get(id)).subscribe({ next: row => {
         if (didUnmount || editorDb.value !== db || props.documentId !== id) return;
-        tooLargeToSync.value = !!row && new TextEncoder().encode(JSON.stringify(sanitizePayloadForSync('posts', row, 'put'))).byteLength > MAX_SYNC_PAYLOAD_BYTES;
+        tooLargeToSync.value = !!row && isSyncPayloadTooLarge(JSON.stringify(sanitizePayloadForSync('posts', row, 'put')), MAX_SYNC_PAYLOAD_BYTES);
         const previous = availability.value;
         availability.value = row?.postType === 'doc' && isVisibleWorkspaceItem(row) ? 'active'
             : row?.postType === 'doc' && !row.deleted && workspaceItemMetadata(row.meta)?.trashed_at != null ? 'trashed' : 'unavailable';

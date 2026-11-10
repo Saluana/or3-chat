@@ -1,17 +1,21 @@
-import { secretValues } from '../deployment/env';
+import { assertLegacyManagedProfile, secretValues } from '../deployment/env';
+import { assertVaultVolumesExist } from '../backup/vault';
 import { assertDeploymentDirectoryIdentity } from '../deployment/identity';
 import { assertPhaseAllowsCommand, loadManaged } from '../deployment/state-store';
-import { assertRunningAppImage, assertSafeComposeBinding, compose, composeArgs } from '../runtime/compose';
+import { assertLegacyComposeProfile, assertRunningAppImage, assertSafeComposeBinding, compose, composeArgs } from '../runtime/compose';
 import { run } from '../runtime/command-runner';
 import { ensureDocker } from '../runtime/docker';
 import { waitForDeepHealth } from '../runtime/health';
-import { startProject, stopProject } from '../runtime/project';
+import { managedVaultEnabled, startProject, stopProject } from '../runtime/project';
 
 export async function startCommand(directory: string) {
   await ensureDocker();
   const loaded = await loadManaged(directory);
   assertDeploymentDirectoryIdentity(directory, loaded.state);
   assertPhaseAllowsCommand('start', loaded.state);
+  assertLegacyManagedProfile(loaded.env);
+  await assertLegacyComposeProfile(loaded.directory, loaded.state.mode, loaded.env);
+  if (managedVaultEnabled(loaded.directory, loaded.env)) await assertVaultVolumesExist(loaded.directory, loaded.state);
   await startProject(directory, loaded.state.mode, loaded.env);
   const url = loaded.state.mode === 'public' ? `https://${loaded.state.domain}` : `http://127.0.0.1:${loaded.state.port}`;
   console.log(`OR3 started and is deeply healthy at ${url}.`);
@@ -30,6 +34,8 @@ export async function restartCommand(directory: string, lifecycle?: { applySaved
   const loaded = await loadManaged(directory);
   assertDeploymentDirectoryIdentity(directory, loaded.state);
   assertPhaseAllowsCommand('restart', loaded.state);
+  assertLegacyManagedProfile(loaded.env);
+  await assertLegacyComposeProfile(loaded.directory, loaded.state.mode, loaded.env, lifecycle?.deadline);
   if (lifecycle) {
     await assertSafeComposeBinding(directory, loaded.state.mode, loaded.env, lifecycle.deadline);
     await assertRunningAppImage(directory, loaded.state.mode, loaded.state.image, lifecycle.deadline);

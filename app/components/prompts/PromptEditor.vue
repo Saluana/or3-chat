@@ -8,7 +8,7 @@
             <UButton
                 v-bind="backButtonProps"
                 @click="handleBack"
-                :icon="useIcon('shell.back').value"
+                :icon="hoistedShellBackIcon"
                 aria-label="Back to list"
             />
             <UInput
@@ -24,8 +24,8 @@
                 v-bind="favoriteButtonProps"
                 :icon="
                     record.favorite
-                        ? useIcon('catalog.star.filled').value
-                        : useIcon('catalog.star').value
+                        ? hoistedCatalogStarFilledIcon
+                        : hoistedCatalogStarIcon
                 "
                 :aria-label="
                     record.favorite
@@ -80,7 +80,7 @@
                         >
                             {{ tag }}
                             <UIcon
-                                :name="useIcon('ui.close').value"
+                                :name="hoistedUiCloseIcon"
                                 class="h-3 w-3"
                             />
                         </button>
@@ -121,6 +121,11 @@
 </template>
 
 <script setup lang="ts">
+const hoistedShellBackIcon = useIcon('shell.back');
+const hoistedCatalogStarFilledIcon = useIcon('catalog.star.filled');
+const hoistedCatalogStarIcon = useIcon('catalog.star');
+const hoistedUiCloseIcon = useIcon('ui.close');
+
 import {
     ref,
     onMounted,

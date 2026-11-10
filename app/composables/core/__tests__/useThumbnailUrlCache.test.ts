@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useThumbnailUrlCache } from '../useThumbnailUrlCache';
+import { resizePreview } from '~/utils/files/resizePreview';
 import { setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 
 describe('useThumbnailUrlCache image readiness', () => {
@@ -41,6 +42,80 @@ describe('useThumbnailUrlCache image readiness', () => {
     function raster() {
         return new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], { type: 'image/png' });
     }
+
+    it('shares three decode slots between gallery resizing and thumbnail formats', async () => {
+        // A GIF decode can overlap a gallery bitmap decode, or queued work can exceed the limit.
+        const cache = useThumbnailUrlCache();
+        const finish: Array<() => void> = [];
+        let active = 0;
+        let peak = 0;
+        const held = () => new Promise<void>(resolve => {
+            active++;
+            peak = Math.max(peak, active);
+            finish.push(() => { active--; resolve(); });
+        });
+        decode.mockImplementation(held);
+        vi.stubGlobal('createImageBitmap', async () => {
+            await held();
+            return { width: 10, height: 10, close() {} };
+        });
+        const jpeg = new Blob([new Uint8Array([255, 216, 255]), 'original'], { type: 'image/jpeg' });
+        const gif = new Blob(['GIF89a', 'image'], { type: 'image/gif' });
+        const webp = new Blob(['RIFF', new Uint8Array([4, 0, 0, 0]), 'WEBP'], { type: 'image/webp' });
+        const blobs = [gif, webp, jpeg, raster(), gif, webp, jpeg, raster()];
+        const tasks = [resizePreview(jpeg, 160), ...blobs.map((blob, i) => {
+            cache.retain(`image-${i}`);
+            return cache.ensure(`image-${i}`, async (current, signal) => resizePreview(blob, 160, current, undefined, signal));
+        })];
+        try {
+            await vi.waitFor(() => expect(finish.length).toBeGreaterThanOrEqual(3));
+            await new Promise(resolve => setTimeout(resolve, 30));
+            expect(peak).toBeLessThanOrEqual(3);
+        } finally {
+            for (let i = 0; i < 20; i++) {
+                while (finish.length) finish.shift()!();
+                await new Promise(resolve => setTimeout(resolve, 10));
+            }
+            const results = await Promise.all(tasks);
+            expect(peak).toBeLessThanOrEqual(3);
+            expect(results.slice(1).every(result => result && 'status' in result && result.status === 'ready')).toBe(true);
+            decode.mockReset();
+            decode.mockResolvedValue(undefined);
+            for (let i = 0; i < 8; i++) cache.release(`image-${i}`);
+        }
+    });
+
+    it('keeps a shared load for a surviving owner and cancels an unowned queued resize', async () => {
+        // Failures: a departing owner cancels another, or an abandoned queued job decodes.
+        const cache = useThumbnailUrlCache();
+        const finishes: Array<() => void> = [];
+        const bitmap = vi.fn(() => new Promise<any>(resolve => finishes.push(() => resolve({ width: 200, height: 100, close() {} }))));
+        vi.stubGlobal('createImageBitmap', bitmap);
+        vi.stubGlobal('OffscreenCanvas', class { getContext() { return { drawImage() {} }; } async convertToBlob() { return new Blob([new Uint8Array([255, 216, 255])], { type: 'image/jpeg' }); } });
+        const jpeg = new Blob([new Uint8Array([255, 216, 255]), 'original'], { type: 'image/jpeg' });
+        const blockers = Array.from({ length: 3 }, () => resizePreview(jpeg, 160));
+        await vi.waitFor(() => expect(bitmap).toHaveBeenCalledTimes(3));
+        cache.retain('shared');
+        cache.retain('shared');
+        const loader = (current: () => boolean, signal: AbortSignal) => resizePreview(jpeg, 160, current, undefined, signal);
+        const first = cache.ensure('shared', loader);
+        const second = cache.ensure('shared', loader);
+        cache.release('shared');
+        finishes.shift()!();
+        await vi.waitFor(() => expect(bitmap).toHaveBeenCalledTimes(4));
+        cache.retain('abandoned');
+        const abandoned = cache.ensure('abandoned', loader);
+        cache.release('abandoned');
+        finishes.shift()!();
+        await new Promise(resolve => setTimeout(resolve, 10));
+        expect(bitmap).toHaveBeenCalledTimes(4);
+        while (finishes.length) finishes.shift()!();
+        await Promise.all(blockers);
+        expect((await first)?.status).toBe('ready');
+        expect(await second).toEqual(await first);
+        expect(await abandoned).toBeUndefined();
+        cache.release('shared');
+    });
 
     it('invalidates shared thumbnail URLs and dimensions on workspace switching before reusing a hash', async () => {
         const cache = useThumbnailUrlCache();

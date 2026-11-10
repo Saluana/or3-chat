@@ -13,18 +13,21 @@ if (!existsSync(versionFile)) {
 }
 const qualifiedVersions = JSON.parse(readFileSyncCallback(versionFile, 'utf8'));
 
-// The managed image ships only the fixed profile: Basic Auth + SQLite +
-// filesystem. Clerk, Convex, and S3 stacks are contributor/operator paths and
-// must not enter the registry-clean production graph (Convex also carries the
-// inactive ws advisory).
-const INACTIVE_FIXED_PROFILE_PROVIDERS = [
-    'or3-provider-clerk',
-    'or3-provider-convex',
-    'or3-provider-s3',
-];
-const INACTIVE_FIXED_PROFILE_DEV_DEPENDENCIES = ['convex'];
+// Closed set of provider combinations; launch qualification is tracked separately.
+export function dockerProfile(value = process.env.OR3_DOCKER_PROFILE ?? 'basic-sqlite-fs') {
+    if (value !== 'basic-sqlite-fs' && value !== 'clerk-sqlite-s3') {
+        throw new Error(`Unsupported Docker provider profile: ${value}`);
+    }
+    return value;
+}
 
-export function prepareDockerManifest(input) {
+export function inactiveDockerProviders(profile) {
+    return dockerProfile(profile) === 'basic-sqlite-fs'
+        ? ['or3-provider-clerk', 'or3-provider-convex', 'or3-provider-s3']
+        : ['or3-provider-basic-auth', 'or3-provider-convex', 'or3-provider-fs'];
+}
+
+export function prepareDockerManifest(input, profile = dockerProfile()) {
     const manifest = structuredClone(input);
     for (const [name, version] of Object.entries(qualifiedVersions)) {
         if (name in (manifest.dependencies ?? {})) {
@@ -42,10 +45,10 @@ export function prepareDockerManifest(input) {
         };
     }
 
-    for (const name of INACTIVE_FIXED_PROFILE_PROVIDERS) {
+    for (const name of inactiveDockerProviders(profile)) {
         delete manifest.dependencies?.[name];
     }
-    for (const name of INACTIVE_FIXED_PROFILE_DEV_DEPENDENCIES) {
+    for (const name of ['convex']) {
         delete manifest.devDependencies?.[name];
     }
 

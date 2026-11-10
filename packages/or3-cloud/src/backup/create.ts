@@ -13,9 +13,11 @@ import { dataVolumeSize } from '../runtime/volumes';
 import { copySecure, sha256File, writeSecure } from '../util/fs';
 import { id, now } from '../util/primitives';
 import { assertFreeSpaceForArchive, volumeArchive } from './archive';
-import { validateCanonicalBackupReferences } from './references';
+import { assertBackupSourceProfile, assertSupportedBackupProfile, validateCanonicalBackupReferences } from './references';
 import { BACKUP_ID_PATTERN, readManifest, writeBackupAuthentication } from './manifests';
 import { removeNamedBackupArtifact } from './retention';
+import { assertRemoteTransferConfiguration, captureRemoteInventory, captureRemoteSnapshot, remoteSource } from './remote';
+import { assertVaultVolumesExist } from './vault';
 
 const asError = (error: unknown) => error instanceof Error ? error : new Error(String(error));
 const RECOVERY_STEPS = 'Keep the operation record. Inspect the named paths and their permissions, then run "npx @or3/cloud recover --dry-run" and "npx @or3/cloud recover" from the deployment directory. Do not restore an unverified artifact or remove recovery locks manually.';
@@ -62,7 +64,15 @@ export async function createBackup(
     onProgress?: (progress: BackupProgress) => void | Promise<void>;
   } = {},
 ) {
+  const remoteStorage = env.NUXT_PUBLIC_STORAGE_PROVIDER === 's3';
+  // Public operations remain gated until managed S3 restore and rollback are
+  // complete. A safety snapshot records only offline references; it is not an
+  // exportable recovery copy.
+  if (!remoteStorage) { assertSupportedBackupProfile(env); await assertBackupSourceProfile(directory, state, env); }
+  else if (options.safetySnapshot) remoteSource(env);
+  else assertRemoteTransferConfiguration(env);
   const restartAfter = options.restartAfter ?? true;
+  if (managedVaultEnabled(directory, env)) await assertVaultVolumesExist(directory, state);
   await requireImageDigest(state.image, state.imageDigest, 'Current deployment');
   const backupId = options.backupId ?? id('backup');
   if (!BACKUP_ID_PATTERN.test(backupId)) throw new Error(`Backup ID ${backupId} is invalid.`);
@@ -104,6 +114,7 @@ export async function createBackup(
     await report('capturing', `Backup capture: OR3 is stopped; writing ${backupDir}.`);
     await volumeArchive(directory, state.mode, env, backupDir);
     if (managedVaultEnabled(directory, env)) {
+      await assertVaultVolumesExist(directory, state);
       await streamCommandToFile('docker', composeArgs(directory, state.mode, [
         'run', '--rm', '-T', '--no-deps', '--entrypoint', '/nodejs/bin/node', 'or3-vault', '/app/vault/entrypoint.mjs', 'backup',
       ]), join(backupDir, 'vault.backup'), directory, secretValues(env));
@@ -120,6 +131,7 @@ export async function createBackup(
       try { await report('restarting', 'Restart: bringing OR3 back and checking deep health; backup verification is still pending.'); }
       catch (error) { progressFailures.push(asError(error)); }
       try {
+        if (managedVaultEnabled(directory, env)) await assertVaultVolumesExist(directory, state);
         await startProject(directory, state.mode, env);
         service = 'healthy';
         downtimeMs = Date.now() - stopStartedAt;
@@ -133,12 +145,22 @@ export async function createBackup(
   // Captured files are private and no longer depend on the live volume. For a
   // standalone backup, hash/authenticate them after service recovery. Mutation
   // snapshots deliberately keep the source stopped through verification.
+  if (!primaryFailure && restartFailure && remoteStorage) primaryFailure = new Error('S3 capture requires successful service recovery before remote transfer.');
   if (!primaryFailure) {
     try {
+      let remote;
+      if (remoteStorage) {
+        await report('remote-capture', options.safetySnapshot ? 'Remote inventory: recording and verifying S3 references for rollback.' : 'Remote capture: copying and verifying the referenced S3 objects.');
+        remote = options.safetySnapshot ? await captureRemoteInventory(directory, state, env, backupDir) : await captureRemoteSnapshot(directory, state, env, backupDir);
+      }
       await report('verifying', `Verification: checking the captured backup; ${service === 'healthy' ? 'OR3 is deeply healthy' : service === 'stopped' ? 'OR3 remains stopped' : 'service recovery is unverified'}.`);
+      // Do not authenticate a full snapshot until its canonical references are
+      // verified: a crash before inspection must not create a recovery point.
+      if (!options.safetySnapshot && !remoteStorage) await validateCanonicalBackupReferences(directory, { ...env, OR3_IMAGE: imageAtDigest(state.image, state.imageDigest) }, backupDir);
       const manifest: BackupManifest = {
-        schemaVersion: 1,
+        ...(remote ? { schemaVersion: 2 as const, storage: 's3' as const, remote } : { schemaVersion: 1 as const }),
         backupId,
+        snapshotKind: options.safetySnapshot ? 'safety' : 'full',
         createdAt: capturedAt,
         appVersion: state.appVersion,
         image: state.image,
@@ -164,7 +186,6 @@ export async function createBackup(
       const manifestContents = `${JSON.stringify(manifest, null, 2)}\n`;
       await writeSecure(join(backupDir, 'manifest.json'), manifestContents);
       await writeBackupAuthentication(directory, backupDir, manifestContents);
-      if (!options.safetySnapshot) await validateCanonicalBackupReferences(directory, { ...env, OR3_IMAGE: imageAtDigest(state.image, state.imageDigest) }, backupDir);
       verifiedManifest = await readManifest(backupDir, directory);
       artifact = 'verified';
     } catch (error) {

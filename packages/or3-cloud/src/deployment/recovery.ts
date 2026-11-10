@@ -24,7 +24,7 @@ import type {
   OperationReceipt,
   PendingOperation,
 } from './contracts';
-import { parseEnv, secretValues } from './env';
+import { managedProviderProfile, parseEnv, secretValues } from './env';
 import { deploymentPaths } from './paths';
 import {
   commitRecoveredState,
@@ -85,6 +85,11 @@ export function decideRecoveryAction(state: ManagedState): RecoveryDecision {
       return { action: 'reconcile-handoff', detail: `The application is complete but the dashboard operator handoff is ${handoff}. Reconcile only the recorded handoff.` };
     }
     return { action: 'none', detail: 'No incomplete operation is recorded.' };
+  }
+  // Older adoption journals did not record when the target started. Even a
+  // snapshot-created phase may therefore have accepted writes already.
+  if (pending.operation === 'adopt') {
+    return { action: 'require-explicit-restore', detail: 'The adoption target may contain newer writes. Replaying the source backup can discard them.', snapshotId: pending.backupId };
   }
   if (pending.operation === 'update' && pending.phase === 'target-ready' && pending.evidence) {
     return { action: 'finish', detail: 'A completed replacement carries durable target-ready evidence and can be committed without restoring data.' };
@@ -149,6 +154,7 @@ export async function collectTargetReadyChecks(
   mode: Mode,
   env: Record<string, string>,
 ): Promise<{ containerId: string | undefined; checks: CheckResult[] }> {
+  const profile = managedProviderProfile(env);
   const checks: CheckResult[] = [];
   let containerId: string | undefined;
   const container = await run('docker', composeArgs(directory, mode, ['ps', '-q', 'or3']), directory);
@@ -164,13 +170,13 @@ export async function collectTargetReadyChecks(
   if (databaseCheck.ok) {
     try {
       const databases = JSON.parse(databaseCheck.stdout.trim()) as Array<{ path: string; quickCheck: string; tables: number }>;
-      databasesOk = databases.length === 2 && databases.every((entry) => entry.quickCheck === 'ok' && entry.tables >= 1);
+      databasesOk = databases.length === (profile === 'basic-sqlite-fs' ? 2 : 1) && databases.every((entry) => entry.quickCheck === 'ok' && entry.tables >= 1);
     } catch {
       databasesOk = false;
     }
   }
   checks.push(databasesOk
-    ? { code: 'database-integrity', status: 'passed', detail: 'auth.sqlite and sync.sqlite quick_check passed with managed ownership.' }
+    ? { code: 'database-integrity', status: 'passed', detail: `${profile === 'basic-sqlite-fs' ? 'auth.sqlite and sync.sqlite' : 'sync.sqlite'} quick_check passed with managed ownership.` }
     : { code: 'database-integrity', status: 'failed', detail: `SQLite integrity or ownership verification failed. ${redact(databaseCheck.stderr.trim(), secretValues(env))}` });
 
   // Deep health must be provable from the caller's network context. A public
@@ -181,7 +187,7 @@ export async function collectTargetReadyChecks(
   if (mode === 'public') {
     const baseUrl = new URL(`https://${env.OR3_PUBLIC_DOMAIN}`);
     try {
-      validateVerificationHealth(await verificationJson(baseUrl, '/api/health?deep=true'));
+      validateVerificationHealth(await verificationJson(baseUrl, '/api/health?deep=true'), profile);
       checks.push({ code: 'public-health', status: 'passed', detail: `${baseUrl.origin} deep health reports the managed profile.` });
     } catch (error) {
       checks.push({ code: 'public-health', status: 'failed', detail: redact(error instanceof Error ? error.message : String(error)) });

@@ -7,7 +7,7 @@ import { useAppConfig, useHooks } from '#imports';
 import { useOr3Config, isMentionSourceEnabled } from '~/composables/useOr3Config';
 import type { OpenRouterMessage } from '~/core/hooks/hook-types';
 import type * as MentionIndexApi from './ChatMentions/useChatMentions';
-import { resetIndex, setMentionsConfig } from './ChatMentions/useChatMentions';
+import mentionsIndex, { resetIndex, setMentionsConfig } from './ChatMentions/useChatMentions';
 import type { createMentionSuggestion } from './ChatMentions/suggestions';
 import type MentionExtension from '@tiptap/extension-mention';
 import { getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
@@ -139,11 +139,9 @@ export default defineNuxtPlugin((nuxtApp) => {
         try {
             const [
                 MentionModule,
-                mentionsIndexModule,
                 { createMentionSuggestion },
             ] = await Promise.all([
                 import('@tiptap/extension-mention'),
-                import('./ChatMentions/useChatMentions'),
                 import('./ChatMentions/suggestions'),
             ]);
 
@@ -153,7 +151,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 collectMentions,
                 resolveMention,
                 resetIndex,
-            } = mentionsIndexModule.default;
+            } = mentionsIndex;
 
             if (disposed) return null;
 

@@ -14,6 +14,7 @@ import { reportError } from '../../utils/errors';
 import { useSharedPreviewCache } from '~/composables/core/usePreviewCache';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '#imports';
+import { resizePreview } from '~/utils/files/resizePreview';
 import { isGeneratedImage } from './image-library';
 
 const iconDownload = useIcon('image.download');
@@ -47,18 +48,70 @@ const state = reactive<State>({ urlByHash: {}, errorByHash: {} });
 const container = ref<HTMLElement | null>(null);
 let io: IntersectionObserver | null = null;
 const cache = useSharedPreviewCache();
+const tileKey = (hash: string) => `gallery-tile:${hash}`;
+const tileHash = (key: string) => key.startsWith('gallery-tile:') ? key.slice(13) : '';
 const visibleHashes = new Set<string>();
+const queuedHashes = new Set<string>();
+const activeHashes = new Map<string, object>();
+const tileOwners = new Map<string, ReturnType<NonNullable<typeof cache>['acquireTile']>>();
+let disposed = false;
+let backgrounded = false;
+let previewEpoch = 0;
+const tileEpoch = new Map<string, number>();
+
+function queuePreview(hash: string) {
+    if (disposed || backgrounded || !visibleHashes.has(hash)) return;
+    if (!tileOwners.has(hash) && cache) tileOwners.set(hash, cache.acquireTile(tileKey(hash)));
+    queuedHashes.add(hash);
+    drainPreviews();
+}
+
+function drainPreviews() {
+    if (disposed || backgrounded) return;
+    for (const hash of queuedHashes) {
+        if (activeHashes.has(hash)) continue;
+        queuedHashes.delete(hash);
+        const meta = props.items.find((item) => item.hash === hash);
+        if (!meta || !visibleHashes.has(hash)) continue;
+        const task = {};
+        activeHashes.set(hash, task);
+        const epoch = previewEpoch;
+        const tileVersion = tileEpoch.get(hash) ?? 0;
+        const current = () => !disposed && !backgrounded && visibleHashes.has(hash)
+            && previewEpoch === epoch && (tileEpoch.get(hash) ?? 0) === tileVersion;
+        const sharedCurrent = tileOwners.get(hash)?.current ?? current;
+        void ensureUrl(meta, current, sharedCurrent).finally(() => {
+            if (activeHashes.get(hash) === task) activeHashes.delete(hash);
+            drainPreviews();
+        });
+    }
+}
+function detachWaiting(hash: string) {
+    activeHashes.delete(hash);
+    const owner = tileOwners.get(hash);
+    tileOwners.delete(hash);
+    return owner?.release() ?? false;
+}
+
+function detachAllWaiting() {
+    for (const hash of tileOwners.keys()) detachWaiting(hash);
+}
 let previousHashes = new Set<string>();
 let idleHandle: number | null = null;
 let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
 let visibilityHandler: (() => void) | null = null;
 const stopWorkspace = subscribeActiveWorkspaceDb(() => {
+    previewEpoch++;
+    detachAllWaiting();
     for (const hash of Object.keys(state.urlByHash)) clearUrlState(hash);
     for (const hash of Object.keys(state.errorByHash)) clearUrlState(hash);
     visibleHashes.clear();
+    queuedHashes.clear();
     previousHashes.clear();
     io?.disconnect();
+    io = null;
     cancelScheduledObserve();
+    scheduleObserve();
 });
 
 function isSelected(hash: string): boolean {
@@ -73,37 +126,45 @@ function clearUrlState(hash: string) {
 function dropHash(hash: string) {
     clearUrlState(hash);
     visibleHashes.delete(hash);
+    queuedHashes.delete(hash);
 }
 
 function pruneStaleState() {
     for (const hash of Object.keys(state.urlByHash)) {
-        if (!cache?.peek(hash)) {
+        if (!cache?.peek(tileKey(hash))) {
             clearUrlState(hash);
         }
     }
 }
 
-async function ensureUrl(meta: FileMeta) {
+async function ensureUrl(meta: FileMeta, current: () => boolean = () => true, sharedCurrent: () => boolean = current) {
     const generation = getWorkspaceGeneration();
+    const isCurrent = () => generation === getWorkspaceGeneration() && sharedCurrent();
     if (!cache) return;
     if (state.errorByHash[meta.hash]) return;
     try {
         const url = await cache.ensure(
-            meta.hash,
+            tileKey(meta.hash),
             async () => {
                 const blob = await getFileBlob(meta.hash);
                 if (!blob) throw new Error('blob missing');
-                const url = URL.createObjectURL(blob);
-                return { url, bytes: blob.size };
+                // A detached cache load still owns its eventual result; let the cache revoke it.
+                if (!isCurrent()) return { url: URL.createObjectURL(blob), bytes: blob.size };
+                const preview = await resizePreview(blob, 960, isCurrent);
+                const url = URL.createObjectURL(preview);
+                return { url, bytes: preview.size };
             },
             1
         );
-        if (generation === getWorkspaceGeneration() && url) {
+        if (generation === getWorkspaceGeneration() && url && current()) {
             state.urlByHash[meta.hash] = url;
             state.errorByHash[meta.hash] = undefined;
+        } else if (url && generation === getWorkspaceGeneration()
+            && !visibleHashes.has(meta.hash) && cache.peek(tileKey(meta.hash)) === url) {
+            releaseHash(meta.hash);
         }
     } catch (error) {
-        if (generation !== getWorkspaceGeneration()) return;
+        if (generation !== getWorkspaceGeneration() || !current()) return;
         state.errorByHash[meta.hash] = true;
         reportError(error, {
             code: 'ERR_DB_READ_FAILED',
@@ -122,26 +183,31 @@ async function ensureUrl(meta: FileMeta) {
 
 function releaseHash(hash: string) {
     if (!cache) return;
-    cache.release(hash);
+    cache.release(tileKey(hash));
 }
 
 function reloadVisiblePreviews() {
     for (const hash of visibleHashes) {
         const meta = props.items.find((m) => m.hash === hash);
-        if (meta) void ensureUrl(meta);
+        if (meta) queuePreview(hash);
     }
 }
 
 function handleVisibilityChange() {
     if (!cache || typeof document === 'undefined') return;
     if (document.visibilityState === 'hidden') {
+        backgrounded = true;
+        previewEpoch++;
+        detachAllWaiting();
+        queuedHashes.clear();
         // Free blob URLs while backgrounded, but keep visibleHashes so we can
         // reload the on-screen tiles when the tab becomes visible again.
         // IntersectionObserver often will not re-fire for already-visible tiles.
         const removed = cache.flushAll();
-        removed.forEach((hash) => clearUrlState(hash));
+        removed.forEach((key) => { const hash = tileHash(key); if (hash) clearUrlState(hash); });
         return;
     }
+    backgrounded = false;
     reloadVisiblePreviews();
     // Rebind in case the browser cleared intersection state while hidden.
     scheduleObserve();
@@ -150,8 +216,10 @@ function handleVisibilityChange() {
 function ensureObserver(): IntersectionObserver | null {
     if (typeof IntersectionObserver === 'undefined') return null;
     if (!io) {
+        const generation = getWorkspaceGeneration();
         io = new IntersectionObserver(
             (entries) => {
+                if (disposed || generation !== getWorkspaceGeneration()) return;
                 for (const e of entries) {
                     const hash = (e.target as HTMLElement).dataset['hash'];
                     if (!hash) continue;
@@ -159,19 +227,23 @@ function ensureObserver(): IntersectionObserver | null {
                         visibleHashes.add(hash);
                         const meta = props.items.find((m) => m.hash === hash);
                         if (meta) {
-                            ensureUrl(meta);
-                            cache?.promote(hash, 1);
+                            queuePreview(hash);
+                            cache?.promote(tileKey(hash), 1);
                         }
                     } else {
                         visibleHashes.delete(hash);
+                        tileEpoch.set(hash, (tileEpoch.get(hash) ?? 0) + 1);
+                        queuedHashes.delete(hash);
+                        detachWaiting(hash);
                         releaseHash(hash);
                     }
                 }
+                drainPreviews();
                 const removed = cache?.evictIfNeeded('intersection') ?? [];
-                removed.forEach((hash) => dropHash(hash));
+                removed.forEach((key) => { const hash = tileHash(key); if (hash) dropHash(hash); });
                 pruneStaleState();
             },
-            { root: container.value, rootMargin: '200px 0px', threshold: 0.01 }
+            { root: null, rootMargin: '200px 0px', threshold: 0.01 }
         );
     }
     return io;
@@ -186,6 +258,7 @@ function bindTiles() {
     observer.disconnect();
 
     const run = () => {
+        if (disposed || observer !== io) return;
         root?.querySelectorAll('[data-hash]')?.forEach((el) =>
             observer.observe(el)
         );
@@ -255,27 +328,33 @@ watch(
         const next = new Set(hashes);
         for (const hash of previousHashes) {
             if (!next.has(hash)) {
-                cache?.drop(hash);
+                tileEpoch.set(hash, (tileEpoch.get(hash) ?? 0) + 1);
+                detachWaiting(hash);
+                cache?.dropIfUnowned(tileKey(hash));
                 dropHash(hash);
             }
         }
+        drainPreviews();
         previousHashes = next;
         const removed = cache?.evictIfNeeded('items-change') ?? [];
-        removed.forEach((hash) => dropHash(hash));
+        removed.forEach((key) => { const hash = tileHash(key); if (hash) dropHash(hash); });
         pruneStaleState();
         scheduleObserve();
     }
 );
 
 onBeforeUnmount(() => {
+    disposed = true;
+    detachAllWaiting();
+    queuedHashes.clear();
+    visibleHashes.clear();
     stopWorkspace();
     if (io) io.disconnect();
     cancelScheduledObserve();
     if (typeof document !== 'undefined' && visibilityHandler) {
         document.removeEventListener('visibilitychange', visibilityHandler);
     }
-    const removed = cache?.flushAll() ?? [];
-    removed.forEach((hash) => dropHash(hash));
+    for (const hash of previousHashes) cache?.dropIfUnowned(tileKey(hash));
     pruneStaleState();
 });
 
@@ -294,6 +373,16 @@ function copy(meta: FileMeta) {
 function toggleSelect(hash: string) {
     if (!hash || props.isDeleting) return;
     emit('toggle-select', hash);
+}
+
+function imageRatio(meta: FileMeta): string | undefined {
+    const { width, height } = meta;
+    if (
+        typeof width !== 'number' || typeof height !== 'number' ||
+        !Number.isFinite(width) || !Number.isFinite(height) ||
+        width <= 0 || height <= 0
+    ) return;
+    return `${width} / ${height}`;
 }
 
 function formatBytes(bytes: number): string {
@@ -411,6 +500,10 @@ defineExpose({ ensureUrl });
                             class="w-full h-auto transition-transform duration-200 group-hover:scale-[1.02] group-focus-within:scale-[1.02]"
                             :src="state.urlByHash[m.hash]"
                             :alt="m.name"
+                            :width="imageRatio(m) ? m.width : undefined"
+                            :height="imageRatio(m) ? m.height : undefined"
+                            :style="{ aspectRatio: imageRatio(m) ? `auto ${imageRatio(m)}` : undefined }"
+                            decoding="async"
                             loading="lazy"
                         />
                     </button>
@@ -418,6 +511,7 @@ defineExpose({ ensureUrl });
                         v-else
                         type="button"
                         class="flex min-h-40 w-full items-center justify-center bg-(--md-surface-container) text-xs opacity-80 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-(--md-primary)"
+                        :style="{ aspectRatio: imageRatio(m) }"
                         :aria-label="`View ${m.name}`"
                         @click="view(m)"
                     >

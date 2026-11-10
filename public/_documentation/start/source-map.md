@@ -45,6 +45,8 @@ For new source-owned UI, use the existing registry for that surface. Do not crea
 
 Definitions carry the context, visibility, ordering, and access fields appropriate to that surface. Sidebar injection helpers must run inside their provided component subtree; a registered sidebar page and a workspace pane do not have identical context.
 
+The sidebar environment's thread and document lists are search-scoped: they are empty when the sidebar query is clear and load asynchronously while it is active. Sidebar pages needing independent browsing should query their own bounded pages rather than treating these lists as a workspace catalog.
+
 The [source pane tutorial](/documentation/start/mini-app-tutorial) demonstrates owned registration and cleanup. For a small source toolbar action, create `app/plugins/example-header.client.ts`:
 
 ```ts

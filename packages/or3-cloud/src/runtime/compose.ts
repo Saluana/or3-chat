@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Mode } from '../deployment/contracts';
-import { dashboardUpdatesEnabled, parseEnv } from '../deployment/env';
+import { assertLegacyManagedProfile, dashboardUpdatesEnabled, parseEnv, secretValues } from '../deployment/env';
 import { imageRepository } from '../deployment/identity';
 import { quote, redact } from '../util/primitives';
 import { run } from './command-runner';
@@ -70,6 +70,14 @@ export async function compose(directory: string, mode: Mode, command: string[], 
 
 type ComposeService = {
   image?: string;
+  entrypoint?: unknown;
+  command?: unknown;
+  working_dir?: unknown;
+  read_only?: boolean;
+  tmpfs?: unknown;
+  configs?: unknown;
+  secrets?: unknown;
+  volumes_from?: unknown;
   network_mode?: string;
   ports?: Array<Record<string, unknown>>;
   volumes?: Array<Record<string, unknown>>;
@@ -91,6 +99,28 @@ export function parseComposeConfig(text: string): ComposeConfig {
   } catch (error) {
     throw new Error(`Docker Compose did not return a readable JSON configuration: ${error instanceof Error ? error.message : String(error)}`);
   }
+}
+
+/** Overlays and volume subpaths can conceal data from a volume-root archive. */
+export function assertCapturedComposeMounts(service: ComposeService) {
+  const mounts = service.volumes ?? [], tmpfs = service.tmpfs;
+  for (const field of [service.configs, service.secrets, service.volumes_from]) {
+    if (field != null && (!Array.isArray(field) || field.length !== 0)) throw new Error('Source has additional Compose mounts that cannot be captured safely.');
+  }
+  if (mounts.some((mount) => {
+    const volume = mount.volume;
+    return volume && typeof volume === 'object' && (volume as Record<string, unknown>).subpath;
+  })) throw new Error('Source volume subpaths cannot be captured safely.');
+  if (tmpfs != null && (!Array.isArray(tmpfs) || tmpfs.some((entry) => typeof entry !== 'string' || entry.split(':', 1)[0] !== '/tmp'))) throw new Error('Source has an unexpected temporary filesystem.');
+}
+
+export function assertCapturedHostMounts(tmpfs: unknown, hostMounts: unknown) {
+  if (tmpfs != null && (typeof tmpfs !== 'object' || Array.isArray(tmpfs) || Object.keys(tmpfs).some(path => path !== '/tmp'))) throw new Error('Source has an unexpected temporary filesystem.');
+  if (hostMounts != null && (!Array.isArray(hostMounts) || hostMounts.some((mount) => {
+    if (!mount || typeof mount !== 'object' || Array.isArray(mount)) return true;
+    const options = (mount as Record<string, unknown>).VolumeOptions;
+    return options && typeof options === 'object' && (options as Record<string, unknown>).Subpath;
+  }))) throw new Error('Source volume subpaths cannot be captured safely.');
 }
 
 export function composeEnvironmentValue(service: ComposeService, key: string) {
@@ -140,6 +170,39 @@ export async function resolvedComposeConfig(directory: string, mode: Mode, deadl
   const result = await run('docker', composeArgs(directory, mode, ['config', '--format', 'json']), directory, undefined, deadline - performance.now());
   if (!result.ok) throw new Error(`${result.command}\n${result.stderr}`);
   return result.stdout;
+}
+
+/** Check effective selectors without requiring an already existing container. */
+export async function assertLegacyComposeProfile(directory: string, mode: Mode, env: Record<string, string>, deadline?: number) {
+  assertLegacyManagedProfile(env);
+  let resolved: string;
+  try { resolved = await resolvedComposeConfig(directory, mode, deadline); }
+  catch (error) { throw new Error(redact(error instanceof Error ? error.message : String(error), secretValues(env))); }
+  let service: ComposeService | undefined;
+  try { service = parseComposeConfig(resolved).services?.or3; }
+  catch { throw new Error('Resolved Compose provider configuration is unreadable.'); }
+  if (!service || !service.environment || typeof service.environment !== 'object') throw new Error('Resolved Compose provider environment is missing.');
+  const entries = Array.isArray(service.environment) ? service.environment.map((entry) => {
+    if (typeof entry !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]*=/.test(entry)) throw new Error('Resolved Compose provider environment is ambiguous.');
+    const index = entry.indexOf('='); return [entry.slice(0, index), entry.slice(index + 1)];
+  }) : Object.entries(service.environment);
+  const effective: Record<string, string> = {};
+  const seen = new Set<string>();
+  for (const [key, value] of entries) {
+    if (typeof key !== 'string' || typeof value !== 'string' || seen.has(key)) throw new Error('Resolved Compose provider environment is ambiguous.');
+    seen.add(key); effective[key] = value;
+  }
+  assertLegacyManagedProfile(effective);
+  // The image entrypoint has non-managed defaults when these are absent.
+  // Compose's resolved environment, not the CLI's env file, is authoritative.
+  if ((effective.OR3_AUTH_PROVIDER || effective.AUTH_PROVIDER) !== 'basic-auth' ||
+      effective.SSR_AUTH_ENABLED !== 'true' ||
+      (effective.OR3_CLOUD_SYNC_ENABLED || effective.OR3_SYNC_ENABLED) !== 'true' ||
+      effective.OR3_SYNC_PROVIDER !== 'sqlite' ||
+      (effective.OR3_CLOUD_STORAGE_ENABLED || effective.OR3_STORAGE_ENABLED) !== 'true' ||
+      (effective.OR3_STORAGE_PROVIDER || effective.NUXT_PUBLIC_STORAGE_PROVIDER) !== 'fs') {
+    throw new Error('Resolved Compose provider profile is missing required Basic/SQLite/filesystem settings.');
+  }
 }
 
 export async function assertSafeComposeBinding(directory: string, mode: Mode, env: Record<string, string>, deadline?: number) {

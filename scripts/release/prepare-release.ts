@@ -1,11 +1,12 @@
 #!/usr/bin/env bun
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import {
     assertCleanStatus,
     assertReleaseVersionContract,
     isRegistryNotFound,
+    releaseCheckEnvironment,
 } from './release-preflight-core';
 
 type CommandResult = { exitCode: number; stdout: string; stderr: string };
@@ -26,12 +27,12 @@ for (let index = 0; index < args.length; index += 1) {
     if (!known.has(value) && args[index - 1] !== '--version') throw new Error(`Unknown release preparation option ${value}.`);
 }
 
-async function command(command: string, commandArgs: string[], options: { quiet?: boolean; env?: Record<string, string> } = {}): Promise<CommandResult> {
+async function command(command: string, commandArgs: string[], options: { quiet?: boolean; env?: Record<string, string>; isolated?: boolean } = {}): Promise<CommandResult> {
     const child = Bun.spawn([command, ...commandArgs], {
         cwd: root,
         stdout: 'pipe',
         stderr: 'pipe',
-        env: { ...process.env, ...options.env },
+        env: options.isolated ? { ...releaseCheckEnvironment(process.env), ...options.env } : { ...process.env, ...options.env },
     });
     const [stdout, stderr, exitCode] = await Promise.all([
         new Response(child.stdout).text(),
@@ -48,7 +49,7 @@ async function command(command: string, commandArgs: string[], options: { quiet?
 async function requireCommand(label: string, executable: string, commandArgs: string[], env?: Record<string, string>) {
     console.log(`\n[release:prepare] ${label}`);
     const startedAt = Date.now();
-    const result = await command(executable, commandArgs, { env });
+    const result = await command(executable, commandArgs, { env, isolated: true });
     const elapsedMs = Date.now() - startedAt;
     timings[label] = elapsedMs;
     console.log(`[release:prepare] ${label} completed in ${(elapsedMs / 1000).toFixed(1)}s`);
@@ -63,6 +64,10 @@ const lock = JSON.parse(await readFile(resolve(root, 'package-lock.json'), 'utf8
     version?: string;
     packages?: Record<string, { version?: string }>;
 };
+const launchLock = JSON.parse(await readFile(resolve(root, 'package-lock.clerk-sqlite-s3.json'), 'utf8')) as {
+    version?: string;
+    packages?: Record<string, { version?: string }>;
+};
 const cli = await readFile(resolve(root, 'packages/or3-cloud/src/package-info.ts'), 'utf8');
 const cliVersion = cli.match(/PACKAGE_VERSION\s*=\s*'([^']+)'/)?.[1];
 const version = requested ?? cloudPackage.version;
@@ -71,6 +76,8 @@ assertReleaseVersionContract({
     root: rootPackage.version,
     lock: lock.version,
     lockRoot: lock.packages?.['']?.version,
+    launchLock: launchLock.version,
+    launchLockRoot: launchLock.packages?.['']?.version,
     cloud: cloudPackage.version,
     cli: cliVersion,
 });
@@ -387,26 +394,17 @@ if (repositoryReadiness) {
     }
 }
 
-const fixedProfile = {
-    CI: '1',
-    AUTH_PROVIDER: 'basic-auth',
-    OR3_AUTH_PROVIDER: 'basic-auth',
-    OR3_GUEST_ACCESS_ENABLED: 'false',
-    OR3_AUTH_REGISTRATION_MODE: 'invite_only',
-    OR3_AUTH_AUTO_PROVISION: 'false',
-    OR3_SYNC_ENABLED: 'true',
-    OR3_CLOUD_SYNC_ENABLED: 'true',
-    OR3_SYNC_PROVIDER: 'sqlite',
-    OR3_STORAGE_ENABLED: 'true',
-    OR3_CLOUD_STORAGE_ENABLED: 'true',
-    NUXT_PUBLIC_STORAGE_PROVIDER: 'fs',
-};
+const dotenvFiles = (await readdir(root)).filter(name => /^\.env(?:\.|$)/.test(name) && name !== '.env.example');
+if (dotenvFiles.length) throw new Error(`Release preparation requires a worktree without dotenv files: ${dotenvFiles.join(', ')}.`);
+await mkdir('/tmp/or3-build/storage', { recursive: true });
+const fixedProfile = releaseCheckEnvironment(process.env);
 
 if (full) {
     await requireCommand('Populated workspace performance gate', 'bun', ['run', 'scripts/performance/compare-populated-workspace.ts'], fixedProfile);
 }
-await requireCommand('Registry-clean lock contract', 'bun', ['run', 'scripts/release/check-lock-drift.mjs']);
-await requireCommand('Offline backup inspection profile', 'bun', ['run', 'scripts/docker/prepare-backup-inspection.mjs']);
+await requireCommand('Default registry-clean lock contract', 'bun', ['run', 'scripts/release/check-lock-drift.mjs'], { OR3_DOCKER_PROFILE: 'basic-sqlite-fs' });
+await requireCommand('Launch registry-clean lock contract', 'bun', ['run', 'scripts/release/check-lock-drift.mjs'], { OR3_DOCKER_PROFILE: 'clerk-sqlite-s3' });
+await requireCommand('Offline backup inspection profile', 'bun', ['run', 'scripts/docker/prepare-backup-inspection.mjs'], { OR3_DOCKER_PROFILE: 'basic-sqlite-fs' });
 await requireCommand('Plugin compatibility inventory', 'bun', ['run', 'plugin-runtime:compatibility:check']);
 await requireCommand(
     'Cloud version and provider contract',

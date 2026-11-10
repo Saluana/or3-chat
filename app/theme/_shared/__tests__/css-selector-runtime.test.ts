@@ -164,6 +164,166 @@ describe('CSS Selector Runtime', () => {
             });
         });
 
+        it('batches additions and skips per-selector scans for unrelated subtrees', async () => {
+            const frames: FrameRequestCallback[] = [];
+            vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frames.push(callback); return frames.length; });
+            vi.stubGlobal('cancelAnimationFrame', vi.fn());
+            try {
+                applyThemeClasses('test-theme', {
+                    '.alpha': { class: 'first shared' },
+                    '.beta': { class: 'second shared' },
+                    ':::invalid:::': { class: 'invalid' },
+                });
+                const unrelated = document.createElement('section');
+                const query = vi.spyOn(unrelated, 'querySelector');
+                const queryAll = vi.spyOn(unrelated, 'querySelectorAll');
+                container.appendChild(unrelated);
+                await Promise.resolve();
+                expect(frames).toHaveLength(1);
+                frames.shift()!(0);
+                expect(query).toHaveBeenCalledTimes(1);
+                expect(queryAll).not.toHaveBeenCalled();
+
+                const root = document.createElement('div');
+                root.className = 'alpha beta';
+                root.innerHTML = '<span class="alpha beta"></span>';
+                container.appendChild(root);
+                container.appendChild(document.createElement('aside'));
+                await Promise.resolve();
+                expect(frames).toHaveLength(1);
+                frames.shift()!(0);
+                for (const el of [root, root.firstElementChild!]) {
+                    expect(el.classList.contains('first')).toBe(true);
+                    expect(el.classList.contains('second')).toBe(true);
+                    expect(el.classList.contains('shared')).toBe(true);
+                }
+            } finally {
+                vi.unstubAllGlobals();
+            }
+        });
+
+        it('releases detached descendants but preserves moved nodes and cancels pending work', async () => {
+            const frames: FrameRequestCallback[] = [];
+            const cancel = vi.fn();
+            vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frames.push(callback); return frames.length; });
+            vi.stubGlobal('cancelAnimationFrame', cancel);
+            try {
+                container.innerHTML = '<div class="target"><span class="target"></span></div><aside></aside>';
+                const root = container.firstElementChild as HTMLElement;
+                const child = root.firstElementChild as HTMLElement;
+                applyThemeClasses('test-theme', { '.target': { class: 'owned' } });
+                container.lastElementChild!.appendChild(child);
+                root.remove();
+                await Promise.resolve();
+                frames.shift()!(0);
+                expect(root.classList.contains('owned')).toBe(false);
+                expect(child.classList.contains('owned')).toBe(true);
+                child.remove();
+                container.appendChild(child);
+                await Promise.resolve();
+                frames.shift()!(0);
+                expect(child.classList.contains('owned')).toBe(true);
+                const added = document.createElement('div');
+                added.className = 'target';
+                container.appendChild(added);
+                await Promise.resolve();
+                const pending = frames.shift()!;
+                removeThemeClasses('test-theme');
+                expect(cancel).toHaveBeenCalled();
+                pending(0);
+                expect(added.classList.contains('owned')).toBe(false);
+                expect(child.classList.contains('owned')).toBe(false);
+            } finally {
+                vi.unstubAllGlobals();
+            }
+        });
+
+        it('cleans detached ownership while frames are paused and retains connected additions', async () => {
+            const frames: FrameRequestCallback[] = [];
+            vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frames.push(callback); return frames.length; });
+            vi.stubGlobal('cancelAnimationFrame', vi.fn());
+            try {
+                const owned = document.createElement('div');
+                owned.className = 'target';
+                container.appendChild(owned);
+                applyThemeClasses('test-theme', { '.target': { class: 'owned' } });
+                const connected = document.createElement('div');
+                connected.className = 'target';
+                container.appendChild(connected);
+                for (let i = 0; i < 5; i++) {
+                    const transient = document.createElement('div');
+                    container.appendChild(transient);
+                    await Promise.resolve();
+                    transient.remove();
+                    await Promise.resolve();
+                }
+                owned.remove();
+                await Promise.resolve();
+                expect(owned.classList.contains('owned')).toBe(false);
+                frames.shift()!(0);
+                expect(connected.classList.contains('owned')).toBe(true);
+            } finally {
+                vi.unstubAllGlobals();
+            }
+        });
+
+        it('does not scan tracked elements or schedule work for text-only changes', async () => {
+            const frame = vi.fn();
+            vi.stubGlobal('requestAnimationFrame', frame);
+            try {
+                container.innerHTML = '<div class="target"></div><span>before</span>';
+                const target = container.firstElementChild as HTMLElement;
+                applyThemeClasses('test-theme', { '.target': { class: 'owned' } });
+                const connected = vi.spyOn(target, 'isConnected', 'get');
+                container.lastElementChild!.textContent = 'after';
+                await Promise.resolve();
+                expect(connected).not.toHaveBeenCalled();
+                expect(frame).not.toHaveBeenCalled();
+                connected.mockRestore();
+            } finally {
+                vi.unstubAllGlobals();
+            }
+        });
+
+        it('handles complex selectors without hiding later matches', async () => {
+            const frames: FrameRequestCallback[] = [];
+            vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frames.push(callback); return frames.length; });
+            vi.stubGlobal('cancelAnimationFrame', vi.fn());
+            try {
+                applyThemeClasses('test-theme', {
+                    '.unused /*': { class: 'unused' },
+                    '.target': { class: 'owned' },
+                });
+                const root = document.createElement('div');
+                root.innerHTML = '<span class="target"></span>';
+                container.appendChild(root);
+                await Promise.resolve();
+                frames.shift()!(0);
+                expect(root.firstElementChild!.classList.contains('owned')).toBe(true);
+            } finally {
+                vi.unstubAllGlobals();
+            }
+        });
+
+        it('processes additions without animation frame support', async () => {
+            vi.stubGlobal('requestAnimationFrame', undefined);
+            try {
+                applyThemeClasses('test-theme', { '.target': { class: 'owned' } });
+                const element = document.createElement('div');
+                element.className = 'target';
+                container.appendChild(element);
+                await Promise.resolve();
+                await Promise.resolve();
+                expect(element.classList.contains('owned')).toBe(true);
+                element.remove();
+                await Promise.resolve();
+                await Promise.resolve();
+                expect(element.classList.contains('owned')).toBe(false);
+            } finally {
+                vi.unstubAllGlobals();
+            }
+        });
+
         it('releases theme-owned classes when matching elements are removed', async () => {
             const element = document.createElement('div');
             element.className = 'temporary-theme-node';
@@ -174,7 +334,7 @@ describe('CSS Selector Runtime', () => {
             expect(element.classList.contains('theme-owned')).toBe(true);
 
             element.remove();
-            await new Promise((resolve) => setTimeout(resolve, 0));
+            await new Promise((resolve) => requestAnimationFrame(resolve));
 
             expect(element.classList.contains('theme-owned')).toBe(false);
             removeThemeClasses('detached-node-theme');

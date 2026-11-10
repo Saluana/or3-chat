@@ -2,7 +2,7 @@ import { normalizeMessageContent } from '~/core/search/command-palette/normalize
 import type { Project } from '~/db/schema';
 import { workspaceItemMetadata } from '~~/shared/posts/workspace-item';
 import { useCommandPalette } from '~/composables/search/useCommandPalette';
-import { readVisibleWorkspaceProjectEntries } from './workspace-projects';
+import { readVisibleWorkspaceProjectEntries, updateWorkspaceProject } from './workspace-projects';
 import { useToolRegistry } from './tool-registry';
 import type { ToolDefinition, ToolExecutionContext } from './types';
 import { captureWorkspaceOperation, workspaceToolsAvailable } from './workspace-access';
@@ -178,7 +178,6 @@ export function registerWorkspaceChatTools(): () => void {
             return createWorkspaceDocument(args, context);
         }, { runtime: 'client', available: workspaceToolsAvailable }),
         registry.registerTool(projectDefinition, async (args, context) => {
-            const { updateWorkspaceProject } = await import('./workspace-projects');
             return updateWorkspaceProject(args, context);
         }, { runtime: 'client', available: workspaceToolsAvailable }),
         registry.registerTool(proposeDefinition, async (args, context) => {

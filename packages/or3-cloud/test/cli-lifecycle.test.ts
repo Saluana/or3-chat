@@ -31,6 +31,45 @@ afterEach(async () => {
 const NEW_IMAGE = `${REPOSITORY}@${NEW_DIGEST}`;
 const DESTRUCTIVE = /compose .* (stop|down|restart)\b|compose .* up\b|volume rm|tar xzf|find \/data|chown/;
 
+// Failure inventory: legacy adoption journals did not record target startup;
+// any phase can therefore describe a target that has accepted new writes.
+// Plain recovery must not replay the old archive or stop either deployment.
+test('interrupted adoption requires explicit restore before any service or data mutation', async () => {
+  const fixture = await sandbox();
+  const base = await fixture.readState();
+  for (const phase of ['prepared', 'snapshot-created', 'target-mutating', undefined] as const) {
+    await fixture.writeState({ ...base, incompleteOperation: { id: 'adopt-fixture', operation: 'adopt', startedAt: base.updatedAt, message: 'fixture', phase, backupId: 'backup-fixture' } });
+    const before = await fixture.readStateText();
+    await fixture.reset();
+    const preview = await fixture.cli(['recover', '--dry-run', '--json']);
+    expect(preview.exitCode, preview.output).toBe(0);
+    expect(JSON.parse(preview.stdout)).toMatchObject({ decision: { action: 'require-explicit-restore' }, dataLoss: true });
+    const recovered = await fixture.cli(['recover']);
+    expect(recovered.exitCode, recovered.output).toBe(1);
+    expect(recovered.stderr).toMatch(/restore|writes/i);
+    expect(await fixture.readStateText()).toBe(before);
+    expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+  }
+});
+
+// If an explicit replay cannot stop a possibly running target, recovery must
+// not start the old source or tear down the target in its failure handler.
+test('failed adoption recovery preserves both deployments after a stop failure', async () => {
+  const fixture = await sandbox();
+  const backup = await fixture.cli(['backup']);
+  expect(backup.exitCode, backup.output).toBe(0);
+  const [backupId] = await fixture.backupIds();
+  const base = await fixture.readState();
+  await fixture.writeState({ ...base, incompleteOperation: { id: 'adopt-fixture', operation: 'adopt', startedAt: base.updatedAt, message: 'fixture', phase: 'snapshot-created', backupId, sourceDirectory: fixture.directory, sourceInitiallyRunning: true } });
+  await fixture.configure({ failures: [{ match: 'stop or3', times: 1, message: 'fixture stop failure' }] });
+  await fixture.reset();
+  const result = await fixture.cli(['recover', '--restore', '--yes']);
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr).toContain('fixture stop failure');
+  expect(await fixture.traceText()).not.toMatch(/compose .* (down|start)\b|tar xzf/);
+  expect((await fixture.readState()).incompleteOperation).toMatchObject({ operation: 'adopt', phase: 'target-mutating' });
+});
+
 test('an unresolved dashboard restart blocks competing CLI mutations before Docker runs', async () => {
   const fixture = await sandbox();
   await mkdir(join(fixture.cloud, 'restarts'), { recursive: true });
@@ -138,7 +177,7 @@ test('update --json emits exactly one result object and sends progress to stderr
 
 test('an update refused before the journal opens changes nothing', async () => {
   const fixture = await sandbox();
-  await fixture.configure({ failures: [{ match: '.Config.Labels', message: 'fixture label failure' }] });
+  await fixture.configure({ failures: [{ match: 'image inspect --format {{json .Config.Labels}}', message: 'fixture label failure' }] });
   const before = await fixture.readStateText();
   const result = await fixture.cli(['update']);
   expect(result.exitCode).toBe(1);
@@ -193,6 +232,194 @@ test('a failure in the snapshot-created phase is resumed without replacing anyth
   expect(after.state.appVersion).toBe(OLD_VERSION);
   expect(after.env.OR3_VERSION).toBe(OLD_VERSION);
   expect(await fixture.backupIds()).toEqual([snapshot]);
+});
+
+// A restart during recovery must not let Compose create a fresh empty vault
+// after an existing deployment's custody volume was lost. Each operation below
+// would otherwise resume the application without replacing its app data.
+// Start and backup must likewise refuse missing/inaccessible custody before
+// Compose can create a replacement, stopping the app, or journaling a backup.
+test.each(['start', 'backup'] as const)('%s refuses missing vault custody before changing the deployment', async operation => {
+  for (const missingVolume of ['data', 'key']) {
+    const fixture = await sandbox();
+    const beforeState = await fixture.readStateText();
+    const beforeEnv = await fixture.readEnvText();
+    await fixture.configure({ failures: [{ match: `volume inspect ${fixture.state.volumeName}-vault-${missingVolume}`, message: 'fixture custody volume missing' }] });
+    await fixture.reset();
+    const result = await fixture.cli([operation]);
+    expect(result.exitCode, result.output).toBe(1);
+    expect(result.output).toMatch(/vault.*custody/i);
+    expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+    expect(await fixture.readStateText()).toBe(beforeState);
+    expect(await fixture.readEnvText()).toBe(beforeEnv);
+    expect(await fixture.backupIds()).toEqual([]);
+  }
+});
+
+// Legacy managed states have no launch-profile identity. A changed provider
+// environment must not start a different profile under that legacy state.
+test.each(['start', 'restart'] as const)('%s refuses a provider conversion under legacy state', async operation => {
+  const fixture = await sandbox();
+  await writeFile(join(fixture.directory, '.env'), serializeEnv({ ...fixture.env, AUTH_PROVIDER: 'clerk', OR3_AUTH_PROVIDER: 'clerk', NUXT_PUBLIC_STORAGE_PROVIDER: 's3' }));
+  const beforeState = await fixture.readStateText();
+  const beforeEnv = await fixture.readEnvText();
+  await fixture.reset();
+  const result = await fixture.cli([operation]);
+  expect(result.exitCode, result.output).toBe(1);
+  expect(result.output).toMatch(/profile|provider/i);
+  expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+  expect(await fixture.readStateText()).toBe(beforeState);
+  expect(await fixture.readEnvText()).toBe(beforeEnv);
+});
+
+test('recovery refuses a provider conversion before restarting legacy state', async () => {
+  const fixture = await sandbox();
+  const base = await fixture.readState();
+  await fixture.writeState({ ...base, incompleteOperation: { id: 'backup-profile', operation: 'backup', startedAt: base.updatedAt, message: 'fixture', initialAppRunning: true } });
+  await writeFile(join(fixture.directory, '.env'), serializeEnv({ ...fixture.env, AUTH_PROVIDER: 'clerk', OR3_AUTH_PROVIDER: 'clerk', NUXT_PUBLIC_STORAGE_PROVIDER: 's3' }));
+  const before = await fixture.readStateText();
+  await fixture.reset();
+  const result = await fixture.cli(['recover']);
+  expect(result.exitCode, result.output).toBe(1);
+  expect(result.output).toMatch(/profile|provider/i);
+  expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+  expect(await fixture.readStateText()).toBe(before);
+});
+
+test('init recovery refuses an effective Compose provider override before starting', async () => {
+  const fixture = await sandbox({ postInstall: true });
+  const base = await fixture.readState();
+  await fixture.writeState({ ...base, incompleteOperation: { id: 'init-profile', operation: 'init', startedAt: base.updatedAt, message: 'fixture', phase: 'prepared' } });
+  await fixture.configure({ sourceComposeOverrides: { NUXT_AUTH_PROVIDER: 'clerk' } });
+  const before = await fixture.readStateText();
+  await fixture.reset();
+  const result = await fixture.cli(['recover']);
+  expect(result.exitCode, result.output).toBe(1);
+  expect(result.output).toMatch(/profile|provider/i);
+  expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+  expect(await fixture.readStateText()).toBe(before);
+});
+
+test.each([
+  ['NUXT_AUTH_PROVIDER', 'clerk'], ['NUXT_STORAGE_PROVIDER', 's3'], ['NUXT_SYNC_PROVIDER', 'convex'],
+  ['SSR_AUTH_ENABLED', 'false'], ['OR3_CLOUD_SYNC_ENABLED', 'false'],
+  ['OR3_CLOUD_STORAGE_ENABLED', 'false'], ['OR3_SQLITE_DRIVER', 'turso'],
+] as const)('start refuses effective provider override %s', async (key, value) => {
+  const fixture = await sandbox();
+  await writeFile(join(fixture.directory, '.env'), serializeEnv({ ...fixture.env, [key]: value }));
+  const before = await fixture.readStateText();
+  await fixture.reset();
+  const result = await fixture.cli(['start']);
+  expect(result.exitCode, result.output).toBe(1);
+  expect(result.output).toMatch(/profile|provider/i);
+  expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+  expect(await fixture.readStateText()).toBe(before);
+});
+
+test('start refuses an effective Compose provider override before recreation', async () => {
+  const fixture = await sandbox();
+  await fixture.configure({ sourceComposeOverrides: { NUXT_AUTH_PROVIDER: 'clerk' } });
+  await fixture.reset();
+  const before = await fixture.readStateText();
+  const result = await fixture.cli(['start']);
+  expect(result.exitCode, result.output).toBe(1);
+  expect(result.output).toMatch(/profile|provider/i);
+  expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+  expect(await fixture.readStateText()).toBe(before);
+});
+
+test.each([
+  ['AUTH_PROVIDER', 'OR3_AUTH_PROVIDER'], ['SSR_AUTH_ENABLED'], ['OR3_SYNC_PROVIDER'],
+  ['OR3_SYNC_ENABLED', 'OR3_CLOUD_SYNC_ENABLED'], ['NUXT_PUBLIC_STORAGE_PROVIDER'],
+  ['OR3_STORAGE_ENABLED', 'OR3_CLOUD_STORAGE_ENABLED'],
+])('start refuses missing effective Compose profile settings: %s', async (...keys) => {
+  const fixture = await sandbox();
+  await fixture.configure({ sourceComposeOmit: keys });
+  await fixture.reset();
+  const before = await fixture.readStateText();
+  const result = await fixture.cli(['start']);
+  expect(result.exitCode, result.output).toBe(1);
+  expect(result.output).toMatch(/profile|provider/i);
+  expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+  expect(await fixture.readStateText()).toBe(before);
+});
+
+test('provider preflight redacts secrets in Compose failures', async () => {
+  const fixture = await sandbox();
+  const secret = fixture.env.OR3_BASIC_AUTH_JWT_SECRET;
+  await fixture.configure({ failures: [{ match: 'config --format json', message: `fixture leaked ${secret}` }] });
+  await fixture.reset();
+  const result = await fixture.cli(['start']);
+  expect(result.exitCode).toBe(1);
+  expect(result.output).not.toContain(secret);
+  expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+});
+
+test('start does not require an existing application container', async () => {
+  const fixture = await sandbox();
+  await fixture.configure({ sourceContainerMissing: true });
+  const result = await fixture.cli(['start']);
+  expect(result.exitCode, result.output).toBe(0);
+});
+
+test('dashboard saved restart refuses a Compose provider override before recreation', async () => {
+  const fixture = await sandbox();
+  await fixture.configure({ sourceComposeOverrides: { NUXT_AUTH_PROVIDER: 'clerk' } });
+  await fixture.reset();
+  const command = new URL('../src/commands/lifecycle.ts', import.meta.url).href;
+  const script = `const { restartCommand } = await import(${JSON.stringify(command)}); try { await restartCommand(process.cwd(), {applySaved:true,deadline:performance.now()+30000}); } catch (error) { console.error(error.message); process.exitCode = 1; }`;
+  const child = Bun.spawn([process.execPath, '-e', script], { cwd: fixture.directory, env: { ...process.env, PATH: `${join(fixture.root, 'bin')}:${process.env.PATH}` }, stdout: 'pipe', stderr: 'pipe' });
+  const [stdout, stderr, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+  expect(exitCode, stdout + stderr).toBe(1);
+  expect(stderr).toMatch(/profile|provider/i);
+  expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+});
+
+// The first inspection succeeds during restore preflight, then custody goes
+// missing before the safety snapshot. Its fallback must not initialize a new
+// vault or clear the operation, even though no target data was replaced.
+test.each(['restore', 'rollback'] as const)('%s retains its journal when vault custody disappears before the safety snapshot', async operation => {
+  const fixture = await sandbox();
+  const setup = await fixture.cli([operation === 'restore' ? 'backup' : 'update']);
+  expect(setup.exitCode, setup.output).toBe(0);
+  const [backup] = await fixture.backupIds();
+  await fixture.configure({ failures: [{ match: `volume inspect ${fixture.state.volumeName}-vault-key`, skip: 1, message: 'fixture custody volume missing' }] });
+  await fixture.reset();
+  const result = await fixture.cli(operation === 'restore' ? ['restore', backup!, '--yes'] : ['rollback', '--yes']);
+  expect(result.exitCode, result.output).toBe(1);
+  expect(result.output).toMatch(/vault.*custody/i);
+  expect(await fixture.traceText()).not.toMatch(/\bup -d\b/);
+  expect((await fixture.readState()).incompleteOperation?.operation).toBe(operation);
+});
+
+test.each(['update', 'restore', 'rollback', 'backup'] as const)('recover refuses missing vault custody before restarting an incomplete %s', async operation => {
+  const fixture = await sandbox();
+  const base = await fixture.readState();
+  await fixture.writeState({ ...base, incompleteOperation: { id: `missing-vault-${operation}`, operation, startedAt: base.updatedAt, message: 'fixture', phase: 'prepared', ...(operation === 'backup' ? { initialAppRunning: true } : {}) } });
+  const missingVolume = operation === 'backup' ? 'data' : 'key';
+  await fixture.configure({ failures: [{ match: `volume inspect ${fixture.state.volumeName}-vault-${missingVolume}`, message: 'fixture custody volume missing' }] });
+  await fixture.reset();
+  const result = await fixture.cli(['recover']);
+  expect(result.exitCode, result.output).toBe(1);
+  expect(result.output).toMatch(/vault.*custody/i);
+  expect(await fixture.traceText()).not.toMatch(/\bup -d\b|tar xzf/);
+  expect((await fixture.readState()).incompleteOperation?.id).toBe(`missing-vault-${operation}`);
+});
+
+test('recover refuses missing vault custody before replaying credential reset', async () => {
+  const fixture = await sandbox();
+  const base = await fixture.readState();
+  const originalEnv = await fixture.readEnvText();
+  const nextEnv = { ...parseEnv(originalEnv), OR3_BASIC_AUTH_BOOTSTRAP_EMAIL: 'owner@example.invalid', OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD: 'synthetic-owner-password', OR3_MANAGED_OWNER_EMAIL: 'owner@example.invalid', OR3_ADMIN_USERNAME: 'owner@example.invalid', OR3_ADMIN_PASSWORD: 'synthetic-admin-password' };
+  await fixture.writeState({ ...base, incompleteOperation: { id: 'missing-vault-credential-reset', operation: 'credentials-reset', startedAt: base.updatedAt, message: 'fixture', credentialReset: { nextEnv } } });
+  await fixture.configure({ failures: [{ match: `volume inspect ${fixture.state.volumeName}-vault-data`, message: 'fixture custody volume missing' }] });
+  await fixture.reset();
+  const result = await fixture.cli(['recover']);
+  expect(result.exitCode, result.output).toBe(1);
+  expect(result.output).toMatch(/vault.*custody/i);
+  expect(await fixture.readEnvText()).toBe(originalEnv);
+  expect(await fixture.traceText()).not.toMatch(/\bup -d\b|OR3_RESET_OWNER_PASSWORD/);
+  expect((await fixture.readState()).incompleteOperation?.id).toBe('missing-vault-credential-reset');
 });
 
 test('a failure while replacing the target restores the verified snapshot and keeps the journal for confirmation', async () => {

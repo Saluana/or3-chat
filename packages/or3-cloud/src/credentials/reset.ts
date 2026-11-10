@@ -1,12 +1,13 @@
 import { rm } from 'node:fs/promises';
+import { assertVaultVolumesExist } from '../backup/vault';
 import { join } from 'node:path';
 import type { ManagedState, Mode } from '../deployment/contracts';
-import { serializeEnv, withoutProvisioningCredentials } from '../deployment/env';
+import { assertLegacyManagedProfile, serializeEnv, withoutProvisioningCredentials } from '../deployment/env';
 import { deploymentPaths } from '../deployment/paths';
 import { composeProcessEnv, run } from '../runtime/command-runner';
 import { composeArgs } from '../runtime/compose';
 import { containerNodeCommand } from '../runtime/health';
-import { startProject, stopProject } from '../runtime/project';
+import { managedVaultEnabled, startProject, stopProject } from '../runtime/project';
 import { writeSecure } from '../util/fs';
 import { redact } from '../util/primitives';
 import { buildCredentialsResetScript, CREDENTIALS_VERIFY_SCRIPT } from './reset-script';
@@ -66,7 +67,9 @@ async function verifyCredentialsInsideContainer(directory: string, mode: Mode, v
 }
 
 export async function applyCredentialReset(directory: string, state: ManagedState, nextEnv: Record<string, string>) {
+  assertLegacyManagedProfile(nextEnv);
   const values = credentialResetValues(nextEnv);
+  if (managedVaultEnabled(directory, nextEnv)) await assertVaultVolumesExist(directory, state);
   const running = await run('docker', [...composeArgs(directory, state.mode, ['ps', '-q', 'or3'])], directory);
   if (!running.ok || !running.stdout.trim()) {
     // A process interruption may have written the operation journal before the
@@ -83,6 +86,7 @@ export async function applyCredentialReset(directory: string, state: ManagedStat
   // after rotation only expands the secret blast radius.
   await rm(initialCredentials, { force: true });
   await stopProject(directory, state.mode);
+  if (managedVaultEnabled(directory, runtimeEnv)) await assertVaultVolumesExist(directory, state);
   await startProject(directory, state.mode, runtimeEnv);
   await verifyCredentialsInsideContainer(directory, state.mode, values);
 }
