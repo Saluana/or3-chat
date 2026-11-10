@@ -67,7 +67,7 @@ describe('mounted thumbnail workspace consumers', () => {
         const preview = new Blob([new Uint8Array([255, 216, 255]), 'preview'], { type: 'image/jpeg' });
         files.meta.mockResolvedValue({ ...originMeta, mime_type: 'image/jpeg' });
         files.blob.mockResolvedValue(original);
-        vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue({ width: 400, height: 200, close: vi.fn() }));
+        vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue({ width: 1200, height: 600, close: vi.fn() }));
         vi.stubGlobal('OffscreenCanvas', class { getContext() { return { drawImage: vi.fn() }; } async convertToBlob() { return preview; } });
         vi.mocked(URL.createObjectURL).mockImplementation((blob) => blob === preview ? 'blob:small' : 'blob:original');
         const wrapper = mount(ChatMessage, {
