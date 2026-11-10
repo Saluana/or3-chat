@@ -1,4 +1,5 @@
 import { computed, onBeforeUnmount, reactive, ref, watch, type Ref } from 'vue';
+import { resizePreview } from '~/utils/files/resizePreview';
 import { parseHashes } from '~/utils/files/attachments';
 import { getFileBlob, getFileMeta } from '~/db/files';
 import {
@@ -56,8 +57,7 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
     }
 
     const thumbUrlCache = useThumbnailUrlCache({ graceMs: 30000 });
-    const retainThumb = thumbUrlCache.retain;
-    const releaseThumb = thumbUrlCache.release;
+    const cacheKey = (hash: string) => message.value.role === 'assistant' ? hash : `attachment-thumb:${hash}`;
 
     const expanded = ref<boolean>(message.value._expanded === true);
     watch(expanded, (v) => {
@@ -69,9 +69,9 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
         expanded.value = !expanded.value;
     }
 
-    async function ensureThumb(hash: string, owner: symbol) {
+    async function ensureThumb(hash: string, owner: symbol, key: string) {
         const generation = getWorkspaceGeneration();
-        const current = () => isComponentActive && generation === getWorkspaceGeneration() && currentHashes.get(hash) === owner;
+        const current = () => isComponentActive && generation === getWorkspaceGeneration() && currentHashes.get(hash)?.owner === owner;
         if (pdfMeta[hash]) return;
 
         const meta = await getFileMeta(hash).catch(() => undefined);
@@ -92,25 +92,21 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
         if (meta.name) imageNames[hash] = meta.name;
         if (thumbnails[hash] && thumbnails[hash].status === 'ready') return;
 
-        const cached = thumbUrlCache.get(hash);
+        const cached = thumbUrlCache.get(key);
         if (cached) {
             thumbnails[hash] = cached;
             return;
         }
         thumbnails[hash] = { status: 'loading' };
 
+        thumbUrlCache.setIntrinsicSize(key, meta.width, meta.height);
         try {
-            const state = await thumbUrlCache.ensure(hash, async () => {
+            const state = await thumbUrlCache.ensure(key, async (current, signal) => {
                 if (generation !== getWorkspaceGeneration()) return null;
                 const blob = await getFileBlob(hash);
                 if (generation !== getWorkspaceGeneration()) return null;
-                thumbUrlCache.setIntrinsicSize(
-                    hash,
-                    meta.width,
-                    meta.height
-                );
                 if (!blob) return null;
-                return blob;
+                return key === hash ? blob : resizePreview(blob, 160, current, undefined, signal);
             });
 
             if (!current()) return;
@@ -125,15 +121,16 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
         }
     }
 
-    const currentHashes = new Map<string, symbol>();
+    const currentHashes = new Map<string, { owner: symbol; key: string }>();
     let isComponentActive = true;
 
     function syncHashes(list: string[]) {
         const nextSet = new Set(list);
         for (const hash of currentHashes.keys()) {
-            if (nextSet.has(hash)) continue;
+            const existing = currentHashes.get(hash)!;
+            if (nextSet.has(hash) && existing.key === cacheKey(hash)) continue;
             currentHashes.delete(hash);
-            releaseThumb(hash);
+            thumbUrlCache.release(existing.key);
             delete thumbnails[hash];
             delete pdfMeta[hash];
             delete imageNames[hash];
@@ -141,16 +138,17 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
         for (const hash of nextSet) {
             if (currentHashes.has(hash)) continue;
             const owner = Symbol(hash);
-            currentHashes.set(hash, owner);
+            const key = cacheKey(hash);
+            currentHashes.set(hash, { owner, key });
             // Own the URL while loading, not only after its decode completes.
-            retainThumb(hash);
+            thumbUrlCache.retain(key);
             thumbnails[hash] = { status: 'loading' };
-            void ensureThumb(hash, owner);
+            void ensureThumb(hash, owner, key);
         }
     }
     // Assistant inline images all use this cache. User attachment rows own
     // only four previews; the expanded gallery loads the remaining files.
-    watch(thumbnailHashes, syncHashes, { immediate: true });
+    watch([thumbnailHashes, () => message.value.role], ([hashes]) => syncHashes(hashes), { immediate: true });
 
     const stopWorkspace = subscribeActiveWorkspaceDb(() => {
         for (const key of Object.keys(thumbnails)) delete thumbnails[key];
@@ -163,7 +161,7 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
     onBeforeUnmount(() => {
         stopWorkspace();
         isComponentActive = false;
-        for (const hash of currentHashes.keys()) releaseThumb(hash);
+        for (const { key } of currentHashes.values()) thumbUrlCache.release(key);
         currentHashes.clear();
     });
 

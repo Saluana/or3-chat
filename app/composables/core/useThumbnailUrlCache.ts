@@ -1,3 +1,4 @@
+import { withPreviewAdmission } from '~/utils/files/resizePreview';
 import { subscribeActiveWorkspaceDb } from '~/db/client';
 import {
     classifyFileBlob,
@@ -18,7 +19,7 @@ export interface ThumbIntrinsicSize {
 
 type GlobalThumbCache = {
     cache: Map<string, ThumbState>;
-    inflight: Map<string, Promise<void>>;
+    inflight: Map<string, { promise: Promise<void>; controller: AbortController }>;
     refCounts: Map<string, number>;
     cleanupTimers: Map<string, ReturnType<typeof setTimeout>>;
     intrinsicSizes: Map<string, ThumbIntrinsicSize>;
@@ -37,7 +38,7 @@ function getGlobalCache(graceMs: number): GlobalThumbCache {
     if (!g.__or3ThumbUrlCache) {
         g.__or3ThumbUrlCache = {
             cache: new Map<string, ThumbState>(),
-            inflight: new Map<string, Promise<void>>(),
+            inflight: new Map(),
             refCounts: new Map<string, number>(),
             cleanupTimers: new Map<string, ReturnType<typeof setTimeout>>(),
             intrinsicSizes: new Map<string, ThumbIntrinsicSize>(),
@@ -56,6 +57,7 @@ function getGlobalCache(graceMs: number): GlobalThumbCache {
             }
             shared.pendingUrls.clear();
             shared.cache.clear();
+            for (const task of shared.inflight.values()) task.controller.abort();
             shared.inflight.clear();
             shared.refCounts.clear();
             shared.cleanupTimers.clear();
@@ -133,6 +135,11 @@ export function useThumbnailUrlCache(opts: { graceMs?: number } = {}) {
         const prev = globalCache.refCounts.get(hash) || 0;
         if (prev <= 1) {
             globalCache.refCounts.set(hash, 0);
+            const task = globalCache.inflight.get(hash);
+            if (task) {
+                globalCache.inflight.delete(hash);
+                task.controller.abort();
+            }
             scheduleCleanup(hash);
         } else {
             globalCache.refCounts.set(hash, prev - 1);
@@ -165,17 +172,18 @@ export function useThumbnailUrlCache(opts: { graceMs?: number } = {}) {
 
     const ensure = async (
         hash: string,
-        loader: () => Promise<Blob | null | undefined>
+        loader: (current: () => boolean, signal: AbortSignal) => Promise<Blob | null | undefined>
     ): Promise<ThumbState | undefined> => {
         const epoch = globalCache.epoch;
-        const current = () => epoch === globalCache.epoch;
+        const controller = new AbortController();
+        const current = () => epoch === globalCache.epoch && !controller.signal.aborted;
         const cached = globalCache.cache.get(hash);
         if (cached) return cached;
 
         const inflight = globalCache.inflight.get(hash);
         if (inflight) {
-            await inflight;
-            return current() ? globalCache.cache.get(hash) : undefined;
+            await inflight.promise;
+            return current() && !inflight.controller.signal.aborted ? globalCache.cache.get(hash) : undefined;
         }
 
         const p = (async () => {
@@ -186,7 +194,7 @@ export function useThumbnailUrlCache(opts: { graceMs?: number } = {}) {
                 }
             };
             try {
-                const blob = await loader();
+                const blob = await loader(current, controller.signal);
                 if (!blob || !current()) return;
                 url = URL.createObjectURL(blob);
                 globalCache.pendingUrls.add(url);
@@ -197,7 +205,10 @@ export function useThumbnailUrlCache(opts: { graceMs?: number } = {}) {
                     globalCache.cache.set(hash, { status: 'error' });
                     return;
                 }
-                await decodeImage(url, blob);
+                const previewUrl = url;
+                await withPreviewAdmission(async () => {
+                    if (current()) await decodeImage(previewUrl, blob);
+                }, controller.signal);
                 if (!current()) { discardUrl(); return; }
                 globalCache.pendingUrls.delete(url);
                 const size = globalCache.intrinsicSizes.get(hash);
@@ -208,12 +219,12 @@ export function useThumbnailUrlCache(opts: { graceMs?: number } = {}) {
             }
         })();
 
-        globalCache.inflight.set(hash, p);
+        globalCache.inflight.set(hash, { promise: p, controller });
         await p;
         if (!current()) return undefined;
         // A discarded old load must not remove the next workspace's promise or
         // schedule cleanup against its current same-hash retention.
-        if (globalCache.inflight.get(hash) === p) {
+        if (globalCache.inflight.get(hash)?.promise === p) {
             globalCache.inflight.delete(hash);
             if ((globalCache.refCounts.get(hash) || 0) === 0) scheduleCleanup(hash);
         }

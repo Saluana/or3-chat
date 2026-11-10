@@ -80,6 +80,46 @@ describe('ImageViewer preview cache reuse', () => {
         return wrapper;
     }
 
+    it('keeps successive originals visible and evicts them after closing', async () => {
+        const revoked = vi.fn();
+        stubObjectUrl(vi.fn((blob: Blob) => `blob:${blob.size}`), revoked);
+        factory.getFileBlob.mockImplementation(async (hash: string) => new Blob([hash]));
+        const wrapper = await mountViewer(makeMeta('first'));
+        await flushPromises();
+        expect(wrapper.find('img').exists()).toBe(true);
+        await wrapper.setProps({ modelValue: false });
+        await wrapper.setProps({ modelValue: true, meta: makeMeta('second-image') });
+        await flushPromises();
+        expect(wrapper.get('img').attributes('src')).toBe('blob:12');
+        expect(revoked).toHaveBeenCalledWith('blob:5');
+        await wrapper.setProps({ modelValue: false });
+        const cache = (await import('~/composables/core/usePreviewCache')).useSharedPreviewCache();
+        await cache.ensure('third', async () => ({ url: 'blob:third' }));
+        expect(revoked).toHaveBeenCalledWith('blob:12');
+    });
+
+    it('releases pending replacements without evicting another viewer’s image', async () => {
+        const revoked = vi.fn();
+        stubObjectUrl(vi.fn((blob: Blob) => `blob:${blob.size}`), revoked);
+        let finish!: (blob: Blob) => void;
+        factory.getFileBlob.mockImplementation((hash: string) => hash === 'held'
+            ? new Promise<Blob>(resolve => { finish = resolve; })
+            : Promise.resolve(new Blob([hash])));
+        const first = await mountViewer(makeMeta('held'));
+        const second = await mountViewer(makeMeta('held'));
+        await flushPromises();
+        await first.setProps({ meta: makeMeta('replacement') });
+        await flushPromises();
+        finish(new Blob(['held']));
+        await flushPromises();
+        expect(second.get('img').attributes('src')).toBe('blob:4');
+        expect(revoked).not.toHaveBeenCalledWith('blob:4');
+        await second.setProps({ modelValue: false });
+        const cache = (await import('~/composables/core/usePreviewCache')).useSharedPreviewCache();
+        cache.evictIfNeeded();
+        expect(revoked).toHaveBeenCalledWith('blob:4');
+    });
+
     it('reuses cached previews when reopening with the same hash', async () => {
         const createObjectURL = vi.fn(() => 'blob://viewer');
         const revokeObjectURL = vi.fn();

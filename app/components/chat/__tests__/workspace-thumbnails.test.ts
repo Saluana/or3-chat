@@ -5,6 +5,7 @@ import { setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import { useMessageThumbnails } from '~/composables/chat/useMessageThumbnails';
 import { createMessageMediaPrefetchController } from '~/composables/chat/useMessageMediaPrefetch';
 import MessageAttachmentsGallery from '../MessageAttachmentsGallery.vue';
+import { resizePreview } from '~/utils/files/resizePreview';
 import ChatMessage from '../ChatMessage.vue';
 import PaletteImageThumb from '../../search/PaletteImageThumb.vue';
 
@@ -46,6 +47,39 @@ function mountHook() {
     return state;
 }
 describe('mounted thumbnail workspace consumers', () => {
+    it('keeps attachment and assistant inline image URLs distinct', async () => {
+        vi.mocked(URL.createObjectURL).mockReturnValueOnce('blob:attachment').mockReturnValueOnce('blob:inline');
+        const attachment = mountHook();
+        await vi.waitFor(() => expect(attachment.thumbnails[hash]?.status).toBe('ready'));
+        let inline!: ReturnType<typeof useMessageThumbnails>;
+        wrappers.push(mount(defineComponent({ setup() {
+            inline = useMessageThumbnails(ref({ role: 'assistant', file_hashes: [hash] }));
+            return () => h('div');
+        } })));
+        await vi.waitFor(() => expect(inline.thumbnails[hash]?.status).toBe('ready'));
+        expect(attachment.thumbnails[hash]).toMatchObject({ status: 'ready', url: 'blob:attachment' });
+        expect(inline.thumbnails[hash]).toMatchObject({ status: 'ready', url: 'blob:inline' });
+        expect(files.blob.mock.calls.map(call => call[0])).toEqual([hash, hash]);
+    });
+
+    it('renders an assistant attachment preview alongside its original inline image', async () => {
+        const original = new Blob([new Uint8Array([255, 216, 255]), 'original image bytes'.repeat(10)], { type: 'image/jpeg' });
+        const preview = new Blob(['RIFF', new Uint8Array([4, 0, 0, 0]), 'WEBP'], { type: 'image/webp' });
+        files.meta.mockResolvedValue({ ...originMeta, mime_type: 'image/jpeg' });
+        files.blob.mockResolvedValue(original);
+        vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue({ width: 400, height: 200, close: vi.fn() }));
+        vi.stubGlobal('OffscreenCanvas', class { getContext() { return { drawImage: vi.fn() }; } async convertToBlob() { return preview; } });
+        vi.mocked(URL.createObjectURL).mockImplementation((blob) => blob === preview ? 'blob:small' : 'blob:original');
+        const wrapper = mount(ChatMessage, {
+            props: { message: { id: 'assistant-image', role: 'assistant', _expanded: true,
+                text: `![file-hash:${hash}](data:image/gif;base64,R0lGODlhAQABAAAAACw=)`, file_hashes: [hash] } },
+            global: { stubs: { ThreadChildLinks: true, ProjectMessageContext: true } },
+        });
+        wrappers.push(wrapper);
+        await vi.waitFor(() => expect(wrapper.get('img[alt^="file-hash:"]').attributes('src')).toBe('blob:original'));
+        await vi.waitFor(() => expect(wrapper.get('.message-attachment-image').attributes('src')).toBe('blob:small'));
+    });
+
     it('hydrates a streaming inline image when its thumbnail becomes ready during a quiet throttle window', async () => {
         vi.useFakeTimers();
         let ready!: (meta: typeof originMeta) => void;
@@ -170,7 +204,7 @@ describe('mounted thumbnail workspace consumers', () => {
         const wrapper = mount(PaletteImageThumb, { props: { hash, alt: 'Synthetic retained palette image', fallbackIcon: 'image' } });
         wrappers.push(wrapper);
         prefetch ??= createPrefetch();
-        prefetch.updateRange([{ file_hashes: [hash] }], { startIndex: 0, endIndex: 0 });
+        prefetch.updateRange([{ role: 'assistant', file_hashes: [hash] }], { startIndex: 0, endIndex: 0 });
         await prefetch.whenIdle();
         await vi.waitFor(() => expect(wrapper.find('img').attributes('src')).toBe('blob:prefetch-palette-origin'));
         vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -294,6 +328,71 @@ describe('mounted thumbnail workspace consumers', () => {
         await flushPromises();
         expect(displayedUrl()).toBe('blob:consumer-recovered');
         expect(files.blob).toHaveBeenCalledOnce();
+    });
+
+    it.each([true, false])('cancels a queued gallery decode only when its last owner leaves (survivor: %s)', async survivor => {
+        const jpeg = new Blob([new Uint8Array([255, 216, 255]), 'image bytes'.repeat(30)], { type: 'image/jpeg' });
+        files.meta.mockResolvedValue({ ...originMeta, mime_type: 'image/jpeg' });
+        files.blob.mockResolvedValue(jpeg);
+        const releases: Array<(bitmap: ImageBitmap) => void> = [];
+        const bitmap = { width: 100, height: 100, close: vi.fn() } as unknown as ImageBitmap;
+        const decode = vi.fn(() => new Promise<ImageBitmap>(resolve => releases.push(resolve)));
+        vi.stubGlobal('createImageBitmap', decode);
+        const blockers = Array.from({ length: 3 }, () => resizePreview(jpeg, 160));
+        await vi.waitFor(() => expect(decode).toHaveBeenCalledTimes(3));
+        const first = mount(MessageAttachmentsGallery, { props: { hashes: [hash] } });
+        const second = mount(MessageAttachmentsGallery, { props: { hashes: [hash] } });
+        wrappers.push(first, second);
+        await vi.waitFor(() => expect(files.blob).toHaveBeenCalledOnce());
+        await flushPromises();
+        first.unmount();
+        if (!survivor) second.unmount();
+        releases.splice(0).forEach(resolve => resolve(bitmap));
+        await Promise.all(blockers);
+        await flushPromises();
+        if (survivor) {
+            await vi.waitFor(() => expect(decode).toHaveBeenCalledTimes(4));
+            releases.splice(0).forEach(resolve => resolve(bitmap));
+            await vi.waitFor(() => expect(second.find('img').exists()).toBe(true));
+        } else {
+            expect(decode).toHaveBeenCalledTimes(3);
+        }
+    });
+
+    it('keeps replacement gallery ownership when an old same-hash load finishes', async () => {
+        let finish!: (blob: Blob) => void;
+        files.blob.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+        const wrapper = mount(MessageAttachmentsGallery, { props: { hashes: [hash] } });
+        wrappers.push(wrapper);
+        await vi.waitFor(() => expect(files.blob).toHaveBeenCalledOnce());
+        await wrapper.setProps({ hashes: [] });
+        await wrapper.setProps({ hashes: [hash] });
+        await vi.waitFor(() => expect(wrapper.find('img').exists()).toBe(true));
+        const url = wrapper.get('img').attributes('src');
+        finish(raster());
+        await flushPromises();
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        try {
+            await vi.advanceTimersByTimeAsync(30_001);
+            expect(wrapper.get('img').attributes('src')).toBe(url);
+            expect(URL.revokeObjectURL).not.toHaveBeenCalledWith(url);
+        } finally { vi.useRealTimers(); }
+    });
+
+    // A removed request must not publish into a newly added instance of the same hash.
+    it('ignores a removed gallery metadata request after same-hash reentry', async () => {
+        let finish!: (meta: typeof originMeta) => void;
+        files.meta.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+        const wrapper = mount(MessageAttachmentsGallery, { props: { hashes: [hash] } });
+        wrappers.push(wrapper);
+        await vi.waitFor(() => expect(files.meta).toHaveBeenCalledOnce());
+        await wrapper.setProps({ hashes: [] });
+        await wrapper.setProps({ hashes: [hash] });
+        await vi.waitFor(() => expect(wrapper.find('img').exists()).toBe(true));
+        finish({ ...originMeta, kind: 'pdf', mime_type: 'application/pdf', name: 'stale.pdf' });
+        await flushPromises();
+        expect(wrapper.find('img').exists()).toBe(true);
+        expect(wrapper.text()).not.toContain('stale.pdf');
     });
 
     it('discards a held chat attachment download after a workspace switch', async () => {

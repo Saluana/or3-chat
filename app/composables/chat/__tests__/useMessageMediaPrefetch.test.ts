@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMessageMediaPrefetchController } from '../useMessageMediaPrefetch';
 import { setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
+import { useThumbnailUrlCache } from '~/composables/core/useThumbnailUrlCache';
 
 const controllers: ReturnType<typeof createMessageMediaPrefetchController>[] = [];
 function createController(options: Parameters<typeof createMessageMediaPrefetchController>[0]) {
@@ -22,9 +23,9 @@ function createCache() {
         get: vi.fn((hash: string) => states.get(hash)),
         ensure: vi.fn(async (
             hash: string,
-            loader: () => Promise<Blob | null | undefined>
+            loader: (current: () => boolean, signal: AbortSignal) => Promise<Blob | null | undefined>
         ) => {
-            const blob = await loader();
+            const blob = await loader(() => true, new AbortController().signal);
             if (blob) states.set(hash, { status: 'ready' });
             return states.get(hash);
         }),
@@ -35,6 +36,47 @@ function createCache() {
 }
 
 describe('message media prefetch controller', () => {
+    it('reloads a desired image when its sole-owner load was canceled during a range change', async () => {
+        const createUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:replacement');
+        const revokeUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+        const cache = useThumbnailUrlCache();
+        let finishOld!: (blob: Blob) => void;
+        const png = () => new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], { type: 'image/png' });
+        const loadBlob = vi.fn().mockImplementationOnce(() => new Promise<Blob>(resolve => { finishOld = resolve; })).mockImplementation(async () => png());
+        const controller = createController({ cache, loadMeta: async () => ({ kind: 'image' }), loadBlob });
+        const messages = [{ role: 'assistant', file_hashes: ['race-hash'] }];
+        try {
+            controller.updateRange(messages, { startIndex: 0, endIndex: 0 });
+            await vi.waitFor(() => expect(loadBlob).toHaveBeenCalledTimes(1));
+            controller.updateRange(messages, { startIndex: 0, endIndex: -1 });
+            controller.updateRange(messages, { startIndex: 0, endIndex: 0 });
+            await vi.waitFor(() => expect(cache.get('race-hash')?.url).toBe('blob:replacement'));
+            finishOld(png());
+            await controller.whenIdle();
+            expect(cache.get('race-hash')?.url).toBe('blob:replacement');
+            expect(loadBlob).toHaveBeenCalledTimes(2);
+            expect(revokeUrl).not.toHaveBeenCalledWith('blob:replacement');
+        } finally {
+            finishOld?.(png());
+            controller.dispose();
+            setActiveWorkspaceDb('prefetch-isolation-a');
+            createUrl.mockRestore();
+            revokeUrl.mockRestore();
+        }
+    });
+
+    it('prefetches distinct user thumbnail and assistant original variants', async () => {
+        const cache = createCache();
+        const controller = createController({ cache, loadMeta: async () => ({ kind: 'image' }),
+            loadBlob: async () => new Blob(['image'], { type: 'image/png' }) });
+        controller.updateRange([{ role: 'user', file_hashes: ['same'] }, { role: 'assistant', file_hashes: ['same'] }], { startIndex: 0, endIndex: 1 });
+        await controller.whenIdle();
+        expect(cache.states.has('attachment-thumb:same')).toBe(true);
+        expect(cache.states.has('same')).toBe(true);
+        controller.updateRange([{ role: 'user', file_hashes: ['same'] }], { startIndex: 0, endIndex: 0 });
+        expect(cache.release).toHaveBeenCalledWith('same');
+    });
+
     it.each(['user', 'assistant'] as const)('warms the visible images for a %s message', async role => {
         const cache = createCache();
         const controller = createController({ cache, loadMeta: async () => ({ kind: 'image' }),
@@ -42,7 +84,7 @@ describe('message media prefetch controller', () => {
         const hashes = Array.from({ length: 7 }, (_, index) => `hash-${index}`);
         controller.updateRange([{ role, file_hashes: hashes }], { startIndex: 0, endIndex: 0 });
         await controller.whenIdle();
-        expect(cache.ensure.mock.calls.map(call => call[0])).toEqual(role === 'assistant' ? hashes : hashes.slice(0, 4));
+        expect(cache.ensure.mock.calls.map(call => call[0])).toEqual(role === 'assistant' ? hashes : hashes.slice(0, 4).map(hash => `attachment-thumb:${hash}`));
     });
 
     // Virtual-range updates may repeat before the first metadata read finishes.
@@ -53,7 +95,7 @@ describe('message media prefetch controller', () => {
         const loadMeta = vi.fn(async () => { await gate; return { kind: 'image' }; });
         const controller = createController({ cache, loadMeta,
             loadBlob: async () => new Blob(['image'], { type: 'image/png' }) });
-        for (let i = 0; i < 10; i++) controller.updateRange([{ file_hashes: ['shared'] }], { startIndex: 0, endIndex: 0 });
+        for (let i = 0; i < 10; i++) controller.updateRange([{ role: 'assistant', file_hashes: ['shared'] }], { startIndex: 0, endIndex: 0 });
         release(); await controller.whenIdle();
         expect(loadMeta).toHaveBeenCalledOnce();
         expect(cache.ensure).toHaveBeenCalledOnce();
@@ -85,7 +127,7 @@ describe('message media prefetch controller', () => {
         expect(maxActive).toBe(4);
         expect(cache.ensure).toHaveBeenCalledTimes(12);
         expect(cache.setIntrinsicSize).toHaveBeenCalledWith(
-            'hash-0',
+            'attachment-thumb:hash-0',
             640,
             480
         );
@@ -99,8 +141,8 @@ describe('message media prefetch controller', () => {
             loadBlob: async () => new Blob(['image'], { type: 'image/png' }),
         });
         const messages = [
-            { file_hashes: ['shared', 'first'] },
-            { file_hashes: JSON.stringify(['shared', 'second']) },
+            { role: 'assistant', file_hashes: ['shared', 'first'] },
+            { role: 'assistant', file_hashes: JSON.stringify(['shared', 'second']) },
         ];
 
         controller.updateRange(messages, { startIndex: 0, endIndex: 1 });
@@ -136,13 +178,13 @@ describe('message media prefetch controller', () => {
         });
 
         controller.updateRange(
-            [{ file_hashes: ['old'] }, { file_hashes: ['never'] }],
+            [{ role: 'assistant', file_hashes: ['old'] }, { role: 'assistant', file_hashes: ['never'] }],
             { startIndex: 0, endIndex: 1 }
         );
         await Promise.resolve();
         controller.reset();
         controller.updateRange(
-            [{ file_hashes: ['fresh', 'pdf'] }],
+            [{ role: 'assistant', file_hashes: ['fresh', 'pdf'] }],
             { startIndex: 0, endIndex: 0 }
         );
         releaseFirst();
@@ -172,7 +214,7 @@ describe('message media prefetch controller', () => {
         });
 
         controller.updateRange(
-            [{ file_hashes: ['generic-png', 'svg-image'] }],
+            [{ role: 'assistant', file_hashes: ['generic-png', 'svg-image'] }],
             { startIndex: 0, endIndex: 0 }
         );
         await controller.whenIdle();
@@ -191,7 +233,7 @@ describe('message media prefetch controller', () => {
             .mockResolvedValue({ kind: 'image', width: 200, height: 300 });
         const loadBlob = vi.fn(async () => new Blob(['current-scope'], { type: 'image/png' }));
         const controller = createController({ cache, concurrency: 1, loadMeta, loadBlob });
-        const messages = [{ file_hashes: ['shared'] }];
+        const messages = [{ role: 'assistant', file_hashes: ['shared'] }];
         controller.updateRange(messages, { startIndex: 0, endIndex: 0 });
         await vi.waitFor(() => expect(loadMeta).toHaveBeenCalledOnce());
         setActiveWorkspaceDb('prefetch-isolation-b');
@@ -224,7 +266,7 @@ describe('message media prefetch controller', () => {
             loadBlob: async () =>
                 new Blob(['image'], { type: 'image/png' }),
         });
-        const messages = [{ file_hashes: ['shared'] }];
+        const messages = [{ role: 'assistant', file_hashes: ['shared'] }];
 
         controller.updateRange(messages, { startIndex: 0, endIndex: 0 });
         await Promise.resolve();
