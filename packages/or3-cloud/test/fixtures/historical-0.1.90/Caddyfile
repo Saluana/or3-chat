@@ -1,0 +1,22 @@
+{$OR3_PUBLIC_DOMAIN} {
+	# Security headers. Caddy 308-redirects plain HTTP to HTTPS before this
+	# site handler runs, so Strict-Transport-Security is only ever emitted on
+	# HTTPS responses (it is meaningless on plain HTTP).
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		# Nuxt needs same-origin scripts plus inline hydration styles/scripts. The
+		# browser exchanges OpenRouter PKCE authorization codes directly with the
+		# OpenRouter API, so that origin must remain available to connect-src.
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://openrouter.ai; media-src 'self' blob:; worker-src 'self' blob:; frame-src 'none'; upgrade-insecure-requests"
+	}
+
+	encode zstd gzip
+	# Caddy recognizes text/event-stream and flushes it immediately. Keeping the
+	# default stream behavior also lets client disconnects cancel foreground
+	# provider requests instead of leaving a paid generation running.
+	reverse_proxy or3:3000
+}
