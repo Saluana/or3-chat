@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { assertExistingVaultCustody } from './vault';
+import { readAuthenticatedBackupConfig } from './config';
 import { assertSupportedBackupProfile, validateCanonicalBackupReferences } from './references';
 import {
   assertRestorableManagedAssets,
@@ -155,7 +156,8 @@ export async function restoreBackupData(
 ) {
   const manifest = await readManifest(backupPath, directory);
   assertRestorableManagedAssets(manifest);
-  const backupEnv = parseEnv(await readText(join(backupPath, 'config.env')));
+  const backupConfig = await readAuthenticatedBackupConfig(backupPath, manifest);
+  const backupEnv = parseEnv(backupConfig);
   if (backupEnv.OR3_VERSION !== manifest.appVersion || backupEnv.OR3_IMAGE !== manifest.image) {
     throw new Error(`Backup ${manifest.backupId} configuration does not match its manifest.`);
   }
@@ -167,7 +169,7 @@ export async function restoreBackupData(
     throw new Error('S3 restore requires a journaled startup or a reference-only safety snapshot.');
   }
   if (manifest.imageDigest) await requireImageDigest(manifest.image, manifest.imageDigest, `Backup ${manifest.backupId}`);
-  await assertExistingVaultCustody(directory, state, manifest, backupPath, backupEnv);
+  await assertExistingVaultCustody(directory, state, manifest, backupPath, backupConfig);
   await validateVolumeArchive(directory, state.mode, env, backupPath, backupEnv.OR3_STORAGE_FS_ROOT);
   if (manifest.schemaVersion === 2 && manifest.remote.kind === 's3-copy-v1') {
     const result = await checkRemoteCopyTarget(directory, manifest, env, backupPath, manifest.remote);

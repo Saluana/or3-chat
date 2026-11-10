@@ -1,0 +1,76 @@
+name: ${OR3_COMPOSE_PROJECT}
+
+services:
+  or3:
+    image: ${OR3_IMAGE}
+    labels:
+      io.or3.cloud.deployment-id: ${OR3_DEPLOYMENT_ID}
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      # Nuxt only applies nested runtime-config overrides from NUXT_* names.
+      # Bridge the managed OR3 setting so Caddy's sanitized forwarding headers
+      # are trusted and HTTPS enforcement cannot redirect back to itself.
+      NUXT_SECURITY_PROXY_TRUST_PROXY: "${OR3_TRUST_PROXY:-false}"
+      OR3_BASIC_AUTH_DB_PATH: /data/auth.sqlite
+      OR3_SQLITE_DB_PATH: /data/sync.sqlite
+      OR3_STORAGE_FS_ROOT: /data/storage
+      OR3_EXTENSIONS_ROOT: /data/extensions
+      OR3_ADMIN_DATA_DIR: /data/admin
+    ports:
+      - "127.0.0.1:${OR3_PORT}:3000"
+    volumes:
+      - or3-data:/data
+    restart: unless-stopped
+    # Leave enough time for Nuxt to close SSE responses and upstream provider
+    # connections before Docker sends SIGKILL.
+    stop_grace_period: 25s
+    # Container hardening: the runtime image already runs as a non-root user and
+    # listens on port 3000 (no privileged ports), so all capabilities are
+    # dropped and the root filesystem is read-only. Persistent state lives on
+    # the or3-data volume (/data: SQLite, storage, admin data, extensions);
+    # scratch space (SQLite WAL, H3 multipart uploads, Nuxt server caches)
+    # is a 256m tmpfs at /tmp. Phase-5 smokes must re-verify uploads and
+    # plugin installs against this read-only profile.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      # Deep health, mirroring the CLI's HEALTH_SCRIPT: exit non-zero unless
+      # the response is HTTP ok AND the parsed body status is exactly 'ok'.
+      # A degraded provider (e.g. sync/storage/auth down) reports HTTP 200
+      # with status 'degraded' and is therefore marked unhealthy. Docker
+      # Compose uses that state for startup dependencies and `or3 status`
+      # reports it, but Docker does not restart a running container solely
+      # because a healthcheck fails; `restart: unless-stopped` covers process
+      # exits only. Operators should run `or3 doctor`/`or3 restart` for a
+      # persistent degraded state.
+      test:
+        - CMD-SHELL
+        - >-
+          if [ -x /nodejs/bin/node ]; then
+            exec /nodejs/bin/node -e "const fs=require('node:fs');try{fs.accessSync('/data',fs.constants.R_OK|fs.constants.W_OK);for(const p of [process.env.OR3_BASIC_AUTH_DB_PATH,process.env.OR3_SQLITE_DB_PATH].filter(Boolean)){const fd=fs.openSync(p,'r+');fs.closeSync(fd)}}catch{process.exit(1)}fetch('http://127.0.0.1:3000/api/health?deep=true').then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok||b.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))";
+          elif [ -x /usr/local/bin/node ]; then
+            exec /usr/local/bin/node -e "const fs=require('node:fs');try{fs.accessSync('/data',fs.constants.R_OK|fs.constants.W_OK);for(const p of [process.env.OR3_BASIC_AUTH_DB_PATH,process.env.OR3_SQLITE_DB_PATH].filter(Boolean)){const fd=fs.openSync(p,'r+');fs.closeSync(fd)}}catch{process.exit(1)}fetch('http://127.0.0.1:3000/api/health?deep=true').then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok||b.status!=='ok')process.exit(1)}).catch(()=>process.exit(1))";
+          else exit 127; fi
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  or3-data:
+    name: ${OR3_VOLUME_NAME}
+    labels:
+      io.or3.cloud.deployment-id: ${OR3_DEPLOYMENT_ID}

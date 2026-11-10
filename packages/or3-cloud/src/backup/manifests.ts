@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { lstat, readdir } from 'node:fs/promises';
 import { isAbsolute, join, resolve } from 'node:path';
 import { verifiedManagedAssetContents } from '../deployment/assets';
@@ -17,6 +17,7 @@ import { lifecycleFaults } from '../lifecycle-faults';
 import { fileExists, readText, sha256File, writeSecure } from '../util/fs';
 import { remoteSource } from './remote';
 import { backupHasVaultCoverage } from './vault';
+import { readAuthenticatedBackupConfig } from './config';
 
 export const BACKUP_ID_PATTERN = /^backup-[0-9A-Za-z-]+$/;
 
@@ -167,9 +168,8 @@ export async function inspectBackupEntry(backupsRoot: string, entry: string, dir
     for (const file of ['data.tgz', 'config.env', 'manifest.json', 'manifest.auth', ...(manifest.vaultSha256 ? ['vault.backup'] : []), ...(manifest.schemaVersion === 2 ? [manifest.remote.file] : [])]) {
       bytes += (await lstat(join(path, file))).size;
     }
-    const savedConfig = await readText(join(path, 'config.env'));
-    if (createHash('sha256').update(savedConfig).digest('hex') !== manifest.configSha256) throw new Error(`Backup configuration changed during inventory for ${manifest.backupId}.`);
-    const recoveryArtifactsComplete = Boolean(manifest.managedAssetSha256) && backupHasVaultCoverage(manifest, parseEnv(savedConfig), savedConfig);
+    const savedConfig = await readAuthenticatedBackupConfig(path, manifest);
+    const recoveryArtifactsComplete = Boolean(manifest.managedAssetSha256) && await backupHasVaultCoverage(manifest, savedConfig, path);
     return {
       kind: 'verified',
       backup: {
@@ -319,11 +319,7 @@ export async function readManifest(backupPath: string, authenticatedForDirectory
   }
   const actual = await sha256File(join(backupPath, 'data.tgz'));
   if (actual !== manifest.dataSha256) throw new Error(`Backup checksum mismatch for ${manifest.backupId}. Expected ${manifest.dataSha256}, got ${actual}.`);
-  if (manifest.configSha256) {
-    const configActual = await sha256File(join(backupPath, 'config.env'));
-    if (configActual !== manifest.configSha256) throw new Error(`Backup configuration checksum mismatch for ${manifest.backupId}.`);
-  }
-  const config = parseEnv(await readText(join(backupPath, 'config.env')));
+  const config = parseEnv(await readAuthenticatedBackupConfig(backupPath, manifest));
   const storage = (config.NUXT_PUBLIC_STORAGE_PROVIDER ?? '').trim().toLowerCase();
   if (manifest.schemaVersion === 1 && storage === 's3') {
     throw new Error(`Invalid backup manifest for ${manifest.backupId}: schema-1 S3 snapshots do not contain recoverable remote objects.`);
