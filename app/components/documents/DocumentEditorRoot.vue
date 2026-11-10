@@ -329,6 +329,7 @@ import { getSchema, isTextSelection } from '@tiptap/core';
 import type { BubbleMenuPluginProps } from '@tiptap/extension-bubble-menu';
 import { downloadBlob } from '~/utils/download-blob';
 import { MAX_SYNC_PAYLOAD_BYTES, sanitizePayloadForSync } from '~~/shared/sync/sanitize';
+import { isSyncPayloadTooLarge } from '~/core/sync/sync-payload-size';
 import { Editor, EditorContent, type JSONContent } from '@tiptap/vue-3';
 import { Selection } from '@tiptap/pm/state';
 import { BubbleMenu } from '@tiptap/vue-3/menus';
@@ -514,7 +515,7 @@ watch([documentId, editorDb], ([id, db]) => {
     tooLargeToSync.value = false;
     itemSubscription = liveQuery(() => db.posts.get(id)).subscribe({ next: row => {
         if (didUnmount || editorDb.value !== db || props.documentId !== id) return;
-        tooLargeToSync.value = !!row && new TextEncoder().encode(JSON.stringify(sanitizePayloadForSync('posts', row, 'put'))).byteLength > MAX_SYNC_PAYLOAD_BYTES;
+        tooLargeToSync.value = !!row && isSyncPayloadTooLarge(JSON.stringify(sanitizePayloadForSync('posts', row, 'put')), MAX_SYNC_PAYLOAD_BYTES);
         const previous = availability.value;
         availability.value = row?.postType === 'doc' && isVisibleWorkspaceItem(row) ? 'active'
             : row?.postType === 'doc' && !row.deleted && workspaceItemMetadata(row.meta)?.trashed_at != null ? 'trashed' : 'unavailable';
