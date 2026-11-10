@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { lstat, open } from 'node:fs/promises';
+import { lstat, open, readFile } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import type { BackupManifest, ManagedState } from '../deployment/contracts';
 import { imageAtDigest } from '../deployment/identity';
@@ -52,9 +52,30 @@ export async function readAuthenticatedVaultId(path: string, expectedSha256: str
 }
 
 /** Only archived configuration can establish that custody was not required. */
-export function backupHasVaultCoverage(manifest: BackupManifest, env: Record<string, string>) {
+export function backupHasVaultCoverage(manifest: BackupManifest, env: Record<string, string>, archivedConfig?: string) {
   if (Object.keys(env).some((key) => /^(?:RUNTIME_CONFIG|NUXT_SECRETS|NITRO_ENV_(?:PREFIX|EXPANSION)|NITRO_SECRETS(?:_.*)?)$/.test(key))) return false;
   const provider = env.NUXT_SECRETS_PROVIDER;
+  // The published 0.1.90 binary predates vault support. Its digest and source
+  // are recorded in @or3/cloud@0.1.90 (source 8cc6e0d3). Do not generalize this
+  // exception to version ranges or similarly named, locally rebuilt images.
+  if (provider === undefined && manifest.appVersion === '0.1.90'
+    && manifest.image === 'ghcr.io/saluana/or3-chat:0.1.90'
+    && manifest.imageDigest === 'sha256:d50b70d6522574798f1a3081894b5bf8fe9eca7aa5f183ad5a562de2e4f41c12'
+    && archivedConfig !== undefined
+    && createHash('sha256').update(archivedConfig).digest('hex') === manifest.configSha256) {
+    // parseEnv intentionally tolerates malformed input and duplicate keys.
+    // Absence is proof only for the simple, unique assignments written by the
+    // historical managed CLI; reject ambiguous Compose syntax or expansion.
+    const keys = new Set<string>();
+    for (const line of archivedConfig.split(/\r?\n/)) {
+      const text = line.trim();
+      if (!text || text.startsWith('#')) continue;
+      const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(text);
+      if (!match || keys.has(match[1]!) || !/^(?:'[^'\r\n]*'|"[^"$\\\r\n]*"|[^'"$\\\s]*)$/.test(match[2]!)) return false;
+      keys.add(match[1]!);
+    }
+    return !keys.has('NUXT_SECRETS_PROVIDER');
+  }
   return provider === '' || ((provider === undefined || provider === 'or3-secrets') && Boolean(manifest.vaultSha256));
 }
 
@@ -72,7 +93,8 @@ export async function assertVaultVolumesExist(directory: string, state: ManagedS
 // already existing, intact vault. In particular Docker must not create absent
 // volumes while probing, since an empty vault would lose the saved secrets.
 export async function assertExistingVaultCustody(directory: string, state: ManagedState, manifest: BackupManifest, backupPath: string, backupEnv: Record<string, string>) {
-  if (!backupHasVaultCoverage(manifest, backupEnv)) throw new Error('Backup lacks the vault archive required by its saved configuration. Preserve it and use a separately reviewed recovery procedure.');
+  const archivedConfig = await readFile(join(backupPath, 'config.env'), 'utf8');
+  if (!backupHasVaultCoverage(manifest, backupEnv, archivedConfig)) throw new Error('Backup lacks the vault archive required by its saved configuration. Preserve it and use a separately reviewed recovery procedure.');
   if (!manifest.vaultSha256) return;
   const expectedVaultId = await readAuthenticatedVaultId(join(backupPath, 'vault.backup'), manifest.vaultSha256);
   const dataVolume = `${state.volumeName}-vault-data`;
