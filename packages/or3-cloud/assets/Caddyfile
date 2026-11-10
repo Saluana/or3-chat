@@ -3,6 +3,8 @@
 	# site handler runs, so Strict-Transport-Security is only ever emitted on
 	# HTTPS responses (it is meaningless on plain HTTP).
 	header {
+		# Apply after upstream headers to avoid duplicate security-policy values.
+		defer
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
@@ -15,6 +17,7 @@
 		not path /or3/portable-frame /streamsaver/mitm.html
 	}
 	header @hostDocument {
+		defer
 		X-Frame-Options "DENY"
 		# Nuxt needs same-origin scripts plus inline hydration styles/scripts. The
 		# browser exchanges OpenRouter PKCE authorization codes directly with the
@@ -25,12 +28,13 @@
 	# Preserve the portable route's hash-authorized, opaque-origin sandbox CSP.
 	# Applying the app policy here would block its worker or weaken containment.
 	@portableFrame path /or3/portable-frame
-	header @portableFrame X-Frame-Options "SAMEORIGIN"
+	header @portableFrame >X-Frame-Options "SAMEORIGIN"
 
 	# The fallback streaming exporter uses this bundled same-origin bridge to
 	# register its download service worker; it cannot use an opaque origin.
 	@downloadBridge path /streamsaver/mitm.html
 	header @downloadBridge {
+		defer
 		X-Frame-Options "SAMEORIGIN"
 		Content-Security-Policy "default-src 'none'; script-src 'unsafe-inline'; connect-src 'self'; worker-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'"
 	}
