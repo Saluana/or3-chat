@@ -296,6 +296,16 @@ function toggleSelect(hash: string) {
     emit('toggle-select', hash);
 }
 
+function imageRatio(meta: FileMeta): string | undefined {
+    const { width, height } = meta;
+    if (
+        typeof width !== 'number' || typeof height !== 'number' ||
+        !Number.isFinite(width) || !Number.isFinite(height) ||
+        width <= 0 || height <= 0
+    ) return;
+    return `${width} / ${height}`;
+}
+
 function formatBytes(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
@@ -373,7 +383,7 @@ defineExpose({ ensureUrl });
                 "
             >
                 <div
-                    class="group relative overflow-hidden bg-[var(--md-surface-container)]"
+                    class="group relative min-h-40 overflow-hidden bg-[var(--md-surface-container)]"
                 >
                     <UButton
                         v-if="props.selectionMode"
@@ -411,6 +421,10 @@ defineExpose({ ensureUrl });
                             class="w-full h-auto transition-transform duration-200 group-hover:scale-[1.02] group-focus-within:scale-[1.02]"
                             :src="state.urlByHash[m.hash]"
                             :alt="m.name"
+                            :width="imageRatio(m) ? m.width : undefined"
+                            :height="imageRatio(m) ? m.height : undefined"
+                            :style="{ aspectRatio: imageRatio(m) ? `auto ${imageRatio(m)}` : undefined }"
+                            decoding="async"
                             loading="lazy"
                         />
                     </button>
@@ -418,6 +432,7 @@ defineExpose({ ensureUrl });
                         v-else
                         type="button"
                         class="flex min-h-40 w-full items-center justify-center bg-(--md-surface-container) text-xs opacity-80 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-(--md-primary)"
+                        :style="{ aspectRatio: imageRatio(m) }"
                         :aria-label="`View ${m.name}`"
                         @click="view(m)"
                     >
