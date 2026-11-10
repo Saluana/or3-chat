@@ -169,7 +169,7 @@ export async function inspectBackupEntry(backupsRoot: string, entry: string, dir
     }
     const savedConfig = await readText(join(path, 'config.env'));
     if (createHash('sha256').update(savedConfig).digest('hex') !== manifest.configSha256) throw new Error(`Backup configuration changed during inventory for ${manifest.backupId}.`);
-    const recoveryArtifactsComplete = Boolean(manifest.managedAssetSha256) && backupHasVaultCoverage(manifest, parseEnv(savedConfig));
+    const recoveryArtifactsComplete = Boolean(manifest.managedAssetSha256) && backupHasVaultCoverage(manifest, parseEnv(savedConfig), savedConfig);
     return {
       kind: 'verified',
       backup: {

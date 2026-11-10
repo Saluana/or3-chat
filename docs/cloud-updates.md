@@ -560,6 +560,14 @@ npx @or3/cloud recover --restore --yes   # return to the recorded snapshot (disc
   changed, use the supported backup/restore flow and read the warnings before
   confirming a destructive restore.
 
+The published 0.1.90 image predates vault support. Its backups may omit the
+secrets-provider setting and vault archive. Recovery recognizes only that exact
+published image digest, with an authenticated configuration containing unique,
+unambiguous assignments and no runtime secrets overrides. Rebuilt images,
+other releases with an absent setting, and ambiguous configurations still
+require vault coverage. Rollback preserves any vault custody volumes created
+by the newer release.
+
 **Never** run `docker compose down --volumes` or delete the application volume
 as an update or troubleshooting step. That deletes the authentication database,
 SQLite data, and uploaded files.
