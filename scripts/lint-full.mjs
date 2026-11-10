@@ -9,6 +9,9 @@ import { dirname, join } from 'node:path';
 const scopes = [
     'app', 'server', 'shared', 'audit-evidence', 'modules',
     'packages/or3-cloud', 'packages/hosted-billing', 'packages/cloud-waitlist',
+    'packages/plugin-sdk/src/[a-f]*.ts', 'packages/plugin-sdk/src/[g-m]*.ts',
+    'packages/plugin-sdk/src/[n-s]*.ts', 'packages/plugin-sdk/src/[t-z]*.ts',
+    'packages/plugin-sdk/src/cli',
     'config.or3.ts', 'config.or3cloud.ts',
 ];
 const require = createRequire(import.meta.url);

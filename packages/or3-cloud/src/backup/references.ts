@@ -16,8 +16,8 @@ export function assertBackupOperatorMount(directory: string, enabled: boolean, c
   const actual = actualMounts.filter(mount => mount.Destination === '/run/or3-operator');
   if (!enabled && configured.length === 0 && actual.length === 0) return;
   if (!enabled || configured.length !== 1 || actual.length !== 1
-    || configured[0]?.type !== 'bind' || configured[0]?.source !== expected || configured[0]?.read_only !== true
-    || actual[0]?.Type !== 'bind' || actual[0]?.Source !== expected || actual[0]?.RW !== false) {
+    || configured.at(0)?.type !== 'bind' || configured.at(0)?.source !== expected || configured.at(0)?.read_only !== true
+    || actual.at(0)?.Type !== 'bind' || actual.at(0)?.Source !== expected || actual.at(0)?.RW !== false) {
     throw new Error('Backup source operator mount does not match the managed read-only socket.');
   }
 }
@@ -180,7 +180,7 @@ export async function assertBackupSourceProfile(directory: string, state: Manage
       const typed = mountsToCheck as Array<Record<string, unknown>>;
       for (const [target, volume] of required) {
         const matches = typed.filter((mount) => mount.Destination === target);
-        if (matches.length !== 1 || matches[0]?.Type !== 'volume' || matches[0]?.Name !== volume
+        if (matches.length !== 1 || matches.at(0)?.Type !== 'volume' || matches.at(0)?.Name !== volume
           || typed.some((mount) => typeof mount.Destination === 'string' && mount.Destination.startsWith(`${target}/`))) throw new Error('Backup source container vault mounts do not match managed custody.');
       }
     };
