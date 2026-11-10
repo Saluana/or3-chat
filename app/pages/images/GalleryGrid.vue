@@ -462,7 +462,7 @@ defineExpose({ ensureUrl });
                 "
             >
                 <div
-                    class="group relative min-h-40 overflow-hidden bg-[var(--md-surface-container)]"
+                    class="group relative overflow-hidden bg-[var(--md-surface-container)]"
                 >
                     <UButton
                         v-if="props.selectionMode"

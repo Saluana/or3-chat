@@ -134,11 +134,10 @@ jobs:
       - name: Install optional billing dependency for source lint
         run: bun install --cwd packages/hosted-billing --frozen-lockfile
       - run: bun run lint
-        # Typed lint retains several Nuxt TypeScript programs. Bound its heap
-        # above Node's ~4 GiB default, leaving room on the 7 GiB runner for
-        # native allocations and the OS. Keep all rules and warnings enforced.
+        # Sequential scopes release TypeScript programs between processes.
+        # Keep each below the runner's memory limit with all rules enforced.
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          NODE_OPTIONS: --max-old-space-size=4096
 
   performance:
     name: Strict performance budgets

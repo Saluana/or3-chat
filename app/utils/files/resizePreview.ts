@@ -73,7 +73,7 @@ export async function resizePreview(blob: Blob, maxWidth: number, current: () =>
                 const context = canvas.getContext('2d');
                 if (!context) return blob;
                 context.drawImage(bitmap, 0, 0, maxWidth, height);
-                preview = await canvas.convertToBlob({ type: 'image/webp', quality: 0.82 });
+                preview = await canvas.convertToBlob({ type: blob.type, quality: 0.82 });
             } else {
                 if (typeof document === 'undefined') return blob;
                 const canvas = document.createElement('canvas');
@@ -82,9 +82,9 @@ export async function resizePreview(blob: Blob, maxWidth: number, current: () =>
                 const context = canvas.getContext('2d');
                 if (!context) return blob;
                 context.drawImage(bitmap, 0, 0, maxWidth, height);
-                preview = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', 0.82));
+                preview = await new Promise(resolve => canvas.toBlob(resolve, blob.type, 0.82));
             }
-            return preview && preview.size < blob.size && (preview.type === 'image/webp' || preview.type === 'image/jpeg') ? preview : blob;
+            return preview && preview.size < blob.size && (preview.type === 'image/webp' || preview.type === 'image/jpeg' || preview.type === 'image/png') ? preview : blob;
         } catch {
             return blob;
         } finally {

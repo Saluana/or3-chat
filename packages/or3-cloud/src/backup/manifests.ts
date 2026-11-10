@@ -300,10 +300,12 @@ export async function readManifest(backupPath: string, authenticatedForDirectory
   const manifestContents = await readText(join(backupPath, 'manifest.json'));
   if (authenticatedForDirectory) await assertBackupAuthentication(authenticatedForDirectory, backupPath, manifestContents);
   const manifest = JSON.parse(manifestContents) as BackupManifest;
+  // Authentication proves provenance, not that parsed fields satisfy their declared types.
+  const unvalidated = manifest as { schemaVersion: number; snapshotKind?: string; storage?: string };
   if (
-    (manifest.schemaVersion !== 1 && manifest.schemaVersion !== 2) ||
+    (unvalidated.schemaVersion !== 1 && unvalidated.schemaVersion !== 2) ||
     !BACKUP_ID_PATTERN.test(manifest.backupId) ||
-    (manifest.snapshotKind !== undefined && manifest.snapshotKind !== 'full' && manifest.snapshotKind !== 'safety') ||
+    (unvalidated.snapshotKind !== undefined && unvalidated.snapshotKind !== 'full' && unvalidated.snapshotKind !== 'safety') ||
     !Number.isFinite(Date.parse(manifest.createdAt)) ||
     !isVersion(manifest.appVersion) ||
     !manifest.image ||
@@ -327,8 +329,10 @@ export async function readManifest(backupPath: string, authenticatedForDirectory
     throw new Error(`Invalid backup manifest for ${manifest.backupId}: schema-1 S3 snapshots do not contain recoverable remote objects.`);
   }
   if (manifest.schemaVersion === 2) {
-    const remote = manifest.remote;
-    if (manifest.storage !== 's3' || storage !== 's3' || !remote ||
+    const remote = manifest.remote as (Omit<typeof manifest.remote, 'kind' | 'file' | 'source'> & {
+      kind: string; file: string; source?: typeof manifest.remote.source;
+    }) | undefined;
+    if (unvalidated.storage !== 's3' || storage !== 's3' || !remote ||
         !(remote.kind === 's3-copy-v1' && remote.file === 'remote-objects.tar' || remote.kind === 's3-reference-v1' && remote.file === 'remote-inventory.json') ||
         !/^[a-f0-9]{64}$/.test(remote.sha256) || !/^[a-f0-9]{64}$/.test(remote.inventorySha256) ||
         !Number.isSafeInteger(remote.bytes) || remote.bytes < 1 || !Number.isSafeInteger(remote.objectCount) || remote.objectCount < 0 || remote.objectCount > 100_000 ||

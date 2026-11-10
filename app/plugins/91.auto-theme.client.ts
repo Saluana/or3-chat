@@ -344,13 +344,6 @@ export default defineNuxtPlugin((nuxtApp) => {
     }
     const stops = new WeakMap<HTMLElement, WatchStopHandle>();
     const latest = new WeakMap<HTMLElement, { binding: any; vnode: VNode }>();
-    const resolutions = new WeakMap<HTMLElement, {
-        target: HTMLElement;
-        resolver: object;
-        version: number;
-        key: string;
-        props: Record<string, unknown>;
-    }>();
 
     /**
      * Apply theme directive logic
@@ -411,18 +404,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 return;
             }
 
-            // Attribute-dependent selectors must always inspect the live DOM. Theme
-            // decorations themselves can change those attributes after resolution.
-            const key = JSON.stringify([componentName, context, identifier, currentTheme, isNuxtUI]);
-            const version = themePlugin.resolversVersion.value;
-            const previous = resolutions.get(el);
-            const cacheable = !resolver.hasElementDependencies(componentName);
-            const props = cacheable && previous?.target === targetEl &&
-                previous.resolver === resolver && previous.version === version && previous.key === key
-                ? previous.props
-                : resolver.resolve(params).props;
-            if (cacheable) resolutions.set(el, { target: targetEl, resolver, version, key, props });
-            else resolutions.delete(el);
+            const props = resolver.resolve(params).props;
 
             applyOverrides(targetEl, vnode, props, identifier);
 
@@ -472,7 +454,6 @@ export default defineNuxtPlugin((nuxtApp) => {
             stops.get(el)?.();
             stops.delete(el);
             latest.delete(el);
-            resolutions.delete(el);
             lastAppliedResolution.delete(el);
             restoreDomTheme(el);
             // Clean up data attributes

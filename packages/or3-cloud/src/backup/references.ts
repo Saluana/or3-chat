@@ -1,6 +1,6 @@
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import type { ManagedState } from '../deployment/contracts';
-import { managedProviderProfile } from '../deployment/env';
+import { dashboardUpdatesEnabled, managedProviderProfile } from '../deployment/env';
 import { assertCapturedComposeMounts, assertCapturedHostMounts, assertSafeComposeBinding, composeArgs, parseComposeConfig, resolvedComposeConfig } from '../runtime/compose';
 import { run } from '../runtime/command-runner';
 import { managedVaultEnabled } from '../runtime/project';
@@ -8,6 +8,28 @@ import { withBackupHelper } from './helper';
 
 const INSPECTOR = '/app/scripts/docker/backup-inspect.mjs';
 const NODE = 'if [ -x /nodejs/bin/node ]; then exec /nodejs/bin/node "$@"; else exec node "$@"; fi';
+
+/** The dashboard socket is the only supported bind mount in the application. */
+export function assertBackupOperatorMount(directory: string, enabled: boolean, composeMounts: Array<Record<string, unknown>>, actualMounts: Array<Record<string, unknown>>) {
+  const expected = resolve(directory, '.or3-cloud/operator-ipc');
+  const configured = composeMounts.filter(mount => mount.target === '/run/or3-operator');
+  const actual = actualMounts.filter(mount => mount.Destination === '/run/or3-operator');
+  if (!enabled && configured.length === 0 && actual.length === 0) return;
+  if (!enabled || configured.length !== 1 || actual.length !== 1
+    || configured.at(0)?.type !== 'bind' || configured.at(0)?.source !== expected || configured.at(0)?.read_only !== true
+    || actual.at(0)?.Type !== 'bind' || actual.at(0)?.Source !== expected || actual.at(0)?.RW !== false) {
+    throw new Error('Backup source operator mount does not match the managed read-only socket.');
+  }
+}
+
+/** Docker may create absent mountpoint directories even with a read-only root. */
+export function assertBackupContainerDiff(diff: string, mounts: Array<Record<string, unknown>>) {
+  const allowed = new Set(['/data', '/run/or3-operator', '/run/or3-secrets', '/run/or3-secrets-client', '/vault-data', '/vault-key']);
+  const targets = new Set(mounts.map(mount => mount.Destination).filter((value): value is string => typeof value === 'string' && allowed.has(value)));
+  const permitted = new Set([...targets].map(target => `A ${target}`));
+  if ([...targets].some(target => target.startsWith('/run/'))) permitted.add('C /run');
+  if (diff.trim() && diff.trim().split('\n').some(line => !permitted.has(line))) throw new Error('Backup source container writable layer is changed or cannot be inspected.');
+}
 
 /** No managed snapshot can claim completeness for an unsupported profile. */
 export function assertSupportedBackupProfile(env: Record<string, string>) {
@@ -83,9 +105,10 @@ export async function assertBackupSourceProfile(directory: string, state: Manage
   const onlyMounts = (items: unknown[], property: 'target' | 'Destination', allowed: string[]) => {
     if (items.some((item) => !item || typeof item !== 'object' || Array.isArray(item) || !allowed.includes((item as Record<string, string>)[property]))) throw new Error('Backup source has an unexpected mount.');
   };
-  onlyMounts(service.volumes ?? [], 'target', ['/data', '/run/or3-secrets', '/run/or3-secrets-client']);
+  onlyMounts(service.volumes ?? [], 'target', ['/data', '/run/or3-secrets', '/run/or3-secrets-client', '/run/or3-operator']);
   assertCapturedComposeMounts(service);
-  onlyMounts(mounts, 'Destination', ['/data', '/run/or3-secrets', '/run/or3-secrets-client']);
+  onlyMounts(mounts, 'Destination', ['/data', '/run/or3-secrets', '/run/or3-secrets-client', '/run/or3-operator']);
+  assertBackupOperatorMount(directory, dashboardUpdatesEnabled(directory), service.volumes ?? [], mounts);
   const data = mounts.filter((mount) => mount && typeof mount === 'object' && mount.Destination === '/data');
   if (data.length !== 1 || data[0].Type !== 'volume' || data[0].Name !== state.volumeName
     || mounts.some((mount) => typeof mount?.Destination === 'string' && mount.Destination.startsWith('/data/'))) throw new Error('Backup source container does not use the captured data volume exclusively.');
@@ -107,7 +130,7 @@ export async function assertBackupSourceProfile(directory: string, state: Manage
   };
   checkExecutionEnv(actualEnv, false);
   checkExecutionEnv(resolved, true);
-  const checkExecution = async (container: string, expectedEntry: unknown, expectedCommand: unknown) => {
+  const checkExecution = async (container: string, expectedEntry: unknown, expectedCommand: unknown, containerMounts: Array<Record<string, unknown>>) => {
     const result = await run('docker', ['inspect', '--format', '{{json .Config.Entrypoint}}\n{{json .Config.Cmd}}\n{{json .Config.WorkingDir}}\n{{json .HostConfig.ReadonlyRootfs}}\n{{json .HostConfig.Tmpfs}}\n{{json .HostConfig.Mounts}}', container], directory);
     let entry: unknown, command: unknown, cwd: unknown, readonly: unknown, tmpfs: unknown, hostMounts: unknown;
     try {
@@ -117,12 +140,20 @@ export async function assertBackupSourceProfile(directory: string, state: Manage
     if (JSON.stringify(entry) !== JSON.stringify(expectedEntry) || JSON.stringify(command) !== JSON.stringify(expectedCommand) || cwd !== imageWorkingDir || readonly !== true) throw new Error('Backup source container changes the managed startup or writable root.');
     assertCapturedHostMounts(tmpfs, hostMounts);
     const diff = await run('docker', ['diff', container], directory);
-    if (!diff.ok || diff.stdout.trim()) throw new Error('Backup source container writable layer is changed or cannot be inspected.');
+    if (!diff.ok) throw new Error('Backup source container writable layer is changed or cannot be inspected.');
+    assertBackupContainerDiff(diff.stdout, containerMounts);
   };
-  await checkExecution(ids[0]!, imageEntry, imageCommand);
+  await checkExecution(ids[0]!, imageEntry, imageCommand, mounts);
   const vaultEnabled = managedVaultEnabled(directory, env);
+  // Older managed releases predate the vault and contain no secrets provider
+  // configuration at all. Only accept that legacy case without vault services,
+  // mounts, or any secrets configuration in the deployment or container.
+  const legacyWithoutVault = !vaultEnabled && !config.services?.['or3-vault']
+    && [env, resolved, actualEnv].every(values => !Object.keys(values).some(key => key.startsWith('NUXT_SECRETS_')))
+    && !(service.volumes ?? []).some(mount => typeof mount.target === 'string' && mount.target.startsWith('/run/or3-secrets'))
+    && !mounts.some(mount => typeof mount?.Destination === 'string' && mount.Destination.startsWith('/run/or3-secrets'));
   const provider = env.NUXT_SECRETS_PROVIDER ?? 'or3-secrets';
-  if ((provider !== '' && provider !== 'or3-secrets') || resolved.NUXT_SECRETS_PROVIDER !== provider || actualEnv.NUXT_SECRETS_PROVIDER !== provider || (provider === 'or3-secrets') !== vaultEnabled) {
+  if (!legacyWithoutVault && ((provider !== '' && provider !== 'or3-secrets') || resolved.NUXT_SECRETS_PROVIDER !== provider || actualEnv.NUXT_SECRETS_PROVIDER !== provider || (provider === 'or3-secrets') !== vaultEnabled)) {
     throw new Error('Backup source secret provider differs from managed vault custody.');
   }
   if (vaultEnabled) {
@@ -149,7 +180,7 @@ export async function assertBackupSourceProfile(directory: string, state: Manage
       const typed = mountsToCheck as Array<Record<string, unknown>>;
       for (const [target, volume] of required) {
         const matches = typed.filter((mount) => mount.Destination === target);
-        if (matches.length !== 1 || matches[0]?.Type !== 'volume' || matches[0]?.Name !== volume
+        if (matches.length !== 1 || matches.at(0)?.Type !== 'volume' || matches.at(0)?.Name !== volume
           || typed.some((mount) => typeof mount.Destination === 'string' && mount.Destination.startsWith(`${target}/`))) throw new Error('Backup source container vault mounts do not match managed custody.');
       }
     };
@@ -183,7 +214,7 @@ export async function assertBackupSourceProfile(directory: string, state: Manage
     checkExecutionEnv(actualVaultEnv, false);
     if (vaultResolved.OR3_VAULT_NAMESPACE !== (resolved.NUXT_SECRETS_NAMESPACE || 'or3') || actualVaultEnv.OR3_VAULT_NAMESPACE !== vaultResolved.OR3_VAULT_NAMESPACE) throw new Error('Backup source vault namespace differs from the managed connection.');
     onlyMounts(vaultMounts, 'Destination', [...expected.map(([target]) => target), '/data']);
-    await checkExecution(vaultIds[0]!, ['/nodejs/bin/node', '/app/vault/entrypoint.mjs'], null);
+    await checkExecution(vaultIds[0]!, ['/nodejs/bin/node', '/app/vault/entrypoint.mjs'], null, vaultMounts);
   }
 }
 

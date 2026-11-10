@@ -35,8 +35,9 @@ export function assertRemoteTransferConfiguration(env: Record<string, string>) {
   return source;
 }
 
-type Summary = { contract: 2; references: number; payloadBytes: number };
-type Verified = { contract: 2; kind: 's3-copy-v1'; objectCount: number; payloadBytes: number; inventorySha256: string };
+// Helper receipts are decoded JSON; their discriminants must be checked at runtime.
+type Summary = { contract: number; references: number; payloadBytes: number };
+type Verified = { contract: number; kind: string; objectCount: number; payloadBytes: number; inventorySha256: string };
 type CopySnapshot = Extract<RemoteSnapshot, { kind: 's3-copy-v1' }>;
 type ReferenceSnapshot = Extract<RemoteSnapshot, { kind: 's3-reference-v1' }>;
 type ImageIdentity = Pick<ManagedState, 'image' | 'imageDigest'>;
@@ -68,7 +69,8 @@ function sourceEnvironment(source: RemoteSource): Record<string, string> {
 }
 
 async function assertArchive(backupDir: string, remote: CopySnapshot) {
-  if (remote.kind !== 's3-copy-v1' || remote.file !== 'remote-objects.tar' || !/^[a-f0-9]{64}$/.test(remote.sha256) || !Number.isSafeInteger(remote.bytes) || remote.bytes < 1) throw new Error('Invalid S3 backup archive metadata.');
+  const unvalidated: { kind: string; file: string } = remote;
+  if (unvalidated.kind !== 's3-copy-v1' || unvalidated.file !== 'remote-objects.tar' || !/^[a-f0-9]{64}$/.test(remote.sha256) || !Number.isSafeInteger(remote.bytes) || remote.bytes < 1) throw new Error('Invalid S3 backup archive metadata.');
   const archive = join(backupDir, remote.file);
   if ((await stat(archive)).size !== remote.bytes || await sha256File(archive) !== remote.sha256) throw new Error('S3 backup archive checksum or size mismatch.');
   return archive;
@@ -136,7 +138,8 @@ export async function checkRemoteCopyTarget(directory: string, image: ImageIdent
 export async function checkRemoteTarget(directory: string, image: ImageIdentity, target: Record<string, string>, backupDir: string, remote: ReferenceSnapshot) {
   const source = assertRemoteTransferConfiguration(target);
   if (source.endpointOrigin !== remote.source.endpointOrigin || source.bucket !== remote.source.bucket || source.keyPrefix !== remote.source.keyPrefix) throw new Error('S3 reference snapshot can only use its original source target.');
-  if (remote.kind !== 's3-reference-v1' || remote.file !== 'remote-inventory.json' || !/^[a-f0-9]{64}$/.test(remote.sha256) || remote.inventorySha256 !== remote.sha256 || !Number.isSafeInteger(remote.bytes) || remote.bytes < 1 || remote.bytes > 64 * 1024 * 1024) throw new Error('Invalid S3 backup reference inventory.');
+  const unvalidated: { kind: string; file: string } = remote;
+  if (unvalidated.kind !== 's3-reference-v1' || unvalidated.file !== 'remote-inventory.json' || !/^[a-f0-9]{64}$/.test(remote.sha256) || remote.inventorySha256 !== remote.sha256 || !Number.isSafeInteger(remote.bytes) || remote.bytes < 1 || remote.bytes > 64 * 1024 * 1024) throw new Error('Invalid S3 backup reference inventory.');
   const inventory = join(backupDir, remote.file);
   const assertInventory = async () => { if ((await stat(inventory)).size !== remote.bytes || await sha256File(inventory) !== remote.sha256) throw new Error('S3 backup inventory checksum or size mismatch.'); };
   await assertInventory();
@@ -147,7 +150,7 @@ export async function checkRemoteTarget(directory: string, image: ImageIdentity,
       await helper.loadSqlite(join(backupDir, 'data.tgz'));
       await helper.execToFile(['sh', '-c', INPUT_NODE, 'or3-s3-verify-inventory', REMOTE, 'verify-inventory', '/scratch/sync.sqlite'], receipt);
       if ((await stat(receipt)).size > 64 * 1024) throw new Error('Invalid S3 backup verification receipt.');
-      return JSON.parse(await readFile(receipt, 'utf8')) as Omit<Verified, 'kind'> & { kind: 's3-reference-v1' };
+      return JSON.parse(await readFile(receipt, 'utf8')) as Verified;
     });
     if (verified.contract !== 2 || verified.kind !== 's3-reference-v1' || verified.objectCount !== remote.objectCount || verified.payloadBytes !== remote.payloadBytes || verified.inventorySha256 !== remote.inventorySha256) throw new Error('S3 inventory verification did not match the authenticated manifest.');
     await rm(receipt, { force: true });
@@ -183,13 +186,13 @@ export async function captureRemoteInventory(directory: string, state: ManagedSt
   if (!Number.isSafeInteger(bytes) || bytes < 1 || bytes > 64 * 1024 * 1024) throw new Error('Invalid S3 backup reference inventory.');
   const before = await sha256File(inventory);
   const receipt = join(backupDir, `.s3-inventory-verification-${randomUUID()}.json`);
-  let verified: Omit<Verified, 'kind'> & { kind: 's3-reference-v1' };
+  let verified: Verified;
   try {
     verified = await withBackupHelper(directory, image, env, { network: 'none', passEnv: SOURCE_ENV, archiveFile: inventory, lifetimeSeconds: 14_400 }, async helper => {
       await helper.loadSqlite(data);
       await helper.execToFile(['sh', '-c', INPUT_NODE, 'or3-s3-verify-inventory', REMOTE, 'verify-inventory', '/scratch/sync.sqlite'], receipt);
       if ((await stat(receipt)).size > 64 * 1024) throw new Error('Invalid S3 backup verification receipt.');
-      return JSON.parse(await readFile(receipt, 'utf8')) as Omit<Verified, 'kind'> & { kind: 's3-reference-v1' };
+      return JSON.parse(await readFile(receipt, 'utf8')) as Verified;
     });
   } finally { await rm(receipt, { force: true }); }
   if (verified.contract !== 2 || verified.kind !== 's3-reference-v1' || verified.objectCount !== summary.references || verified.payloadBytes !== summary.payloadBytes || verified.inventorySha256 !== before) throw new Error('S3 backup verification did not match the canonical reference summary.');
