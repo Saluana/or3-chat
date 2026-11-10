@@ -1,4 +1,5 @@
 import { onScopeDispose, ref, useId, watch } from 'vue';
+import { useState } from '#imports';
 
 /** Keep the lazily mounted sidebar action popovers mutually exclusive. */
 export function useSidebarActionMenu() {
