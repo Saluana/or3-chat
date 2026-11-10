@@ -23,14 +23,83 @@ async function chooseModel(page: Page, name: string) {
     await catalog.getByRole('listitem').filter({ hasText: name.replace(' (OpenAI key)', '') }).getByRole('button', { name: 'Use model', exact: true }).click();
 }
 
-async function send(page: Page, text: string) {
+async function send(page: Page, text: string, diagnose = false) {
     await expect(page.getByRole('button', { name: 'Stop generation', exact: true })).toHaveCount(0, { timeout: 45_000 });
     const input = page.getByRole('textbox', { name: 'Message input' });
     await input.click();
     await input.fill(text);
     await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled({ timeout: 45_000 });
-    await input.press('Enter');
-    await expect(input).not.toContainText(text, { timeout: 45_000 });
+    // Keep this failure evidence bounded and
+    // record state and request categories, never editor content or credentials.
+    const network: Array<{ event: string; category: string; elapsedMs: number; status?: number }> = [];
+    const started = Date.now();
+    const category = (url: string) => {
+        const path = new URL(url).pathname;
+        if (path === '/api/openrouter/stream') return 'chat-admission';
+        if (/^\/api\/jobs\/[^/]+(?:\/stream)?$/.test(path)) return 'job';
+        return null;
+    };
+    const onRequest = (request: import('@playwright/test').Request) => {
+        const kind = category(request.url());
+        if (kind && network.length < 100) network.push({ event: 'request', category: kind, elapsedMs: Date.now() - started });
+    };
+    const onResponse = (response: import('@playwright/test').Response) => {
+        const kind = category(response.url());
+        if (kind && network.length < 100) network.push({ event: 'response', category: kind, elapsedMs: Date.now() - started, status: response.status() });
+    };
+    const probe = diagnose ? await input.evaluateHandle((editor) => {
+        const events: Array<Record<string, boolean | number | string>> = [];
+        const start = performance.now();
+        const snapshot = (event: string, key?: KeyboardEvent) => {
+            if (events.length >= 100) return;
+            const send = document.querySelector<HTMLButtonElement>('button[aria-label="Send message"]');
+            events.push({ event, elapsedMs: Math.round(performance.now() - start),
+                connected: editor.isConnected, focused: editor.contains(document.activeElement),
+                hasContent: Boolean(editor.textContent?.trim()), sendPresent: Boolean(send),
+                sendDisabled: send?.disabled ?? false,
+                stopPresent: Boolean(document.querySelector('button[aria-label="Stop generation"]')),
+                ...(key ? { defaultPrevented: key.defaultPrevented, targetInsideEditor: editor.contains(key.target as Node),
+                    composing: key.isComposing, shift: key.shiftKey, trusted: key.isTrusted } : {}) });
+        };
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key !== 'Enter') return;
+            snapshot(event.type, event);
+            if (event.type === 'keydown') setTimeout(() => snapshot('keydown-after-dispatch', event), 0);
+        };
+        document.addEventListener('keydown', onKey, true);
+        document.addEventListener('keyup', onKey, true);
+        snapshot('ready');
+        const timers = [100, 1000].map(delay => setTimeout(() => snapshot(`after-${delay}ms`), delay));
+        return { finish() {
+            snapshot('finish');
+            for (const timer of timers) clearTimeout(timer);
+            document.removeEventListener('keydown', onKey, true);
+            document.removeEventListener('keyup', onKey, true);
+            return events;
+        } };
+    }).catch(() => null) : null;
+    if (probe) { page.on('request', onRequest); page.on('response', onResponse); }
+    let failed = false;
+    try {
+        await input.press('Enter');
+        await expect(input).not.toContainText(text, { timeout: 45_000 });
+    } catch (error) {
+        failed = true;
+        throw error;
+    } finally {
+        if (diagnose) {
+            page.off('request', onRequest); page.off('response', onResponse);
+            // A diagnostic failure must never replace the original assertion.
+            const events = probe ? await probe.evaluate(value => value.finish()).catch(() => null) : null;
+            await probe?.dispose().catch(() => {});
+            if (failed) {
+                const path = test.info().outputPath('send-boundary.json');
+                await writeFile(path, JSON.stringify({ events, network }, null, 2))
+                    .then(() => test.info().attach('send-boundary', { path, contentType: 'application/json' }))
+                    .catch(() => {});
+            }
+        }
+    }
 }
 
 test('a personal OpenAI key chats directly while OpenRouter keeps working', async ({ page }, info) => {
@@ -83,7 +152,7 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
         data: { username: 'openai-adapter-admin', password: process.env.OR3_OPENAI_E2E_ADMIN_PASSWORD } })).ok()).toBe(true);
     await openAiSettings(page, 'fast');
     await page.getByRole('button', { name: 'Fast Model', exact: true }).click();
-    await page.getByText('gpt-5.4-mini · OpenAI', { exact: true }).click();
+    await page.getByRole('listbox', { name: 'Fast Model' }).getByText('gpt-5.4-mini · OpenAI', { exact: true }).click();
     await expect(page.getByRole('button', { name: 'Fast Model', exact: true })).toContainText('gpt-5.4-mini · OpenAI');
     await expect(page.getByRole('combobox', { name: 'Fast model routing' })).toHaveCount(0);
     await expect.poll(async () => (await page.request.get('/api/openrouter/title-model')).json())
@@ -91,7 +160,7 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
 
     await page.goto('/chat');
     await chooseModel(page, 'gpt-5.4-mini (OpenAI key)');
-    await send(page, 'openai:hello');
+    await send(page, 'openai:hello', true);
     await expect(page.getByText('OpenAI fixture reply')).toBeVisible({ timeout: 45_000 });
     await expect.poll(() => page.evaluate(async () => {
         for (const database of await indexedDB.databases()) {
@@ -137,7 +206,7 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
     expect(attachmentRequest!.inputKinds).toEqual(expect.arrayContaining(['input_text', 'input_image', 'input_file']));
     expect(attachmentRequest!.inputFiles).toEqual([{ filename: 'fixture.pdf', hasData: true }]);
     // A second turn must carry the first exchange, and retry must issue a new request.
-    await send(page, 'openai:second');
+    await send(page, 'openai:second', true);
     const secondReply = page.locator('.chat-message-container').filter({ hasText: 'OpenAI second fixture reply' });
     await expect(secondReply).toBeVisible({ timeout: 15_000 });
     const second = (await captured()).filter(request => request.path === '/v1/responses' && request.includeUsage === true).at(-1);
@@ -147,12 +216,12 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
     await secondReply.getByRole('button', { name: 'Retry message' }).click();
     await expect.poll(async () => (await captured()).filter(request => request.path === '/v1/responses' && request.includeUsage === true).length).toBeGreaterThan(beforeRetry);
     await expect(secondReply).toBeVisible({ timeout: 30_000 });
-    await send(page, 'openai:tool');
+    await send(page, 'openai:tool', true);
     await expect(page.getByText('OpenAI tool round complete')).toBeVisible({ timeout: 45_000 });
     const toolFollowup = (await captured()).filter(request => request.path === '/v1/responses' && request.includeUsage === true).at(-1);
     expect(toolFollowup!.roles).toContain('tool');
     // A Responses refusal is visible text rather than an empty successful answer.
-    await send(page, 'openai:refuse');
+    await send(page, 'openai:refuse', true);
     await expect(page.getByText('Fixture refusal')).toBeVisible({ timeout: 30_000 });
     // A disconnect during admission must wait for connectivity and reuse the same send.
     const beforeOffline = (await captured()).filter(request => request.path === '/v1/responses' && request.includeUsage === true).length;
@@ -165,7 +234,7 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
             await route.abort('internetdisconnected');
         } else await route.continue();
     });
-    await send(page, 'openai:offline');
+    await send(page, 'openai:offline', true);
     await expect.poll(() => interrupted).toBe(true);
     await page.waitForTimeout(1500);
     await expect(page.getByText('Response status unknown')).toHaveCount(0);
@@ -184,7 +253,7 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
     await expect(page.getByText('OpenAI Chat Completions requires thinking off when tools are enabled for this model.')).toHaveCount(0);
     await page.getByRole('button', { name: 'Close chat settings' }).click();
     const beforeLuna = (await captured()).filter(request => request.path === '/v1/responses' && request.includeUsage === true).length;
-    await send(page, 'openai:tool');
+    await send(page, 'openai:tool', true);
     await expect.poll(async () => (await captured()).filter(request => request.path === '/v1/responses' && request.includeUsage === true).length, { timeout: 45_000 }).toBeGreaterThanOrEqual(beforeLuna + 2);
     const luna = (await captured()).filter(request => request.model === 'gpt-6-luna' && request.includeUsage === true).at(-1);
     expect(luna).toMatchObject({ reasoningEffort: 'medium' });
@@ -193,7 +262,7 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
     // A real background job keeps running while the user switches workspace tabs.
     const backgroundAdmission = page.waitForRequest(request => request.url().endsWith('/api/openrouter/stream') && request.method() === 'POST'
         && request.postDataJSON()?._background === true, { timeout: 30_000 });
-    await send(page, 'openai:hold');
+    await send(page, 'openai:hold', true);
     await backgroundAdmission;
     await expect(page.getByText('OpenAI background started')).toBeVisible({ timeout: 15_000 });
     intentionallyOffline = true;
@@ -225,7 +294,7 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
 
     // The same chat continues on OpenRouter with the instance key.
     await chooseModel(page, 'Fixture Router');
-    await send(page, 'openrouter:hello');
+    await send(page, 'openrouter:hello', true);
     await expect(page.getByText('OpenRouter fixture reply')).toBeVisible({ timeout: 45_000 });
     const openRouter = (await captured()).filter(request => request.path === '/api/v1/chat/completions').at(-1);
     expect(openRouter).toMatchObject({ credential: 'instance-openrouter', model: 'fixture/router' });
@@ -638,6 +707,7 @@ test('switching tabs before a send is saved still sends the original message', a
     await chooseModel(page, 'Fixture Router');
     await send(page, 'establish chat');
     await expect(page.getByText('OpenRouter fixture reply')).toBeVisible({ timeout: 45_000 });
+    await expect(page.getByRole('button', { name: 'Stop generation', exact: true })).toHaveCount(0, { timeout: 45_000 });
     const originalTabId = await page.getByRole('tab', { selected: true }).getAttribute('id');
     expect(originalTabId).toBeTruthy();
     await page.evaluate(async () => {
@@ -662,7 +732,7 @@ test('switching tabs before a send is saved still sends the original message', a
     await expect(page.getByRole('region', { name: 'New chat' })).toBeVisible({ timeout: 30_000 });
     await page.getByRole('textbox', { name: 'Message input' }).fill('other tab draft');
     await page.locator(`[id="${originalTabId}"]`).click();
-    await expect(page.getByText('switch-before-save', { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('.chat-message-container').getByText('switch-before-save', { exact: true })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText('OpenRouter fixture reply')).toHaveCount(2, { timeout: 30_000 });
     await expect(page.getByRole('textbox', { name: 'Message input' })).not.toContainText('switch-before-save');
     await page.locator(`[id="${otherTabId}"]`).click();
