@@ -225,6 +225,9 @@ Image intake uses the file API ownership callback bound to the mounted editor, d
 ## Titles for documents created from messages
 
 Create Document saves the original converted message and opens it immediately.
+When the chat belongs to a project, the document is also added to that project.
+If the project association fails, the saved document remains available and a
+notification explains that it can be added from the sidebar.
 A suitable Markdown heading outside code fences supplies its title without an AI
 call. Otherwise a short temporary title appears while the shared backend title
 service names the document. Failures keep the temporary title. Typing a manual

@@ -41,12 +41,19 @@
                             v-if="
                                 !collapsed &&
                                 expandedProjectsSet.has(project.id) &&
-                                children[project.id]?.length
+                                children[project.id]
                             "
                         >
                             <div class="overflow-hidden min-h-0">
+                                <p
+                                    v-if="!children[project.id]!.length"
+                                    class="project-children-empty h-8 flex items-center ps-[42px] mx-1 mb-1 text-[13px] text-[color:var(--md-on-surface-variant)]"
+                                >
+                                    No chats or docs yet
+                                </p>
                                 <div
-                                    class="ml-5 border-l-2 border-[color:var(--md-primary-tint)]/60 space-y-1"
+                                    v-else
+                                    class="project-children pb-1"
                                 >
                                     <SidebarProjectChild
                                         v-for="child in children[project.id]"

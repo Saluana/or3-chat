@@ -327,17 +327,26 @@ html[data-theme="blank"] {
         line-height: var(--blank-leading-body);
     }
 
-    /* Project rows share the chat rows' height and content inset. */
+    /* Project rows share the chat rows' height and content inset; their items
+       sit slightly shorter with icons aligned under the project name. */
     .project-root-container,
     .project-child-container {
         height: var(--app-control-height-medium, 36px);
         margin-inline: 0;
     }
 
+    .project-child-container {
+        height: calc(var(--app-control-height-medium, 36px) - 2px);
+    }
+
     .project-root-toggle,
     .project-child-toggle {
         height: 100%;
         padding-inline: var(--blank-sb-inset);
+    }
+
+    .project-child-toggle {
+        padding-inline-start: calc(var(--blank-sb-inset) + var(--blank-sb-row-icon) + 0.5rem);
     }
 
     /* Row icons stay small so titles carry the list. */
@@ -371,31 +380,33 @@ html[data-theme="blank"] {
     }
 
     /* Project rows match chat rows: small icons in the same tone and a gray menu button. */
-    .project-root-toggle .project-icon,
+    .project-root-toggle :is(.project-icon, .project-chevron),
     .project-child-toggle .project-child-icon {
         width: var(--blank-sb-row-icon);
         height: var(--blank-sb-row-icon);
         min-width: var(--blank-sb-row-icon);
         min-height: var(--blank-sb-row-icon);
         font-size: var(--blank-sb-row-icon);
-        opacity: 1;
     }
 
-    .project-root-toggle .project-icon {
+    .project-root-toggle :is(.project-icon, .project-chevron) {
         color: var(--blank-sb-icon);
     }
 
-    .project-root-toggle:is(:hover, :focus-within) .project-icon {
+    .project-root-toggle:is(:hover, :focus-within) :is(.project-icon, .project-chevron) {
         color: var(--md-on-surface);
     }
 
     .project-child-toggle .project-child-icon {
         color: inherit;
+        opacity: 1;
     }
 
-    .project-root-toggle > button:has(> .project-icon) {
-        width: var(--blank-sb-row-icon);
-        height: var(--blank-sb-row-icon);
+    /* The toggle's hover pad overhangs the icon so the title keeps the chat rows' inset. */
+    .project-root-toggle > .project-expand-btn {
+        width: calc(var(--blank-sb-row-icon) + 6px);
+        height: calc(var(--blank-sb-row-icon) + 6px);
+        margin-inline: -3px;
     }
 
     .project-more-btn {

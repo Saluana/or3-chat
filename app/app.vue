@@ -38,9 +38,6 @@ const isDark = computed(() =>
     ).startsWith('dark')
 );
 const themeColor = computed(() => (isDark.value ? '#1A1F24' : '#F1F4FB'));
-const statusBarStyle = computed(() =>
-    isDark.value ? 'black-translucent' : 'default'
-);
 
 useHead({
     htmlAttrs: {
@@ -58,11 +55,12 @@ useHead({
         { name: 'theme-color', content: themeColor },
         // Enable iOS PWA full-screen and control status bar style
         { name: 'mobile-web-app-capable', content: 'yes' },
+        { name: 'apple-mobile-web-app-capable', content: 'yes' },
         {
             name: 'apple-mobile-web-app-status-bar-style',
-            content: statusBarStyle,
+            content: 'black-translucent',
         },
-        // Ensure content can extend under the notch when using black-translucent
+        // Keep the themed safe area behind the status bar and notch
         {
             name: 'viewport',
             content: 'width=device-width, initial-scale=1, viewport-fit=cover',

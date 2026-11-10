@@ -107,9 +107,13 @@ body {
 	overscroll-behavior: none;
 }
 
+html,
+body {
+	background-color: var(--md-surface);
+}
+
 body {
 	overflow: hidden;
-	background-color: var(--md-surface);
 	touch-action: pan-y;
 }
 

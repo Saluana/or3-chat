@@ -215,7 +215,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "Create, edit, sync, recover, and manage native documents with workspace-owned navigation, editor sessions, and safe AI preference updates and local approximate token estimates."
+                    "summary": "Create, edit, sync, recover, and manage native documents, including project association for documents created from chat messages, workspace navigation, and editor sessions."
                 },
                 {
                     "name": "prompts.md",
