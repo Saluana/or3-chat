@@ -78,7 +78,15 @@ try {
     await run([...compose, 'up', '-d', '--wait', 'or3-vault']);
     assert.deepEqual(await connection('status'), { connected: true, persisted: true });
     record('Application credential operations fail closed during vault outage and recover after restart');
-    await cli(['backup']);
+    try {
+        await cli(['backup']);
+    } catch (error) {
+        for (const service of ['or3', 'or3-vault']) {
+            const container = (await run([...compose, 'ps', '-aq', service])).trim();
+            if (container) console.error(`${service} Docker filesystem diff:\n${await run(['docker', 'diff', container])}`);
+        }
+        throw error;
+    }
     const backupRoot = join(deployment, '.or3-cloud/backups');
     const manifests = await Promise.all((await readdir(backupRoot)).map(async name => {
         const path = join(backupRoot, name); return { path, manifest: JSON.parse(await readFile(join(path, 'manifest.json'), 'utf8')) };
