@@ -206,9 +206,9 @@
 
                     <EditorContent v-if="editor" :editor="editor" class="document-content or3-prose" :class="{ 'document-content--readonly': editorLocked }" />
 
-                    <!-- TipTap detaches the menu element. Keep Vue's conditional on a stable parent. -->
+                    <!-- TipTap detaches the menu; keep its conditional stable and position it outside the inverse-zoomed prose. -->
                     <div v-if="editor && !editorLocked">
-                        <BubbleMenu v-theme="'document.selection-menu'" :editor="editor" :should-show="shouldShowTextSelection" :options="{ placement: 'top' }" class="selection-menu">
+                        <BubbleMenu v-theme="'document.selection-menu'" :editor="editor" :should-show="shouldShowTextSelection" :append-to="() => editorScroll!" :options="{ placement: 'top', scrollTarget: editorScroll }" class="selection-menu">
                             <UButton :icon="icons.bold" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('bold') }" aria-label="Bold" @click="runToolbarAction(() => editor?.chain().focus().toggleBold().run())" />
                             <UButton :icon="icons.italic" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('italic') }" aria-label="Italic" @click="runToolbarAction(() => editor?.chain().focus().toggleItalic().run())" />
                             <UButton :icon="icons.underline" color="neutral" variant="ghost" size="sm" square :class="{ active: editor.isActive('underline') }" aria-label="Underline" @click="runToolbarAction(() => editor?.chain().focus().toggleUnderline().run())" />
