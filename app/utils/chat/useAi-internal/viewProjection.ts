@@ -11,8 +11,8 @@ function sameValue(a: unknown, b: unknown): boolean {
     if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
     if (Array.isArray(a) !== Array.isArray(b)) return false;
     if (!Array.isArray(a)) {
-        const aPrototype = Object.getPrototypeOf(a);
-        const bPrototype = Object.getPrototypeOf(b);
+        const aPrototype: unknown = Object.getPrototypeOf(a);
+        const bPrototype: unknown = Object.getPrototypeOf(b);
         if ((aPrototype !== Object.prototype && aPrototype !== null) ||
             (bPrototype !== Object.prototype && bPrototype !== null)) return false;
     }

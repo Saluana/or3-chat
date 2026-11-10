@@ -76,7 +76,7 @@ export function useContextPreview(options: {
             await preferences.ensureLoaded(); if (!current()) return;
             const settings = { ...preferences.settings.value };
             const revisionValue = toValue(options.revision);
-            const revision = Array.isArray(revisionValue) ? [...revisionValue] : [revisionValue];
+            const revision: unknown[] = Array.isArray(revisionValue) ? Array.from<unknown>(revisionValue) : [revisionValue];
             const cached = historyBase;
             const matches = !bypassCache && cached && cached.db === db && cached.generation === generation
                 && cached.threadId === threadId && Object.is(cached.promptSelection, promptSelection)
