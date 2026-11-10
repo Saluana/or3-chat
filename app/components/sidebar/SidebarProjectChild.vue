@@ -1,11 +1,12 @@
 <template>
     <div
-        class="project-child-container h-10 mx-1 mb-0.5"
+        class="project-child-container h-9 mx-1 mb-px"
     >
+        <!-- ps aligns the icon under the project name: row inset + 18px toggle + gap. -->
         <div
             role="button"
             tabindex="0"
-            class="project-child-toggle relative group w-full flex items-center h-full px-3 gap-2 rounded-[var(--md-border-radius-small,var(--md-border-radius))] transition-colors duration-200 cursor-pointer"
+            class="project-child-toggle relative group w-full flex items-center h-full ps-[38px] pe-3 gap-2 rounded-[var(--md-border-radius-small,var(--md-border-radius))] transition-colors duration-200 cursor-pointer"
             :class="{ 
                 'bg-[color:var(--md-primary)]/12 text-[color:var(--md-primary)]': active,
                 'hover:bg-[var(--md-surface-hover)] text-[color:var(--md-on-surface-variant)] hover:text-[color:var(--md-on-surface)]': !active
