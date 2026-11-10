@@ -1,6 +1,6 @@
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import type { ManagedState } from '../deployment/contracts';
-import { managedProviderProfile } from '../deployment/env';
+import { dashboardUpdatesEnabled, managedProviderProfile } from '../deployment/env';
 import { assertCapturedComposeMounts, assertCapturedHostMounts, assertSafeComposeBinding, composeArgs, parseComposeConfig, resolvedComposeConfig } from '../runtime/compose';
 import { run } from '../runtime/command-runner';
 import { managedVaultEnabled } from '../runtime/project';
@@ -8,6 +8,19 @@ import { withBackupHelper } from './helper';
 
 const INSPECTOR = '/app/scripts/docker/backup-inspect.mjs';
 const NODE = 'if [ -x /nodejs/bin/node ]; then exec /nodejs/bin/node "$@"; else exec node "$@"; fi';
+
+/** The dashboard socket is the only supported bind mount in the application. */
+export function assertBackupOperatorMount(directory: string, enabled: boolean, composeMounts: Array<Record<string, unknown>>, actualMounts: Array<Record<string, unknown>>) {
+  const expected = resolve(directory, '.or3-cloud/operator-ipc');
+  const configured = composeMounts.filter(mount => mount.target === '/run/or3-operator');
+  const actual = actualMounts.filter(mount => mount.Destination === '/run/or3-operator');
+  if (!enabled && configured.length === 0 && actual.length === 0) return;
+  if (!enabled || configured.length !== 1 || actual.length !== 1
+    || configured[0]?.type !== 'bind' || configured[0]?.source !== expected || configured[0]?.read_only !== true
+    || actual[0]?.Type !== 'bind' || actual[0]?.Source !== expected || actual[0]?.RW !== false) {
+    throw new Error('Backup source operator mount does not match the managed read-only socket.');
+  }
+}
 
 /** No managed snapshot can claim completeness for an unsupported profile. */
 export function assertSupportedBackupProfile(env: Record<string, string>) {
@@ -83,9 +96,10 @@ export async function assertBackupSourceProfile(directory: string, state: Manage
   const onlyMounts = (items: unknown[], property: 'target' | 'Destination', allowed: string[]) => {
     if (items.some((item) => !item || typeof item !== 'object' || Array.isArray(item) || !allowed.includes((item as Record<string, string>)[property]))) throw new Error('Backup source has an unexpected mount.');
   };
-  onlyMounts(service.volumes ?? [], 'target', ['/data', '/run/or3-secrets', '/run/or3-secrets-client']);
+  onlyMounts(service.volumes ?? [], 'target', ['/data', '/run/or3-secrets', '/run/or3-secrets-client', '/run/or3-operator']);
   assertCapturedComposeMounts(service);
-  onlyMounts(mounts, 'Destination', ['/data', '/run/or3-secrets', '/run/or3-secrets-client']);
+  onlyMounts(mounts, 'Destination', ['/data', '/run/or3-secrets', '/run/or3-secrets-client', '/run/or3-operator']);
+  assertBackupOperatorMount(directory, dashboardUpdatesEnabled(directory), service.volumes ?? [], mounts);
   const data = mounts.filter((mount) => mount && typeof mount === 'object' && mount.Destination === '/data');
   if (data.length !== 1 || data[0].Type !== 'volume' || data[0].Name !== state.volumeName
     || mounts.some((mount) => typeof mount?.Destination === 'string' && mount.Destination.startsWith('/data/'))) throw new Error('Backup source container does not use the captured data volume exclusively.');
