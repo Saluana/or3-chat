@@ -43,6 +43,37 @@ test.describe('local document recovery faults', () => {
     const intakePng = { name: 'synthetic-document-intake.png', mimeType: 'image/png',
         buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=', 'base64') };
 
+    test('selection toolbar stays clear of text while scrolling', async ({ page }, info) => {
+        // Mirror the shell's interface zoom and inverse document zoom in this isolated fixture.
+        await page.evaluate(() => {
+            document.documentElement.style.setProperty('--app-ui-zoom', '0.8');
+            document.body.style.zoom = '0.8';
+        });
+        const body = page.getByRole('textbox', { name: 'Document body' });
+        await body.fill(Array.from({ length: 35 }, (_, index) => `Paragraph ${index} selectable text`).join('\n'));
+        const paragraph = body.locator('p').filter({ hasText: 'Paragraph 20 selectable text' });
+        await paragraph.evaluate(element => element.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await paragraph.dblclick({ position: { x: 20, y: 10 } });
+        const menu = page.locator('.selection-menu');
+        await expect(menu).toBeVisible();
+        const isClear = () => page.evaluate(() => {
+            const selection = window.getSelection();
+            const menu = document.querySelector('.selection-menu')!.getBoundingClientRect();
+            const rect = selection!.getRangeAt(0).getBoundingClientRect();
+            return (menu.bottom <= rect.top && rect.top - menu.bottom <= 24)
+                || (menu.top >= rect.bottom && menu.top - rect.bottom <= 24);
+        });
+        await expect.poll(isClear).toBe(true);
+        await page.locator('.editor-scroll').evaluate(element => {
+            element.style.scrollBehavior = 'auto';
+            element.scrollTop += 30;
+        });
+        await expect.poll(isClear).toBe(true);
+        await page.screenshot({ path: info.outputPath('selection-toolbar-scrolled.png') });
+        await menu.getByRole('button', { name: 'Bold', exact: true }).click();
+        await expect(paragraph.locator('strong')).toHaveText('Paragraph');
+    });
+
     test('image selection hides text formatting while text selection still shows it', async ({ page }, info) => {
         const body = page.getByRole('textbox', { name: 'Document body' });
         await body.fill('Selectable text');
