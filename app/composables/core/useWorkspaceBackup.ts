@@ -306,7 +306,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 if (exportCloud) {
                     const { exportCloudWorkspace } = await import('~/utils/cloud-workspace-backup');
                     assertCloudOrigin();
-                    await exportCloudWorkspace(await fileHandle.createWritable());
+                    await exportCloudWorkspace(() => fileHandle.createWritable());
                 } else await streamWorkspaceExport({
                     db: exportDb,
                     fileHandle,
@@ -359,37 +359,41 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 if (streamSaverApi.mitm !== localMitmUrl) {
                     streamSaverApi.mitm = localMitmUrl;
                 }
-                const fileStream = streamSaverApi.createWriteStream(
-                    suggestedName,
-                    {
-                        headers: {
-                            'Content-Type': exportCloud ? 'application/octet-stream' : 'application/json',
-                            'Content-Disposition': `attachment; filename="${suggestedName}"`,
-                        },
-                    } as unknown as Parameters<typeof streamSaverApi.createWriteStream>[1]
-                );
-
-                const writer =
-                    typeof fileStream.getWriter === 'function'
-                        ? fileStream.getWriter()
-                        : null;
-
-                if (!writer) {
-                    throw err(
-                        'ERR_INTERNAL',
-                        'StreamSaver returned an unsupported stream writer.',
-                        { tags: { domain: 'db', action: 'export' } }
+                const createWriter = async () => {
+                    const fileStream = streamSaverApi.createWriteStream(
+                        suggestedName,
+                        {
+                            headers: {
+                                'Content-Type': exportCloud ? 'application/octet-stream' : 'application/json',
+                                'Content-Disposition': `attachment; filename="${suggestedName}"`,
+                            },
+                        } as unknown as Parameters<typeof streamSaverApi.createWriteStream>[1]
                     );
-                }
+
+                    const writer =
+                        typeof fileStream.getWriter === 'function'
+                            ? fileStream.getWriter()
+                            : null;
+
+                    if (!writer) {
+                        throw err(
+                            'ERR_INTERNAL',
+                            'StreamSaver returned an unsupported stream writer.',
+                            { tags: { domain: 'db', action: 'export' } }
+                        );
+                    }
+
+                    return writer;
+                };
 
                 if (exportCloud) {
                     assertCloudOrigin();
                     const { exportCloudWorkspace } = await import('~/utils/cloud-workspace-backup');
                     assertCloudOrigin();
-                    await exportCloudWorkspace(writer);
+                    await exportCloudWorkspace(createWriter);
                 } else await streamWorkspaceExportToWritable({
                     db: exportDb,
-                    writable: writer,
+                    writable: await createWriter(),
                     chunkSize: STREAM_CHUNK_SIZE,
                     onProgress: updateStreamProgress,
                 });

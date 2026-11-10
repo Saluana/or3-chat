@@ -63,7 +63,7 @@ export default defineEventHandler(async event => {
                     if (isLocalOnlyKvChange(table, item.pk, row)) continue;
                     if (Buffer.byteLength(JSON.stringify(row)) > MAX_ARCHIVE_ROW_BYTES) throw new Error('Backup record exceeds the supported size.');
                     if (table === 'file_meta') {
-                        if (!storage || typeof row.storage_id !== 'string' || row.storage_provider_id !== storage.id || !/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32})$/.test(String(row.hash))) throw new Error('An original is not committed to the active Cloud provider.');
+                        if (!storage || typeof row.storage_id !== 'string' || row.storage_provider_id !== storage.id || !/^(sha256:[a-f0-9]{64}|md5:[a-f0-9]{32})$/.test(String(row.hash))) throw createError({ statusCode: 409, statusMessage: 'A file is not committed to the active Cloud provider' });
                         originals.add(String(row.hash));
                     }
                     if ((table === 'messages' || table === 'posts') && typeof row.file_hashes === 'string') {

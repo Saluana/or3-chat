@@ -50,9 +50,10 @@ function writeFailed(cause: unknown): never {
 }
 
 /** Only canonical, fully uploaded data can be represented by a Cloud snapshot. */
-export async function exportCloudWorkspace(writer: BackupWriter): Promise<void> {
+export async function exportCloudWorkspace(createWriter: () => Promise<BackupWriter>): Promise<void> {
     const origin = captureOrigin();
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    let writer: BackupWriter | undefined;
     const check = createCloudBackupStreamCheck();
     try {
         const deadline = Date.now() + 30_000;
@@ -68,8 +69,11 @@ export async function exportCloudWorkspace(writer: BackupWriter): Promise<void> 
         }
         origin.assertCurrent();
         const response = await fetch(`/api/workspaces/backup?workspaceId=${encodeURIComponent(origin.workspaceId)}`, { cache: 'no-store' });
+        if (response.status === 409) throw new CloudBackupError('A workspace file, including possibly a file in Trash, has incomplete or incompatible Cloud storage metadata. Contact your administrator to inspect the file and its original.');
         if (!response.ok || !response.body) throw new CloudBackupError('Cloud backup could not start. Check sync and storage availability.');
         reader = response.body.getReader();
+        writer = await createWriter();
+        origin.assertCurrent();
         for (;;) {
             origin.assertCurrent();
             const { done, value } = await reader.read();
@@ -80,7 +84,7 @@ export async function exportCloudWorkspace(writer: BackupWriter): Promise<void> 
         }
         check.finish();
         await writer.close().catch(writeFailed);
-    } catch (error) { await writer.abort(error).catch(() => {}); throw error; }
+    } catch (error) { await writer?.abort(error).catch(() => {}); throw error; }
     finally { await reader?.cancel().catch(() => {}); }
 }
 
