@@ -75,25 +75,20 @@ export function createChatViewProjection(msgs: ChatMessage[], getAccumulator: ()
     ): boolean {
         if (tailAssistant.value?.id !== messageId) return false;
         const streamAcc = getAccumulator();
-        const streamState = streamAcc.state;
-        if (!nextContent) {
-            streamAcc.reset();
-            return true;
+        const reasoning = tailAssistant.value.reasoning_text;
+        const currentContent = streamAcc.getText();
+        if (nextContent !== currentContent) {
+            const canAppendDelta = delta.length > 0 &&
+                nextContent.length === currentContent.length + delta.length &&
+                nextContent === currentContent + delta;
+            if (canAppendDelta) {
+                streamAcc.append(delta, { kind: 'text' });
+            } else {
+                const currentReasoning = streamAcc.getReasoning();
+                streamAcc.hydrate({ text: nextContent, reasoningText: reasoning ?? currentReasoning });
+            }
         }
-
-        const currentContent = streamState.text || '';
-        const canAppendDelta =
-            delta.length > 0 &&
-            nextContent.length === currentContent.length + delta.length &&
-            nextContent.startsWith(currentContent);
-
-        if (canAppendDelta) {
-            streamAcc.append(delta, { kind: 'text' });
-            return true;
-        }
-
-        streamAcc.reset();
-        streamAcc.append(nextContent, { kind: 'text' });
+        if (typeof reasoning === 'string') streamAcc.replaceReasoning(reasoning);
         return true;
     }
 

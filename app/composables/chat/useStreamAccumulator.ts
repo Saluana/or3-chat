@@ -63,6 +63,11 @@
 import { reactive } from 'vue';
 import { normalizeStreamingMessage } from '~/utils/chat/messages';
 
+const MEDIUM_STREAM_LENGTH = 20_000;
+const LARGE_STREAM_LENGTH = 60_000;
+const MEDIUM_FLUSH_INTERVAL_MS = 80;
+const LARGE_FLUSH_INTERVAL_MS = 125;
+
 export interface StreamingState {
     text: string;
     reasoningText: string;
@@ -78,6 +83,9 @@ export type AppendKind = 'text' | 'reasoning';
 export interface StreamAccumulatorApi {
     state: Readonly<StreamingState>;
     append(delta: string, options: { kind: AppendKind }): void;
+    getText(): string;
+    getReasoning(): string;
+    replaceReasoning(text: string): void;
     hydrate(seed: {
         text?: unknown;
         reasoningText?: unknown;
@@ -116,7 +124,11 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
     });
     let pendingMain: string[] = [];
     let pendingReasoning: string[] = [];
+    let reasoningReplacement: string | null = null;
     let frame: number | null = null;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    let pendingLength = 0;
+    let lastFlush: number | null = null;
     let microtaskToken: object | null = null;
     let _finalized = false;
     let emptyAppendWarnings = 0;
@@ -132,8 +144,9 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
             state.text += pendingMain.join('');
             pendingMain = [];
         }
-        if (pendingReasoning.length) {
-            state.reasoningText += pendingReasoning.join('');
+        if (reasoningReplacement !== null || pendingReasoning.length) {
+            state.reasoningText = (reasoningReplacement ?? state.reasoningText) + pendingReasoning.join('');
+            reasoningReplacement = null;
             pendingReasoning = [];
         }
         
@@ -151,24 +164,62 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
         }
         /* v8 ignore stop */
         
+        pendingLength = 0;
+        lastFlush = performance.now();
         state.version++;
     }
 
     function schedule() {
-        if (frame != null || microtaskToken != null || _finalized) return;
-        // Prefer real rAF if available; otherwise, queue a microtask (cancelable via token)
+        if (microtaskToken != null || _finalized) return;
         if (typeof (globalThis as GlobalWithRAF).requestAnimationFrame === 'function') {
-            const raf = getRAF();
-            frame = raf(flush);
+            const length = state.text.length + state.reasoningText.length + pendingLength;
+            const interval = length >= LARGE_STREAM_LENGTH ? LARGE_FLUSH_INTERVAL_MS
+                : length >= MEDIUM_STREAM_LENGTH ? MEDIUM_FLUSH_INTERVAL_MS : 0;
+            const delay = lastFlush == null ? 0 : Math.max(0, interval - (performance.now() - lastFlush));
+            if (delay > 0) {
+                if (timeout != null) clearTimeout(timeout);
+                if (frame != null) {
+                    getCAF()(frame);
+                    frame = null;
+                }
+                timeout = setTimeout(() => {
+                    timeout = null;
+                    frame = getRAF()(flushWhenDue);
+                }, Math.ceil(delay));
+            } else if (frame == null) {
+                if (timeout != null) clearTimeout(timeout);
+                timeout = null;
+                frame = getRAF()(flushWhenDue);
+            }
             return;
         }
         const token = {};
         microtaskToken = token;
         queueMicrotask(() => {
-            if (microtaskToken !== token) return; // canceled
+            if (microtaskToken !== token) return;
             microtaskToken = null;
             flush();
         });
+    }
+
+    function flushWhenDue() {
+        frame = null;
+        const length = state.text.length + state.reasoningText.length + pendingLength;
+        const interval = length >= LARGE_STREAM_LENGTH ? LARGE_FLUSH_INTERVAL_MS
+            : length >= MEDIUM_STREAM_LENGTH ? MEDIUM_FLUSH_INTERVAL_MS : 0;
+        if (lastFlush != null && performance.now() - lastFlush < interval) {
+            schedule();
+            return;
+        }
+        flush();
+    }
+
+    function cancelScheduled() {
+        if (timeout != null) clearTimeout(timeout);
+        timeout = null;
+        if (frame != null) getCAF()(frame);
+        frame = null;
+        microtaskToken = null;
     }
 
     /** Ensure stream not already finalized. Returns false if already finalized. */
@@ -196,6 +247,7 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
             /* v8 ignore stop */
             return;
         }
+        pendingLength += delta.length;
         if (kind === 'reasoning') pendingReasoning.push(delta);
         else pendingMain.push(delta);
         schedule();
@@ -204,16 +256,8 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
     function finalize(opts?: { error?: Error; aborted?: boolean }) {
         if (!ensureNotFinalized('finalize')) return;
         _finalized = true;
-        if (frame != null) {
-            const caf = getCAF();
-            caf(frame); // cancel pending frame then immediate flush
-            frame = null;
-        }
-        if (microtaskToken) {
-            // Cancel pending microtask flush
-            microtaskToken = null;
-        }
-        if (pendingMain.length || pendingReasoning.length) flush();
+        cancelScheduled();
+        if (pendingMain.length || pendingReasoning.length || reasoningReplacement !== null) flush();
         else state.version++;
         if (opts?.error) state.error = opts.error;
         state.aborted = opts?.aborted === true;
@@ -226,13 +270,12 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
         reasoningText?: unknown;
     }) {
         if (!ensureNotFinalized('hydrate')) return;
-        if (frame != null) {
-            getCAF()(frame);
-            frame = null;
-        }
-        microtaskToken = null;
+        cancelScheduled();
+        pendingLength = 0;
+        lastFlush = null;
         pendingMain = [];
         pendingReasoning = [];
+        reasoningReplacement = null;
         const normalized = normalizeStreamingMessage({
             text: seed.text,
             reasoning_text: seed.reasoningText,
@@ -243,14 +286,12 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
     }
 
     function reset() {
-        if (frame != null) {
-            const caf = getCAF();
-            caf(frame);
-            frame = null;
-        }
-        if (microtaskToken) microtaskToken = null;
+        cancelScheduled();
+        pendingLength = 0;
+        lastFlush = null;
         pendingMain = [];
         pendingReasoning = [];
+        reasoningReplacement = null;
         _finalized = false;
         emptyAppendWarnings = 0;
         warnedAboutSize = false; // Reset warning flag
@@ -263,7 +304,15 @@ export function createStreamAccumulator(): StreamAccumulatorApi {
         state.version++;
     }
 
-    return { state, append, hydrate, finalize, reset };
+    const getReasoning = () => (reasoningReplacement ?? state.reasoningText) + pendingReasoning.join('');
+    function replaceReasoning(text: string) {
+        if (!ensureNotFinalized('replaceReasoning') || text === getReasoning()) return;
+        pendingLength += text.length - (reasoningReplacement?.length ?? state.reasoningText.length) - pendingReasoning.reduce((sum, part) => sum + part.length, 0);
+        reasoningReplacement = text;
+        pendingReasoning = [];
+        schedule();
+    }
+    return { state, append, getText: () => state.text + pendingMain.join(''), getReasoning, replaceReasoning, hydrate, finalize, reset };
 }
 
 // Convenience factory (future usage) - could be extended to support options

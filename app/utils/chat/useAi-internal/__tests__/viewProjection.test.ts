@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { createStreamAccumulator } from '~/composables/chat/useStreamAccumulator';
 import type { ChatMessage } from '~/utils/chat/types';
 import { createChatViewProjection } from '../viewProjection';
 
@@ -43,4 +44,64 @@ describe('canonical history projection', () => {
         expect(view.messages.value[1]).not.toBe(before[1]);
         expect(view.messages.value[1]?.toolResultMessageIds).toEqual(['result']);
     });
+});
+
+// Background snapshots may arrive faster than the accumulator publishes frames.
+it('reconciles consecutive background snapshots and true replacements', () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => setTimeout(() => cb(performance.now()), 16));
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
+    try {
+        const acc = createStreamAccumulator();
+        const view = createChatViewProjection([], () => acc);
+        view.tailAssistant.value = { id: 'tail', role: 'assistant', text: '' } as any;
+        const initial = 'a'.repeat(20_000);
+        acc.hydrate({ text: initial });
+        view.syncTailAccumulator('tail', initial + 'b', 'b');
+        vi.advanceTimersByTime(16);
+        view.syncTailAccumulator('tail', initial + 'bc', 'c');
+        view.syncTailAccumulator('tail', initial + 'bcd', 'd');
+        expect(acc.state.text).toBe(initial + 'b');
+        vi.advanceTimersByTime(100);
+        expect(acc.state.text).toBe(initial + 'bcd');
+        view.syncTailAccumulator('tail', 'replacement', 'replacement');
+        view.syncTailAccumulator('tail', 'replacement!', '!');
+        acc.finalize();
+        expect(acc.state.text).toBe('replacement!');
+        acc.reset();
+        view.syncTailAccumulator('tail', 'new', 'new');
+        acc.finalize();
+        expect(acc.state.text).toBe('new');
+    } finally { vi.useRealTimers(); vi.unstubAllGlobals(); }
+});
+
+it('publishes background reasoning snapshots without losing queued text', () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => setTimeout(() => cb(performance.now()), 16));
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
+    try {
+        const acc = createStreamAccumulator();
+        const view = createChatViewProjection([], () => acc);
+        const initial = 'a'.repeat(20_000);
+        view.tailAssistant.value = { id: 'tail', role: 'assistant', text: initial, reasoning_text: 'old' } as any;
+        acc.hydrate({ text: initial, reasoningText: 'old' });
+        view.syncTailAccumulator('tail', initial + 'b', 'b');
+        vi.advanceTimersByTime(16);
+        view.syncTailAccumulator('tail', initial + 'bc', 'c');
+        view.tailAssistant.value!.reasoning_text = 'old plus';
+        view.syncTailAccumulator('tail', initial + 'bc', '');
+        vi.advanceTimersByTime(100);
+        expect(acc.state.reasoningText).toBe('old plus');
+        expect(acc.state.text).toBe(initial + 'bc');
+        view.tailAssistant.value!.reasoning_text = 'old plus more';
+        view.syncTailAccumulator('tail', initial + 'bcd', 'd');
+        vi.advanceTimersByTime(100);
+        expect(acc.state.reasoningText).toBe('old plus more');
+        expect(acc.state.text).toBe(initial + 'bcd');
+        view.tailAssistant.value!.reasoning_text = 'replacement reason';
+        view.syncTailAccumulator('tail', 'replacement', 'replacement');
+        acc.finalize();
+        expect(acc.state.text).toBe('replacement');
+        expect(acc.state.reasoningText).toBe('replacement reason');
+    } finally { vi.useRealTimers(); vi.unstubAllGlobals(); }
 });
