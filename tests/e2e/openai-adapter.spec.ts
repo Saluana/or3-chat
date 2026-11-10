@@ -152,7 +152,7 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
         data: { username: 'openai-adapter-admin', password: process.env.OR3_OPENAI_E2E_ADMIN_PASSWORD } })).ok()).toBe(true);
     await openAiSettings(page, 'fast');
     await page.getByRole('button', { name: 'Fast Model', exact: true }).click();
-    await page.getByText('gpt-5.4-mini · OpenAI', { exact: true }).click();
+    await page.getByRole('listbox', { name: 'Fast Model' }).getByText('gpt-5.4-mini · OpenAI', { exact: true }).click();
     await expect(page.getByRole('button', { name: 'Fast Model', exact: true })).toContainText('gpt-5.4-mini · OpenAI');
     await expect(page.getByRole('combobox', { name: 'Fast model routing' })).toHaveCount(0);
     await expect.poll(async () => (await page.request.get('/api/openrouter/title-model')).json())
@@ -707,6 +707,7 @@ test('switching tabs before a send is saved still sends the original message', a
     await chooseModel(page, 'Fixture Router');
     await send(page, 'establish chat');
     await expect(page.getByText('OpenRouter fixture reply')).toBeVisible({ timeout: 45_000 });
+    await expect(page.getByRole('button', { name: 'Stop generation', exact: true })).toHaveCount(0, { timeout: 45_000 });
     const originalTabId = await page.getByRole('tab', { selected: true }).getAttribute('id');
     expect(originalTabId).toBeTruthy();
     await page.evaluate(async () => {
@@ -731,7 +732,7 @@ test('switching tabs before a send is saved still sends the original message', a
     await expect(page.getByRole('region', { name: 'New chat' })).toBeVisible({ timeout: 30_000 });
     await page.getByRole('textbox', { name: 'Message input' }).fill('other tab draft');
     await page.locator(`[id="${originalTabId}"]`).click();
-    await expect(page.getByText('switch-before-save', { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('.chat-message-container').getByText('switch-before-save', { exact: true })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText('OpenRouter fixture reply')).toHaveCount(2, { timeout: 30_000 });
     await expect(page.getByRole('textbox', { name: 'Message input' })).not.toContainText('switch-before-save');
     await page.locator(`[id="${otherTabId}"]`).click();
