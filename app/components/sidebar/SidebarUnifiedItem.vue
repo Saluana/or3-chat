@@ -168,6 +168,7 @@ import type { UnifiedSidebarItem } from '~/types/sidebar';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useIcon } from '~/composables/useIcon';
+import { useSidebarActionMenu } from '~/composables/sidebar/useSidebarActionMenu';
 import { usePopoverKeyboard } from '~/composables/usePopoverKeyboard';
 import { useWorkspaceResourceActions } from '~/composables/core/useWorkspaceResourceActions';
 import { usePinnedItems } from '~/composables/sidebar/usePinnedItems';
@@ -330,7 +331,7 @@ const extraActions = computed<readonly ExtraAction[]>(() =>
     props.item.type === 'thread' ? threadActions.value : documentActions.value
 );
 
-const actionsOpen = ref(false);
+const actionsOpen = useSidebarActionMenu();
 // Virtual rows frequently remount. Create the menu only when it is first used;
 // retain it afterward so Reka still owns dismissal, transitions and focus.
 const actionsMounted = ref(false);
