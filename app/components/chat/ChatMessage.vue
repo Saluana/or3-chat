@@ -75,7 +75,7 @@
                         v-for="(hash, idx) in displayedHashes"
                         :key="hash"
                         type="button"
-                        class="attachment-item flex items-center gap-2.5 pl-1.5 pr-3 py-1.5 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-white/10 hover:bg-white/15 active:bg-white/20 transition-all cursor-pointer shadow-sm backdrop-blur-sm"
+                        class="attachment-item flex items-center gap-2.5 pl-1.5 pr-3 py-1.5 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-white/10 hover:bg-white/15 active:bg-white/20 transition-all cursor-pointer shadow-sm"
                         @click="toggleExpanded"
                         :aria-label="'View attachment ' + (idx + 1)"
                     >
@@ -177,7 +177,7 @@
                     <button
                         v-if="hashList.length > maxDisplayedThumbs"
                         type="button"
-                        class="attachment-more flex items-center justify-center px-4 py-1.5 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-white/10 hover:bg-white/15 active:bg-white/20 transition-all cursor-pointer text-[13px] font-medium shadow-sm backdrop-blur-sm"
+                        class="attachment-more flex items-center justify-center px-4 py-1.5 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-white/10 hover:bg-white/15 active:bg-white/20 transition-all cursor-pointer text-[13px] font-medium shadow-sm"
                         @click="toggleExpanded"
                     >
                         +{{ hashList.length - maxDisplayedThumbs }} more
@@ -869,9 +869,9 @@ function toggleUserMessage() {
 }
 
 const outerClass = computed(() => ({
-    'bg-primary text-white dark:text-white/95 retro-message-user px-4 backdrop-blur-sm w-fit max-w-full self-end ml-auto pb-5 min-w-0':
+    'bg-primary text-white dark:text-white/95 retro-message-user px-4 w-fit max-w-full self-end ml-auto pb-5 min-w-0':
         props.message.role === 'user',
-    'bg-white/5 retro-message-assistant w-full backdrop-blur-sm min-w-0':
+    'bg-white/5 retro-message-assistant w-full min-w-0':
         props.message.role === 'assistant',
 }));
 
