@@ -690,6 +690,18 @@ test('schema-2 S3 manifests authenticate remote data and distinguish reference s
   const sign = async () => { const text = `${JSON.stringify(manifest, null, 2)}\n`; await writeFile(join(dir, 'manifest.json'), text, { mode: 0o600 }); await writeBackupAuthentication(fixture.directory, dir, text); };
   await writeFile(join(dir, manifest.remote.file), payload, { mode: 0o600 }); await sign();
   expect((await readManifest(dir, fixture.directory)).schemaVersion).toBe(2);
+  // A valid authentication tag does not make malformed manifest fields safe.
+  const validManifest = structuredClone(manifest);
+  for (const change of [
+    { schemaVersion: 3 }, { snapshotKind: 'unknown' }, { storage: 'fs' },
+    { remote: { ...validManifest.remote, kind: 'unknown' } },
+    { remote: { ...validManifest.remote, file: 'remote-inventory.json' } },
+    { remote: { ...validManifest.remote, source: null } },
+  ]) {
+    Object.assign(manifest, structuredClone(validManifest), change); await sign();
+    await expect(readManifest(dir, fixture.directory)).rejects.toThrow(/invalid|source/i);
+  }
+  Object.assign(manifest, validManifest); await sign();
   const entries = (await inventoryBackups(fixture.directory)).entries;
   expect(entries).toContainEqual(expect.objectContaining({ kind: 'verified', backup: expect.objectContaining({ backupId: id, schemaVersion: 2, remoteKind: 's3-copy-v1' }) }));
   const exported = join(fixture.root, 's3-export'); await exportBackup(fixture.directory, id, exported);
