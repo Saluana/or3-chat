@@ -135,8 +135,15 @@ export async function assertBackupSourceProfile(directory: string, state: Manage
   };
   await checkExecution(ids[0]!, imageEntry, imageCommand);
   const vaultEnabled = managedVaultEnabled(directory, env);
+  // Older managed releases predate the vault and contain no secrets provider
+  // configuration at all. Only accept that legacy case without vault services,
+  // mounts, or any secrets configuration in the deployment or container.
+  const legacyWithoutVault = !vaultEnabled && !config.services?.['or3-vault']
+    && [env, resolved, actualEnv].every(values => !Object.keys(values).some(key => key.startsWith('NUXT_SECRETS_')))
+    && !(service.volumes ?? []).some(mount => typeof mount.target === 'string' && mount.target.startsWith('/run/or3-secrets'))
+    && !mounts.some(mount => typeof mount?.Destination === 'string' && mount.Destination.startsWith('/run/or3-secrets'));
   const provider = env.NUXT_SECRETS_PROVIDER ?? 'or3-secrets';
-  if ((provider !== '' && provider !== 'or3-secrets') || resolved.NUXT_SECRETS_PROVIDER !== provider || actualEnv.NUXT_SECRETS_PROVIDER !== provider || (provider === 'or3-secrets') !== vaultEnabled) {
+  if (!legacyWithoutVault && ((provider !== '' && provider !== 'or3-secrets') || resolved.NUXT_SECRETS_PROVIDER !== provider || actualEnv.NUXT_SECRETS_PROVIDER !== provider || (provider === 'or3-secrets') !== vaultEnabled)) {
     throw new Error('Backup source secret provider differs from managed vault custody.');
   }
   if (vaultEnabled) {
