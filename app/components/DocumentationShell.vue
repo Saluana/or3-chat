@@ -8,7 +8,7 @@
                 <div class="docs-header-brand-cell">
                     <UButton
                         v-bind="sidebarToggleButtonProps"
-                        :icon="useIcon('ui.menu').value"
+                        :icon="hoistedUiMenuIcon"
                         class="md:hidden!"
                         :aria-controls="sidebarId"
                         :aria-expanded="sidebarOpen"
@@ -97,7 +97,7 @@
                                 Documentation navigation
                             </h2>
                             <div class="sticky top-0 z-10 flex justify-end bg-[var(--md-surface)] px-4 pt-4">
-                                <UButton :icon="useIcon('ui.close').value" square variant="ghost" color="neutral" class="size-11! min-h-11! min-w-11! p-0!" aria-label="Close navigation" @click="closeSidebar" />
+                                <UButton :icon="hoistedUiCloseIcon" square variant="ghost" color="neutral" class="size-11! min-h-11! min-w-11! p-0!" aria-label="Close navigation" @click="closeSidebar" />
                             </div>
                             <div class="px-4 pt-2 pb-10">
                                 <DocsSidebarNav
@@ -184,7 +184,7 @@
                                 >
                                     <span>On this page</span>
                                     <UIcon
-                                        :name="useIcon('ui.chevron.down').value"
+                                        :name="hoistedUiChevronDownIcon"
                                         class="w-3.5 h-3.5 opacity-60 transition-transform duration-200"
                                         :class="{ 'rotate-180': mobileTocOpen }"
                                         aria-hidden="true"
@@ -235,7 +235,7 @@
                                 >
                                     <span class="docs-prevnext-label">
                                         <UIcon
-                                            :name="useIcon('ui.arrow.left').value"
+                                            :name="hoistedUiArrowLeftIcon"
                                             class="w-3.5 h-3.5"
                                             aria-hidden="true"
                                         />
@@ -255,7 +255,7 @@
                                         Next
                                         <UIcon
                                             :name="
-                                                useIcon('ui.chevron.right').value
+                                                hoistedUiChevronRightIcon
                                             "
                                             class="w-3.5 h-3.5"
                                             aria-hidden="true"
@@ -291,6 +291,14 @@
 </template>
 
 <script setup lang="ts">
+const hoistedUiMenuIcon = useIcon('ui.menu');
+const hoistedUiCloseIcon = useIcon('ui.close');
+const hoistedUiChevronDownIcon = useIcon('ui.chevron.down');
+const hoistedUiArrowLeftIcon = useIcon('ui.arrow.left');
+const hoistedUiChevronRightIcon = useIcon('ui.chevron.right');
+const hoistedShellThemeLightIcon = useIcon('shell.theme.light');
+const hoistedUiMoonIcon = useIcon('ui.moon');
+
 import {
     ref,
     computed,
@@ -336,8 +344,8 @@ const currentShikiTheme = computed(() => {
 
 const themeToggleIcon = computed(() => {
     return currentThemeName.value.startsWith('dark')
-        ? useIcon('shell.theme.light').value
-        : useIcon('ui.moon').value;
+        ? hoistedShellThemeLightIcon.value
+        : hoistedUiMoonIcon.value;
 });
 
 interface NavItem {
