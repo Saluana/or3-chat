@@ -23,14 +23,83 @@ async function chooseModel(page: Page, name: string) {
     await catalog.getByRole('listitem').filter({ hasText: name.replace(' (OpenAI key)', '') }).getByRole('button', { name: 'Use model', exact: true }).click();
 }
 
-async function send(page: Page, text: string) {
+async function send(page: Page, text: string, diagnose = false) {
     await expect(page.getByRole('button', { name: 'Stop generation', exact: true })).toHaveCount(0, { timeout: 45_000 });
     const input = page.getByRole('textbox', { name: 'Message input' });
     await input.click();
     await input.fill(text);
     await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled({ timeout: 45_000 });
-    await input.press('Enter');
-    await expect(input).not.toContainText(text, { timeout: 45_000 });
+    // Only the refusal turn needs this failure evidence. Keep it bounded and
+    // record state and request categories, never editor content or credentials.
+    const network: Array<{ event: string; category: string; elapsedMs: number; status?: number }> = [];
+    const started = Date.now();
+    const category = (url: string) => {
+        const path = new URL(url).pathname;
+        if (path === '/api/openrouter/stream') return 'chat-admission';
+        if (/^\/api\/jobs\/[^/]+(?:\/stream)?$/.test(path)) return 'job';
+        return null;
+    };
+    const onRequest = (request: import('@playwright/test').Request) => {
+        const kind = category(request.url());
+        if (kind && network.length < 100) network.push({ event: 'request', category: kind, elapsedMs: Date.now() - started });
+    };
+    const onResponse = (response: import('@playwright/test').Response) => {
+        const kind = category(response.url());
+        if (kind && network.length < 100) network.push({ event: 'response', category: kind, elapsedMs: Date.now() - started, status: response.status() });
+    };
+    const probe = diagnose ? await input.evaluateHandle((editor) => {
+        const events: Array<Record<string, boolean | number | string>> = [];
+        const start = performance.now();
+        const snapshot = (event: string, key?: KeyboardEvent) => {
+            if (events.length >= 100) return;
+            const send = document.querySelector<HTMLButtonElement>('button[aria-label="Send message"]');
+            events.push({ event, elapsedMs: Math.round(performance.now() - start),
+                connected: editor.isConnected, focused: editor.contains(document.activeElement),
+                hasContent: Boolean(editor.textContent?.trim()), sendPresent: Boolean(send),
+                sendDisabled: send?.disabled ?? false,
+                stopPresent: Boolean(document.querySelector('button[aria-label="Stop generation"]')),
+                ...(key ? { defaultPrevented: key.defaultPrevented, targetInsideEditor: editor.contains(key.target as Node),
+                    composing: key.isComposing, shift: key.shiftKey, trusted: key.isTrusted } : {}) });
+        };
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key !== 'Enter') return;
+            snapshot(event.type, event);
+            if (event.type === 'keydown') setTimeout(() => snapshot('keydown-after-dispatch', event), 0);
+        };
+        document.addEventListener('keydown', onKey, true);
+        document.addEventListener('keyup', onKey, true);
+        snapshot('ready');
+        const timers = [100, 1000].map(delay => setTimeout(() => snapshot(`after-${delay}ms`), delay));
+        return { finish() {
+            snapshot('finish');
+            for (const timer of timers) clearTimeout(timer);
+            document.removeEventListener('keydown', onKey, true);
+            document.removeEventListener('keyup', onKey, true);
+            return events;
+        } };
+    }).catch(() => null) : null;
+    if (probe) { page.on('request', onRequest); page.on('response', onResponse); }
+    let failed = false;
+    try {
+        await input.press('Enter');
+        await expect(input).not.toContainText(text, { timeout: 45_000 });
+    } catch (error) {
+        failed = true;
+        throw error;
+    } finally {
+        if (diagnose) {
+            page.off('request', onRequest); page.off('response', onResponse);
+            // A diagnostic failure must never replace the original assertion.
+            const events = probe ? await probe.evaluate(value => value.finish()).catch(() => null) : null;
+            await probe?.dispose().catch(() => {});
+            if (failed) {
+                const path = test.info().outputPath('refusal-send-boundary.json');
+                await writeFile(path, JSON.stringify({ events, network }, null, 2))
+                    .then(() => test.info().attach('refusal-send-boundary', { path, contentType: 'application/json' }))
+                    .catch(() => {});
+            }
+        }
+    }
 }
 
 test('a personal OpenAI key chats directly while OpenRouter keeps working', async ({ page }, info) => {
@@ -152,7 +221,7 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
     const toolFollowup = (await captured()).filter(request => request.path === '/v1/responses' && request.includeUsage === true).at(-1);
     expect(toolFollowup!.roles).toContain('tool');
     // A Responses refusal is visible text rather than an empty successful answer.
-    await send(page, 'openai:refuse');
+    await send(page, 'openai:refuse', true);
     await expect(page.getByText('Fixture refusal')).toBeVisible({ timeout: 30_000 });
     // A disconnect during admission must wait for connectivity and reuse the same send.
     const beforeOffline = (await captured()).filter(request => request.path === '/v1/responses' && request.includeUsage === true).length;
