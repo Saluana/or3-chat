@@ -73,7 +73,7 @@
                             :square="true"
                             aria-label="Open sidebar"
                             title="Open sidebar"
-                            :icon="useIcon('ui.menu').value"
+                            :icon="hoistedUiMenuIcon"
                             @click="openMobileSidebar"
                         />
                     </UTooltip>
@@ -95,7 +95,7 @@
                             :disabled="!canAddPane"
                             aria-label="New split"
                             title="New split"
-                            :icon="useIcon('shell.pane.add').value"
+                            :icon="hoistedShellPaneAddIcon"
                             @click="workspaceTabs.newSplit()"
                         />
                     </UTooltip>
@@ -110,7 +110,7 @@
                             :square="true"
                             aria-label="Close split"
                             title="Close split"
-                            :icon="useIcon('shell.pane.close').value"
+                            :icon="hoistedShellPaneCloseIcon"
                             @click="workspaceTabs.closeSplit()"
                         />
                     </UTooltip>
@@ -177,7 +177,7 @@
                             v-bind="sidebarToggleButtonProps"
                             :square="true"
                             aria-label="Open sidebar"
-                            :icon="useIcon('ui.menu').value"
+                            :icon="hoistedUiMenuIcon"
                         />
                     </template>
                     <template #actions>
@@ -222,7 +222,7 @@
                             :square="true"
                             aria-label="Open sidebar"
                             title="Open sidebar"
-                            :icon="useIcon('ui.menu').value"
+                            :icon="hoistedUiMenuIcon"
                             @click="openMobileSidebar"
                         />
                     </UTooltip>
@@ -243,7 +243,7 @@
                             ]"
                             aria-label="New window"
                             title="New window"
-                            :icon="useIcon('shell.pane.add').value"
+                            :icon="hoistedShellPaneAddIcon"
                             @click="addPane"
                         />
                     </UTooltip>
@@ -260,13 +260,7 @@
                             :class="'pointer-events-auto backdrop-blur'"
                             :aria-label="themeAriaLabel"
                             :title="themeAriaLabel"
-                            :icon="
-                                useIcon(
-                                    themeName === 'dark'
-                                        ? 'shell.theme.light'
-                                        : 'shell.theme.dark'
-                                ).value
-                            "
+                            :icon="themeToggleIcon"
                             @click="toggleTheme"
                         />
                     </UTooltip>
@@ -374,7 +368,7 @@
                                 :square="true"
                                 aria-label="Close window"
                                 title="Close window"
-                                :icon="useIcon('shell.pane.close').value"
+                                :icon="hoistedShellPaneCloseIcon"
                                 @click.stop="closePane(i)"
                             />
                         </UTooltip>
@@ -439,6 +433,10 @@
     </resizable-sidebar-layout>
 </template>
 <script setup lang="ts">
+const hoistedUiMenuIcon = useIcon('ui.menu');
+const hoistedShellPaneAddIcon = useIcon('shell.pane.add');
+const hoistedShellPaneCloseIcon = useIcon('shell.pane.close');
+
 import { presentError } from '~~/shared/errors';
 import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
 // Generic PageShell merging chat + docs functionality.

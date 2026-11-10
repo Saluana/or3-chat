@@ -57,7 +57,7 @@
                             >
                                 <UIcon
                                     class="size-4 shrink-0"
-                                    :name="useIcon('ui.chevron.left').value"
+                                    :name="hoistedUiChevronLeftIcon"
                                 />
                                 <span id="dashboard-page-breadcrumb" class="truncate">{{ backTarget.label }}</span>
                             </button>
@@ -70,7 +70,7 @@
                             </h2>
                         </div>
                         <UButton
-                            :icon="useIcon('ui.close').value"
+                            :icon="hoistedUiCloseIcon"
                             color="neutral"
                             variant="ghost"
                             square
@@ -186,6 +186,9 @@
     </AppModal>
 </template>
 <script setup lang="ts">
+const hoistedUiChevronLeftIcon = useIcon('ui.chevron.left');
+const hoistedUiCloseIcon = useIcon('ui.close');
+
 import { presentError } from '~~/shared/errors';
 import { computed, nextTick, provide, ref, shallowRef, watch } from 'vue';
 import PluginIcons from './PluginIcons.vue';

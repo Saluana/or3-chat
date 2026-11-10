@@ -393,7 +393,7 @@ const api = {
     imageReadyAt: (index: number) => {
         const hash = messages.value[index]?.file_hashes?.[0];
         return hash
-            ? useThumbnailUrlCache().get(hash)?.status === 'ready'
+            ? useThumbnailUrlCache().get(`attachment-thumb:${hash}`)?.status === 'ready'
             : false;
     },
     appendMessage,

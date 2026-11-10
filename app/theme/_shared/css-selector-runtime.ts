@@ -55,6 +55,7 @@ export function applyThemeClasses(
     let cancelled = false;
     let frame: number | ReturnType<typeof setTimeout> | null = null;
     let observer: MutationObserver | null = null;
+    const added = new Set<Element>();
 
     const addClasses = (element: Element, classes: string[]) => {
         if (!(element instanceof HTMLElement) || cancelled) return;
@@ -71,20 +72,7 @@ export function applyThemeClasses(
         }
     };
 
-    const releaseElement = (element: Element) => {
-        if (!(element instanceof HTMLElement) || element.isConnected) return;
-        const classes = owned.get(element);
-        if (!classes) return;
-        for (const className of classes) element.classList.remove(className);
-        owned.delete(element);
-    };
-
-    const releaseRemovedSubtree = (node: Node) => {
-        if (!(node instanceof Element)) return;
-        releaseElement(node);
-        node.querySelectorAll('*').forEach(releaseElement);
-    };
-
+    const validEntries: typeof entries = [];
     const applyEntry = ({
         selector,
         classes,
@@ -96,6 +84,7 @@ export function applyThemeClasses(
             const elements = document.querySelectorAll(selector);
 
             elements.forEach((element) => addClasses(element, classes));
+            validEntries.push({ selector, classes });
         } catch (error) {
             if (import.meta.dev) {
                 console.warn(
@@ -111,6 +100,7 @@ export function applyThemeClasses(
             cancelled = true;
             observer?.disconnect();
             observer = null;
+            added.clear();
             if (frame !== null) {
                 if (typeof frame === 'number' && typeof cancelAnimationFrame !== 'undefined') {
                     cancelAnimationFrame(frame);
@@ -136,25 +126,51 @@ export function applyThemeClasses(
     if (entries.length === 0) return session;
 
     const observeAdditions = () => {
-        if (typeof MutationObserver === 'undefined' || cancelled) return;
+        if (typeof MutationObserver === 'undefined' || cancelled || validEntries.length === 0) return;
+        // Only combine a conservative subset whose syntax cannot consume a separator.
+        const combined = validEntries.every(({ selector }) => /^[\w\s.#>+~*-]+$/.test(selector))
+            ? `:is(${validEntries.map(({ selector }) => selector).join(',')})`
+            : null;
+        let pending = false;
+        const flush = () => {
+            frame = null;
+            pending = false;
+            if (cancelled) return;
+            for (const node of added) {
+                if (!node.isConnected) continue;
+                if (combined && !node.matches(combined) && !node.querySelector(combined)) continue;
+                for (const { selector, classes } of validEntries) {
+                    if (node.matches(selector)) addClasses(node, classes);
+                    node.querySelectorAll(selector).forEach((el) => addClasses(el, classes));
+                }
+            }
+            added.clear();
+        };
         observer = new MutationObserver((records) => {
-            for (const record of records) {
-                for (const node of record.removedNodes) {
-                    releaseRemovedSubtree(node);
+            const hasRemovals = records.some((record) =>
+                Array.from(record.removedNodes).some((node) => node instanceof Element)
+            );
+            if (hasRemovals) {
+                for (const node of added) {
+                    if (!node.isConnected) added.delete(node);
+                }
+                for (const [element, classes] of owned) {
+                    if (element.isConnected) continue;
+                    for (const className of classes) element.classList.remove(className);
+                    owned.delete(element);
                 }
             }
             for (const record of records) {
                 for (const node of record.addedNodes) {
-                    if (!(node instanceof Element)) continue;
-                    for (const { selector, classes } of entries) {
-                        try {
-                            if (node.matches(selector)) addClasses(node, classes);
-                            node.querySelectorAll(selector).forEach((el) => addClasses(el, classes));
-                        } catch {
-                            // Invalid selectors are already reported during the initial pass.
-                        }
-                    }
+                    if (node instanceof Element && node.isConnected) added.add(node);
                 }
+            }
+            if (pending || added.size === 0) return;
+            pending = true;
+            if (typeof requestAnimationFrame !== 'undefined') {
+                frame = requestAnimationFrame(flush);
+            } else {
+                queueMicrotask(flush);
             }
         });
         observer.observe(document.documentElement, { childList: true, subtree: true });

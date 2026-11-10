@@ -12,10 +12,12 @@ import Dexie, { liveQuery, type Subscription } from 'dexie';
 import { ref, shallowRef, watch, onBeforeUnmount } from 'vue';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import type { Thread, Message } from '~/db/schema';
+import { useChatBranchAnchors } from '~/composables/projects/useChatBranchAnchors';
 import { storedMessagesToCanonicalTranscript, isSupersededMessage } from '~/utils/chat/transcript';
 const props = defineProps<{ threadId?: string; messageId: string; toolResultMessageIds?: readonly string[] }>();
 const emit = defineEmits<{ (e: 'navigate', target: { threadId: string; originThreadId: string; anchorMessageId: string; generation: number }): void }>();
 const children = shallowRef<Thread[]>([]); const hasMore = ref(false); const opening = ref(false); const limit = ref(50);
+const branchAnchors = useChatBranchAnchors();
 const unavailable = ref<string>(); let subscription: Subscription | undefined; let revision = 0;
 function validToolAnchor(parent: Message, tool: Message, origin: string): boolean {
     if (parent.role !== 'assistant' || parent.deleted || isSupersededMessage(parent) || tool.role !== 'tool'
@@ -24,10 +26,17 @@ function validToolAnchor(parent: Message, tool: Message, origin: string): boolea
     const result = records.find(row => row.id === tool.id); const owner = records.find(row => row.id === parent.id);
     return result?.parentAssistantId === parent.id && Boolean(result.callId && owner?.toolCalls.some(call => call.callId === result.callId));
 }
+function eligible() {
+    if (!branchAnchors) return true;
+    if (branchAnchors.threadId() !== props.threadId) return false;
+    const anchors = branchAnchors.anchors.value;
+    return anchors === null || [props.messageId, ...(props.toolResultMessageIds ?? [])].some(id => anchors.has(id));
+}
 function bind() {
     subscription?.unsubscribe(); children.value = []; hasMore.value = false; unavailable.value = undefined; opening.value = false;
     const token = ++revision; const db = getDb(); const generation = getWorkspaceGeneration(); const origin = props.threadId; const messageId = props.messageId;
     if (!origin || !messageId) return;
+    if (!eligible()) return;
     subscription = liveQuery(async () => {
         const anchor = await db.messages.get(messageId);
         // Inherited-only rows get their reverse links in the original pane.
@@ -59,6 +68,7 @@ function bind() {
     }, error: () => { if (token === revision) unavailable.value = 'Branch links are unavailable.'; } });
 }
 watch([() => props.threadId, () => props.messageId, () => props.toolResultMessageIds], () => { limit.value = 50; bind(); }, { immediate: true });
+if (branchAnchors) watch(eligible, bind);
 watch(limit, bind); const stopWorkspace = subscribeActiveWorkspaceDb(bind);
 onBeforeUnmount(() => { revision++; subscription?.unsubscribe(); stopWorkspace(); });
 async function open(id: string) {

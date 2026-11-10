@@ -354,6 +354,9 @@ function onEscapeClear() {
 let sub: { unsubscribe: () => void } | null = null;
 let subProjects: { unsubscribe: () => void } | null = null;
 let stopWorkspaceSubscription: (() => void) | null = null;
+let searchBinding = 0;
+let workspaceQueriesMounted = false;
+let sidebarDisposed = false;
 
 // Virtualization removed — always render the simple list for chats.
 
@@ -419,13 +422,13 @@ function bindProjectQuery() {
     });
 }
 
-function bindWorkspaceQueries() {
+function bindSearchQueries() {
+    const binding = ++searchBinding;
     sub?.unsubscribe();
-    subProjects?.unsubscribe();
     subDocs?.unsubscribe();
     items.value = [];
-    projects.value = [];
     docs.value = [];
+    if (!sidebarQuery.value.trim()) return;
     const workspaceDb = getDb();
     const generation = getWorkspaceGeneration();
     // Threads subscription (sorted by last opened, excluding deleted)
@@ -437,11 +440,10 @@ function bindWorkspaceQueries() {
             .toArray()
     ).subscribe({
         next: (results) => {
-            if (generation === getWorkspaceGeneration()) items.value = results;
+            if (binding === searchBinding && generation === getWorkspaceGeneration()) items.value = results;
         },
         error: (err) => console.error('liveQuery error', err),
     });
-    bindProjectQuery();
     if (documentsEnabled.value) {
         // Documents subscription (docs only, excluding deleted)
         subDocs = liveQuery(() =>
@@ -452,7 +454,7 @@ function bindWorkspaceQueries() {
                 .toArray()
         ).subscribe({
             next: (res) => {
-                if (generation !== getWorkspaceGeneration()) return;
+                if (binding !== searchBinding || generation !== getWorkspaceGeneration()) return;
                 docs.value = res.map((d: any) => ({ ...d }));
             },
             error: (err) => console.error('documents liveQuery error', err),
@@ -462,9 +464,21 @@ function bindWorkspaceQueries() {
     }
 }
 
+function bindWorkspaceQueries() {
+    projects.value = [];
+    bindSearchQueries();
+    bindProjectQuery();
+}
+
+watch(() => Boolean(sidebarQuery.value.trim()), () => {
+    if (workspaceQueriesMounted) bindSearchQueries();
+}, { flush: 'sync' });
+
 onMounted(async () => {
     await nextTick();
+    if (sidebarDisposed) return;
     recomputeListHeight();
+    workspaceQueriesMounted = true;
     bindWorkspaceQueries();
     stopWorkspaceSubscription = subscribeActiveWorkspaceDb(bindWorkspaceQueries);
 });
@@ -512,6 +526,9 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+    sidebarDisposed = true;
+    workspaceQueriesMounted = false;
+    searchBinding++;
     stopWorkspaceSubscription?.();
     sub?.unsubscribe();
     subProjects?.unsubscribe();

@@ -275,6 +275,13 @@ vi.mock('~/composables/chat/useStreamAccumulator', () => ({
         };
         return {
             state,
+            getText: () => state.text,
+            getReasoning: () => state.reasoningText,
+            replaceReasoning: (text: string) => { state.reasoningText = text; },
+            hydrate: (seed: { text?: unknown; reasoningText?: unknown }) => {
+                state.text = typeof seed.text === 'string' ? seed.text : '';
+                state.reasoningText = typeof seed.reasoningText === 'string' ? seed.reasoningText : '';
+            },
             reset: () => {
                 streamAccResetMock();
                 state.text = '';
@@ -1788,6 +1795,14 @@ describe('useChat background detach race', () => {
             reasoning: 'old reasoning',
             status: { status: 'streaming' },
         });
+        expect(chat.streamState.reasoningText).toBe('old reasoning');
+        subscriber?.onUpdate?.({
+            content: 'old partial',
+            delta: '',
+            reasoning: 'new reasoning',
+            status: { status: 'streaming' },
+        });
+        expect(chat.streamState.reasoningText).toBe('new reasoning');
         subscriber?.onUpdate?.({
             content: '',
             delta: '',
@@ -1797,6 +1812,7 @@ describe('useChat background detach race', () => {
             status: { status: 'streaming', content_reset: true, attempt: 2 },
         });
         expect(chat.streamState.text).toBe('');
+        expect(chat.streamState.reasoningText).toBe('');
         expect(chat.tailAssistant.value?.reasoning_text ?? '').toBe('');
 
         subscriber?.onUpdate?.({

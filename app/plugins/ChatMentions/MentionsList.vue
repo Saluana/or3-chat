@@ -29,7 +29,7 @@
             <!-- Search Input -->
             <div class="search-wrap">
                 <UIcon
-                    :name="useIcon('ui.search').value"
+                    :name="hoistedUiSearchIcon"
                     class="search-icon"
                 />
                 <input
@@ -95,15 +95,15 @@
                                 :hash="item.imageHash"
                                 :size-bytes="item.imageSizeBytes"
                                 alt=""
-                                :fallback-icon="useIcon('ui.notes').value"
+                                :fallback-icon="hoistedUiNotesIcon"
                                 class="size-8! rounded-[inherit]! border-0!"
                             />
                             <UIcon
                                 v-else
                                 :name="
                                     item.source !== 'chat'
-                                        ? useIcon('ui.notes').value
-                                        : useIcon('ui.chat').value
+                                        ? hoistedUiNotesIcon
+                                        : hoistedUiChatIcon
                                 "
                                 class="item-icon"
                             />
@@ -133,7 +133,7 @@
             class="suggestion-empty"
         >
             <UIcon
-                :name="useIcon('ui.search').value"
+                :name="hoistedUiSearchIcon"
                 class="empty-icon"
             />
             <p class="empty-title">No results</p>
@@ -156,13 +156,18 @@
             </div>
             <div class="footer-action">
                 <span class="hint-label">Type <strong>@</strong> to create a reference</span>
-                <UIcon :name="useIcon('ui.sparkles').value" class="footer-sparkle" />
+                <UIcon :name="hoistedUiSparklesIcon" class="footer-sparkle" />
             </div>
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
+const hoistedUiSearchIcon = useIcon('ui.search');
+const hoistedUiNotesIcon = useIcon('ui.notes');
+const hoistedUiChatIcon = useIcon('ui.chat');
+const hoistedUiSparklesIcon = useIcon('ui.sparkles');
+
 import { ref, computed, watch, nextTick } from 'vue';
 import { useIcon } from '~/composables/useIcon';
 import PaletteImageThumb from '~/components/search/PaletteImageThumb.vue';
@@ -236,7 +241,7 @@ const sections = computed<SectionBucket[]>(() => {
         list.push({
             key: 'recommended',
             title: 'Search Results',
-            icon: useIcon('ui.search').value,
+            icon: hoistedUiSearchIcon.value,
             items: recommendedItems.value,
         });
     }
@@ -252,7 +257,7 @@ const sections = computed<SectionBucket[]>(() => {
         list.push({
             key: 'chats',
             title: 'Chats',
-            icon: useIcon('ui.chat').value,
+            icon: hoistedUiChatIcon.value,
             items: chatItems.value,
         });
     }

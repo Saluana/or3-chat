@@ -2836,7 +2836,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "987bd9648dbde721d0444d9c20fe82788c77a617d75b9377cadfe077b354c845",
+      "apiSha256": "a75b7bb944fe5f41e402230797e78028e519d5e204d2d365a8823be5c50566e6",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2989,7 +2989,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useStreamAccumulator.ts",
-              "line": 76,
+              "line": 81,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type AppendKind = 'text' | 'reasoning';"
             }
@@ -3196,7 +3196,7 @@
               "resolvedReturnType": "StreamAccumulatorApi",
               "declaration": {
                 "source": "app/composables/chat/useStreamAccumulator.ts",
-                "line": 107,
+                "line": 115,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createStreamAccumulator(): StreamAccumulatorApi;"
               }
@@ -3205,7 +3205,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useStreamAccumulator.ts",
-              "line": 107,
+              "line": 115,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createStreamAccumulator(): StreamAccumulatorApi;"
             }
@@ -6104,9 +6104,9 @@
           "declarations": [
             {
               "source": "app/composables/chat/useStreamAccumulator.ts",
-              "line": 78,
+              "line": 83,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface StreamAccumulatorApi {\n    state: Readonly<StreamingState>;\n    append(delta: string, options: { kind: AppendKind }): void;\n    hydrate(seed: {\n        text?: unknown;\n        reasoningText?: unknown;\n    }): void;\n    finalize(opts?: { error?: Error; aborted?: boolean }): void; // idempotent\n    reset(): void; // prepare for a fresh stream\n}"
+              "text": "export interface StreamAccumulatorApi {\n    state: Readonly<StreamingState>;\n    append(delta: string, options: { kind: AppendKind }): void;\n    getText(): string;\n    getReasoning(): string;\n    replaceReasoning(text: string): void;\n    hydrate(seed: {\n        text?: unknown;\n        reasoningText?: unknown;\n    }): void;\n    finalize(opts?: { error?: Error; aborted?: boolean }): void; // idempotent\n    reset(): void; // prepare for a fresh stream\n}"
             }
           ]
         },
@@ -6118,7 +6118,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useStreamAccumulator.ts",
-              "line": 66,
+              "line": 71,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StreamingState {\n    text: string;\n    reasoningText: string;\n    isActive: boolean;\n    finalized: boolean;\n    aborted: boolean;\n    error: Error | null;\n    version: number; // increments on each flush for lightweight watchers\n}"
             }
@@ -6224,7 +6224,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useStreamAccumulator.ts",
-              "line": 66,
+              "line": 71,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface StreamingState {\n    text: string;\n    reasoningText: string;\n    isActive: boolean;\n    finalized: boolean;\n    aborted: boolean;\n    error: Error | null;\n    version: number; // increments on each flush for lightweight watchers\n}"
             }
@@ -7703,7 +7703,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useStreamAccumulator.ts",
-                "line": 270,
+                "line": 319,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useStreamAccumulator();"
               }
@@ -7712,7 +7712,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useStreamAccumulator.ts",
-              "line": 270,
+              "line": 319,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useStreamAccumulator();"
             }
@@ -8913,7 +8913,7 @@
     },
     {
       "source": "app/composables/sidebar/useSidebarEnvironment.ts",
-      "apiSha256": "371273b53f513e509552d76bc649e1283e185cf7b32233b455c6647283e9b640",
+      "apiSha256": "5bf4b434ef9255611deb8e2b65174ddbcad61df56ca7b1a8e7fa876e5c3a697b",
       "runtime": "client",
       "publicPaths": [
         "~/composables/sidebar",
@@ -9084,7 +9084,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarEnvironment.ts",
-                "line": 491,
+                "line": 493,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useActiveDocumentIds();"
               }
@@ -9093,7 +9093,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarEnvironment.ts",
-              "line": 491,
+              "line": 493,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useActiveDocumentIds();"
             }
@@ -9110,7 +9110,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarEnvironment.ts",
-                "line": 413,
+                "line": 415,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useActiveSections();"
               }
@@ -9119,7 +9119,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarEnvironment.ts",
-              "line": 413,
+              "line": 415,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useActiveSections();"
             }
@@ -9136,7 +9136,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarEnvironment.ts",
-                "line": 465,
+                "line": 467,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useActiveThreadIds();"
               }
@@ -9145,7 +9145,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarEnvironment.ts",
-              "line": 465,
+              "line": 467,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useActiveThreadIds();"
             }
@@ -9162,7 +9162,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarEnvironment.ts",
-                "line": 439,
+                "line": 441,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useExpandedProjects();"
               }
@@ -9171,7 +9171,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarEnvironment.ts",
-              "line": 439,
+              "line": 441,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useExpandedProjects();"
             }
@@ -9188,7 +9188,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarEnvironment.ts",
-                "line": 368,
+                "line": 370,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarDocuments();"
               }
@@ -9197,7 +9197,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarEnvironment.ts",
-              "line": 368,
+              "line": 370,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarDocuments();"
             }
@@ -9240,7 +9240,7 @@
               "resolvedReturnType": "SidebarMultiPaneApi",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarEnvironment.ts",
-                "line": 517,
+                "line": 519,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarMultiPane(): SidebarMultiPaneApi;"
               }
@@ -9249,7 +9249,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarEnvironment.ts",
-              "line": 517,
+              "line": 519,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarMultiPane(): SidebarMultiPaneApi;"
             }
@@ -9266,7 +9266,7 @@
               "resolvedReturnType": "PanePluginApi | null",
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarEnvironment.ts",
-                "line": 537,
+                "line": 539,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarPostsApi(): PanePluginApi | null;"
               }
@@ -9275,7 +9275,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarEnvironment.ts",
-              "line": 537,
+              "line": 539,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarPostsApi(): PanePluginApi | null;"
             }
@@ -9318,7 +9318,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarEnvironment.ts",
-                "line": 388,
+                "line": 390,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarQuery();"
               }
@@ -9327,7 +9327,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarEnvironment.ts",
-              "line": 388,
+              "line": 390,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarQuery();"
             }
@@ -9344,7 +9344,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/sidebar/useSidebarEnvironment.ts",
-                "line": 348,
+                "line": 349,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useSidebarThreads();"
               }
@@ -9353,7 +9353,7 @@
           "declarations": [
             {
               "source": "app/composables/sidebar/useSidebarEnvironment.ts",
-              "line": 348,
+              "line": 349,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useSidebarThreads();"
             }

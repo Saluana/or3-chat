@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
     createStreamAccumulator,
     useStreamAccumulator,
@@ -244,5 +244,117 @@ describe('createStreamAccumulator', () => {
 
         expect(acc.state.isActive).toBe(true);
         expect(acc.state.text).toBe('');
+    });
+});
+
+describe('long stream scheduling', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+        vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) =>
+            setTimeout(() => cb(performance.now()), 16));
+        vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
+    });
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.unstubAllGlobals();
+    });
+
+    it('flushes every frame below the threshold', () => {
+        const acc = createStreamAccumulator();
+        for (let i = 0; i < 10; i++) {
+            acc.append('x', { kind: 'text' });
+            vi.advanceTimersByTime(16);
+        }
+        expect(acc.state.text).toBe('x'.repeat(10));
+        expect(acc.state.version).toBe(10);
+    });
+
+    it.each([
+        [20_000, 80, 'text'],
+        [60_000, 125, 'text'],
+        [20_000, 80, 'reasoning'],
+        [60_000, 125, 'reasoning'],
+    ] as const)('throttles %i characters at %i ms for %s', (size, gap, kind) => {
+        const acc = createStreamAccumulator();
+        acc.append('a'.repeat(size), { kind });
+        vi.advanceTimersByTime(16);
+        acc.append('b', { kind });
+        acc.append('c', { kind });
+        vi.advanceTimersByTime(gap - 1);
+        expect(acc.state.version).toBe(1);
+        vi.advanceTimersByTime(17);
+        expect(acc.state.version).toBe(2);
+        expect(kind === 'text' ? acc.state.text : acc.state.reasoningText).toBe('a'.repeat(size) + 'bc');
+    });
+
+    it.each(['finalize', 'reset', 'hydrate'] as const)('%s cancels delayed work', (operation) => {
+        const acc = createStreamAccumulator();
+        acc.append('a'.repeat(20_000), { kind: 'text' });
+        vi.advanceTimersByTime(16);
+        acc.append('stale', { kind: 'text' });
+        if (operation === 'hydrate') acc.hydrate({ text: 'saved' });
+        else acc[operation]();
+        const expected = operation === 'finalize' ? 'a'.repeat(20_000) + 'stale' : operation === 'hydrate' ? 'saved' : '';
+        const version = acc.state.version;
+        vi.advanceTimersByTime(300);
+        expect(acc.state.text).toBe(expected);
+        expect(acc.state.version).toBe(version);
+    });
+
+    it('combines committed and pending channels when choosing a threshold', () => {
+        const acc = createStreamAccumulator();
+        acc.append('a'.repeat(19_000), { kind: 'text' });
+        vi.advanceTimersByTime(16);
+        acc.append('b'.repeat(1_000), { kind: 'reasoning' });
+        vi.advanceTimersByTime(79);
+        expect(acc.state.reasoningText).toBe('');
+        vi.advanceTimersByTime(17);
+        expect(acc.state.reasoningText).toBe('b'.repeat(1_000));
+    });
+
+    it.each([[11_000, 16], [35_000, 96]])('counts a %i-character reasoning replacement once', (size, delay) => {
+        const acc = createStreamAccumulator();
+        const reasoning = 'r'.repeat(size);
+        acc.append(reasoning, { kind: 'reasoning' });
+        vi.advanceTimersByTime(16);
+        acc.replaceReasoning(reasoning + '!');
+        vi.advanceTimersByTime(delay);
+        expect(acc.state.reasoningText.length).toBe(size + 1);
+        expect(acc.state.reasoningText.endsWith('!')).toBe(true);
+    });
+
+    it('does not publish before a fractional deadline even if a frame arrives early', () => {
+        let now = 0.2;
+        vi.spyOn(performance, 'now').mockImplementation(() => now);
+        let callback: FrameRequestCallback | undefined;
+        vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { callback = cb; return 1; });
+        const acc = createStreamAccumulator();
+        acc.append('a'.repeat(20_000), { kind: 'text' });
+        callback!(now);
+        now = 1.5;
+        acc.append('b', { kind: 'text' });
+        vi.advanceTimersByTime(79);
+        now = 80.1;
+        callback?.(now);
+        expect(acc.state.text).toBe('a'.repeat(20_000));
+        now = 81;
+        vi.advanceTimersByTime(20);
+        callback?.(now);
+        expect(acc.state.text).toBe('a'.repeat(20_000) + 'b');
+        vi.restoreAllMocks();
+    });
+
+    it('counts flushes for sustained long input', () => {
+        const acc = createStreamAccumulator();
+        acc.hydrate({ text: 'a'.repeat(60_000) });
+        const start = acc.state.version;
+        for (let i = 0; i < 100; i++) {
+            acc.append('x', { kind: 'text' });
+            vi.advanceTimersByTime(16);
+        }
+        acc.finalize();
+        console.log('sustained flush count:', acc.state.version - start - 1);
+        expect(acc.state.text).toBe('a'.repeat(60_000) + 'x'.repeat(100));
+        expect(acc.state.version - start).toBeLessThan(30);
     });
 });

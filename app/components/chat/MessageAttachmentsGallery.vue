@@ -126,6 +126,7 @@
 </template>
 
 <script setup lang="ts">
+import { resizePreview } from '~/utils/files/resizePreview';
 import { reactive, watch, onBeforeUnmount } from 'vue';
 import { useToast } from '#imports';
 import { getFileBlob, getFileMeta } from '~/db/files';
@@ -158,6 +159,7 @@ const attachmentItemProps = useThemeOverrides({
 });
 
 // Shared object URL cache across chat surfaces
+const cacheKey = (hash: string) => `attachment-thumb:${hash}`;
 const thumbUrlCache = useThumbnailUrlCache({ graceMs: 30000 });
 
 const thumbs = reactive<Record<string, LocalThumbState>>({});
@@ -166,10 +168,11 @@ const fileNames = reactive<Record<string, string>>({});
 const downloading = reactive<Record<string, boolean>>({});
 const toast = useToast();
 
-async function ensure(h: string) {
+async function ensure(h: string, owner: object) {
     const generation = getWorkspaceGeneration();
+    const current = () => isComponentActive && generation === getWorkspaceGeneration() && currentHashes.get(h) === owner;
     const m = await getFileMeta(h).catch(() => undefined);
-    if (!isComponentActive || generation !== getWorkspaceGeneration()) return;
+    if (!current()) return;
     if (m) {
         meta[h] = m;
         if (m.name) fileNames[h] = m.name;
@@ -184,20 +187,20 @@ async function ensure(h: string) {
     }
 
     if (thumbs[h] && thumbs[h].status === 'ready') return;
-    const cached = thumbUrlCache.get(h);
+    const cached = thumbUrlCache.get(cacheKey(h));
     if (cached) {
         thumbs[h] = cached;
         return;
     }
 
     thumbs[h] = { status: 'loading' };
-    const state = await thumbUrlCache.ensure(h, async () => {
+    const state = await thumbUrlCache.ensure(cacheKey(h), async (cacheCurrent, signal) => {
         const blob = await getFileBlob(h);
-        if (generation !== getWorkspaceGeneration()) return null;
-        thumbUrlCache.setIntrinsicSize(h, m.width, m.height);
-        return blob;
+        if (!cacheCurrent()) return null;
+        thumbUrlCache.setIntrinsicSize(cacheKey(h), m.width, m.height);
+        return blob ? resizePreview(blob, 160, cacheCurrent, undefined, signal) : blob;
     });
-    if (!isComponentActive || generation !== getWorkspaceGeneration()) return;
+    if (!current()) return;
     if (state) {
         thumbs[h] = state;
     } else {
@@ -230,28 +233,26 @@ async function downloadAttachment(hash: string): Promise<void> {
 }
 
 // Track current hashes and manage ref counting/object URL cleanup
-const currentHashes = new Set<string>();
+const currentHashes = new Map<string, object>();
 let isComponentActive = true;
 
-async function syncHashes(list: string[]) {
-    const generation = getWorkspaceGeneration();
+function syncHashes(list: string[]) {
     const next = new Set(list);
-    for (const h of next) {
-        if (!currentHashes.has(h)) {
-            await ensure(h);
-            if (!isComponentActive || generation !== getWorkspaceGeneration()) return;
-            const state = thumbUrlCache.get(h);
-            if (state?.status === 'ready' && state.url) {
-                thumbUrlCache.retain(h);
-                currentHashes.add(h);
-            }
-        }
-    }
-    for (const h of Array.from(currentHashes)) {
+    for (const h of currentHashes.keys()) {
         if (!next.has(h)) {
             currentHashes.delete(h);
-            thumbUrlCache.release(h);
+            thumbUrlCache.release(cacheKey(h));
             delete thumbs[h];
+            delete meta[h];
+            delete fileNames[h];
+        }
+    }
+    for (const h of next) {
+        if (!currentHashes.has(h)) {
+            const owner = {};
+            currentHashes.set(h, owner);
+            thumbUrlCache.retain(cacheKey(h));
+            void ensure(h, owner);
         }
     }
 }
@@ -268,8 +269,8 @@ const stopWorkspace = subscribeActiveWorkspaceDb(() => {
 onBeforeUnmount(() => {
     stopWorkspace();
     isComponentActive = false;
-    for (const h of currentHashes) {
-        thumbUrlCache.release(h);
+    for (const h of currentHashes.keys()) {
+        thumbUrlCache.release(cacheKey(h));
         delete thumbs[h];
     }
     currentHashes.clear();

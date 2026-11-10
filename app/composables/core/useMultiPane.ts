@@ -367,11 +367,15 @@ export function useMultiPane(
         // A combined liveQuery reruns every open history when any one thread
         // changes. Keep one owned observer per distinct open conversation so
         // an idle pane retains its history objects during neighboring writes.
-        type HistoryObserver = { subscription?: Subscription; retry?: ReturnType<typeof setTimeout>; failures: number };
+        const HISTORY_RESAMPLE_INTERVAL_MS = 2000;
+        type HistoryObserver = { subscription?: Subscription; retry?: ReturnType<typeof setTimeout>; timer?: ReturnType<typeof setTimeout>; cancelWait?: () => void; lastStart?: number; starts: number; allowImmediate?: boolean; failures: number; active?: Promise<MultiPaneMessage[]>; generation: number };
         const histories = new Map<string, HistoryObserver>();
         const releaseObserver = (observer: HistoryObserver) => {
+            observer.generation++;
             observer.subscription?.unsubscribe();
             if (observer.retry) clearTimeout(observer.retry);
+            if (observer.timer) clearTimeout(observer.timer);
+            observer.cancelWait?.();
         };
         const releaseHistories = () => {
             for (const observer of histories.values()) releaseObserver(observer);
@@ -395,12 +399,37 @@ export function useMultiPane(
                 }
                 for (const id of ids) {
                     if (histories.has(id)) continue;
-                    const observer: HistoryObserver = { failures: 0 };
+                    const observer: HistoryObserver = { failures: 0, starts: 0, generation: 0 };
                     histories.set(id, observer);
                     const subscribe = () => {
                         if (histories.get(id) !== observer || getDb() !== db) return;
                         observer.retry = undefined;
-                        observer.subscription = liveQuery(() => loadMessagesInDb(id, db)).subscribe({
+                        observer.subscription = liveQuery(async () => {
+                            // Dexie may restart a query while an earlier read is still running.
+                            // Retain only the latest waiter and let each actual read finish before starting another.
+                            observer.cancelWait?.();
+                            const generation = ++observer.generation;
+                            if (observer.active) await Dexie.Promise.resolve(observer.active).catch(() => {});
+                            if (generation !== observer.generation || histories.get(id) !== observer || getDb() !== db) return [];
+                            const now = performance.now();
+                            const elapsed = observer.lastStart === undefined ? Infinity : Math.max(0, now - observer.lastStart);
+                            const delay = observer.starts < 2 || observer.allowImmediate ? 0 : Math.max(0, HISTORY_RESAMPLE_INTERVAL_MS - elapsed);
+                            observer.allowImmediate = !delay && observer.starts >= 1 && elapsed >= HISTORY_RESAMPLE_INTERVAL_MS;
+                            if (delay) {
+                                const proceed = await new Promise<boolean>(resolve => {
+                                    observer.cancelWait = () => { clearTimeout(observer.timer); observer.timer = undefined; observer.cancelWait = undefined; resolve(false); };
+                                    observer.timer = setTimeout(() => { observer.timer = undefined; observer.cancelWait = undefined; resolve(true); }, delay);
+                                });
+                                if (!proceed) return [];
+                            }
+                            if (generation !== observer.generation || histories.get(id) !== observer || getDb() !== db) return [];
+                            observer.lastStart = performance.now();
+                            observer.starts++;
+                            const active = loadMessagesInDb(id, db);
+                            observer.active = active;
+                            try { return await active; }
+                            finally { if (observer.active === active) observer.active = undefined; }
+                        }).subscribe({
                         next: messages => {
                             if (histories.get(id) !== observer || getDb() !== db) return;
                             observer.failures = 0;
@@ -410,7 +439,12 @@ export function useMultiPane(
                         },
                         error: error => {
                             if (histories.get(id) !== observer || getDb() !== db) return;
+                            observer.generation++;
+                            observer.cancelWait?.();
                             observer.subscription?.unsubscribe();
+                            observer.starts = 0;
+                            observer.lastStart = undefined;
+                            observer.allowImmediate = false;
                             const delay = Math.min(30_000, 1000 * 2 ** Math.min(observer.failures++, 5));
                             observer.retry = setTimeout(subscribe, delay);
                             if (import.meta.dev) console.warn('[useMultiPane] History observation failed:', error);

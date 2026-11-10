@@ -18,7 +18,7 @@
                             aria-label="Add chat to project"
                         >
                             <UIcon
-                                :name="useIcon('sidebar.new_chat').value"
+                                :name="hoistedSidebarNewChatIcon"
                                 class="w-4 h-4 opacity-70"
                             />
                         </button>
@@ -28,7 +28,7 @@
                             aria-label="Add document to project"
                         >
                             <UIcon
-                                :name="useIcon('sidebar.new_note').value"
+                                :name="hoistedSidebarNewNoteIcon"
                                 class="w-4 h-4 opacity-70"
                             />
                         </button>
@@ -53,7 +53,7 @@
                             "
                         >
                             <UIcon
-                                :name="useIcon('ui.more').value"
+                                :name="hoistedUiMoreIcon"
                                 class="w-4 h-4 opacity-70"
                             />
                         </span>
@@ -147,6 +147,10 @@
 </template>
 
 <script setup lang="ts">
+const hoistedSidebarNewChatIcon = useIcon('sidebar.new_chat');
+const hoistedSidebarNewNoteIcon = useIcon('sidebar.new_note');
+const hoistedUiMoreIcon = useIcon('ui.more');
+
 import { computed, watch, ref } from 'vue';
 import {
     normalizeProjectData,

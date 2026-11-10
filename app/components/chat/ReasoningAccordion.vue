@@ -17,7 +17,7 @@
             :aria-controls="`reasoning-${id}`"
             type="button"
         >
-            <UIcon :name="useIcon('chat.reasoning').value" class="mr-1" />
+            <UIcon :name="hoistedChatReasoningIcon" class="mr-1" />
             <span class="reasoning-toggle-text" v-if="!pending || content">
                 {{
                     expanded
@@ -52,6 +52,8 @@
 </template>
 
 <script setup lang="ts">
+const hoistedChatReasoningIcon = useIcon('chat.reasoning');
+
 import { ref, computed } from 'vue';
 import LoadingGenerating from './LoadingGenerating.vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';

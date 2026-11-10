@@ -151,7 +151,9 @@ pixel gap while content grows must not make it appear during bottom following.
 buffers text and reasoning separately and batches reactive flushes with animation
 frames, with a microtask fallback when frames are unavailable. `finalize()`
 flushes pending output and seals the accumulator idempotently. Later appends are
-ignored until a reset. This display state is not a durable message receipt.
+ignored until a reset. `getText()` and `getReasoning()` include buffered output
+before the next flush; `replaceReasoning(text)` replaces the current reasoning
+while the accumulator is active. This display state is not a durable message receipt.
 
 `ChatContainer.vue` uses the `or3-scroll` package for its message viewport.
 Preserve keyed message anchors and the existing user's scroll intent when
