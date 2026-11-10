@@ -7,9 +7,9 @@ it('resizes a large JPEG and closes the bitmap', async () => {
     const close = vi.fn();
     const bitmap = { width: 400, height: 200, close };
     const drawImage = vi.fn();
-    const result = new Blob(['small'], { type: 'image/webp' });
+    const result = new Blob(['small'], { type: 'image/jpeg' });
     vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue(bitmap));
-    vi.stubGlobal('OffscreenCanvas', class { getContext() { return { drawImage }; } async convertToBlob() { return result; } });
+    vi.stubGlobal('OffscreenCanvas', class { getContext() { return { drawImage }; } async convertToBlob(options: { type: string }) { return options.type === 'image/jpeg' ? result : new Blob(['unsupported'], { type: 'image/png' }); } });
     expect(await resizePreview(new Blob([new Uint8Array([255, 216, 255]), 'original'], { type: 'image/jpeg' }), 100)).toBe(result);
     expect(drawImage).toHaveBeenCalledWith(bitmap, 0, 0, 100, 50);
     expect(close).toHaveBeenCalledOnce();
@@ -49,9 +49,9 @@ it('preserves animated PNG', async () => {
 
 it('resizes a static PNG', async () => {
     const png = new Blob([new Uint8Array([137,80,78,71,13,10,26,10, 0,0,0,0, 73,68,65,84, 0,0,0,0])], { type: 'image/png' });
-    const result = new Blob(['x'], { type: 'image/webp' });
+    const result = new Blob(['x'], { type: 'image/png' });
     vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue({ width: 200, height: 100, close: vi.fn() }));
-    vi.stubGlobal('OffscreenCanvas', class { getContext() { return { drawImage: vi.fn() }; } async convertToBlob() { return result; } });
+    vi.stubGlobal('OffscreenCanvas', class { getContext() { return { drawImage: vi.fn() }; } async convertToBlob(options: { type: string }) { return options.type === 'image/png' ? result : new Blob(['unsupported'], { type: 'image/png' }); } });
     expect(await resizePreview(png, 100)).toBe(result);
 });
 
