@@ -29,7 +29,7 @@ async function send(page: Page, text: string, diagnose = false) {
     await input.click();
     await input.fill(text);
     await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled({ timeout: 45_000 });
-    // Only the refusal turn needs this failure evidence. Keep it bounded and
+    // Keep this failure evidence bounded and
     // record state and request categories, never editor content or credentials.
     const network: Array<{ event: string; category: string; elapsedMs: number; status?: number }> = [];
     const started = Date.now();
@@ -93,9 +93,9 @@ async function send(page: Page, text: string, diagnose = false) {
             const events = probe ? await probe.evaluate(value => value.finish()).catch(() => null) : null;
             await probe?.dispose().catch(() => {});
             if (failed) {
-                const path = test.info().outputPath('refusal-send-boundary.json');
+                const path = test.info().outputPath('send-boundary.json');
                 await writeFile(path, JSON.stringify({ events, network }, null, 2))
-                    .then(() => test.info().attach('refusal-send-boundary', { path, contentType: 'application/json' }))
+                    .then(() => test.info().attach('send-boundary', { path, contentType: 'application/json' }))
                     .catch(() => {});
             }
         }
@@ -160,7 +160,7 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
 
     await page.goto('/chat');
     await chooseModel(page, 'gpt-5.4-mini (OpenAI key)');
-    await send(page, 'openai:hello');
+    await send(page, 'openai:hello', true);
     await expect(page.getByText('OpenAI fixture reply')).toBeVisible({ timeout: 45_000 });
     await expect.poll(() => page.evaluate(async () => {
         for (const database of await indexedDB.databases()) {
@@ -206,7 +206,7 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
     expect(attachmentRequest!.inputKinds).toEqual(expect.arrayContaining(['input_text', 'input_image', 'input_file']));
     expect(attachmentRequest!.inputFiles).toEqual([{ filename: 'fixture.pdf', hasData: true }]);
     // A second turn must carry the first exchange, and retry must issue a new request.
-    await send(page, 'openai:second');
+    await send(page, 'openai:second', true);
     const secondReply = page.locator('.chat-message-container').filter({ hasText: 'OpenAI second fixture reply' });
     await expect(secondReply).toBeVisible({ timeout: 15_000 });
     const second = (await captured()).filter(request => request.path === '/v1/responses' && request.includeUsage === true).at(-1);
@@ -216,7 +216,7 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
     await secondReply.getByRole('button', { name: 'Retry message' }).click();
     await expect.poll(async () => (await captured()).filter(request => request.path === '/v1/responses' && request.includeUsage === true).length).toBeGreaterThan(beforeRetry);
     await expect(secondReply).toBeVisible({ timeout: 30_000 });
-    await send(page, 'openai:tool');
+    await send(page, 'openai:tool', true);
     await expect(page.getByText('OpenAI tool round complete')).toBeVisible({ timeout: 45_000 });
     const toolFollowup = (await captured()).filter(request => request.path === '/v1/responses' && request.includeUsage === true).at(-1);
     expect(toolFollowup!.roles).toContain('tool');
@@ -234,7 +234,7 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
             await route.abort('internetdisconnected');
         } else await route.continue();
     });
-    await send(page, 'openai:offline');
+    await send(page, 'openai:offline', true);
     await expect.poll(() => interrupted).toBe(true);
     await page.waitForTimeout(1500);
     await expect(page.getByText('Response status unknown')).toHaveCount(0);
@@ -253,7 +253,7 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
     await expect(page.getByText('OpenAI Chat Completions requires thinking off when tools are enabled for this model.')).toHaveCount(0);
     await page.getByRole('button', { name: 'Close chat settings' }).click();
     const beforeLuna = (await captured()).filter(request => request.path === '/v1/responses' && request.includeUsage === true).length;
-    await send(page, 'openai:tool');
+    await send(page, 'openai:tool', true);
     await expect.poll(async () => (await captured()).filter(request => request.path === '/v1/responses' && request.includeUsage === true).length, { timeout: 45_000 }).toBeGreaterThanOrEqual(beforeLuna + 2);
     const luna = (await captured()).filter(request => request.model === 'gpt-6-luna' && request.includeUsage === true).at(-1);
     expect(luna).toMatchObject({ reasoningEffort: 'medium' });
@@ -262,7 +262,7 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
     // A real background job keeps running while the user switches workspace tabs.
     const backgroundAdmission = page.waitForRequest(request => request.url().endsWith('/api/openrouter/stream') && request.method() === 'POST'
         && request.postDataJSON()?._background === true, { timeout: 30_000 });
-    await send(page, 'openai:hold');
+    await send(page, 'openai:hold', true);
     await backgroundAdmission;
     await expect(page.getByText('OpenAI background started')).toBeVisible({ timeout: 15_000 });
     intentionallyOffline = true;
@@ -294,7 +294,7 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
 
     // The same chat continues on OpenRouter with the instance key.
     await chooseModel(page, 'Fixture Router');
-    await send(page, 'openrouter:hello');
+    await send(page, 'openrouter:hello', true);
     await expect(page.getByText('OpenRouter fixture reply')).toBeVisible({ timeout: 45_000 });
     const openRouter = (await captured()).filter(request => request.path === '/api/v1/chat/completions').at(-1);
     expect(openRouter).toMatchObject({ credential: 'instance-openrouter', model: 'fixture/router' });
