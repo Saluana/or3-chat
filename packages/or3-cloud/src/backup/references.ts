@@ -22,6 +22,15 @@ export function assertBackupOperatorMount(directory: string, enabled: boolean, c
   }
 }
 
+/** Docker may create absent mountpoint directories even with a read-only root. */
+export function assertBackupContainerDiff(diff: string, mounts: Array<Record<string, unknown>>) {
+  const allowed = new Set(['/data', '/run/or3-operator', '/run/or3-secrets', '/run/or3-secrets-client', '/vault-data', '/vault-key']);
+  const targets = new Set(mounts.map(mount => mount.Destination).filter((value): value is string => typeof value === 'string' && allowed.has(value)));
+  const permitted = new Set([...targets].map(target => `A ${target}`));
+  if ([...targets].some(target => target.startsWith('/run/'))) permitted.add('C /run');
+  if (diff.trim() && diff.trim().split('\n').some(line => !permitted.has(line))) throw new Error('Backup source container writable layer is changed or cannot be inspected.');
+}
+
 /** No managed snapshot can claim completeness for an unsupported profile. */
 export function assertSupportedBackupProfile(env: Record<string, string>) {
   let profile: ReturnType<typeof managedProviderProfile> | undefined;
@@ -121,7 +130,7 @@ export async function assertBackupSourceProfile(directory: string, state: Manage
   };
   checkExecutionEnv(actualEnv, false);
   checkExecutionEnv(resolved, true);
-  const checkExecution = async (container: string, expectedEntry: unknown, expectedCommand: unknown) => {
+  const checkExecution = async (container: string, expectedEntry: unknown, expectedCommand: unknown, containerMounts: Array<Record<string, unknown>>) => {
     const result = await run('docker', ['inspect', '--format', '{{json .Config.Entrypoint}}\n{{json .Config.Cmd}}\n{{json .Config.WorkingDir}}\n{{json .HostConfig.ReadonlyRootfs}}\n{{json .HostConfig.Tmpfs}}\n{{json .HostConfig.Mounts}}', container], directory);
     let entry: unknown, command: unknown, cwd: unknown, readonly: unknown, tmpfs: unknown, hostMounts: unknown;
     try {
@@ -131,9 +140,10 @@ export async function assertBackupSourceProfile(directory: string, state: Manage
     if (JSON.stringify(entry) !== JSON.stringify(expectedEntry) || JSON.stringify(command) !== JSON.stringify(expectedCommand) || cwd !== imageWorkingDir || readonly !== true) throw new Error('Backup source container changes the managed startup or writable root.');
     assertCapturedHostMounts(tmpfs, hostMounts);
     const diff = await run('docker', ['diff', container], directory);
-    if (!diff.ok || diff.stdout.trim()) throw new Error('Backup source container writable layer is changed or cannot be inspected.');
+    if (!diff.ok) throw new Error('Backup source container writable layer is changed or cannot be inspected.');
+    assertBackupContainerDiff(diff.stdout, containerMounts);
   };
-  await checkExecution(ids[0]!, imageEntry, imageCommand);
+  await checkExecution(ids[0]!, imageEntry, imageCommand, mounts);
   const vaultEnabled = managedVaultEnabled(directory, env);
   // Older managed releases predate the vault and contain no secrets provider
   // configuration at all. Only accept that legacy case without vault services,
@@ -204,7 +214,7 @@ export async function assertBackupSourceProfile(directory: string, state: Manage
     checkExecutionEnv(actualVaultEnv, false);
     if (vaultResolved.OR3_VAULT_NAMESPACE !== (resolved.NUXT_SECRETS_NAMESPACE || 'or3') || actualVaultEnv.OR3_VAULT_NAMESPACE !== vaultResolved.OR3_VAULT_NAMESPACE) throw new Error('Backup source vault namespace differs from the managed connection.');
     onlyMounts(vaultMounts, 'Destination', [...expected.map(([target]) => target), '/data']);
-    await checkExecution(vaultIds[0]!, ['/nodejs/bin/node', '/app/vault/entrypoint.mjs'], null);
+    await checkExecution(vaultIds[0]!, ['/nodejs/bin/node', '/app/vault/entrypoint.mjs'], null, vaultMounts);
   }
 }
 
