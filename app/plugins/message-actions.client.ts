@@ -47,7 +47,7 @@ export default defineNuxtPlugin(() => {
     });
     if (import.meta.hot) import.meta.hot.dispose(() => action.dispose());
 
-    async function create({ message }: import('~/composables/chat/useMessageActions').MessageActionContext) {
+    async function create({ message, threadId }: import('~/composables/chat/useMessageActions').MessageActionContext) {
         const workspaceGeneration = getWorkspaceGeneration();
         const originDb = getDb();
         const assertCurrent = () => {
@@ -95,6 +95,32 @@ export default defineNuxtPlugin(() => {
                 color: 'error',
             });
             return;
+        }
+
+        if (getWorkspaceGeneration() !== workspaceGeneration) return;
+        if (threadId) {
+            try {
+                const { resolveChatProject } = await import('~/db/project-workspace');
+                const projectId = await resolveChatProject(originDb, threadId);
+                assertCurrent();
+                if (projectId) {
+                    const { useProjectsCrud } = await import('~/composables/projects/useProjectsCrud');
+                    assertCurrent();
+                    await useProjectsCrud().updateProjectEntries(projectId, (entries) =>
+                        entries.some((entry) => entry.kind === 'doc' && entry.id === doc.id)
+                            ? entries
+                            : [...entries, { id: doc.id, kind: 'doc', name: doc.title }]
+                    );
+                }
+            } catch (error) {
+                if (getWorkspaceGeneration() !== workspaceGeneration || getDb() !== originDb) return;
+                console.error('Failed to add message document to project:', error);
+                toast.add({
+                    title: 'Document created, but not added to project',
+                    description: 'You can add it to the project from the sidebar.',
+                    color: 'warning',
+                });
+            }
         }
 
         if (getWorkspaceGeneration() !== workspaceGeneration) return;

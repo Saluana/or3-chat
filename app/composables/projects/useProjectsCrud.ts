@@ -127,15 +127,16 @@ export function useProjectsCrud() {
     /** Resolves to how many related chats (branch family members) moved along with the edited ones. */
     async function updateProjectEntries(
         id: string,
-        entries: ProjectEntry[]
+        entries: ProjectEntry[] | ((current: ProjectEntry[]) => ProjectEntry[])
     ): Promise<number> {
         const scope = captureProjectOperation();
         scope.assertCurrent('write');
         const db = scope.db;
         const existing = await db.projects.get(id);
         if (!existing || existing.deleted) throw new Error('Project not found');
-        const normalized = entries.map((entry) => ({ ...entry }));
         const previous = normalizeProjectData(existing.data);
+        const normalized = (typeof entries === 'function' ? entries(previous) : entries)
+            .map((entry) => ({ ...entry }));
         const prepared = await prepareProjectWrite({ ...existing,
             data: mergeProjectEntries(existing.data, normalized), updated_at: nowSec() }, 'upsert');
         if (prepared.row.id !== id || prepared.row.deleted) throw new Error('A project hook changed the operation target.');

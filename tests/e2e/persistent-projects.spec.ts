@@ -1664,3 +1664,46 @@ test('project review fixes keep drafts and expose management for every project',
     await info.attach('projects-review-fixed', { path: screenshot, contentType: 'image/png' });
     await info.attach('projects-review-receipt', { body: JSON.stringify({ renamedBeyondHomeLimit: true, preservedDraft: true, savedBrief: true, deletedFromHeader: true }), contentType: 'application/json' });
 });
+
+test('documents created from project chat messages join the project', async ({ page }, info) => {
+    test.setTimeout(120000);
+    await page.route('**openrouter.ai/**', route => route.abort());
+    await page.goto('/__or3-chat-journey-test?project=1&context=1');
+    const input = page.getByRole('textbox', { name: 'Message input' });
+    await expect(input).toBeVisible({ timeout: 60000 });
+    await input.fill('Create a project document');
+    await page.getByRole('button', { name: 'Send message', exact: true }).click();
+    const reply = page.locator('.chat-message-container').filter({ hasText: 'Hello from deterministic stream.' }).last();
+    await expect(reply).toBeVisible({ timeout: 30000 });
+    await reply.hover();
+    await reply.getByRole('button', { name: 'Create document', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Document body' })).toContainText('Hello from deterministic stream.', { timeout: 30000 });
+    const membership = async () => page.evaluate(async () => {
+        for (const entry of await indexedDB.databases()) {
+            if (!entry.name) continue;
+            const db = await new Promise<IDBDatabase>((resolve, reject) => {
+                const request = indexedDB.open(entry.name!);
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+            if (!db.objectStoreNames.contains('projects') || !db.objectStoreNames.contains('posts')) { db.close(); continue; }
+            const read = (table: string) => new Promise<any[]>((resolve, reject) => {
+                const request = db.transaction(table).objectStore(table).getAll();
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+            const project = (await read('projects')).find(row => row.id === 'workspace-journey-project');
+            const docs = (await read('posts')).filter(row => row.postType === 'doc' && !row.deleted);
+            db.close();
+            if (project) return { project, docs };
+        }
+        return null;
+    });
+    await expect.poll(async () => {
+        const state = await membership();
+        return state?.project.data?.filter((entry: any) => entry.kind === 'doc' && state.docs.some(doc => doc.id === entry.id && String(doc.content).includes('Hello from deterministic stream.'))).length;
+    }).toBe(1);
+    const path = info.outputPath('project-message-document.json');
+    await writeFile(path, JSON.stringify(await membership(), null, 2));
+    await info.attach('project-message-document', { path, contentType: 'application/json' });
+});
