@@ -5,6 +5,7 @@ import { checkAndRecordLlmRequest } from '../../../utils/llm/rate-limiter';
 import { isSsrAuthEnabled } from '../../../utils/auth/is-ssr-auth-enabled';
 import type { ToolDefinition } from '~/utils/chat/types';
 import { registerServerTool, unregisterServerTool } from '../../../utils/chat/tool-registry';
+import { clearOpenRouterModelCache } from '../../../utils/chat/context-admission';
 import { estimateChatRequest } from '~~/shared/chat/context-budget';
 import { countTokensApprox } from '~/utils/chat/tokens';
 
@@ -167,6 +168,7 @@ beforeAll(async () => {
 
 describe('POST /api/openrouter/stream credential authorization', () => {
     beforeEach(() => {
+        clearOpenRouterModelCache();
         catalogBoundary.capacity = 1_000_000; catalogBoundary.calls = 0; catalogBoundary.unreachable = false;
         bodyReader.useActual = false;
         vi.unstubAllGlobals();
