@@ -215,7 +215,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "Create, edit, sync, recover, and manage native documents, including project association for documents created from chat messages, workspace navigation, and editor sessions."
+                    "summary": "Create, edit, sync, recover, and manage native documents, including History recovery of displaced open-editor edits, normalized conflict checks, project association for documents created from chat messages, workspace navigation, and editor sessions."
                 },
                 {
                     "name": "prompts.md",
@@ -314,7 +314,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 3,
-                    "summary": "Export Cloud archives or local recovery copies, understand remote-only file coverage, and restore with captured import options and workspace identity."
+                    "summary": "Export Cloud archives or local recovery copies, preserve background-message ordering, understand remote-only file coverage, and restore with captured import options and workspace identity."
                 }
             ]
         },
@@ -710,7 +710,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 13,
-                    "summary": "S3 and Hippius setup, verified transfers, dormant immutable generations and coordinated cleanup, retained quotas, offline SHA-256 backup preparation, and qualification."
+                    "summary": "S3 and Hippius setup, bounded server requests and retries, verified transfers, dormant immutable generations and coordinated cleanup, retained quotas, offline SHA-256 backup preparation, and qualification."
                 },
                 {
                     "name": "deployment-operations.md",
@@ -877,7 +877,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Understand chat admission, persistence, streaming, recovery, tab and pane navigation ownership, retired command handles, durable layouts, attachment resource cleanup, and local token estimates."
+                    "summary": "Understand chat admission, persistence, literal user-message editing, streaming, recovery, tab and pane navigation ownership, retired command handles, durable layouts, attachment resource cleanup, and local token estimates."
                 },
                 {
                     "name": "ai-preferences.md",
