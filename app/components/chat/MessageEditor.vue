@@ -17,7 +17,7 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
-import { Node } from '@tiptap/core';
+import { Node, type JSONContent } from '@tiptap/core';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Editor, EditorContent } from '@tiptap/vue-3';
 // If you still want markdown extension keep it; otherwise remove these two lines:
@@ -28,6 +28,7 @@ const props = defineProps<{
     modelValue: string;
     autofocus?: boolean;
     focusDelay?: number;
+    plainText?: boolean;
 }>();
 const emit = defineEmits<{
     (e: 'update:modelValue', v: string): void;
@@ -52,6 +53,17 @@ const editorProps = useThemeOverrides({
 
 const editor = ref<Editor | null>(null);
 let lastEmitted = '';
+
+function editorContent(value: string): string | JSONContent {
+    if (!props.plainText) return value;
+    return {
+        type: 'doc',
+        content: value.split('\n').map(text => ({
+            type: 'paragraph',
+            content: text ? [{ type: 'text', text }] : [],
+        })),
+    };
+}
 
 // Chat rendering treats escaped brackets as math delimiters. Encode literal
 // brackets as entities so saving cannot turn them into math or Markdown links.
@@ -168,7 +180,9 @@ async function init() {
 
     const instance = new Editor({
         extensions,
-        content: props.modelValue,
+        content: editorContent(props.modelValue),
+        enableInputRules: !props.plainText,
+        enablePasteRules: !props.plainText,
         editorProps: {
             // Escape cancels, Ctrl/Cmd+Enter saves (plain Enter stays a newline).
             handleKeyDown: (_view, event) => {
@@ -188,6 +202,10 @@ async function init() {
         },
         onBlur: () => flushPendingEmit(),
         onUpdate: ({ editor: e }) => {
+            if (props.plainText) {
+                emitModelValue(e.getText({ blockSeparator: '\n' }));
+                return;
+            }
             const storage: unknown = e.storage;
             if (
                 storage &&
@@ -238,7 +256,7 @@ watch(
         // A parent replacement is authoritative. Drop any queued local update
         // so it cannot overwrite the newer value after the debounce expires.
         cancelPendingEmit();
-        instance.commands.setContent(val, { emitUpdate: false });
+        instance.commands.setContent(editorContent(val), { emitUpdate: false });
         lastEmitted = val;
     }
 );
