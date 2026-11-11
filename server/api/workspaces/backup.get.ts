@@ -59,7 +59,14 @@ export default defineEventHandler(async event => {
                     if (item.kind !== 'row') continue;
                     const table = item.tableName as typeof ARCHIVE_TABLES[number];
                     if (!ARCHIVE_TABLES.includes(table)) throw new Error('Unexpected backup table.');
-                    const row = TABLE_PAYLOAD_SCHEMAS[table]!.parse(item.payload) as Record<string, unknown>;
+                    let payload = item.payload;
+                    // Background messages may omit order_key. Match incoming sync's
+                    // HLC fallback so existing conversations remain exportable.
+                    if (table === 'messages' && payload && typeof payload === 'object' &&
+                        !('order_key' in payload && payload.order_key)) {
+                        payload = { ...payload, order_key: item.revision.hlc };
+                    }
+                    const row = TABLE_PAYLOAD_SCHEMAS[table]!.parse(payload) as Record<string, unknown>;
                     if (isLocalOnlyKvChange(table, item.pk, row)) continue;
                     if (Buffer.byteLength(JSON.stringify(row)) > MAX_ARCHIVE_ROW_BYTES) throw new Error('Backup record exceeds the supported size.');
                     if (table === 'file_meta') {
