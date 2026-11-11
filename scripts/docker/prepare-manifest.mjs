@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { existsSync, readFileSync as readFileSyncCallback } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const versionFile = process.env.OR3_FIRST_PARTY_VERSIONS_FILE ?? resolve(
@@ -67,15 +67,30 @@ export function prepareDockerManifest(input, profile = dockerProfile()) {
     return manifest;
 }
 
+// patch-package aborts when a patch targets a package that is not installed.
+// Drop the patches for the providers this profile pruned from the manifest.
+export async function pruneInactiveProviderPatches(patchesDir, profile = dockerProfile()) {
+    const inactive = inactiveDockerProviders(profile);
+    for (const name of await readdir(patchesDir)) {
+        if (name.endsWith('.patch') && inactive.some((provider) => name.startsWith(`${provider}+`))) {
+            await rm(join(patchesDir, name));
+        }
+    }
+}
+
 const directPath = process.argv[1] ? resolve(process.argv[1]) : '';
 if (directPath === resolve(fileURLToPath(import.meta.url))) {
-    const manifestPath = resolve(process.argv[2] ?? 'package.json');
-    const manifest = prepareDockerManifest(
-        JSON.parse(await readFile(manifestPath, 'utf8'))
-    );
-    await writeFile(
-        manifestPath,
-        `${JSON.stringify(manifest, null, 2)}\n`,
-        'utf8'
-    );
+    if (process.argv[2] === '--prune-patches') {
+        await pruneInactiveProviderPatches(resolve(process.argv[3] ?? 'patches'));
+    } else {
+        const manifestPath = resolve(process.argv[2] ?? 'package.json');
+        const manifest = prepareDockerManifest(
+            JSON.parse(await readFile(manifestPath, 'utf8'))
+        );
+        await writeFile(
+            manifestPath,
+            `${JSON.stringify(manifest, null, 2)}\n`,
+            'utf8'
+        );
+    }
 }

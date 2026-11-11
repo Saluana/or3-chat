@@ -107,7 +107,10 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY . .
 # npm ci deliberately skips lifecycle scripts; apply the same checked-in
 # dependency fixes as the contributor postinstall before compiling the app.
-RUN node node_modules/patch-package/index.js --error-on-fail
+# Patches for providers this profile pruned are removed first, because
+# patch-package fails on a patch whose package is not installed.
+RUN node scripts/docker/prepare-manifest.mjs --prune-patches patches && \
+    node node_modules/patch-package/index.js --error-on-fail
 RUN node scripts/docker/prepare-backup-inspection.mjs
 RUN node scripts/docker/prepare-remote-helper.mjs /tmp/or3-recovery-tools
 # Restore the real release version while retaining the fixed production

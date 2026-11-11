@@ -1,0 +1,19 @@
+diff --git a/node_modules/or3-provider-s3/dist/runtime/server/storage/s3-storage-gateway-adapter.js b/node_modules/or3-provider-s3/dist/runtime/server/storage/s3-storage-gateway-adapter.js
+--- a/node_modules/or3-provider-s3/dist/runtime/server/storage/s3-storage-gateway-adapter.js
++++ b/node_modules/or3-provider-s3/dist/runtime/server/storage/s3-storage-gateway-adapter.js
+@@ -122,6 +122,15 @@
+       region: this.cfg.region,
+       endpoint: this.cfg.endpoint,
+       forcePathStyle: this.cfg.forcePathStyle,
++      // Bound individual calls so a stalled commit can retry inside the
++      // host's 60-second deadline without re-uploading the blob.
++      maxAttempts: 3,
++      retryMode: "standard",
++      requestHandler: {
++        connectionTimeout: 2e3,
++        requestTimeout: 5e3,
++        throwOnRequestTimeout: true
++      },
+       // The caller supplies the checksum. Do not invent CRC32 for the
+       // presigner's absent Body when a legacy upload uses Content-MD5.
+       requestChecksumCalculation: "WHEN_REQUIRED",

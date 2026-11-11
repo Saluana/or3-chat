@@ -70,10 +70,24 @@ const SCRIPT_FILES = [
     'scripts/theme-discovery.ts',
 ];
 
+// Removed from the generated project's dependencies.
+const OPTIONAL_PROVIDERS = [
+    'or3-provider-clerk',
+    'or3-provider-convex',
+    'or3-provider-s3',
+];
+
 function shouldCopy(source) {
     const path = relative(repoRoot, source).replaceAll('\\', '/');
     const parts = path.split('/');
     const fileName = parts.at(-1);
+    // patch-package aborts the install when a patch's package is not installed.
+    if (
+        parts[0] === 'patches' &&
+        OPTIONAL_PROVIDERS.some((name) => fileName?.startsWith(`${name}+`))
+    ) {
+        return false;
+    }
     if (
         fileName === '.DS_Store' ||
         fileName === '.env' ||
@@ -132,11 +146,7 @@ export function rewriteTemplateManifest(manifest) {
     for (const [name, version] of Object.entries(FIRST_PARTY_VERSIONS)) {
         if (name in dependencies) dependencies[name] = version;
     }
-    for (const optionalProvider of [
-        'or3-provider-clerk',
-        'or3-provider-convex',
-        'or3-provider-s3',
-    ]) {
+    for (const optionalProvider of OPTIONAL_PROVIDERS) {
         delete dependencies[optionalProvider];
     }
 

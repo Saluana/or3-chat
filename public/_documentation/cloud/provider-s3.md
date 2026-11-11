@@ -100,6 +100,15 @@ require a signed checksum and `Content-Length`. New SHA-256 uploads use
 
 ## How it works
 
+Server-side S3 calls have a 2-second connection timeout and a 5-second response
+timeout, with standard SDK retries capped at three attempts per operation.
+Stalled verification and commit-marker calls retry individually without
+re-uploading the blob. If a marker was written but its response was lost, the
+existing conditional-write replay verifies the stored marker. Direct browser
+transfer timeouts are unchanged; storage-host latency can still occur.
+The pinned `0.0.15` dependency receives this fix through the source app's
+checked-in dependency patch until a qualified provider release includes it.
+
 OR3 client flow:
 
 1. Client asks OR3 for a presigned URL: `POST /api/storage/presign-upload`
