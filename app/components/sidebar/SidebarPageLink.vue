@@ -2,18 +2,22 @@
     <button
         v-if="compact"
         type="button"
-        class="page-link-btn page-link-btn--compact group w-full flex flex-col items-center justify-center gap-1.5 min-h-[64px] px-1 py-2 rounded-[var(--md-border-radius-small,var(--md-border-radius))] transition-colors duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] hover:bg-[color:var(--md-surface-hover)] active:bg-[color:var(--md-surface-active)] focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)] cursor-pointer"
+        class="page-link-btn page-link-btn--compact group w-full flex items-center gap-2.5 min-h-[36px] px-2.5 rounded-[var(--md-border-radius-small,var(--md-border-radius))] transition-colors duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] hover:bg-[color:var(--md-surface-hover)] active:bg-[color:var(--md-surface-active)] focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)] cursor-pointer"
         :class="accentClass"
         :aria-label="label"
         @click="emit('select')"
     >
         <span
-            class="shrink-0 w-8 h-8 rounded-full flex items-center justify-center page-link-icon-container transition-transform duration-[var(--app-motion-duration-fast,150ms)] group-hover:scale-105"
+            class="shrink-0 w-6 h-6 rounded-full flex items-center justify-center page-link-icon-container"
             :class="iconToneClass"
         >
-            <UIcon :name="icon" class="w-4 h-4" />
+            <UIcon :name="icon" class="w-3.5 h-3.5" />
         </span>
-        <span class="max-w-full truncate text-[12px] font-medium leading-none text-[color:var(--md-on-surface)] page-link-label">{{ label }}</span>
+        <span class="flex-1 min-w-0 truncate text-left text-[14px] font-medium text-[color:var(--md-on-surface)] page-link-label">{{ label }}</span>
+        <UIcon
+            :name="iconChevronRight"
+            class="w-3.5 h-3.5 shrink-0 text-[color:var(--md-on-surface-variant)] opacity-50 group-hover:opacity-100 group-hover:text-[color:var(--md-on-surface)] transition-[opacity,color] page-link-icon"
+        />
     </button>
     <button
         v-else
@@ -58,7 +62,7 @@ const props = withDefaults(
         description?: string;
         icon: string;
         accent?: 'chats' | 'docs' | 'projects';
-        /** A tile in the home page's three-across row. */
+        /** A slim row for the home page's link list. */
         compact?: boolean;
     }>(),
     {

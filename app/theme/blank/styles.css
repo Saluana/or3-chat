@@ -314,16 +314,13 @@ html[data-theme="blank"] {
         background: var(--md-surface-active);
     }
 
-    /* Home row tiles: icon over a short label, three across. */
+    /* Home link rows: slimmer than the full page links, same inset. */
     .page-link-btn.page-link-btn--compact {
-        padding-inline: 4px;
-        gap: 6px;
+        gap: 10px;
     }
 
     .page-link-btn--compact .page-link-label {
-        font-size: var(--blank-text-caption);
         font-weight: var(--blank-weight-medium, 500);
-        line-height: 1.1;
     }
 
     /* Rows span the full column like the search and page links; the inset is
@@ -1309,7 +1306,7 @@ html[data-theme='blank']
         white-space: nowrap;
     }
 
-    html[data-theme="blank"] .page-link-btn:not(.page-link-btn--compact) .page-link-label {
+    html[data-theme="blank"] .page-link-btn .page-link-label {
         font-size: var(--blank-mobile-control-text) !important;
         line-height: 24px;
     }
@@ -1323,6 +1320,11 @@ html[data-theme='blank']
         html[data-theme="blank"] .page-link-btn {
             min-height: 56px !important;
             padding-block: 6px !important;
+        }
+
+        html[data-theme="blank"] .page-link-btn.page-link-btn--compact {
+            min-height: 44px !important;
+            padding-block: 0 !important;
         }
 
         html[data-theme="blank"] .bottomnav-root

@@ -32,11 +32,10 @@
                         :is="item.component"
                     />
 
-                    <!-- Page links: one compact row so content starts higher -->
+                    <!-- Page links: slim rows so content starts higher -->
                     <nav
                         v-else-if="item.type === 'page-links'"
-                        class="sidebar-page-links grid gap-1.5 mb-2"
-                        :style="{ gridTemplateColumns: `repeat(${item.links.length}, minmax(0, 1fr))` }"
+                        class="sidebar-page-links flex flex-col gap-0.5 mb-2"
                         aria-label="Browse"
                     >
                         <SidebarPageLink
