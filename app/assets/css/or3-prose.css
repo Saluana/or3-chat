@@ -94,20 +94,24 @@
     content: none;
 }
 
+/* Plain code blocks (documents) wear the same surface as chat's highlighted blocks. */
 .or3-prose :deep(pre) {
-    padding: 1rem;
-    border-radius: var(--md-border-radius);
-    border: var(--md-border-width) solid var(--md-border-color);
+    padding: 0.875rem 1rem;
+    border-radius: var(--md-border-radius-large, var(--md-border-radius));
+    border: var(--md-border-width) solid var(--or3-prose-code-border);
+    background: var(--or3-prose-code-block-bg);
     overflow-x: auto;
     margin: 1rem 0;
-    font-weight: 505;
+    font-weight: 400;
+    line-height: 1.6;
 }
 
 .or3-prose :deep(pre code) {
     background: transparent;
     padding: 0;
     border: none;
-    font-size: 16px;
+    font-size: 0.875rem;
+    font-weight: 400;
     border-radius: 0;
 }
 
@@ -331,6 +335,6 @@
     opacity: 0.45;
     user-select: none;
 }
-.or3-prose :deep(pre) {
+.or3-prose :deep([data-streamdown='pre']) {
     padding-left: 0;
 }

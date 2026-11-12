@@ -127,7 +127,7 @@ test('restores workspace tabs without adding blank tabs when profiles change', a
     const originalTabs = await tabs.allTextContents();
 
     await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
-    await page.locator('#dashboard-plugin-grid').getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.locator('#dashboard-sidebar, #dashboard-plugin-grid').getByRole('button', { name: 'Settings', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: /^Workspace Profile/ }).click();
     const profiles = page.getByRole('group', { name: 'Profile' });
     const documentProfile = profiles.getByRole('button', { name: /^Document Workspace/ });

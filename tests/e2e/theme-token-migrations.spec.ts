@@ -690,9 +690,8 @@ async function openThemeStudio(page: Page, isMobile: boolean): Promise<void> {
     const title = page.getByRole('tablist', { name: 'Theme settings sections' });
     if (await title.isVisible()) return;
 
-    const dashboardDialog = page.getByRole('dialog', { name: 'Dashboard' });
-    // The sidebar lists Settings too; open it from the dashboard grid.
-    const settings = dashboardDialog.locator('#dashboard-plugin-grid').getByRole('button', {
+    // Wide screens list sections in the dashboard sidebar; narrow ones show the grid.
+    const settings = page.locator('#dashboard-sidebar, #dashboard-plugin-grid').getByRole('button', {
         name: 'Settings',
         exact: true,
     });
@@ -1298,9 +1297,8 @@ for (const initialTheme of ['blank', 'cyberpunk'] as const) {
         };
         await expectIcons(initialTheme);
         await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
-        // The dashboard dialog is titled after its current page.
-        const dashboard = page.getByRole('dialog', { name: 'Dashboard' });
-        await dashboard.locator('#dashboard-plugin-grid').getByRole('button', { name: 'Settings', exact: true }).click();
+        // Wide screens list sections in the dashboard sidebar; narrow ones show the grid.
+        await page.locator('#dashboard-sidebar, #dashboard-plugin-grid').getByRole('button', { name: 'Settings', exact: true }).click();
         await page.getByRole('dialog', { name: 'Settings' })
             .getByRole('button', { name: /^Appearance/ }).click();
         const themeDialog = page.getByRole('dialog', { name: 'Appearance' });

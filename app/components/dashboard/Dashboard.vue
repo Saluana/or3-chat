@@ -191,6 +191,7 @@ const hoistedUiCloseIcon = useIcon('ui.close');
 
 import { presentError } from '~~/shared/errors';
 import { computed, nextTick, provide, ref, shallowRef, watch } from 'vue';
+import { useMediaQuery } from '@vueuse/core';
 import PluginIcons from './PluginIcons.vue';
 import DashboardListRow from './DashboardListRow.vue';
 import AppModal from '~/components/ui/AppModal.vue';
@@ -268,24 +269,15 @@ const handleLandingPageClick = (pageId: string) => {
     void openPage(pluginId, pageId);
 };
 
-const dashboardIcon = useIcon('dashboard.home');
 const fallbackPageIcon = useIcon('sidebar.page.default');
 
-// Settings sits beside the Dashboard home; every other app follows a divider.
+// Settings leads the list; every other app follows a divider. There is no
+// "home" entry: on wide screens the sidebar is the overview, so the card grid
+// would only repeat it.
 const sidebarEntries = computed(() => {
     const settings = dashboardItems.value.find((item) => item.id === 'core:settings');
     const apps = dashboardItems.value.filter((item) => item !== settings);
     return [
-        {
-            id: 'dashboard',
-            label: 'Dashboard',
-            icon: dashboardIcon.value,
-            iconToken: undefined,
-            image: undefined,
-            active: state.view === 'dashboard',
-            divided: false,
-            open: reset,
-        },
         ...[settings, ...apps].filter((item) => item !== undefined).map((item, index) => ({
             id: item.id,
             label: item.label,
@@ -293,7 +285,7 @@ const sidebarEntries = computed(() => {
             iconToken: item.iconToken,
             image: item.image,
             active: state.view === 'page' && state.activePluginId === item.id,
-            divided: index === (settings ? 1 : 0),
+            divided: settings !== undefined && index === 1,
             open: () => handlePluginClick(item.id),
         })),
     ];
@@ -316,6 +308,20 @@ const backTarget = computed(() => {
     }
     return { label: 'Dashboard', action: reset, home: true };
 });
+
+// Wide screens show the sidebar, so open the first section instead of a grid
+// that repeats it. Narrow screens keep the grid as their only navigation.
+// Resizing alone never changes the page the user is looking at.
+const wideLayout = useMediaQuery('(min-width: 768px)');
+watch(
+    () => [open.value, state.view, shouldDeferDashboardGrid.value] as const,
+    ([isOpen, view, deferred]) => {
+        if (!isOpen || view !== 'dashboard' || !wideLayout.value || deferred) return;
+        const first = sidebarEntries.value[0];
+        if (first) first.open();
+    },
+    { immediate: true }
+);
 
 watch(() => [state.view, state.activePluginId, state.activePageId], () => {
     subpage.value = null;

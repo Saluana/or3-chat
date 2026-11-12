@@ -1,14 +1,18 @@
 <template>
-    <UTooltip
+    <UPopover
         v-if="!isSsrAuthEnabled || allowUserOverride"
+        v-model:open="menuOpen"
+        :content="{ side: 'right', align: 'end', sideOffset: 8 }"
+    >
+    <UTooltip
         text="OpenRouter"
         :delay-duration="0"
+        :disabled="menuOpen"
         :content="{ side: 'right' }"
     >
         <UButton
             v-bind="buttonProps"
             type="button"
-            @click="onOpenRouterClick"
             :data-connection-state="connectionState"
             :aria-label="ariaLabel"
         >
@@ -57,6 +61,36 @@
             </template>
         </UButton>
     </UTooltip>
+        <template #content>
+            <div id="openrouter-status-menu" class="or3-action-menu flex flex-col gap-0.5 p-1.5 w-[260px]">
+                <div class="flex items-start gap-3 px-1.5 pt-1.5 pb-2">
+                    <span
+                        class="mt-1.5 size-2 shrink-0 rounded-full"
+                        :class="isConnected || usingInstanceKey ? 'bg-[var(--md-success)]' : 'bg-[var(--md-error)]'"
+                        aria-hidden="true"
+                    />
+                    <div class="min-w-0">
+                        <p class="text-[14px] font-medium text-[var(--md-on-surface)]">{{ statusTitle }}</p>
+                        <p class="text-[12px] leading-snug text-[var(--md-on-surface-variant)]">{{ statusDetail }}</p>
+                    </div>
+                </div>
+                <div class="h-px mx-1.5 mb-0.5 bg-[var(--md-border-color)]" aria-hidden="true" />
+                <button
+                    v-for="item in menuItems"
+                    :id="`openrouter-menu-${item.id}`"
+                    :key="item.id"
+                    type="button"
+                    class="flex items-center gap-2.5 w-full min-h-[36px] px-2 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[14px] text-left transition-colors duration-[var(--app-motion-duration-fast,150ms)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] cursor-pointer focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))]"
+                    :class="item.danger ? 'text-[var(--md-error)]' : 'text-[var(--md-on-surface)]'"
+                    @click="runMenuItem(item)"
+                >
+                    <UIcon :name="item.icon" class="size-4 shrink-0 opacity-80" />
+                    <span class="flex-1">{{ item.label }}</span>
+                    <UIcon v-if="item.external" name="i-lucide-arrow-up-right" class="size-3.5 shrink-0 opacity-50" />
+                </button>
+            </div>
+        </template>
+    </UPopover>
     <UTooltip
         v-if="isSsrAuthEnabled"
         text="Account"
@@ -158,21 +192,44 @@ const buttonProps = computed(() => {
     });
     return {
         block: true,
-        disabled: isManaged.value,
         ...overrides.value,
     };
 });
 
-function onOpenRouterClick() {
-    if (isManaged.value) {
-        return;
+// The rail icon only opens this menu: leaving the app for OpenRouter's sign-up
+// page, or removing a key, must be an explicit, labelled choice.
+const menuOpen = ref(false);
+const statusTitle = computed(() => {
+    if (isConnected.value) return 'Using your OpenRouter key';
+    if (usingInstanceKey.value) return 'Using this workspace’s key';
+    return 'OpenRouter not connected';
+});
+const statusDetail = computed(() => {
+    if (isConnected.value) return 'Requests are billed to your OpenRouter account.';
+    if (isManaged.value) return 'Your administrator manages the OpenRouter connection.';
+    if (usingInstanceKey.value) return 'Connect your own key to use your OpenRouter credits and models.';
+    return 'Connect an OpenRouter account to start chatting.';
+});
+
+interface OpenRouterMenuItem { id: string; label: string; icon: string; external?: boolean; danger?: boolean; run: () => void }
+const menuItems = computed<OpenRouterMenuItem[]>(() => {
+    const items: OpenRouterMenuItem[] = [];
+    if (!isManaged.value && !isConnected.value) {
+        items.push({ id: 'connect', label: 'Connect your own key', icon: 'i-lucide-key-round', run: () => openrouter.startLogin() });
     }
     if (isConnected.value) {
-        // Removing the key is a one-click footgun on a small rail icon; confirm first.
-        confirmDisconnectOpen.value = true;
-    } else {
-        openrouter.startLogin();
+        items.push(
+            { id: 'activity', label: 'Usage activity', icon: 'i-lucide-activity', external: true, run: () => window.open('https://openrouter.ai/activity', '_blank', 'noopener') },
+            { id: 'credits', label: 'Credits', icon: 'i-lucide-wallet', external: true, run: () => window.open('https://openrouter.ai/settings/credits', '_blank', 'noopener') },
+            // Removing the key is destructive; it still asks for confirmation.
+            { id: 'disconnect', label: 'Disconnect…', icon: 'i-lucide-unplug', danger: true, run: () => { confirmDisconnectOpen.value = true; } },
+        );
     }
+    return items;
+});
+function runMenuItem(item: OpenRouterMenuItem) {
+    menuOpen.value = false;
+    item.run();
 }
 
 const confirmDisconnectOpen = ref(false);

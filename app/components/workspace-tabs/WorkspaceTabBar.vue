@@ -2,7 +2,11 @@
     <div
         :class="[
             'workspace-tab-bar-shell',
-            { 'workspace-tab-bar-shell--mobile': mobile },
+            {
+                'workspace-tab-bar-shell--mobile': mobile,
+                'has-hidden-start': hiddenStart,
+                'has-hidden-end': hiddenEnd,
+            },
         ]"
     >
         <div
@@ -18,6 +22,7 @@
             ref="strip"
             :class="['workspace-tab-bar', barProps?.class ?? '']"
             @keydown="onKeydown"
+            @scroll.passive="measureOverflow"
         >
             <div
                 v-for="(tab, index) in tabs"
@@ -91,6 +96,46 @@
                 </button>
             </div>
         </div>
+        <UPopover
+            v-if="hiddenStart || hiddenEnd"
+            v-model:open="overflowOpen"
+            :content="{ side: 'bottom', align: 'end', sideOffset: 6 }"
+        >
+            <button
+                type="button"
+                class="workspace-tab-overflow-button"
+                :aria-label="`All tabs (${tabs.length})`"
+                :title="`All tabs (${tabs.length})`"
+            >
+                <span class="workspace-tab-overflow-count">{{ tabs.length }}</span>
+                <UIcon name="i-lucide-chevron-down" class="size-3.5" />
+            </button>
+            <template #content>
+                <div
+                    class="or3-action-menu flex flex-col gap-0.5 p-1.5 w-[300px] max-h-[60vh] overflow-y-auto"
+                    role="menu"
+                    aria-label="All tabs"
+                >
+                    <button
+                        v-for="tab in tabs"
+                        :key="`overflow-${tab.id}`"
+                        type="button"
+                        role="menuitem"
+                        class="workspace-tab-overflow-item"
+                        :class="{ 'is-active': tab.id === activeTabId }"
+                        :aria-current="tab.id === activeTabId ? 'page' : undefined"
+                        @click="selectOverflowTab(tab.id)"
+                    >
+                        <AppIcon
+                            :image="props.imageByTabId?.get(tab.id)"
+                            :icon="resourceIcon(tab)"
+                            class="size-4 shrink-0"
+                        />
+                        <span class="truncate flex-1">{{ workspaceTabTitle(tab, props.tabs) }}</span>
+                    </button>
+                </div>
+            </template>
+        </UPopover>
         <WorkspaceNewTabControl
             :can-create-document="canCreateDocument"
             :plugin-items="pluginItems"
@@ -612,7 +657,35 @@ if (typeof window !== 'undefined') {
     window.addEventListener('pointerdown', dismissContextMenuOnOutsidePointer, true);
     window.addEventListener('keydown', dismissContextMenuOnEscape, true);
 }
+// Show which edges hide tabs, and offer a full list once any tab is out of view.
+const hiddenStart = ref(false);
+const hiddenEnd = ref(false);
+const overflowOpen = ref(false);
+function measureOverflow(): void {
+    const element = strip.value;
+    if (!element) return;
+    hiddenStart.value = element.scrollLeft > 1;
+    hiddenEnd.value = element.scrollLeft + element.clientWidth < element.scrollWidth - 1;
+}
+function selectOverflowTab(tabId: string): void {
+    overflowOpen.value = false;
+    emit('activate', tabId, 'pointer');
+}
+let overflowObserver: ResizeObserver | undefined;
+watch(strip, (element) => {
+    overflowObserver?.disconnect();
+    if (!element || typeof ResizeObserver === 'undefined') return;
+    overflowObserver = new ResizeObserver(() => {
+        // A narrower strip must not hide the tab the user is looking at.
+        tabElements.get(props.activeTabId)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+        measureOverflow();
+    });
+    overflowObserver.observe(element);
+}, { immediate: true });
+watch(() => props.tabs.length, () => nextTick(measureOverflow));
+
 onBeforeUnmount(() => {
+    overflowObserver?.disconnect();
     finishDrag();
     if (typeof window !== 'undefined') {
         window.removeEventListener('blur', onWindowBlur);
@@ -764,13 +837,57 @@ watch(
     top: 0;
     bottom: 0;
     left: 0;
-    width: 18px;
+    width: 24px;
+    opacity: 0;
+    transition: opacity var(--app-motion-duration-fast, 0.14s) ease;
     background: linear-gradient(
         90deg,
         var(--or3-workspace-chrome-bg, var(--md-surface)),
         transparent
     );
 }
+.workspace-tab-bar-shell.has-hidden-start::before { opacity: 1; }
+.workspace-tab-bar {
+    /* Fade the end edge only while tabs sit past it. */
+    --or3-tab-end-fade: 0px;
+    mask-image: linear-gradient(90deg, #000 calc(100% - var(--or3-tab-end-fade)), transparent);
+}
+.workspace-tab-bar-shell.has-hidden-end .workspace-tab-bar { --or3-tab-end-fade: 28px; }
+.workspace-tab-overflow-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+    height: 26px;
+    padding: 0 6px 0 8px;
+    border-radius: var(--or3-tab-close-radius);
+    font-size: 12px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: var(--md-on-surface-variant);
+    cursor: pointer;
+    transition: background-color var(--app-motion-duration-fast, 0.14s) ease;
+}
+.workspace-tab-overflow-button:hover { background: var(--md-surface-hover); color: var(--md-on-surface); }
+.workspace-tab-overflow-button:focus-visible {
+    outline: var(--app-focus-ring-width, 2px) solid var(--md-focus-ring, var(--md-primary));
+    outline-offset: 1px;
+}
+.workspace-tab-overflow-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 34px;
+    padding: 0 8px;
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
+    font-size: 14px;
+    text-align: left;
+    color: var(--md-on-surface);
+    cursor: pointer;
+}
+.workspace-tab-overflow-item:hover { background: var(--md-surface-hover); }
+.workspace-tab-overflow-item.is-active { background: var(--md-surface-variant); font-weight: 500; }
 .workspace-tab-bar {
     display: flex;
     align-items: center;
@@ -789,10 +906,10 @@ watch(
 .workspace-tab-bar::-webkit-scrollbar { display: none; }
 .workspace-tab-wrap {
     position: relative;
-    flex: 0 0 auto;
-    width: max-content;
-    min-width: 96px;
-    max-width: 320px;
+    /* Tabs give up width, down to a readable minimum, before the strip scrolls. */
+    flex: 0 1 max-content;
+    min-width: 120px;
+    max-width: 260px;
     height: var(--or3-workspace-tab-height, 32px);
     margin-inline-end: 0;
     transition: transform var(--app-motion-duration-fast, 0.14s)

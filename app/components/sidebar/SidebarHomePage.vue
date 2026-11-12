@@ -32,20 +32,27 @@
                         :is="item.component"
                     />
 
-                    <!-- Page links -->
-                    <SidebarPageLink
-                        v-else-if="item.type === 'page-link'"
-                        :label="item.label"
-                        :description="item.description"
-                        :icon="item.icon"
-                        :accent="item.accent"
-                        :class="item.class"
-                        @select="
-                            item.pageId === 'sidebar-projects-home'
-                                ? openProjectsSidebar()
-                                : setActivePage(item.pageId)
-                        "
-                    />
+                    <!-- Page links: one compact row so content starts higher -->
+                    <nav
+                        v-else-if="item.type === 'page-links'"
+                        class="sidebar-page-links grid gap-1.5 mb-2"
+                        :style="{ gridTemplateColumns: `repeat(${item.links.length}, minmax(0, 1fr))` }"
+                        aria-label="Browse"
+                    >
+                        <SidebarPageLink
+                            v-for="link in item.links"
+                            :key="link.key"
+                            compact
+                            :label="link.label"
+                            :icon="link.icon"
+                            :accent="link.accent"
+                            @select="
+                                link.pageId === 'sidebar-projects-home'
+                                    ? openProjectsSidebar()
+                                    : setActivePage(link.pageId)
+                            "
+                        />
+                    </nav>
 
                     <!-- Projects Section -->
                     <SidebarProjectsSection
@@ -373,22 +380,20 @@ import { useCommandPalette } from '~/composables/search/useCommandPalette';
 import { useViewOnlyAccess } from '~/composables/auth/useViewOnlyAccess';
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
+interface SidebarPageLinkItem {
+    key: string;
+    label: string;
+    icon: string;
+    pageId: string;
+    accent: 'chats' | 'docs' | 'projects';
+}
 type SidebarCombinedItem =
     | {
           key: string;
           type: 'custom-top' | 'custom-main' | 'custom-bottom';
           component: Component;
       }
-    | {
-          key: string;
-          type: 'page-link';
-          label: string;
-          description: string;
-          icon: string;
-          pageId: string;
-          accent?: 'chats' | 'docs' | 'projects';
-          class?: string;
-      }
+    | { key: string; type: 'page-links'; links: SidebarPageLinkItem[] }
     | { key: string; type: 'projects' }
     | { key: string; type: 'pinned-header' }
     | { key: string; type: 'pinned-item'; item: UnifiedSidebarItem }
@@ -602,41 +607,12 @@ const combinedItems = computed(() => {
         });
     }
 
-    const pageLinks: SidebarCombinedItem[] = [
-        {
-            key: 'page-link-chats',
-            type: 'page-link',
-            label: 'Chats',
-            class: 'mb-1.5',
-            description: '',
-            icon: iconChats.value,
-            pageId: 'sidebar-chats',
-            accent: 'chats',
-        },
+    const pageLinks: SidebarPageLinkItem[] = [
+        { key: 'page-link-chats', label: 'Chats', icon: iconChats.value, pageId: 'sidebar-chats', accent: 'chats' },
         ...(documentsEnabled.value
-            ? [
-                  {
-                      key: 'page-link-docs',
-                      type: 'page-link' as const,
-                      label: 'Documents',
-                      description: '',
-                      icon: iconDocs.value,
-                      pageId: 'sidebar-docs',
-                      class: 'mb-1.5',
-                      accent: 'docs' as const,
-                  },
-              ]
+            ? [{ key: 'page-link-docs', label: 'Documents', icon: iconDocs.value, pageId: 'sidebar-docs', accent: 'docs' as const }]
             : []),
-        {
-            key: 'page-link-projects',
-            type: 'page-link',
-            label: 'Projects',
-            description: '',
-            icon: iconProjects.value,
-            pageId: 'sidebar-projects-home',
-            class: 'mb-1.5',
-            accent: 'projects',
-        },
+        { key: 'page-link-projects', label: 'Projects', icon: iconProjects.value, pageId: 'sidebar-projects-home', accent: 'projects' },
     ];
     const navigationOrder = isMobile.value
         ? resolvedWorkspaceProfile.value.mobile.bottomNavigation
@@ -645,25 +621,14 @@ const combinedItems = computed(() => {
         ...navigationOrder.filter((id) => id !== 'sidebar-projects-home'),
         'sidebar-projects-home',
     ];
-    pageLinks.sort(
-        (left, right) =>
-            pageOrder.indexOf(left.type === 'page-link' ? left.pageId : '') -
-            pageOrder.indexOf(right.type === 'page-link' ? right.pageId : ''),
+    pageLinks.sort((left, right) => pageOrder.indexOf(left.pageId) - pageOrder.indexOf(right.pageId));
+    const visibleLinks = pageLinks.filter((item) =>
+        item.pageId === 'sidebar-projects-home'
+            ? listSidebarPages.value.some((page) => page.id === item.pageId) &&
+              !resolvedWorkspaceProfile.value.navigation.hidden.includes(item.pageId)
+            : navigationOrder.includes(item.pageId),
     );
-    result.push(
-        ...pageLinks.filter(
-            (item) =>
-                item.type === 'page-link' &&
-                (item.pageId === 'sidebar-projects-home'
-                    ? listSidebarPages.value.some(
-                          (page) => page.id === item.pageId,
-                      ) &&
-                      !resolvedWorkspaceProfile.value.navigation.hidden.includes(
-                          item.pageId,
-                      )
-                    : navigationOrder.includes(item.pageId)),
-        ),
-    );
+    if (visibleLinks.length) result.push({ key: 'page-links', type: 'page-links', links: visibleLinks });
 
     // Projects section (single item that renders the whole section)
     if (props.activeSections.projects && !isCompletelyEmpty.value) {

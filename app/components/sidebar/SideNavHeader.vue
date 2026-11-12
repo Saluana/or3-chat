@@ -11,6 +11,7 @@
                     aria-label="Filter sidebar by title"
                     class="w-full"
                     @keydown.escape.prevent.stop="onEscapeClear"
+                    @keydown.enter.prevent="searchEverything"
                 >
                     <template #trailing>
                         <UButton
@@ -34,6 +35,18 @@
                 </UInput>
             </div>
         </div>
+        <!-- The filter matches titles instantly; message and document text lives in the palette. -->
+        <button
+            v-if="sidebarQuery.trim()"
+            id="sidebar-search-everything"
+            type="button"
+            class="mt-1.5 flex w-full items-center gap-2 h-8 px-2.5 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[13px] text-left text-[color:var(--md-on-surface-variant)] transition-colors duration-[var(--app-motion-duration-fast,150ms)] hover:bg-[color:var(--md-surface-hover)] hover:text-[color:var(--md-on-surface)] focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] cursor-pointer"
+            @click="searchEverything"
+        >
+            <UIcon :name="iconSearch" class="size-3.5 shrink-0" />
+            <span class="min-w-0 flex-1 truncate">Search all content for “{{ sidebarQuery.trim() }}”</span>
+            <kbd class="shrink-0 text-[11px] font-medium opacity-70 font-[system-ui,ui-sans-serif,sans-serif]">↵</kbd>
+        </button>
 
         <SidebarRenameEntityModal
             :modal-props="renameModalProps"
@@ -200,12 +213,18 @@ const searchInputProps = computed(() => {
         ...(searchInputOverrides.value as any),
         // Slot provides trailing content; don't also enable empty trailing-icon chrome.
         trailingIcon: undefined,
-        placeholder: 'Search by title...',
+        placeholder: 'Filter by title…',
         ui: mergedUi,
     };
 });
 
-const { open: openCommandPalette } = useCommandPalette();
+const commandPalette = useCommandPalette();
+const openCommandPalette = commandPalette.open;
+function searchEverything() {
+    const text = sidebarQuery.value.trim();
+    commandPalette.open();
+    if (text) commandPalette.query.value = text;
+}
 
 const searchShortcutLabel = computed(() =>
     import.meta.client ? formatShortcut('k') : '⌘K'
