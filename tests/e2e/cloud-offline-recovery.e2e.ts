@@ -24,11 +24,22 @@ async function openWorkspace(page: Page, create = true) {
     const session = await (await page.request.get('/api/auth/session')).json();
     const workspaceId: string = session.session.workspace.id;
     const requests: string[] = [];
+    let initialPullComplete = false;
     page.on('request', request => requests.push(request.url()));
+    page.on('response', response => {
+        const request = response.request();
+        if (!response.ok() || request.method() !== 'POST' || !/\/api\/sync\/pull(?:\?|$)/.test(response.url())) return;
+        try {
+            if (request.postDataJSON()?.scope?.workspaceId === workspaceId) initialPullComplete = true;
+        } catch { /* Ignore an unrelated or malformed response. */ }
+    });
     await page.goto('/');
     await expect.poll(() => requests.find(url => /\/db\/client\.ts(?:\?|$)/.test(url)), { timeout: 30_000 }).toBeTruthy();
     const clientUrl = requests.find(url => /\/db\/client\.ts(?:\?|$)/.test(url))!;
     await expect.poll(() => page.evaluate(async url => (await import(url)).getActiveWorkspaceId(), clientUrl), { timeout: 30_000 }).toBe(workspaceId);
+    // A selected DB is available before the lazy sync plugin installs capture.
+    // Bootstrap pulls begin only after capture is attached for this workspace.
+    if (create) await expect.poll(() => initialPullComplete, { timeout: 30_000 }).toBe(true);
     return { clientUrl, workspaceId, headers };
 }
 
@@ -90,7 +101,16 @@ test('offline edits and original upload survive a closed tab and converge automa
 });
 
 test('a second tab recovers a crashed push owner after a committed response is lost', async ({ page, context }, info) => {
+    // Exercise slow sync startup: the DB can become active before its lazy
+    // module loads, but the simulated user write must wait for capture.
+    let delayedStartup = false;
+    await page.route('**/core/sync/client-sync-engine.ts*', async route => {
+        delayedStartup = true;
+        await new Promise(resolve => setTimeout(resolve, 3500));
+        await route.continue();
+    });
     const { clientUrl, workspaceId, headers } = await openWorkspace(page);
+    expect(delayedStartup).toBe(true);
     let committed!: (value: any) => void;
     const receipt = new Promise<any>(resolve => { committed = resolve; });
     let release!: () => void;
