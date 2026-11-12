@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { chmod, copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ASSET_ROOT } from '../package-info';
@@ -131,11 +131,12 @@ export async function verifiedManagedAssetContents(backupPath: string, manifest:
       throw new Error(`Backup ${manifest.backupId} has an invalid checksum for managed asset ${name}.`);
     }
     const source = join(backupPath, 'managed-assets', name);
-    const actualSha = await sha256File(source);
+    const contents = await readFile(source);
+    const actualSha = createHash('sha256').update(contents).digest('hex');
     if (actualSha !== expectedSha) {
       throw new Error(`Backup managed asset checksum mismatch for ${name}. Expected ${expectedSha}, got ${actualSha}.`);
     }
-    assets.set(name, await readFile(source));
+    assets.set(name, contents);
   }
   return assets;
 }

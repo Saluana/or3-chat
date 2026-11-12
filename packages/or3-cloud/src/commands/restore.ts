@@ -1,5 +1,5 @@
-import { join } from 'node:path';
 import { createPreMutationSnapshot } from '../backup/create';
+import { readAuthenticatedBackupConfig } from '../backup/config';
 import { assertBackupSourceProfile, assertSupportedBackupProfile, validateCanonicalBackupReferences } from '../backup/references';
 import { assertExistingVaultCustody, assertVaultVolumesExist } from '../backup/vault';
 import { preflightRemoteRestore } from '../backup/remote';
@@ -40,7 +40,8 @@ export async function restoreCommand(directory: string, flags: Flags, positional
   const backupPath = await resolveBackup(loaded.directory, backupValue);
   const manifest = await readManifest(backupPath, loaded.directory);
   assertRestorableManagedAssets(manifest);
-  const backupEnv = parseEnv(await readText(join(backupPath, 'config.env')));
+  const backupConfig = await readAuthenticatedBackupConfig(backupPath, manifest);
+  const backupEnv = parseEnv(backupConfig);
   if (backupEnv.OR3_VERSION !== manifest.appVersion || backupEnv.OR3_IMAGE !== manifest.image) {
     throw new Error(`Backup ${manifest.backupId} configuration does not match its manifest.`);
   }
@@ -50,7 +51,7 @@ export async function restoreCommand(directory: string, flags: Flags, positional
   const recreateDataVolume = restoreRequiresVolumeRecreation(loaded.env, backupEnv);
   if (manifest.imageDigest) await pullAndRequireImage(manifest.image, manifest.imageDigest, `Backup ${manifest.backupId}`);
   await assertSupportedHostArchitecture(manifest.image);
-  await assertExistingVaultCustody(loaded.directory, loaded.state, manifest, backupPath, backupEnv);
+  await assertExistingVaultCustody(loaded.directory, loaded.state, manifest, backupPath, backupConfig);
   // Do this before recording a recovery operation: a capacity refusal has not
   // touched the live deployment and should not require an operator recovery.
   await assertRestoreFreeSpace(loaded.directory, loaded.state, loaded.env, manifest, backupPath);

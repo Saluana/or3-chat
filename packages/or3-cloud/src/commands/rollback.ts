@@ -1,5 +1,5 @@
-import { join } from 'node:path';
 import { createPreMutationSnapshot } from '../backup/create';
+import { readAuthenticatedBackupConfig } from '../backup/config';
 import { validateVolumeArchive } from '../backup/archive';
 import { assertExistingVaultCustody, assertVaultVolumesExist } from '../backup/vault';
 import { preflightRemoteRestore } from '../backup/remote';
@@ -42,7 +42,8 @@ export async function rollbackCommand(directory: string, flags: Flags) {
   if (manifest.appVersion !== point.appVersion || manifest.image !== point.image || manifest.imageDigest !== point.imageDigest) {
     throw new Error(`Rollback point ${point.backupId} no longer matches its recorded image/version. Refusing to mutate the deployment.`);
   }
-  const backupEnv = parseEnv(await readText(join(backupPath, 'config.env')));
+  const backupConfig = await readAuthenticatedBackupConfig(backupPath, manifest);
+  const backupEnv = parseEnv(backupConfig);
   if (backupEnv.OR3_VERSION !== manifest.appVersion || backupEnv.OR3_IMAGE !== manifest.image) {
     throw new Error(`Backup ${manifest.backupId} configuration does not match its manifest.`);
   }
@@ -52,7 +53,7 @@ export async function rollbackCommand(directory: string, flags: Flags) {
   const recreateDataVolume = restoreRequiresVolumeRecreation(loaded.env, backupEnv);
   await pullAndRequireImage(point.image, point.imageDigest, 'Rollback');
   await assertSupportedHostArchitecture(point.image);
-  await assertExistingVaultCustody(loaded.directory, loaded.state, manifest, backupPath, backupEnv);
+  await assertExistingVaultCustody(loaded.directory, loaded.state, manifest, backupPath, backupConfig);
   await assertRestoreFreeSpace(loaded.directory, loaded.state, loaded.env, manifest, backupPath);
   // Snapshot capture already stops the app. Validate before journaling/capture,
   // using the authenticated archived FS root and retaining the later recheck.
