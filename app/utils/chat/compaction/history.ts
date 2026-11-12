@@ -23,6 +23,12 @@ function requestHistoryMessage(row: Message) {
     return { ...message, data };
 }
 
+// A re-materialized row can return the same fields in a different order; that is not a change.
+function sortedKeys(_key: string, value: unknown): unknown {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+    return Object.fromEntries(Object.entries(value).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+}
+
 /** Request admission tracks transcript and lineage, not independently updated display titles. */
 export function requestHistoryFingerprint(projection: ThreadProjection): string {
     return JSON.stringify({ messages: projection.messages.map(requestHistoryMessage), segments: projection.segments.map(({ thread, rows, visible }) => ({
@@ -30,7 +36,7 @@ export function requestHistoryFingerprint(projection: ThreadProjection): string 
             anchor_message_id: thread.anchor_message_id, anchor_index: thread.anchor_index, branch_mode: thread.branch_mode,
             root_thread_id: thread.root_thread_id, summary_message_id: thread.summary_message_id, fork_reason: thread.fork_reason,
             project_id: thread.project_id, system_prompt_id: thread.system_prompt_id, status: thread.status, deleted: thread.deleted },
-    })) });
+    })) }, sortedKeys);
 }
 
 /** The original content may be gone, but the summary's own pair must be intact. */

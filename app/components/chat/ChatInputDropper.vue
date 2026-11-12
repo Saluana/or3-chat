@@ -1349,6 +1349,9 @@ async function handleSend(decision: { inspectLossyRequest?: boolean; lossyConfir
     if ((result.status === 'rejected' || result.status === 'failed') && ['context_full', 'model_metadata_unavailable', 'invalid_context_limit', 'invalid_output_limit', 'unsupported_input'].includes(result.reason)) {
         sendBlock.value = result;
         if (result.status === 'rejected') lossyPreview.value = result.lossyPreview;
+    } else if (result.status === 'rejected' && result.reason === 'unavailable' && result.error) {
+        // The draft is kept; say why it did not send instead of ignoring the Enter.
+        toast.add({ title: 'Message not sent', description: result.error, color: 'warning', duration: 3500 });
     }
     return result;
 }
