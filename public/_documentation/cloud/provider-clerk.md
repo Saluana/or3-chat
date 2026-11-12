@@ -58,9 +58,7 @@ origin such as `http://127.0.0.1:3000`.
 On a plain HTTP origin, Clerk's session-refresh handshake returns its cookies as
 `SameSite=None` without `Secure`, which browsers discard. The provider rewrites
 those cookies to `SameSite=Lax` so a signed-in visitor with an expired token is
-not served the lock page. The pinned `0.0.11` dependency receives this fix
-through the source app's checked-in dependency patch until a qualified provider
-release includes it.
+not served the lock page. Provider `0.0.12` and later include this fix.
 
 Each request still verifies its Clerk session token. Verified primary-email
 profile data is cached for up to 30 seconds per server process to keep sync

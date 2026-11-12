@@ -25,21 +25,6 @@ the real SDK against a local HTTP server: transient HEAD stalls, lost marker
 acknowledgements, persistent stalls, and non-retryable access denials. Remove
 this patch after upgrading to a qualified provider release containing the fix.
 
-## or3-provider-clerk 0.0.11
-
-When a signed-in visitor loads a page with an expired session token, Clerk's
-middleware refreshes it through a handshake redirect. On a plain HTTP origin
-(local development) the handshake returns its cookies as `SameSite=None`
-without `Secure`, which browsers discard. The refreshed session never landed,
-the handshake repeated until Clerk's loop guard reported the visitor as signed
-out, and the lock page was served and shown until the client recovered the
-session. The patch rewrites only those discarded cookies to `SameSite=Lax` on
-the handshake redirect; cookies that already carry `Secure` are untouched.
-
-The same fix lives in the provider source with tests for rewritten, already
-secure, and multiple cookies. Remove this patch after upgrading to a qualified
-provider release containing the fix.
-
 ## @nuxt/icon 2.5.1
 
 `useResolvedName()` sorted the shared reactive collection array on every icon
