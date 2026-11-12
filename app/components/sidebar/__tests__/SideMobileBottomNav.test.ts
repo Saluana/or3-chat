@@ -84,6 +84,19 @@ vi.mock('~/core/auth/useOpenrouter', () => ({
     }),
 }));
 
+// Ways the System section can go wrong:
+// - a non-owner member sees Admin and Cloud mode (a link /admin will refuse)
+// - a deployment admin who is not the workspace owner loses the Admin entry
+// - a signed-out or still-loading session briefly shows it
+// - local mode, which has no accounts, hides its own status row
+const mockSessionData = ref<{ session: Record<string, unknown> | null } | null>(null);
+function signedIn(session: Record<string, unknown>) {
+    mockSessionData.value = { session: { authenticated: true, ...session } };
+}
+vi.mock('~/composables/auth/useSessionContext', () => ({
+    useSessionContext: () => ({ data: mockSessionData }),
+}));
+
 vi.mock('~/core/auth-ui/registry', () => ({
     resolveAuthUiAdapter: mockResolveAuthUiAdapter,
 }));
@@ -182,6 +195,7 @@ describe('SideMobileBottomNav', () => {
         mockActivePageId.value = 'sidebar-home';
         mockSetActivePage.mockResolvedValue(true);
         testConfig.public.ssrAuthEnabled = false;
+        mockSessionData.value = null;
         mockResolveAuthUiAdapter.mockReturnValue(null);
         setGlobalSidebarLayoutApi({
             close: vi.fn(),
@@ -323,6 +337,7 @@ describe('SideMobileBottomNav', () => {
 
     it('shows Cloud mode badge when SSR auth is enabled', async () => {
         testConfig.public.ssrAuthEnabled = true;
+        signedIn({ role: 'owner' });
         const wrapper = mountComponent();
         await openMoreSheet(wrapper);
         expect(wrapper.find('.more-system-mode').text()).toContain('Cloud mode');
@@ -332,6 +347,7 @@ describe('SideMobileBottomNav', () => {
 
     it('navigates to admin when Admin is tapped', async () => {
         testConfig.public.ssrAuthEnabled = true;
+        signedIn({ role: 'owner' });
         const wrapper = mountComponent();
         await openMoreSheet(wrapper);
 
@@ -339,6 +355,30 @@ describe('SideMobileBottomNav', () => {
 
         expect(mockNavigateTo).toHaveBeenCalledWith('/admin');
         expect(wrapper.find('#mobile-nav-more-sheet').exists()).toBe(false);
+    });
+
+    it.each(['editor', 'viewer'])('hides System status and Admin from a workspace %s', async (role) => {
+        testConfig.public.ssrAuthEnabled = true;
+        signedIn({ role });
+        const wrapper = mountComponent();
+        await openMoreSheet(wrapper);
+        expect(wrapper.find('.more-system-mode').exists()).toBe(false);
+        expect(wrapper.find('.more-system-admin').exists()).toBe(false);
+    });
+
+    it('hides System status and Admin until the session is known', async () => {
+        testConfig.public.ssrAuthEnabled = true;
+        const wrapper = mountComponent();
+        await openMoreSheet(wrapper);
+        expect(wrapper.find('.more-system-admin').exists()).toBe(false);
+    });
+
+    it('shows Admin to a deployment admin who is not the workspace owner', async () => {
+        testConfig.public.ssrAuthEnabled = true;
+        signedIn({ role: 'editor', deploymentAdmin: true });
+        const wrapper = mountComponent();
+        await openMoreSheet(wrapper);
+        expect(wrapper.find('.more-system-admin').exists()).toBe(true);
     });
 
     it('hides the info button in SSR auth mode', async () => {
