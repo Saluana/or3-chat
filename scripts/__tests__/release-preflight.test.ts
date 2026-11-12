@@ -114,7 +114,7 @@ describe('managed Docker profile projection', () => {
         const { result, manifest } = await project('clerk-sqlite-s3');
         expect(result.status, result.stderr).toBe(0);
         expect(manifest.dependencies).toMatchObject({
-            'or3-provider-clerk': '0.0.11', 'or3-provider-sqlite': '0.0.28', 'or3-provider-s3': '0.0.15',
+            'or3-provider-clerk': '0.0.12', 'or3-provider-sqlite': '0.0.28', 'or3-provider-s3': '0.0.15',
         });
         expect(manifest.dependencies['or3-provider-basic-auth']).toBeUndefined();
         expect(manifest.dependencies['or3-provider-fs']).toBeUndefined();
