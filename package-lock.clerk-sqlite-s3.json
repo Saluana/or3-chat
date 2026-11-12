@@ -42,7 +42,7 @@
         "lru-cache": "^11.5.2",
         "mammoth": "^1.13.0",
         "nuxt": "4.6.2",
-        "or3-provider-clerk": "0.0.11",
+        "or3-provider-clerk": "0.0.12",
         "or3-provider-s3": "0.0.15",
         "or3-provider-sqlite": "0.0.28",
         "or3-scroll": "0.1.6",
@@ -17432,9 +17432,9 @@
       }
     },
     "node_modules/or3-provider-clerk": {
-      "version": "0.0.11",
-      "resolved": "https://registry.npmjs.org/or3-provider-clerk/-/or3-provider-clerk-0.0.11.tgz",
-      "integrity": "sha512-FczlY9+3kw79oJlkGadI9BWa3BQaqXP6c7kZ1HRIS17dsYvUBWDvCXvosLYTPVSvW8GJvLC/odKmmC5zC6wkfw==",
+      "version": "0.0.12",
+      "resolved": "https://registry.npmjs.org/or3-provider-clerk/-/or3-provider-clerk-0.0.12.tgz",
+      "integrity": "sha512-qMqVWosvBRidOHiO1jyPyc22JjMk8sdIx4mJXqf8yxpZVgwviH0oBowdV2157vvs7IiMqZE+7uli7AOcdwdw7Q==",
       "license": "MIT",
       "dependencies": {
         "@clerk/nuxt": "^1.13.34"
