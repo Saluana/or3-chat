@@ -18,7 +18,7 @@ import {
     scaffoldProject,
 } from '../src/index.mjs';
 import { main as packagedMain } from '../dist/index.mjs';
-import { prepareDockerManifest } from '../../../scripts/docker/prepare-manifest.mjs';
+import { prepareDockerManifest, pruneInactiveProviderPatches } from '../../../scripts/docker/prepare-manifest.mjs';
 
 const qualifiedVersions = JSON.parse(await readFile(
     new URL('../first-party-versions.json', import.meta.url), 'utf8'
@@ -177,6 +177,36 @@ test('Docker manifest preparation prunes inactive providers and replaces pinned 
     assert.equal(manifest.devDependencies['convex'], undefined);
 });
 
+// patch-package aborts when a patch targets a package the profile pruned, so
+// each image keeps only the patches for the providers it installs.
+test('Docker patch preparation drops patches for inactive providers only', async () => {
+    const names = [
+        'or3-provider-clerk+0.0.11.patch',
+        'or3-provider-s3+0.0.15.patch',
+        'or3-provider-basic-auth+0.0.20.patch',
+        'streamdown-vue+1.0.35.patch',
+        'README.md',
+    ];
+    const remaining = async (profile) => {
+        const dir = await mkdtemp(join(tmpdir(), 'or3-patches-'));
+        for (const name of names) await writeFile(join(dir, name), '');
+        await pruneInactiveProviderPatches(dir, profile);
+        return (await readdir(dir)).sort();
+    };
+
+    assert.deepEqual(await remaining('basic-sqlite-fs'), [
+        'README.md',
+        'or3-provider-basic-auth+0.0.20.patch',
+        'streamdown-vue+1.0.35.patch',
+    ]);
+    assert.deepEqual(await remaining('clerk-sqlite-s3'), [
+        'README.md',
+        'or3-provider-clerk+0.0.11.patch',
+        'or3-provider-s3+0.0.15.patch',
+        'streamdown-vue+1.0.35.patch',
+    ]);
+});
+
 test('generated template has registry-clean first-party dependencies', async () => {
     const templateUrl = new URL('../dist/template/', import.meta.url);
     const manifest = JSON.parse(
@@ -193,6 +223,13 @@ test('generated template has registry-clean first-party dependencies', async () 
     assert.equal(manifest.scripts.postinstall, 'patch-package --error-on-fail && nuxt prepare');
     assert.ok(manifest.devDependencies['patch-package']);
     await readFile(new URL('patches/streamdown-vue+1.0.35.patch', templateUrl));
+    // patch-package aborts the install when a patch targets a package that is
+    // not installed, so providers removed from the template lose their patches.
+    const patches = await readdir(new URL('patches/', templateUrl));
+    for (const provider of ['or3-provider-clerk', 'or3-provider-convex', 'or3-provider-s3']) {
+        assert.equal(manifest.dependencies[provider], undefined);
+        assert.deepEqual(patches.filter((name) => name.startsWith(`${provider}+`)), []);
+    }
     assert.equal(
         manifest.scripts['generate:static'],
         'tsx scripts/cli/nuxt-task.ts generate-static'

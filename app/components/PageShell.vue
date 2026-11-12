@@ -448,6 +448,7 @@ import { useWorkspaceTabHost } from '~/composables/core/useWorkspaceTabHost';
 import { useDocumentSaveHooks } from '~/composables/core/useDocumentSaveHooks';
 import type { WorkspaceTabScrollState } from '~/core/workspace-tabs/types';
 import { useWorkspaceTabs } from '~/composables/core/useWorkspaceTabs';
+import { getWorkspaceTabsStorageKey } from '~/composables/core/useWorkspaceTabPersistence';
 import { useEmptyChatActions } from '~/composables/chat/useEmptyChatActions';
 import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import type { EmptyChatActionId } from '~/theme/_shared/chat-empty-state';
@@ -1783,6 +1784,24 @@ watch(
 
 // Empty-chat creation is scoped to its originating pane/tab and workspace.
 const emptySession = useState<SessionPayload | null>('auth-session', () => null);
+// The server renders a blank chat because saved tabs live in localStorage.
+// Before first paint, flag a saved tab that will replace it so the blank
+// chat's artwork stays hidden until the restored tab is bound.
+if (import.meta.server && workspaceTabsEnabled.value && !props.initialThreadId && !props.initialDocumentId) {
+    const storageKey = JSON.stringify(getWorkspaceTabsStorageKey(
+        emptySession.value?.session?.workspace?.id,
+        resolvedProfile.value.id
+    )).replace(/</g, '\\u003c');
+    useHead({ script: [{
+        key: 'or3-workspace-tab-restore',
+        tagPriority: -20,
+        innerHTML: `(()=>{try{
+            const s=JSON.parse(localStorage.getItem(${storageKey})||'null');
+            const r=s&&s.tabs.find(t=>t.id===s.activeTabId)?.resource;
+            if(r&&(r.kind!=='chat'||r.threadId))document.documentElement.setAttribute('data-or3-tab-restore','');
+        }catch{}})();`,
+    }] });
+}
 const emptyAvailable = computed<readonly EmptyChatActionId[]>(() => {
     const role = emptySession.value?.session?.role;
     const showCreation = runtimeConfig.public.ssrAuthEnabled !== true
@@ -2540,23 +2559,28 @@ useHookEffect('db.documents.delete:action:hard:after', handleDocumentDeletion, {
 
 // --------------- Mount ---------------
 onMounted(async () => {
-    let restoredWorkspaceTabs = false;
-    if (workspaceTabsEnabled.value) {
-        restoredWorkspaceTabs = await workspaceTabs.restore();
-    }
-    await initInitial(restoredWorkspaceTabs);
-    syncTheme();
-    ensureAtLeastOne();
-    shellMounted.value = true;
-    await applyInitialPaneRequest();
-    if (workspaceTabsEnabled.value) {
-        if (!props.initialThreadId && !props.initialDocumentId && !restoredWorkspaceTabs) {
-            reconcileWorkspaceTabsWithPanes();
+    try {
+        let restoredWorkspaceTabs = false;
+        if (workspaceTabsEnabled.value) {
+            restoredWorkspaceTabs = await workspaceTabs.restore();
         }
-        activeWorkspaceTabsScope = `${workspaceScopeId.value ?? 'local'}\0${resolvedProfile.value.id}`;
-        workspaceTabsReady.value = true;
+        await initInitial(restoredWorkspaceTabs);
+        syncTheme();
+        ensureAtLeastOne();
+        shellMounted.value = true;
+        await applyInitialPaneRequest();
+        if (workspaceTabsEnabled.value) {
+            if (!props.initialThreadId && !props.initialDocumentId && !restoredWorkspaceTabs) {
+                reconcileWorkspaceTabsWithPanes();
+            }
+            activeWorkspaceTabsScope = `${workspaceScopeId.value ?? 'local'}\0${resolvedProfile.value.id}`;
+            workspaceTabsReady.value = true;
+        }
+        workspaceTabsHydrated.value = true;
+    } finally {
+        // Never leave the blank chat hidden if restoring the saved tabs fails.
+        document.documentElement.removeAttribute('data-or3-tab-restore');
     }
-    workspaceTabsHydrated.value = true;
 
     // Expose sidebar layout API globally for plugins
     const sidebarLayoutApi: SidebarLayoutApi = {

@@ -155,6 +155,14 @@ Releasing a cached document drops heavy content and timers only when no editor o
 The mounted editor shows a persistent save-failure banner with **Retry document save** while edits remain unsaved. Hiding the page captures and flushes the current editor buffer. Refreshing or leaving the page with staged edits requests the browser's unsaved-change confirmation and starts a save; dismissing the confirmation keeps the buffer open. An unload-time write is not a durability receipt. Browsers may suppress confirmations without prior user interaction, and forcibly closing the browser or accepting the confirmation can still discard an uncommitted edit.
 
 Clean split panes showing the same document follow the latest title and body.
+If a synced update replaces a recently edited body in an open editor before its
+automatic checkpoint runs, the displaced local text is saved in **History**.
+The current document still follows normal sync ordering; the saved version can
+be inspected and restored through the existing History controls.
+Conflict comparisons normalize the editor's automatically appended empty paragraph
+after a final code block, list or other non-paragraph block. That structural
+normalization does not count as another writer's edit or block the first save of
+a document created from chat.
 If both panes have independent edits, saving refuses to overwrite the other
 draft. The existing save banner asks you to copy your edits and undo text changes
 to load the shared version before applying them again. If the title also

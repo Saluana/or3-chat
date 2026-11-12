@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { createOpenRouterClient, fetchOpenRouterCatalog } from '~~/shared/openrouter';
 import type { OpenRouterModel } from '~~/shared/openrouter/types';
 import { openRouterCatalogLookupId } from '~~/shared/openrouter/selection';
@@ -11,6 +12,31 @@ import { useRuntimeConfig } from '#imports';
 
 /** The send waits on this lookup; a provider that never answers must not hold it open. */
 const CATALOG_DEADLINE_MS = 15_000;
+
+/**
+ * A send and its background job each need one model's capacity, but the only
+ * source is the full catalog (~840 KB, 0.5–1 s on an idle connection). The
+ * catalog differs per API key (account guardrails filter it), so the chosen
+ * model is cached per key hash, never shared across keys. Only a found model
+ * is cached: a missing one always re-reads the live catalog.
+ */
+const MODEL_CACHE_TTL_MS = 5 * 60_000;
+const MODEL_CACHE_MAX_ENTRIES = 500;
+const modelCache = new Map<string, { at: number; model: OpenRouterModel }>();
+
+/** Test isolation: fixtures that change the catalog between cases must not see an earlier case's model. */
+export function clearOpenRouterModelCache(): void {
+    modelCache.clear();
+}
+
+function modelCacheKey(apiKey: string, serverURL: string | undefined, lookupId: string): string {
+    return `${createHash('sha256').update(`${serverURL ?? ''}\0${apiKey}`).digest('hex')}\0${lookupId}`;
+}
+
+function findCatalogModel(catalog: readonly OpenRouterModel[], lookupId: string): OpenRouterModel | undefined {
+    return catalog.find((candidate) => candidate.id === lookupId)
+        ?? catalog.find((candidate) => candidate.canonical_slug === lookupId);
+}
 
 /** Normalizes as a retry-later provider failure (`ERR_PROVIDER`), never as missing model metadata. */
 export class OpenRouterCatalogUnavailableError extends Error {
@@ -37,8 +63,7 @@ export function contextPolicyFromCatalog(body: Record<string, unknown>, catalog:
     const requestedCompletion = envelope.requested_completion_tokens === null ? null
         : typeof envelope.requested_completion_tokens === 'number' ? envelope.requested_completion_tokens : NaN;
     const lookupId = openRouterCatalogLookupId(selectedModel);
-    const model = catalog.find((candidate) => candidate.id === lookupId)
-        ?? catalog.find((candidate) => candidate.canonical_slug === lookupId);
+    const model = findCatalogModel(catalog, lookupId);
     if (!model) throw new ChatContextAdmissionError({ ok: false, code: 'model_metadata_unavailable' });
     return Object.freeze({ model: Object.freeze({ context_length: model.context_length,
         top_provider: model.top_provider ? Object.freeze({ context_length: model.top_provider.context_length,
@@ -54,15 +79,26 @@ export async function resolveServerContextPolicy(body: Record<string, unknown>, 
     if (!body._context || typeof body._context !== 'object' || Array.isArray(body._context) ||
         (body._context as Record<string, unknown>).version !== 1 || typeof body.model !== 'string' || !Array.isArray(body.messages))
         throw new ChatContextAdmissionError({ ok: false, code: 'model_metadata_unavailable' });
+    const openRouter = !isOpenAiModel(body.model);
+    const cacheKey = openRouter ? modelCacheKey(apiKey, serverURL, openRouterCatalogLookupId(body.model)) : '';
+    const cached = openRouter ? modelCache.get(cacheKey) : undefined;
+    if (cached && Date.now() - cached.at < MODEL_CACHE_TTL_MS) return contextPolicyFromCatalog(body, [cached.model]);
     let catalog;
     // The model's router supplies its own capacity metadata.
-    try { catalog = isOpenAiModel(body.model) ? await fetchOpenAiCatalog(apiKey, useRuntimeConfig().openaiBaseUrl, signal)
+    try { catalog = !openRouter ? await fetchOpenAiCatalog(apiKey, useRuntimeConfig().openaiBaseUrl, signal)
         : await fetchOpenRouterCatalog(createOpenRouterClient({ apiKey, serverURL }), signal, { deadlineMs: CATALOG_DEADLINE_MS }); }
     catch (error) {
         if (signal?.aborted) throw error;
         throw new OpenRouterCatalogUnavailableError(error);
     }
-    return contextPolicyFromCatalog(body, catalog);
+    const policy = contextPolicyFromCatalog(body, catalog);
+    const model = openRouter ? findCatalogModel(catalog, openRouterCatalogLookupId(body.model)) : undefined;
+    if (model) {
+        modelCache.delete(cacheKey);
+        modelCache.set(cacheKey, { at: Date.now(), model });
+        if (modelCache.size > MODEL_CACHE_MAX_ENTRIES) modelCache.delete(modelCache.keys().next().value!);
+    }
+    return policy;
 }
 
 export async function admitServerProviderBody(body: Record<string, unknown>, policy: ContextRequestPolicy | undefined,

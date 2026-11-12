@@ -697,6 +697,12 @@ function normalizedContent(value: unknown): TipTapDocument {
     const content = value as JSONContent;
     if (content.type !== 'doc' || (content.content !== undefined && !Array.isArray(content.content))) throw new Error('Invalid native document.');
     if (!content.content?.length) return { ...content, content: emptyDocument().content } as TipTapDocument;
+    // StarterKit's trailingNode adds a paragraph after a final non-paragraph
+    // block. Compare saved content in that same shape: this editor-only
+    // normalization is not a competing edit from another pane.
+    if (content.content.at(-1)?.type !== 'paragraph') {
+        return { ...content, content: [...content.content, { type: 'paragraph' }] } as TipTapDocument;
+    }
     return content as TipTapDocument;
 }
 
@@ -1332,6 +1338,16 @@ function syncCleanBuffers(): void {
     const serialized = JSON.stringify(content);
     const buffer = JSON.stringify(current.getJSON());
     if (buffer === JSON.stringify(capturedContent.value) || buffer === serialized) {
+        // Local durability is not a Cloud acknowledgement. A newer remote row
+        // can replace an offline edit before its periodic checkpoint runs.
+        // Retain that immutable editor snapshot in the existing History flow.
+        const checkpointDisplacedEdit = buffer !== serialized && revisionTimer !== undefined
+            && !pendingAutomaticRevision;
+        if (checkpointDisplacedEdit) {
+            clearTimeout(revisionTimer);
+            revisionTimer = undefined;
+            pendingAutomaticRevision = { origin: revisionOrigin(), document: current.state.doc, title: titleDraft.value };
+        }
         capturedContent.value = content;
         if (buffer !== serialized) {
             const view = captureDocumentViewState(props.documentId);
@@ -1348,6 +1364,7 @@ function syncCleanBuffers(): void {
             setDocumentEditorConflict(props.documentId, conflictKey(), undefined, editorDb.value);
         }
         capturedEditorDocument = current.state.doc;
+        if (checkpointDisplacedEdit) void saveAutomaticRevision(revisionGeneration);
     }
 }
 

@@ -1580,14 +1580,13 @@ const emptyStateMediaProps = computed(() => {
 // so creating a hidden img cannot eagerly request the opposite mode's source.
 const emptyMediaKey = computed(() => emptyTheme.activeTheme.value +
     (emptyStateMediaProps.value.mediaVariants ? '' : ':' + emptyMode.value));
-// Snapshot the local-mode actions in the payload so the first client render
+// Snapshot the server's actions in the payload so the first client render
 // matches SSR even if workspace preferences hydrate before this async component.
-// Cloud authority still resolves before exposing creation actions.
+// In Cloud mode the server render already holds the session, so its role
+// decides the creation actions without waiting for the client to mount.
 const emptyInitialActions = useState<readonly EmptyChatActionId[]>(
     'chat-empty-initial-actions',
-    () => runtimeConfig.public.ssrAuthEnabled === true
-        ? ['start-chat']
-        : [...(emptyActionHost?.available.value ?? ['start-chat'])],
+    () => [...(emptyActionHost?.available.value ?? ['start-chat'])],
 );
 const emptyActions = computed(() => {
     const available = emptyMounted.value
@@ -1615,6 +1614,9 @@ defineExpose({ captureViewState, restoreViewState, scrollToMessage, compactThrea
 
 <style>
 .chat-container--rebinding > :not(.chat-rebinding-status) { visibility: hidden; }
+/* PageShell's pre-paint script sets this while a saved tab is about to replace
+   the server-rendered blank chat, so its artwork never flashes first. */
+html[data-or3-tab-restore] .chat-container--empty > * { visibility: hidden; }
 .chat-rebinding-status {
     position: absolute;
     inset: 0;

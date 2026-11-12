@@ -28,6 +28,7 @@ import { canonicalToolResultData } from '~~/shared/chat/canonical-tool-transcrip
 import { toolResultTranscriptData } from '~/utils/chat/transcript';
 import { modelSearchDefinition } from '~~/shared/openrouter/delegation-model-catalog';
 import { normalizeError } from '~~/shared/errors';
+import { clearOpenRouterModelCache } from '../../chat/context-admission';
 import {
     registerJobStream,
     resetJobViewersForTests,
@@ -226,6 +227,7 @@ describe('consumeBackgroundStreamWithTools', () => {
     afterEach(() => {
         unregisterServerTool('server_echo');
         unregisterServerTool('search_models');
+        clearOpenRouterModelCache();
         contextCatalog.unavailable = false;
         vi.unstubAllGlobals();
         resetJobViewersForTests();
@@ -965,6 +967,7 @@ describe('background usage through terminal history', () => {
     });
     beforeEach(() => {
         clearAllJobs();
+        clearOpenRouterModelCache();
         contextCatalog.capacity = 1_000_000; contextCatalog.calls = 0; contextCatalog.reasoning = false;
         delivered.length = 0; artifacts.clear();
         finalize.mockClear();

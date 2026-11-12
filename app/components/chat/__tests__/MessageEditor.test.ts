@@ -35,6 +35,29 @@ describe('MessageEditor', () => {
         vi.useRealTimers();
     });
 
+    it('keeps user message text literal across editing, saving and reopening', async () => {
+        const source = '[label](https://example.test) & <tags> &#91;literal&#93;\n**not bold**';
+        const wrapper = mount(MessageEditor, { props: { modelValue: source, plainText: true } });
+        let reopened: VueWrapper | undefined;
+        try {
+            await flushPromises();
+            const editor = getEditor(wrapper);
+            expect(editor.getText({ blockSeparator: '\n' })).toBe(source);
+            editor.commands.insertContentAt(editor.state.doc.content.size - 1, { type: 'text', text: ' edited' });
+            await vi.advanceTimersByTimeAsync(200);
+            const saved = wrapper.emitted('update:modelValue')?.at(-1)?.[0];
+            expect(saved).toBe(source + ' edited');
+            reopened = mount(MessageEditor, { props: { modelValue: saved as string, plainText: true } });
+            await flushPromises();
+            expect(getEditor(reopened).getText({ blockSeparator: '\n' })).toBe(saved);
+            await wrapper.setProps({ modelValue: '<replacement> & literal' });
+            expect(editor.getText()).toBe('<replacement> & literal');
+        } finally {
+            reopened?.unmount();
+            wrapper.unmount();
+        }
+    });
+
     it('debounces user edits before updating the parent model', async () => {
         const wrapper = mount(MessageEditor, {
             props: { modelValue: 'Original' },

@@ -364,6 +364,7 @@
                 <LazyChatMessageEditor
                     hydrate-on-interaction="focus"
                     v-model="draft"
+                    :plain-text="props.message.role === 'user'"
                     :autofocus="true"
                     :focus-delay="120"
                     @submit="saveEdit"

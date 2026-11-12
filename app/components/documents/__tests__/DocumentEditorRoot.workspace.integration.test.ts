@@ -105,6 +105,28 @@ async function mountedWorkspaces(initialAvailability?: 'trashed' | 'missing', mo
 }
 
 describe('mounted document editor workspace lifecycle', () => {
+    // A locally durable offline edit can lose sync's LWW comparison before the
+    // periodic checkpoint runs. The live document must converge, while History
+    // retains the displaced local text instead of silently losing it.
+    it('preserves a recent local edit in History before accepting a remote document', async () => {
+        vi.stubGlobal('Blob', NodeBlob);
+        const { dbA, editor } = await mountedWorkspaces();
+        const { getDocumentEditorSession } = await import('~/composables/documents/useDocumentEditorSessions');
+        const { listCompleteDocumentRevisions } = await import('~/db/document-revisions');
+        editor.commands.setContent(content('Offline local draft to recover'), { emitUpdate: true });
+        await getDocumentEditorSession({ paneId: 'fixture-pane', tabId: 'fixture-tab' })!.ensureLocalDurability();
+        expect(await listCompleteDocumentRevisions(documentId, dbA)).toHaveLength(0);
+
+        await dbA.posts.update(documentId, { content: JSON.stringify(content('Remote winning draft')), clock: 999 });
+        await loadDocument(documentId, dbA);
+        await vi.waitFor(() => expect(editor.getText()).toBe('Remote winning draft'));
+        await vi.waitFor(async () => {
+            const revisions = await listCompleteDocumentRevisions(documentId, dbA);
+            expect(revisions.map(revision => revision.snapshot.content)).toContainEqual(content('Offline local draft to recover'));
+        });
+        expect((await dbA.posts.get(documentId))!.content).toContain('Remote winning draft');
+    });
+
     it('releases a closed document only after its last split pane saves', async () => {
         const { dbA, currentEditor } = await mountedWorkspaces();
         const peer = shallowMount(DocumentEditorRoot, {

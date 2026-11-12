@@ -52,7 +52,11 @@ parent conversation still exists and is live. Workspace/account or permission
 changes reject stale saves; completed work cannot update a replaced presentation
 row or a disposed editor.
 
-The native message editor preserves literal Markdown and HTML entity text when
+User-message edits preserve plain text, including literal Markdown, angle brackets,
+ampersands, entity spellings and line breaks. They do not parse or serialize that
+text as Markdown before saving or sending it to the provider.
+
+The assistant message editor preserves literal Markdown and HTML entity text when
 saved and reopened. Literal brackets serialize as entities to avoid the renderer's
 LaTeX delimiter interpretation. Genuine LaTeX spans remain distinct from ordinary
 text and code, so a message can contain both formulas and literal link syntax.

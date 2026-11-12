@@ -463,17 +463,31 @@ html[data-theme="blank"] {
         left: calc(var(--blank-sb-row-icon) / 2 - 4.5px);
     }
 
+    /* Same chip as the project row's disclosure, clear of the title. */
     .sidebar-family-toggle {
         position: absolute;
         inset-inline-start: calc(var(--blank-sb-inset) + var(--blank-sb-row-icon) / 2);
         z-index: 1;
         transform: translateX(-50%);
+        width: calc(var(--blank-sb-row-icon) + 6px);
+        height: calc(var(--blank-sb-row-icon) + 6px);
+        min-width: 0;
+        min-height: 0;
+        padding: 0;
+        display: grid;
+        place-items: center;
+        border-radius: var(--md-border-radius-small, var(--md-border-radius));
         background: transparent !important;
     }
 
     .sidebar-family-toggle:hover,
     .sidebar-family-toggle:focus-visible {
-        background: var(--md-surface-hover) !important;
+        background: var(--md-surface-active) !important;
+    }
+
+    /* The chip sits outside the row button, so keep the row lit beneath it. */
+    .sidebar-family-header:hover > .unified-sb-item:not(.unified-sb-item-active) {
+        background: var(--md-surface-hover);
     }
 
     .unified-sb-item-active {
