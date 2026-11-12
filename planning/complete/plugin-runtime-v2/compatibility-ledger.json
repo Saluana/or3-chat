@@ -2836,7 +2836,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "a75b7bb944fe5f41e402230797e78028e519d5e204d2d365a8823be5c50566e6",
+      "apiSha256": "678844285f55eb1a8d8ecac2ca3f9383b904a75b6ebcf12e03991f0310e9c59b",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -7295,7 +7295,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useModelStore.ts",
-                "line": 189,
+                "line": 192,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useModelStore();"
               }
@@ -7304,7 +7304,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useModelStore.ts",
-              "line": 189,
+              "line": 192,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useModelStore();"
             }
