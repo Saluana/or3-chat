@@ -702,6 +702,13 @@ html[data-density] .page-link-btn {
 	gap: max(0.75rem, var(--app-space-control, 0.75rem));
 }
 
+/* Home link rows follow the list rows' tier, not the full page-link card. */
+html[data-density] .page-link-btn.page-link-btn--compact {
+	min-height: var(--app-control-height-medium, 36px);
+	padding-block: 0;
+	gap: var(--app-space-control, 0.625rem);
+}
+
 html[data-density] .unified-sb-item {
 	min-height: var(--app-control-height-medium, 40px);
 	gap: var(--app-space-control, 0.625rem);

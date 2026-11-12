@@ -75,8 +75,8 @@
                         <dd>{{ stats.characters.toLocaleString() }}</dd>
                     </div>
                     <div>
-                        <dt>Sections</dt>
-                        <dd>{{ stats.blocks.toLocaleString() }}</dd>
+                        <dt>Headings</dt>
+                        <dd>{{ outline.length.toLocaleString() }}</dd>
                     </div>
                     <div v-if="stats.serializedBytes">
                         <dt>Document size</dt>

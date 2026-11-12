@@ -1,5 +1,26 @@
 <template>
     <button
+        v-if="compact"
+        type="button"
+        class="page-link-btn page-link-btn--compact group w-full flex items-center gap-2.5 min-h-[36px] px-2.5 rounded-[var(--md-border-radius-small,var(--md-border-radius))] transition-colors duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] hover:bg-[color:var(--md-surface-hover)] active:bg-[color:var(--md-surface-active)] focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)] cursor-pointer"
+        :class="accentClass"
+        :aria-label="label"
+        @click="emit('select')"
+    >
+        <span
+            class="shrink-0 w-6 h-6 rounded-full flex items-center justify-center page-link-icon-container"
+            :class="iconToneClass"
+        >
+            <UIcon :name="icon" class="w-3.5 h-3.5" />
+        </span>
+        <span class="flex-1 min-w-0 truncate text-left text-[14px] font-normal text-[color:var(--md-on-surface)] page-link-label">{{ label }}</span>
+        <UIcon
+            :name="iconChevronRight"
+            class="w-3.5 h-3.5 shrink-0 text-[color:var(--md-on-surface-variant)] opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 [@media(hover:none)]:opacity-50 transition-opacity page-link-icon"
+        />
+    </button>
+    <button
+        v-else
         class="w-full flex items-center gap-3 px-2.5 min-h-[52px] group relative transition-colors duration-[var(--app-motion-duration-medium,200ms)] ease-[var(--app-motion-easing-standard,ease)] rounded-[var(--md-border-radius-small,var(--md-border-radius))] mb-1 bg-[color:var(--md-surface)] border-[length:var(--md-border-width)] border-[color:var(--md-border-color)]/60 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:bg-[color:var(--md-surface-hover)] hover:border-[color:var(--md-border-color)] active:bg-[color:var(--md-surface-active)] focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)] cursor-pointer page-link-btn"
         :class="accentClass"
         :aria-label="label"
@@ -41,6 +62,8 @@ const props = withDefaults(
         description?: string;
         icon: string;
         accent?: 'chats' | 'docs' | 'projects';
+        /** A slim row for the home page's link list. */
+        compact?: boolean;
     }>(),
     {
         accent: 'chats',

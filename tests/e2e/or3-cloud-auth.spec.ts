@@ -125,7 +125,7 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
         await page.goto('/chat');
         await page.getByRole('button', { name: 'Dismiss welcome' }).click({ timeout: 5_000 }).catch(() => undefined);
         await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
-        await page.locator('#dashboard-plugin-grid').getByRole('button', { name: 'Webhooks', exact: true }).click();
+        await page.locator('#dashboard-sidebar, #dashboard-plugin-grid').getByRole('button', { name: 'Webhooks', exact: true }).click();
         await page.getByRole('dialog').getByRole('button', { name: 'Create webhook' }).click();
         const form = page.getByRole('dialog', { name: 'Create Webhook' });
         await form.getByRole('textbox', { name: 'Target URL' }).fill(`${origin}/disposable`);

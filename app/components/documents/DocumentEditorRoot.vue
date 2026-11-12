@@ -1170,16 +1170,18 @@ async function loadActiveDocument(id: string) {
     emit('ready', id);
 }
 
-// The outline only earns its space once the document has headings to list.
+// The outline only earns its width once there is a structure to navigate;
+// a short note with one heading reads better without it.
+const INSPECTOR_DEFAULT_MIN_HEADINGS = 3;
 function inspectorOpensByDefault(): boolean {
     const current = editor.value;
     if (!current || isCompactToolbar.value) return false;
-    let headings = false;
+    let headings = 0;
     current.state.doc.descendants((node) => {
-        if (node.type.name === 'heading' && Number(node.attrs.level) <= 3) headings = true;
-        return !headings;
+        if (node.type.name === 'heading' && Number(node.attrs.level) <= 3) headings += 1;
+        return headings < INSPECTOR_DEFAULT_MIN_HEADINGS;
     });
-    return headings;
+    return headings >= INSPECTOR_DEFAULT_MIN_HEADINGS;
 }
 
 // A document created moments ago with nothing in it: let the user start typing,
@@ -1665,7 +1667,8 @@ const toolbarOverflowItems = computed(() => {
         onSelect: () => runToolbarAction(button.run),
     }));
     return [
-        actionItems,
+        // Desktop overflow holds only insert actions; compact mode mixes in formatting.
+        isCompactToolbar.value ? actionItems : [{ type: 'label' as const, label: 'Insert' }, ...actionItems],
         ...(pluginButtons.value.length
             ? [
                   pluginButtons.value.map((button) => {
@@ -1685,6 +1688,7 @@ const toolbarOverflowItems = computed(() => {
                   }),
               ]
             : []),
+        [{ label: 'Download Markdown', icon: 'i-lucide-download', onSelect: () => void downloadMarkdown() }],
     ];
 });
 

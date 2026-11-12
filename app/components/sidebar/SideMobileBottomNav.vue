@@ -408,7 +408,7 @@
                         </div>
                     </div>
 
-                    <footer v-if="!infoOpen" class="more-sheet-footer">
+                    <footer v-if="!infoOpen && showSystemSection" class="more-sheet-footer">
                         <div class="more-system">
                             <p class="more-section-label">System</p>
                             <div class="more-system-card more-list">
@@ -509,6 +509,7 @@ import { useOpenRouterAuth } from '~/core/auth/useOpenrouter';
 import ConfirmDialog from '~/components/admin/ConfirmDialog.vue';
 import { state } from '~/state/global';
 import { useUserApiKey } from '~/core/auth/useUserApiKey';
+import { useSessionContext } from '~/composables/auth/useSessionContext';
 
 /** Keep nested auth menus on-screen inside the mobile More sheet. */
 provide('or3:auth-ui-popover-content', {
@@ -550,6 +551,17 @@ const config = useRuntimeConfig();
 const isSsrAuthEnabled = computed(
     () => config.public?.ssrAuthEnabled === true
 );
+
+// System status and the admin entry are for whoever can administer this
+// deployment: the server admits workspace owners and deployment admins to
+// /admin, so everyone else would only see a link that refuses them.
+const { data: sessionData } = useSessionContext();
+const showSystemSection = computed(() => {
+    if (!isSsrAuthEnabled.value) return true;
+    const session = sessionData.value?.session;
+    return session?.authenticated === true
+        && (session.role === 'owner' || session.deploymentAdmin === true);
+});
 
 // Account adapter only (Connect is a local System-matched more-row above).
 const authProviderId = computed(() =>

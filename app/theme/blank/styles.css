@@ -314,6 +314,19 @@ html[data-theme="blank"] {
         background: var(--md-surface-active);
     }
 
+    /* Home link rows: slimmer than the full page links, same inset. */
+    .page-link-btn.page-link-btn--compact {
+        gap: 10px;
+        /* The full page link is a 56px card with a gap below; these rows are not. */
+        min-height: 36px !important;
+        margin-bottom: 0 !important;
+        padding-block: 0 !important;
+    }
+
+    .page-link-btn--compact .page-link-label {
+        font-weight: 400;
+    }
+
     /* Rows span the full column like the search and page links; the inset is
        padding, so the selected fill and the content edge stay independent. */
     .unified-sb-item {
@@ -522,6 +535,12 @@ html[data-theme="blank"] {
 
     .page-link-accent-projects .page-link-icon-container {
         background: color-mix(in srgb, var(--md-secondary) 10%, var(--md-surface)) !important;
+    }
+
+    /* The pale chips match the hover fill almost exactly and would vanish into
+       it; on a hovered or pressed row they sit on the plain surface instead. */
+    .page-link-btn:is(:hover, :active, :focus-visible) .page-link-icon-container {
+        background: var(--md-surface) !important;
     }
 
     /* Expanded: soft outer edge against main content */
@@ -1297,7 +1316,7 @@ html[data-theme='blank']
         white-space: nowrap;
     }
 
-    html[data-theme="blank"] .page-link-label {
+    html[data-theme="blank"] .page-link-btn .page-link-label {
         font-size: var(--blank-mobile-control-text) !important;
         line-height: 24px;
     }
@@ -1311,6 +1330,11 @@ html[data-theme='blank']
         html[data-theme="blank"] .page-link-btn {
             min-height: 56px !important;
             padding-block: 6px !important;
+        }
+
+        html[data-theme="blank"] .page-link-btn.page-link-btn--compact {
+            min-height: 44px !important;
+            padding-block: 0 !important;
         }
 
         html[data-theme="blank"] .bottomnav-root

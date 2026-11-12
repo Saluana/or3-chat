@@ -5,7 +5,7 @@ export default {
     // Shell & Navigation
     'shell.sidebar.toggle.left': 'blank-solar:panel-left-close-linear',
     'shell.sidebar.toggle.right': 'blank-solar:panel-left-open-linear',
-    'shell.pane.add': 'blank-solar:add-square-linear',
+    'shell.pane.add': 'blank-solar:columns-2-linear',
     'shell.pane.close': 'blank-solar:close-linear',
     'shell.theme.light': 'blank-solar:sun-linear',
     'shell.theme.dark': 'blank-solar:moon-linear',

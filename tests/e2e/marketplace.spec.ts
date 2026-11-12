@@ -193,7 +193,7 @@ async function openMarketplace(
     if (await welcome.count()) await welcome.locator('button[aria-label="Dismiss welcome"]').click();
     await page.getByRole('button', { name: 'Dashboard' }).first().click({ timeout: 30_000 });
     await page
-        .locator('#dashboard-plugin-grid [aria-label="Marketplace"]')
+        .locator('#dashboard-sidebar, #dashboard-plugin-grid').getByRole('button', { name: 'Marketplace', exact: true })
         .first()
         .click({ timeout: 30_000 });
     await page
