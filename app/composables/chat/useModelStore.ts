@@ -129,6 +129,9 @@ function waitForCatalog<T>(pending: Promise<T>, signal?: AbortSignal): Promise<T
 export const MODELS_CACHE_KEY = 'MODELS_CATALOG';
 export const MODELS_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
 
+// A guarded write the workspace left behind is refused on purpose, not a failure.
+const isCancelled = (e: unknown) => (e as { rpcCode?: unknown } | null)?.rpcCode === 'cancelled';
+
 function canUseDexie() {
     try {
         return (
@@ -269,7 +272,7 @@ export function useModelStore() {
                     count: list.length,
                 });
         } catch (e) {
-            console.warn('[models-cache] Dexie save failed', e);
+            if (!isCancelled(e)) console.warn('[models-cache] Dexie save failed', e);
         }
     }
 
@@ -286,7 +289,7 @@ export function useModelStore() {
             if (import.meta.dev)
                 console.debug('[models-cache] Dexie record deleted');
         } catch (e) {
-            console.warn('[models-cache] Dexie delete failed', e);
+            if (!isCancelled(e)) console.warn('[models-cache] Dexie delete failed', e);
         }
     }
 
