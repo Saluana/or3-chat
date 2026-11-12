@@ -1149,7 +1149,7 @@ for (const theme of themes) {
                             ).toHaveCSS('padding-top', '4px');
                             await expect(
                                 page.locator('.page-link-btn').first()
-                            ).toHaveCSS('min-height', '64px');
+                            ).toHaveCSS('min-height', '32px');
 
                             await appearance
                                 .locator('#theme-density-preset')

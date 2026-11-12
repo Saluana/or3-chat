@@ -317,6 +317,10 @@ html[data-theme="blank"] {
     /* Home link rows: slimmer than the full page links, same inset. */
     .page-link-btn.page-link-btn--compact {
         gap: 10px;
+        /* The full page link is a 56px card with a gap below; these rows are not. */
+        min-height: 36px !important;
+        margin-bottom: 0 !important;
+        padding-block: 0 !important;
     }
 
     .page-link-btn--compact .page-link-label {
