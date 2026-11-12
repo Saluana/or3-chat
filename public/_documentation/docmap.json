@@ -692,7 +692,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 11,
-                    "summary": "Clerk trusted-origin startup, session-scoped tokens, recovery, and provider-isolated client adapters."
+                    "summary": "Clerk trusted-origin startup, HTTP handshake cookie recovery in 0.0.12, session-scoped tokens, and provider-isolated client adapters."
                 },
                 {
                     "name": "provider-convex.md",
