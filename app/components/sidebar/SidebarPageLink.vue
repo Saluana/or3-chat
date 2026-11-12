@@ -13,10 +13,10 @@
         >
             <UIcon :name="icon" class="w-3.5 h-3.5" />
         </span>
-        <span class="flex-1 min-w-0 truncate text-left text-[14px] font-medium text-[color:var(--md-on-surface)] page-link-label">{{ label }}</span>
+        <span class="flex-1 min-w-0 truncate text-left text-[14px] font-normal text-[color:var(--md-on-surface)] page-link-label">{{ label }}</span>
         <UIcon
             :name="iconChevronRight"
-            class="w-3.5 h-3.5 shrink-0 text-[color:var(--md-on-surface-variant)] opacity-50 group-hover:opacity-100 group-hover:text-[color:var(--md-on-surface)] transition-[opacity,color] page-link-icon"
+            class="w-3.5 h-3.5 shrink-0 text-[color:var(--md-on-surface-variant)] opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 [@media(hover:none)]:opacity-50 transition-opacity page-link-icon"
         />
     </button>
     <button

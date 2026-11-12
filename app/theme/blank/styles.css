@@ -324,7 +324,7 @@ html[data-theme="blank"] {
     }
 
     .page-link-btn--compact .page-link-label {
-        font-weight: var(--blank-weight-medium, 500);
+        font-weight: 400;
     }
 
     /* Rows span the full column like the search and page links; the inset is
@@ -535,6 +535,12 @@ html[data-theme="blank"] {
 
     .page-link-accent-projects .page-link-icon-container {
         background: color-mix(in srgb, var(--md-secondary) 10%, var(--md-surface)) !important;
+    }
+
+    /* The pale chips match the hover fill almost exactly and would vanish into
+       it; on a hovered or pressed row they sit on the plain surface instead. */
+    .page-link-btn:is(:hover, :active, :focus-visible) .page-link-icon-container {
+        background: var(--md-surface) !important;
     }
 
     /* Expanded: soft outer edge against main content */
