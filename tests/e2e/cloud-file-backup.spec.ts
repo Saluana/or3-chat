@@ -203,10 +203,10 @@ test('complete cloud backup restores independently of browser cache', async ({ p
     expect((await trashed.json()).results[0].applied).toBe(true);
     await page.evaluate(async url => { await (await import(url)).getDb().file_blobs.clear(); }, clientUrl);
     const clientExport = await page.evaluate(async url => {
-        const { exportCloudWorkspace } = await import(new URL('../utils/cloud-workspace-backup.ts', url).href);
+        const { exportCloudWorkspace } = await import(new URL('../utils/cloud-workspace-backup.ts', url).href) as typeof import('../../app/utils/cloud-workspace-backup');
         let bytes = 0, closed = false, aborted = false;
-        await exportCloudWorkspace({ write: async (chunk: Uint8Array) => { bytes += chunk.length; },
-            close: async () => { closed = true; }, abort: async () => { aborted = true; } });
+        await exportCloudWorkspace(async () => ({ write: async (chunk: Uint8Array) => { bytes += chunk.length; },
+            close: async () => { closed = true; }, abort: async () => { aborted = true; } }));
         return { bytes, closed, aborted, blobs: await (await import(url)).getDb().file_blobs.count() };
     }, clientUrl);
     expect(clientExport).toMatchObject({ closed: true, aborted: false, blobs: 0 });
