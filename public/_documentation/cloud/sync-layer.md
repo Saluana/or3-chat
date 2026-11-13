@@ -14,6 +14,10 @@ snapshot transactionally, then begins incremental replay strictly after the
 watermark.
 
 SQLite and Convex implement provider-side materialized snapshot page generators.
+The updated SQLite provider also targets 1 MiB of serialized JSON per pull or
+snapshot page, in addition to its row limit. It keeps records whole, advances
+past filtered changes, and emits one oversized record when necessary to make
+progress. Existing clients continue to follow the same cursors and tokens.
 The client stages each validated page in a local IndexedDB table, then installs
 the completed chain and cursor in one transaction before replaying strictly
 after the watermark. Interrupted staging leaves materialized data untouched;
@@ -42,6 +46,11 @@ advancing across that gap. Wall-clock cursor age (24h) is only a fallback when
 the retention fields are absent.
 
 ## Gateway polling and request volume
+
+On servers advertising request compression, the browser compresses large
+same-origin sync push bodies when gzip makes them smaller. Both compressed and
+expanded bodies remain subject to the existing request limit. Older servers and
+browsers without compression support continue to receive ordinary JSON.
 
 Open chat panes, document editors, and tab titles refresh from workspace-local
 Dexie observations after incoming sync writes. They add no network polling or

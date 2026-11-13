@@ -81,6 +81,114 @@ afterEach(async () => {
 });
 
 describe('durable storage recovery contracts', () => {
+    it('resumes an interrupted verified download from its last received byte', async () => {
+        const db = await database();
+        await db.file_meta.put({ ...meta(), storage_id: 'original' });
+        const requests: Array<{ range: string | null; validator: string | null }> = [];
+        vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+            const requestHeaders = new Headers(init.headers);
+            requests.push({ range: requestHeaders.get('range'), validator: requestHeaders.get('if-range') });
+            if (requests.length === 1) {
+                let sent = false;
+                return new Response(new ReadableStream({ pull(controller) {
+                    if (!sent) { sent = true; controller.enqueue(new TextEncoder().encode('he')); }
+                    else controller.error(new Error('connection lost'));
+                } }), { headers: { 'content-type': 'text/plain', 'content-length': '5',
+                    'accept-ranges': 'bytes', etag: '"original-v1"' } });
+            }
+            return requestHeaders.get('range') === 'bytes=2-'
+                ? new Response('llo', { status: 206, headers: { 'content-type': 'text/plain', 'content-length': '3',
+                    'content-range': 'bytes 2-4/5', etag: '"original-v1"' } })
+                : new Response('hello', { headers: { 'content-type': 'text/plain' } });
+        }));
+        const storage = provider();
+        vi.mocked(storage.getPresignedDownloadUrl).mockResolvedValue({ url: '/api/storage/fs/download?token=test', expiresAt: Date.now() + 60_000 });
+        const executor = queue(db, storage, { backoffBaseMs: 1 });
+        executor.setWorkspaceId('ws', 'account-a');
+        expect(await (await executor.ensureDownloadedBlob(hash))?.text()).toBe('hello');
+        expect(requests).toEqual([{ range: null, validator: null }, { range: 'bytes=2-', validator: '"original-v1"' }]);
+        expect(await (await db.file_blobs.get(hash))?.blob.text()).toBe('hello');
+    });
+
+    it.each(['full', 'bad-range'] as const)('safely restarts when the server returns %s after a partial download', async mode => {
+        const db = await database();
+        await db.file_meta.put({ ...meta(), storage_id: 'original' });
+        const ranges: Array<string | null> = [];
+        vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+            const range = new Headers(init.headers).get('range');
+            ranges.push(range);
+            if (ranges.length === 1) {
+                let sent = false;
+                return new Response(new ReadableStream({ pull(controller) {
+                    if (!sent) { sent = true; controller.enqueue(new TextEncoder().encode('he')); }
+                    else controller.error(new Error('connection lost'));
+                } }), { headers: { 'content-length': '5', 'accept-ranges': 'bytes', etag: '"v1"' } });
+            }
+            if (ranges.length === 2 && mode === 'bad-range') return new Response('xxx', { status: 206,
+                headers: { 'content-length': '3', 'content-range': 'bytes 2-4/5', etag: '"v2"' } });
+            return new Response('hello', { headers: { 'content-type': 'text/plain' } });
+        }));
+        const storage = provider();
+        vi.mocked(storage.getPresignedDownloadUrl).mockResolvedValue({ url: '/api/storage/fs/download?token=test', expiresAt: Date.now() + 60_000 });
+        const executor = queue(db, storage, { backoffBaseMs: 1 });
+        executor.setWorkspaceId('ws', 'account-a');
+        expect(await (await executor.ensureDownloadedBlob(hash))?.text()).toBe('hello');
+        expect(ranges).toEqual(mode === 'full' ? [null, 'bytes=2-'] : [null, 'bytes=2-', null]);
+        expect(await (await db.file_blobs.get(hash))?.blob.text()).toBe('hello');
+    });
+
+    it('discards interrupted bytes when the account changes in the same workspace', async () => {
+        const db = await database();
+        await db.file_meta.put({ ...meta(), storage_id: 'original' });
+        const ranges: Array<string | null> = [];
+        vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+            ranges.push(new Headers(init.headers).get('range'));
+            if (ranges.length === 1) {
+                let sent = false;
+                return new Response(new ReadableStream({ pull(controller) {
+                    if (!sent) { sent = true; controller.enqueue(new TextEncoder().encode('he')); }
+                    else controller.error(new Error('connection lost'));
+                } }), { headers: { 'content-length': '5', 'accept-ranges': 'bytes', etag: '"v1"' } });
+            }
+            return new Response('hello', { headers: { 'content-type': 'text/plain' } });
+        }));
+        const storage = provider();
+        vi.mocked(storage.getPresignedDownloadUrl).mockResolvedValue({ url: '/api/storage/fs/download?token=test', expiresAt: Date.now() + 60_000 });
+        const executor = queue(db, storage, { backoffBaseMs: 200 });
+        executor.setWorkspaceId('ws', 'account-a');
+        const transfer = await executor.enqueue(hash, 'download');
+        await until(async () => (await db.file_transfers.get(transfer!.id))?.attempts === 1);
+        executor.setWorkspaceId('ws', 'account-b');
+        await until(async () => (await db.file_transfers.get(transfer!.id))?.state === 'done');
+        expect(ranges).toEqual([null, null]);
+    });
+
+    it.each(['revoked', 'corrupt'] as const)('never caches a resumed download that is %s', async failure => {
+        const db = await database();
+        await db.file_meta.put({ ...meta(), storage_id: 'original' });
+        let calls = 0;
+        vi.stubGlobal('fetch', vi.fn(async () => {
+            if (++calls === 1) {
+                let sent = false;
+                return new Response(new ReadableStream({ pull(controller) {
+                    if (!sent) { sent = true; controller.enqueue(new TextEncoder().encode('he')); }
+                    else controller.error(new Error('connection lost'));
+                } }), { headers: { 'content-length': '5', 'accept-ranges': 'bytes', etag: '"v1"' } });
+            }
+            return failure === 'revoked' ? new Response('', { status: 403 })
+                : new Response('bad', { status: 206, headers: { 'content-length': '3',
+                    'content-range': 'bytes 2-4/5', etag: '"v1"' } });
+        }));
+        const storage = provider();
+        vi.mocked(storage.getPresignedDownloadUrl).mockResolvedValue({ url: '/api/storage/fs/download?token=test', expiresAt: Date.now() + 60_000 });
+        const executor = queue(db, storage, { backoffBaseMs: 1, maxAttempts: 2 });
+        executor.setWorkspaceId('ws', 'account-a');
+        const transfer = await executor.enqueue(hash, 'download');
+        await until(async () => (await db.file_transfers.get(transfer!.id))?.state === 'failed');
+        expect(calls).toBe(2);
+        expect(await db.file_blobs.get(hash)).toBeUndefined();
+    });
+
     it('downloads previously stored files above the local cap after expiry without pinning them', async () => {
         policy.configured = true;
         policy.cacheBytes = 1; // Cloud cache rejects this original, but download still succeeds.

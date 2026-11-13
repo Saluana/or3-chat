@@ -133,7 +133,8 @@ describe('fresh authorization of bounded, ordered SSE batches', () => {
         jobId?: string,
         offset?: number,
         previousContent = '',
-        attempt?: number
+        attempt?: number,
+        stateDeltas = false
     ) {
         jobId ??= await memoryJobProvider.createJob({
             userId: 'owner',
@@ -158,7 +159,7 @@ describe('fresh authorization of bounded, ordered SSE batches', () => {
         );
         const opening = send(
             new Request(
-                `http://chat.test/api/jobs/${jobId}/stream${offset === undefined ? '' : `?offset=${offset}${attempt === undefined ? '' : `&attempt=${attempt}`}`}`
+                `http://chat.test/api/jobs/${jobId}/stream?${new URLSearchParams({ ...(offset === undefined ? {} : { offset: String(offset) }), ...(attempt === undefined ? {} : { attempt: String(attempt) }), ...(stateDeltas ? { stateDeltas: '1' } : {}) })}`
             )
         );
         await vi.advanceTimersByTimeAsync(auth.delay);
@@ -218,6 +219,25 @@ describe('fresh authorization of bounded, ordered SSE batches', () => {
             },
         };
     }
+
+    it.each([false, true])('sends unchanged tool state according to negotiated delta mode: %s', async stateDeltas => {
+        const stream = await attach(undefined, undefined, '', undefined, stateDeltas);
+        const tool_calls: NonNullable<BackgroundJob['tool_calls']> = [{ id: 'tool', name: 'tool', status: 'complete', result: 'x'.repeat(20000) }];
+        emitJobDelta(stream.jobId, 'a', { contentLength: 1, chunksReceived: 1, attempt: 0, tool_calls });
+        await vi.advanceTimersByTimeAsync(auth.delay * 3);
+        emitJobDelta(stream.jobId, 'b', { contentLength: 2, chunksReceived: 2, attempt: 0, tool_calls });
+        await vi.advanceTimersByTimeAsync(auth.delay * 3);
+        emitJobDelta(stream.jobId, 'c', { contentLength: 3, chunksReceived: 3, attempt: 0, tool_calls: [] });
+        await vi.advanceTimersByTimeAsync(auth.delay * 3);
+        const deltas = stream.frames.filter(frame => frame.status.content_delta);
+        expect(deltas).toHaveLength(3);
+        expect(deltas[0]!.status.tool_calls).toEqual(tool_calls);
+        expect(deltas[1]!.status.tool_calls).toEqual(stateDeltas ? undefined : tool_calls);
+        expect(deltas[2]!.status.tool_calls).toEqual([]);
+        if (stateDeltas) expect(JSON.stringify(deltas[1]!.status).length).toBeLessThan(500);
+        await stream.reader.cancel();
+        await stream.consumed;
+    });
 
     async function finish(
         jobId: string,

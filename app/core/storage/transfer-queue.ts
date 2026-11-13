@@ -55,6 +55,9 @@ type BoundQueueContext = {
     db: Or3DB;
 };
 
+type PartialDownload = { blob: Blob; etag: string; total: number; storageId: string; hash: string };
+const MAX_PARTIAL_DOWNLOAD_BYTES = 16 * 1024 * 1024;
+
 function isAbortError(error: unknown): boolean {
     return typeof error === 'object'
         && error !== null
@@ -85,6 +88,9 @@ export class FileTransferQueue {
     private abortControllers = new Map<string, AbortController>();
     private requeueOnAbort = new Set<string>();
     private workspaceId: string | null = null;
+    private accountId: string | null = null;
+    private scopeGeneration = 0;
+    private partialDownloads = new Map<string, PartialDownload>();
     private processQueueTimeout: ReturnType<typeof setTimeout> | null = null;
     private processQueueAt: number | null = null;
     private lastCleanupAt = 0;
@@ -125,16 +131,20 @@ export class FileTransferQueue {
         this.activity.addEventListener?.('offline', this.onOffline);
     }
 
-    setWorkspaceId(workspaceId: string | null) {
+    setWorkspaceId(workspaceId: string | null, accountId: string | null = null) {
         const previousWorkspaceId = this.workspaceId;
+        const scopeChanged = previousWorkspaceId !== workspaceId || this.accountId !== accountId;
         this.workspaceId = workspaceId;
-        if (previousWorkspaceId !== workspaceId) {
+        this.accountId = accountId;
+        if (scopeChanged) {
+            this.scopeGeneration++;
+            this.partialDownloads.clear();
             this.recoveryCursor = undefined;
             this.recoveryComplete = false;
         }
 
         // Cancel in-flight transfers for the old workspace when switching
-        if (previousWorkspaceId && workspaceId !== previousWorkspaceId) {
+        if (previousWorkspaceId && scopeChanged) {
             this.pauseRunning();
             if (this.processQueueTimeout) {
                 clearTimeout(this.processQueueTimeout);
@@ -210,6 +220,7 @@ export class FileTransferQueue {
     /** Cancel a specific transfer by ID */
     cancelTransfer(id: string): void {
         this.requeueOnAbort.delete(id);
+        this.partialDownloads.delete(id);
         const controller = this.abortControllers.get(id);
         if (controller) {
             controller.abort();
@@ -236,6 +247,9 @@ export class FileTransferQueue {
     dispose(): void {
         if (queueInstance === this) queueInstance = null;
         this.workspaceId = null;
+        this.accountId = null;
+        this.scopeGeneration++;
+        this.partialDownloads.clear();
         this.pauseRunning();
         if (this.processQueueTimeout) clearTimeout(this.processQueueTimeout);
         this.processQueueTimeout = null;
@@ -1048,18 +1062,51 @@ export class FileTransferQueue {
         });
         await this.assertTransferActive(transfer, context.db, signal);
 
-        const response = await fetch(presign.url, {
+        const scopeGeneration = this.scopeGeneration;
+        let fsDownload = false;
+        try {
+            const url = new URL(presign.url, globalThis.location?.href);
+            fsDownload = Boolean(this.accountId && url.origin === globalThis.location?.origin && url.pathname === '/api/storage/fs/download');
+        } catch { /* Other providers retain the existing full-download behavior. */ }
+        let partial = fsDownload ? this.partialDownloads.get(transfer.id) : undefined;
+        if (partial && (partial.storageId !== meta.storage_id || partial.hash !== meta.hash)) {
+            this.partialDownloads.delete(transfer.id);
+            partial = undefined;
+        }
+        const headers = new Headers(presign.headers);
+        if (partial) {
+            headers.set('Range', `bytes=${partial.blob.size}-`);
+            headers.set('If-Range', partial.etag);
+        }
+        let response = await fetch(presign.url, {
             method: presign.method ?? 'GET',
-            headers: presign.headers,
+            headers,
             credentials: 'include',
             signal,
         });
+        if (partial && (response.status === 416 || (response.status === 206 &&
+            (response.headers.get('etag') !== partial.etag ||
+             response.headers.get('content-range') !== `bytes ${partial.blob.size}-${partial.total - 1}/${partial.total}` ||
+             Number(response.headers.get('content-length')) !== partial.total - partial.blob.size)))) {
+            await response.body?.cancel();
+            this.partialDownloads.delete(transfer.id);
+            partial = undefined;
+            // A fresh grant rechecks access before restarting the safe GET.
+            const fresh = await this.provider.getPresignedDownloadUrl({
+                workspaceId: transfer.workspace_id, hash: meta.hash, storageId: meta.storage_id,
+                mimeType: meta.mime_type, expiresInMs: urlOptions.expiry_ms,
+                disposition: urlOptions.disposition, signal,
+            });
+            await this.assertTransferActive(transfer, context.db, signal);
+            response = await fetch(fresh.url, { method: fresh.method ?? 'GET', headers: fresh.headers, credentials: 'include', signal });
+        }
         if (signal.aborted) {
             await response.body?.cancel();
             throw createAbortError();
         }
 
         if (!response.ok) {
+            if ([401, 403, 404, 410, 416].includes(response.status)) this.partialDownloads.delete(transfer.id);
             if (response.status === 404 || response.status === 410) {
                 throw recoverableTransferError(
                     'remote_missing',
@@ -1094,6 +1141,7 @@ export class FileTransferQueue {
             actualMime === 'application/octet-stream' ||
             actualMime === expectedMime;
         if (!mimeTrusted) {
+            this.partialDownloads.delete(transfer.id);
             await response.body?.cancel();
             throw err(
                 'ERR_STORAGE_DOWNLOAD_FAILED',
@@ -1110,15 +1158,11 @@ export class FileTransferQueue {
                     ? meta.mime_type
                     : DEFAULT_FILE_MIME_TYPE;
 
-        const { blob, bytesTotal } = await this.readBlobWithProgress(
-            response,
-            transfer.id,
-            context.db,
-            isCloudFileStorageConfigured() ? Math.max(this.maxDownloadBytes, meta.size_bytes) : this.maxDownloadBytes,
-            blobMime,
-            signal,
-            transfer.lease_token,
-        );
+        const maxBytes = isCloudFileStorageConfigured() ? Math.max(this.maxDownloadBytes, meta.size_bytes) : this.maxDownloadBytes;
+        const { blob, bytesTotal } = fsDownload
+            ? await this.readResumableDownload(response, transfer, context.db, maxBytes, blobMime, signal, scopeGeneration, meta.storage_id, partial)
+            : await this.readBlobWithProgress(response, transfer.id, context.db, maxBytes, blobMime, signal, transfer.lease_token);
+        this.partialDownloads.delete(transfer.id);
         await this.updateTransfer(transfer.id, {
             bytes_total: bytesTotal,
             bytes_done: bytesTotal,
@@ -1166,6 +1210,85 @@ export class FileTransferQueue {
             size_bytes: bytesTotal,
         });
         return blob;
+    }
+
+    private async readResumableDownload(
+        response: Response, transfer: FileTransfer, db: Or3DB, maxBytes: number,
+        mime: string, signal: AbortSignal, scopeGeneration: number, storageId: string,
+        partial?: PartialDownload,
+    ): Promise<{ blob: Blob; bytesTotal: number }> {
+        const etag = response.headers.get('etag');
+        const length = Number(response.headers.get('content-length'));
+        if (partial && response.status === 206) {
+            const expected = `bytes ${partial.blob.size}-${partial.total - 1}/${partial.total}`;
+            if (etag !== partial.etag || response.headers.get('content-range') !== expected || length !== partial.total - partial.blob.size) {
+                this.partialDownloads.delete(transfer.id);
+                await response.body?.cancel();
+                throw err('ERR_STORAGE_DOWNLOAD_FAILED', 'Invalid resumed download response', { tags: { domain: 'storage', stage: 'download' } });
+            }
+        } else if (response.status === 200) {
+            this.partialDownloads.delete(transfer.id);
+            partial = undefined;
+        } else {
+            this.partialDownloads.delete(transfer.id);
+            await response.body?.cancel();
+            throw err('ERR_STORAGE_DOWNLOAD_FAILED', 'Unexpected partial download response', { tags: { domain: 'storage', stage: 'download' } });
+        }
+        const total = partial?.total ?? length;
+        const resumable = Boolean(response.body && etag && /^"[^"\s]+"$/.test(etag) &&
+            Number.isSafeInteger(total) && total > 0 && total <= maxBytes && total <= MAX_PARTIAL_DOWNLOAD_BYTES &&
+            (partial || response.headers.get('accept-ranges')?.toLowerCase() === 'bytes') &&
+            (!response.url || new URL(response.url).origin === globalThis.location?.origin));
+        if (!resumable) {
+            if (partial) {
+                this.partialDownloads.delete(transfer.id);
+                await response.body?.cancel();
+                throw err('ERR_STORAGE_DOWNLOAD_FAILED', 'Untrusted resumed download response', { tags: { domain: 'storage', stage: 'download' } });
+            }
+            return this.readBlobWithProgress(response, transfer.id, db, maxBytes, mime, signal, transfer.lease_token);
+        }
+
+        const reader = response.body!.getReader();
+        const chunks: BlobPart[] = partial ? [partial.blob] : [];
+        let received = partial?.blob.size ?? 0;
+        let lastUpdate = 0;
+        const abort = () => { void reader.cancel('transfer aborted').catch(() => {}); };
+        signal.addEventListener('abort', abort, { once: true });
+        try {
+            for (;;) {
+                signal.throwIfAborted();
+                const { done, value } = await reader.read();
+                signal.throwIfAborted();
+                if (done) break;
+                received += value.byteLength;
+                if (received > total) throw new Error('Download exceeds declared length');
+                chunks.push(Uint8Array.from(value).buffer);
+                if (Date.now() - lastUpdate > 200) {
+                    await this.updateTransfer(transfer.id, { bytes_done: received, bytes_total: total }, db, transfer.lease_token);
+                    lastUpdate = Date.now();
+                }
+            }
+            if (received !== total) throw new Error('Download ended before declared length');
+            return { blob: new Blob(chunks, { type: mime }), bytesTotal: total };
+        } catch (error) {
+            await reader.cancel().catch(() => {});
+            if ((error as Error | undefined)?.name !== 'LeaseLostError' && received > 0 && received < total && this.scopeGeneration === scopeGeneration &&
+                (!signal.aborted || this.requeueOnAbort.has(transfer.id))) {
+                const blob = new Blob(chunks);
+                this.partialDownloads.delete(transfer.id);
+                let used = [...this.partialDownloads.values()].reduce((sum, item) => sum + item.blob.size, 0);
+                while (used + blob.size > MAX_PARTIAL_DOWNLOAD_BYTES && this.partialDownloads.size) {
+                    const oldest = this.partialDownloads.keys().next().value!;
+                    used -= this.partialDownloads.get(oldest)!.blob.size;
+                    this.partialDownloads.delete(oldest);
+                }
+                this.partialDownloads.set(transfer.id, { blob, etag: etag!, total, storageId, hash: transfer.hash });
+            }
+            throw error;
+        } finally {
+            signal.removeEventListener('abort', abort);
+            reader.releaseLock();
+        }
     }
 
     private async readBlobWithProgress(

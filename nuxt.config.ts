@@ -252,6 +252,7 @@ export default defineNuxtConfig({
         ...applicationPlan.runtimeConfig,
         public: {
             ...applicationPlan.runtimeConfig.public,
+            gzipRequests: true,
             chatToolIterations: 10,
             chatGeneratedImages: 6,
             devTools:

@@ -4,6 +4,8 @@ import { FULL_HISTORY_PULL_RETENTION } from '~~/shared/sync/types';
 import { createGatewaySyncProvider } from '../providers/gateway-sync-provider';
 import { OutboxManager } from '../outbox-manager';
 import { createMockDb, createPendingOpsTable } from './sync-test-utils';
+import { Blob as NodeBlob } from 'node:buffer';
+import { gunzipSync } from 'node:zlib';
 
 const hookState = vi.hoisted(() => ({
     doAction: vi.fn(),
@@ -590,6 +592,24 @@ describe('GatewaySyncProvider', () => {
         expect(sessionInvalidSpy).toHaveBeenCalledTimes(1);
         expect(consoleError).not.toHaveBeenCalled();
         window.removeEventListener('or3:sync-session-invalid', sessionInvalidSpy);
+    });
+
+    it.each([
+        { gzipRequests: true, baseUrl: '', compressed: true },
+        { gzipRequests: false, baseUrl: '', compressed: false },
+        { gzipRequests: true, baseUrl: 'https://sync.example.test', compressed: false },
+    ])('compresses only an advertised same-origin push: $compressed', async ({ gzipRequests, baseUrl, compressed }) => {
+        vi.useRealTimers();
+        vi.stubGlobal('Blob', NodeBlob);
+        const fetchMock = vi.fn<typeof fetch>(async () => makeErrorResponse(401, 'Unauthorized'));
+        vi.stubGlobal('fetch', fetchMock);
+        const batch = pushBatch();
+        batch.ops[0]!.pk = 'a'.repeat(40_000);
+        await expect(createGatewaySyncProvider({ gzipRequests, baseUrl }).push(batch)).rejects.toMatchObject({ status: 401 });
+        const init = fetchMock.mock.calls[0]![1]!;
+        const raw = compressed ? gunzipSync(Buffer.from(await (init.body as Blob).arrayBuffer())).toString() : init.body as string;
+        expect(JSON.parse(raw).ops[0].pk).toBe(batch.ops[0]!.pk);
+        expect((init.headers as Record<string, string>)['Content-Encoding']).toBe(compressed ? 'gzip' : undefined);
     });
 
     it('surfaces retry-after metadata on 429 push failures', async () => {

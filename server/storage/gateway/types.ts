@@ -203,6 +203,13 @@ export interface StorageGatewayAdapter {
         input: { workspaceId: string; hash: string; storageId: string }
     ): Promise<Response>;
 
+    /** Server-only read of one live, committed original for chat. The provider
+     * must enforce current workspace access and the exact storage identity. */
+    readChatAttachment?(
+        event: H3Event,
+        input: { workspaceId: string; hash: string; storageId: string }
+    ): Promise<Response>;
+
     /**
      * Optional: Commit/finalize an upload.
      *

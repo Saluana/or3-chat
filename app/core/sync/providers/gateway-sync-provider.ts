@@ -1,5 +1,6 @@
 import { WORKSPACE_ITEM_CAPABILITY } from "~~/shared/posts/workspace-item-capability";
 import { normalizeError, type ErrorCode } from '~~/shared/errors';
+import { prepareJsonBody } from '~/utils/compress-json';
 /**
  * @module app/core/sync/providers/gateway-sync-provider
  *
@@ -79,6 +80,7 @@ type VersionChannel = {
  */
 export interface GatewaySyncProviderConfig {
     id?: string;
+    gzipRequests?: boolean;
     baseUrl?: string;
     pollIntervalMs?: number;
     pullLimit?: number;
@@ -209,6 +211,7 @@ async function requestJsonRaw<T>(
     baseUrl: string,
     options: {
         allowEmpty?: boolean;
+        gzipRequests?: boolean;
         signal?: AbortSignal;
         schema?: {
             safeParse(
@@ -219,14 +222,16 @@ async function requestJsonRaw<T>(
         };
     } = {}
 ): Promise<T> {
+    const payload = await prepareJsonBody(body, options.gzipRequests === true && baseUrl === '' && path === '/api/sync/push', options.signal);
     const res = await fetch(`${baseUrl}${path}`, {
         method: 'POST',
         credentials: 'include',
         headers: {
             'Content-Type': 'application/json',
             'x-or3-cloud-intent': 'mutation',
+            ...(payload.compressed ? { 'Content-Encoding': 'gzip' } : {}),
         },
-        body: JSON.stringify(body),
+        body: payload.body,
         signal: options.signal,
     });
 
@@ -327,7 +332,7 @@ export function createGatewaySyncProvider(
         try {
             if (controller.signal.aborted) return await cancelled;
             return await Promise.race([requestJsonRaw<T>(path, wireBody, url,
-                { ...options, signal: controller.signal }), cancelled]);
+                { ...options, gzipRequests: config.gzipRequests, signal: controller.signal }), cancelled]);
         } finally {
             clearTimeout(timer);
             options.signal?.removeEventListener('abort', forwardAbort);

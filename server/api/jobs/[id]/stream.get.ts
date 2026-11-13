@@ -195,6 +195,7 @@ export default defineEventHandler(async (event) => {
     };
 
     const query = getQuery(event);
+    const stateDeltas = query.stateDeltas === '1';
     const offsetParam = typeof query.offset === 'string' ? query.offset : null;
     const offset = offsetParam ? Number(offsetParam) : null;
     const attemptParam =
@@ -276,6 +277,9 @@ export default defineEventHandler(async (event) => {
                 closeStream();
             });
 
+            let sentToolState: string | undefined;
+            let sentWorkflowState: string | undefined;
+            let sentAttempt: number | undefined;
             const write = (payload: StreamEventPayload) => {
                 if (isClosed()) return;
                 if (suppressedTerminal && (
@@ -305,9 +309,18 @@ export default defineEventHandler(async (event) => {
                 suppressedTerminal = null;
                 suppressedTerminalBytes = 0;
 
-                const encoded = encoder.encode(
-                    `data: ${JSON.stringify(payload)}\n\n`
-                );
+                const toolState = JSON.stringify(payload.status.tool_calls);
+                const workflowState = JSON.stringify(payload.status.workflow_state);
+                const compact = stateDeltas && payload.event === 'delta' &&
+                    payload.status.attempt === sentAttempt && !payload.status.content_reset;
+                const status: Record<string, unknown> = { ...payload.status };
+                if (compact) {
+                    if (toolState === sentToolState) delete status.tool_calls;
+                    else if (toolState === undefined) status.tool_calls = null;
+                    if (workflowState === sentWorkflowState) delete status.workflow_state;
+                    else if (workflowState === undefined) status.workflow_state = null;
+                }
+                const encoded = encoder.encode(`data: ${JSON.stringify({ ...payload, status, ...(stateDeltas ? { stateDeltas: 1 } : {}) })}\n\n`);
                 const available = controller.desiredSize;
                 if (!hasSseQueueCapacity(available, encoded.byteLength)) {
 
@@ -315,6 +328,9 @@ export default defineEventHandler(async (event) => {
                     return;
                 }
                 controller.enqueue(encoded);
+                sentToolState = toolState;
+                sentWorkflowState = workflowState;
+                sentAttempt = payload.status.attempt;
                 lastMeasuredUsage = payload.status.usage;
                 lastUsage = JSON.stringify(lastMeasuredUsage);
             };

@@ -2,13 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
 import { testRuntimeConfig } from '../../../tests/setup';
 
-const session = ref<{ session?: { authenticated: boolean; workspace?: { id: string } } }>({});
+const session = ref<{ session?: { authenticated: boolean; workspace?: { id: string }; user?: { id: string } } }>({});
 const access = ref(false);
 const queue = {
     workspaceId: null as string | null,
+    accountId: null as string | null,
     // Each upload toggle records the workspace bound at that moment.
     uploadToggles: [] as Array<{ enabled: boolean; workspaceId: string | null }>,
-    setWorkspaceId(id: string | null) { this.workspaceId = id; },
+    setWorkspaceId(id: string | null, account: string | null) { this.workspaceId = id; this.accountId = account; },
     setUploadsEnabled(enabled: boolean) { this.uploadToggles.push({ enabled, workspaceId: this.workspaceId }); },
     getWorkspaceId() { return this.workspaceId; },
     dispose: vi.fn(),
@@ -40,10 +41,14 @@ describe('storage transfer plugin', () => {
         await plugin({ vueApp: { onUnmount: fn => { dispose = fn; } } });
         try {
             // Billing deployments learn the workspace and Cloud access together.
-            session.value = { session: { authenticated: true, workspace: { id: 'ws-1' } } };
+            session.value = { session: { authenticated: true, user: { id: 'account-a' }, workspace: { id: 'ws-1' } } };
             access.value = true;
             await nextTick();
             expect(queue.uploadToggles.at(-1)).toEqual({ enabled: true, workspaceId: 'ws-1' });
+            expect(queue.accountId).toBe('account-a');
+            session.value = { session: { authenticated: true, user: { id: 'account-b' }, workspace: { id: 'ws-1' } } };
+            await nextTick();
+            expect(queue.accountId).toBe('account-b');
         } finally {
             dispose?.();
         }

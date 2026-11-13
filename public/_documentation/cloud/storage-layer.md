@@ -58,6 +58,19 @@ a download that policy excludes from the browser cache, the requesting tab
 retrieves and verifies its own transient bytes. Such bytes are never persisted
 outside the configured cache budget.
 
+With a compatible filesystem provider, interrupted downloads of up to 16 MiB
+can resume within the same queue session using authenticated byte ranges and a
+matching strong validator. Partial bytes are held only in bounded memory and
+discarded when the account or workspace changes. The complete hash is verified
+before the original enters the cache. Providers without range support continue
+to send complete files.
+
+For compatible Cloud providers, chat can replace already committed images and
+PDFs from 32 KiB to 16 MiB with workspace-scoped references on the browser-to-server hop. The
+server checks current membership, canonical live metadata, object identity,
+size and SHA-256 before reconstructing the same model input. Uncommitted files,
+unsupported providers and older servers keep the existing inline transfer.
+
 After this workspace's file settings have loaded in the current app session,
 small originals can be saved locally while offline using those verified
 settings. Connect once first if settings have not loaded. Reconnecting refreshes

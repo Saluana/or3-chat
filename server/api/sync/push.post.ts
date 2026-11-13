@@ -157,7 +157,8 @@ export default defineEventHandler(async (event) => {
 
     const body: unknown = await readLimitedJsonBody(
         event,
-        MAX_SYNC_PUSH_BATCH_BYTES
+        MAX_SYNC_PUSH_BATCH_BYTES,
+        { allowGzip: true }
     );
     const envelope = PushEnvelopeSchema.safeParse(body);
     if (!envelope.success) {

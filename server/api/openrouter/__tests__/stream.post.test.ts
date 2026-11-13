@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { createHash } from 'node:crypto';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setResponseHeader, type H3Event } from 'h3';
 import { checkAndRecordLlmRequest } from '../../../utils/llm/rate-limiter';
@@ -48,9 +49,9 @@ vi.mock('../../../utils/security/limited-json-body', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../../utils/security/limited-json-body')>();
     return {
         ...actual,
-        readLimitedJsonBody: (event: H3Event, maxBytes?: number) =>
+        readLimitedJsonBody: (event: H3Event, maxBytes?: number, options?: { allowGzip?: boolean }) =>
             bodyReader.useActual
-                ? actual.readLimitedJsonBody(event, maxBytes)
+                ? actual.readLimitedJsonBody(event, maxBytes, options)
                 : readBodyMock(event, maxBytes),
     };
 });
@@ -616,6 +617,36 @@ describe('POST /api/openrouter/stream credential authorization', () => {
         expect(body).not.toHaveProperty('_messageId');
         expect(body).not.toHaveProperty('_toolRuntime');
         expect(body).not.toHaveProperty('_streamedFieldMode');
+    });
+
+    it.each(['foreground', 'background'] as const)('resolves Cloud attachments before %s model admission', async mode => {
+        const [syncRegistry, storageRegistry, storageAccess] = await Promise.all([
+            import('../../../sync/gateway/registry'), import('../../../storage/gateway/registry'), import('../../../utils/storage/workspace-access'),
+        ]);
+        const bytes = Buffer.from('image bytes for model');
+        const hash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+        const storageId = `workspace-1:${hash}`;
+        const sync = vi.spyOn(syncRegistry, 'getActiveSyncGatewayAdapter').mockReturnValue({
+            queryCanonicalStorage: async () => ({ hasMore: false, items: [{ kind: 'metadata', hash,
+                storageId, sizeBytes: bytes.length, fileKind: 'image', mimeType: 'image/png' }] }),
+        } as never);
+        const storage = vi.spyOn(storageRegistry, 'getActiveStorageGatewayAdapter').mockReturnValue({
+            readChatAttachment: async () => new Response(bytes),
+        } as never);
+        const access = vi.spyOn(storageAccess, 'requireStorageWorkspaceAccess').mockResolvedValue(undefined);
+        try {
+            const body = { model: 'test/model', stream: true, messages: [{ role: 'user', content: [
+                { type: 'text', text: 'look' }, { type: 'image_url', image_url: { url: 'or3-cloud-attachment:0' } },
+            ] }], _cloudAttachments: [{ messageIndex: 0, partIndex: 1, hash, storageId, prefix: 'data:image/png;base64,' }],
+            ...(mode === 'background' ? { _background: true, _threadId: 'thread-1', _messageId: 'message-1' } : {}) };
+            readBodyMock.mockResolvedValue(body);
+            await handler(makeEvent());
+            const sent = mode === 'background' ? startBackgroundStreamMock.mock.calls[0]![0].body
+                : JSON.parse(vi.mocked(fetch).mock.calls[0]![1]!.body as string);
+            expect(sent).not.toHaveProperty('_cloudAttachments');
+            expect(sent.messages[0].content).toEqual([{ type: 'text', text: 'look' },
+                { type: 'image_url', image_url: { url: `data:image/png;base64,${bytes.toString('base64')}` } }]);
+        } finally { sync.mockRestore(); storage.mockRestore(); access.mockRestore(); }
     });
     describe('client disconnect', () => {
         /** A provider whose response headers have not arrived; resolves only if never aborted. */

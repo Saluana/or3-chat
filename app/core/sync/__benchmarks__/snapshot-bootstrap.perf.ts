@@ -15,6 +15,7 @@ import type {
 } from '~~/shared/sync/types';
 
 const scope: SyncScope = { workspaceId: 'snapshot-benchmark' };
+const payloadBytes = positiveInteger(process.env.OR3_BENCH_SNAPSHOT_CONTENT_BYTES, 0);
 
 function positiveInteger(value: string | undefined, fallback: number): number {
     const parsed = Number(value);
@@ -33,7 +34,7 @@ function messageItem(index: number): SnapshotItem {
             role: index % 2 === 0 ? 'user' : 'assistant',
             index,
             order_key: `${index.toString().padStart(13, '0')}:0000:benchmark`,
-            data: { content: `snapshot benchmark message ${index}` },
+            data: { content: payloadBytes > 0 ? 'x'.repeat(payloadBytes) : `snapshot benchmark message ${index}` },
             pending: false,
             error: null,
             file_hashes: null,
@@ -141,6 +142,8 @@ async function main(): Promise<void> {
             rows: rowCount,
             pageSize,
             pages: pageCount,
+            contentBytes: payloadBytes || null,
+            peakRssKiB: process.resourceUsage().maxRSS,
             stagingMs: Number(stagingMs.toFixed(2)),
             installMs: Number(installMs.toFixed(2)),
             cleanupMs: Number(cleanupMs.toFixed(2)),
