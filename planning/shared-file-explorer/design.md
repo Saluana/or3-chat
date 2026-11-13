@@ -2,243 +2,278 @@
 
 ## Overview
 
-Implement a shared explorer on Nuxt UI `UTree` for project contents and Files navigation. Add two small internal post record types for folders and scoped item placements; existing content, membership, ownership, storage, and sync remain authoritative. Projects hosts the mixed-content tree, while Files reuses its current list/preview/upload shell with a folder navigator and breadcrumbs.
+Keep the scoped folder/placement model, but deliver the interaction in two phases. Phase 1 starts with a local/static Files list that has folders, breadcrumbs, explicit destinations, selection, and real moves; its interaction review precedes cloud work. Projects then reuse the same operations/controller with a compact `UTree`. Phase 2 adds Undo, Type sort, the optional Files navigator, and full shortcut trees.
 
-This plan is based on the checked-in source, not the older standalone `SidebarProjectTree.vue`. Relevant owners are `app/components/sidebar/SidebarProjectsPage.vue`, `SidebarProjectsSection.vue`, `app/components/files/WorkspaceFilesPane.vue`, `app/db/project-workspace.ts`, `workspace-files.ts`, `shared/posts/visibility.ts`, and the host/provider sync capability boundaries. New paths below are proposed; existing paths are integration targets.
+Provider implementation is an external workstream: the authoring workspace contains sibling `../or3-provider-sqlite` and `../or3-provider-convex` clones relative to the host root; neither is part of this repository. Paths below identify inspected integration seams, not files guaranteed in every host checkout. Record provider SHAs and revalidate paths/contracts before editing them. Missing clones block cloud qualification only.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    P[Project Home and shortcuts] --> U[Shared explorer controller]
-    F[Files browser] --> U
-    U --> T[ExplorerTree and Move dialog]
-    T --> D[Drag interaction]
+    F[Files list and breadcrumbs] --> U[Shared selection and command controller]
+    P[Project sidebar tree] --> U
+    S[Phase 1 shortcut actions] --> U
+    U --> V[Virtualized list or UTree]
+    V --> D[Drag intent adapter]
     D --> U
-    U --> G[Tree projection]
-    U --> W[Explorer record operations]
-    P --> A[Existing project membership and chat APIs]
-    F --> B[Existing catalog and document APIs]
-    W --> R[Validated explorer records]
-    W --> DB[Workspace Dexie posts and atomic outbox]
+    U --> Q[Metadata reader and hierarchy projection]
+    U --> W[Bounded folder and placement operations]
+    U --> A[Existing catalog and project lifecycle APIs]
+    Q --> K[Local derived metadata index keys]
+    W --> DB[Canonical posts and atomic outbox]
     A --> DB
-    B --> DB
-    DB --> S[Existing sync and backup]
-    S --> C[Explorer capability admission]
-    C --> SQ[SQLite canonical adapter]
-    C --> CV[Convex gateway and templates]
+    DB --> K
+    DB --> C[Qualified cloud capability]
+    C --> SQ[External SQLite provider]
+    C --> CV[External Convex provider and backend]
 ```
 
-| Component | Responsibility | Requirements |
+| Component | Responsibility / proposed owner | Requirements |
 | --- | --- | --- |
-| C1 Explorer record contract | Validate folder/placement identity and payloads in `shared/explorer/records.ts`. | R1, R7, R8, R9 |
-| C2 Explorer record operations | Read/write organization in `app/db/explorer.ts` with existing transaction, scope, and revision contracts. | R1, R5, R6, R7, R8, R9, R12 |
-| C3 Tree projection | Derive a reachable display hierarchy from records and eligible content in `shared/explorer/tree.ts`. | R1, R7, R8, R10, R12 |
-| C4 Explorer controller | Own scope-local navigation, selection, edit/undo state, and commands in `app/composables/explorer/useExplorer.ts`. | R4, R5, R10, R11, R12 |
-| C5 Explorer presentation | Render `app/components/explorer/ExplorerTree.vue` and `ExplorerMoveDialog.vue` with Nuxt UI semantics. | R1, R4, R5, R10, R11, R12 |
-| C6 Drag interaction | Translate pointer dragging into validated controller move/upload intents in `app/composables/explorer/useExplorerDrag.ts`. | R3, R5, R11, R12 |
-| C7 Project integration | Supply eligible project contents/actions and host the shared tree in the active project components. | R2, R4, R6, R7, R10 |
-| C8 Files integration | Supply catalog contents/actions and host folder navigation in `WorkspaceFilesPane.vue`. | R3, R4, R6, R7, R10, R11 |
-| C9 Explorer capability admission | Enforce schema/version and workspace access at host and canonical provider boundaries. | R8, R9 |
-| C10 Qualification | Preserve repeatable evidence and document feature/provider contracts using existing test/docs infrastructure. | R1–R13 |
+| C1 Record contract | `shared/explorer/records.ts`: validate folder/placement payload and identity. | R1, R7, R8, R9 |
+| C2 Organization operations | `app/db/explorer.ts`: scoped, revision-checked folder/placement writes with bounded admission. | R1, R5, R6, R7, R8, R9, R12 |
+| C3 Hierarchy projection | `shared/explorer/tree.ts`: resolve effective parents, paths, cycles, and recovery reasons. | R1, R7, R8, R10 |
+| C4 Interaction controller | `app/composables/explorer/useExplorer.ts`: selection, destinations, commands, local preferences. | R4, R5, R10, R11, R12 |
+| C5 Explorer presentation | `ExplorerTree.vue`, `ExplorerMoveDialog.vue`, existing Files row shell: render the shared state. | R1, R3, R4, R5, R10, R11, R12 |
+| C6 Drag adapter | `useExplorerDrag.ts`: pointer/external-file events become validated domain intents. | R3, R5, R11 |
+| C7 Project integration | Active sidebar page/shortcuts: eligible project contents and existing membership actions. | R2, R4, R6, R7, R10 |
+| C8 Files integration | `WorkspaceFilesPane.vue`: navigation, inspector, existing intake/content actions. | R3, R4, R6, R7, R10 |
+| C9 Capability admission | Host and external provider boundaries: version/shape/access checks. | R8, R9, R13 |
+| C10 Qualification | Existing browser/provider/docs infrastructure: traceable evidence per phase. | R1–R13 |
+| C11 Metadata reader | `app/db/explorer-items.ts` plus existing derived-index hooks: key-only enumeration. | R10, R12 |
+| C12 Bulk content executor | Thin composition in existing file/project owners: bounded item-level lifecycle actions. | R4, R6, R9, R12 |
 
-Keep C7/C8 in their existing owners initially. Extract a surface-specific helper only when necessary to keep those owners readable; do not add an adapter registry, new service, or generic CRUD framework.
+No adapter registry or new service. Keep project/Files shell code in its current owner. Extract only the shared controller, read projection, and concrete operations that prevent duplication.
 
 ## Components and Interfaces
 
-### C1: Typed domain boundary
+### C1: Typed records
 
-Use Zod for persisted payloads and validation, matching `shared/projects/workspace.ts`. Use snake_case for serialized fields. The following TypeScript describes the intended contract, not a new public SDK API:
+Use Zod as existing internal project records do. Serialized fields are snake_case:
 
 ```ts
-type ExplorerScope =
-    | { kind: 'files' }
-    | { kind: 'project'; project_id: string };
-
+type ExplorerScope = { kind: 'files' } | { kind: 'project'; project_id: string };
 type ExplorerItemRef =
-    | { kind: 'chat'; item_id: string } // canonical chat family root
+    | { kind: 'chat'; item_id: string } // canonical family root
     | { kind: 'document'; item_id: string }
-    | { kind: 'file'; item_id: string }; // catalog post ID, never a blob hash
+    | { kind: 'file'; item_id: string }; // catalog post ID
 
 type ExplorerFolder = {
-    version: 1;
-    scope: ExplorerScope;
-    parent_id: string | null;
-    name: string;
+    version: 1; scope: ExplorerScope; parent_id: string | null; name: string;
 };
 type ExplorerPlacement = {
-    version: 1;
-    scope: ExplorerScope;
-    parent_id: string | null;
-    item: ExplorerItemRef;
+    version: 1; scope: ExplorerScope; parent_id: string | null; item: ExplorerItemRef;
 };
-type ExplorerRowRef =
-    | { kind: 'folder'; id: string }
+type ExplorerRowRef = { kind: 'folder'; id: string }
     | { kind: 'item'; item: ExplorerItemRef };
 type ExpectedRecord = Pick<Post, 'id' | 'clock' | 'hlc' | 'content' | 'title' | 'deleted'> | null;
-type ExplorerChangeError = Error & {
-    code: 'invalid-name' | 'invalid-target' | 'conflict' | 'permission-denied'
-        | 'scope-changed' | 'unsupported-version' | 'storage-failed';
-};
+type BulkOutcome = { item: ExplorerItemRef; status: 'done' | 'failed' | 'unattempted'; reason?: string };
 ```
 
-The schema forbids chat placements in Files. `parent_id` points only to a folder record in the same scope. Scope and placement item identity are immutable for an existing record. Folder names are separate from `Post.title`, which is reserved for the indexed scope key.
+Scope/item identity is immutable; Files disallows chats. Parent IDs reference folders in the same scope. Unknown-version rows remain intact and uneditable; known-version edits preserve unrecognized fields using the existing internal-record pattern. Local name comparison is `name.trim().normalize('NFC').toLowerCase()`; there is no locale-specific uniqueness database. Creation/rename/move compares against fresh siblings, including projected children of deleted folders. Concurrent duplicates remain separate and display a short stable ID suffix until the user renames/moves them. Creating a default `New folder` chooses the first free numeric suffix; submitting an explicitly entered duplicate refuses rather than silently changing it.
 
-Validate new records strictly. For a record with unknown version or invalid payload, retain the raw row, refuse mutation, and expose an organization warning; do not turn parse failure into deletion. Read known-version records with the existing preserve-unknown-fields approach, and merge fields on save so a narrow edit cannot discard unrecognized data.
+### C2: Operations, budget, and lifecycle
 
-### C2: Persistence operations
+Provide concrete scoped read/create/rename/move/remove helpers. Pass captured `WorkspaceOperationScope`, typed identities, and observed revisions; never accept a replacement tree from the UI. Before write, resolve current membership, destination ancestry, duplicate sibling names, and changed canonical rows. Capture/write through `getWriteTxTableNames` with pending operations/tombstones included, recheck under the transaction, and notify after commit. Async policy hooks and ID hashing happen outside the transaction. Content rename/Trash/source removal remain in existing content owners.
 
-Provide concrete `readExplorerRecords`, `createExplorerFolder`, `renameExplorerFolder`, `moveExplorerEntries`, and `removeExplorerFolder` helpers. Every write accepts a captured `WorkspaceOperationScope`, scope descriptor, and expected record snapshots for rows being changed. Move accepts row identities plus a destination folder ID or root; it never accepts an entire client-supplied replacement tree.
+**Admission is explicit, not chunked:**
 
-Operation sequence:
+- Maximum 100 changed canonical records for a new explorer command. A folder move changes its parent row only; its descendants need no rewritten paths. A content move changes its placement. Nonempty folder removal counts all direct child folders/placements, including hidden/trashed ones, plus its tombstone.
+- A 600-item move refuses before mutation: `600 items selected. Move at most 100 at a time.` A folder with 2,000 direct records cannot be removed in one operation: show the count and instruct moving children in smaller selections until removal is within budget. Do not partially remove it.
+- For sync-enabled scopes, before and within the write transaction, count queued operations with the same statuses/coalescing rules as `OutboxManager.getPendingCount`. Conservatively count proposed distinct `(tableName, pk)` writes. Refuse if projected queue size is at least 500, explaining that sync must catch up before another bulk change. Reuse/extract existing constants; this is explorer admission, not a new global hard queue cap. Existing unrelated writers may still reach the warning threshold.
+- Keep the existing outbox's 100-op/2 MiB packing. A local atomic command is not guaranteed to arrive in one network batch; large content rows may require several pushes. Preserve individual oversize-row errors and do not increase wire limits.
+- Local/static mode applies the record cap but not a nonexistent cloud queue limit. No new jobs, persisted mutation queue, retry daemon, or automatic chunking.
 
-1. Capture the originating workspace/session and resolve input IDs. Prepare content hooks through their existing owner when a content operation is involved; do not execute arbitrary async hooks in a Dexie transaction.
-2. Precompute deterministic IDs outside the transaction. Enter `scope.db.transaction('rw', getWriteTxTableNames(..., { includeTombstones: true }), ...)` with posts plus projects/threads needed for membership checks.
-3. Recheck scope/access, expected changed rows, scope owner, current membership, and destination ancestry from fresh rows under the transaction. Validate all selected entries before writing any.
-4. Remove descendants whose selected ancestor already moves. Update each selected folder's parent or each item's placement record; advance clocks through existing helpers. Write row changes and capture/outbox effects atomically.
-5. Publish existing generic post notifications only after commit. A notification failure is reported without pretending an already committed operation failed. The live query supplies the committed tree.
+Remove folder promotes direct children and tombstones the folder atomically. The menu reads `Remove folder, keep contents`. For a nonempty folder, the dialog reads, for example, `12 items and 2 subfolders will move to Files / Research (including 3 items in Trash). No content will be deleted.` Show counts of typed direct entries, not recursively expanded descendants. Empty removal skips confirmation; Phase 1 does not promise undo. Counts/revisions are revalidated before commit.
 
-Resolve a missing/deleted destination differently by caller: explicit moves refuse; create/upload integration retains an already saved item at root and reports fallback. Never replay an operation in a new active workspace.
+Project deletion makes its entire organization scope ineligible through the canonical project tombstone. Do not add an O(n) eager metadata deletion cascade. Existing archive/retention rules retain those internal records; no new garbage-collection job is needed. Explicit detach retires only that item's placement through its existing owner; re-association starts at root. Restoring trashed content retains its saved placement and uses C3's effective parent.
 
-Organization-only operations do not call catalog rename/Trash hooks or alter `file_hashes`. Content rename/trash/remove still route through existing catalog/document/project helpers and extension policies. Do not introduce a new public folder-action registry or silently expand existing plugin payload unions.
+### C3: Effective parent and recovery
 
-### C3: Display projection
+Only existing catalog/membership/profile readers determine eligible content. Placements grant no membership/access. Unplaced items appear at root. Content title comes from its current canonical item, not a copied placement label. Chat-family branches stay grouped under the root and cannot be moved separately.
 
-Join scoped organization records to eligible content from existing membership/catalog readers. No placement creates membership, makes trashed content visible, or changes permissions. Content with no placement appears at root. Duplicate content references collapse by typed item identity; duplicate names do not collapse. Branch children remain a conversation-family presentation detail, not folder children eligible for independent moves.
+Build an iterative parent map from live and retained deleted folder records. Resolve a deleted parent by following its stored parent chain to the first live folder in the same scope. This makes late-arriving children of a removed folder appear beside locally promoted children. Preserve the original pointer; projection does not write a repair.
 
-Build parent maps iteratively in O(folders + placements + supplied items), avoiding recursion limits. For a missing, deleted, or wrong-scope folder parent, project the affected node at scope root. For each directed cycle, ignore the parent edge of the lexicographically smallest folder ID in that cycle, making the entire component reachable; expose a “Folder location needs attention” indicator on the affected node. All clients use identical ID ordering. Unknown-version organization rows produce a warning and root fallback for readable content, never speculative writes.
+If an ancestor payload is missing/unreadable, collected by tombstone GC, or belongs to another scope, resolve to root. Detect cycles across live/deleted ancestry; deterministically ignore the parent edge of the lexicographically smallest folder ID in each cycle. Apply the same rule independent of record arrival order. A deliberate Move to… validates against the effective tree and persists a valid live parent.
 
-This projection handles out-of-order sync pages and concurrent offline moves. It does not claim canonical multi-row atomicity across devices: local batches are atomic, remote records may arrive separately, and existing LWW resolves each row. A user repairs a recovered node with an ordinary explicit move against fresh records. Validate explicit moves against the projected ancestry and persist a legal parent so recovery is not perpetuated.
+Each recovered row carries a reason, original parent when known, and effective destination. Example messages: `Research was removed; shown in Files / Contracts`, `The original folder is no longer available; shown in Files`, or `Conflicting folder moves were received; shown at project Alpha root`. Offer `Move within Files…` or `Move within project Alpha…`. Do not merely say “needs attention.” If a deleted parent payload has already been purged, root fallback is an explicit limitation; do not extend retention indefinitely to preserve paths.
 
-### C4–C5: Shared interaction and rendering
+### C4–C5: Interaction contract
 
-`useExplorer` consumes the scope and eligible content rows supplied by the surface. It returns visible rows, breadcrumbs, expanded IDs, selected typed IDs, focused ID, pending operation, and direct commands. Surface callbacks activate/rename content through existing owners. Folder commands always use C2.
+Both surfaces use the same typed selection IDs and commands. Project trees keep tree semantics; Files uses its list/grid semantics rather than nesting a complete tree inside each list row.
 
-`ExplorerTree.vue` wraps `UTree`, supplies an explicit stable `get-key`, controlled expansion/selection, and slots for existing item icons/actions/status. It uses flattened virtualized rendering for large trees. Keep expand-chevron activation separate from item activation; content activation must not happen on a disclosure click or selection modifier. Empty folders remain real expandable/drop-target entries. Use the supported row `as`/slot controls to avoid nesting action buttons or rename inputs inside a button. Use semantic tokens, `v-theme`, and `useThemeOverrides()` where the surrounding components do.
+| Input or control | Phase 1 behavior |
+| --- | --- |
+| Plain click on content | Replace selection with that item and open its existing pane/preview. |
+| Ctrl/Cmd click; Shift click | Toggle selection; select anchored ordered range. Neither opens content. |
+| Tree folder label/disclosure | Plain label selects and toggles; disclosure only toggles. Modified label clicks only select. |
+| Files folder row | Plain click selects/navigates; modified click or checkbox only selects. |
+| Checkbox or touch Select mode | Toggle selection without navigation/activation. Toolbar shows selected count, Clear, Select all results, Move, and eligible bulk actions. |
+| Drag selected row | Drag normalized current selection, removing descendants of selected ancestors. |
+| Drag unselected row | Reset selection to that row and drag only it; suppress activation caused by the drag gesture. |
+| Menu on selected row in multiselection | Counted bulk menu; no implicit single-item rename/plugin action. |
+| Menu on unselected row | Select it alone and show its normal menu. |
+| Enter | Activate focused content or toggle/navigate focused folder as appropriate. |
+| Arrows, Home/End, Space | Standard tree/list focus and disclosure; Space toggles selection without opening. Shift+arrows extend the range. |
+| F2 | Rename the single selected row; unavailable for multiple rows. Content rename uses its owner and shared-title explanation. |
+| Delete/Backspace | Files content: Trash; project content: Remove from project; a single folder: Remove folder, keep contents. Mixed folder/content selection gives an explanation instead of choosing a destructive interpretation. Required confirmations still apply. |
+| Cmd/Ctrl+A | Select the complete ordered current result set, including virtual rows. Display bounded-search result counts; never imply selection of undisplayed search matches. |
+| Type-ahead | 700 ms buffered prefix match in the current ordered result set; focus/scroll without opening. Space remains selection; editable controls retain text input. |
+| Escape | Cancel rename/drag/dialog first; otherwise clear selection. |
+| Cmd/Ctrl+Z | No explorer binding in Phase 1. Phase 2 handles only an explorer-owned move/folder-rename receipt while explorer focus is outside inputs. |
 
-`ExplorerMoveDialog.vue` renders the same tree restricted to eligible folders plus a root destination; invalid descendants are disabled. It is also the complete keyboard/touch movement path. Row menus remain available without hover. Visible tree navigation follows Reka's semantics; rename fields suspend tree shortcuts. Files list selection uses the same typed controller state and operations, with list/table semantics appropriate to that view.
+Selection is reset on folder/filter/search/sort changes to avoid hidden selected items; it is pruned on live deletion/ineligibility and its anchor resets on result reorder. A plain activation still works when not in Select mode. Touch Select mode persists until Done; tapping a row in that mode changes selection only. Checkboxes remain available through keyboard and pointer as well.
 
-Store expansion, active folder, sort, and project view preference with the existing VueUse `useLocalStorage` pattern used by `app/composables/sidebar/useActiveSidebarPage.ts`, under a versioned key namespaced by account/workspace/scope. Existing project expansion is memory-only; this adds persistence explicitly rather than assuming it already exists. Do not sync these UI preferences or store content in them. Validate restored IDs, prune missing entries, and retain usable in-memory navigation if preference storage is unavailable. Selection and the single last move/rename undo receipt remain memory-only. Undo retains before/after snapshots, rechecks all inverse revisions/membership/destinations, and is cleared on scope/account changes; undo is not a second mutation path.
+Every dialog/toast/menu names its scope: `Move within Files`, `Move within project Alpha`, `Show in Files`, `Show in project Alpha`. Do not label two independent paths simply “Location.” The preview inspector shows Files location and the relevant associated project locations, with root written explicitly. From a project preview, Show in Files reveals the same content record; it does not relocate it. Trash labels its retained library placement `Files location` and the effective destination `Restores to`; project placement is never substituted. Replace the ambiguous “original location” label: folder renames, moves, or removal can change the retained path, and no historical path snapshot is promised. If retained ancestry is unavailable, show that explicitly with the effective root destination.
 
-### C6: Drag implementation decision and qualification gate
+`ExplorerTree.vue` supplies stable keys, controlled state, virtualized flattened rows, and valid row `as`/slots so buttons/rename inputs are not nested inside buttons. Cap visual indentation at 48px; retain actual `aria-level`, full path in tooltips/details, and a subtle depth indicator beyond the cap. Full names/paths must be reachable on keyboard focus as well as pointer hover; touch uses the row's details/menu. Use current theme tokens/`v-theme`/overrides and reduced-motion settings.
 
-Nuxt UI supplies tree presentation, selection, and virtualization; its [official drag example](https://ui.nuxt.com/docs/components/tree#with-drag-and-drop) is a Sortable.js integration, not the full folder-management behavior required here. Do not copy its index-based list mutation into persistent data operations.
+Move dialog has a search field, ancestor-path result labels, scope root, and `New folder in [highlighted destination]`. Search narrows folder results without losing disabled-target explanations; creating a folder immediately selects it as destination but does not move content until the user confirms. New folder is a separate committed action: cancelling the move leaves that folder in place and never relocates the selected contents. The root destination always remains reachable. Do not introduce another search index for 500 already loaded folders.
 
-Use `@atlaskit/pragmatic-drag-and-drop` as the proposed drag interaction dependency, with its [auto-scroll package](https://atlassian.design/components/pragmatic-drag-and-drop/optional-packages/auto-scroll) for viewport-edge scrolling. The [core package supports Vue through framework-independent TypeScript APIs](https://atlassian.design/components/pragmatic-drag-and-drop/core-package/). These dependencies are justified by cross-row targets, external file drops, cleanup, and auto-scroll. Add no React packages, sortable model, hitbox/reorder package, or alternate styling layer. Resolve and pin compatible versions during implementation rather than guessing versions in this plan.
+Preferences use the existing `useLocalStorage` pattern in `useActiveSidebarPage.ts`, keyed by account/workspace/scope. Store explicit project view choice separately from automatic default; preserve Recently modified as the initial Files sort. Keep active folder/expansion/sort device-local, validate restored IDs, and fall back to memory if storage fails. Selection stays in memory. Dispose subscriptions/timers/drag registrations on scope changes.
 
-Before persistence/UI integration, qualify a small local browser spike against installed `UTree`: empty/collapsed/root targets, selected folder with selected descendants, nested scrolling, virtualized row mount/unmount, focus after drop, and external file payloads. The spike must demonstrate all these behaviors and produce a trace; otherwise revise this one interaction choice before proceeding. Do not maintain two drag engines or hide failed behavior behind a timeout increase.
+### C6: Drag presentation and destinations
 
-Drag data contains only typed IDs and an originating scope token. Treat DOM/dataTransfer payloads as untrusted; validate against fresh controller/domain state at drop. Drops are onto a folder or root, not between alphabetically sorted rows. Show destination outline plus text/icon, selected count, and explicit invalid-target feedback. Hover expansion is 600 ms; cancel its timer when leaving/unmounting. Render pending state until the local transaction commits; avoid a second optimistic tree that must be reconciled. External plain files delegate to C8's existing intake path, capturing destination before asynchronous work.
+Keep the prior proposed framework-independent [Pragmatic drag-and-drop core](https://atlassian.design/components/pragmatic-drag-and-drop/core-package/) plus [auto-scroll](https://atlassian.design/components/pragmatic-drag-and-drop/optional-packages/auto-scroll), subject to a small browser interaction gate. [Nuxt UI's Sortable example](https://ui.nuxt.com/docs/components/tree#with-drag-and-drop) alone does not specify folder reparenting/empty destinations. Use one engine, no React packages or sibling reordering model; pin tested versions during implementation.
 
-### C7: Project integration
+Run the initial gate on the actual Files list first, then verify UTree's virtual row lifetime before project integration. Demonstrate unselected-row drag, selection groups, empty/collapsed folders, invalid descendants/duplicate names, 600 ms hover expansion, auto-scroll, cancellation, and focus. Keep passing traces; revise the choice if the gate fails rather than maintaining alternatives.
 
-Add Explorer/Recent activity selection to the existing Project Home content area, keeping brief and new chat/document controls, Knowledge, Memory, and Settings. Reuse project list readers, chat-family grouping, `normalizeProjectData`, canonical ownership resolution, source associations, and workspace-profile visibility. Do not infer project membership from organization records.
+Files breadcrumb segments are drop targets for their represented folder, including Files root; the project header is always a project-root target even when its tree fills the viewport. Folder rows are targets; content rows are not. Highlight text/icon/outline and announce the exact destination. Persistent headers/breadcrumbs must remain visible during autoscroll. Drag payload IDs/scope tokens are untrusted and resolved against fresh state on drop. Cancel hover timers on exit/unmount.
 
-Replace the flat child rendering inside expanded Home shortcuts with the same shared tree, preserving their existing lazy-loading boundary and project actions. Do not mount every project's full tree when the sidebar loads. The old standalone `SidebarProjectTree.vue` may be removed only after confirming no runtime/import consumer; do not edit it as the sole implementation.
+Files accepts ordinary external files through existing intake with the captured destination. Folder directories refuse explicitly. Project folders/header reject external files with supported alternatives; prevent default browser file navigation even for rejected drops. Internal cross-scope drags also refuse with a scope-specific explanation. Touch uses selection and Move to…; native touch dragging is not a delivery requirement.
 
-New project documents continue to use existing Knowledge binding and source modes. Folder selection determines placement only. If the existing create/association helper supports joining a transaction, compose placement into that transaction; otherwise create/associate first, then place and visibly report root fallback if placement fails. Never report total failure and invite duplicate creation when content already committed.
+### C7–C8: Surface integration and creation destinations
 
-Project detach/delete paths retire the corresponding metadata in their existing owning transaction when feasible. Regardless of delayed cleanup, C3 immediately hides ineligible placements. Re-adding a previously detached item starts at project root: the explicit association path clears an old placement, including a retained tombstone, using a fresh clock. Existing explicit cross-project chat moves retain branch-family semantics and start the family at destination root.
+Project Home stays a sidebar page. Explorer is an alternative to Recent activity, not an unconditional replacement. Honor saved preference, otherwise use Recent activity until a live folder exists. Keep brief/Knowledge/Memory/Settings/new-content controls. Reuse canonical chat-family/membership/source/profile readers and existing content activation.
 
-### C8: Files integration
+Top-level project New chat/New document/Add file always uses root. In-folder creation is available from the folder's `+`/menu, labeled with its path; capture that destination when invoked, never read current selection later. Preserve existing Knowledge/source behavior for newly created documents. Join placement to the existing transaction where supported; otherwise distinguish committed content from a failed placement and reveal its actual effective location. Do not offer a blind re-create retry.
 
-Retain `WorkspaceFilesPane.vue` preview/download/upload/Trash, policy hooks, existing errors, and `useWorkspaceFileActions`. Add a folder navigator, breadcrumb bar, New folder, Move to…, selection controls, and direct child folders in the list. Directory navigation is independent of type/project filters; folders remain navigable when a filter hides their content. Root lists unfiled entries. Search searches the whole Files scope or project scope, clearly labels the scope, and returns paths even when a matching descendant is outside the current folder.
+Phase 1 shortcuts retain current navigation/open rows and receive Move to… through shared actions. Link “Open project Explorer” when deeper navigation is needed. Full nested shortcut trees are Phase 2. Delete the unreferenced `SidebarProjectTree.vue` in the relevant integration change after the quick import/reference check; remove stale comments, not unrelated sidebar code.
 
-Keep file/document search in the existing command-palette coordinator with its 120 ms debounce and bounded results; add a small local folder-name search over the already loaded folder map. This does not justify a second search engine or searching blob bytes. Derive paths from C3 rather than persisting materialized paths. Content revisions continue to invalidate their existing indexes; folder revisions invalidate computed paths/reveal without reindexing document text.
+Files Phase 1 has breadcrumbs, a folders-in-list view, and existing preview. No navigator at any width. Below 1024px preview is a sheet/modal; at larger widths the existing list/preview split is permitted. Scope-labeled Upload/New folder controls name the current folder. Intake captures that destination, preserves existing catalog deduplication, and reports duplicate reuse with Show in Files. A deleted destination resolves through C3; loss of authorization prevents a new placement.
 
-Handle the existing `recordId` prop by resolving current placement, expanding ancestors, scrolling/focusing, and then following current preview/open behavior. Missing/ineligible targets show an unavailable result. Trash stays a flat recovery view with original location labels; restoring an item retains its placement if valid, otherwise displays root. Removing a folder while items are trashed also reparents those hidden placements, so later restoration has a defined destination.
+With any search/type/project filter, switch to flat content results with a Files path column and This folder / All Files toggle. This folder includes descendants and is the initial mode; root means all Files. Hide ordinary folder rows in this result view. Folder-name discovery belongs in Move dialog, not empty folder matches under Images. Project filtering still shows library paths; an optional Show in project action reveals its independent placement. Reveal clears incompatible filters, restores folder browsing, focuses the item, and opens as before. Project search uses project paths and Show in project [name].
 
-Uploads capture a destination once. A new upload is cataloged by the existing helper, then placed if still authorized; deduplicated catalog entries keep their prior location and offer Reveal. If the destination disappears, keep the committed record at root with feedback. If access changes, stop subsequent placement. Reject directory drops explicitly rather than importing an arbitrary subset silently. On small screens, put folder navigation behind a button/drawer and retain breadcrumbs and Move to… in the main pane.
+### C11: Concrete Files read and rendering strategy
 
-### C9: Cloud admission and old-client boundary
+Replace cumulative 50-row Load more with **virtualization over a complete lightweight metadata result vector** for the qualification scale. Do not page full `Post` records and then try to sort their first page. Use the installed virtualizer behind `UTable`/existing `@tanstack/vue-virtual` runtime after verifying the host import; no additional virtualization library is needed. Render fewer than 150 rows including overscan, and scroll the focused identity into view before setting DOM focus.
 
-Add the narrow optional `explorerCapability: 'v1'` request field and `capabilities.explorer: 'v1'` provider advertisement, following the existing separate `fileKindCapability` and `workspaceItemCapability` patterns. Do not overload or bump existing workspace-item `v1` semantics. The new capability is required because older readers do not recognize the proposed internal post types and must not expose them as ordinary content.
+Extend existing derived-index hooks with one sparse local `posts.explorer_item_key` array:
 
-Update host sync types/schemas, gateway provider requests, push/pull/snapshot routes, session capability response, and backup export/restore callers. Add shape/identity validation and an explicit update-required error using the current 426 convention. Detection recognizes both new post types even when content is malformed; incoming puts and stored canonical rows must both be checked, including deletes or attempts to change `post_type` to bypass the guard. Pull/watch/snapshot check before returning the affected page or committing its cursor. A bare tombstone must be classified from its reserved ID prefix or retained canonical type; gating must not depend on a deleted payload still being present.
+```ts
+type ExplorerItemKey = [
+    state: 'active' | 'trash', kind: 'document' | 'file',
+    updated_at: number, title: string, id: string,
+    original_hash: string, text_coverage: 'none' | 'prefix' | 'full',
+    clock: number
+];
+```
 
-Implement equivalent checks in `or3-provider-sqlite/src/runtime/server/sync/sqlite-sync-gateway-adapter.ts`, and `or3-provider-convex/templates/convex/sync.ts` plus its helper, `src/runtime/server/sync/convex-sync-gateway-adapter.ts`, and `src/runtime/app/sync/convex-sync-provider.ts`. Native SQLite and Convex must validate within the same canonical transaction as mutation/version allocation, not just at the host gateway. Preserve `can()`, broker tokens, existing LWW, `op_id`, contiguous versions, tombstones, and snapshot ordering. D1 does not gain explorer support as part of this work; reject explorer mutations rather than advertising an unqualified transactional capability.
+Only eligible `doc`/`or3:file` rows receive a key, using the existing workspace-item visibility/parser rules. Tombstoned or unsupported-format items have no key; logical Trash has a trash key. Empty hash represents a document; do not put document content or its attachment arrays in the key. File catalog entries have one validated original hash. Values are normalized to legal IndexedDB key primitives. File metadata supplies MIME/size/availability through `file_meta.bulkGet` in bounded batches; those rows contain no blob values.
 
-Canonical validation checks payload shape/size, reserved identity, matching indexed scope key, immutable scope/item identity, forbidden file ownership fields, and workspace permissions. It does not invent a second global tree authority or require every referenced parent/content row to have arrived in the same batch. Missing relationships use C3's deterministic projection; local user operations still validate eligibility and cycle prevention. Providers advertise capability only when installed backend/template support is verified; a new Convex package with an old deployed template must not advertise readiness. Follow the existing backend contract/version check rather than trusting package version alone.
+Add the index in the **next unused Dexie version** (30 was current at inspection). Backfill with a bounded cursor over eligible posts inside the upgrade, computing only the derived field. This one-time upgrade reads existing full row values; say so explicitly instead of promising zero body reads during migration. Do not parse bodies, modify canonical timestamps/clocks, download blobs, or enqueue canonical writes. Upgrade failure rolls back and offers retry without deleting the DB. Creating/updating hooks recompute the key for all local writes, remote apply, and restore, independent of sync-capture suppression. Strip the key from sync payloads and revision fingerprints alongside `document_reference_key`; rebuild from canonical fields after restore rather than trust imported keys. Verify old tabs close/reload correctly for the additive IndexedDB version change.
+
+Read `posts.orderBy('explorer_item_key').eachKey(...)` or equivalent **index-key cursor**, following `listDocumentFileHashes`; `filter(...).toArray()` is not a metadata-only substitute. Decode all eligible metadata IDs at the tested 5,000-item scale, resolve file metadata, and join organization in memory. Root's unplaced set is eligible IDs whose effective placement is root (absent row, explicit null, or recovered parent); no scan of body values is required. Project document/file rows reuse this projection; chats keep existing lightweight family readers.
+
+For unfiltered browsing choose direct child folders and contents, then sort each group by Recently modified descending or Name, with name/ID tie-breaks. Type sort is Phase 2. For type/project filters choose the entire eligible metadata result set under the selected scope toggle, omit folders, derive paths, and sort. For **explicit full-text search only**, reuse the existing debounced command-palette coordinator, whose document source does read/parse bodies. Apply folder/type/project eligibility before its result cap; label the capped result set (currently 200) so Select all results is honest. Do not silently downgrade existing full-text search to filename search.
+
+The complete ordered result vector owns range selection, so Shift can include virtual rows not currently mounted. Select all selects this vector, not the DOM or an unloaded page; above-budget mutations are disabled with counts. When records update, recompute relevant metadata/paths without relying on row-count changes. The local index observes title/Trash/updated-at changes; folder records observe paths; file metadata observes MIME/size. Preview/menu activation fetches the actual current content row and revision on demand; mutation revalidates it. Existing visible thumbnail rendering is a separate on-demand path, never a reason for the enumeration reader to fetch blobs; the metadata-only performance probe disables preview/thumbnail requests to measure the reader itself.
+
+This is one justified local index, not another catalog table/cache or new sync authority. If the measured fixture fails, inspect key enumeration, metadata join, sort, or rendering before adding more indexes or changing the storage model.
+
+### C12: Bulk content actions
+
+The selection toolbar and selected-row menus offer Move plus the appropriate content action. Files offers `Move N items to Trash`; Projects offers `Remove N items from project Alpha`. Any selected folder disables these content actions and explains `Select files/documents only` or `Select project contents only`. Users can open a folder, Select all contents, Trash/remove them, then remove the empty folder; no recursive deletion is inferred.
+
+Use existing content policies, document editor settlement, project source unbinding, and chat-family moves. Factor only the necessary preparation/commit seam in those owners to admit the aggregate record/queue budget and recheck inside each item's transaction; do not reimplement lifecycle logic in the controller or await arbitrary hooks inside a write transaction.
+
+Preflight the entire selection and predicted related writes against the 100-record budget. Confirm count and scope, including chat-family effects. Execute admitted items sequentially through existing owning helpers; each item is atomic, the whole content batch is not. Recheck cumulative write count/queue/access before each item. Policy/revision failures can leave that item failed while other eligible items proceed; scope/permission/quota/budget loss stops the remainder as unattempted. Show, for example, `8 moved to Trash, 1 failed, 1 not attempted`, retain failed selection, and retry only unfinished items with fresh admission. No new durable batch job or global rollback is promised. Generic plugin actions remain single-item only.
+
+### C9: Cloud admission and first-use notice
+
+Use a narrow optional `explorerCapability: 'v1'` request field and `capabilities.explorer: 'v1'` advertisement, following existing file-kind/workspace-item capability patterns. Do not bump their existing versions. Update host request types/schemas, gateway requests, push/pull/snapshot, session, and backup paths. Internal types are recognized even if their content is malformed. Check incoming and stored canonical rows, identity/type substitution, deletes, and bare tombstones (reserved identity prefix/type metadata) before admitting data or advancing an incompatible page cursor.
+
+The first folder/placement is a **workspace client-version cutover**. Because sync has one workspace cursor, 426 on an organization page can stop all sync for an outdated client. Before a device/workspace's first organization mutation in Cloud, show a once-acknowledged notice: `Folders require a compatible OR3 version on every device. Older devices may stop syncing this workspace. Removing folders will not reverse this requirement while sync history remains.` Offer Continue/Cancel; Cancel creates nothing. Persist acknowledgement as device-local preference, not another synced record. A device that has seen organization created elsewhere still sees the notice before its own first mutation. Do not claim a readiness check of every device or an automatic downgrade path.
+
+External integration seams inspected in the sibling clones:
+
+- SQLite: `src/runtime/server/sync/sqlite-sync-gateway-adapter.ts` and its capability helpers/host contract fixtures.
+- Convex: `templates/convex/sync.ts`/capability helper, `src/runtime/server/sync/convex-sync-gateway-adapter.ts`, and `src/runtime/app/sync/convex-sync-provider.ts`.
+
+Require canonical shape/identity/permission checks in the same transaction as mutation/version allocation; host-only validation is insufficient. Preserve `can()`, tokens, LWW, `op_id`, contiguous versions, tombstones, and snapshot contracts. Providers validate records, not a competing global folder authority: unresolved parents can arrive later and C3 handles them. D1 remains unqualified for this feature. Convex capability must reflect deployed backend/template contract support, not just a new installed package. Provider changes/READMEs/qualification are separate deliverables; provider publication precedes host dependency adoption only when separately authorized.
+
+### Phase 2 behavior
+
+- **Undo (C2/C4/C5):** after a successful organization move/folder rename, show a toast naming scope/destination with Undo. Keep one in-memory receipt until the next such operation, scope change, or reload. Cmd/Ctrl+Z uses the same receipt while explorer focus is outside editors/inputs. Recheck all affected post-operation revisions/parents before the inverse; reject conflicts rather than overwrite. Folder removal and content Trash/remove have no new undo promise.
+- **Type sort (C11/C4):** normalize native documents to Document and files to the displayed MIME/category label; stable name/ID ties, folders first only in unfiltered browsing.
+- **Files navigator (C8/C5):** optional at 1280px+, reuse shared tree/controller; hide it when preview/list space would create a cramped third column. Folders-in-list and breadcrumbs remain primary everywhere.
+- **Shortcut tree (C7/C5):** replace limited shortcut contents with the shared tree only after Phase 1 interaction/performance evidence. Preserve lazy loading, indentation cap, profile gates, and existing open actions.
 
 ## Data Models
 
-### Existing `posts` records, no new synchronized table
+| Record/index | Identity and content | Persistence |
+| --- | --- | --- |
+| Folder | `or3:explorer-folder`, `explorer-folder-<uuid>`, versioned folder JSON | Existing synced `posts`; `title` is scope key |
+| Placement | `or3:explorer-placement`, `explorer-placement-<sha256>`, versioned placement JSON | Existing synced `posts`; `title` is scope key |
+| Metadata key | `posts.explorer_item_key`, tuple specified in C11 | Derived local index only; not synced or an independent authority |
+| View/notice preferences | Versioned account/workspace/scope localStorage key | Device-only; no content or secrets |
 
-| Record | `postType` locally / `post_type` on wire | `id` | `title` | `content` |
-| --- | --- | --- | --- | --- |
-| Folder | `or3:explorer-folder` | `explorer-folder-<uuid>` | Serialized scope key | Versioned `ExplorerFolder` JSON |
-| Placement | `or3:explorer-placement` | `explorer-placement-<sha256>` | Serialized scope key | Versioned `ExplorerPlacement` JSON |
+Scope key is `JSON.stringify(['files'])` or `JSON.stringify(['project', projectId])`. Placement ID hashes `[scopeKey, item.kind, item.item_id]` with existing `shared/runtime-crypto.ts:sha256Hex`, before entering a transaction. Absent placement means root; moving back to root writes null rather than deleting history. Unknown-version rows stay untouched. Every organization record has normal timestamps/clocks/tombstone behavior, empty `file_hashes`, no file ownership edges/Trash namespace, and at most 8 KiB content.
 
-Use `JSON.stringify(['files'])` or `JSON.stringify(['project', projectId])` as the stable scope key. Hash `JSON.stringify([scopeKey, item.kind, item.item_id])` with the existing SHA-256 utility family for a deterministic placement ID, computed before transactions. Include IDs/prefix rules in provider contract fixtures. A placement is created only on first organization; an absent row means root. Moving a previously placed item to root writes `parent_id: null`, keeping its conflict history instead of removing the row. Resurrecting an explicitly retired placement must compare its tombstone and advance revision through normal helpers.
+Reuse `[postType+title]` for scoped organization and primary keys for writes. Add the two post types to internal visibility guards across ordinary editors/tools/search/exports. Workspace backup retains canonical records but derives local index keys afresh. The metadata index requires an additive **local** schema version; no provider table or backend schema migration is introduced. This revises the earlier blanket “no Dexie migration” claim to satisfy the concrete metadata-only read requirement.
 
-Every organization row has ordinary Post timestamps, clock/HLC, and tombstone fields. It has empty `file_hashes`, no file ownership/reference edge, and no workspace-item Trash metadata. Limit serialized organization content to 8 KiB; these records contain identifiers/names only. Add both types to `shared/posts/visibility.ts` and reuse the internal-post guard in ordinary editors, search, chat tools, exports, and plugin read/write paths. Workspace backup includes the raw posts; normal content export does not treat them as documents.
-
-Use the existing `[postType+title]` index for exactly scoped folder/placement reads and `id` for mutations. Do not add a Dexie version or backend SQL/Convex table/index for this design. Read each active scope's organization once per live query; use in-memory parent maps for the 5,500-row qualification target. Do not load every project's contents, scan blobs, or create a materialized path cache. If measured limits fail, collect the failing query/render boundary before introducing an index or another storage model.
-
-Folder removal promotes direct child folders and all placements, including hidden/trashed placements, in one local transaction and tombstones the folder. It does not recursively enumerate or mutate content. Local concurrent edits conflict through expected snapshots; remote child edits arriving after deletion remain reachable through C3's root recovery. Folder names allow duplicates deliberately, eliminating destructive merge/overwrite semantics and distributed uniqueness machinery.
+Deleted folder payloads retain their last parent for ancestor recovery while ordinary retention allows it. Minimal tombstones without payload cannot preserve that chain; root fallback is visible. Project deletion hides its scope without metadata fanout. New associations reset that scope's old placement using normal revision/tombstone rules; content/other scopes remain untouched.
 
 ## Error Handling
 
-Follow existing typed `Error` objects with `code` (as in `workspace-files.ts`), not a new result framework. Map codes to application-owned text through `reportError`; do not display raw backend exceptions.
+Use existing `Error & { code }` conventions with application-owned messages via `reportError`; do not add a result framework or expose raw backend diagnostics.
 
-| Failure | Outcome and recovery |
+| Failure | Observable outcome |
 | --- | --- |
-| Invalid/empty name or target | Keep editor/selection; show inline validation; no write. |
-| Stale source/destination revision | Abort the whole local move/removal; refresh observed state; require a fresh user retry. |
-| Local quota/IndexedDB abort | Roll back records and outbox together; remove pending state; retain input; use existing storage guidance. |
-| Workspace/account/role changes | Abort new writes, clear scoped interaction state, dispose listeners; never replay in the new workspace. |
-| Upload succeeds but placement fails | Keep saved content, report root/current location, offer Reveal/Move; do not upload again automatically. |
-| Unknown record version or malformed graph | Preserve raw row; refuse edits to unreadable row; show warning and deterministic reachable projection. |
-| Remote concurrent movement | Accept existing per-record LWW; redraw winning location; no silent compensating writes. |
-| Cloud capability/version rejection | Keep durable local work and expose existing sync failure; explain provider/client update requirement. |
-| Missing item or revoked membership | Hide placement and report unavailable on explicit activation; metadata never grants access. |
-| Post-commit notification failure | Keep committed UI state and report the notification failure without rolling back successful content. |
+| Invalid/duplicate name | Explain rule/conflicting sibling, retain draft, no write. |
+| More than 100 changed rows | Show actual count and smaller-selection guidance before any mutation. |
+| Queue would reach 500 | Explain pending count and wait-for-sync action; retain selection; no auto retry job. |
+| Stale revision/membership/destination | Abort atomic organization action; refresh and ask for a fresh operation. |
+| Folder was removed | Use nearest readable live ancestor, otherwise root; name cause/destination and offer Move to…. |
+| Quota/transaction abort | Roll back local organization/outbox together, retain input, show storage guidance. |
+| Content batch partially succeeds | Item-level receipt, unfinished selection, retry only unfinished after fresh validation. |
+| Workspace/account/role changes | Stop uncommitted writes and remaining batch items; dispose scoped state. |
+| Intake saved content but placement failed | Show actual location, preserve bytes/catalog record, offer scoped Reveal/Move. |
+| Unsupported client/provider | Explicit update boundary; keep queue/data; first-use notice explains workspace-wide impact. |
+| Post-commit notification fails | Keep committed success, separately report notification failure. |
+| Local index migration fails | Roll back schema upgrade and retry/reload; never clear data or manufacture an empty successful library. |
 
 ## Testing Strategy
 
-Testing is E2E-first and follows `AGENTS.md`: enumerate failures and write any necessary isolated tests **before** implementing their production behavior. No post-hoc unit tests mirroring implementation. Read the `test-audit` skill when authoring tests. Tests must exercise real operation/provider boundaries; do not copy production algorithms into tests.
+Policy attribution is explicit: `or3-chat/AGENTS.md` calls for targeted/risk-based checks. In this authoring workspace, parent `../AGENTS.md` additionally says “Never write unit tests after you write code” and “Highly prefer E2E tests as the sole testing mechanism.” Those parent instructions apply here; they are not text in the host's own file. The previously named `test-audit` skill is an operator-installed skill, not a repository dependency, and is **not a prerequisite for executing this portable plan**. Retain the substantive practice: enumerate failure modes, use browser journeys for behavior, and author any necessary isolated boundary tests before its production change. Do not spend a separate front-loaded phase authoring broad tests before a usable local slice.
 
-- **Browser journeys (R1–R7, R10–R12):** extend `tests/e2e/persistent-projects.spec.ts` and `storage-layer.spec.ts` with folder creation, nested moves, selected ancestors/descendants, empty/collapsed destinations, rename/cancel, guarded undo, safe folder removal, project/reference independence, duplicate upload, reload, search/reveal, and retained plugin actions. Exercise actual pointer movement in Chromium and a WebKit run for native drag constraints; keyboard/touch paths cover the same operations.
-- **Focused isolation where browsers cannot expose the boundary (R5–R9):** before implementation, extend existing database integration and sync/schema/provider suites with transaction abort, revision conflict, opposite offline folder moves, dangling parents, malformed/new-version records, capability bypass via incoming/stored rows, bare tombstones, and role revocation. Pure graph fixtures may be narrow tests if needed, using fixed expected trees rather than an alternate graph implementation.
-- **Real cloud convergence (R8–R9):** two isolated browser contexts/devices against disposable Basic Auth + SQLite + filesystem storage; offline concurrent moves, reconnect, independent records, deletion race, new-device snapshot, stale client refusal, and export/restore into a separate disposable workspace. Repeat provider contract/convergence checks with disposable Convex templates and both gateway/direct transports. Do not use the user's real workspace or paid model calls.
-- **Accessibility/responsive (R4, R5, R11):** keyboard tree navigation and rename focus, screen-reader semantics/live announcements, 320/768/1440 widths, light/dark themes, reduced motion, and touch Move to…. Check existing profile restrictions and plugin cleanup on unmount.
-- **Performance (R12):** extend the workspace-scale harness with deterministic 5,000-item/500-folder/20-depth fixtures; record host/browser/build, warm-up, p95 across 30 interactions, mounted rows, and network requests. Enforce the stated 200 ms/<150-row bounds; compare base and candidate on the same machine if a gate fails. Virtualization must preserve keyboard focus and drag targets. No speculative optimization before this fixture identifies a failure.
-- **Evidence (R13):** attach screenshots, retained traces for successful qualification as well as failures, and a JSON receipt through Playwright `testInfo.outputPath/attach`; include source SHAs for host/providers, seed, scopes, before/after IDs/parents, unchanged content hashes, cloud convergence and backup results, viewport/browser, and timing samples. Retain failed-run evidence separately.
+1. **Early local slice (R1/R3/R5/R10/R12):** behind temporary `OR3_EXPLORER_DEV` dev/test configuration, require local/static mode with cloud sync disabled. Implement records/index/read path/minimal moves and the real Files list. Capture plain versus modified click, checkbox/touch selection, root/explicit destinations, virtual Shift range, sorting, and valid/invalid drag in a repeatable browser trace before provider work. This is an internal qualification flag removed before Phase 1 delivery, not a new supported production configuration.
+2. **Data boundary checks (R1/R6/R8/R12):** extend canonical derived-index/database suites before the relevant code change for key-only reader behavior, schema-upgrade rollback/no outbox, remote/restore recomputation, duplicate-name races, deleted-parent chains/GC/cycles, write caps 100/101, queue projected counts 499/500, and atomic organization failures. Browser receipts prove unchanged content hashes/ownership/source modes.
+3. **Bulk lifecycle (R4/R6/R9):** real existing file/project helper paths, editor settlement, policy denial, mixed-folder disable, chat-family write fanout, partial failure, stop-on-revocation/quota, and retry without repeating completed items. Use a 600-item selection and a 2,000-child folder to verify refusal without writes.
+4. **UI breadth (R2–R7/R10/R11):** real project sidebar and Files surfaces at 320/768/1440px, 20-level indentation, default-view persistence, full labels/tooltips, filters-as-flat-results, inspector scope labels, Trash location meaning, Move search/New folder, header/breadcrumb drop targets, OS project-drop refusal, keyboard shortcuts, touch Select mode, and extension actions. Chromium plus WebKit drag qualification; successful traces/screenshots retained.
+5. **Cloud (R8/R9):** after the local slice review, use disposable Basic Auth + SQLite + filesystem profile and separately qualified Convex direct/gateway backend. Two devices test opposite offline moves, late child under deleted parent, old-client 426 affecting workspace sync, first-use cancellation/acknowledgement, partial push packing, snapshots, and backup restore. Missing external clones/backend prerequisites are an explicit cloud gate, not a reason to delay local UI review.
+6. **Scale (R12):** 5,000 metadata items/500 folders/20 depth, production build, recorded reference host/browser, warm-up then 30 interactions; p95 200 ms and <150 mounted rows. Instrument key-only index access to prove browsing never materializes post bodies, separate the one-time migration and explicit full-text/preview paths, and exercise selection across virtual rows. Compare failing performance gates with the base on the same host.
+7. **Artifacts/docs (R13):** existing Playwright outputPath/attach pattern; successful traces, screenshots, JSON seed/SHAs/profile/before-after IDs/parents/outcomes/hashes/queue sizes/timing samples. Update docmap and public guides plus external provider READMEs. Phase 2 receives its own acceptance evidence.
 
-Verification commands to use after coherent batches, not after every edit:
-
-```sh
-# or3-chat: focused tests first, then the connected/high-risk lanes once
-bun run test:e2e:projects
-bun run test:e2e:storage
-bun run test:integration
-bun run test:plugin-compatibility
-bun run type-check
-bun run check:docs
-bun run check:docs:examples
-bun run build
-bun run test:e2e:sync:cloud
-bun run test:e2e:file-backup:cloud
-bun run test:e2e:workspace-scale
-```
-
-Add a named `test:e2e:explorer` runner only to bind the new cloud/browser/receipt scenarios that existing runners do not execute; it must invoke canonical suites rather than duplicate them. Its final exact command/profile belongs in the implementation receipt. For affected provider packages run their `bun run test`, `bun run type-check:standalone`, and `bun run build`; SQLite also has `type-check:host-contract`/`test:host-integration`, and Convex has `test:release`/`test:sync-hardening`. Qualify changed contracts/templates through those existing lanes. Build/typecheck with the fixed Basic Auth + SQLite + filesystem profile and managed registration policy for cloud qualification; also verify the host static build remains usable. New dependencies require build/typecheck/affected tests. No release gate or production lifecycle smoke is required for this planning-only change.
+Run the smallest relevant suite after coherent batches. Existing host commands include `bun run test:e2e:storage`, `test:e2e:projects`, `test:integration`, `test:plugin-compatibility`, `type-check`, `build`, `generate:static`, `check:docs`, `check:docs:examples`, `test:e2e:sync:cloud`, `test:e2e:file-backup:cloud`, and `test:e2e:workspace-scale`. Bind the local explorer flag/scenarios into the existing named harness or one thin named runner; do not duplicate canonical suites. Run the appropriate local commands early; reserve provider/cloud gates for their phase. New drag dependencies and the local index require affected tests/typecheck/build. Use the fixed production profile for final cloud qualification. Re-read each external provider manifest before choosing its test/typecheck/build commands; do not assume those commands or installed sibling packages exist in a host-only checkout.
 
 ## Design Decisions
 
-1. **Internal posts over new tables or nested project JSON.** Existing project settings/sources already use indexed internal posts. Two concrete post kinds avoid a provider table migration and keep independent moves as independent LWW records. A whole tree in `projects.data` would couple unrelated edits; content parent metadata cannot represent independent per-project placement. No physical schema migration is needed.
-2. **Shared operations/controller, distinct surface shells.** Projects needs mixed-content tree activation; Files needs preview, filters, and a details list. Sharing the whole shell would grow conditionals and duplicate established owners. Share only behavior that is identical.
-3. **Independent scoped references.** Files is a library; project membership and context already have canonical APIs. Folder moves must not become a second ownership API. Cross-scope dragging is excluded until its copy/reference/ownership meaning is separately specified.
-4. **Folders first plus explicit sorts, no drag ordering.** Finder/VS Code organization does not require manually ordered siblings. Omitting position ranks removes an unnecessary distributed ordering contract; drag always means move into a container.
-5. **Safe folder removal and limited undo.** Promote direct children, retain blobs/content, and confirm the exact action. Current-session move/rename undo provides useful recovery without durable command logs or recursive delete protocols.
-6. **Read-time graph recovery over server-side tree transactions.** Offline devices can independently form cycles even with locally valid moves. Deterministic projection provides reachability while preserving sync invariants; canonical providers enforce shape/access, not a competing tree authority. No repair background job is introduced.
-7. **New narrow capability over weakening existing guards.** Unknown internal types are unsafe for older readers, including direct Convex clients. Follow existing capability patterns; qualify both providers/templates before exposing Cloud mutations. Existing flat behavior needs no legacy tree implementation or bulk conversion.
-8. **Small drag dependency over adopting an entire file-manager library.** Framework-independent drag adapters and auto-scroll address concrete required interactions, while Nuxt UI remains responsible for appearance/accessibility. The browser spike is an implementation gate, not a promise that all libraries compose without testing.
+1. **Virtual metadata vector, not paging full bodies.** Current 50-row paging cannot implement complete folder/name/filter order or virtual range selection. One derived key follows an existing local pattern and avoids an independent metadata table. A local schema migration is necessary and explicit; full-text search remains a separate body-reading operation.
+2. **Files list first; navigator later.** Breadcrumbs and folder rows cover all widths and avoid three columns at sidebar/tablet sizes. The shared behavior still supports a later navigator.
+3. **Recent defaults preserved.** Existing projects without folders retain activity view; Files retains Recently modified. Explicit per-project preference wins over heuristics.
+4. **Scope is user-visible.** Independent placement is retained because ownership/library membership differ, but every action/inspector/recovery label identifies which scope changes. Shared rename is called out.
+5. **Local name collisions refuse; synchronized duplicates survive.** This gives normal local behavior without pretending offline devices can enforce global uniqueness or destroying colliding data.
+6. **Bounded commands rather than new background infrastructure.** 100 changed records and queue headroom keep organization predictable under existing limits. Very large folder cleanup takes several explicit operations; do not hide that tradeoff. Bulk content actions preserve per-item existing policies and report partial outcomes.
+7. **Ancestor recovery while tombstones remain.** Resolving retained deleted-parent chains aligns late remote children with local promotion. After payload retention ends, visible root fallback is the documented limit.
+8. **Small shared core, preserved content owners.** Keep internal posts for scoped references and existing membership/content helpers authoritative. No folder permissions, new sync table, or generalized plugin registry.
+9. **Local vertical slice precedes cloud admission.** Interaction is the highest delivery uncertainty. The temporary local flag allows review before provider work without exposing unsupported records to cloud clients.
+10. **Phase 2 is explicit.** Undo/type sort/navigator/full shortcut trees are useful but not dependencies of the coherent first delivery. No placeholder controls or promised Undo appear in Phase 1.
 
 ## Risks & Mitigations
 
-1. **Virtualization and dragging conflict with focus/DOM lifetime.** Run the C6 spike first, register targets per mounted row, key by identity, clean up on unmount, and retain WebKit/keyboard evidence before integrating persistence.
-2. **Offline edits produce cycles or a parent disappears mid-operation.** Fresh transactional checks for local commands plus deterministic non-writing recovery for synced graphs; prove opposite offline moves, deleted-parent restoration, and snapshot order independence.
-3. **Provider package and deployed Convex templates disagree.** Require advertised backend contract support, cover direct and gateway paths, and fail closed for organization mutations. Provider releases precede host adoption when separately authorized; do not publish during implementation verification.
-4. **Organization accidentally changes ownership, AI context, or file retention.** Keep placements as metadata with no file edges; route membership/content actions through existing helpers; compare owners, source modes, hashes, and reference counts in receipts.
-5. **Large existing UI owners cause duplicate logic or scope leakage.** Share the controller/operations, integrate into active owners only, retain generation/account guards, and verify profile restrictions, stale operations, and disposal in the two real surfaces.
+1. **Metadata migration changes local write/read boundaries.** Reuse derived hooks/sanitization, test upgrade rollback and remote/restore rebuilding, exclude the key from revisions, and instrument key-only enumeration. Do not call post-value filtering “metadata-only.”
+2. **Interaction drift across rows/tree/touch.** Use the explicit input table and one controller; review the early real Files slice, then add project-tree parity with keyboard/mobile evidence.
+3. **Sync bounds or delayed children defeat local intent.** Count actual records/queue slots before mutation, retain existing transport packing, and test ancestor recovery, fanout limits, and partial content results.
+4. **First use breaks outdated clients' workspace sync.** Give the one-time scoped notice, qualify old-client read/write boundaries, and require verified backend readiness. No downgrade promise.
+5. **External provider work is unavailable or stale.** Track it separately by SHA/backend contract. Continue local UI work while cloud delivery remains explicitly gated; do not fabricate successful provider verification.

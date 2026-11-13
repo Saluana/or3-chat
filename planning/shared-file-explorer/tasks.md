@@ -1,272 +1,256 @@
 # Tasks
 
-Implement in dependency order. Each checkbox is intended to fit approximately 1–4 hours; split a task further if its discovered scope exceeds that bound. Estimates describe task size, not a delivery commitment. Do not publish packages, change production, or disturb unrelated worktrees as part of these tasks.
+Execute sections 1–8 for Phase 1. Section 9 is Phase 2 and is not a prerequisite for shipping Phase 1. Each task is approximately 1–4 hours; split further when evidence expands its scope. Existing requirement/criterion IDs remain stable, while task numbers are resequenced for this revision. No publication or production deployment is authorized by this plan.
 
-## 1. Establish contracts and verification before implementation
+Provider paths are external dependencies, not host-checkout contents. A missing provider clone/backend blocks the cloud gate only; complete and review the local/static slice first. Enumerate boundary failures and write any necessary isolated tests before the corresponding implementation, without a separate front-loaded test-authoring project.
 
-- [ ] 1.1 Record the host and both provider source SHAs, relevant dirty paths, and baseline commands/artifact locations (1h).
-      Design: C10.
+## 1. Ground the revision and prepare local review
+
+- [ ] 1.1 Record host SHA/dirty paths and distinguish external provider availability (1h).
+      Design: C10, C9.
       Requirements: R13.AC2, R13.AC3.
-      Done when: a local qualification receipt identifies the exact checkouts/profiles and distinguishes existing failures; no unrelated file is modified.
+      Done when: the receipt identifies host and available sibling provider SHAs, deployed-backend prerequisites, applicable parent versus host policies, and baseline targeted commands; missing external paths are not reported as host failures.
 
-- [ ] 1.2 Enumerate failure fixtures and expected outcomes before writing isolated tests or production logic (2h).
-      Design: C1, C2, C3, C9, C10.
-      Requirements: R1.AC3, R1.AC4, R5.AC3, R5.AC4, R6.AC5, R8.AC2, R8.AC3, R9.AC1, R9.AC2, R9.AC3, R9.AC5, R12.AC3.
-      Done when: fixtures cover malformed/unknown records, duplicates, cycles, missing parents, selected ancestors, stale edits, abort/quota, revocation, and old-client read/write bypass; the test-audit skill has been read for test authoring.
+- [ ] 1.2 Define the interaction/failure fixture and temporary local flag (2h).
+      Design: C4, C6, C10.
+      Requirements: R5.AC1, R5.AC7, R5.AC8, R12.AC5, R13.AC4.
+      Done when: browser steps specify plain/modified clicks, touch selection, root/explicit destination, invalid drag, off-screen selection, and 100/101 writes; `OR3_EXPLORER_DEV` admits only the local/static dev/test profile with cloud sync disabled.
 
-- [ ] 1.3 Author the necessary contract/projection regression cases before implementing C1/C3 (3h).
-      Design: C1, C3, C10.
-      Requirements: R1.AC3, R1.AC4, R7.AC2, R8.AC3, R8.AC5, R9.AC5.
-      Done when: fixed input/output fixtures specify stable identity, cycle-edge choice, missing-parent recovery, non-writing reads, unknown versions, and root defaults without copying the implementation algorithm.
+## 2. Build and review the local Files vertical slice
 
-- [ ] 1.4 Author failing transaction-boundary integration cases before implementing C2 (4h).
-      Design: C2, C10.
-      Requirements: R5.AC3, R5.AC4, R5.AC6, R6.AC1, R6.AC3, R7.AC1, R9.AC1, R9.AC2, R12.AC3.
-      Done when: existing database suites contain real-helper expectations for atomic local moves/removal, outbox rollback, stale undo, content retention, and access changes; failures are attributable to the missing feature.
+- [ ] 2.1 Implement record schemas, identity, visibility, and scoped reads (4h).
+      Design: C1, C2, C3.
+      Requirements: R1.AC1, R1.AC2, R1.AC3, R4.AC2, R7.AC2, R8.AC5, R9.AC5.
+      Done when: concrete folder/placement records and stable IDs work against existing posts, both internal types are excluded from ordinary editor/search/tool/plugin content rows, unplaced content remains at root, and necessary contract cases were written before production logic.
 
-- [ ] 1.5 Author host/SQLite admission cases before their capability implementation (4h).
-      Design: C1, C9, C10.
-      Requirements: R9.AC3, R9.AC4, R9.AC5.
-      Done when: cases cover incoming/stored rows, type substitution, deletes/bare tombstones, malformed payloads, viewer writes, read cursor refusal, and unchanged legacy capabilities.
+- [ ] 2.2 Add the local metadata key and safe additive migration (4h).
+      Design: C11, C1.
+      Requirements: R12.AC2, R12.AC7, R8.AC4.
+      Done when: the next unused Dexie version adds only the derived index, bounded backfill emits no canonical edits, hooks rebuild local/remote/restored values, sanitization/revision fingerprints omit the field, and prewritten upgrade/rollback cases pass.
 
-- [ ] 1.6 Author equivalent Convex template/direct/gateway contract cases before implementation (4h).
-      Design: C9, C10.
-      Requirements: R8.AC2, R9.AC3, R9.AC4, R9.AC5.
-      Done when: existing provider suites specify the same boundaries, including new package with old backend templates; fixture contracts are aligned with the host.
+- [ ] 2.3 Implement key-only enumeration and a complete ordered result vector (4h).
+      Design: C11, C3.
+      Requirements: R10.AC4, R12.AC1, R12.AC2, R12.AC6.
+      Done when: root/unplaced and folder-child sets resolve without post-value reads, file metadata joins use bounded batches, Recently modified/Name sort the complete set, and virtual row data has stable IDs.
 
-- [ ] 1.7 Qualify the proposed UTree/drag integration in a disposable local fixture (4h).
-      Design: C5, C6, C10.
-      Requirements: R5.AC2, R5.AC3, R5.AC5, R11.AC1, R11.AC2, R12.AC1.
-      Done when: a retained browser trace demonstrates empty/collapsed/root drops, selected ancestors, hover expansion, nested auto-scroll, virtual row disposal, external files, and keyboard focus. Record exact compatible dependency versions; if the gate fails, revise C6 before continuing rather than adding a second engine.
-
-## 2. Define organization records and visibility
-
-- [ ] 2.1 Implement the versioned folder/placement schemas and deterministic identity helpers (3h).
-      Design: C1.
-      Requirements: R1.AC2, R1.AC3, R1.AC4, R7.AC1, R8.AC5, R9.AC5.
-      Done when: names, scope keys, kind restrictions, immutable identity, 8 KiB bound, and empty ownership fields satisfy the prewritten contract cases; no new table or index is added.
-
-- [ ] 2.2 Register internal record visibility and block ordinary editing/search/tool exposure (3h).
-      Design: C1, C7, C8.
-      Requirements: R4.AC2, R7.AC2, R9.AC5.
-      Done when: both post types stay out of ordinary document/prompt lists, generic content tools, and extension content rows, while raw workspace backup retains them.
-
-- [ ] 2.3 Implement deterministic hierarchy projection and scope-local record reads (4h).
-      Design: C2, C3.
-      Requirements: R1.AC1, R7.AC2, R7.AC3, R7.AC4, R8.AC3, R8.AC5, R12.AC2.
-      Done when: flat items appear at root, valid parents resolve, chat families remain grouped, cycles/missing parents recover identically regardless of row order, and projection performs no writes or blob fetches.
-
-## 3. Implement transactional organization operations
-
-- [ ] 3.1 Implement create/rename folder with captured scope and revision checks (3h).
+- [ ] 2.4 Implement minimal create/rename/move with local admission (4h).
       Design: C1, C2.
-      Requirements: R1.AC1, R1.AC2, R1.AC3, R1.AC4, R9.AC1, R9.AC2, R12.AC3.
-      Done when: create/rename pass contract/transaction cases and preserve unknown supported-version fields; failures retain the prior committed state.
+      Requirements: R1.AC2, R1.AC3, R5.AC3, R5.AC4, R7.AC1, R9.AC2, R12.AC3, R12.AC5.
+      Done when: fresh parent/name/revision checks, selected-ancestor normalization, the 100-record cap, and atomic organization writes work in local mode, without changing content/ownership; required transaction failure cases precede implementation.
 
-- [ ] 3.2 Implement fresh destination/membership validation and selection normalization (3h).
-      Design: C2, C3.
-      Requirements: R5.AC3, R5.AC4, R7.AC2, R7.AC3, R9.AC2.
-      Done when: invalid scope/descendant/leaf destinations refuse and selected descendants are processed once under their selected ancestor, using fresh canonical content eligibility.
+- [ ] 2.5 Put folders/breadcrumbs and selection into the real Files list (4h).
+      Design: C4, C5, C8, C11.
+      Requirements: R3.AC1, R3.AC2, R5.AC1, R5.AC7, R10.AC4, R12.AC1, R12.AC6.
+      Done when: cumulative Load more is replaced by virtualization, plain click opens, modified clicks/checkboxes select, touch Select mode works, and full-vector Shift/Select all behave without requiring mounted rows.
 
-- [ ] 3.3 Implement batch reparenting with atomic outbox capture (4h).
-      Design: C2.
-      Requirements: R1.AC2, R5.AC4, R7.AC1, R8.AC1, R12.AC3.
-      Done when: folder and item moves commit all local rows/outbox effects or none, root moves retain placement history, and owners/source modes/hashes/ref-counts are unchanged.
+- [ ] 2.6 Qualify Move/drag interaction and review the local slice (4h).
+      Design: C4, C5, C6, C10.
+      Requirements: R5.AC2, R5.AC3, R5.AC5, R5.AC8, R11.AC2, R13.AC2, R13.AC4.
+      Done when: real Files operations work through Move to… and one qualified drag engine, including unselected-row/root/breadcrumb/empty-folder targets; a successful browser trace, screenshot, and JSON receipt make the local slice reviewable before provider work begins.
 
-- [ ] 3.4 Implement safe folder removal with child promotion (3h).
-      Design: C2, C3.
-      Requirements: R6.AC1, R6.AC3, R8.AC3.
-      Done when: direct child folders and visible/trashed placements promote atomically with the folder tombstone, file bytes remain unchanged, and late remote children remain reachable.
+## 3. Complete safe organization and bulk content operations
 
-- [ ] 3.5 Implement guarded inverse operations for last move/rename (3h).
-      Design: C2, C4.
-      Requirements: R5.AC6, R9.AC2, R12.AC3.
-      Done when: a receipt can undo one operation through the same helpers, and changed membership/revisions/destinations refuse the inverse without partial changes.
+- [ ] 3.1 Implement collision handling and deterministic ancestor/cycle recovery (4h).
+      Design: C1, C2, C3.
+      Requirements: R1.AC3, R1.AC4, R8.AC2, R8.AC3, R8.AC6.
+      Done when: local same-name create/rename/moves refuse (including collisions within a moved batch), synced duplicates survive visibly, deleted chains resolve to the nearest live ancestor, GC/cycles produce explained fallback, and reads perform no repair writes.
 
-- [ ] 3.6 Integrate metadata retirement with project detach/delete and content restore (4h).
-      Design: C2, C7, C8.
-      Requirements: R6.AC2, R6.AC3, R6.AC4, R7.AC1, R7.AC2.
-      Done when: existing lifecycle paths hide/retire ineligible placements, project deletion retains content, re-association starts at root, and Trash restore uses a valid saved folder or root.
+- [ ] 3.2 Implement bounded folder removal and exact confirmations (3h).
+      Design: C2, C5.
+      Requirements: R6.AC1, R6.AC3, R12.AC3, R12.AC5.
+      Done when: Remove folder, keep contents counts direct/hidden entries and destination, empty removal skips confirmation, up-to-budget promotion/tombstone is atomic, and a 2,000-child folder refuses without writing.
 
-## 4. Integrate sync and provider capability admission
+- [ ] 3.3 Integrate placement eligibility with existing content/project lifecycle (3h).
+      Design: C2, C3, C7, C8.
+      Requirements: R6.AC2, R6.AC3, R6.AC4, R6.AC5, R7.AC1, R7.AC2, R7.AC3, R7.AC4.
+      Done when: Trash/restore, detach/re-associate, intake fallback, and project deletion retain content safely; project deletion hides its scope without an unbounded organization cascade, and chat families/title changes remain canonical.
 
-- [ ] 4.1 Add the host explorer capability contract and session availability (3h).
+- [ ] 3.4 Compose bulk Files Trash through existing owning helpers (4h).
+      Design: C12, C8, C2.
+      Requirements: R4.AC2, R4.AC4, R6.AC6, R6.AC7, R9.AC2, R12.AC5.
+      Done when: aggregate record admission and item-level transaction checks preserve policy/editor-settlement hooks, selected folders disable Trash explicitly, partial results retain unfinished selection, and retries do not repeat completed items.
+
+- [ ] 3.5 Compose bulk project removal through existing membership owners (4h).
+      Design: C12, C7, C2.
+      Requirements: R6.AC2, R6.AC7, R7.AC1, R7.AC3, R9.AC1, R12.AC5.
+      Done when: Remove N items from project names the scope/family effects, counts related canonical writes, preserves underlying Files/content state, and stops safely on revocation/fanout overflow with item-level results.
+
+## 4. Finish shared interaction and responsive presentation
+
+- [ ] 4.1 Implement scoped menus, selection toolbar, shortcuts, and focus rules (4h).
+      Design: C4, C5, C12.
+      Requirements: R4.AC1, R4.AC2, R4.AC4, R5.AC1, R5.AC7, R11.AC1, R11.AC2.
+      Done when: the design input table is implemented, menu selection semantics are explicit, single-item plugins never receive bulk payloads, Delete uses context-specific confirmation, and editable controls retain native shortcuts.
+
+- [ ] 4.2 Complete Move-dialog filtering/new-folder and scoped feedback (3h).
+      Design: C3, C4, C5.
+      Requirements: R5.AC5, R7.AC5, R8.AC6, R11.AC3.
+      Done when: 500 folders remain navigable by search/path, root is always reachable, New folder names its destination, and recovery/action messages identify Files or the project plus a useful next action.
+
+- [ ] 4.3 Complete drag cleanup, project-tree compatibility, and OS-drop handling (4h).
+      Design: C5, C6.
+      Requirements: R4.AC3, R5.AC2, R5.AC3, R5.AC8, R5.AC9, R11.AC5.
+      Done when: mounted UTree targets safely register/dispose, the header remains a root target, hover/autoscroll/cancel work, drag never opens content, and project OS drops reject with supported alternatives rather than browser navigation.
+
+- [ ] 4.4 Finish device preferences, indentation, responsive preview, and accessibility (4h).
+      Design: C4, C5, C8.
+      Requirements: R2.AC1, R3.AC1, R4.AC3, R10.AC4, R11.AC2, R11.AC3, R11.AC4, R11.AC5.
+      Done when: explicit project choice/defaults and Recently modified persist correctly, 48px indentation/full-name tooltips preserve logical depth, 320/768/1440 layouts have no three-column squeeze, and live announcements/reduced-motion/focus behavior pass.
+
+## 5. Integrate project destinations and Files scope/filter behavior
+
+- [ ] 5.1 Add Explorer to Project Home with explicit root/in-folder creation (4h).
+      Design: C7, C4, C5.
+      Requirements: R2.AC1, R2.AC2, R2.AC3, R7.AC1, R7.AC3, R9.AC1.
+      Done when: the active sidebar page honors the view rule, preserves existing sections, opens canonical content, and top-level creation is root while folder creation names/captures its destination.
+
+- [ ] 5.2 Wire limited Phase 1 shortcuts and remove the dead tree component (2h).
+      Design: C7, C4.
+      Requirements: R2.AC4, R4.AC1, R4.AC2, R4.AC3.
+      Done when: shortcuts retain existing navigation/opening and scoped Move to…, profile gates remain, and an import/reference check supports deleting unused `SidebarProjectTree.vue` plus stale comments without adding a second full tree.
+
+- [ ] 5.3 Finish Files intake/inspector and scope-specific locations (4h).
+      Design: C8, C7, C3.
+      Requirements: R2.AC5, R3.AC3, R3.AC4, R3.AC5, R6.AC3, R6.AC5, R7.AC4, R7.AC5.
+      Done when: Upload/New folder name the destination, deduplication preserves location, preview explains shared title and separate Files/project paths, reveal does not move content, and Trash/fallback labels identify library placement unambiguously.
+
+- [ ] 5.4 Implement flat filtered results, path updates, and reveal (4h).
+      Design: C3, C4, C8, C11.
+      Requirements: R10.AC1, R10.AC2, R10.AC3, R10.AC4, R10.AC5, R12.AC2, R12.AC6.
+      Done when: active filters/search hide ordinary folder rows, This folder / All Files controls descendant eligibility, explicit full-text search retains existing capped behavior, and Show in Files/project clears incompatible state and reveals the current path.
+
+## 6. Add cloud admission after the local interaction gate
+
+- [ ] 6.1 Add host capability and first-use compatibility notice (3h).
+      Design: C9, C4.
+      Requirements: R9.AC3, R9.AC4, R9.AC6.
+      Done when: host/session/request schemas support the independent explorer capability, unsupported backends cannot create organization, and a once-per-device/workspace notice explains whole-workspace old-client sync stoppage with Cancel creating nothing.
+
+- [ ] 6.2 Wire host transport/backup checks and queue admission (4h).
+      Design: C9, C2, C12.
+      Requirements: R8.AC1, R8.AC4, R9.AC3, R9.AC5, R12.AC4, R12.AC5.
+      Done when: gateway push/pull/snapshot/backup carry/check the capability, queued statuses/coalescing are reused for transactional headroom, projected 499 admits and 500 refuses, and existing 100-op/2 MiB packing remains intact.
+
+- [ ] 6.3 Implement and qualify external SQLite canonical admission (4h).
+      Design: C9, C10.
+      Requirements: R9.AC1, R9.AC3, R9.AC4, R9.AC5.
+      Done when: a recorded provider SHA passes targeted cases for incoming/stored identity/type/deletes/tombstones/shape/roles in the canonical transaction; no incompatible page cursor advances, and D1 does not advertise unsupported admission.
+
+- [ ] 6.4 Implement and qualify external Convex backend admission (4h).
+      Design: C9, C10.
+      Requirements: R8.AC2, R9.AC1, R9.AC3, R9.AC5.
+      Done when: recorded disposable templates enforce equivalent push/pull/watch/snapshot/shape/identity/permission boundaries while preserving existing idempotency, versions, and LWW.
+
+- [ ] 6.5 Wire external Convex direct/gateway capability and readiness (3h).
       Design: C9.
       Requirements: R9.AC3, R9.AC4, R9.AC5.
-      Done when: shared request types/schemas and authenticated session expose the independent capability without changing existing Files/file-kind admission or accepting unsupported organization writes.
+      Done when: both transports send the contract, a new package with an old deployed backend remains unqualified, and template artifacts are rebuilt through the provider's own verified scripts.
 
-- [ ] 4.2 Wire gateway requests and host push/pull/snapshot checks (4h).
-      Design: C9.
-      Requirements: R8.AC1, R8.AC4, R9.AC3, R9.AC5.
-      Done when: all request paths send the capability, unsupported reads stop before page/cursor admission, incoming organization rows validate, and backup export/restore carries the same capability.
-
-- [ ] 4.3 Implement native SQLite canonical validation (4h).
-      Design: C1, C9.
-      Requirements: R8.AC2, R9.AC1, R9.AC3, R9.AC4, R9.AC5.
-      Done when: stored/incoming row and tombstone checks run in the canonical mutation transaction, atomic rejection leaves versions/data unchanged, and D1 does not advertise or accept explorer mutations.
-
-- [ ] 4.4 Implement Convex template mutation/read admission (4h).
-      Design: C1, C9.
-      Requirements: R8.AC2, R9.AC1, R9.AC3, R9.AC5.
-      Done when: push, pull, watch, and snapshot enforce equivalent typed/authorization/version boundaries, including deleted records, without changing LWW/idempotency/cursor contracts.
-
-- [ ] 4.5 Wire Convex gateway/direct transport and backend readiness (3h).
-      Design: C9.
-      Requirements: R9.AC3, R9.AC4.
-      Done when: direct and gateway requests carry the contract and an old deployed template cannot produce a false capability advertisement; regenerate contract/template artifacts through the package's existing build process.
-
-- [ ] 4.6 Run affected host/provider contract suites and resolve feature-caused failures (3h).
+- [ ] 6.6 Integrate qualified provider contracts and close the local-only flag (3h).
       Design: C9, C10.
-      Requirements: R8.AC2, R9.AC1, R9.AC3, R9.AC4, R9.AC5, R13.AC3.
-      Done when: prewritten admission cases pass in both providers and host; test output identifies exact versions/SHAs without releasing packages.
+      Requirements: R13.AC1, R13.AC3, R13.AC4.
+      Done when: host/provider compatibility checks use recorded exact dependencies/backend contracts, the temporary local flag is removed from delivered configuration, and local/static still works with provider-independent organization. Missing provider qualification is explicitly reported as a Phase 1 cloud gate; no package is published.
 
-## 5. Build the shared explorer interaction
+## 7. Verify Phase 1 with repeatable evidence
 
-- [ ] 5.1 Implement controlled navigation, selection, sort, and device preferences (4h).
-      Design: C3, C4.
-      Requirements: R4.AC1, R4.AC3, R5.AC1, R10.AC4, R11.AC1.
-      Done when: state is scoped by account/workspace/surface, click/Ctrl-or-Cmd/Shift selection uses visible rows, expansion/sort survives reload outside content sync, and switching scope clears pending actions/undo.
+- [ ] 7.1 Complete the local Files behavior and retention journey (4h).
+      Design: C8, C10, C11, C12.
+      Requirements: R1.AC1, R1.AC2, R1.AC3, R1.AC4, R3.AC1, R3.AC2, R3.AC3, R3.AC4, R3.AC5, R4.AC4, R6.AC1, R6.AC3, R6.AC5, R6.AC6, R6.AC7, R7.AC1, R7.AC4, R7.AC5, R10.AC1, R10.AC2, R13.AC2.
+      Done when: the canonical storage harness proves scoped paths, upload reuse, collision rules, rename/moves, removal counts, bulk partial outcomes, Trash/restore, root fallback, search/reveal, and unchanged hashes with traces/screenshots/JSON receipts.
 
-- [ ] 5.2 Implement the shared UTree wrapper and row actions (4h).
-      Design: C4, C5.
-      Requirements: R1.AC1, R4.AC1, R4.AC2, R11.AC1, R11.AC2, R11.AC3, R12.AC1.
-      Done when: stable keys, empty folders, controlled expansion, virtual rows, folder/content activation, focus restoration, and per-surface existing actions work without duplicate mutation handlers.
+- [ ] 7.2 Complete the project/sidebar and input-method journey (4h).
+      Design: C5, C6, C7, C10.
+      Requirements: R2.AC1, R2.AC2, R2.AC3, R2.AC4, R2.AC5, R4.AC1, R4.AC2, R4.AC3, R5.AC1, R5.AC2, R5.AC3, R5.AC4, R5.AC5, R5.AC7, R5.AC8, R5.AC9, R6.AC2, R6.AC4, R7.AC2, R7.AC3, R10.AC3, R10.AC4, R10.AC5, R11.AC1, R11.AC2, R11.AC3, R11.AC4, R11.AC5.
+      Done when: Chromium/WebKit plus touch/keyboard cases prove the interaction table, capped indentation/default views, explicit destinations, scope-independent placement, family grouping, header drop targets, OS-drop refusal, profile gates, and retained single-item extension actions.
 
-- [ ] 5.3 Implement inline rename, safe removal confirmation, and Move to… (4h).
-      Design: C2, C4, C5.
-      Requirements: R1.AC3, R5.AC5, R5.AC6, R6.AC1, R11.AC2, R11.AC3, R12.AC3.
-      Done when: Enter/Escape and focus behavior are verified, Move uses the same validated operation as dragging, removal names child promotion, and conflict/error text retains recoverable input.
+- [ ] 7.3 Verify mutation/queue limits, faults, and index lifecycle (4h).
+      Design: C2, C10, C11, C12.
+      Requirements: R5.AC4, R6.AC7, R8.AC1, R9.AC1, R9.AC2, R12.AC3, R12.AC4, R12.AC5, R12.AC7.
+      Done when: 100/101 changed rows, 600 selected items, 2,000 direct children, projected queue 499/500, related chat writes, quota/abort/revocation, migration rollback, and restore/snapshot key rebuild all have expected receipts and no false success or duplicate retry.
 
-- [ ] 5.4 Integrate the qualified drag adapter and auto-scroll (4h).
-      Design: C4, C5, C6.
-      Requirements: R3.AC3, R5.AC2, R5.AC3, R5.AC4, R5.AC5, R11.AC3, R11.AC5.
-      Done when: only qualified dependencies are added, the prototype behavior runs against real IDs/operations, external files reach intake, and invalid/cancelled drops produce no writes.
-
-- [ ] 5.5 Finish owned cleanup, reduced motion, and accessible feedback (3h).
-      Design: C4, C5, C6.
-      Requirements: R4.AC3, R11.AC1, R11.AC2, R11.AC3, R11.AC5, R12.AC4.
-      Done when: unmount/scope change disposes observations/timers/drag targets, live announcements cover outcomes, touch menus require no hover, and local save/cloud pending/error states are distinct.
-
-## 6. Connect Projects and Files
-
-- [ ] 6.1 Host Explorer/Recent activity in the active project page (4h).
-      Design: C7, C4, C5.
-      Requirements: R2.AC1, R2.AC2, R7.AC2, R7.AC3, R7.AC4.
-      Done when: Project Home shows real eligible mixed contents and opens the existing panes; brief, Knowledge, Memory, Settings, and activity remain usable.
-
-- [ ] 6.2 Place newly created/associated project items and preserve actions (3h).
-      Design: C2, C7.
-      Requirements: R2.AC3, R4.AC2, R6.AC5, R7.AC1.
-      Done when: new chats/documents and Add to project use the selected folder, existing Knowledge/membership APIs retain ownership, and partial creation/placement outcomes explicitly reveal saved content.
-
-- [ ] 6.3 Use the shared tree in project shortcuts (3h).
-      Design: C7, C5.
-      Requirements: R2.AC4, R4.AC1, R4.AC2, R4.AC3.
-      Done when: shortcut and page show the same hierarchy, existing lazy loading/profile gates apply, and obsolete tree code is removed only if proven unreferenced.
-
-- [ ] 6.4 Add Files folder navigation, breadcrumbs, and child listing (4h).
-      Design: C8, C3, C4, C5.
-      Requirements: R3.AC1, R3.AC2, R4.AC1, R7.AC4, R10.AC4.
-      Done when: folder selection, breadcrumbs, filters, root/unfiled listing, preview/download, and existing actions work together without duplicating folder operations.
-
-- [ ] 6.5 Integrate upload destinations, deduplication feedback, and Trash locations (4h).
-      Design: C8, C2, C6.
-      Requirements: R3.AC3, R3.AC4, R6.AC3, R6.AC5, R9.AC2.
-      Done when: button/drop uploads capture the destination, reused records keep their location, directories reject clearly, partial failures report actual outcomes, and restored content remains reachable.
-
-- [ ] 6.6 Connect scope search, path invalidation, and reveal (4h).
-      Design: C3, C4, C7, C8.
-      Requirements: R10.AC1, R10.AC2, R10.AC3, R12.AC2.
-      Done when: existing bounded search finds descendant contents, folder-name search uses loaded metadata, moves/renames update paths without count changes, and Files `recordId` resolves/focuses/previews the current location.
-
-- [ ] 6.7 Complete narrow-layout, theme, and profile integration (3h).
-      Design: C5, C7, C8.
-      Requirements: R2.AC4, R4.AC3, R11.AC4, R11.AC5.
-      Done when: 320/768/1440 layouts, light/dark themes, mobile folder navigation, Move to…, reduced motion, and profile restrictions are usable through real surfaces.
-
-## 7. Qualify behavior and retain browser artifacts
-
-- [ ] 7.1 Complete the project organization browser journey (4h).
-      Design: C7, C10.
-      Requirements: R1.AC1, R1.AC2, R1.AC4, R2.AC1, R2.AC2, R2.AC3, R2.AC4, R6.AC2, R6.AC4, R7.AC1, R7.AC3, R13.AC2.
-      Done when: the existing project harness covers nested mixed contents, shortcuts, independent placements, family grouping, detach/delete, and unchanged AI context; screenshots/trace/JSON receipt are attached.
-
-- [ ] 7.2 Complete the Files organization and data-retention browser journey (4h).
-      Design: C8, C10.
-      Requirements: R3.AC1, R3.AC2, R3.AC3, R3.AC4, R4.AC2, R6.AC1, R6.AC3, R6.AC5, R7.AC1, R7.AC4, R10.AC1, R10.AC2, R10.AC3, R13.AC2.
-      Done when: the storage harness verifies upload/reuse, move, search/reveal, safe folder removal, Trash/restore, retained plugin policies, and original-byte hashes with repeatable artifacts.
-
-- [ ] 7.3 Run pointer/keyboard/touch/responsive interaction qualification (4h).
-      Design: C5, C6, C10.
-      Requirements: R5.AC1, R5.AC2, R5.AC3, R5.AC4, R5.AC5, R5.AC6, R10.AC4, R11.AC1, R11.AC2, R11.AC3, R11.AC4, R11.AC5, R13.AC2.
-      Done when: Chromium/WebKit drag cases and keyboard/touch Move cases pass, with focus/announcement checks, screenshots at all stated widths, and successful-run traces.
-
-- [ ] 7.4 Run local fault, permission, and workspace-switch browser cases (3h).
-      Design: C2, C4, C10.
-      Requirements: R4.AC3, R5.AC6, R8.AC1, R9.AC1, R9.AC2, R12.AC3, R12.AC4, R13.AC2.
-      Done when: quota/abort/stale revisions and mid-operation account/role changes retain safe state, do not leak writes, and produce explicit recovery outcomes in the receipt.
-
-- [ ] 7.5 Qualify SQLite cloud convergence, new-device recovery, and backup (4h).
+- [ ] 7.4 Qualify SQLite cloud convergence and backup recovery (4h).
       Design: C3, C9, C10.
-      Requirements: R8.AC1, R8.AC2, R8.AC3, R8.AC4, R8.AC5, R9.AC3, R9.AC4, R13.AC2.
-      Done when: two isolated devices on the fixed disposable cloud profile converge after opposite offline folder moves and deletion races; a new snapshot device and separate restored workspace preserve IDs/content hashes; old-client refusal is verified.
+      Requirements: R8.AC1, R8.AC2, R8.AC3, R8.AC4, R8.AC5, R8.AC6, R9.AC3, R9.AC4, R9.AC6, R13.AC2.
+      Done when: two disposable devices prove offline opposite moves, deleted-parent late children, GC fallback, first-use notice/cancel, old-client workspace-sync refusal, new-device snapshot, and separate backup restore with unchanged hashes.
 
-- [ ] 7.6 Qualify Convex direct/gateway convergence and stale-template behavior (4h).
+- [ ] 7.5 Qualify Convex direct/gateway convergence and stale-backend refusal (4h).
       Design: C9, C10.
-      Requirements: R8.AC2, R8.AC3, R8.AC4, R9.AC3, R9.AC4, R9.AC5, R13.AC2.
-      Done when: disposable templates prove the same graph/cursor/content outcomes for both transports, incompatible readers/writers are refused, and a stale backend disables organization before mutation.
+      Requirements: R8.AC2, R8.AC3, R8.AC4, R9.AC3, R9.AC4, R9.AC5, R13.AC2, R13.AC3.
+      Done when: externally recorded templates/provider versions pass the same graph/cursor/backup expectations through both transports; unsupported backend versions refuse organization before mutation.
 
-- [ ] 7.7 Run the populated-workspace explorer performance fixture (4h).
-      Design: C3, C5, C6, C10.
-      Requirements: R12.AC1, R12.AC2, R13.AC2.
-      Done when: recorded production-build measurements meet p95 200 ms/<150 mounted rows at the stated scale, no incidental blob requests occur, and any regression has same-host base/candidate evidence and a resolved cause.
+- [ ] 7.6 Measure the full metadata/virtualization fixture (4h).
+      Design: C3, C5, C10, C11.
+      Requirements: R12.AC1, R12.AC2, R12.AC6, R13.AC2.
+      Done when: a recorded production build meets p95 200 ms/<150 rows with 5,000 items/500 folders/20 depth, instrumentation proves no browsing post-body reads, Shift/select-all includes unmounted results, and capped full-text results are labeled separately.
 
-## 8. Documentation and final verification
+## 8. Document and complete Phase 1
 
-- [ ] 8.1 Update public user/developer guides and docmap entries (3h).
-      Design: C10.
-      Requirements: R13.AC1.
-      Done when: `public/_documentation/start/projects.md`, database Files/projects guidance, sync capability guidance, and affected theme/extension guidance explain folders, independent placement, recovery, and the retained public action contracts; `docmap.json` and docs checks agree.
-
-- [ ] 8.2 Document provider compatibility and rollout order (2h).
+- [ ] 8.1 Update host public guides/docmap and external provider READMEs (3h).
       Design: C9, C10.
-      Requirements: R9.AC3, R9.AC4, R13.AC1.
-      Done when: SQLite and Convex READMEs describe the explorer contract, installed backend-template requirement, qualified transports, D1 exclusion, and provider-before-host publication dependency; no release/deployment is performed.
+      Requirements: R13.AC1, R9.AC6.
+      Done when: scope labels, click/touch/bulk behavior, limits, local migration, nearest-ancestor recovery, version cutover, external repository ownership, and phased scope are documented with working docmap entries.
 
-- [ ] 8.3 Complete the proportionate final host/provider validation pass (4h).
+- [ ] 8.2 Run the proportionate final Phase 1 verification (4h).
       Design: C10.
       Requirements: R13.AC2, R13.AC3.
-      Done when: design-listed relevant suites, typechecks, static/cloud builds, dependency checks, and disposable browser/cloud journeys are green; missing environment prerequisites or pre-existing failures are explicitly recorded rather than waived or hidden.
+      Done when: affected host/provider tests/typechecks, dependency/static/cloud builds, docs checks, and disposable journeys pass with exact profiles/SHAs; unavailable external prerequisites or unrelated existing failures are separately evidenced, never silently marked passed.
 
-- [ ] 8.4 Simplify, inspect the final diffs, and finalize the receipt (2h).
-      Design: C1–C10.
-      Requirements: R4.AC1, R7.AC1, R13.AC1, R13.AC2, R13.AC3.
-      Done when: no duplicate tree mutation path, unused prototype, generic adapter framework, speculative index/service, or accidental ownership/file edge remains; explicit changed paths and repeatable artifacts are linked and every acceptance criterion has evidence.
+- [ ] 8.3 Inspect diffs, simplify, and finalize Phase 1 receipt (2h).
+      Design: C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12.
+      Requirements: R4.AC1, R7.AC1, R13.AC1, R13.AC2, R13.AC3, R13.AC4.
+      Done when: no duplicate mutation path, dead prototype, temporary flag, speculative service, unsafe body read, ownership edge, or claimed Phase 2 control remains; all Phase 1 criteria have evidence and unrelated changes remain untouched.
+
+## 9. Phase 2 follow-up — not a Phase 1 dependency
+
+- [ ] 9.1 Add guarded move/folder-rename Undo (4h).
+      Design: C2, C4, C5.
+      Requirements: R5.AC6.
+      Done when: success toasts expose Undo, explorer-focused Cmd/Ctrl+Z invokes the same one-session receipt, stale revisions/parents refuse safely, and editor/input shortcuts are untouched.
+
+- [ ] 9.2 Add Type sorting (2h).
+      Design: C4, C11.
+      Requirements: R10.AC6.
+      Done when: normalized displayed type sorting has stable name/ID ties, correct folder grouping, saved preference, and no new body reads.
+
+- [ ] 9.3 Add the optional wide-screen Files navigator (4h).
+      Design: C5, C8.
+      Requirements: R3.AC6.
+      Done when: navigator reuses the shared state at 1280px+, collapses before a cramped list/preview layout, and breadcrumbs/folders-in-list remain complete on every width.
+
+- [ ] 9.4 Upgrade shortcuts to the full shared tree (3h).
+      Design: C5, C7.
+      Requirements: R2.AC6.
+      Done when: nested shortcuts use the same behavior without duplicate data writes, retain lazy/profile gates, and preserve the indentation/selection rules.
+
+- [ ] 9.5 Qualify and document Phase 2 separately (3h).
+      Design: C10.
+      Requirements: R2.AC6, R3.AC6, R5.AC6, R10.AC6, R13.AC1, R13.AC2.
+      Done when: focused browser evidence covers Undo conflicts/input focus, Type sort, navigator responsiveness, and shortcut parity; docs and receipts distinguish the later delivery.
 
 ## Traceability Matrix
 
-| Requirement | Design components | Tasks |
-| --- | --- | --- |
-| R1 Nested folders | C1, C2, C3, C5 | 1.2–1.3, 2.1, 2.3, 3.1, 3.3, 5.2–5.3, 7.1 |
-| R2 Project explorer | C7, C4, C5 | 6.1–6.3, 6.7, 7.1 |
-| R3 Files browser | C8, C6 | 5.4, 6.4–6.5, 7.2 |
-| R4 Shared behavior | C4, C5, C7, C8 | 2.2, 5.1–5.2, 5.5, 6.2–6.4, 6.7, 7.2, 7.4, 8.4 |
-| R5 Selection/moves | C2, C4, C5, C6 | 1.2, 1.4, 1.7, 3.2–3.3, 3.5, 5.1, 5.3–5.4, 7.3–7.4 |
-| R6 Lifecycle safety | C2, C7, C8 | 1.2, 1.4, 3.4, 3.6, 5.3, 6.2, 6.5, 7.1–7.2 |
-| R7 Identity/authority | C1, C2, C3, C7, C8 | 1.3–1.4, 2.1–2.3, 3.2–3.3, 3.6, 6.1–6.2, 6.4, 7.1–7.2, 8.4 |
-| R8 Persistence/recovery | C1, C2, C3, C9 | 1.2–1.3, 1.6, 2.1, 2.3, 3.3–3.4, 4.2–4.4, 4.6, 7.4–7.6 |
-| R9 Auth/version | C1, C2, C9 | 1.2–1.6, 2.1–2.2, 3.1–3.2, 3.5, 4.1–4.6, 6.5, 7.4–7.6, 8.2 |
-| R10 Search/navigation | C3, C4, C5, C7, C8 | 5.1, 6.4, 6.6, 7.2–7.3 |
-| R11 Accessible UI | C4, C5, C6, C8 | 1.7, 5.1–5.5, 6.7, 7.3 |
-| R12 Scale/errors | C2, C3, C4, C5, C6 | 1.2, 1.4, 1.7, 2.3, 3.1, 3.3, 3.5, 5.2–5.3, 5.5, 6.6, 7.4, 7.7 |
-| R13 Evidence/docs | C10, C9 | 1.1, 4.6, 7.1–7.7, 8.1–8.4 |
+| Requirement | Design components | Phase 1 tasks | Phase 2 tasks |
+| --- | --- | --- | --- |
+| R1 Folders/names | C1, C2, C3, C5 | 2.1, 2.4, 3.1, 7.1 | — |
+| R2 Project integration | C7, C4, C5 | 4.4, 5.1–5.3, 7.2 | 9.4–9.5 (AC6) |
+| R3 Files integration | C8, C5, C6 | 2.5, 4.4, 5.3, 7.1 | 9.3, 9.5 (AC6) |
+| R4 Shared behavior | C1, C4, C5, C7, C8, C12 | 2.1, 3.4, 4.1, 4.3–4.4, 5.2, 7.1–7.2, 8.3 | — |
+| R5 Selection/moves | C2, C4, C5, C6 | 1.2, 2.4–2.6, 4.1–4.3, 7.2–7.3 | 9.1, 9.5 (AC6) |
+| R6 Lifecycle/bulk | C2, C3, C7, C8, C12 | 3.2–3.5, 5.3, 7.1–7.3 | — |
+| R7 Scope/authority | C1, C2, C3, C7, C8 | 2.1, 2.4, 3.3, 3.5, 4.2, 5.1, 5.3, 7.1–7.2, 8.3 | — |
+| R8 Persistence/recovery | C1, C2, C3, C9 | 2.1–2.2, 3.1, 6.2, 6.4, 7.3–7.5 | — |
+| R9 Access/cutover | C1, C2, C9, C12 | 2.1, 2.4, 3.4–3.5, 5.1, 6.1–6.5, 7.3–7.5, 8.1 | — |
+| R10 Search/filter/sort | C3, C4, C7, C8, C11 | 2.3, 2.5, 4.4, 5.4, 7.1–7.2 | 9.2, 9.5 (AC6) |
+| R11 Accessible input | C4, C5, C6, C8 | 2.6, 4.1–4.4, 7.2 | — |
+| R12 Reads/limits/errors | C2, C4, C5, C11, C12 | 1.2, 2.2–2.5, 3.2, 3.4–3.5, 5.4, 6.2, 7.3, 7.6 | — |
+| R13 Evidence/phases | C9, C10 | 1.1–1.2, 2.6, 6.6, 7.1, 7.4–7.6, 8.1–8.3 | 9.5 |
 
 ## Definition of Done
 
-- All R1–R13 acceptance criteria have passing evidence, and the requirement/component/task matrix has no gaps.
-- Both real surfaces use shared folder/move operations and preserve existing content, membership, plugin, theme, and profile behavior.
-- Local-only and qualified SQLite/Convex configurations work; unsupported provider/backend versions fail closed for organization.
-- Data safety, concurrency, old-client admission, backup/restore, keyboard/mobile behavior, and stated performance bounds pass their appropriate checks.
-- Host/provider typechecks, affected tests, required dependency builds, and documentation checks are green; unrelated pre-existing failures are separately evidenced.
-- Playwright traces/screenshots and JSON receipts are repeatable and reference exact source SHAs/profiles/fixture seeds.
-- Final diff and simplification review are complete; only intended files changed, no production data changed, and no package/tag/image was published.
+- **Phase 1:** all criteria except R2.AC6, R3.AC6, R5.AC6, and R10.AC6 have passing evidence. The flagged local slice was reviewed before cloud work; the temporary flag is absent from delivery.
+- **Phase 2:** the four deferred criteria and their documentation/browser evidence pass independently; Phase 1 does not imply they exist.
+- Shared organization and existing content owners preserve file identity, references, membership, AI context, plugin contracts, and profile restrictions.
+- Metadata-only browsing, additive local migration, complete virtual selection, explicit batch/queue admission, bulk partial outcomes, ancestor recovery, and client-version notice meet the defined contracts.
+- Qualified local/static and external SQLite/Convex configurations pass their appropriate checks. Missing external prerequisites are reported as open cloud work, not treated as success.
+- Repeatable traces/screenshots/JSON receipts identify exact source SHAs, fixture seed, profiles, operation counts, hashes, and measured outcomes.
+- Relevant typechecks/tests/builds/docs checks pass, final diffs and simplification are reviewed, unrelated work is intact, and no production change or publication occurred.
