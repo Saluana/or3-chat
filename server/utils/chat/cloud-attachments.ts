@@ -55,7 +55,9 @@ export async function resolveCloudAttachments(event: H3Event, session: SessionCo
         if (seen.has(key)) throw createError({ statusCode: 400, statusMessage: 'Duplicate Cloud attachment reference' });
         seen.add(key);
         const content = messages[ref.messageIndex as number]?.content;
-        const part = Array.isArray(content) ? content[ref.partIndex as number] : undefined;
+        const part = (Array.isArray(content) ? content[ref.partIndex as number] : undefined) as
+            | { type?: string; image_url?: Record<string, unknown>; file?: Record<string, unknown> }
+            | undefined;
         const mime = ref.prefix.slice(5, ref.prefix.indexOf(';'));
         const target = part?.type === 'image_url' && mime.startsWith('image/') ? part.image_url
             : part?.type === 'file' && mime === 'application/pdf' ? part.file : undefined;
