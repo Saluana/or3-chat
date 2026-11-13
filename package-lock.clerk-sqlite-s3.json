@@ -44,7 +44,7 @@
         "nuxt": "4.6.2",
         "or3-provider-clerk": "0.0.12",
         "or3-provider-s3": "0.0.15",
-        "or3-provider-sqlite": "0.0.28",
+        "or3-provider-sqlite": "0.0.29",
         "or3-scroll": "0.1.6",
         "pathe": "2.0.3",
         "pdfjs-dist": "^6.4.299",
@@ -17465,9 +17465,9 @@
       }
     },
     "node_modules/or3-provider-sqlite": {
-      "version": "0.0.28",
-      "resolved": "https://registry.npmjs.org/or3-provider-sqlite/-/or3-provider-sqlite-0.0.28.tgz",
-      "integrity": "sha512-ZBhUgOiK7rqcCE8C5IeCvl0CiYh0lxaaShLT3eV3LBuFp5oRgOn3IpPVsEJjW4GrnV7KC8nI/XMolYGdm2Xs9g==",
+      "version": "0.0.29",
+      "resolved": "https://registry.npmjs.org/or3-provider-sqlite/-/or3-provider-sqlite-0.0.29.tgz",
+      "integrity": "sha512-ChVhlBofDE1RPo6bp10EIV1Kd6byLQDd4R0WptUOA7zo9DZl3THF/Dv0xusB/38C9h0IkX7fmemz/4ZFLUQ17Q==",
       "license": "MIT",
       "dependencies": {
         "kysely": "^0.28.18"

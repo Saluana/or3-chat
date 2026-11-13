@@ -86,7 +86,7 @@ try {
   await mkdir(helperDirectory, { mode: 0o700 });
   for (const name of ['backup-inspect.mjs', 'remote-archive.mjs', 'remote-objects.mjs']) await copyFile(new URL(`../docker/${name}`, import.meta.url), join(helperDirectory, name));
   await symlink(new URL('../../node_modules', import.meta.url), join(helperDirectory, 'node_modules'), 'dir');
-  await writeFile(join(helperDirectory, 'backup-inspection-profile.json'), JSON.stringify({ contract: 2, sqlite: '0.0.28', s3: '0.0.15' }), { mode: 0o600 });
+  await writeFile(join(helperDirectory, 'backup-inspection-profile.json'), JSON.stringify({ contract: 2, sqlite: '0.0.29', s3: '0.0.15' }), { mode: 0o600 });
   const Database = require('better-sqlite3');
   const databasePath = join(temporary, 'sync.sqlite');
   const database = new Database(databasePath);

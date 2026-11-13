@@ -114,7 +114,7 @@ describe('managed Docker profile projection', () => {
         const { result, manifest } = await project('clerk-sqlite-s3');
         expect(result.status, result.stderr).toBe(0);
         expect(manifest.dependencies).toMatchObject({
-            'or3-provider-clerk': '0.0.12', 'or3-provider-sqlite': '0.0.28', 'or3-provider-s3': '0.0.15',
+            'or3-provider-clerk': '0.0.12', 'or3-provider-sqlite': '0.0.29', 'or3-provider-s3': '0.0.15',
         });
         expect(manifest.dependencies['or3-provider-basic-auth']).toBeUndefined();
         expect(manifest.dependencies['or3-provider-fs']).toBeUndefined();
@@ -146,7 +146,7 @@ describe('managed Docker profile projection', () => {
     it('builds the exact launch inspection contract without filesystem dependencies', async () => {
         const directory = await mkdtemp(join(tmpdir(), 'or3-inspection-profile-'));
         try {
-            for (const [name, version] of [['or3-provider-sqlite', '0.0.28'], ['or3-provider-s3', '0.0.15']]) {
+            for (const [name, version] of [['or3-provider-sqlite', '0.0.29'], ['or3-provider-s3', '0.0.15']]) {
                 const packageDir = join(directory, 'node_modules', name);
                 await mkdir(packageDir, { recursive: true });
                 await writeFile(join(packageDir, 'package.json'), JSON.stringify({ version }));
@@ -160,7 +160,7 @@ describe('managed Docker profile projection', () => {
             const profile = JSON.parse(await readFile(join(directory, 'scripts/docker/backup-inspection-profile.json'), 'utf8'));
             expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
             expect(() => assertS3InspectionProfile(profile)).not.toThrow();
-            expect(profile).toEqual({ contract: 2, sqlite: '0.0.28', s3: '0.0.15' });
+            expect(profile).toEqual({ contract: 2, sqlite: '0.0.29', s3: '0.0.15' });
             await writeFile(join(directory, 'node_modules/or3-provider-s3/package.json'), JSON.stringify({ version: '0.0.14' }));
             expect(run('clerk-sqlite-s3').status).not.toBe(0);
             expect(run('unknown').status).not.toBe(0);
