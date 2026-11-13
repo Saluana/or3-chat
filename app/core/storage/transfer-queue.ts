@@ -1063,10 +1063,11 @@ export class FileTransferQueue {
         await this.assertTransferActive(transfer, context.db, signal);
 
         const scopeGeneration = this.scopeGeneration;
+        const browserLocation = Reflect.get(globalThis, 'location') as { href: string; origin: string } | undefined;
         let fsDownload = false;
         try {
-            const url = new URL(presign.url, globalThis.location?.href);
-            fsDownload = Boolean(this.accountId && url.origin === globalThis.location?.origin && url.pathname === '/api/storage/fs/download');
+            const url = new URL(presign.url, browserLocation?.href);
+            fsDownload = Boolean(this.accountId && url.origin === browserLocation?.origin && url.pathname === '/api/storage/fs/download');
         } catch { /* Other providers retain the existing full-download behavior. */ }
         let partial = fsDownload ? this.partialDownloads.get(transfer.id) : undefined;
         if (partial && (partial.storageId !== meta.storage_id || partial.hash !== meta.hash)) {
@@ -1235,10 +1236,11 @@ export class FileTransferQueue {
             throw err('ERR_STORAGE_DOWNLOAD_FAILED', 'Unexpected partial download response', { tags: { domain: 'storage', stage: 'download' } });
         }
         const total = partial?.total ?? length;
+        const browserLocation = Reflect.get(globalThis, 'location') as { origin: string } | undefined;
         const resumable = Boolean(response.body && etag && /^"[^"\s]+"$/.test(etag) &&
             Number.isSafeInteger(total) && total > 0 && total <= maxBytes && total <= MAX_PARTIAL_DOWNLOAD_BYTES &&
             (partial || response.headers.get('accept-ranges')?.toLowerCase() === 'bytes') &&
-            (!response.url || new URL(response.url).origin === globalThis.location?.origin));
+            (!response.url || new URL(response.url).origin === browserLocation?.origin));
         if (!resumable) {
             if (partial) {
                 this.partialDownloads.delete(transfer.id);

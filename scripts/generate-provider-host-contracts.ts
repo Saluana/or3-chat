@@ -13,6 +13,7 @@ const providers = [
 
 const typeOverrides: Readonly<Record<string, Readonly<Record<string, string>>>> = {
     'or3-provider-convex': {
+        SyncRequestOptions: 'export type SyncRequestOptions = { signal?: AbortSignal };',
         PendingOp:
             'export type PendingOp = { stamp: { opId: string; [key: string]: any }; tableName: string; operation: string; payload?: any; [key: string]: any };',
         PushBatch:
