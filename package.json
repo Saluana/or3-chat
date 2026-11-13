@@ -2,7 +2,7 @@
     "name": "or3-chat",
     "type": "module",
     "private": false,
-    "version": "0.1.115",
+    "version": "0.1.116",
     "license": "GPL-3.0",
     "engines": {
         "node": "^24.22.1"
@@ -101,7 +101,7 @@
         "or3-cloud:init": "tsx scripts/cli/or3-cloud.ts init",
         "or3-cloud:validate": "tsx scripts/cli/or3-cloud.ts validate",
         "or3-cloud:doctor": "tsx scripts/cli/or3-cloud.ts doctor",
-        "or3-cloud:build": "bun build ./scripts/cli/or3-cloud.ts --target=node --format=esm --outfile ./dist/or3-cloud.mjs",
+        "or3-cloud:build": "bun build ./scripts/cli/or3-cloud.ts --target=node --format=esm --outfile ./dist/or3-cloud.mjs --packages=external",
         "cloud:package:build": "bun run --cwd packages/or3-cloud build",
         "cloud:package:check": "bun run --cwd packages/or3-cloud check",
         "release:cloud:check": "bun run scripts/release/check-cloud-package.mjs",

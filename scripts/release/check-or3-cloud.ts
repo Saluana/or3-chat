@@ -84,6 +84,11 @@ for (const provider of providers) {
     const cwd = resolve(workspace, provider);
     gates.push(
         {
+            label: `${provider} package build`,
+            cwd,
+            command: ['bun', 'run', 'build'],
+        },
+        {
             label: `${provider} type-check`,
             cwd,
             command: ['bun', 'run', 'type-check'],
@@ -97,11 +102,6 @@ for (const provider of providers) {
             label: `${provider} tests`,
             cwd,
             command: ['bun', 'run', 'test'],
-        },
-        {
-            label: `${provider} package build`,
-            cwd,
-            command: ['bun', 'run', 'build'],
         }
     );
 }
