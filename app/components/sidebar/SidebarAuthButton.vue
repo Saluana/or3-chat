@@ -5,7 +5,7 @@
         :content="{ side: 'right', align: 'end', sideOffset: 8 }"
     >
     <UTooltip
-        text="OpenRouter"
+        text="Connections"
         :delay-duration="0"
         :disabled="menuOpen"
         :content="{ side: 'right' }"
@@ -18,30 +18,14 @@
         >
             <template #default>
                 <span class="flex flex-col items-center gap-1 w-full">
-                    <svg
-                        class="w-[18px] h-[18px]"
-                        viewBox="0 0 512 512"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="currentColor"
-                        stroke="currentColor"
-                    >
-                        <g>
-                            <path
-                                d="M3 248.945C18 248.945 76 236 106 219C136 202 136 202 198 158C276.497 102.293 332 120.945 423 120.945"
-                                stroke-width="90"
-                            />
-                            <path
-                                d="M511 121.5L357.25 210.268L357.25 32.7324L511 121.5Z"
-                            />
-                            <path
-                                d="M0 249C15 249 73 261.945 103 278.945C133 295.945 133 295.945 195 339.945C273.497 395.652 329 377 420 377"
-                                stroke-width="90"
-                            />
-                            <path
-                                d="M508 376.445L354.25 287.678L354.25 465.213L508 376.445Z"
-                            />
-                        </g>
-                    </svg>
+                    <span class="relative inline-flex">
+                        <UIcon name="i-lucide-plug" class="w-5 h-5" />
+                        <span
+                            v-if="hydrated && needsConnection"
+                            class="absolute -top-0.5 -right-1 size-2 rounded-full bg-[var(--md-error)] ring-2 ring-[var(--md-surface)]"
+                            aria-hidden="true"
+                        />
+                    </span>
                     <span
                         class="sidebar-rail-caption text-[7px] uppercase tracking-wider whitespace-nowrap"
                     >
@@ -62,32 +46,89 @@
         </UButton>
     </UTooltip>
         <template #content>
-            <div id="openrouter-status-menu" class="or3-action-menu flex flex-col gap-0.5 p-1.5 w-[260px]">
-                <div class="flex items-start gap-3 px-1.5 pt-1.5 pb-2">
-                    <span
-                        class="mt-1.5 size-2 shrink-0 rounded-full"
-                        :class="isConnected || usingInstanceKey ? 'bg-[var(--md-success)]' : 'bg-[var(--md-error)]'"
-                        aria-hidden="true"
-                    />
-                    <div class="min-w-0">
-                        <p class="text-[14px] font-medium text-[var(--md-on-surface)]">{{ statusTitle }}</p>
-                        <p class="text-[12px] leading-snug text-[var(--md-on-surface-variant)]">{{ statusDetail }}</p>
+            <div id="connections-menu" class="connections-panel w-[300px] p-1.5">
+                <p class="px-2 pt-1.5 pb-1 text-[12px] font-medium text-[var(--md-on-surface-variant)]">Connections</p>
+
+                <!-- OpenRouter -->
+                <section class="connection-row" aria-label="OpenRouter">
+                    <span class="connection-logo" aria-hidden="true"><UIcon name="i-simple-icons-openrouter" class="size-4" /></span>
+                    <div class="min-w-0 flex-1">
+                        <p class="connection-name">OpenRouter</p>
+                        <p class="connection-status">
+                            <span class="connection-dot" :class="openRouterActive ? 'bg-[var(--md-success)]' : 'bg-[var(--md-outline)]'" aria-hidden="true" />
+                            {{ openRouterStatus }}
+                        </p>
                     </div>
+                    <button
+                        v-if="!isManaged && !isConnected"
+                        id="openrouter-menu-connect"
+                        type="button"
+                        class="connection-action"
+                        :class="{ 'connection-action--primary': !openRouterActive }"
+                        aria-label="Connect with OpenRouter"
+                        @click="connectOpenRouter"
+                    >Connect</button>
+                    <button
+                        v-else-if="isConnected"
+                        id="openrouter-menu-disconnect"
+                        type="button"
+                        class="connection-action"
+                        aria-label="Disconnect OpenRouter"
+                        @click="askDisconnect"
+                    >Disconnect</button>
+                </section>
+                <div v-if="isConnected" class="flex gap-1 pl-[46px] pr-2 pb-1.5">
+                    <a class="connection-link" href="https://openrouter.ai/activity" target="_blank" rel="noopener">Usage <UIcon name="i-lucide-arrow-up-right" class="size-3" /></a>
+                    <a class="connection-link" href="https://openrouter.ai/settings/credits" target="_blank" rel="noopener">Credits <UIcon name="i-lucide-arrow-up-right" class="size-3" /></a>
                 </div>
-                <div class="h-px mx-1.5 mb-0.5 bg-[var(--md-border-color)]" aria-hidden="true" />
-                <button
-                    v-for="item in menuItems"
-                    :id="`openrouter-menu-${item.id}`"
-                    :key="item.id"
-                    type="button"
-                    class="flex items-center gap-2.5 w-full min-h-[36px] px-2 rounded-[var(--md-border-radius-small,var(--md-border-radius))] text-[14px] text-left transition-colors duration-[var(--app-motion-duration-fast,150ms)] hover:bg-[var(--md-surface-hover)] active:bg-[var(--md-surface-active)] cursor-pointer focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))]"
-                    :class="item.danger ? 'text-[var(--md-error)]' : 'text-[var(--md-on-surface)]'"
-                    @click="runMenuItem(item)"
-                >
-                    <UIcon :name="item.icon" class="size-4 shrink-0 opacity-80" />
-                    <span class="flex-1">{{ item.label }}</span>
-                    <UIcon v-if="item.external" name="i-lucide-arrow-up-right" class="size-3.5 shrink-0 opacity-50" />
-                </button>
+
+                <!-- OpenAI -->
+                <section class="connection-row" aria-label="OpenAI">
+                    <span class="connection-logo" aria-hidden="true"><UIcon name="i-simple-icons-openai" class="size-4" /></span>
+                    <div class="min-w-0 flex-1">
+                        <p class="connection-name">OpenAI</p>
+                        <p class="connection-status">
+                            <span class="connection-dot" :class="openAi.connected || openAi.instance ? 'bg-[var(--md-success)]' : 'bg-[var(--md-outline)]'" aria-hidden="true" />
+                            {{ openAiStatus }}
+                        </p>
+                    </div>
+                    <button
+                        v-if="openAi.available && !openAi.connected && !openAiFormOpen"
+                        id="openai-menu-connect"
+                        type="button"
+                        class="connection-action"
+                        aria-label="Connect with an OpenAI API key"
+                        @click="openAiFormOpen = true"
+                    >Add key</button>
+                    <button
+                        v-else-if="openAi.connected"
+                        id="openai-menu-remove"
+                        type="button"
+                        class="connection-action"
+                        aria-label="Remove OpenAI API key"
+                        :disabled="openAiBusy"
+                        @click="removeOpenAi"
+                    >Remove</button>
+                </section>
+                <form v-if="openAiFormOpen && !openAi.connected" class="flex gap-1.5 pl-[46px] pr-2 pb-2" @submit.prevent="saveOpenAi">
+                    <UInput
+                        v-model="openAiKeyInput"
+                        type="password"
+                        size="sm"
+                        autocomplete="off"
+                        autofocus
+                        placeholder="sk-…"
+                        aria-label="OpenAI API key"
+                        class="flex-1 min-w-0"
+                        :disabled="openAiBusy"
+                    />
+                    <UButton type="submit" size="sm" label="Save" :loading="openAiBusy" :disabled="!openAiKeyInput.trim()" />
+                </form>
+                <p v-if="openAiError" class="pl-[46px] pr-2 pb-2 text-[12px] leading-snug text-[var(--md-error)]" role="alert">{{ openAiError }}</p>
+
+                <p class="mx-2 mt-1 pt-2 pb-1 border-t border-[var(--md-border-color)] text-[11px] leading-snug text-[var(--md-on-surface-variant)]">
+                    Your own keys are billed to your accounts and add their models to the picker.
+                </p>
             </div>
         </template>
     </UPopover>
@@ -112,7 +153,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRuntimeConfig } from '#imports';
 import { state } from '~/state/global';
 import { useUserApiKey } from '~/core/auth/useUserApiKey';
@@ -121,6 +162,9 @@ import SidebarAuthButtonFallback from './SidebarAuthButtonFallback.client.vue';
 import { resolveAuthUiAdapter } from '~/core/auth-ui/registry';
 import { useOpenRouterAuth } from '~/core/auth/useOpenrouter';
 import ConfirmDialog from '~/components/admin/ConfirmDialog.vue';
+import { useOpenAiKey } from '~/core/auth/useOpenAiKey';
+import { useModelStore } from '~/composables/chat/useModelStore';
+import { presentError } from '~~/shared/errors';
 
 // Check if SSR auth is enabled via runtime config
 const runtimeConfig = useRuntimeConfig();
@@ -199,38 +243,65 @@ const buttonProps = computed(() => {
 // The rail icon only opens this menu: leaving the app for OpenRouter's sign-up
 // page, or removing a key, must be an explicit, labelled choice.
 const menuOpen = ref(false);
-const statusTitle = computed(() => {
-    if (isConnected.value) return 'Using your OpenRouter key';
-    if (usingInstanceKey.value) return 'Using this workspace’s key';
-    return 'OpenRouter not connected';
+const openRouterActive = computed(() => isConnected.value || usingInstanceKey.value);
+const needsConnection = computed(() => !openRouterActive.value && !openAi.connected && !openAi.instance);
+const openRouterStatus = computed(() => {
+    if (isConnected.value) return 'Your key';
+    if (isManaged.value) return 'Managed by your administrator';
+    if (usingInstanceKey.value) return 'Workspace key';
+    return 'Not connected';
 });
-const statusDetail = computed(() => {
-    if (isConnected.value) return 'Requests are billed to your OpenRouter account.';
-    if (isManaged.value) return 'Your administrator manages the OpenRouter connection.';
-    if (usingInstanceKey.value) return 'Connect your own key to use your OpenRouter credits and models.';
-    return 'Connect an OpenRouter account to start chatting.';
-});
-
-interface OpenRouterMenuItem { id: string; label: string; icon: string; external?: boolean; danger?: boolean; run: () => void }
-const menuItems = computed<OpenRouterMenuItem[]>(() => {
-    const items: OpenRouterMenuItem[] = [];
-    if (!isManaged.value && !isConnected.value) {
-        items.push({ id: 'connect', label: 'Connect your own key', icon: 'i-lucide-key-round', run: () => openrouter.startLogin() });
-    }
-    if (isConnected.value) {
-        items.push(
-            { id: 'activity', label: 'Usage activity', icon: 'i-lucide-activity', external: true, run: () => window.open('https://openrouter.ai/activity', '_blank', 'noopener') },
-            { id: 'credits', label: 'Credits', icon: 'i-lucide-wallet', external: true, run: () => window.open('https://openrouter.ai/settings/credits', '_blank', 'noopener') },
-            // Removing the key is destructive; it still asks for confirmation.
-            { id: 'disconnect', label: 'Disconnect…', icon: 'i-lucide-unplug', danger: true, run: () => { confirmDisconnectOpen.value = true; } },
-        );
-    }
-    return items;
-});
-function runMenuItem(item: OpenRouterMenuItem) {
+function connectOpenRouter() {
     menuOpen.value = false;
-    item.run();
+    openrouter.startLogin();
 }
+function askDisconnect() {
+    menuOpen.value = false;
+    confirmDisconnectOpen.value = true;
+}
+
+// OpenAI: a personal API key, saved from here without a trip through Settings.
+const { connection: openAi, refresh: refreshOpenAi, save: saveOpenAiKey, remove: removeOpenAiKey } = useOpenAiKey();
+const { refreshModels } = useModelStore();
+const openAiFormOpen = ref(false);
+const openAiKeyInput = ref('');
+const openAiBusy = ref(false);
+const openAiError = ref('');
+const openAiStatus = computed(() => {
+    if (openAi.connected) return 'Your API key';
+    if (openAi.instance) return 'Workspace key';
+    if (!openAi.available) return 'Personal keys are unavailable here';
+    return 'Not connected';
+});
+async function changeOpenAi(action: () => Promise<void>) {
+    openAiBusy.value = true;
+    openAiError.value = '';
+    try {
+        await action();
+        // The picker gains or loses the OpenAI models.
+        await refreshModels().catch(() => undefined);
+    } catch (caught) {
+        openAiError.value = presentError(caught, { fallbackMessage: 'The OpenAI key could not be changed.' }).message;
+    } finally {
+        openAiBusy.value = false;
+    }
+}
+const saveOpenAi = () => changeOpenAi(async () => {
+    await saveOpenAiKey(openAiKeyInput.value);
+    openAiKeyInput.value = '';
+    openAiFormOpen.value = false;
+});
+const removeOpenAi = () => changeOpenAi(removeOpenAiKey);
+watch(menuOpen, (open) => {
+    if (!open) {
+        // A half-typed key must not linger in a closed menu.
+        openAiKeyInput.value = '';
+        openAiFormOpen.value = false;
+        openAiError.value = '';
+        return;
+    }
+    refreshOpenAi().catch(() => undefined);
+});
 
 const confirmDisconnectOpen = ref(false);
 function disconnectOpenRouter() {
@@ -238,3 +309,77 @@ function disconnectOpenRouter() {
     openrouter.logoutOpenRouter();
 }
 </script>
+
+<style scoped>
+.connection-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+}
+.connection-logo {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
+    background: var(--md-surface-variant);
+    color: var(--md-on-surface);
+}
+.connection-name {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--md-on-surface);
+}
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--md-on-surface-variant);
+}
+.connection-dot {
+    flex-shrink: 0;
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+}
+.connection-action {
+    flex-shrink: 0;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
+    border: var(--md-border-width, 1px) solid var(--md-border-color);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--md-on-surface);
+    cursor: pointer;
+    transition: background-color var(--app-motion-duration-fast, 150ms) ease;
+}
+.connection-action:hover { background: var(--md-surface-hover); }
+.connection-action:disabled { opacity: 0.5; cursor: default; }
+.connection-action--primary {
+    border-color: transparent;
+    background: var(--md-inverse-surface);
+    color: var(--md-inverse-on-surface);
+}
+.connection-action--primary:hover { background: var(--md-inverse-surface); opacity: 0.88; }
+.connection-action:focus-visible,
+.connection-link:focus-visible {
+    outline: var(--app-focus-ring-width, 2px) solid var(--md-focus-ring, var(--md-primary));
+    outline-offset: 2px;
+}
+.connection-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 6px;
+    border-radius: var(--md-border-radius-small, var(--md-border-radius));
+    font-size: 12px;
+    color: var(--md-on-surface-variant);
+}
+.connection-link:hover { background: var(--md-surface-hover); color: var(--md-on-surface); }
+</style>

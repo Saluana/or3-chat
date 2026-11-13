@@ -1006,7 +1006,8 @@ html[data-theme='blank'].dark {
     /* Match the tab menu's charcoal surface. Target the popover frame too:
        its inherited dark:bg-black otherwise shows behind the action list. */
     .or3-action-menu,
-    [data-slot='content']:has(> .or3-action-menu) {
+    .connections-panel,
+    [data-slot='content']:has(> :is(.or3-action-menu, .connections-panel)) {
         background-color: var(--md-surface) !important;
     }
 
