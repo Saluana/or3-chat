@@ -195,6 +195,7 @@ export async function setupSyncEngine(): Promise<void> {
     const publicConfig = runtimeConfig.public as {
         admin?: { basePath?: string };
         sync?: { enabled?: boolean; provider?: string };
+        gzipRequests?: boolean;
     };
     // Admin pages are currently mounted at `/admin/*` (canonical).
     // `admin.basePath` is treated as an alias that redirects to `/admin/*`.
@@ -228,7 +229,7 @@ export async function setupSyncEngine(): Promise<void> {
     if (ssrAuthEnabled) {
         try {
             if (!getActiveSyncProvider()) {
-                const gatewayProvider = createGatewaySyncProvider({ id: providerId });
+                const gatewayProvider = createGatewaySyncProvider({ id: providerId, gzipRequests: publicConfig.gzipRequests === true });
                 registerSyncProvider(gatewayProvider);
             }
             setActiveSyncProvider(providerId);

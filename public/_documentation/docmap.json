@@ -629,7 +629,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "Understand server-side jobs, admission, recovery, and work that continues after detachment."
+                    "summary": "Understand server-side jobs, admission, compact streaming, recovery, and work that continues after detachment."
                 },
                 {
                     "name": "notifications.md",
@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Understand workspace synchronization, failed-write recovery, local recovery backups, and conflict handling."
+                    "summary": "Understand workspace synchronization, request compression, failed-write recovery, local recovery backups, and conflict handling."
                 },
                 {
                     "name": "storage-layer.md",
@@ -782,7 +782,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 20,
-                    "summary": "Hash-addressed Cloud files with atomic upload staging, offline and crash recovery, fenced cross-tab transfers, cancellation deadlines, and bounded browser caching."
+                    "summary": "Hash-addressed Cloud files with durable uploads, authenticated resumable downloads, reusable chat attachments, and bounded browser caching."
                 },
                 {
                     "name": "plugin-access-gating.md",

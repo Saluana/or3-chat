@@ -1,5 +1,7 @@
 /** OpenRouter foreground streaming, with compatibility exports for host jobs. */
 import { useRuntimeConfig } from '#imports';
+import { prepareJsonBody } from '~/utils/compress-json';
+import { prepareCloudAttachmentReferences } from './cloud-attachments';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { captureUsagePrefix, attachRequestUsage } from '~~/shared/chat/request-usage';
 import { captureContextEnvelope, ChatContextAdmissionError } from '~~/shared/chat/context-budget';
@@ -33,6 +35,8 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
     const runtimeConfig = useRuntimeConfig() as {
         public: {
             ssrAuthEnabled?: boolean;
+            gzipRequests?: boolean;
+            storage?: { enabled?: boolean; provider?: string };
             backgroundStreaming?: { enabled?: boolean };
             openRouter?: { baseUrl?: string };
         };
@@ -205,6 +209,8 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
             let serverResp: Response | undefined;
             let networkError: Error | undefined;
 
+            const serverBody = isSsrAuthEnabled
+                ? await prepareCloudAttachmentReferences(requestSnapshot, signal, runtimeConfig.public.storage) : requestSnapshot;
             await admitDispatch(true);
             try {
                 const headers: Record<string, string> = {
@@ -215,10 +221,12 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
                     headers['x-or3-openrouter-key'] = apiKey as string;
                 }
                 Object.assign(headers, await openAiKeyHeaders(preparedBody.model));
+                const payload = await prepareJsonBody(serverBody, runtimeConfig.public.gzipRequests === true, signal);
+                if (payload.compressed) headers['Content-Encoding'] = 'gzip';
                 serverResp = await transportRequest('/api/openrouter/stream', {
                     method: 'POST',
                     headers,
-                    body: JSON.stringify(requestSnapshot),
+                    body: payload.body,
                 });
             } catch (e) {
                 if (

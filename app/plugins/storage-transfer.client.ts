@@ -50,7 +50,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             // Bind first: re-enabling uploads requeues deferred admissions in
             // the queue's current workspace, which access and session often
             // change together.
-            queue?.setWorkspaceId(workspaceId);
+            queue?.setWorkspaceId(workspaceId, session?.authenticated ? session.user?.id ?? null : null);
             queue?.setUploadsEnabled(enabled);
             if (workspaceId && queue && enabled) {
                 void (async () => {

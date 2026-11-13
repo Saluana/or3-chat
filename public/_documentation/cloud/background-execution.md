@@ -79,6 +79,12 @@ checkpoint and terminal writes, including for server-side tools.
 Polling and SSE project the same current attempt and visible content, reasoning,
 tools, workflow, usage, and terminal state. An attempt change resets the client
 projection; stale live state from an older attempt is ignored.
+SSE clients request `stateDeltas=1` to avoid repeating unchanged tool and
+workflow state. A response with `stateDeltas: 1` on the event can omit unchanged
+fields in a delta and uses `null` to clear a previously sent field. Snapshots,
+status updates, attempt changes, and terminal updates contain full state. Older
+clients receive full frames; clients treat unmarked frames from older servers
+as full state.
 
 Server tools run in the background tool loop. For browser-only tools, the client
 checks `/api/jobs/client-tool/capability` before admission. If the selected job

@@ -1,6 +1,8 @@
 /** Host job admission, status and browser-tool transport. */
 import { shallowRef } from 'vue';
 import { useRuntimeConfig } from '#imports';
+import { prepareJsonBody } from '~/utils/compress-json';
+import { prepareCloudAttachmentReferences } from './cloud-attachments';
 import { hasCloudAccess } from '~/core/cloud/access';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { readRequestUsage, type RequestUsage } from '~~/shared/chat/compaction';
@@ -156,6 +158,7 @@ export interface BackgroundStreamResult {
 export type BackgroundJobStreamEvent = {
     event: 'snapshot' | 'delta' | 'status';
     status: BackgroundJobStatus;
+    stateDeltas?: 1;
 };
 
 function normalizeBackgroundJobUsage(status: BackgroundJobStatus): BackgroundJobStatus {
@@ -329,9 +332,14 @@ export async function startBackgroundStream(params: {
     }
     Object.assign(headers, await openAiKeyHeaders(body.model));
 
-    const serializedBody = JSON.stringify(body);
+    const runtimeConfig = useRuntimeConfig();
+    const serverBody = runtimeConfig.public.ssrAuthEnabled === true
+        ? await prepareCloudAttachmentReferences(body, params.signal, runtimeConfig.public.storage) : body;
+    const payload = await prepareJsonBody(serverBody, runtimeConfig.public.gzipRequests === true, params.signal);
+    if (payload.compressed) headers['Content-Encoding'] = 'gzip';
     let result: BackgroundStreamResult | null = null;
     let lastError: unknown;
+    let hadAmbiguousAttempt = false;
     for (let attempt = 0; attempt < 3; attempt += 1) {
         await waitForOnline(params.signal);
         await assertDispatchOwner(params);
@@ -340,7 +348,7 @@ export async function startBackgroundStream(params: {
                 method: 'POST',
                 headers,
                 credentials: 'include',
-                body: serializedBody,
+                body: payload.body,
             }, {
                 signal: params.signal,
                 timeoutMs:
@@ -382,6 +390,7 @@ export async function startBackgroundStream(params: {
                 Object.assign(error, metadata);
                 if (!retryable || attempt === 2) throw error;
                 lastError = error;
+                hadAmbiguousAttempt = true;
             } else {
                 // Strict admission contract: `_background: true` must return a
                 // JSON `{ jobId, status: 'streaming' }` body. An unexpected SSE
@@ -439,9 +448,12 @@ export async function startBackgroundStream(params: {
             if (params.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
             const admissionError = error as BackgroundAdmissionError | null | undefined;
             if (admissionError?.backgroundAdmissionRetryable === false && !admissionError.backgroundAdmissionUncertain) {
-                throw error;
+                if (!hadAmbiguousAttempt) throw error;
+                lastError = error;
+                break;
             }
             lastError = error;
+            hadAmbiguousAttempt = true;
             if (attempt === 2 || admissionError?.backgroundAdmissionUncertain) break;
         }
         await abortableDelay(150 * 2 ** attempt, params.signal);
@@ -816,6 +828,7 @@ export function subscribeBackgroundJobStream(params: {
             ? Math.max(0, Math.floor(params.offset))
             : null;
     const query = new URLSearchParams();
+    query.set('stateDeltas', '1');
     if (offset !== null) query.set('offset', String(offset));
     if (
         typeof params.attempt === 'number' &&
@@ -829,11 +842,21 @@ export function subscribeBackgroundJobStream(params: {
 
     const es = new EventSource(url);
     let receivedTerminal = false;
+    let lastTools: BackgroundJobStatus['tool_calls'];
+    let lastWorkflow: BackgroundJobStatus['workflow_state'];
+    let lastAttempt: number | undefined;
 
     es.onmessage = (event) => {
         try {
             const parsed = JSON.parse(event.data) as BackgroundJobStreamEvent;
-            const status = normalizeBackgroundJobUsage(parsed.status);
+            const raw = parsed.status as BackgroundJobStatus & { tool_calls?: BackgroundJobStatus['tool_calls'] | null; workflow_state?: BackgroundJobStatus['workflow_state'] | null };
+            const compact = parsed.stateDeltas === 1 && parsed.event === 'delta' && raw.attempt === lastAttempt && !raw.content_reset;
+            const toolCalls = compact && !('tool_calls' in raw) ? lastTools : raw.tool_calls ?? undefined;
+            const workflowState = compact && !('workflow_state' in raw) ? lastWorkflow : raw.workflow_state ?? undefined;
+            const status = normalizeBackgroundJobUsage({ ...raw, tool_calls: toolCalls, workflow_state: workflowState });
+            lastTools = toolCalls;
+            lastWorkflow = workflowState;
+            lastAttempt = status.attempt;
             if (status.status !== 'streaming') {
                 receivedTerminal = true;
                 es.close();

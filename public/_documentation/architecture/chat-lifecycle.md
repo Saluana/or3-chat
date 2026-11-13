@@ -471,3 +471,10 @@ replacement before the persistence debounce fires. Durable execution fingerprint
 use versioned SHA-256 over canonical arguments. Legacy diagnostic fingerprints
 cannot establish replay equality and produce a conflict; start a new explicit
 call rather than automatically replaying an uncertain legacy execution.
+
+## Request transport
+
+Cloud servers advertise gzip request support to their clients. Large chat
+requests are compressed only when that reduces their size; older servers and
+browsers without compression support continue to receive ordinary JSON. The
+server enforces its request limit on both compressed and expanded bytes.

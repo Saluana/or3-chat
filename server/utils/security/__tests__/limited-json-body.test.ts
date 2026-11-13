@@ -23,7 +23,7 @@ describe('bounded anonymous JSON body reader', () => {
     });
 
     it('rejects a declared oversized body before reading it', async () => {
-        getHeaderMock.mockReturnValue('8193');
+        getHeaderMock.mockImplementation((_event, name) => name === 'content-length' ? '8193' : undefined);
         await expect(
             readLimitedJsonBody({} as never, 8192)
         ).rejects.toMatchObject({ statusCode: 413 });

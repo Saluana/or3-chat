@@ -49,6 +49,8 @@
         "test:e2e:scroll": "OR3_SCROLL_TEST_HARNESS=true PW_PORT=3107 bunx playwright test tests/e2e/or3-scroll-canary.spec.ts",
         "test:e2e:command-palette": "bunx playwright test tests/e2e/command-palette.spec.ts",
         "test:e2e:storage": "PW_PORT=3109 bunx playwright test tests/e2e/storage-layer.spec.ts --workers=1 --reporter=line",
+        "test:e2e:network-assets": "PW_SKIP_WEB_SERVER=true bunx playwright test tests/e2e/network-assets.offline.spec.ts --workers=1 --reporter=line",
+        "test:e2e:network-cloud": "PW_SKIP_WEB_SERVER=true bunx playwright test tests/e2e/network-cloud.spec.ts --workers=1 --reporter=line",
         "test:e2e:sync:cloud": "bun scripts/test/run-file-backup-cloud-e2e.ts --sync-recovery",
         "test:e2e:file-backup:s3": "bun scripts/test/run-file-backup-cloud-e2e.ts --s3",
         "test:e2e:s3-generations:protocol": "tsx scripts/test/qualify-s3-generations.ts",

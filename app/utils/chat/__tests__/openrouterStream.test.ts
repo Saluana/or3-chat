@@ -19,10 +19,13 @@ import { OpenRouterTimeoutError } from '~~/shared/openrouter/deadlines';
 import { captureUsagePrefix } from '~~/shared/chat/request-usage';
 import { estimateChatRequest } from '~~/shared/chat/context-budget';
 import { countTokensApprox } from '../tokens';
+import { Blob as NodeBlob } from 'node:buffer';
+import { gunzipSync } from 'node:zlib';
 
 const runtimeConfigMock = {
     public: {
         ssrAuthEnabled: false,
+        gzipRequests: false,
         backgroundStreaming: { enabled: true },
     },
 };
@@ -66,11 +69,55 @@ describe('openrouterStream', () => {
         localStorage.clear();
         vi.restoreAllMocks();
         runtimeConfigMock.public.ssrAuthEnabled = false;
+        runtimeConfigMock.public.gzipRequests = false;
         runtimeConfigMock.public.backgroundStreaming.enabled = true;
     });
 
     afterEach(() => {
         vi.useRealTimers();
+        vi.unstubAllGlobals();
+    });
+
+    it.each([false, true])('uses gzip for large server requests only when advertised: %s', async enabled => {
+        vi.stubGlobal('Blob', NodeBlob);
+        runtimeConfigMock.public.ssrAuthEnabled = true;
+        runtimeConfigMock.public.gzipRequests = enabled;
+        const fetchMock = vi.fn().mockResolvedValue(createStreamResponse());
+        vi.stubGlobal('fetch', fetchMock);
+        const content = 'long conversation '.repeat(3000);
+        for await (const _event of openRouterStream({ apiKey: null, model: 'model-1', orMessages: [{ role: 'user', content }] })) { /* drain */ }
+        const [url, init] = fetchMock.mock.calls[0]!;
+        expect(url).toBe('/api/openrouter/stream');
+        const body = enabled ? gunzipSync(Buffer.from(await init.body.arrayBuffer())).toString() : init.body;
+        expect(JSON.parse(body).messages[0].content).toBe(content);
+        expect(init.headers['Content-Encoding']).toBe(enabled ? 'gzip' : undefined);
+    });
+
+    it('retains omitted SSE state and clears it on explicit clear or a fresh snapshot', () => {
+        let source!: { onmessage?: (event: { data: string }) => void; close: () => void };
+        let url = '';
+        vi.stubGlobal('EventSource', class {
+            onmessage?: (event: { data: string }) => void;
+            close = vi.fn();
+            constructor(value: string) { url = value; source = this; }
+        });
+        const received: BackgroundJobStatus[] = [];
+        const stop = subscribeBackgroundJobStream({ jobId: 'job-1', onStatus: value => received.push(value) });
+        expect(url).toContain('stateDeltas=1');
+        const base = { id: 'job-1', status: 'streaming', threadId: 't', messageId: 'm', model: 'test', chunksReceived: 1, startedAt: 1, attempt: 0 };
+        const tools = [{ id: 'tool', name: 'tool', status: 'complete', result: 'saved' }];
+        const send = (event: string, status: object) => source.onmessage?.({ data: JSON.stringify({ event, stateDeltas: 1, status: { ...base, ...status } }) });
+        send('snapshot', { tool_calls: tools });
+        send('delta', { content_delta: 'a' });
+        send('delta', { tool_calls: null });
+        send('snapshot', { attempt: 1 });
+        expect(received.map(value => value.tool_calls)).toEqual([tools, tools, undefined, undefined]);
+        // An older server ignores the query and sends full frames without the
+        // marker: absent fields then mean cleared, not retained.
+        source.onmessage?.({ data: JSON.stringify({ event: 'delta', status: { ...base, tool_calls: tools } }) });
+        source.onmessage?.({ data: JSON.stringify({ event: 'delta', status: base }) });
+        expect(received.slice(-2).map(value => value.tool_calls)).toEqual([tools, undefined]);
+        stop();
     });
 
     it('sends saved online selections as a server search tool alongside client tools', async () => {
@@ -735,6 +782,21 @@ describe('background streaming helpers', () => {
         expect(request.messages).toEqual([instruction, { role: 'user', content: 'Task' }]);
     });
 
+    it('compresses background admission without changing its idempotency identity or messages', async () => {
+        vi.stubGlobal('Blob', NodeBlob);
+        runtimeConfigMock.public.gzipRequests = true;
+        const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({ jobId: 'job-1', status: 'streaming', historyVersion: 1 }));
+        vi.stubGlobal('fetch', fetchMock);
+        const content = 'long background message '.repeat(2500);
+        await startBackgroundStream({ model: 'model-1', orMessages: [{ role: 'user', content }], modalities: ['text'],
+            threadId: 't1', messageId: 'm1', admissionId: 'admission-test', history: testHistory() });
+        const init = fetchMock.mock.calls[0]![1]!;
+        expect(init.headers['Content-Encoding']).toBe('gzip');
+        const body = JSON.parse(gunzipSync(Buffer.from(await init.body.arrayBuffer())).toString());
+        expect(body._backgroundAdmissionId).toBe('admission-test');
+        expect(body.messages[0].content).toBe(content);
+    });
+
     it('does not retry or disable ordinary background streaming after durable delegation is refused', async () => {
         const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({ code: 'background_delegation_unsupported',
             error: 'Durable delegation is unavailable.' }, 503));
@@ -846,6 +908,22 @@ describe('background streaming helpers', () => {
         expect(bodies[1]._backgroundAdmissionId).toBe(
             bodies[0]._backgroundAdmissionId
         );
+    });
+
+    it('recovers a committed admission when a retry rejects a now-missing attachment', async () => {
+        vi.useFakeTimers();
+        const fetchMock = vi.fn()
+            .mockRejectedValueOnce(new TypeError('response lost after commit'))
+            .mockResolvedValueOnce(createJsonResponse({ error: 'Cloud attachment unavailable' }, 404))
+            .mockResolvedValueOnce(createJsonResponse({ jobId: 'committed-job', status: 'streaming', historyVersion: 1,
+                threadId: 't1', messageId: 'm1' }));
+        vi.stubGlobal('fetch', fetchMock);
+        const start = startBackgroundStream({ model: 'model-1', threadId: 't1', messageId: 'm1',
+            admissionId: 'admission-1', history: testHistory(), orMessages: [], modalities: ['text'] });
+        const assertion = expect(start).resolves.toMatchObject({ jobId: 'committed-job' });
+        await vi.advanceTimersByTimeAsync(150);
+        await assertion;
+        expect(String(fetchMock.mock.calls[2]![0])).toContain('/api/jobs/admission/admission-1');
     });
 
     it('does not recover an admission into another thread or message', async () => {

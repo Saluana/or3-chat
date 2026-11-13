@@ -67,6 +67,7 @@ import { resolveServerContextPolicy, admitServerProviderBody, contextAdmissionRe
 import { ChatContextAdmissionError, captureContextEnvelope } from '~~/shared/chat/context-budget';
 import { normalizeProviderResponseError } from '~~/shared/openrouter/errors';
 import { sendWithAffordableReply } from '~~/shared/openrouter/credit-retry';
+import { resolveCloudAttachments } from '../../utils/chat/cloud-attachments';
 import {
     OpenRouterTimeoutError,
     readResponseTextWithIdleDeadline,
@@ -93,7 +94,8 @@ export default defineEventHandler(async (event) => {
     try {
         const parsed: unknown = await readLimitedJsonBody(
             event,
-            MODEL_REQUEST_BODY_LIMIT_BYTES
+            MODEL_REQUEST_BODY_LIMIT_BYTES,
+            { allowGzip: true }
         );
         if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
             throw new TypeError('The request body must be a JSON object.');
@@ -101,7 +103,7 @@ export default defineEventHandler(async (event) => {
         body = parsed as Record<string, unknown>;
     } catch (error) {
         // An oversized body is a 413, not a malformed one.
-        if (isPayloadTooLargeError(error)) throw error;
+        if (isPayloadTooLargeError(error) || (error as { statusCode?: number })?.statusCode === 415) throw error;
         setResponseStatus(event, 400);
         return 'Invalid request body';
     }
@@ -240,6 +242,8 @@ export default defineEventHandler(async (event) => {
             return `Daily message limit reached (${dailyConfig.maxRequests}). Try again tomorrow.`;
         }
     }
+
+    await resolveCloudAttachments(event, modelSession, body);
 
     // =============================
     // BACKGROUND MODE HANDLING
