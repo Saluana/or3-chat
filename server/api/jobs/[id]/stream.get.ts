@@ -309,8 +309,9 @@ export default defineEventHandler(async (event) => {
                 suppressedTerminal = null;
                 suppressedTerminalBytes = 0;
 
-                const toolState = JSON.stringify(payload.status.tool_calls);
-                const workflowState = JSON.stringify(payload.status.workflow_state);
+                // JSON.stringify can return undefined for absent state at runtime.
+                const toolState = JSON.stringify(payload.status.tool_calls) as string | undefined;
+                const workflowState = JSON.stringify(payload.status.workflow_state) as string | undefined;
                 const compact = stateDeltas && payload.event === 'delta' &&
                     payload.status.attempt === sentAttempt && !payload.status.content_reset;
                 const status: Record<string, unknown> = { ...payload.status };

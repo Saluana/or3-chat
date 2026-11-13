@@ -103,7 +103,7 @@ export default defineEventHandler(async (event) => {
         body = parsed as Record<string, unknown>;
     } catch (error) {
         // An oversized body is a 413, not a malformed one.
-        if (isPayloadTooLargeError(error) || (error as { statusCode?: number })?.statusCode === 415) throw error;
+        if (isPayloadTooLargeError(error) || (error !== null && typeof error === 'object' && 'statusCode' in error && error.statusCode === 415)) throw error;
         setResponseStatus(event, 400);
         return 'Invalid request body';
     }
