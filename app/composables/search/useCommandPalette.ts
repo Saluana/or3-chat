@@ -63,6 +63,8 @@ export interface CommandPaletteController {
     focusToken: Readonly<Ref<number>>;
     open(): void;
     close(): void;
+    /** Clear the closed palette's query once its leave transition ends. */
+    resetAfterClose(): void;
     toggle(): void;
     setActive(key: string): void;
     activateByPointer(key: string, previewOnly?: boolean): Promise<void>;
@@ -380,6 +382,8 @@ function open(): void {
         const active = document.activeElement;
         previousFocus = active instanceof HTMLElement ? active : null;
     }
+    // Normally cleared after the leave transition; covers a missed one.
+    if (clearQueryOnOpen) clearClosedQuery();
     isOpen.value = true;
     errorMessage.value = null;
     focusToken.value += 1;
@@ -393,11 +397,19 @@ function open(): void {
     })();
 }
 
+// The query and results stay while the dialog fades out; resetting them on
+// close swapped the list to default results mid-transition.
+let clearQueryOnOpen = false;
+function clearClosedQuery(): void {
+    clearQueryOnOpen = false;
+    query.value = '';
+    coordinator?.setQuery('');
+}
+
 function close(): void {
     if (!isOpen.value) return;
     isOpen.value = false;
-    query.value = '';
-    coordinator?.setQuery('');
+    clearQueryOnOpen = true;
     actionTrayOpen.value = false;
     hoverLock.value = 'keyboard';
     pointerArmedKey.value = null;
@@ -579,6 +591,9 @@ export function useCommandPalette(): CommandPaletteController {
         focusToken,
         open,
         close,
+        resetAfterClose: () => {
+            if (!isOpen.value && clearQueryOnOpen) clearClosedQuery();
+        },
         toggle: () => (isOpen.value ? close() : open()),
         setActive: (key: string) => {
             hoverLock.value = 'keyboard';

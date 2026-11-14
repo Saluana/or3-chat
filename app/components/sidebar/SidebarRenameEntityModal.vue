@@ -13,6 +13,7 @@
                     :model-value="value"
                     class="w-full"
                     :placeholder="placeholder"
+                    :aria-label="placeholder"
                     :icon="icon"
                     @update:model-value="emit('update:value', String($event ?? ''))"
                     @focus.once="selectAll"

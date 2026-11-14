@@ -6,6 +6,7 @@
         title="Command palette"
         description="Search chats, documents, projects, images, and commands"
         @update:open="onUpdateOpen"
+        @after:leave="resetAfterClose"
     >
         <template #content>
             <div
@@ -63,7 +64,7 @@
                         <button
                             v-if="query"
                             type="button"
-                            class="or3-palette-clear shrink-0 rounded-full p-1 text-[color:var(--md-on-surface-variant)] transition-colors duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] hover:bg-[color:var(--md-surface-hover)] hover:text-[color:var(--md-on-surface)] focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]"
+                            class="or3-palette-clear shrink-0 rounded-full p-1 sm:-my-1.5 text-[color:var(--md-on-surface-variant)] transition-colors duration-[var(--app-motion-duration-fast,150ms)] ease-[var(--app-motion-easing-standard,ease)] hover:bg-[color:var(--md-surface-hover)] hover:text-[color:var(--md-on-surface)] focus-visible:outline-[length:var(--app-focus-ring-width,2px)] focus-visible:outline-[color:var(--md-focus-ring,var(--md-primary))] focus-visible:outline-offset-[var(--app-focus-ring-offset,2px)]"
                             aria-label="Clear search"
                             @click="clearQuery"
                         >
@@ -259,6 +260,7 @@ const {
     errorMessage,
     focusToken,
     close,
+    resetAfterClose,
     activateByPointer,
     hoverActive,
     releaseHoverLock,

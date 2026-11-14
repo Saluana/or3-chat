@@ -237,7 +237,7 @@ import { focusPaneInput } from '~/composables/chat/useChatInputBridge';
 import { useNuxtApp } from '#app';
 import { CORE_APP_COMPONENT_DEFAULTS } from '~/theme/_shared/theme-components-registry';
 import 'or3-scroll/style.css';
-import { useElementSize } from '@vueuse/core';
+import { useElementSize, useEventListener } from '@vueuse/core';
 import { isMobile } from '~/state/global';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
@@ -1111,7 +1111,9 @@ function captureViewState() {
 }
 
 async function restoreViewState(saved?: ReturnType<typeof captureViewState>) {
-    if (!saved?.scroll) return;
+    // A cached view that is putting back its exact pixel position wins over
+    // the tab's anchor memento, which cannot re-anchor reattached rows.
+    if (!saved?.scroll || keptViewRestored) return;
     await nextTick();
     if (saved.scroll.mode === 'bottom') {
         scroller.value?.scrollToBottom?.({ smooth: false });
@@ -1629,6 +1631,19 @@ async function onEmptyChatAction(id: EmptyChatActionId) {
 // after the move. The messages are unchanged, so restore the last pixel
 // position seen by the scroll handler. A different thread is restored by its tab.
 let hiddenView: { threadId?: string; tabId?: string; top: number; bottom: boolean } | null = null;
+// The scroller's own event is not emitted for every scroll; read the element
+// directly while it is attached, before deactivation moves it out.
+let attachedScrollTop = 0;
+let attachedAtBottom = true;
+// Set while a reactivated view shows its own retained position, so the tab's
+// anchor memento (which cannot re-anchor reattached rows) does not move it.
+let keptViewRestored = false;
+useEventListener(() => (scroller.value as { $el?: HTMLElement } | null)?.$el, 'scroll', (event: Event) => {
+    const root = event.currentTarget as HTMLElement;
+    if (!root.isConnected) return;
+    attachedScrollTop = root.scrollTop;
+    attachedAtBottom = root.scrollHeight - root.scrollTop - root.clientHeight <= 2;
+}, { passive: true });
 let scrollRestoreRevision = 0;
 let revealRestoringScroll: (() => void) | undefined;
 function cancelScrollRestore() {
@@ -1636,11 +1651,12 @@ function cancelScrollRestore() {
     revealRestoringScroll?.();
     revealRestoringScroll = undefined;
 }
-watch([() => props.threadId, () => props.tabId], cancelScrollRestore, { flush: 'sync' });
+watch([() => props.threadId, () => props.tabId], () => { keptViewRestored = false; cancelScrollRestore(); }, { flush: 'sync' });
 onBeforeUnmount(cancelScrollRestore);
 onDeactivated(() => {
     cancelScrollRestore();
-    hiddenView = { threadId: props.threadId, tabId: props.tabId, top: lastScrollTop.value, bottom: atBottom.value };
+    keptViewRestored = false;
+    hiddenView = { threadId: props.threadId, tabId: props.tabId, top: attachedScrollTop, bottom: attachedAtBottom };
 });
 onActivated(async () => {
     cancelScrollRestore();
@@ -1648,6 +1664,7 @@ onActivated(async () => {
     const view = hiddenView;
     hiddenView = null;
     if (!view || view.threadId !== props.threadId || view.tabId !== props.tabId) return;
+    keptViewRestored = true;
     // Hide the list until it is back in place, so the top of the thread does
     // not flash while rows re-measure (activation runs before paint).
     const root = (scroller.value as { $el?: HTMLElement } | null)?.$el;

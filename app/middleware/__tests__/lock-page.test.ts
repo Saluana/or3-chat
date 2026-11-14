@@ -146,4 +146,16 @@ describe('lock-page middleware', () => {
             { replace: true }
         );
     });
+
+    it('rechecks access when navigating within an already admitted route', async () => {
+        resolveLockPageAccessMock.mockResolvedValue({ allowed: false });
+        const middleware = (await import('../lock-page.global')).default as unknown as (
+            to: TestRoute & { matched: unknown[] }, from: TestRoute & { matched: unknown[] }
+        ) => Promise<unknown>;
+        const record = { path: '/chat/:id?' };
+        const from = { path: '/chat/1', fullPath: '/chat/1', meta: { lockPageProtected: true }, matched: [record] };
+        const to = { ...from, path: '/chat/2', fullPath: '/chat/2' };
+        await expect(middleware(to, from)).resolves.toEqual({ path: '/welcome', query: { next: '/chat/2' } });
+        expect(resolveLockPageAccessMock).toHaveBeenCalledOnce();
+    });
 });

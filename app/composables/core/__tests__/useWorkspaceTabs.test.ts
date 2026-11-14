@@ -119,6 +119,18 @@ describe('useWorkspaceTabs', () => {
         expect(fake.bindings.get('pane-a')).toEqual({ kind: 'chat', threadId: null });
     });
 
+    it('preserves a blank chat when a document is adopted by its pane', async () => {
+        const fake = createHost();
+        const tabs = useWorkspaceTabs({ host: fake.host, paneLimit: ref(3), isMobile: ref(false),
+            workspaceId: () => 'local', profileId: () => 'standard', storage: null,
+            canReuseActiveBlank: () => false });
+        const chatId = tabs.activeTabId.value;
+        const documentId = tabs.reconcilePaneResource('pane-a', { kind: 'document', documentId: 'doc' });
+        expect(documentId).not.toBe(chatId);
+        expect(tabs.tabs.value.find(tab => tab.id === chatId)?.resource).toEqual({ kind: 'chat', threadId: null });
+        expect(tabs.state.value.paneBindings.get('pane-a')).toBe(documentId);
+    });
+
     it('cancels pending navigation when its owner is disposed', async () => {
         const fake = createHost();
         let finish!: () => void;
@@ -130,6 +142,7 @@ describe('useWorkspaceTabs', () => {
         const tabs = scope.run(() => useWorkspaceTabs({ host: fake.host, paneLimit: ref(3), isMobile: ref(false),
             workspaceId: () => 'local', profileId: () => 'standard', storage: null }))!;
         const pending = tabs.openResource({ kind: 'document', documentId: 'late' });
+        await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
         scope.stop();
         finish();
         expect((await pending).status).toBe('superseded');
@@ -344,8 +357,9 @@ describe('useWorkspaceTabs', () => {
         expect(fake.bindings.get('pane-a')).toEqual({ kind: 'chat', threadId: 'b' });
     });
 
-    it('retains a tab when closing a split and closes an empty extra split after a tab close', async () => {
+    it('discards an untouched blank split tab, keeps one with a draft, and closes an empty extra split after a tab close', async () => {
         const fake = createHost();
+        let blankHasDraft = false;
         const tabs = useWorkspaceTabs({
             host: fake.host,
             paneLimit: computed(() => 3),
@@ -353,10 +367,17 @@ describe('useWorkspaceTabs', () => {
             workspaceId: () => 'local',
             profileId: () => 'standard',
             storage: null,
+            canReuseActiveBlank: () => !blankHasDraft,
         });
         await tabs.openResource({ kind: 'chat', threadId: 'a' });
-        const { tabId: splitTabId } = await tabs.newSplit();
+        const untouched = await tabs.newSplit();
         await tabs.closeSplit('pane-b');
+        expect(tabs.tabs.value.some((tab) => tab.id === untouched.tabId)).toBe(false);
+        expect(tabs.state.value.recentlyClosed).toHaveLength(0);
+
+        blankHasDraft = true;
+        const { tabId: splitTabId } = await tabs.newSplit();
+        await tabs.closeSplit(fake.panes.at(-1)!);
         expect(tabs.tabs.value.some((tab) => tab.id === splitTabId)).toBe(true);
         await tabs.closeTab(splitTabId!);
 

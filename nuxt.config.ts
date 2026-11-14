@@ -962,6 +962,9 @@ export default defineNuxtConfig({
             }
         },
         'pages:extend'(pages) {
+            const workspacePage = resolve(__dirname, 'app/pages/chat/[[id]].vue');
+            pages.push({ name: 'or3-docs', path: '/docs/:id?', file: workspacePage });
+            pages.push({ name: 'or3-home', path: '/', file: workspacePage });
             if (process.env.NODE_ENV !== 'production' && process.env.OR3_CHAT_TOOLS_CLOUD_TEST_HARNESS === 'true')
                 pages.push({ name: 'or3-cloud-tools-test', path: '/__or3-cloud-tools-test',
                     file: resolve(__dirname, 'tests/e2e/fixtures/CloudToolBridgeJourney.vue') });

@@ -18,12 +18,19 @@
             <slot name="sidebar-header">
                 <div id="header-content" class="flex items-center px-[6px]">
                     <img
+                        v-if="customLogo"
                         :src="logoUrl"
                         :alt="appName"
-                        :width="runtimeConfig.public?.branding?.logoUrl ? undefined : 1632"
-                        :height="runtimeConfig.public?.branding?.logoUrl ? undefined : 344"
                         class="h-7 w-auto"
                     />
+                    <!-- The default wordmark has a lighter variant for dark modes; CSS
+                         shows one, and lazy loading skips fetching the hidden one. -->
+                    <template v-else>
+                        <img src="/logos/logo-svg.svg" :alt="appName" width="1632" height="344"
+                            loading="lazy" class="or3-wordmark or3-wordmark--light h-7 w-auto" />
+                        <img src="/logos/logo-svg-dark.svg" :alt="appName" width="1632" height="344"
+                            loading="lazy" class="or3-wordmark or3-wordmark--dark h-7 w-auto" />
+                    </template>
                     <span v-if="!logoUrl" class="header-title ml-2 text-[9px]">
                         {{ appName }}
                     </span>
@@ -69,6 +76,7 @@ const runtimeConfig = useRuntimeConfig();
 const appName = computed(
     () => runtimeConfig.public?.branding?.appName || 'OR3'
 );
+const customLogo = computed(() => Boolean(runtimeConfig.public?.branding?.logoUrl));
 const logoUrl = computed(
     () => runtimeConfig.public?.branding?.logoUrl || '/logos/logo-svg.svg'
 );
@@ -188,7 +196,15 @@ function onToggle() {
 }
 </script>
 
+<style>
+/* Unscoped: the mode class lives on <html>. */
+.or3-wordmark--dark { display: none; }
+:root:is(.dark, .dark-high-contrast, .dark-medium-contrast) .or3-wordmark--light { display: none; }
+:root:is(.dark, .dark-high-contrast, .dark-medium-contrast) .or3-wordmark--dark { display: block; }
+</style>
+
 <style scoped>
+
 /* Gradient already supplied by global pattern image; we just ensure better dark base */
 .header-pattern {
     background-image: var(--app-header-gradient, none) !important;

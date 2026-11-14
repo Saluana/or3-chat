@@ -906,10 +906,12 @@ watch(
 .workspace-tab-bar::-webkit-scrollbar { display: none; }
 .workspace-tab-wrap {
     position: relative;
-    /* Tabs give up width, down to a readable minimum, before the strip scrolls. */
-    flex: 0 1 max-content;
+    /* A fixed width that gives way evenly, down to a readable minimum, before
+       the strip scrolls. Sizing tabs to their titles resized them as titles
+       resolved after opening. */
+    flex: 0 1 200px;
     min-width: 120px;
-    max-width: 260px;
+    max-width: 200px;
     height: var(--or3-workspace-tab-height, 32px);
     margin-inline-end: 0;
     transition: transform var(--app-motion-duration-fast, 0.14s)
@@ -985,12 +987,17 @@ watch(
     line-height: 1.25;
 }
 .workspace-tab-status {
+    /* Out of the flow beside the close button, so appearing never changes
+       the tab's layout; the title truncates a little earlier instead. */
+    position: absolute;
+    right: 31px;
+    top: calc(50% - 3.5px);
     width: 7px;
     height: 7px;
     border-radius: 999px;
     background: var(--or3-tab-attention, var(--md-primary));
-    flex: none;
 }
+.workspace-tab:has(.workspace-tab-status) { padding-right: 44px; }
 .workspace-tab-status.is-streaming,
 .workspace-tab-status.is-loading,
 .workspace-tab-status.is-saving {

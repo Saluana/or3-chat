@@ -395,12 +395,27 @@ export function closeTab(
 }
 
 /** Closing a split unbinds its tab but never removes that tab from the session. */
+/**
+ * Closing a split keeps its tab, except an untouched blank chat (the one New
+ * split creates), which the caller names in `discardBlankTabId` after checking
+ * it has no draft. It is not added to recently closed: there is nothing to reopen.
+ */
 export function closeSplit(
     input: WorkspaceTabsState,
     paneId: string,
-    factory?: TransitionFactory
+    factory?: TransitionFactory,
+    discardBlankTabId?: string
 ): WorkspaceTabsState {
-    return unbindPane(input, paneId, factory);
+    const state = unbindPane(input, paneId, factory);
+    const index = state.tabs.findIndex((tab) => tab.id === discardBlankTabId);
+    if (index < 0 || !isBlankChat(state.tabs[index]) || findPaneForTab(state, discardBlankTabId!)) return state;
+    state.tabs.splice(index, 1);
+    state.runtime.delete(discardBlankTabId!);
+    if (state.activeTabId === discardBlankTabId) {
+        const active = state.activePaneId ? state.paneBindings.get(state.activePaneId) : undefined;
+        if (active) state.activeTabId = active;
+    }
+    return repairState(state, factory);
 }
 
 export function reorderTab(

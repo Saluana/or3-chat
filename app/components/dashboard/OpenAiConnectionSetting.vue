@@ -18,18 +18,18 @@
 </template>
 <script setup lang="ts">
 import { presentError } from '~~/shared/errors';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useOpenAiKey } from '~/core/auth/useOpenAiKey';
 import { useModelStore } from '~/composables/chat/useModelStore';
 
-const { connection, refresh, save: saveKey, remove: removeKey } = useOpenAiKey();
+const { connection, scope, refresh, save: saveKey, remove: removeKey } = useOpenAiKey();
 const { refreshModels } = useModelStore();
 const key = ref('');
 const busy = ref(false);
 const error = ref('');
-const statusText = computed(() => connection.connected ? 'Your OpenAI key is saved.'
-    : connection.instance ? 'Using this server’s OpenAI key. Save your own key to use it instead.'
-    : connection.available ? 'No OpenAI key saved.' : 'Personal keys are unavailable on this server.');
+const statusText = computed(() => connection.value.connected ? 'Your OpenAI key is saved.'
+    : connection.value.instance ? 'Using this server’s OpenAI key. Save your own key to use it instead.'
+    : connection.value.available ? 'No OpenAI key saved.' : 'Personal keys are unavailable on this server.');
 
 async function run(action: () => Promise<void>) {
     busy.value = true;
@@ -44,5 +44,14 @@ async function run(action: () => Promise<void>) {
 }
 const save = () => run(async () => { await saveKey(key.value); key.value = ''; });
 const remove = () => run(removeKey);
-onMounted(() => { refresh().catch((caught: unknown) => { error.value = presentError(caught, { fallbackMessage: 'Could not check your OpenAI connection. Please try again.' }).message; }); });
+let mounted = false;
+function checkConnection() {
+    const origin = scope.value;
+    error.value = '';
+    refresh().catch((caught: unknown) => {
+        if (origin === scope.value) error.value = presentError(caught, { fallbackMessage: 'Could not check your OpenAI connection. Please try again.' }).message;
+    });
+}
+onMounted(() => { mounted = true; checkConnection(); });
+watch(scope, () => { if (mounted) checkConnection(); });
 </script>

@@ -120,6 +120,30 @@ describe('workspace tab transitions', () => {
         expect(result.state.paneBindings.get('pane-a')).toBe(result.state.activeTabId);
     });
 
+    it('discards only the named untouched blank when its split closes', () => {
+        const f = factory();
+        let state = createInitialState({ paneId: 'pane-a' }, f);
+        state = openTab(state, { kind: 'chat', threadId: 'main' }, {}, f).state;
+        const mainTabId = state.activeTabId;
+        const split = newBlankTab(state, { reuseActiveBlank: false }, f);
+        state = bindTabToPane(split.state, 'pane-b', split.tabId!, f);
+
+        // A blank with a draft is not named, so it stays.
+        const kept = closeSplit(state, 'pane-b', f);
+        expect(kept.tabs.map((tab) => tab.id)).toContain(split.tabId);
+
+        const discarded = closeSplit(state, 'pane-b', f, split.tabId!);
+        expect(discarded.tabs.map((tab) => tab.id)).toEqual([mainTabId]);
+        expect(discarded.activeTabId).toBe(mainTabId);
+        expect(discarded.paneBindings.get('pane-a')).toBe(mainTabId);
+        expect(discarded.recentlyClosed).toHaveLength(0);
+
+        // A real resource is never discarded, even if named.
+        const opened = openTab(state, { kind: 'chat', threadId: 'b' }, { reuseActiveBlank: false }, f);
+        const withChat = bindTabToPane(opened.state, 'pane-b', opened.tabId!, f);
+        expect(closeSplit(withChat, 'pane-b', f, opened.tabId!).tabs.map((tab) => tab.id)).toContain(opened.tabId!);
+    });
+
     it('reorders and promotes a blank without changing its tab ID', () => {
         const f = factory();
         let state = createInitialState({ paneId: 'pane-a' }, f);

@@ -32,22 +32,22 @@ Source: the cloud.or3.chat audit of 2026-11-13 (signed-in Brave session, warm ca
 ### Flicker and layout shift
 
 - ~~7. New-chat composer jumps 179px when the lazily loaded bird hero mounts.~~ Done in the second pass.
-- 8. Command palette: the filter row grows from 33 to 40px on the first keystroke, and the list resets to default results while fading out on close.
-- 10. Settings header jumps 34px between sub-pages (with breadcrumb) and top-level pages.
+- ~~8. Command palette row growth and close reset.~~ Done in the third pass.
+- ~~10. Settings header jump.~~ Done in the third pass.
 - ~~11. Sidebar collapse/expand reflows every frame.~~ Done in the second pass.
-- 12. New tabs resize two or three times as the title resolves. The tab status dot also changes tab width when it appears.
+- ~~12. Tab width churn.~~ Done in the third pass.
 - 13. Split view snaps the Files pane between table and card layout with no transition; the click takes 88–112ms.
 - 14. Gallery tiles: replace the text placeholder with a blur placeholder and fade.
-- 15. Connections popover fills in ~100ms late because OpenAI credentials are fetched on open.
+- ~~15. Connections popover late fill.~~ Done in the third pass.
 - 16. Boot placeholder is inconsistent (sidebar skeleton rows on one reload, "Loading page…" on another).
 
 ### Network
 
 - 18. Boot waterfall: six requests wait on `/api/auth/session` (see the note above before inlining it).
 - 19. Every API call has a ~65ms floor even for tiny responses; likely edge-to-origin distance.
-- 22. `/api/plugins/access` reloads each time Settings opens; session, manifest and policy were re-fetched together mid-session.
+- ~~22. Settings refetches.~~ Done in the fourth pass (see notes).
 - 23. 145–151 requests per load: 115 script files, 42 preloads, 77 chunks right after load, several under 700 bytes. Set a minimum chunk size.
-- 24. First chat open pulls ~740 KB of JS and first ⌘K ~118 KB. Prefetch them when idle after boot.
+- ~~24. First-use chunk downloads.~~ Done in the fourth pass.
 - 25. Seven render-blocking stylesheets, including a 1-byte and a 194-byte file and a duplicate request; 388 KB main stylesheet plus 60 KB inline styles.
 - 26. The service worker precaches 501 files (5 MB+) on first visit, including 414 JS chunks. Precache the shell only.
 - 27. Unhashed assets (theme CSS, favicon, touch icon) get a 4-hour cache; the web manifest has none; every HTML response sets a theme cookie.
@@ -58,14 +58,14 @@ Source: the cloud.or3.chat audit of 2026-11-13 (signed-in Brave session, warm ca
 ### Product polish
 
 - ~~31. The page title is always "OR3".~~ Done in the second pass.
-- 32. Browser Back/Forward do nothing in-app. **Tried and backed out in the second pass:** Vue Router's own `popstate` listener runs before any app listener (even a capture one), so every Back also navigated the router and remounted the page shell (chat and document routes are separate page components). Needs the `/chat`, `/chat/:id`, `/docs`, `/docs/:id` routes to share one page instance that reacts to route changes; then push entries per tab change.
+- ~~32. Browser Back/Forward do nothing in-app.~~ Done in the third pass.
 - ~~33. The URL does not follow the Files tab.~~ Done in the second pass.
-- 34. Search snippets show raw markdown (`**…**`).
+- ~~34. Raw markdown in search snippets.~~ Done in the fourth pass.
 - 35. Model names are truncated in the chat settings picker.
-- 36. Closing a split pane leaves an empty "New chat" tab behind.
+- ~~36. Split close leaves an empty tab.~~ Done in the fourth pass.
 - 37. Marketplace library is listed in Settings even when it is unavailable on the server.
 - 38. The document outline does not highlight the current section while scrolling, and the floating composer overlaps text with no fade.
-- 39. Dark mode leaves `color-scheme` at `normal`, so native controls can render light; the wordmark is dark blue on near-black.
+- ~~39. Dark mode `color-scheme` and wordmark.~~ Done in the fourth pass.
 - 40. Document URLs are `/docs/message-doc-` plus 64 hex characters.
 - 41. Old notifications never expire.
 
@@ -82,7 +82,45 @@ Source: the cloud.or3.chat audit of 2026-11-13 (signed-in Brave session, warm ca
 
 Not done: 23 (tiny chunks). 97 of 411 scripts are under 700 B gzip, but merging them needs Rolldown's experimental `experimentalInlineCommonChunks` (conflicts with Vite CSS emission, needs `preserveEntrySignatures: false`); not worth the risk in a hand-tuned release build.
 
-## Next five (after the second pass)
+## Third pass (done)
+
+| Item | What changed |
+| --- | --- |
+| Exact chat scroll on tab switch | Each chat tab keeps its own cached view (up to 6 views per pane), keyed by the tab once the pane shows that tab's thread. Returning to a chat shows the same DOM at the exact pixel position, hidden until in place; verified 500 → 500 and 200 → 200 across chat, document and blank-chat round trips. The position is read from native scroll events, since the scroller does not emit for every scroll. |
+| Per-tab views | Chat→chat switches reuse the cached view (~30–45 ms) instead of rebinding one view and rebuilding its message list. |
+| 32. Back/Forward | `/`, `/chat`, `/chat/:id`, `/docs` and `/docs/:id` use distinct route records with one page key, so navigation keeps the workspace shell. Tab changes push router entries carrying the tab id; Back/Forward reactivate that tab or open the resource. |
+| 8. Command palette | The clear button no longer grows the query row (42 px before and after typing). The query and results stay during the fade-out and clear after the leave transition. |
+| 12. Tab widths | Tabs have a fixed 200 px basis that shrinks evenly to 120 px, so resolving titles no longer resize them; the status dot sits out of the flow beside the close button. |
+| 10. Settings header | The back-button row is reserved on every page, so the header and content stay put between top-level and sub-pages (103 px header either way at 1280 px). |
+| 15. Connections | The OpenAI status check starts on pointer or focus over the button; the popover shows the final state on open without a second request. |
+
+## Fourth pass (done)
+
+| Item | What changed |
+| --- | --- |
+| 36. Split close | Closing a split removes its tab when it is still an untouched blank chat (the one New split creates). A blank tab with a draft, and any chat, document or app tab, stays. Not added to "Reopen closed tab". A pane removed some other way keeps its tab, since its draft cannot be checked after it is gone. |
+| 24. Idle prefetch | After tabs restore, the chat message renderer, the command palette and (when enabled) the document editor load one at a time in idle time; skipped on Save-Data and 2G. Verified both async components resolved while Files was showing. |
+| 39. Dark mode | `color-scheme` follows the mode class, so native controls render dark. The default wordmark has a lighter dark-mode variant (`logos/logo-svg-dark.svg`); the hidden variant is lazy and not fetched. |
+| 34. Snippets | ⌘K snippets are built from Markdown reduced to visible text (emphasis, headings, lists, quotes, code and link syntax), keeping `snake_case` and arithmetic intact. |
+| 22. Settings refetches | Plugin access is cached for later Settings opens. Protected navigations re-check lock-page access, using the existing short-lived cache for successful checks. |
+
+## Next five (after the fourth pass)
+
+1. **Boot waterfall and placeholder (16, 18).** Six requests wait on `/api/auth/session`, and the boot placeholder differs between reloads. Start independent requests in parallel and show one consistent shell skeleton.
+2. **Render-blocking stylesheets (25).** Seven blocking stylesheets including a 1-byte file, a duplicate request and a 388 KB main sheet; merge and trim to speed up first paint.
+3. **Caching headers (27).** Unhashed assets get a 4-hour cache, the manifest none, and every HTML response sets a theme cookie; fix for faster repeat visits.
+4. **Truncated model names (35).** Visible in every chat's settings picker; widen or wrap the names.
+5. **Document outline and composer (38).** Highlight the current section while scrolling, and fade text under the floating composer.
+
+## Next five (after the third pass, done in the fourth pass)
+
+1. **Idle prefetch of first-use chunks (24).** The first chat open pulls ~740 KB of JS and the first ⌘K ~118 KB. Prefetch them after boot when idle; this is the biggest remaining first-interaction delay.
+2. **Closing a split leaves an empty "New chat" tab (36).** Visible every time splits are used; reads as a bug.
+3. **Dark mode `color-scheme` and wordmark contrast (39).** Native controls (scrollbars, inputs, selects) render light in dark themes; small, global fix.
+4. **Raw markdown in search snippets (34).** ⌘K results show `**…**`; strip markdown when building snippets.
+5. **Settings refetches (22).** `/api/plugins/access` reloads on every Settings open, and session, manifest and policy are re-fetched together mid-session; cache them like the models list.
+
+## Next five (after the second pass, done in the third pass)
 
 1. **Single workspace page route**, then real Back/Forward (32).
 2. **Per-tab views** inside the tab activation transaction (instant chat→chat switches).

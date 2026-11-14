@@ -933,6 +933,11 @@ html [class~='duration-1000'] {
 	}
 }
 
+/* Native controls (scrollbars, inputs, selects, date pickers) follow the
+   resolved mode class, set before paint, rather than staying light. */
+:root { color-scheme: light; }
+:root:is(.dark, .dark-high-contrast, .dark-medium-contrast) { color-scheme: dark; }
+
 /* Interface scale. `--app-ui-scale` is the chosen scale (a theme default, or
    the user's Theme settings override on <html>). Wherever the app shell is
    mounted it renders at that scale through CSS zoom on <body>, so portaled

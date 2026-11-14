@@ -398,6 +398,10 @@ async function change(row: Post, changes: { title?: string; trashed?: boolean })
         rename.value = false;
     });
 }
+function renameOnEnter(event: KeyboardEvent) {
+    if (event.isComposing || event.keyCode === 229 || !actionTarget.value) return;
+    void change(actionTarget.value, { title: newTitle.value });
+}
 async function open(row: Post) {
     previewTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     error.value = '';
@@ -786,7 +790,7 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
         </aside>
         </Transition>
         <AppModal v-model:open="rename" title="Rename item" close-label="Close">
-            <UInput v-model="newTitle" aria-label="Item title" class="w-full" size="workspace" @keydown.enter="actionTarget && change(actionTarget, { title: newTitle })" />
+            <UInput v-model="newTitle" aria-label="Item title" class="w-full" size="workspace" @keydown.enter="renameOnEnter" />
             <UAlert v-if="error" role="alert" color="error" variant="soft" title="Could not rename item" :description="error" class="mt-4" />
             <template #footer><UButton size="workspace" label="Save title" :disabled="busy || readOnly" @click="actionTarget && change(actionTarget, { title: newTitle })" /></template>
         </AppModal>

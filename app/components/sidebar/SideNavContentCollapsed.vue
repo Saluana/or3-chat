@@ -82,12 +82,6 @@
                             :aria-pressed="activeRailItem === DEFAULT_PAGE_ID"
                             aria-label="Home"
                             @click="() => handlePageSelect(DEFAULT_PAGE_ID)"
-                            @keydown.enter="
-                                () => handlePageSelect(DEFAULT_PAGE_ID)
-                            "
-                            @keydown.space.prevent="
-                                () => handlePageSelect(DEFAULT_PAGE_ID)
-                            "
                         />
                     </UTooltip>
                     <UTooltip
@@ -141,10 +135,6 @@
                                 :aria-pressed="activeRailItem === page.id"
                                 :aria-label="page.label"
                                 @click="() => handlePageSelect(page.id)"
-                                @keydown.enter="() => handlePageSelect(page.id)"
-                                @keydown.space.prevent="
-                                    () => handlePageSelect(page.id)
-                                "
                             >
                                 <AppIcon
                                     :image="page.image"
