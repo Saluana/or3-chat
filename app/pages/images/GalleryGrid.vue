@@ -518,7 +518,7 @@ defineExpose({ ensureUrl });
                         <span v-if="state.errorByHash[m.hash]"
                             >Preview unavailable</span
                         >
-                        <span v-else>Loading preview…</span>
+                        <span v-else class="or3-loading-delay">Loading preview…</span>
                     </button>
 
                     <div

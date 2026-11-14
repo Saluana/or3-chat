@@ -833,7 +833,7 @@ async function doRefresh() {
     if (refreshing.value) return;
     refreshing.value = true;
     try {
-        await Promise.all([refreshModels(), workspaceModels.load().then(() => { policyError.value = ''; })]);
+        await Promise.all([refreshModels(), workspaceModels.load({ force: true }).then(() => { policyError.value = ''; })]);
     } catch (e) {
         console.warn('[ModelCatalog] model refresh failed', e);
     } finally {

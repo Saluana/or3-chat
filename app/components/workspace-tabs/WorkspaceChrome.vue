@@ -236,6 +236,11 @@ defineExpose({ openTabSwitcher });
     padding: 0 6px;
     overflow: visible;
 }
+/* The tab strip loads asynchronously. Pin the actions right so they do not
+   start at the left edge and jump across when the strip arrives. */
+.workspace-chrome-tabs-row > .workspace-chrome-actions {
+    margin-inline-start: auto;
+}
 .workspace-chrome:not(.workspace-chrome--mobile)
     :deep(.workspace-chrome-action) {
     border: var(--md-border-width, 1px) solid var(--md-border-color);

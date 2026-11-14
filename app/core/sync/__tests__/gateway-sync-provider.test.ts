@@ -125,10 +125,11 @@ describe('GatewaySyncProvider', () => {
     it('pulls on version notifications and resumes polling on channel failure', async () => {
         vi.spyOn(Math, 'random').mockReturnValue(0);
         let source: any;
+        let sources = 0;
         vi.stubGlobal('EventSource', class {
             onopen?: () => void; onmessage?: (event: { data: string }) => void; onerror?: () => void;
             close = vi.fn();
-            constructor() { source = this; }
+            constructor() { source = this; sources += 1; }
         });
         let version = 0;
         const fetchMock = vi.fn(async () => makeOkResponse({ changes: [change(version, String(version))],
@@ -153,6 +154,23 @@ describe('GatewaySyncProvider', () => {
             version = 4;
             await vi.advanceTimersByTimeAsync(2000);
             expect(fetchMock).toHaveBeenCalledTimes(2);
+            // A brief outage reconnects after seconds, not a minute of polling.
+            await vi.advanceTimersByTimeAsync(3000);
+            expect(sources).toBe(2);
+            source.onopen();
+            const pullsWhileLive = fetchMock.mock.calls.length;
+            await vi.advanceTimersByTimeAsync(30_000);
+            expect(fetchMock).toHaveBeenCalledTimes(pullsWhileLive);
+            // Repeated failures back off: the next attempt waits 5s again after
+            // a successful open, then 10s if that one fails too.
+            source.onerror();
+            await vi.advanceTimersByTimeAsync(5000);
+            expect(sources).toBe(3);
+            source.onerror();
+            await vi.advanceTimersByTimeAsync(9000);
+            expect(sources).toBe(3);
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(sources).toBe(4);
         } finally { unsubscribe(); }
         expect(source.close).toHaveBeenCalled();
     });

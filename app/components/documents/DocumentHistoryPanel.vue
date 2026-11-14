@@ -16,7 +16,7 @@
             />
         </div>
 
-        <div v-if="loading" class="empty-state">Loading history…</div>
+        <div v-if="loading" class="empty-state or3-loading-delay">Loading history…</div>
         <div v-else-if="!revisions.length" class="empty-state">
             <UIcon :name="historyIcon" />
             <strong>No saved versions yet</strong>
@@ -93,7 +93,8 @@ const chevronIcon = useIcon('ui.chevron.right');
 const revisions = ref<CompleteDocumentRevision[]>([]);
 const selected = ref<CompleteDocumentRevision | null>(null);
 const previewOpen = ref(false);
-const loading = ref(false);
+// Start loading so the empty state cannot render before the first read.
+const loading = ref(true);
 const busy = ref(false);
 const error = ref('');
 let generation = 0;

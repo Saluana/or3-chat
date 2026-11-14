@@ -1,9 +1,10 @@
-import { defineComponent, h, onBeforeUnmount } from 'vue';
+import { defineComponent, h, onBeforeUnmount, ref, watch } from 'vue';
 import { CodeBlock } from 'streamdown-vue';
 import { createHighlightWorkerPool, type HighlightInput } from './highlight-worker-pool';
+import { useCachedViewActivity } from '~/composables/core/useCachedViewActivity';
 
 // The pool owns no worker until a mounted block requests highlighting, and
-// terminates it when its last component lease is released.
+// terminates it after its last visible component lease has idled.
 const pool = createHighlightWorkerPool(() => new Worker(
     new URL('../../workers/markdown-highlight.worker.ts', import.meta.url),
     { type: 'module' },
@@ -16,10 +17,41 @@ export const WorkerCodeBlock = defineComponent({
     inheritAttrs: false,
     setup(props, { attrs, slots }) {
         // SSR renders the library's plain code and never acquires a worker lease.
-        const lease = typeof window === 'undefined' ? undefined : pool.acquire();
-        onBeforeUnmount(() => lease?.release());
-        const highlight = (input: HighlightInput) => lease?.highlight(input)
-            ?? Promise.reject(new Error('Syntax highlighting unavailable'));
-        return () => h(CodeBlock, { ...props, ...attrs, highlight }, slots);
+        let lease: ReturnType<typeof pool.acquire> | undefined;
+        const active = useCachedViewActivity();
+        let disposed = false;
+        let pending = 0;
+        let needsRefresh = false;
+        const renderKey = ref(0);
+        const release = () => {
+            needsRefresh ||= pending > 0;
+            lease?.release();
+            lease = undefined;
+        };
+        onBeforeUnmount(() => { disposed = true; release(); });
+        watch(active, (visible) => {
+            if (!visible) { release(); return; }
+            if (disposed || typeof window === 'undefined') return;
+            lease = pool.acquire();
+            // CodeBlock watches code/theme, not the highlight callback. Only
+            // remount interrupted/changed blocks; completed HTML stays intact.
+            if (needsRefresh) {
+                needsRefresh = false;
+                renderKey.value++;
+            }
+        }, { immediate: true, flush: 'sync' });
+        const highlight = async (input: HighlightInput) => {
+            if (!active.value || disposed || !lease) {
+                if (!disposed) needsRefresh = true;
+                throw new Error('Syntax highlighting unavailable');
+            }
+            pending++;
+            try {
+                return await lease.highlight(input);
+            } finally {
+                pending--;
+            }
+        };
+        return () => h(CodeBlock, { ...props, ...attrs, key: renderKey.value, highlight }, slots);
     },
 });

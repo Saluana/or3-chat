@@ -48,7 +48,7 @@ describe('getProviderInfo', () => {
     it('returns registry entries with icons', () => {
         const p = getProviderInfo('anthropic');
         expect(p.name).toBe('Anthropic');
-        expect(p.icon).toBe('anthropic');
+        expect(p.icon).toBe('simple-icons:anthropic');
         expect(p.color).toBe('#D97757');
     });
 

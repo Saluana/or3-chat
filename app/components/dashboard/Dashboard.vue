@@ -98,7 +98,7 @@
                         <div
                             v-if="shouldDeferDashboardGrid"
                             id="dashboard-grid-loading"
-                            class="text-sm opacity-70"
+                            class="text-sm opacity-70 or3-loading-delay"
                         >
                             Loading dashboard…
                         </div>
@@ -156,7 +156,7 @@
                             <div
                                 v-if="state.loadingPage"
                                 id="dashboard-page-loading"
-                                class="text-sm opacity-70 px-[var(--dashboard-gutter)]"
+                                class="text-sm opacity-70 or3-loading-delay px-[var(--dashboard-gutter)]"
                             >
                                 Loading…
                             </div>

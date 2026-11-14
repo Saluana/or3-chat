@@ -14,7 +14,7 @@
 
         <!-- Notifications list -->
         <div class="overflow-y-auto max-h-80">
-            <div v-if="loading" class="p-4 text-center">
+            <div v-if="loading" class="p-4 text-center or3-loading-delay">
                 <span class="text-xs text-[var(--md-on-surface-variant)] animate-pulse">
                     Loading…
                 </span>

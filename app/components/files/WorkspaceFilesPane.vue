@@ -730,7 +730,7 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
                 <div class="files-columns" :data-trash="trash" aria-hidden="true">
                     <span class="files-name-label">Name</span><span class="files-type-column">Type</span><span class="files-project-column">Project</span><span class="files-date-column">Last modified</span><span class="files-size-column">Size</span><span />
                 </div>
-                <div v-if="loading && !filtered.length" class="files-empty" role="status">
+                <div v-if="loading && !filtered.length" class="files-empty or3-loading-delay" role="status">
                     <UIcon :name="icons.folder.value" class="size-9 opacity-50" /><p>Loading your files…</p>
                 </div>
                 <div v-else-if="!filtered.length && !error" class="files-empty">

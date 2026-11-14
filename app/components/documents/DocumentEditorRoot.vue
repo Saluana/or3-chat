@@ -21,7 +21,7 @@
             <UIcon :name="icons.inspector" class="document-status-icon" aria-hidden="true" />
             <p>{{ availabilityMessage }}</p>
         </div>
-        <div v-if="!documentLoaded" class="document-unavailable" role="status">
+        <div v-if="!documentLoaded" class="document-unavailable" :class="{ 'or3-loading-delay': loadingDocument }" role="status">
             <UIcon :name="icons.inspector" class="document-status-icon" aria-hidden="true" />
             <h2>{{ loadingDocument ? 'Loading document…' : availability === 'trashed' ? 'Document in Trash' : 'Document unavailable' }}</h2>
             <p>{{ loadingDocument ? 'Your saved content is loading.' : availabilityMessage }}</p>
@@ -254,7 +254,7 @@
                             @toggle-autocomplete="toggleAutocomplete"
                             @clear-selection="clearAiSelection"
                         />
-                        <template #fallback><div class="ai-composer-loading">Loading document AI…</div></template>
+                        <template #fallback><div class="ai-composer-loading or3-loading-delay">Loading document AI…</div></template>
                     </Suspense>
                 </div>
             </main>
@@ -324,6 +324,7 @@ import { shouldLockDocumentAiEditor } from '~/composables/documents/documentAiLi
 import AppModal from '~/components/ui/AppModal.vue';
 import { formatShortcut, isApplePlatform } from '~/utils/keyboard-shortcuts';
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRef, watch } from 'vue';
+import { useCachedViewActivity } from '~/composables/core/useCachedViewActivity';
 import { onClickOutside } from '@vueuse/core';
 import { getSchema, isTextSelection } from '@tiptap/core';
 import type { BubbleMenuPluginProps } from '@tiptap/extension-bubble-menu';
@@ -534,7 +535,8 @@ watch([documentId, editorDb], ([id, db]) => {
 const pluginButtons = useEditorToolbarButtons(editor);
 const inspectorPanels = useEditorInspectorPanels();
 const documentAiActions = useDocumentAiActions();
-const { outline, activeOutlineId, stats, scrollTo, setSerializedSize, refresh } = useDocumentInsights(editor);
+const editorViewActive = useCachedViewActivity();
+const { outline, activeOutlineId, stats, scrollTo, setSerializedSize, refresh, flush: flushInsights } = useDocumentInsights(editor, editorViewActive);
 
 function captureContent(id = props.documentId, db = editorDb.value): void {
     // Capture edits made before the item became read-only; storage still refuses
@@ -1021,9 +1023,8 @@ async function restoreDocumentViewState(
     suppressFindAutofocus = false;
 
     if (props.documentId !== id) return;
-    if (editorScroll.value) {
-        editorScroll.value.scrollTop = Math.max(0, saved.scrollTop);
-    }
+    // Jump: the scroller's CSS smooth scrolling would animate from the top.
+    editorScroll.value?.scrollTo({ top: Math.max(0, saved.scrollTop), behavior: 'instant' });
     restoreEditorSelection(saved);
     if (!options?.focus || props.documentId !== id) return;
 
@@ -1155,6 +1156,7 @@ async function loadActiveDocument(id: string) {
         }
         loadedDocumentId = id;
         if (inspectorDefaultApplied.value) inspectorOpen.value = inspectorOpensByDefault();
+        flushInsights();
         documentLoaded.value = true;
         loadingDocument.value = false;
         registerActiveSession(id);

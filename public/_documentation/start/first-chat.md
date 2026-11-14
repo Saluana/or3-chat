@@ -20,6 +20,8 @@ The input clears once your message is saved, without waiting for the model to re
 
 Choose the system prompt for this chat in **Settings**. For an unsent chat, the selection is saved with its draft and restored after reload when browser storage is available. While sending, the send control shows progress, then becomes **Stop generation** while the response streams.
 
+You can open **Settings** while a response streams to inspect the current setup and chat memory. Controls that cannot change during generation remain disabled until it finishes.
+
 Tools start off. Turn on the switch beside **Settings → Tools** to enable them,
 and select the **Tools** row to choose individual tools. The switch remembers
 your selection when you turn it off and back on. Each chat keeps its own setup.

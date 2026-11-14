@@ -919,6 +919,20 @@ html [class~='duration-1000'] {
 	}
 }
 
+/* Loading placeholders stay invisible for their first ~180ms, so loads that
+   finish quickly never flash a spinner, skeleton or "Loading…" line. Slow
+   loads still show them. The delay is not motion, so reduced-motion keeps it. */
+.or3-loading-delay {
+	animation: or3-loading-reveal 160ms ease-out 180ms backwards;
+}
+
+/* No `to` frame: the element ends at its own opacity (e.g. `opacity-70`). */
+@keyframes or3-loading-reveal {
+	from {
+		opacity: 0;
+	}
+}
+
 /* Interface scale. `--app-ui-scale` is the chosen scale (a theme default, or
    the user's Theme settings override on <html>). Wherever the app shell is
    mounted it renders at that scale through CSS zoom on <body>, so portaled

@@ -190,7 +190,8 @@
 .document-title-field { width: 100%; font-size: clamp(2rem, 5cqw, 3rem); }
 /* Themes floor every textarea at 16px with !important; the title inherits its larger size from the field. */
 .document-title-field :deep(#document-title) { font-size: inherit !important; }
-.document-title-field :deep(textarea) { display: block; width: 100%; min-height: 1.2em; resize: none; overflow: hidden; border: 0; padding: 0; background: transparent; color: var(--md-on-surface); font-family: var(--font-heading, var(--font-sans, ui-sans-serif, system-ui, sans-serif)); font-weight: 720; letter-spacing: -0.035em; line-height: 1.08; outline: none; box-shadow: none; }
+/* `field-sizing` sizes the title in its first layout; Nuxt UI autoresize only runs after a timeout, which made a long title grow and push the document down. Three lines, matching `maxrows`. */
+.document-title-field :deep(textarea) { display: block; width: 100%; min-height: 1.2em; field-sizing: content; max-height: 3lh; resize: none; overflow: hidden; border: 0; padding: 0; background: transparent; color: var(--md-on-surface); font-family: var(--font-heading, var(--font-sans, ui-sans-serif, system-ui, sans-serif)); font-weight: 720; letter-spacing: -0.035em; line-height: 1.08; outline: none; box-shadow: none; }
 .document-title-field :deep(textarea::placeholder) { color: color-mix(in oklab, var(--md-on-surface-variant), transparent 55%); }
 .document-byline { display: flex; gap: 0.8rem; margin: 0.85rem 0 3rem; color: var(--md-on-surface-variant); font-size: 0.72rem; }
 

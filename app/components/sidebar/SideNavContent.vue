@@ -62,7 +62,7 @@
                             id="page-loading-fallback"
                             class="flex-1 flex items-center justify-center"
                         >
-                            <div class="text-sm opacity-70">
+                            <div class="text-sm opacity-70 or3-loading-delay">
                                 Loading page…
                             </div>
                         </div>

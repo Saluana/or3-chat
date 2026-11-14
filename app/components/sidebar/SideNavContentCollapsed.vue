@@ -155,6 +155,31 @@
                         </UTooltip>
                     </div>
                 </div>
+                <!-- Server render: show the built-in rail items so the rail does
+                     not paint empty and pop in. Plugin pages follow these, so
+                     their late arrival shifts nothing above them. -->
+                <template #fallback>
+                    <div
+                        class="pt-2 flex flex-col space-y-2 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-t-[color:var(--md-border-color)]"
+                        aria-hidden="true"
+                        inert
+                    >
+                        <UButton
+                            v-if="showHomePage"
+                            v-bind="pageButtonProps"
+                            class="flex items-center justify-center"
+                            :icon="iconPageHome"
+                            tabindex="-1"
+                        />
+                        <UButton
+                            v-if="dashboardEnabled"
+                            v-bind="pageButtonProps"
+                            class="flex items-center justify-center"
+                            :icon="iconDashboard"
+                            tabindex="-1"
+                        />
+                    </div>
+                </template>
             </ClientOnly>
         </div>
         <div class="sidebar-bottom-section">

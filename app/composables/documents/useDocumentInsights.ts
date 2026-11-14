@@ -1,4 +1,4 @@
-import { computed, onScopeDispose, readonly, ref, watch, type Ref } from 'vue';
+import { computed, onScopeDispose, readonly, ref, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue';
 import type { Editor } from '@tiptap/vue-3';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 
@@ -33,7 +33,7 @@ function countWords(text: string): number {
     return normalized.split(/\s+/u).length;
 }
 
-export function useDocumentInsights(editor: Ref<Editor | null>) {
+export function useDocumentInsights(editor: Ref<Editor | null>, enabled: MaybeRefOrGetter<boolean> = true) {
     const outline = ref<DocumentOutlineItem[]>([]);
     const activeOutlineId = ref<string>();
     const words = ref(0);
@@ -108,6 +108,7 @@ export function useDocumentInsights(editor: Ref<Editor | null>) {
     }
 
     function schedule() {
+        if (!toValue(enabled)) return;
         const doc = editor.value?.state.doc ?? null;
         if (doc !== scheduledDocument) {
             const initial = scheduledDocument === null;
@@ -136,9 +137,9 @@ export function useDocumentInsights(editor: Ref<Editor | null>) {
         frame = 0;
     }
 
-    const stop = watch(editor, (nextEditor) => {
+    const stop = watch([editor, () => toValue(enabled)], ([nextEditor, active]) => {
         detach();
-        attachedEditor = nextEditor;
+        attachedEditor = active ? nextEditor : null;
         attachedEditor?.on('transaction', schedule);
         if (!nextEditor) {
             outline.value = [];
@@ -183,5 +184,12 @@ export function useDocumentInsights(editor: Ref<Editor | null>) {
         scrollTo,
         setSerializedSize: (size: number) => { serializedBytes.value = Math.max(0, size); },
         refresh: schedule,
+        /** Publish stats now, e.g. after loading content, so the first frame is not empty. */
+        flush() {
+            if (!toValue(enabled)) return;
+            if (timer !== undefined) clearTimeout(timer);
+            scheduledDocument = editor.value?.state.doc ?? null;
+            recompute();
+        },
     };
 }

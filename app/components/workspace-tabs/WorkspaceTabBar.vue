@@ -997,6 +997,15 @@ watch(
     animation: workspace-tab-pulse var(--app-motion-duration-slow, 1s)
         var(--app-motion-easing-standard, ease-in-out) infinite alternate;
 }
+/* Quick tab switches finish before this delay, so the dot does not blink.
+   or3-loading-reveal is defined in main.css. */
+.workspace-tab-status.is-loading,
+.workspace-tab-status.is-saving {
+    animation:
+        or3-loading-reveal 160ms ease-out 180ms backwards,
+        workspace-tab-pulse var(--app-motion-duration-slow, 1s)
+            var(--app-motion-easing-standard, ease-in-out) 180ms infinite alternate;
+}
 .workspace-tab-status.is-error {
     background: var(--md-error, #ba1a1a);
 }

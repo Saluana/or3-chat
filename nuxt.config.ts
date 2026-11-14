@@ -332,6 +332,16 @@ export default defineNuxtConfig({
         clientBundle: {
             // Custom icons must also work in static builds without an icon API.
             includeCustomCollections: true,
+            // Bundle literal icon names from app templates and registries so
+            // menus, dialogs and pickers render their icons in the first frame
+            // instead of waiting on /api/_nuxt_icon (~22 KB gzip for ~400 icons).
+            scan: {
+                globInclude: ['app/**/*.{vue,ts}'],
+                globExclude: ['node_modules', 'dist', '**/__tests__/**', '**/*.test.ts', '**/*.spec.ts', '.*'],
+            },
+            // The scan brings the bundle to ~205 KB uncompressed (default
+            // limit 256 KB, which fails the build). Leave room for new icons.
+            sizeLimitKb: 384,
             // Theme tokens are resolved at runtime and cannot be discovered by
             // Nuxt Icon's source scan. Bundle the selected glyphs for static and
             // offline use; custom collections are already included above.
@@ -516,6 +526,15 @@ export default defineNuxtConfig({
                             entry.size > 1.5 * 1024 * 1024
                         )
                             return false;
+                        // Large on-demand workers (PDF extraction) are cached after use.
+                        if (/\.worker-[^/]+\.js$/.test(entry.url) && entry.size > 256 * 1024)
+                            return false;
+                        // Large artwork (theme backgrounds, sign-in and lock-page
+                        // art, the 1024px install icon) is not needed for the
+                        // offline shell: the static-images runtime cache keeps
+                        // what is shown. This was ~2.9 MB of the first visit.
+                        if (/\.(?:png|webp)$/i.test(entry.url) && entry.size > 32 * 1024)
+                            return false;
                         return true;
                     }),
                     warnings: [],
@@ -584,7 +603,8 @@ export default defineNuxtConfig({
                 },
                 // Nuxt chunks
                 {
-                    urlPattern: /^\/_nuxt\//,
+                    urlPattern: ({ url, sameOrigin }) =>
+                        sameOrigin && url.pathname.startsWith('/_nuxt/'),
                     handler: 'NetworkFirst',
                     method: 'GET',
                     options: {

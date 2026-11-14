@@ -23,9 +23,7 @@ const props = withDefaults(
 
 const info = computed(() => getProviderInfo(props.slug));
 
-const iconName = computed(() =>
-    info.value.icon ? `simple-icons:${info.value.icon}` : undefined
-);
+const iconName = computed(() => info.value.icon);
 
 const showTile = computed(() => props.tile || !iconName.value);
 

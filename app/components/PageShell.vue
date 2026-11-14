@@ -374,6 +374,10 @@
                         </UTooltip>
                     </div>
 
+                    <!-- Each pane keeps its core chat and document views mounted while
+                         the other one is shown, so chat/document tab switches rebind
+                         instead of rebuilding the composer or editor. -->
+                    <KeepAlive :include="CACHED_PANE_VIEWS" :max="2">
                     <component
                         :ref="(instance: any) => setPaneComponentRef(pane.id, instance)"
                         :is="resolvePaneComponent(pane)"
@@ -392,6 +396,7 @@
                             (title: string) => onPaneTabTitle(pane.id, title)
                         "
                     />
+                    </KeepAlive>
 
                     <!-- Resize handle (only between panes, not after the last one) -->
                     <PaneResizeHandle
@@ -1066,6 +1071,12 @@ whenever(shiftRight, () => {
  * Resolve the component to render for a pane based on its mode.
  * Returns the appropriate component for built-in modes or registered custom apps.
  */
+// Only the core views, which release pane-keyed registrations while hidden.
+// Theme and plugin pane components are not written for deactivation.
+// Nuxt names components by folder: documents/DocumentEditor.vue is
+// DocumentsDocumentEditor.
+const CACHED_PANE_VIEWS = ['ChatContainer', 'DocumentsDocumentEditor'];
+
 function resolvePaneComponent(pane: PaneState): Component {
     // Built-in: chat
     if (pane.mode === 'chat') {
@@ -1747,13 +1758,16 @@ function updateUrl(force = false) {
     const pane = panes.value[activePaneIndex.value];
     if (!pane) return;
 
-    // Skip route sync for custom pane apps (only sync chat/doc modes)
-    if (pane.mode !== 'chat' && pane.mode !== 'doc') return;
+    const isRecordPane = pane.mode === 'chat' || pane.mode === 'doc';
+    // App panes (Files, plugins) have no route of their own. With saved tabs,
+    // the bare /chat entry restores the active tab on reload, so a reload no
+    // longer reopens the chat or document that was shown before the app.
+    if (!isRecordPane && !workspaceTabsEnabled.value) return;
 
     const base = pane.mode === 'doc' ? '/docs' : '/chat';
-    const id = pane.mode === 'doc' ? pane.documentId : pane.threadId;
+    const id = !isRecordPane ? undefined : pane.mode === 'doc' ? pane.documentId : pane.threadId;
     const newPath = id ? `${base}/${id}` : base;
-    if (window.location.pathname === newPath) return;
+    if (currentPath === newPath) return;
     // The root entry point can become /chat while a dashboard deep link is
     // mounting. Keep its operation context through that one route rewrite.
     const params = new URLSearchParams(window.location.search);
@@ -1763,13 +1777,27 @@ function updateUrl(force = false) {
     // control after it mounts, so the token also survives this rewrite.
     const invite = params.get('invite');
     const query = dashboardQuery || (invite ? `?${new URLSearchParams({ invite })}` : '');
-    window.history.replaceState(window.history.state, '', `${newPath}${query}`);
+    const url = `${newPath}${query}`;
+    // Keep vue-router's `current` in step, or its next push rewrites this
+    // entry back to the route it last navigated to.
+    window.history.replaceState({ ...window.history.state, current: url }, '', url);
 }
+
+const shellTitle = computed(() => {
+    const appName = runtimeConfig.public?.branding?.appName || 'OR3';
+    if (!props.routeSync || !workspaceTabsEnabled.value) return appName;
+    const tab = workspaceTabs.state.value.tabs.find(item => item.id === workspaceTabs.activeTabId.value);
+    const title = tab ? workspaceTabMetadata.titleFor(tab).title : '';
+    return title ? `${title} · ${appName}` : appName;
+});
+useHead({ title: shellTitle });
 
 watch(
     () => {
         const active = panes.value[activePaneIndex.value];
         if (!active) return '';
+        // The bound resource only: the active tab id changes before its
+        // resource is bound, and would record the outgoing path for it.
         return `${active.mode}:${active.threadId || ''}:${
             active.documentId || ''
         }`;

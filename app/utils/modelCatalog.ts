@@ -22,7 +22,7 @@ export interface ProviderInfo {
     slug: string;
     /** Human readable company name, e.g. "Anthropic". */
     name: string;
-    /** simple-icons glyph name (without collection prefix) when available. */
+    /** Full simple-icons glyph name (e.g. `simple-icons:openai`) so the icon scan bundles it. */
     icon?: string;
     /**
      * Brand color used for the glyph / monogram tile.
@@ -39,19 +39,19 @@ export interface ProviderInfo {
  * Unknown slugs fall back to a prettified name + hashed-hue monogram tile.
  */
 const PROVIDER_REGISTRY: Record<string, ProviderInfo> = {
-    openai: { slug: 'openai', name: 'OpenAI', icon: 'openai', color: null },
+    openai: { slug: 'openai', name: 'OpenAI', icon: 'simple-icons:openai', color: null },
     // Direct OpenAI models billed to the configured OpenAI key, not OpenRouter.
-    '@openai': { slug: '@openai', name: 'OpenAI', icon: 'openai', color: null },
+    '@openai': { slug: '@openai', name: 'OpenAI', icon: 'simple-icons:openai', color: null },
     anthropic: {
         slug: 'anthropic',
         name: 'Anthropic',
-        icon: 'anthropic',
+        icon: 'simple-icons:anthropic',
         color: '#D97757',
     },
     google: {
         slug: 'google',
         name: 'Google',
-        icon: 'googlegemini',
+        icon: 'simple-icons:googlegemini',
         color: '#4285F4',
     },
     'x-ai': {
@@ -64,13 +64,13 @@ const PROVIDER_REGISTRY: Record<string, ProviderInfo> = {
     'meta-llama': {
         slug: 'meta-llama',
         name: 'Meta',
-        icon: 'meta',
+        icon: 'simple-icons:meta',
         color: '#0082FB',
     },
     mistralai: {
         slug: 'mistralai',
         name: 'Mistral AI',
-        icon: 'mistralai',
+        icon: 'simple-icons:mistralai',
         color: '#FF7000',
     },
     cohere: {
@@ -83,71 +83,71 @@ const PROVIDER_REGISTRY: Record<string, ProviderInfo> = {
     perplexity: {
         slug: 'perplexity',
         name: 'Perplexity',
-        icon: 'perplexity',
+        icon: 'simple-icons:perplexity',
         color: '#20B8CD',
     },
     deepseek: {
         slug: 'deepseek',
         name: 'DeepSeek',
-        icon: 'deepseek',
+        icon: 'simple-icons:deepseek',
         color: '#4D6BFE',
     },
-    qwen: { slug: 'qwen', name: 'Qwen', icon: 'qwen', color: '#615CED' },
+    qwen: { slug: 'qwen', name: 'Qwen', icon: 'simple-icons:qwen', color: '#615CED' },
     alibaba: {
         slug: 'alibaba',
         name: 'Alibaba',
-        icon: 'alibabacloud',
+        icon: 'simple-icons:alibabacloud',
         color: '#FF6A00',
     },
     microsoft: {
         slug: 'microsoft',
         name: 'Microsoft',
-        icon: 'microsoft',
+        icon: 'simple-icons:microsoft',
         color: null,
     },
-    nvidia: { slug: 'nvidia', name: 'NVIDIA', icon: 'nvidia', color: '#76B900' },
+    nvidia: { slug: 'nvidia', name: 'NVIDIA', icon: 'simple-icons:nvidia', color: '#76B900' },
     amazon: {
         slug: 'amazon',
         name: 'Amazon',
-        icon: 'amazonwebservices',
+        icon: 'simple-icons:amazonwebservices',
         color: '#FF9900',
     },
     openrouter: {
         slug: 'openrouter',
         name: 'OpenRouter',
-        icon: 'openrouter',
+        icon: 'simple-icons:openrouter',
         color: null,
     },
     huggingface: {
         slug: 'huggingface',
         name: 'Hugging Face',
-        icon: 'huggingface',
+        icon: 'simple-icons:huggingface',
         color: '#FF9D00',
     },
-    ibm: { slug: 'ibm', name: 'IBM', icon: 'ibm', color: '#0F62FE' },
+    ibm: { slug: 'ibm', name: 'IBM', icon: 'simple-icons:ibm', color: '#0F62FE' },
     databricks: {
         slug: 'databricks',
         name: 'Databricks',
-        icon: 'databricks',
+        icon: 'simple-icons:databricks',
         color: '#FF3621',
     },
     snowflake: {
         slug: 'snowflake',
         name: 'Snowflake',
-        icon: 'snowflake',
+        icon: 'simple-icons:snowflake',
         color: '#29B5E8',
     },
     bytedance: {
         slug: 'bytedance',
         name: 'ByteDance',
-        icon: 'bytedance',
+        icon: 'simple-icons:bytedance',
         color: '#325AB4',
     },
-    baidu: { slug: 'baidu', name: 'Baidu', icon: 'baidu', color: '#2932E1' },
+    baidu: { slug: 'baidu', name: 'Baidu', icon: 'simple-icons:baidu', color: '#2932E1' },
     minimax: {
         slug: 'minimax',
         name: 'MiniMax',
-        icon: 'minimax',
+        icon: 'simple-icons:minimax',
         color: null,
     },
     moonshotai: {
