@@ -1,5 +1,5 @@
+import { prepareSyncWrite, SyncWriteError } from '~~/shared/sync/prepare-sync-write';
 import { observeSyncRequest } from '../../sync/observations';
-import { isLocalOnlyKvChange } from '../../../shared/sync/local-only-kv';
 import { WORKSPACE_ITEM_CAPABILITY } from "~~/shared/posts/workspace-item-capability";
 import { hasWorkspaceItemSemantics } from '~~/shared/posts/workspace-item-capability';
 import { requireWorkspaceItemCapability } from '../../utils/sync/workspace-item-capability';
@@ -23,7 +23,6 @@ import {
     PendingOpSchema,
     PushResultSchema,
     SyncScopeSchema,
-    TABLE_PAYLOAD_SCHEMAS,
     MAX_SYNC_PUSH_BATCH_BYTES,
     MAX_SYNC_PUSH_BATCH_OPS,
     getPushResultContractError,
@@ -41,7 +40,6 @@ import {
 import { enforceRateLimit } from '../../utils/rate-limit/enforce';
 import { setNoCacheHeaders } from '../../utils/headers';
 import { readLimitedJsonBody } from '../../utils/security/limited-json-body';
-import { MAX_SYNC_PAYLOAD_BYTES } from '~~/shared/sync/sanitize';
 import {
     isGenericFileMetaPayload,
     requireFileKindCapability,
@@ -57,10 +55,6 @@ const PushEnvelopeSchema = z.object({
     fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
     workspaceItemCapability: z.literal(WORKSPACE_ITEM_CAPABILITY).optional(),
 });
-
-function serializedPayloadBytes(payload: unknown): number {
-    return new TextEncoder().encode(JSON.stringify(payload)).byteLength;
-}
 
 function opIdFromUnknown(op: unknown, index: number): string {
     if (
@@ -101,39 +95,12 @@ function validateOneOp(
         };
     }
 
-    const op = { ...parsed.data };
-    if (isLocalOnlyKvChange(op.tableName, op.pk, op.payload)) return { result: validationFailure(op.stamp.opId, 'Device-only KV names cannot be synced') };
-    if (
-        op.payload !== undefined &&
-        serializedPayloadBytes(op.payload) > MAX_SYNC_PAYLOAD_BYTES
-    ) {
-        return {
-            result: {
-                opId: op.stamp.opId,
-                success: false,
-                error: `Payload too large for ${op.tableName}: exceeds ${MAX_SYNC_PAYLOAD_BYTES} bytes`,
-                errorCode: 'OVERSIZED',
-            },
-        };
+    try {
+        return { op: { ...parsed.data, ...prepareSyncWrite(parsed.data) } };
+    } catch (error) {
+        if (!(error instanceof SyncWriteError)) throw error;
+        return { result: { opId: parsed.data.stamp.opId, success: false, error: error.message, errorCode: error.code } };
     }
-
-    if (op.operation === 'put') {
-        const schema = TABLE_PAYLOAD_SCHEMAS[op.tableName];
-        if (schema) {
-            const payload = schema.safeParse(op.payload ?? {});
-            if (!payload.success) {
-                return {
-                    result: validationFailure(
-                        op.stamp.opId,
-                        `Invalid payload for ${op.tableName}: ${payload.error.message}`
-                    ),
-                };
-            }
-            op.payload = payload.data as Record<string, unknown>;
-        }
-    }
-
-    return { op };
 }
 
 /**

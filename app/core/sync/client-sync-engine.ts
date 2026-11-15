@@ -180,6 +180,13 @@ function startSyncEngine(
     authorizationRevision = getCachedSessionContext()?.authorizationRevision,
 ): Promise<void> {
     if (!hasCloudAccess()) return stopSyncEngine();
+    // Explicit retry of a storage-paused subscription retains its staged chain.
+    // A healthy same-scope start remains idempotent; auth changes still reconcile.
+    if (!reconcilePending && desiredScope?.workspaceId === workspaceId && desiredScope.principalId === principalId &&
+        engineState?.scope.workspaceId === workspaceId && engineState.scope.principalId === principalId &&
+        desiredAuthorizationRevision === authorizationRevision && engineState.subscriptionManager.getStatus() === 'error') {
+        return engineState.subscriptionManager.start();
+    }
     return requestEngine({ workspaceId, ...(principalId ? { principalId } : {}) }, false, authorizationRevision);
 }
 

@@ -382,7 +382,7 @@ describe('atomic sync capture integration', () => {
                 clock: 2,
                 hlc: '0000000000002:0000:node',
                 deviceId: 'remote-device',
-                opId: 'remote-op-1',
+                opId: '00000000-0000-4000-8000-000000000001',
             },
         };
 

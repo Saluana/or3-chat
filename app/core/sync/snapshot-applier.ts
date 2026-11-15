@@ -1,7 +1,11 @@
+import { MAX_SYNC_PAYLOAD_BYTES } from '~~/shared/sync/sanitize';
+import { assertIncomingIdentity, isSyncTable } from '~~/shared/sync/incoming-records';
+import { retainIncomingEvidenceInTx } from './incoming-evidence';
+import { compareSyncTuple, syncJsonByteLength, SnapshotItemSchema, SnapshotResponseSchema, SnapshotUnavailableRecordSchema } from '~~/shared/sync/schemas';
 import { getSyncStateId } from './cursor-manager';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 import type { Transaction } from 'dexie';
-import type { Or3DB, SnapshotStageRow } from '~/db/client';
+import type { Or3DB, SnapshotStageRow, StagedUnavailableRecord } from '~/db/client';
 import type { Message } from '~/db/schema';
 import type { PendingOp, SnapshotItem, SnapshotResponse, SyncScope } from '~~/shared/sync/types';
 import { compareSyncRevision } from '~~/shared/sync/revision';
@@ -27,7 +31,7 @@ function revisionOf(value: unknown): { clock: number; hlc: string; opId: string 
     };
 }
 
-function isLocalOnlyKv(item: SnapshotItem, names: Set<string>): boolean {
+function isLocalOnlyKv(item: SnapshotItem | StagedUnavailableRecord, names: Set<string>): boolean {
     if (item.tableName !== 'kv') return false;
     const payload = item.kind === 'row' && item.payload && typeof item.payload === 'object'
         ? item.payload as { name?: unknown }
@@ -104,9 +108,10 @@ export class SnapshotStager {
     private readonly localOnlyKv = getLocalOnlyKvNames();
     private snapshotId: string | null = null;
     private highWatermark = 0;
-    private previousKey: string | null = null;
+    private previousKey: string[] | null = null;
     private previousLogicalKey: string | null = null;
     private sequence = 0;
+    private readonly unavailableKeys = new Set<string>();
     private complete = false;
 
     constructor(
@@ -142,28 +147,59 @@ export class SnapshotStager {
             throw new Error('Snapshot page identity or high-watermark changed');
         }
 
+        // Validate provider lanes before merging; sorting must not hide a broken seek.
+        for (const lane of [page.items, page.unavailable ?? []]) {
+            let previous: string[] | null = null;
+            for (const entry of lane) {
+                assertIncomingIdentity(entry);
+                const key = [entry.tableName, entry.pk, 'kind' in entry ? entry.kind : entry.originalKind];
+                if (previous && compareSyncTuple(key, previous) <= 0) throw new Error('Snapshot items are duplicated or out of order');
+                previous = key;
+            }
+        }
+        const entries: (SnapshotItem | StagedUnavailableRecord)[] = page.items.map(item => {
+            let reason = !SnapshotItemSchema.safeParse(item).success ? 'invalid_record_envelope' : !isSyncTable(item.tableName) ? 'unknown_table' : null;
+            if (!reason && item.kind === 'row' && syncJsonByteLength(item.payload) > MAX_SYNC_PAYLOAD_BYTES) reason = 'oversized_payload';
+            if (!reason && item.kind === 'row' && !normalizeSyncPayload(item.tableName, item.pk, item.payload, item.revision).isValid) reason = 'invalid_local_payload';
+            if (!reason) return item;
+            const marker = SnapshotUnavailableRecordSchema.parse({ tableName: item.tableName, pk: item.pk,
+                originalKind: item.kind, snapshotId: page.snapshotId, highWatermark: page.highWatermark,
+                evidenceRef: 'client-discovered', reason });
+            return { ...marker, kind: 'unavailable' as const, record: item };
+        });
+        for (const raw of page.unavailable ?? []) {
+            const marker = SnapshotUnavailableRecordSchema.parse(raw);
+            if (marker.snapshotId !== page.snapshotId || marker.highWatermark !== page.highWatermark) throw new Error('Unavailable snapshot identity changed');
+            entries.push({ ...marker, kind: 'unavailable' });
+        }
+        const keyOf = (item: SnapshotItem | StagedUnavailableRecord) => [item.tableName, item.pk, item.kind === 'unavailable' ? item.originalKind : item.kind];
+        entries.sort((a, b) => compareSyncTuple(keyOf(a), keyOf(b)));
+        SnapshotResponseSchema.parse({ ...page, items: entries.filter(item => item.kind !== 'unavailable'),
+            unavailable: entries.filter(item => item.kind === 'unavailable') });
+
         const rows: SnapshotStageRow[] = [];
-        for (const item of page.items) {
-            const logicalKey = `${item.tableName}\0${item.pk}`;
-            const key = `${logicalKey}\0${item.kind}`;
-            if (logicalKey === this.previousLogicalKey) {
-                throw new Error('Snapshot contains duplicate or contradictory entries for one record');
-            }
-            if (this.previousKey !== null && key <= this.previousKey) {
-                throw new Error('Snapshot items are duplicated or out of order');
-            }
-            this.previousKey = key;
-            this.previousLogicalKey = logicalKey;
-            this.tableNames.add(item.tableName);
+        let previousKey = this.previousKey;
+        let previousLogicalKey = this.previousLogicalKey;
+        let sequence = this.sequence;
+        for (const item of entries) {
+            const logicalKey = JSON.stringify([item.tableName, item.pk]);
+            const key = keyOf(item);
+            if (logicalKey === previousLogicalKey) throw new Error('Snapshot contains duplicate or contradictory entries for one record');
+            if (previousKey !== null && compareSyncTuple(key, previousKey) <= 0) throw new Error('Snapshot items are duplicated or out of order');
+            previousKey = key;
+            previousLogicalKey = logicalKey;
             if (isLocalOnlyKv(item, this.localOnlyKv)) continue;
-            rows.push({
-                id: `${this.generation}:${this.sequence}`,
-                generation: this.generation,
-                sequence: this.sequence++,
-                item,
-            });
+            rows.push({ id: `${this.generation}:${sequence}`, generation: this.generation, sequence: sequence++, item });
         }
         if (rows.length) await this.db.snapshot_staging.bulkPut(rows);
+        // Commit in-memory continuation only after the page is durable (quota can retry it).
+        this.previousKey = previousKey;
+        this.previousLogicalKey = previousLogicalKey;
+        this.sequence = sequence;
+        for (const item of entries) {
+            if (isSyncTable(item.tableName)) this.tableNames.add(item.tableName);
+            if (item.kind === 'unavailable') this.unavailableKeys.add(JSON.stringify([item.tableName, item.pk]));
+        }
         this.complete = page.nextPageToken === null;
     }
 
@@ -175,11 +211,12 @@ export class SnapshotStager {
         if (!this.complete || this.snapshotId === null) {
             throw new Error('Snapshot chain is incomplete');
         }
+        replacementTables = replacementTables.filter(isSyncTable);
         const tableNames = [...new Set([
             ...this.requestedTables,
             ...this.tableNames,
             ...replacementTables,
-        ])];
+        ].filter(isSyncTable))];
         const transactionTables = [
             ...tableNames.map((name) => this.db.table(name)),
             // Foreground rows need a live parent check when restored below.
@@ -197,6 +234,27 @@ export class SnapshotStager {
                 await tx.table('snapshot_staging').get('__active__') as SnapshotStageRow | undefined;
             if (active?.generation !== this.generation) abortSnapshotApply();
 
+            const preserved: { tableName: string; pk: string; row: unknown; tombstone: unknown }[] = [];
+            let evidenceSequence = 0;
+            while (evidenceSequence < this.sequence) {
+                const batch = await tx.table('snapshot_staging').where('[generation+sequence]')
+                    .between([this.generation, evidenceSequence], [this.generation, Number.MAX_SAFE_INTEGER])
+                    .limit(STAGE_BATCH_SIZE).toArray() as SnapshotStageRow[];
+                if (!batch.length) throw new Error('Snapshot staging rows are incomplete');
+                for (const row of batch) {
+                    evidenceSequence = row.sequence + 1;
+                    const item = row.item;
+                    if (item?.kind !== 'unavailable') continue;
+                    await retainIncomingEvidenceInTx(tx, { ...item, source: 'incoming_snapshot',
+                        reference: item.snapshotId, record: item.record ?? item });
+                    // Evidence is deduplicated across retries. Its archived local
+                    // copy may predate edits/deletes made before this installation.
+                    if (isSyncTable(item.tableName)) preserved.push({ tableName: item.tableName, pk: item.pk,
+                        row: await tx.table(item.tableName).get(item.pk),
+                        tombstone: await tx.table('tombstones').get(`${item.tableName}:${item.pk}`) });
+                }
+            }
+
             // Read the outbox inside this transaction. Writes made while pages
             // were fetched are included, and the cursor cannot commit before
             // the matching local intent is restored. Permanently failed work is
@@ -205,7 +263,7 @@ export class SnapshotStager {
             // rebuilt from the still-present local rows before anything is cleared.
             const pendingOps = await collectReplayableOps(
                 tx,
-                (tableName) => tableNames.includes(tableName),
+                (tableName, pk) => tableNames.includes(tableName) && !this.unavailableKeys.has(JSON.stringify([tableName, pk])),
                 deviceId
             );
             // Streaming assistants intentionally have no sync operation. Their
@@ -279,7 +337,7 @@ export class SnapshotStager {
                     const item = row.item;
                     if (!item) throw new Error('Snapshot staging row is invalid');
                     nextSequence = row.sequence + 1;
-                    if (isLocalOnlyKv(item, localOnlyKv)) continue;
+                    if (item.kind === 'unavailable' || isLocalOnlyKv(item, localOnlyKv)) continue;
                     if (item.kind === 'row') {
                         if (!item.payload || typeof item.payload !== 'object' || Array.isArray(item.payload)) {
                             throw new Error(`Snapshot row payload is invalid for ${item.tableName}:${item.pk}`);
@@ -317,14 +375,21 @@ export class SnapshotStager {
                     await tx.table(tableName).bulkDelete(keys);
                 }
                 if (tombstones.length) await tx.table('tombstones').bulkPut(tombstones);
+                // Consumption and replacement roll back together on quota/abort.
+                await tx.table('snapshot_staging').bulkDelete(batch.map(row => row.id));
             }
 
+            for (const entry of preserved) {
+                if (entry.row) await tx.table(entry.tableName).put(entry.row);
+                if (entry.tombstone) await tx.table('tombstones').put(entry.tombstone);
+            }
             for (const op of pendingOps) {
                 if (!shouldContinue()) abortSnapshotApply();
                 await applyPendingOp(tx, op, fileRefCounts.get(op.pk));
             }
             for (const row of foregroundRows) {
                 if (!shouldContinue()) abortSnapshotApply();
+                if (this.unavailableKeys.has(JSON.stringify(['messages', row.id]))) continue;
                 const parent = await this.db.threads.get(row.thread_id);
                 if (!parent || parent.deleted || await this.db.tombstones.get(`threads:${row.thread_id}`)) continue;
                 const canonical = await this.db.messages.get(row.id);
@@ -338,6 +403,7 @@ export class SnapshotStager {
                 if (tombstone) await tx.table('tombstones').delete(`messages:${row.id}`);
             }
             if (!shouldContinue()) abortSnapshotApply();
+            await tx.table('snapshot_staging').delete('__active__');
             await tx.table('sync_state').put({
                 id: getSyncStateId(this.scope),
                 cursor: this.highWatermark,

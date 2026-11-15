@@ -1,3 +1,4 @@
+import { classifyPullPage } from '../../utils/sync/unavailable-records';
 import { observeSyncRequest } from '../../sync/observations';
 import { hasWorkspaceItemSemantics } from "~~/shared/posts/workspace-item-capability";
 import { requireWorkspaceItemCapability } from "../../utils/sync/workspace-item-capability";
@@ -99,7 +100,7 @@ export default defineEventHandler(async (event) => {
         }
 
         const result = PullResponseSchema.safeParse(
-            await adapter.pull(event, parsed.data)
+            await classifyPullPage(event, adapter, parsed.data, await adapter.pull(event, parsed.data))
         );
         if (!result.success) {
             throw createError({

@@ -23,12 +23,13 @@ watermark.
 SQLite and Convex implement provider-side materialized snapshot page generators.
 The updated SQLite provider also targets 1 MiB of serialized JSON per pull or
 snapshot page, in addition to its row limit. It keeps records whole, advances
-past filtered changes, and emits one oversized record when necessary to make
-progress. Existing clients continue to follow the same cursors and tokens.
+past filtered changes, and requires durable unavailable handling for records beyond the hard
+single-record ceiling when the matched recovery contract is enabled. Existing clients continue to follow the same cursors and tokens.
 The client stages each validated page in a local IndexedDB table, then installs
 the completed chain and cursor in one transaction before replaying strictly
 after the watermark. Interrupted staging leaves materialized data untouched;
-the next attempt discards the incomplete staging rows. Pending local operations
+ordinary restarted attempts discard incomplete staging rows; a storage pause
+retains the current attempt for explicit retry. Pending local operations
 are read and merged in the install transaction, including writes made while
 pages were fetched. Cross-provider coverage verifies deterministic rows,
 tombstones, intervening writes, duplicate boundaries, and fresh-device recovery
@@ -46,6 +47,73 @@ atomically, except device-local KV keys excluded by the sync capture policy
 (including plugin extensions). Pending local puts and deletes are normalized,
 merged by revision in the same transaction, and then changes after the
 snapshot watermark are replayed before the live subscription resumes.
+
+## Unavailable records and durable recovery
+
+A compatible host/provider pair can contain a malformed stored record while
+continuing healthy records. Pull and snapshot responses carry an optional
+`unavailable` array. Every marker identifies the logical key, original operation
+or snapshot item kind, a bounded reason and a durable server evidence reference.
+Pull markers require the original server version; snapshot markers require the
+matching snapshot ID and high-watermark. Healthy entries and markers share the
+page count and byte budget. An all-unavailable pull window still advances, and
+a final all-unavailable snapshot page completes the chain. Invalid identity,
+ordering or coverage fails the page instead of silently skipping it.
+
+This requires explicit provider support (`capabilities.unavailableRecords =
+'v1'`) and browser negotiation (`unavailableRecordCapability: 'unavailable-v1'`).
+An older browser receives HTTP 426 / `OR3_SYNC_UPDATE_REQUIRED` before any
+partial page. The new snapshot ordering contract uses the same gate. Existing
+healthy pages from older adapters remain usable; upgrading the host alone does
+not add server evidence storage or repair to an older provider. Convex direct
+mode requires a separately qualified matching backend deployment.
+Legacy messages without `order_key` remain readable: the client derives their
+ordering from the revision HLC without changing stored history.
+
+The browser classifies incoming defects before opening table transactions.
+Remote evidence uses `variant: 'incoming'` in the existing `sync_quarantine`
+store and appears in `$syncEngine.getQuarantined()` and
+`$syncEngine.exportQuarantined()`. It never reconstructs outgoing operations.
+Evidence must commit before the cursor advances. Snapshot markers and
+client-discovered defects preserve affected local rows, deletion tombstones and
+pending intent in the same atomic replacement transaction as the watermark.
+Those preserved copies remain explicitly uncertain through their incoming
+quarantine entry; they are not confirmed server winners or newly queued writes.
+Unresolved evidence is retained until an explicit recovery/discard decision.
+
+Server evidence survives ordinary log garbage collection and snapshot expiry.
+Providers must retain original data before returning a marker and keep
+notification ownership checks fail-closed. A repair must publish a fresh op ID,
+a winning valid revision and a new server version; editing old history behind
+an advanced cursor cannot redeliver it. See `docs/sync-unavailable-records.md`
+in the source repository for the normative provider checklist.
+
+Snapshot ordering compares `(tableName, primaryKey, kind)` component by
+component using UTF-8 byte order with shorter prefixes first. NUL, colons, CJK
+and supplementary Unicode remain valid identifiers; new writes reject lone
+UTF-16 surrogates. The 1,024-code-unit primary-key admission limit is unchanged.
+Continuation tokens allow 65,536 characters and the snapshot request body allows
+128 KiB, including worst-case escaped keys and filters. Provider token decoders
+must use the matching bound.
+
+Staging rows are consumed inside the single atomic install transaction. A local
+storage-quota failure rolls the install back, leaves the previous dataset and
+cursor intact, and pauses automatic reconnection. Free storage, then explicitly
+retry with `$syncEngine.start(workspaceId)` to resume the retained page/staging
+in the current client session.
+This reduces temporary duplication; browsers may still require transaction
+space, so it is not a promise of quota immunity.
+
+Writer integrations use `prepareSyncWrite` from
+`~~/shared/sync/prepare-sync-write` at HTTP/background admission and provider
+transactional sinks. Preparation is deterministic, allowlists synced tables,
+validates lossless identifiers, stamps and final live payloads, and enforces the
+256 KiB serialized payload ceiling. Deletes validate their envelope without
+requiring a live row and retain their exact payload metadata so lost-ACK retries
+still match older receipts. `nextSyncClock` rejects unsafe increments. Existing
+nonempty legacy snapshot revision IDs remain supported.
+Reparsing stored background admissions preserves their record fields so existing
+admission and finalization receipts continue to match after an upgrade.
 
 ## Pull retention and snapshot recovery
 

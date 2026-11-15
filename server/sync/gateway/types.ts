@@ -21,6 +21,8 @@ import type { H3Event } from 'h3';
 import type { CanonicalChatReader } from '~~/shared/chat/history-reader';
 import type {
     SyncScope,
+    PullUnavailableRecord,
+    SnapshotUnavailableRecord,
     PullRequest,
     PullResponse,
     PushBatch,
@@ -187,6 +189,8 @@ export interface SyncGatewayAdapter {
         /** reserveUploadIntent serializes retained bytes and active digest holds. */
         atomicUploadQuota?: 'retained-v1';
         snapshotBootstrap?: 'snapshot-v1';
+        /** Durable authorized read evidence, independent of log/snapshot GC. */
+        unavailableRecords?: 'v1';
         historyRetention?: 'snapshot-v1';
         /** Atomic canonical chat admission/finalization and durable receipts. */
         backgroundGenerationHistory?: 'v1';
@@ -203,6 +207,16 @@ export interface SyncGatewayAdapter {
         /** Separate from native-storage deletion coordination; default absent. */
         externalStorageGenerations?: 'v1';
     };
+    /** Persist original reader-defective entry before authorizing a marker.
+     * Must verify source identity/visibility and retain bytes beyond GC/expiry.
+     * A failure rejects the page; never return a reference before durable commit.
+     */
+    retainUnavailableRecord?(event: H3Event, input: {
+        scope: SyncScope;
+        source: 'pull' | 'snapshot';
+        record: unknown;
+        marker: Omit<PullUnavailableRecord, 'evidenceRef'> | Omit<SnapshotUnavailableRecord, 'evidenceRef'>;
+    }): Promise<{ evidenceRef: string }>;
     readChatHistory?: CanonicalChatReader['readChatHistory'];
 
     /**

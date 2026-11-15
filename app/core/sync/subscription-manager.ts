@@ -1,3 +1,5 @@
+import { assertIncomingIdentity } from '~~/shared/sync/incoming-records';
+import { isStorageQuotaError } from './incoming-evidence';
 /**
  * @module app/core/sync/subscription-manager
  *
@@ -123,6 +125,15 @@ export class SubscriptionManager {
     private requestController = new AbortController();
     private probeGeneration: number | null = null;
     private pendingCursorAcknowledgement: number | null = null;
+    /** Kept only for a recoverable local storage pause; explicit start retries it. */
+    private pausedSnapshot: {
+        stager: SnapshotStager;
+        seenPageTokens: Set<string>;
+        pageToken?: string;
+        totalPulled: number;
+        pendingPage?: SnapshotResponse;
+        downloadComplete: boolean;
+    } | null = null;
 
     constructor(
         db: Or3DB,
@@ -206,6 +217,12 @@ export class SubscriptionManager {
                 this.setStatus('connected');
                 probe.success();
                 probeSettled = true;
+            } catch (error) {
+                if (isStorageQuotaError(error)) {
+                    circuitBreaker.recordSuccess();
+                    probeSettled = true;
+                }
+                throw error;
             } finally {
                 signal.removeEventListener('abort', cancelProbe);
                 if (this.probeGeneration === generation) this.probeGeneration = null;
@@ -221,7 +238,9 @@ export class SubscriptionManager {
             }
             console.error('[SubscriptionManager] Failed to start:', error);
             this.setStatus('error');
-            if (!(error instanceof SnapshotRecoveryPausedError)) this.scheduleReconnect(generation);
+            if (!(error instanceof SnapshotRecoveryPausedError) && !isStorageQuotaError(error)) {
+                this.scheduleReconnect(generation);
+            }
         }
     }
 
@@ -348,6 +367,8 @@ export class SubscriptionManager {
                     pendingFetch = null;
                 }
 
+                await this.conflictResolver.applyChanges([], response.unavailable);
+                if (!this.isCurrentGeneration(generation)) return;
                 if (response.changes.length > 0) {
                     const filtered = this.filterRecentOps(response.changes);
                     if (filtered.length) {
@@ -467,46 +488,51 @@ export class SubscriptionManager {
         const snapshot = this.provider.snapshot?.bind(this.provider);
         if (!snapshot) return;
 
-        const stager = new SnapshotStager(this.db, this.scope, this.config.tables);
-        const seenPageTokens = new Set<string>();
-        let pageToken: string | undefined;
-        let totalPulled = 0;
+        const state = this.pausedSnapshot ?? {
+            stager: new SnapshotStager(this.db, this.scope, this.config.tables),
+            seenPageTokens: new Set<string>(), totalPulled: 0, downloadComplete: false,
+            pageToken: undefined, pendingPage: undefined,
+        };
+        const { stager } = state;
+        if (!this.pausedSnapshot) await stager.start();
+        this.pausedSnapshot = null;
         let highWatermark: number;
-
-        await stager.start();
         try {
-            for (;;) {
+            while (!state.downloadComplete) {
                 if (!this.isCurrentGeneration(generation)) return;
                 if (!this.canContinueProbe(generation)) {
                     throw new Error('Circuit breaker opened during snapshot bootstrap');
                 }
 
-                const page = await this.fetchSnapshotPage(snapshot, {
+                const page = state.pendingPage ?? await this.fetchSnapshotPage(snapshot, {
                     scope: this.scope,
                     pageSize: this.config.bootstrapPageSize,
+                    unavailableRecordCapability: 'unavailable-v1',
                     tables: this.config.tables,
-                    ...(pageToken ? { pageToken } : {}),
+                    ...(state.pageToken ? { pageToken: state.pageToken } : {}),
                 }, this.requestController.signal, startTime + SNAPSHOT_TTL_MS);
                 if (!this.isCurrentGeneration(generation)) return;
 
+                state.pendingPage = page;
                 await stager.appendPage(page);
-                totalPulled += page.items.length;
+                state.pendingPage = undefined;
+                state.totalPulled += page.items.length + (page.unavailable?.length ?? 0);
                 if (emitBootstrapEvents) {
                     await useHooks().doAction('sync.bootstrap:action:progress', {
                         scope: this.scope,
                         cursor: page.highWatermark,
-                        pulledCount: totalPulled,
+                        pulledCount: state.totalPulled,
                         hasMore: page.nextPageToken !== null,
                     });
                     if (!this.isCurrentGeneration(generation)) return;
                 }
 
-                if (page.nextPageToken === null) break;
-                if (seenPageTokens.has(page.nextPageToken)) {
+                if (page.nextPageToken === null) { state.downloadComplete = true; break; }
+                if (state.seenPageTokens.has(page.nextPageToken)) {
                     throw new Error('Snapshot pagination token repeated before completion');
                 }
-                seenPageTokens.add(page.nextPageToken);
-                pageToken = page.nextPageToken;
+                state.seenPageTokens.add(page.nextPageToken);
+                state.pageToken = page.nextPageToken;
             }
 
             highWatermark = await stager.apply(
@@ -515,16 +541,22 @@ export class SubscriptionManager {
                 replacementTables
             );
         } catch (error) {
+            // Quota keeps the staged prefix for an explicit resume (no download loop).
+            if (isStorageQuotaError(error)) {
+                this.pausedSnapshot = state;
+                throw error;
+            }
             const status = (error as { status?: number; statusCode?: number } | null)?.status ??
                 (error as { statusCode?: number } | null)?.statusCode;
             if (this.requestController.signal.aborted || isAbortLikeError(error) ||
                 status === 410 || error instanceof SnapshotIdentityExpiredError) throw error;
-            // A fatal chain, admission or storage failure needs deliberate
-            // recovery; reconnect must not silently download a fresh identity.
+            // A fatal chain or admission failure needs deliberate recovery;
+            // reconnect must not silently download a fresh identity.
             throw new SnapshotRecoveryPausedError('Snapshot recovery paused after a non-transient failure', { cause: error });
         } finally {
-            await stager.dispose();
+            if (this.pausedSnapshot !== state) await stager.dispose();
         }
+        let totalPulled = state.totalPulled;
         if (!this.isCurrentGeneration(generation)) return;
 
         // The watermark and materialized rows commit atomically. Pull semantics
@@ -588,22 +620,23 @@ export class SubscriptionManager {
             }
             return true;
         }
+        let probe: PullResponse;
         try {
-            const probe = await this.pull({
+            probe = await this.pull({
                 scope: this.scope,
                 cursor,
                 limit: 1,
                 tables: this.config.tables,
             });
-            if (!this.isCurrentGeneration(generation)) return true;
-            if (typeof probe.requiresSnapshot !== 'boolean') return false;
-            if (probe.requiresSnapshot) {
-                await this.recoverFromExpiredCursor(generation);
-            }
-            return true;
         } catch {
             return false;
         }
+        if (!this.isCurrentGeneration(generation)) return true;
+        if (typeof probe.requiresSnapshot !== 'boolean') return false;
+        // An authoritative reset is no longer an optional capability probe.
+        // In particular, quota must reach start's storage-pause handling.
+        if (probe.requiresSnapshot) await this.recoverFromExpiredCursor(generation);
+        return true;
     }
 
     private async recoverFromExpiredCursor(generation: number): Promise<void> {
@@ -681,6 +714,8 @@ export class SubscriptionManager {
                 if (!this.isCurrentGeneration(generation)) return;
                 if (await this.honorRequiresSnapshot(response, generation)) return;
 
+                await this.conflictResolver.applyChanges([], response.unavailable);
+                if (!this.isCurrentGeneration(generation)) return;
                 if (response.changes.length) {
                     const filtered = this.filterRecentOps(response.changes);
                     if (filtered.length) {
@@ -814,6 +849,8 @@ export class SubscriptionManager {
         if (!Number.isSafeInteger(fromCursor) || fromCursor < 0 || fromCursor > cursor) {
             throw new Error('Subscription page skipped the durable cursor');
         }
+        await this.conflictResolver.applyChanges([], parsed.unavailable);
+        if (!this.isCurrentGeneration(generation)) return;
         const changes = parsed.changes.filter(change => change.serverVersion > cursor);
         const filtered = this.filterRecentOps(changes);
         if (changes.length) {
@@ -869,6 +906,10 @@ export class SubscriptionManager {
      */
     private async handleChanges(changes: SyncChange[], generation: number): Promise<void> {
         if (changes.length === 0 || !this.isCurrentGeneration(generation)) return;
+        for (const change of changes) {
+            assertIncomingIdentity(change);
+            if (!Number.isSafeInteger(change.serverVersion) || change.serverVersion <= 0) throw new Error('Invalid incoming version');
+        }
 
         // Filter out changes we've already seen to avoid reprocessing
         const currentCursor = await this.cursorManager.getCursor();
@@ -963,7 +1004,7 @@ export class SubscriptionManager {
     }
 
     private filterRecentOps(changes: SyncChange[]): SyncChange[] {
-        const filtered = changes.filter((c) => !isRecentOpId(c.stamp.opId));
+        const filtered = changes.filter((c) => !isRecentOpId(c.stamp?.opId ?? ''));
         if (import.meta.dev) {
             const dropped = changes
                 .filter((c) => !filtered.includes(c))
@@ -1026,6 +1067,8 @@ export class SubscriptionManager {
                 break;
             }
 
+            await this.conflictResolver.applyChanges([], response.unavailable);
+            if (!this.isCurrentGeneration(generation)) break;
             const newChanges = response.changes.filter(
                 (change) => change.serverVersion > cursor
             );
@@ -1072,7 +1115,9 @@ export class SubscriptionManager {
             this.unsubscribe = null;
         }
         this.setStatus('error');
-        if (!(error instanceof SnapshotRecoveryPausedError)) this.scheduleReconnect(generation);
+        if (!(error instanceof SnapshotRecoveryPausedError) && !isStorageQuotaError(error)) {
+            this.scheduleReconnect(generation);
+        }
     }
 
     /**
@@ -1145,8 +1190,15 @@ export class SubscriptionManager {
             getSyncCircuitBreaker(this.circuitBreakerKey).canRetry();
     }
 
-    private pull(request: PullRequest): Promise<PullResponse> {
-        return this.provider.pull(request, { signal: this.requestController.signal });
+    private async pull(request: PullRequest): Promise<PullResponse> {
+        const response = await this.provider.pull({ ...request, unavailableRecordCapability: 'unavailable-v1' }, { signal: this.requestController.signal });
+        // Check coverage before callers filter already-seen versions. A corrupt
+        // version cannot be silently dropped by the cursor comparison.
+        for (const change of response.changes) {
+            assertIncomingIdentity(change);
+            if (!Number.isSafeInteger(change.serverVersion) || change.serverVersion <= 0) throw new Error('Invalid incoming version');
+        }
+        return response;
     }
 
     private getWindow(): Window | null {

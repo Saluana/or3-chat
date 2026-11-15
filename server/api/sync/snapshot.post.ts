@@ -1,3 +1,4 @@
+import { classifySnapshotPage } from '../../utils/sync/unavailable-records';
 import { observeSyncRequest } from '../../sync/observations';
 import { hasWorkspaceItemSemantics } from "~~/shared/posts/workspace-item-capability";
 import { requireWorkspaceItemCapability } from "../../utils/sync/workspace-item-capability";
@@ -10,6 +11,7 @@ import { requireWorkspaceItemCapability } from "../../utils/sync/workspace-item-
  */
 import { defineEventHandler, createError, setResponseHeader } from 'h3';
 import {
+    MAX_SYNC_SNAPSHOT_REQUEST_BYTES,
     SnapshotRequestSchema,
     SnapshotResponseSchema,
     getSnapshotResponseContractError,
@@ -38,7 +40,7 @@ export default defineEventHandler(async (event) => {
     }
 
     setNoCacheHeaders(event);
-    const request = SnapshotRequestSchema.safeParse(await readLimitedJsonBody(event, 8 * 1024));
+    const request = SnapshotRequestSchema.safeParse(await readLimitedJsonBody(event, MAX_SYNC_SNAPSHOT_REQUEST_BYTES));
     if (!request.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid snapshot request' });
     }
@@ -74,7 +76,7 @@ export default defineEventHandler(async (event) => {
         recordSyncRequest(userId, 'sync:snapshot');
 
         const response = SnapshotResponseSchema.safeParse(
-            await adapter.snapshot(event, request.data)
+            await classifySnapshotPage(event, adapter, request.data, await adapter.snapshot(event, request.data))
         );
         if (!response.success) {
             throw createError({ statusCode: 502, statusMessage: 'Invalid snapshot response' });

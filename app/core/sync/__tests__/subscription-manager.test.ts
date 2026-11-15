@@ -1,3 +1,4 @@
+import Dexie from 'dexie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
     PendingOp,
@@ -97,7 +98,7 @@ class SubscriptionProvider implements SyncProvider {
                             clock: 1,
                             hlc: '0000000000105:0000:node',
                             deviceId: 'device-2',
-                            opId: 'op-105',
+                            opId: testUuid('op-105'),
                         },
                     },
                 ],
@@ -130,7 +131,7 @@ class SubscriptionProvider implements SyncProvider {
                             clock: 1,
                             hlc: '0000000000110:0000:node',
                             deviceId: 'device-2',
-                            opId: 'op-110',
+                            opId: testUuid('op-110'),
                         },
                     },
                     {
@@ -153,7 +154,7 @@ class SubscriptionProvider implements SyncProvider {
                             clock: 1,
                             hlc: '0000000000120:0000:node',
                             deviceId: 'device-2',
-                            opId: 'op-120',
+                            opId: testUuid('op-120'),
                         },
                     },
                 ],
@@ -205,7 +206,7 @@ function buildChange(version: number): SyncChange {
             clock: 1,
             hlc: `0000000000${version}:0000:node`,
             deviceId: 'device-1',
-            opId: `op-${version}`,
+            opId: testUuid(`op-${version}`),
         },
     };
 }
@@ -446,7 +447,7 @@ describe('SubscriptionManager', () => {
 
         const onChanges = (provider.subscribe as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]![2] as (changes: SyncChange[]) => void;
 
-        markRecentOpId('op-echo');
+        markRecentOpId(testUuid('op-echo'));
 
         await onChanges([
             {
@@ -469,7 +470,7 @@ describe('SubscriptionManager', () => {
                     clock: 1,
                     hlc: '0000000000002:0000:node',
                     deviceId: 'device-1',
-                    opId: 'op-echo',
+                    opId: testUuid('op-echo'),
                 },
             },
             {
@@ -492,7 +493,7 @@ describe('SubscriptionManager', () => {
                     clock: 1,
                     hlc: '0000000000003:0000:node',
                     deviceId: 'device-1',
-                    opId: 'op-live',
+                    opId: testUuid('op-live'),
                 },
             },
         ]);
@@ -541,7 +542,7 @@ describe('SubscriptionManager', () => {
 
         const onChanges = (provider.subscribe as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]![2] as (changes: SyncChange[]) => void;
 
-        markRecentOpId('op-only');
+        markRecentOpId(testUuid('op-only'));
 
         await onChanges([
             {
@@ -564,7 +565,7 @@ describe('SubscriptionManager', () => {
                     clock: 1,
                     hlc: '0000000000005:0000:node',
                     deviceId: 'device-1',
-                    opId: 'op-only',
+                    opId: testUuid('op-only'),
                 },
             },
         ]);
@@ -1177,6 +1178,45 @@ describe('SubscriptionManager', () => {
             await db.delete();
             vi.mocked(cursorApi.isBootstrapNeeded).mockResolvedValue(false);
         }
+    });
+
+    it.each([{ phase: 'staging', rescan: false }, { phase: 'install', rescan: false }, { phase: 'install', rescan: true }])('pauses on $phase quota (rescan=$rescan) and resumes the retained snapshot without downloading again', async ({ phase, rescan }) => {
+        (cursorManagerModule as unknown as { __cursorState: { cursor: number } }).__cursorState.cursor = rescan ? 10 : 0;
+        const db = new Or3DB(`quota-${crypto.randomUUID()}`); await db.open();
+        const cursor = cursorManagerModule.getCursorManager(db, { workspaceId: 'ws-1' });
+        vi.mocked(cursor.isBootstrapNeeded).mockResolvedValue(!rescan);
+        await db.kv.put({ id: 'old', name: 'old', value: 'last good', deleted: false, created_at: 1, updated_at: 1, clock: 1 });
+        let quota = true;
+        if (phase === 'staging') db.snapshot_staging.hook('creating', (_key, row) => {
+            if (quota && row.sequence >= 0) throw new Dexie.BulkError('storage full', [new DOMException('storage full', 'QuotaExceededError')]);
+        });
+        else db.kv.hook('creating', () => { if (quota) throw new DOMException('storage full', 'QuotaExceededError'); });
+        const snapshot = vi.fn(async () => ({ workspaceId: 'ws-1', snapshotId: 'quota-snapshot', highWatermark: 40,
+            items: [{ kind: 'row' as const, tableName: 'kv', pk: 'new', payload: { id: 'new', name: 'new', value: 'canonical', created_at: 1, updated_at: 1, clock: 1 },
+                revision: { clock: 1, hlc: 'h', opId: 'legacy-snapshot' } }], nextPageToken: null }));
+        const provider: SyncProvider = { id: `quota-${phase}-${rescan}`, mode: 'direct', snapshot,
+            pull: vi.fn(async request => ({ changes: [], nextCursor: request.cursor, hasMore: false, ...FULL_HISTORY_PULL_RETENTION,
+                requiresSnapshot: rescan && request.cursor === 10 })),
+            subscribe: vi.fn(async () => () => undefined), updateCursor: vi.fn(async () => undefined),
+            push: vi.fn(async () => { throw new Error('unused'); }), dispose: vi.fn(async () => undefined) };
+        const manager = new SubscriptionManager(db, provider, { workspaceId: 'ws-1' }, { tables: ['kv'] });
+        try {
+            await manager.start();
+            expect(manager.getStatus()).toBe('error');
+            expect(provider.subscribe).not.toHaveBeenCalled();
+            expect(await db.kv.get('old')).toMatchObject({ value: 'last good' });
+            expect(await db.kv.get('new')).toBeUndefined();
+            expect(await db.sync_state.count()).toBe(0);
+            await vi.advanceTimersByTimeAsync(60_000);
+            expect(snapshot).toHaveBeenCalledTimes(1);
+            quota = false;
+            await manager.start();
+            expect(manager.getStatus()).toBe('connected');
+            expect(snapshot).toHaveBeenCalledTimes(1);
+            expect(await db.kv.get('new')).toMatchObject({ value: 'canonical' });
+            if (rescan) expect(await db.kv.get('old')).toBeUndefined();
+            expect(await db.snapshot_staging.count()).toBe(0);
+        } finally { vi.mocked(cursor.isBootstrapNeeded).mockResolvedValue(false); await manager.stop(); await db.delete(); }
     });
 
     it('rescans from a snapshot when pull reports requiresSnapshot', async () => {
