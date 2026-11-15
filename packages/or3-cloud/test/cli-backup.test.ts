@@ -190,11 +190,16 @@ test('offline inspection accepts the installed provider migration history and re
   const db = new Database(path);
   try {
     const installed = JSON.parse(await readFile(new URL('../../../node_modules/or3-provider-sqlite/package.json', import.meta.url), 'utf8')) as { version: string };
-    const migrationCount = installed.version === '0.0.24' ? 28 : installed.version === '0.0.25' ? 29 : ['0.0.26', '0.0.27'].includes(installed.version) ? 31 : installed.version === '0.0.29' ? 32 : 0;
+    const migrationCount = installed.version === '0.0.24' ? 28 : installed.version === '0.0.25' ? 29 : ['0.0.26', '0.0.27'].includes(installed.version) ? 31 : installed.version === '0.0.29' ? 32 : installed.version === '0.0.30' ? 33 : 0;
     expect(migrationCount).toBeGreaterThan(0);
     expect(db.query('SELECT name FROM kysely_migration ORDER BY name').all())
       .toEqual(QUALIFIED_MIGRATIONS.slice(0, migrationCount).map(name => ({ name })));
-    if (migrationCount === 32) {
+    if (migrationCount >= 33) {
+      // Published 0.0.29 backups remain inspectable after the UUID repair.
+      db.query('DELETE FROM kysely_migration WHERE name=?').run('033_tool_result_operation_ids');
+      expect(inspectCanonicalReferences(OfflineDatabase, path, inventory, '/data/storage')).toMatchObject({ complete: true });
+    }
+    if (migrationCount >= 32) {
       // The previously published 0.0.27 history (through 031) remains valid for upgrade and rollback inspection.
       db.query('DELETE FROM kysely_migration WHERE name=?').run('032_sync_observations');
       expect(inspectCanonicalReferences(OfflineDatabase, path, inventory, '/data/storage')).toMatchObject({ complete: true });
@@ -272,8 +277,8 @@ test('offline inspection validates immutable generation bindings and their archi
 });
 
 test('offline inspection refuses unsupported versions, ambiguous archives and scratch exhaustion', () => {
-  expect(() => assertInspectionProfile({ contract: 1, sqlite: '0.0.29', filesystem: '0.0.18' })).not.toThrow();
-  for (const profile of [{ contract: 2, sqlite: '0.0.29', filesystem: '0.0.18' }, { contract: 1, sqlite: '0.0.27', filesystem: '0.0.18' }, { contract: 1, sqlite: '0.0.29', filesystem: '0.0.16' }]) expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
+  expect(() => assertInspectionProfile({ contract: 1, sqlite: '0.0.30', filesystem: '0.0.18' })).not.toThrow();
+  for (const profile of [{ contract: 2, sqlite: '0.0.30', filesystem: '0.0.18' }, { contract: 1, sqlite: '0.0.27', filesystem: '0.0.18' }, { contract: 1, sqlite: '0.0.30', filesystem: '0.0.16' }]) expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
   const entry = '-rw------- nonroot/nonroot 4096 2026-10-11 10:16:23 ./sync.sqlite\n';
   expect(() => readBackupInventory(entry + entry)).toThrow('Duplicate');
   expect(() => readBackupInventory(entry.replace('./sync.sqlite', '../sync.sqlite'))).toThrow('Unsafe');

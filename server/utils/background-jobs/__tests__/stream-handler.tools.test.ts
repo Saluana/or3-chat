@@ -1080,6 +1080,37 @@ describe('background usage through terminal history', () => {
         await expect(reconcileBackgroundJobHistory(memoryJobProvider, job)).resolves.toBe('blocked');
     });
 
+    it('retains nine ordinary source reads without consuming the answer budget', async () => {
+        const output = 'source 🌱 "'.repeat(900);
+        const answer = 'A useful final answer. '.repeat(1200);
+        const execute = vi.fn(() => output);
+        registerServerTool(toolDef, execute, { override: true });
+        const { jobId, context } = await admitted(true);
+        const calls = Array.from({ length: 9 }, (_, index) => ({ index, id: `read-${index}`,
+            function: { name: 'server_echo', arguments: JSON.stringify({ value: String(index) }) } }));
+        const fetchMock = vi.fn().mockResolvedValueOnce(new Response(makeSseStream([
+            { choices: [{ delta: { tool_calls: calls }, finish_reason: 'tool_calls' }] },
+        ]))).mockResolvedValueOnce(new Response(makeSseStream([
+            { choices: [{ delta: { content: answer }, finish_reason: 'stop' }] },
+        ])));
+        vi.stubGlobal('fetch', fetchMock);
+        await executeBackgroundJob(jobId, context, memoryJobProvider);
+        const { snapshot } = await terminal(jobId);
+        expect(snapshot.status).toBe('complete');
+        expect(snapshot.content).toBe(answer);
+        expect(execute).toHaveBeenCalledTimes(9);
+        expect(snapshot.toolCalls).toHaveLength(9);
+        for (const call of snapshot.toolCalls! as { result: string }[]) {
+            expect(call.result).toMatch(/^or3-tool-result:v1\//);
+            expect(await readToolResultStorage(call.result, async id => artifacts.get(id))).toBe(output);
+        }
+        const resumedBody = JSON.parse(fetchMock.mock.calls[1]![1].body);
+        expect(resumedBody.messages.filter((message: { role: string }) => message.role === 'tool'))
+            .toHaveLength(9);
+        for (const message of resumedBody.messages.filter((message: { role: string }) => message.role === 'tool'))
+            expect(message.content[0].text).toBe(output);
+    });
+
     it('keeps large background tool results inline when the provider cannot retain chunks', async () => {
         const output = 'x'.repeat(20 * 1024);
         const { jobId, context } = await admitted(true);
@@ -1404,14 +1435,16 @@ describe('background usage through terminal history', () => {
         expect(fetch).toHaveBeenCalledOnce(); expect(tool).toHaveBeenCalledOnce();
         const job = (await memoryJobProvider.getJob(jobId, 'owner'))!;
         if (!job.execution || !('body' in job.execution)) throw new Error('Expected native chat checkpoint');
-        expect(job.tool_calls?.[0]).toMatchObject({ id: 'call-1', status: 'complete', result });
+        const reference = job.tool_calls?.[0]?.result as string;
+        expect(job.tool_calls?.[0]).toMatchObject({ id: 'call-1', status: 'complete', result: expect.stringMatching(/^or3-tool-result:v1\//) });
+        expect(await readToolResultStorage(reference, async id => artifacts.get(id))).toBe(result);
         expect(job.execution?.body._context).toEqual({ version: 1, user_max_context_tokens: 500, requested_completion_tokens: null });
         const restored = { ...context, body: job.execution!.body, execution: job.execution! };
         await expect(executeBackgroundJob(jobId, restored, memoryJobProvider)).rejects.toMatchObject({ name: 'BackgroundJobLeaseLostError' });
         expect(fetch).toHaveBeenCalledOnce(); expect(tool).toHaveBeenCalledOnce();
         expect(job.error).toContain('ERR_CONTEXT_FULL');
         const finalized = await terminal(jobId);
-        expect(finalized.snapshot.toolCalls?.[0]).toMatchObject({ id: 'call-1', status: 'complete', result });
+        expect(finalized.snapshot.toolCalls?.[0]).toMatchObject({ id: 'call-1', status: 'complete', result: reference });
         expect(finalized.snapshot.error).toContain('ERR_CONTEXT_FULL');
     });
 
@@ -1462,7 +1495,8 @@ describe('background usage through terminal history', () => {
         });
         expect(usage).toMatchObject(prefix);
         expect((snapshot as unknown as Record<string, unknown>).usage).toEqual(usage);
-        expect(snapshot.toolCalls).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'call-1', status: 'complete', result: 'ok' })]));
+        expect(snapshot.toolCalls).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'call-1', status: 'complete', result: expect.stringMatching(/^or3-tool-result:v1\//) })]));
+        expect(await readToolResultStorage((snapshot.toolCalls![0] as { result: string }).result, async id => artifacts.get(id))).toBe('ok');
     });
     it.each(['x'.repeat(256 * 1024), '"'.repeat(140_000)])('retains complete background tool overflow before settling a bounded history receipt (%#)', async (output) => {
         const { jobId, context } = await admitted();

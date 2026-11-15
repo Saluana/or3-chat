@@ -13,6 +13,7 @@ import { parseHashes, mergeAssistantFileHashes } from '~/utils/files/attachments
 import { resolveThreadProjection, requestHistoryFingerprint } from '~/utils/chat/compaction/history';
 import { recoveryInputFingerprint, discardStaleRecovery } from '~/utils/chat/native-recovery';
 import { projectTranscriptForOpenRouter, storedMessagesToCanonicalTranscript } from '~/utils/chat/transcript';
+import { waitForTranscriptToolResultSync } from '~/utils/chat/tool-result-sync';
 import { buildParts, shouldKeepAssistantMessage, getChatModalities } from '~/utils/chat/messages';
 import { prepareOpenRouterRequest, getBackgroundClientToolCapability } from '~/utils/chat/openrouterStream';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
@@ -387,7 +388,12 @@ export function createTurnPreparation(ports: {
         let sourceFingerprint: string | undefined;
         if (preparationThreadId) {
             try {
-                const projection = await resolveThreadProjection(preparationThreadId, requestScope.originDb);
+                let projection = await resolveThreadProjection(preparationThreadId, requestScope.originDb);
+                if (await waitForTranscriptToolResultSync(projectTranscriptForOpenRouter(storedMessagesToCanonicalTranscript(projection.messages)),
+                    requestScope.originDb, preparationSignal)) {
+                    if (!ownsPreparation()) return early({ status: 'aborted', requestId, reason: 'aborted' });
+                    projection = await resolveThreadProjection(preparationThreadId, requestScope.originDb);
+                }
                 sourceFingerprint = requestHistoryFingerprint(projection);
                 for (const row of [...projection.messages].reverse()) {
                     if (row.role !== 'assistant') continue;

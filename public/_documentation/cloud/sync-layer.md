@@ -2,6 +2,13 @@
 
 The OR3 Sync Layer provides offline-first, bidirectional synchronization between a workspace-scoped local Dexie database and the selected sync backend (SQLite or Convex in first-party deployments). It enables users to work offline and have their changes automatically synced when connectivity is restored, with support for multi-device synchronization and conflict resolution.
 
+SQLite provider `0.0.30` stores background tool-result operations with UUIDs.
+Its startup migration repairs legacy `background-tool:` operation IDs in saved
+rows, change logs, tombstones, and materialized snapshots. The repair preserves
+content, clocks, server versions, and cursors, so existing clients can resume
+sync without resetting their workspace. Offline backup inspection accepts both
+the earlier migration history and the repaired history.
+
 ## Materialized snapshot bootstrap contract
 
 Cold bootstrap uses a provider-neutral materialized snapshot instead of cursor

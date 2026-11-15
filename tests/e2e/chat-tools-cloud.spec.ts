@@ -2,6 +2,9 @@ import { expect, test, type APIRequestContext } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { modelSearchDefinition } from '../../shared/openrouter/delegation-model-catalog';
 import { normalizeError } from '../../shared/errors';
+import { readToolResultStorage } from '../../shared/chat/tool-result-artifact';
+import { PullResponseSchema } from '../../shared/sync/schemas';
+import type { SyncChange } from '../../shared/sync/types';
 
 test.setTimeout(90000);
 test.beforeAll(() => {
@@ -43,6 +46,28 @@ async function status(request: APIRequestContext, jobId: string) {
     const response = await request.get(`/api/jobs/${jobId}/status`);
     expect(response.ok(), await response.text()).toBe(true);
     return response.json();
+}
+async function pullHistory(request: APIRequestContext, origin: string, workspaceId: string) {
+    const changes: SyncChange[] = [];
+    let cursor = 0;
+    for (;;) {
+        const response = await request.post('/api/sync/pull', { headers: { origin, 'x-or3-cloud-intent': 'mutation' },
+            data: { scope: { workspaceId }, cursor, limit: 1000, fileKindCapability: 'v1' } });
+        expect(response.ok(), await response.text()).toBe(true);
+        const page = PullResponseSchema.parse(await response.json());
+        expect(page.requiresSnapshot).toBe(false);
+        changes.push(...page.changes);
+        if (!page.hasMore) return changes;
+        expect(page.nextCursor).toBeGreaterThan(cursor);
+        cursor = page.nextCursor;
+    }
+}
+async function syncedToolResult(request: APIRequestContext, origin: string, workspaceId: string, result: string) {
+    const changes = await pullHistory(request, origin, workspaceId);
+    return readToolResultStorage(result, async id => {
+        const change = changes.findLast(change => change.tableName === 'kv' && change.pk === id);
+        return change?.op === 'put' ? change.payload as { value: string; deleted?: boolean } : undefined;
+    });
 }
 
 async function startDurableDraft(request: APIRequestContext, origin: string, prompt = 'durable-parent') {
@@ -471,11 +496,9 @@ for (const mode of ['normal', 'duplicate', 'conflict', 'failure', 'online']) tes
     expect(saved.content).toContain('Cloud fixture completed.');
     const call = saved.tool_calls.find((call: { id: string }) => call.id === job.callId);
     expect(call.status).toBe(mode === 'failure' || mode === 'conflict' ? 'error' : 'complete');
-    if (mode !== 'failure' && mode !== 'conflict') expect(JSON.parse(call.result).count).toBe(1);
-    const pull = await request.post('/api/sync/pull', { headers: { origin, 'x-or3-cloud-intent': 'mutation' },
-        data: { scope: { workspaceId: job.workspaceId }, cursor: 0, limit: 1000, fileKindCapability: 'v1' } });
-    expect(pull.ok(), await pull.text()).toBe(true);
-    const history = await pull.text();
+    if (mode !== 'failure' && mode !== 'conflict')
+        expect(JSON.parse(await syncedToolResult(request, origin, job.workspaceId, call.result)).count).toBe(1);
+    const history = JSON.stringify(await pullHistory(request, origin, job.workspaceId));
     expect(history).toContain(job.messageId);
     expect(history).toContain(job.callId);
     await info.attach('cloud-terminal-receipt', { contentType: 'application/json', body: JSON.stringify({ job, saved }) });
@@ -505,7 +528,8 @@ test('authenticated client handoff claims once and preserves delivered result', 
     expect(result.ok(), await result.text()).toBe(true);
     await expect.poll(async () => (await status(request, job.jobId)).status).toBe('complete');
     const saved = await status(request, job.jobId);
-    expect(saved.tool_calls[0]).toMatchObject({ id: job.callId, status: 'complete', result: 'durable client result' });
+    expect(saved.tool_calls[0]).toMatchObject({ id: job.callId, status: 'complete' });
+    expect(await syncedToolResult(request, origin, job.workspaceId, saved.tool_calls[0].result)).toBe('durable client result');
     expect((await request.post(resultUrl, { headers: resultHeaders,
         data: { callId: job.callId, claimToken: claimed.claimToken, result: 'duplicate' } })).status()).toBe(409);
     expect((await status(request, job.jobId)).tool_calls).toEqual(saved.tool_calls);
@@ -542,7 +566,8 @@ test(`browser reconnect reconciles ${interruption} client journal without repeat
     expect(saved.tool_calls[0]).toMatchObject({ id: job.callId, status: interruption === 'running' ? 'error' : 'complete' });
     expect(claimRequests, 'claim retries should stay bounded while the previous lease expires').toBeLessThanOrEqual(15);
     if (interruption === 'running') expect(saved.tool_calls[0].error).toContain('outcome is unknown');
-    else expect(saved.tool_calls[0].result).toBe('one durable browser write');
+    else expect(await syncedToolResult(reconnected.request, String(info.project.use.baseURL), job.workspaceId,
+        saved.tool_calls[0].result)).toBe('one durable browser write');
     expect(exceptions).toEqual([]);
     await info.attach('browser-journal-receipt', { contentType: 'application/json', body: JSON.stringify({ job, saved, executions: 1, interruption }) });
     await reconnected.close();

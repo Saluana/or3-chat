@@ -1,4 +1,5 @@
 import { retainBackgroundToolResult } from './history';
+import { parseToolResultArtifact } from '~~/shared/chat/tool-result-artifact';
 import { getChatJobExecution } from './types';
 import { serializeError, normalizeError, presentError, parseRetryAfter } from '~~/shared/errors';
 import { OpenRouterStreamError, normalizeProviderResponseError } from '~~/shared/openrouter/errors';
@@ -1244,6 +1245,8 @@ export async function consumeBackgroundStreamWithTools(params: {
                 return true;
             }
 
+            const replayReference = decision.action === 'replay' && parseToolResultArtifact(decision.result)
+                ? decision.result : undefined;
             let toolResultText = '';
             let status: 'complete' | 'error' | 'skipped' = 'complete';
             let errorMessage: string | undefined;
@@ -1257,6 +1260,15 @@ export async function consumeBackgroundStreamWithTools(params: {
                 toolResultText = errorMessage;
             } else if (decision.action === 'replay') {
                 toolResultText = decision.result;
+                if (replayReference) {
+                    const admission = historyJob && getChatJobExecution(historyJob)?.history;
+                    const adapter = historyJob?.syncProviderId ? getSyncGatewayAdapter(historyJob.syncProviderId) : undefined;
+                    if (!admission || !adapter?.readChatToolResult) throw new Error('Retained tool result reader is unavailable');
+                    toolResultText = await adapter.readChatToolResult(
+                        { userId: params.context.userId, workspaceId: admission.workspaceId },
+                        { admission, callId: toolCall.id, reference: replayReference },
+                    );
+                }
             } else if (decision.action === 'conflict') {
                 status = 'error';
                 errorMessage = `Tool call ID "${toolCall.id}" was reused with different arguments.`;
@@ -1331,7 +1343,8 @@ export async function consumeBackgroundStreamWithTools(params: {
             }
 
             const projectedResult = projectToolResult(toolResultText);
-            if (historyJob) projectedResult.durable = await retainBackgroundToolResult(historyJob, projectedResult.durable, toolCall.id);
+            if (replayReference) projectedResult.durable = replayReference;
+            else if (historyJob) projectedResult.durable = await retainBackgroundToolResult(historyJob, projectedResult.durable, toolCall.id);
             logBackgroundEvent('info', 'background.tools.call.completed', {
                 jobId: params.jobId,
                 toolCallId: toolCall.id,

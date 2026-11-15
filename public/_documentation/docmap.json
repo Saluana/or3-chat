@@ -629,7 +629,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "Understand server-side jobs, admission, compact streaming, recovery, and work that continues after detachment."
+                    "summary": "Understand server-side jobs, admission, compact streaming, retained tool results outside the answer budget, recovery, and work that continues after detachment."
                 },
                 {
                     "name": "notifications.md",
@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Understand workspace synchronization, request compression, failed-write recovery, local recovery backups, and conflict handling."
+                    "summary": "Understand workspace synchronization, request compression, tool-result UUID repair, failed-write recovery, local recovery backups, and conflict handling."
                 },
                 {
                     "name": "storage-layer.md",
