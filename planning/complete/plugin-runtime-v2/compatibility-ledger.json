@@ -2836,7 +2836,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "678844285f55eb1a8d8ecac2ca3f9383b904a75b6ebcf12e03991f0310e9c59b",
+      "apiSha256": "a93adfe62642675e282a7bab37036e05718a05b990f660b349bfdb4cdfb35af8",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -3569,7 +3569,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentInsights.ts",
-              "line": 5,
+              "line": 7,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentOutlineItem {\n    id: string;\n    level: 1 | 2 | 3;\n    text: string;\n    position: number;\n}"
             }
@@ -3583,7 +3583,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentInsights.ts",
-              "line": 12,
+              "line": 14,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentStats {\n    words: number;\n    characters: number;\n    blocks: number;\n    readingMinutes: number;\n    serializedBytes: number;\n}"
             }
@@ -7030,23 +7030,23 @@
           "nuxtAutoImport": false,
           "signatures": [
             {
-              "signature": "export function useDocumentInsights(editor: Ref<Editor | null>);",
+              "signature": "export function useDocumentInsights(\n    editor: Ref<Editor | null>,\n    enabled: MaybeRefOrGetter<boolean> = true,\n    viewport?: MaybeRefOrGetter<HTMLElement | null | undefined>,\n);",
               "declaredReturnType": null,
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/documents/useDocumentInsights.ts",
-                "line": 36,
+                "line": 41,
                 "syntaxKind": "FunctionDeclaration",
-                "text": "export function useDocumentInsights(editor: Ref<Editor | null>);"
+                "text": "export function useDocumentInsights(\n    editor: Ref<Editor | null>,\n    enabled: MaybeRefOrGetter<boolean> = true,\n    viewport?: MaybeRefOrGetter<HTMLElement | null | undefined>,\n);"
               }
             }
           ],
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentInsights.ts",
-              "line": 36,
+              "line": 41,
               "syntaxKind": "FunctionDeclaration",
-              "text": "export function useDocumentInsights(editor: Ref<Editor | null>);"
+              "text": "export function useDocumentInsights(\n    editor: Ref<Editor | null>,\n    enabled: MaybeRefOrGetter<boolean> = true,\n    viewport?: MaybeRefOrGetter<HTMLElement | null | undefined>,\n);"
             }
           ]
         },
