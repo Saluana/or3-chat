@@ -161,7 +161,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 2,
-                    "summary": "Workspace-safe writes, atomic sync and tombstone scopes, hooks outside transactions, retained tool chunks across message transfers, explicit database failure policies, safe UI errors, deletion, atomic store migration, and nondestructive upgrade retry."
+                    "summary": "Workspace-safe writes, atomic sync and tombstone scopes, hooks outside transactions, retained tool chunks across message transfers, explicit database failure policies, safe UI errors, deletion, atomic store migration, and nondestructive upgrade retry. Include the shared history guard in write transactions."
                 },
                 {
                     "name": "threads.md",
@@ -305,7 +305,7 @@
                     "category": "Internals",
                     "categoryOrder": 3,
                     "order": 2,
-                    "summary": "Zod helpers, IDs, clocks, transaction scopes, and required versus best-effort database error contracts."
+                    "summary": "Zod helpers, IDs, clocks, transaction scopes, and required versus best-effort database error contracts. Write scopes include sync history fencing."
                 },
                 {
                     "name": "backup.md",
