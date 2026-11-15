@@ -246,7 +246,7 @@ export async function quarantineOpInTx(
     tx: Transaction,
     op: PendingOp,
     diagnostics: string[],
-    source: SyncQuarantineRow['source'],
+    source: 'snapshot_apply' | 'manual',
     deviceId: string
 ): Promise<PendingOp | null> {
     // Stored queue entries may predate or violate the current declared shape.
@@ -301,12 +301,12 @@ async function readOps(tx: Transaction, statuses: readonly string[]): Promise<Pe
  */
 export async function collectReplayableOps(
     tx: Transaction,
-    includesTable: (tableName: string) => boolean,
+    includesTable: (tableName: string, pk: string) => boolean,
     deviceId: string
 ): Promise<PendingOp[]> {
     const replayable: PendingOp[] = [];
     for (const op of await readOps(tx, REPLAY_STATUSES)) {
-        if (!includesTable(op.tableName)) continue;
+        if (!includesTable(op.tableName, op.pk)) continue;
         // Wire size is not a local-storage validity rule. A valid oversized
         // edit must survive table replacement with its full durable intent.
         const diagnostics = diagnoseOp(op, false);
@@ -323,7 +323,7 @@ export async function collectReplayableOps(
 /** Quarantine and rebuild every corrupt queued op. Each op is its own atomic unit. */
 export async function quarantineCorruptOps(
     db: Or3DB,
-    source: SyncQuarantineRow['source'] = 'manual',
+    source: 'snapshot_apply' | 'manual' = 'manual',
     selected?: PendingOp[]
 ): Promise<QuarantineSummary> {
     const bridge = getHookBridge(db);

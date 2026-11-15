@@ -1,3 +1,5 @@
+import { ConflictResolver } from '../conflict-resolver';
+import { exportQuarantined } from '../sync-quarantine';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Or3DB } from '~/db/client';
 import type { SnapshotResponse } from '~~/shared/sync/types';
@@ -84,6 +86,50 @@ afterEach(async () => {
 });
 
 describe('applySnapshotChain', () => {
+    it('quarantines malformed and unknown incoming rows durably while applying healthy siblings', async () => {
+        const db = createDb(); await db.open();
+        const row = pages()[0]!.items[0]!;
+        if (row.kind !== 'row') throw new Error('fixture');
+        const stamp = { ...row.revision, deviceId: 'remote', opId: testUuid('incoming') };
+        const resolver = new ConflictResolver(db);
+        await resolver.applyChanges([
+            { tableName: 'messages', pk: 'bad', op: 'put', serverVersion: 1, stamp, payload: {} },
+            { tableName: 'unknown', pk: 'unknown', op: 'delete', serverVersion: 2, stamp: { ...stamp, opId: testUuid('unknown') } },
+            { tableName: 'messages', pk: row.pk, op: 'put', serverVersion: 3, stamp: { ...stamp, opId: testUuid('healthy') }, payload: row.payload },
+        ]);
+        expect(await db.messages.count()).toBe(1);
+        expect(await db.sync_quarantine.count()).toBe(2);
+        expect(JSON.parse(await exportQuarantined(db)).entries).toEqual(expect.arrayContaining([
+            expect.objectContaining({ variant: 'incoming', pk: 'bad', status: 'quarantined' }),
+            expect.objectContaining({ variant: 'incoming', tableName: 'unknown' }),
+        ]));
+        expect(await db.pending_ops.count()).toBe(0);
+    });
+
+    it.each(['server marker', 'client defect'] as const)('preserves rows, tombstones and pending intent for %s in a final all-unavailable snapshot', async mode => {
+        const db = createDb(); await db.open();
+        const local = { id: 'affected', name: 'affected', value: 'last good', created_at: 1, updated_at: 1, clock: 2 };
+        const tombstone = { id: 'kv:affected', tableName: 'kv', pk: 'affected', deletedAt: 1, clock: 3, hlc: 'h', opId: 'legacy' };
+        await db.kv.put(local);
+        await db.tombstones.put(tombstone);
+        const op: PendingOp = { id: 'intent', tableName: 'kv', pk: 'affected', operation: 'put', payload: local,
+            stamp: { clock: 2, hlc: 'h', opId: testUuid('intent'), deviceId: 'local' }, createdAt: 1, attempts: 0, status: 'pending' };
+        await db.pending_ops.put(op);
+        const page: SnapshotResponse = { workspaceId: 'workspace-1', snapshotId: 'unavailable', highWatermark: 12, nextPageToken: null,
+            items: mode === 'client defect' ? [{ kind: 'tombstone', tableName: 'kv', pk: 'affected',
+                revision: { clock: -1, hlc: 'h', opId: 'bad' }, serverDeletedAt: 2 }] : [],
+            ...(mode === 'server marker' ? { unavailable: [{ tableName: 'kv', pk: 'affected', originalKind: 'tombstone',
+                snapshotId: 'unavailable', highWatermark: 12, evidenceRef: 'e1', reason: 'invalid_revision' }] } : {}) };
+        await applySnapshotChain(db, [page], { workspaceId: 'workspace-1' }, 'device', () => true, ['kv']);
+        expect(await db.kv.get('affected')).toEqual(local);
+        expect(await db.tombstones.get('kv:affected')).toEqual(tombstone);
+        expect(await db.pending_ops.get('intent')).toEqual(op);
+        expect(await db.sync_quarantine.toArray()).toEqual([expect.objectContaining({ variant: 'incoming', localRow: local,
+            localTombstone: tombstone, pendingIntent: [op], status: 'quarantined' })]);
+        expect(await db.sync_state.get('sync_state:workspace-1:default')).toMatchObject({ cursor: 12 });
+        expect(await db.snapshot_staging.count()).toBe(0);
+    });
+
     it.each(['absent', 'older', 'expired lease'] as const)('preserves unqueued foreground progress through replacement (%s) and can finalize it', async canonical => {
         setHookEngine(createTypedHookEngine(createHookEngine()));
         const db = createDb(); await db.open();

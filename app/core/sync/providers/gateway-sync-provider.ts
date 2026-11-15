@@ -366,7 +366,7 @@ export function createGatewaySyncProvider(
         try {
             const response = await requestJson<PullResponse>(
                 '/api/sync/pull',
-                { ...request, workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
+                { ...request, unavailableRecordCapability: 'unavailable-v1', workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
                 baseUrl, { signal, schema: PullResponseSchema }
             );
             assertGatewayResponseContract('/api/sync/pull', getPullResponseContractError(request, response));
@@ -484,7 +484,7 @@ export function createGatewaySyncProvider(
                         cursor,
                         limit,
                         tables,
-                        workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY,
+                        unavailableRecordCapability: 'unavailable-v1', workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY,
                     };
                     const response = await requestPull(request, pollAbortController.signal);
 
@@ -607,7 +607,7 @@ export function createGatewaySyncProvider(
         async snapshot(request: SnapshotRequest, options?: SyncRequestOptions): Promise<SnapshotResponse> {
             const response = await requestJson<SnapshotResponse>(
                 '/api/sync/snapshot',
-                { ...request, workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
+                { ...request, unavailableRecordCapability: 'unavailable-v1', workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
                 baseUrl,
                 { signal: options?.signal, schema: SnapshotResponseSchema }
             );
@@ -621,7 +621,7 @@ export function createGatewaySyncProvider(
         async push(batch: PushBatch, options?: SyncRequestOptions): Promise<PushResult> {
             const response = await requestJson<PushResult>(
                 '/api/sync/push',
-                { ...batch, workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
+                { ...batch, unavailableRecordCapability: 'unavailable-v1', workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
                 baseUrl,
                 { signal: options?.signal, schema: PushResultSchema }
             );

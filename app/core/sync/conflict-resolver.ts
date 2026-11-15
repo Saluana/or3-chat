@@ -1,3 +1,6 @@
+import { assertIncomingIdentity, isSyncTable } from '~~/shared/sync/incoming-records';
+import { PullUnavailableRecordSchema, SyncChangeSchema } from '~~/shared/sync/schemas';
+import { retainIncomingEvidenceInTx } from './incoming-evidence';
 /**
  * @module app/core/sync/conflict-resolver
  *
@@ -23,7 +26,7 @@
  * @see core/sync/hook-bridge for sync transaction suppression
  */
 import type { Or3DB } from '~/db/client';
-import type { ChangeStamp, SyncChange, Tombstone } from '~~/shared/sync/types';
+import type { ChangeStamp, SyncChange, Tombstone, PullUnavailableRecord } from '~~/shared/sync/types';
 import type { Transaction } from 'dexie';
 import { compareSyncRevision } from '~~/shared/sync/revision';
 import { getHookBridge, getLocalOnlyKvNames } from './hook-bridge';
@@ -84,18 +87,35 @@ export class ConflictResolver {
     /**
      * Apply a batch of remote changes
      */
-    async applyChanges(changes: SyncChange[]): Promise<ApplyResult> {
+    async applyChanges(changes: SyncChange[], unavailable: PullUnavailableRecord[] = []): Promise<ApplyResult> {
         const result: ApplyResult = {
             applied: 0,
             skipped: 0,
             conflicts: 0,
         };
 
-        if (changes.length === 0) return result;
+        const defective: { change: SyncChange; reason: string }[] = [];
+        changes = changes.filter(change => {
+            assertIncomingIdentity(change);
+            if (!Number.isSafeInteger(change.serverVersion) || change.serverVersion <= 0) throw new Error('Invalid incoming version');
+            let reason = !SyncChangeSchema.safeParse(change).success ? 'invalid_record_envelope' : !isSyncTable(change.tableName) ? 'unknown_table' : null;
+            if (!reason && change.op === 'put') {
+                if (!change.payload || typeof change.payload !== 'object' || Array.isArray(change.payload)) reason = 'invalid_payload';
+                const normalized = normalizeSyncPayload(change.tableName, change.pk, change.payload, change.stamp);
+                if (!normalized.isValid) reason = 'invalid_local_payload';
+            }
+            if (!reason) return true;
+            defective.push({ change, reason });
+            result.skipped++;
+            return false;
+        });
+        unavailable = unavailable.map(marker => PullUnavailableRecordSchema.parse(marker));
+        if (changes.length === 0 && defective.length === 0 && unavailable.length === 0) return result;
 
         // Collect unique table names for the transaction
-        const tableNames = Array.from(new Set(changes.map((c) => c.tableName)));
-        const tables = [...tableNames, 'tombstones'];
+        const tableNames = Array.from(new Set([...changes, ...defective.map(({ change }) => change), ...unavailable]
+            .map(c => c.tableName).filter(isSyncTable)));
+        const tables = [...tableNames, 'tombstones', ...(defective.length || unavailable.length ? ['sync_quarantine'] : [])];
 
         // Collect conflicts to emit hooks AFTER transaction completes
         // (calling async hooks inside transaction causes PrematureCommitError)
@@ -111,6 +131,16 @@ export class ConflictResolver {
         await this.db.transaction('rw', tables, async (tx) => {
             // Mark this specific transaction as a sync transaction
             getHookBridge(this.db).markSyncTransaction(tx);
+
+            for (const { change, reason } of defective) {
+                await retainIncomingEvidenceInTx(tx, { ...change, source: 'incoming_pull',
+                    reference: change.serverVersion, reason, record: change });
+            }
+            for (const marker of unavailable) {
+                await retainIncomingEvidenceInTx(tx, { ...marker, source: 'incoming_pull',
+                    reference: marker.serverVersion, record: marker });
+                result.skipped++;
+            }
 
             // Batch-fetch existing records by table
             const existingByTable = new Map<string, Map<string, LocalRecord>>();

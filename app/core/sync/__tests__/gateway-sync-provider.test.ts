@@ -677,16 +677,13 @@ describe('GatewaySyncProvider', () => {
             expect.objectContaining({
                 method: 'POST',
                 credentials: 'include',
-                body: JSON.stringify({
-                    scope: { workspaceId: 'ws-1' },
-                    pageSize: 50,
-                    pageToken: 'opaque-page',
-                    tables: ['messages'],
-                    workspaceItemCapability: 'v1',
-                    fileKindCapability: 'v1',
-                }),
+
             })
         );
+        expect(JSON.parse(fetchMock.mock.calls[0]![1]!.body as string)).toEqual({
+            scope: { workspaceId: 'ws-1' }, pageSize: 50, pageToken: 'opaque-page', tables: ['messages'],
+            workspaceItemCapability: 'v1', fileKindCapability: 'v1', unavailableRecordCapability: 'unavailable-v1',
+        });
     });
 
     it.each([false, true])('honors Retry-After seconds across subscription ownership changes (restart: %s)', async restart => {

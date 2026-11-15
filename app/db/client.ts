@@ -71,13 +71,19 @@ export interface FileBlobRow {
     cache_bytes?: number;
 }
 
+/** Incoming snapshot uncertainty, staged with the page chain before replacement. */
+export type StagedUnavailableRecord = import('~~/shared/sync/types').SnapshotUnavailableRecord & {
+    kind: 'unavailable';
+    record?: unknown;
+};
+
 /** Temporary snapshot rows; never part of the synchronized data model. */
 export interface SnapshotStageRow {
     id: string;
     generation: string;
     sequence: number;
     /** Null only for the active-generation sentinel at sequence -1. */
-    item: SnapshotItem | null;
+    item: SnapshotItem | StagedUnavailableRecord | null;
 }
 
 /** Corrupt outbox operation set aside with its diagnostics; local-only, never synchronized. */
@@ -87,7 +93,11 @@ export interface SyncQuarantineRow {
     tableName: string;
     pk: string;
     status: 'quarantined' | 'repaired' | 'discarded';
-    source: 'snapshot_apply' | 'manual';
+    source: 'snapshot_apply' | 'manual' | 'incoming_pull' | 'incoming_snapshot';
+    /** Absent on legacy outgoing entries. Incoming entries never reconstruct ops. */
+    variant?: 'incoming';
+    evidenceRef?: string;
+    pendingIntent?: PendingOp[];
     /** The operation exactly as found. */
     op: unknown;
     diagnostics: string[];
