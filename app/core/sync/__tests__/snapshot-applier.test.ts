@@ -95,10 +95,11 @@ describe('applySnapshotChain', () => {
         await resolver.applyChanges([
             { tableName: 'messages', pk: 'bad', op: 'put', serverVersion: 1, stamp, payload: {} },
             { tableName: 'unknown', pk: 'unknown', op: 'delete', serverVersion: 2, stamp: { ...stamp, opId: testUuid('unknown') } },
+            { tableName: 'messages', pk: 'oversized', op: 'put', serverVersion: 4, stamp, payload: { ...(row.payload as object), data: { content: 'x'.repeat(256 * 1024) } } },
             { tableName: 'messages', pk: row.pk, op: 'put', serverVersion: 3, stamp: { ...stamp, opId: testUuid('healthy') }, payload: row.payload },
         ]);
         expect(await db.messages.count()).toBe(1);
-        expect(await db.sync_quarantine.count()).toBe(2);
+        expect(await db.sync_quarantine.count()).toBe(3);
         expect(JSON.parse(await exportQuarantined(db)).entries).toEqual(expect.arrayContaining([
             expect.objectContaining({ variant: 'incoming', pk: 'bad', status: 'quarantined' }),
             expect.objectContaining({ variant: 'incoming', tableName: 'unknown' }),
@@ -108,7 +109,7 @@ describe('applySnapshotChain', () => {
 
     it.each(['server marker', 'client defect'] as const)('preserves rows, tombstones and pending intent for %s in a final all-unavailable snapshot', async mode => {
         const db = createDb(); await db.open();
-        const local = { id: 'affected', name: 'affected', value: 'last good', created_at: 1, updated_at: 1, clock: 2 };
+        const local = { id: 'affected', name: 'affected', value: 'last good', deleted: false, created_at: 1, updated_at: 1, clock: 2 };
         const tombstone = { id: 'kv:affected', tableName: 'kv', pk: 'affected', deletedAt: 1, clock: 3, hlc: 'h', opId: 'legacy' };
         await db.kv.put(local);
         await db.tombstones.put(tombstone);

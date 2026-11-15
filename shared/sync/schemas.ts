@@ -17,7 +17,7 @@ const MAX_SYNC_TABLE_FILTERS = 50;
 
 /** Bounds include JSON escaping of every currently admitted 1,024-unit key. */
 export const MAX_SYNC_SNAPSHOT_TOKEN_LENGTH = 65_536;
-export const MAX_SYNC_SNAPSHOT_REQUEST_BYTES = 96 * 1024;
+export const MAX_SYNC_SNAPSHOT_REQUEST_BYTES = 128 * 1024;
 export const MAX_SYNC_RESPONSE_BYTES = 2 * 1024 * 1024;
 
 /** UTF-8 BINARY ordering, component by component; never flatten with delimiters. */
@@ -122,8 +122,8 @@ function createTablePayloadSchema<T extends z.ZodRawShape>(
 // ============================================================
 
 export const SyncScopeSchema = z.object({
-    workspaceId: z.string().trim().min(1).max(MAX_SYNC_IDENTIFIER_LENGTH),
-    projectId: z.string().trim().min(1).max(MAX_SYNC_IDENTIFIER_LENGTH).optional(),
+    workspaceId: z.string().trim().min(1).max(MAX_SYNC_IDENTIFIER_LENGTH).refine(isLosslessSyncIdentifier),
+    projectId: z.string().trim().min(1).max(MAX_SYNC_IDENTIFIER_LENGTH).refine(isLosslessSyncIdentifier).optional(),
 });
 
 export const ChangeStampSchema = z.object({
@@ -180,8 +180,8 @@ export const PendingOpSchema = z.object({
 
 export const SyncChangeSchema = z.object({
     serverVersion: z.number().int().positive(),
-    tableName: z.string(),
-    pk: z.string(),
+    tableName: SyncRecordIdentifierSchema,
+    pk: SyncRecordIdentifierSchema,
     op: z.enum(['put', 'delete']),
     payload: z.unknown().optional(),
     stamp: ChangeStampSchema,
@@ -398,15 +398,15 @@ export const SnapshotRevisionSchema = z.object({
 export const SnapshotItemSchema = z.discriminatedUnion('kind', [
     z.object({
         kind: z.literal('row'),
-        tableName: z.string().min(1),
-        pk: z.string().min(1),
+        tableName: SyncRecordIdentifierSchema,
+        pk: SyncRecordIdentifierSchema,
         payload: z.unknown(),
         revision: SnapshotRevisionSchema,
     }),
     z.object({
         kind: z.literal('tombstone'),
-        tableName: z.string().min(1),
-        pk: z.string().min(1),
+        tableName: SyncRecordIdentifierSchema,
+        pk: SyncRecordIdentifierSchema,
         revision: SnapshotRevisionSchema,
         serverDeletedAt: z.number().int().nonnegative(),
     }),
@@ -470,7 +470,6 @@ export const PushBatchSchema = z
         ops: z.array(PendingOpSchema).max(MAX_SYNC_PUSH_BATCH_OPS),
         fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
     workspaceItemCapability: z.literal(WORKSPACE_ITEM_CAPABILITY).optional(),
-    unavailableRecordCapability: z.literal(UNAVAILABLE_RECORD_CAPABILITY).optional(),
     })
     .superRefine((batch, ctx) => {
         if (syncJsonByteLength(batch) > MAX_SYNC_PUSH_BATCH_BYTES) {
@@ -637,8 +636,8 @@ export function getPushResultContractError(
 
 export const TombstoneSchema = z.object({
     id: z.string(),
-    tableName: z.string(),
-    pk: z.string(),
+    tableName: SyncRecordIdentifierSchema,
+    pk: SyncRecordIdentifierSchema,
     deletedAt: z.number(),
     clock: z.number().int().nonnegative(),
     hlc: z.string().min(1).optional(),

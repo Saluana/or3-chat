@@ -1,5 +1,6 @@
+import { MAX_SYNC_PAYLOAD_BYTES } from '~~/shared/sync/sanitize';
 import { assertIncomingIdentity, isSyncTable } from '~~/shared/sync/incoming-records';
-import { PullUnavailableRecordSchema, SyncChangeSchema } from '~~/shared/sync/schemas';
+import { PullUnavailableRecordSchema, SyncChangeSchema, syncJsonByteLength } from '~~/shared/sync/schemas';
 import { retainIncomingEvidenceInTx } from './incoming-evidence';
 /**
  * @module app/core/sync/conflict-resolver
@@ -19,7 +20,7 @@ import { retainIncomingEvidenceInTx } from './incoming-evidence';
  * Constraints:
  * - All changes in a batch are applied in a single Dexie transaction for atomicity
  * - Payloads are normalized via `sync-payload-normalizer` before storage
- * - Invalid payloads abort the batch so its cursor cannot be acknowledged
+ * - Record defects commit incoming evidence before the cursor can be acknowledged
  *
  * @see core/sync/hlc for HLC comparison
  * @see core/sync/sync-payload-normalizer for payload normalization
@@ -74,7 +75,7 @@ function tombstoneBlocks(stamp: ChangeStamp, tombstone: Tombstone): boolean {
  * - Emits conflict hooks after the transaction completes
  *
  * Constraints:
- * - Invalid payloads abort the batch
+ * - Record defects are quarantined; coverage and storage failures abort the batch
  * - Callers should ensure HookBridge suppression is active for the tx
  */
 export class ConflictResolver {
@@ -101,8 +102,8 @@ export class ConflictResolver {
             let reason = !SyncChangeSchema.safeParse(change).success ? 'invalid_record_envelope' : !isSyncTable(change.tableName) ? 'unknown_table' : null;
             if (!reason && change.op === 'put') {
                 if (!change.payload || typeof change.payload !== 'object' || Array.isArray(change.payload)) reason = 'invalid_payload';
-                const normalized = normalizeSyncPayload(change.tableName, change.pk, change.payload, change.stamp);
-                if (!normalized.isValid) reason = 'invalid_local_payload';
+                else if (syncJsonByteLength(change.payload) > MAX_SYNC_PAYLOAD_BYTES) reason = 'oversized_payload';
+                if (!reason && !normalizeSyncPayload(change.tableName, change.pk, change.payload, change.stamp).isValid) reason = 'invalid_local_payload';
             }
             if (!reason) return true;
             defective.push({ change, reason });

@@ -199,7 +199,6 @@ export interface PushBatch {
     /** Writer capability required before generic file metadata is accepted. */
     fileKindCapability?: FileKindCapability;
     workspaceItemCapability?: WorkspaceItemCapability;
-    unavailableRecordCapability?: 'unavailable-v1';
 }
 
 /**

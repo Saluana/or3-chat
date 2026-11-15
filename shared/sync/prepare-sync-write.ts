@@ -46,6 +46,9 @@ export function prepareSyncWrite(input: SyncWriteInput): SyncWriteInput {
         if (!parsed.success) throw new SyncWriteError(`Invalid payload for ${tableName}`);
         payload = parsed.data;
         const row = payload as Record<string, unknown>;
+        for (const key of ['id', 'hash', 'thread_id', 'project_id', 'user_id', 'document_id', 'root_thread_id', 'summary_message_id']) {
+            if (typeof row[key] === 'string' && !isLosslessSyncIdentifier(row[key])) throw new SyncWriteError('Invalid payload identifier');
+        }
         if (row[getPkField(tableName)] !== pk || row.clock !== stamp.clock ||
             (row.hlc !== undefined && row.hlc !== stamp.hlc) ||
             (row.op_id !== undefined && row.op_id !== stamp.opId)) {

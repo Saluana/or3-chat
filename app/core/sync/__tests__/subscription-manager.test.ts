@@ -1,3 +1,4 @@
+import Dexie from 'dexie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
     PendingOp,
@@ -1093,10 +1094,10 @@ describe('SubscriptionManager', () => {
         const db = new Or3DB(`quota-${crypto.randomUUID()}`); await db.open();
         const cursor = cursorManagerModule.getCursorManager(db, { workspaceId: 'ws-1' });
         vi.mocked(cursor.isBootstrapNeeded).mockResolvedValue(true);
-        await db.kv.put({ id: 'old', name: 'old', value: 'last good', created_at: 1, updated_at: 1, clock: 1 });
+        await db.kv.put({ id: 'old', name: 'old', value: 'last good', deleted: false, created_at: 1, updated_at: 1, clock: 1 });
         let quota = true;
         if (phase === 'staging') db.snapshot_staging.hook('creating', (_key, row) => {
-            if (quota && row.sequence >= 0) throw new DOMException('storage full', 'QuotaExceededError');
+            if (quota && row.sequence >= 0) throw new Dexie.BulkError('storage full', [new DOMException('storage full', 'QuotaExceededError')]);
         });
         else db.kv.hook('creating', () => { if (quota) throw new DOMException('storage full', 'QuotaExceededError'); });
         const snapshot = vi.fn(async () => ({ workspaceId: 'ws-1', snapshotId: 'quota-snapshot', highWatermark: 40,

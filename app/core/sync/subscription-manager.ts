@@ -1,3 +1,4 @@
+import { assertIncomingIdentity } from '~~/shared/sync/incoming-records';
 import { isStorageQuotaError } from './incoming-evidence';
 /**
  * @module app/core/sync/subscription-manager
@@ -833,6 +834,10 @@ export class SubscriptionManager {
      */
     private async handleChanges(changes: SyncChange[], generation: number): Promise<void> {
         if (changes.length === 0 || !this.isCurrentGeneration(generation)) return;
+        for (const change of changes) {
+            assertIncomingIdentity(change);
+            if (!Number.isSafeInteger(change.serverVersion) || change.serverVersion <= 0) throw new Error('Invalid incoming version');
+        }
 
         // Filter out changes we've already seen to avoid reprocessing
         const currentCursor = await this.cursorManager.getCursor();
@@ -927,7 +932,7 @@ export class SubscriptionManager {
     }
 
     private filterRecentOps(changes: SyncChange[]): SyncChange[] {
-        const filtered = changes.filter((c) => !isRecentOpId(c.stamp.opId));
+        const filtered = changes.filter((c) => !isRecentOpId(c.stamp?.opId ?? ''));
         if (import.meta.dev) {
             const dropped = changes
                 .filter((c) => !filtered.includes(c))
@@ -1112,8 +1117,15 @@ export class SubscriptionManager {
             getSyncCircuitBreaker(this.circuitBreakerKey).canRetry();
     }
 
-    private pull(request: PullRequest): Promise<PullResponse> {
-        return this.provider.pull({ ...request, unavailableRecordCapability: 'unavailable-v1' }, { signal: this.requestController.signal });
+    private async pull(request: PullRequest): Promise<PullResponse> {
+        const response = await this.provider.pull({ ...request, unavailableRecordCapability: 'unavailable-v1' }, { signal: this.requestController.signal });
+        // Check coverage before callers filter already-seen versions. A corrupt
+        // version cannot be silently dropped by the cursor comparison.
+        for (const change of response.changes) {
+            assertIncomingIdentity(change);
+            if (!Number.isSafeInteger(change.serverVersion) || change.serverVersion <= 0) throw new Error('Invalid incoming version');
+        }
+        return response;
     }
 
     private getWindow(): Window | null {

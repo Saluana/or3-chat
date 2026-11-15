@@ -34,8 +34,9 @@ export async function retainIncomingEvidenceInTx(tx: Transaction, input: {
 
 export function isStorageQuotaError(error: unknown): boolean {
     if (!error || typeof error !== 'object') return false;
-    const value = error as { name?: string; inner?: unknown; cause?: unknown };
+    const value = error as { name?: string; inner?: unknown; cause?: unknown; failures?: unknown[] };
     return value.name === 'QuotaExceededError' ||
+        (value.name === 'BulkError' && Array.isArray(value.failures) && value.failures.some(isStorageQuotaError)) ||
         (!!value.inner && value.inner !== error && isStorageQuotaError(value.inner)) ||
         (!!value.cause && value.cause !== error && isStorageQuotaError(value.cause));
 }

@@ -152,17 +152,19 @@ export function parseChatGenerationAdmissionEnvelope(
     ) {
         throw new Error('Continuation background history must advance the assistant clock');
     }
-    // Validate before job persistence. Sinks repeat preparation after assigning
-    // their final UUID/revision; admission uses a provisional UUID, never persisted.
-    for (const [tableName, row] of [['threads', thread], ['messages', userMessage], ['messages', assistantMessage]] as const) {
-        if (!row) continue;
+    // Normalize once before sanitization/job persistence; camel-case legacy
+    // timestamps must not fall through to the sanitizer's wall-clock defaults.
+    const prepare = (tableName: 'threads' | 'messages', row: CanonicalHistoryRecord): CanonicalHistoryRecord => {
         nextSyncClock(row.clock);
-        // Provider-owned operation IDs are assigned at the transactional sink.
         const opId = '00000000-0000-4000-8000-000000000000';
-        prepareSyncWrite({ tableName, pk: row.id, operation: 'put', payload: { ...row, op_id: opId },
+        const payload = prepareSyncWrite({ tableName, pk: row.id, operation: 'put', payload: { ...row, op_id: opId },
             stamp: { deviceId: backgroundHistoryDeviceId(candidate.generationId as string),
-                opId, hlc: typeof row.hlc === 'string' ? row.hlc : 'background', clock: row.clock } });
-    }
+                opId, hlc: typeof row.hlc === 'string' ? row.hlc : 'background', clock: row.clock } }).payload as CanonicalHistoryRecord;
+        // The provider assigns its real op ID in the final writer transaction.
+        delete payload.op_id;
+        if (row.op_id !== undefined) payload.op_id = row.op_id;
+        return payload;
+    };
     return {
         version: BACKGROUND_HISTORY_CONTRACT_VERSION,
         kind: candidate.kind,
@@ -171,9 +173,9 @@ export function parseChatGenerationAdmissionEnvelope(
         workspaceId: candidate.workspaceId as string,
         threadId: candidate.threadId as string,
         messageId: candidate.messageId as string,
-        thread,
-        userMessage,
-        assistantMessage,
+        thread: thread ? prepare('threads', thread) : undefined,
+        userMessage: userMessage ? prepare('messages', userMessage) : undefined,
+        assistantMessage: prepare('messages', assistantMessage),
         expectedAssistant,
     };
 }

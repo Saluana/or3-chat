@@ -880,6 +880,14 @@ describe('memory background job admission and lifecycle', () => {
             referer: 'http://localhost:3000',
         };
 
+        const createJob = vi.spyOn(memoryJobProvider, 'createJob');
+        const { index: _index, ...invalidAssistant } = params.body._history.assistantMessage;
+        await expect(startBackgroundStream({ ...params, body: { ...params.body,
+            _history: { ...params.body._history, assistantMessage: invalidAssistant } } })).rejects.toThrow('Invalid payload');
+        expect(createJob).not.toHaveBeenCalled();
+        expect(fetchMock).not.toHaveBeenCalled();
+        createJob.mockRestore();
+
         const [first, second] = await Promise.all([
             startBackgroundStream(params),
             startBackgroundStream(params),

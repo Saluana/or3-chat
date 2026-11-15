@@ -1,6 +1,7 @@
+import { MAX_SYNC_PAYLOAD_BYTES } from '~~/shared/sync/sanitize';
 import { assertIncomingIdentity, isSyncTable } from '~~/shared/sync/incoming-records';
 import { retainIncomingEvidenceInTx } from './incoming-evidence';
-import { compareSyncTuple, SnapshotItemSchema, SnapshotResponseSchema, SnapshotUnavailableRecordSchema } from '~~/shared/sync/schemas';
+import { compareSyncTuple, syncJsonByteLength, SnapshotItemSchema, SnapshotResponseSchema, SnapshotUnavailableRecordSchema } from '~~/shared/sync/schemas';
 import { getSyncStateId } from './cursor-manager';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 import type { Transaction } from 'dexie';
@@ -158,6 +159,7 @@ export class SnapshotStager {
         }
         const entries: (SnapshotItem | StagedUnavailableRecord)[] = page.items.map(item => {
             let reason = !SnapshotItemSchema.safeParse(item).success ? 'invalid_record_envelope' : !isSyncTable(item.tableName) ? 'unknown_table' : null;
+            if (!reason && item.kind === 'row' && syncJsonByteLength(item.payload) > MAX_SYNC_PAYLOAD_BYTES) reason = 'oversized_payload';
             if (!reason && item.kind === 'row' && !normalizeSyncPayload(item.tableName, item.pk, item.payload, item.revision).isValid) reason = 'invalid_local_payload';
             if (!reason) return item;
             const marker = SnapshotUnavailableRecordSchema.parse({ tableName: item.tableName, pk: item.pk,

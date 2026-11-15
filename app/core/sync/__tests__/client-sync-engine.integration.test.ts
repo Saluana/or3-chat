@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
     session: null as unknown,
     workspace: null as unknown,
     starts: [] as string[],
+    subscriptionStatus: 'connected' as 'connected' | 'error',
     dispose: async () => {},
 }));
 vi.mock('~/composables/auth/useSessionContext', () => ({
@@ -31,6 +32,7 @@ vi.mock('../sync-provider-registry', () => ({
 vi.mock('../subscription-manager', () => ({
     createSubscriptionManager: (_db: unknown, _provider: unknown, scope: { workspaceId: string }) => ({
         start: async () => { state.starts.push(scope.workspaceId); }, stop: async () => {},
+        getStatus: () => state.subscriptionStatus,
     }),
     cleanupSubscriptionManager: vi.fn(), cleanupSubscriptionManagersByWorkspace: vi.fn(),
     getScopeKey: (scope: { workspaceId: string; principalId?: string }) => `${scope.workspaceId}:${scope.principalId ?? ''}`,
@@ -123,8 +125,13 @@ describe('sync lifecycle with real local write capture', () => {
                 await control.start(a);
                 expect(control.isRunning()).toBe(true);
                 expect(state.starts).toHaveLength(3);
+                state.subscriptionStatus = 'error';
+                await control.start(a);
+                expect(state.starts).toHaveLength(4);
+                state.subscriptionStatus = 'connected';
             }
         } finally {
+            state.subscriptionStatus = 'connected';
             release(); scope.stop(); state.dispose = async () => {};
             await control?.stop(); setActiveWorkspaceDb(null);
             for (const [id, database] of [[a, db], [b, other]] as const) {

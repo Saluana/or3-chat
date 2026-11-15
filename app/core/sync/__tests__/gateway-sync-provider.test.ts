@@ -240,7 +240,7 @@ describe('GatewaySyncProvider', () => {
             else window.dispatchEvent(new Event('online'));
             await vi.advanceTimersByTimeAsync(0);
             expect(fetchMock).toHaveBeenCalledTimes(1);
-            expect(JSON.parse(fetchMock.mock.calls[0]![1]!.body as string).cursor).toBe(5);
+            expect(JSON.parse((fetchMock.mock.calls as unknown as [string, RequestInit][])[0]![1].body as string).cursor).toBe(5);
 
             await vi.advanceTimersByTimeAsync(100);
             expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -680,7 +680,7 @@ describe('GatewaySyncProvider', () => {
 
             })
         );
-        expect(JSON.parse(fetchMock.mock.calls[0]![1]!.body as string)).toEqual({
+        expect(JSON.parse((fetchMock.mock.calls as unknown as [string, RequestInit][])[0]![1].body as string)).toEqual({
             scope: { workspaceId: 'ws-1' }, pageSize: 50, pageToken: 'opaque-page', tables: ['messages'],
             workspaceItemCapability: 'v1', fileKindCapability: 'v1', unavailableRecordCapability: 'unavailable-v1',
         });

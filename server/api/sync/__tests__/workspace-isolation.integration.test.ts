@@ -49,9 +49,9 @@ describe('document sync HTTP isolation with the real SQLite harness', () => {
     function admission(workspaceId: string): ChatGenerationAdmissionEnvelope {
         return { version: 1, kind: 'new-turn', admissionId: 'shared-admission', generationId: 'shared-generation',
             workspaceId, threadId: 'shared-thread', messageId: 'shared-assistant',
-            thread: { id: 'shared-thread', clock: 1, title: 'Synthetic thread' },
-            userMessage: { id: 'shared-user', clock: 1, thread_id: 'shared-thread', role: 'user', data: { content: 'Synthetic request' } },
-            assistantMessage: { id: 'shared-assistant', clock: 1, thread_id: 'shared-thread', role: 'assistant', pending: true,
+            thread: { id: 'shared-thread', clock: 1, title: 'Synthetic thread', status: 'ready', pinned: false, deleted: false, created_at: 1, updated_at: 1 },
+            userMessage: { id: 'shared-user', clock: 1, thread_id: 'shared-thread', role: 'user', index: 0, order_key: '1:0:server', deleted: false, created_at: 1, updated_at: 1, data: { content: 'Synthetic request' } },
+            assistantMessage: { id: 'shared-assistant', clock: 1, thread_id: 'shared-thread', role: 'assistant', pending: true, index: 1, order_key: '1:1:server', deleted: false, created_at: 1, updated_at: 1,
                 data: { content: '', generation_id: 'shared-generation' } },
         };
     }
