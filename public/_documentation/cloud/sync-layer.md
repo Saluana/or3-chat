@@ -106,7 +106,8 @@ Writer integrations use `prepareSyncWrite` from
 transactional sinks. Preparation is deterministic, allowlists synced tables,
 validates lossless identifiers, stamps and final live payloads, and enforces the
 256 KiB serialized payload ceiling. Deletes validate their envelope without
-requiring a live row. `nextSyncClock` rejects unsafe increments. Existing
+requiring a live row and retain their exact payload metadata so lost-ACK retries
+still match older receipts. `nextSyncClock` rejects unsafe increments. Existing
 nonempty legacy snapshot revision IDs remain supported.
 
 ## Pull retention and snapshot recovery

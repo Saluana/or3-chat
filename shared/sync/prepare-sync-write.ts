@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ChangeStampSchema, isLosslessSyncIdentifier, TABLE_PAYLOAD_SCHEMAS, normalizeWirePayloadForTable, syncJsonByteLength } from './schemas';
+import { ChangeStampSchema, isLosslessSyncIdentifier, TABLE_PAYLOAD_SCHEMAS, syncJsonByteLength } from './schemas';
 import { MAX_SYNC_PAYLOAD_BYTES } from './sanitize';
 import { getPkField } from './table-metadata';
 import { isLocalOnlyKvChange } from './local-only-kv';
@@ -40,7 +40,9 @@ export function prepareSyncWrite(input: SyncWriteInput): SyncWriteInput {
         throw new SyncWriteError('Invalid sync stamp');
     }
     const stamp = parsedStamp.data;
-    let payload = normalizeWirePayloadForTable(tableName, input.payload);
+    // Delete payloads were historically forwarded verbatim. Renaming their
+    // metadata changes the fingerprint of a previously committed lost-ACK op.
+    let payload = input.payload;
     if (operation === 'put') {
         const parsed = TABLE_PAYLOAD_SCHEMAS[tableName]!.safeParse(payload);
         if (!parsed.success) throw new SyncWriteError(`Invalid payload for ${tableName}`);

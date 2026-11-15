@@ -166,6 +166,24 @@ describe('document sync HTTP isolation with the real SQLite harness', () => {
         expect(page.unavailable ?? []).toEqual([]);
     });
 
+    it('replays a deletion committed with the old wire payload without fingerprint drift', async () => {
+        select(alice, workspaceA);
+        const op = { ...documentOp('unused'), operation: 'delete' as const, status: 'pending' as const,
+            payload: { id: 'copied-document', deletedAt: 123, deleted: true } };
+        const batch = { scope: { workspaceId: workspaceA }, ops: [op] };
+        // Old HTTP admission forwarded delete metadata unchanged to this sink.
+        const committed = await fixture.adapter!.push({ context: {} } as H3Event, batch);
+        expect(committed.results[0]).toMatchObject({ success: true });
+        const response = await fetch(`${baseUrl}/push`, {
+            method: 'POST', headers: { origin: baseUrl, 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' },
+            body: JSON.stringify(batch),
+        });
+        expect(response.status).toBe(200);
+        expect((await response.json()).results[0]).toMatchObject({ success: true, replayed: true,
+            serverVersion: committed.results[0]!.serverVersion });
+        expect(getRawDb().prepare('SELECT COUNT(*) AS count FROM change_log WHERE op_id = ?').get(op.stamp.opId)).toEqual({ count: 1 });
+    });
+
     it.each(['pull', 'snapshot', 'push'] as const)('refuses a foreign scope through %s even when the user belongs to it', async (route) => {
         select(bob, workspaceB);
         expect((await call(route, workspaceA)).status).toBe(403);

@@ -16,8 +16,10 @@ metadata must agree with the stamp and logical key. Only threads, messages,
 projects, posts, file_meta, kv and notifications are writable. Identifiers must
 round-trip through UTF-8: reject lone surrogates, preserve NUL, colon, CJK and
 supplementary scalars. PK admission remains 1–1,024 UTF-16 code units.
-Delete validates its envelope and optional JSON payload without requiring a live
-row. Put validates the applicable TABLE_PAYLOAD_SCHEMAS reader contract and key.
+Delete validates its envelope and optional object payload without requiring a
+live row, preserving the payload's exact keys and values. Do not normalize delete
+metadata: old receipts fingerprinted it verbatim, including camel-case fields.
+Put validates the applicable TABLE_PAYLOAD_SCHEMAS reader contract and key.
 The final serialized payload must fit MAX_SYNC_PAYLOAD_BYTES (256 KiB). Clocks,
 assigned versions and increments must be nonnegative safe integers (versions
 positive); `nextSyncClock` rejects exhaustion before mutation. HLC grammar is
