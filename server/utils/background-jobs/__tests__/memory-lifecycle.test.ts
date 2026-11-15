@@ -795,9 +795,9 @@ describe('memory background job admission and lifecycle', () => {
             body: { _background: true, _threadId: 'thread-1', _messageId: 'message-1', _backgroundAdmissionId: 'defaults-admission',
                 _delegationDefaults: defaults, model: 'test-model', messages: [instruction, { role: 'user', content: 'Private task' }], stream: true,
                 _history: { version: 1, kind: 'new-turn', admissionId: 'defaults-admission', generationId: 'defaults-generation',
-                    workspaceId: 'workspace-1', threadId: 'thread-1', messageId: 'message-1', thread: { id: 'thread-1', clock: 1 },
-                    userMessage: { id: 'user-message-1', thread_id: 'thread-1', role: 'user', clock: 1 },
-                    assistantMessage: { id: 'message-1', thread_id: 'thread-1', role: 'assistant', clock: 1 } } },
+                    workspaceId: 'workspace-1', threadId: 'thread-1', messageId: 'message-1', thread: { id: 'thread-1', clock: 1, status: 'ready', deleted: false, pinned: false, created_at: 1, updated_at: 1 },
+                    userMessage: { id: 'user-message-1', thread_id: 'thread-1', role: 'user', clock: 1, index: 0, order_key: '1:0:local', deleted: false, created_at: 1, updated_at: 1 },
+                    assistantMessage: { id: 'message-1', thread_id: 'thread-1', role: 'assistant', clock: 1, index: 1, order_key: '1:1:local', deleted: false, created_at: 1, updated_at: 1 } } },
             apiKey: 'user-api-key', userId: 'user-1', workspaceId: 'workspace-1', threadId: 'thread-1', messageId: 'message-1',
             referer: 'http://localhost:3000',
         };
@@ -854,7 +854,7 @@ describe('memory background job admission and lifecycle', () => {
                     workspaceId: 'workspace-1',
                     threadId: 'thread-1',
                     messageId: 'message-1',
-                    thread: { id: 'thread-1', clock: 1 },
+                    thread: { id: 'thread-1', clock: 1, status: 'ready', deleted: false, pinned: false, created_at: 1, updated_at: 1 },
                     userMessage: {
                         id: 'user-message-1',
                         thread_id: 'thread-1',

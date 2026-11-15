@@ -1,3 +1,4 @@
+import { prepareSyncWrite, nextSyncClock, isLosslessSyncIdentifier } from '../sync/prepare-sync-write';
 import type { RequestUsage } from './compaction';
 
 export const BACKGROUND_HISTORY_CONTRACT_VERSION = 1 as const;
@@ -99,7 +100,7 @@ export function parseChatGenerationAdmissionEnvelope(
         throw new Error('Invalid background history kind');
     }
     for (const key of ['admissionId', 'generationId', 'workspaceId', 'threadId', 'messageId'] as const) {
-        if (typeof candidate[key] !== 'string' || !candidate[key]) {
+        if (typeof candidate[key] !== 'string' || !candidate[key] || !isLosslessSyncIdentifier(candidate[key])) {
             throw new Error(`Invalid background history ${key}`);
         }
     }
@@ -150,6 +151,17 @@ export function parseChatGenerationAdmissionEnvelope(
         assistantMessage.clock <= expectedAssistant.clock
     ) {
         throw new Error('Continuation background history must advance the assistant clock');
+    }
+    // Validate before job persistence. Sinks repeat preparation after assigning
+    // their final UUID/revision; admission uses a provisional UUID, never persisted.
+    for (const [tableName, row] of [['threads', thread], ['messages', userMessage], ['messages', assistantMessage]] as const) {
+        if (!row) continue;
+        nextSyncClock(row.clock);
+        // Provider-owned operation IDs are assigned at the transactional sink.
+        const opId = '00000000-0000-4000-8000-000000000000';
+        prepareSyncWrite({ tableName, pk: row.id, operation: 'put', payload: { ...row, op_id: opId },
+            stamp: { deviceId: backgroundHistoryDeviceId(candidate.generationId as string),
+                opId, hlc: typeof row.hlc === 'string' ? row.hlc : 'background', clock: row.clock } });
     }
     return {
         version: BACKGROUND_HISTORY_CONTRACT_VERSION,

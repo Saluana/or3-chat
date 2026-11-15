@@ -113,6 +113,18 @@ function successfulPushResult(opId: string) {
 }
 
 describe('POST /api/sync/push', () => {
+    it.each(['unknown-table', 'lone-surrogate', 'unsafe-clock'])('rejects %s before adapter dispatch', async fault => {
+        const body = makeBaseBody();
+        if (fault === 'unknown-table') body.ops[0]!.tableName = 'not_a_sync_table';
+        if (fault === 'lone-surrogate') body.ops[0]!.pk = '\uD800';
+        if (fault === 'unsafe-clock') body.ops[0]!.stamp = { ...STAMP_1, clock: Number.MAX_SAFE_INTEGER + 1 };
+        readBodyMock.mockResolvedValue(body);
+        const { default: handler } = await import('../push.post');
+        const result = await handler(makeEvent());
+        expect(result.results[0]).toMatchObject({ success: false, errorCode: 'VALIDATION_ERROR' });
+        expect(pushMock).not.toHaveBeenCalled();
+    });
+
     beforeEach(() => {
         vi.mocked(requireCloudMutation).mockReset();
         readBodyMock.mockReset();
