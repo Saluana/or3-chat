@@ -65,7 +65,15 @@ const ChatPageDefault = defineAsyncVueComponent(
     () => import('~/components/chat/ChatContainer.vue')
 );
 const ChatMessageDefault = defineAsyncVueComponent(
-    () => import('~/components/chat/ChatMessage.vue')
+    async () => {
+        const [component] = await Promise.all([
+            import('~/components/chat/ChatMessage.vue'),
+            // Warm math within the existing message chunk boundary, before any
+            // message mounts. The renderer can retry a failed optional load.
+            import('streamdown-vue').then(module => module.preloadMath()).catch(() => {}),
+        ]);
+        return component;
+    }
 );
 const ChatInputDefault = defineAsyncVueComponent(
     () => import('~/components/chat/ChatInputDropper.vue')

@@ -1,0 +1,630 @@
+diff --git a/node_modules/or3-scroll/dist/or3-scroll.js b/node_modules/or3-scroll/dist/or3-scroll.js
+index 3f92895..2fdbb44 100644
+--- a/node_modules/or3-scroll/dist/or3-scroll.js
++++ b/node_modules/or3-scroll/dist/or3-scroll.js
+@@ -307,27 +307,27 @@ var re = class e {
+ 		"prefetchRange"
+ 	],
+ 	setup(a, { expose: re, emit: ce }) {
+-		let h = a, le = ce, ue = ne(), de = Number.isFinite(h.estimateHeight) && h.estimateHeight > 0 ? h.estimateHeight : 50, g = d(null), fe = d(null), _ = d(0), v = d(!0), y = d(0), b = d(-1), pe = d(0), me = d(0), x = d(0), he = d(0), S = 0, ge = 0, C = h.maintainBottom ? "followingBottom" : "userBrowsing", w = null, T = null, _e = !1, E = !1, D = !1, ve = 0, ye = !1, O = !1, k = 0, be = 0, xe = 0, Se = 0, A = null, j = 0, Ce = 0, M = 0, we = !1, Te = !1, N = -1, Ee = -1, P = new ie({
++		let h = a, le = ce, ue = ne(), de = Number.isFinite(h.estimateHeight) && h.estimateHeight > 0 ? h.estimateHeight : 50, g = d(null), fe = d(null), pe = d(null), _ = d(0), v = d(!0), y = d(0), b = d(-1), me = d(0), he = d(0), ge = d(0), _e = d(0), x = 0, ve = 0, S = h.maintainBottom ? "followingBottom" : "userBrowsing", C = null, w = null, T = !1, E = !1, D = !1, ye = 0, be = !1, O = !1, k = 0, xe = 0, Se = 0, Ce = 0, A = null, j = 0, we = 0, M = 0, Te = !1, Ee = !1, N = -1, De = -1, P = new ie({
+ 			estimateHeight: de,
+ 			overscanTop: h.overscan,
+ 			overscanBottom: h.overscan,
+ 			tailCount: h.tailCount,
+ 			maxWindow: void 0
+-		}), F = [], I = /* @__PURE__ */ new Map(), L = /* @__PURE__ */ new Map(), De = t(() => {
++		}), F = [], I = /* @__PURE__ */ new Map(), L = /* @__PURE__ */ new Map(), Oe = t(() => {
+ 			h.rowContentRevision;
+ 			let e = b.value === -1 ? 0 : b.value + 1;
+ 			return h.items.slice(y.value, e);
+ 		}), R = (e) => typeof h.itemKey == "function" ? h.itemKey(e) : e[h.itemKey], z = (e) => typeof requestAnimationFrame == "function" ? requestAnimationFrame(e) : (queueMicrotask(() => e(Date.now())), 0), B = (e) => {
+ 			e && typeof cancelAnimationFrame == "function" && cancelAnimationFrame(e);
+-		}, Oe = (e) => {
++		}, ke = (e) => {
+ 			let t = typeof devicePixelRatio == "number" && devicePixelRatio > 0 ? devicePixelRatio : 1;
+ 			return Math.round(e * t) / t;
+-		}, ke = () => {
+-			I.clear(), F.forEach((e, t) => I.set(e, t));
+ 		}, Ae = () => {
++			I.clear(), F.forEach((e, t) => I.set(e, t));
++		}, je = () => {
+ 			if (F.length === 0) return null;
+-			g.value && (S = g.value.scrollTop);
+-			let e = S - h.paddingTop, t = P.findIndexForOffset(Math.max(0, e)), n = F[t];
++			g.value && (x = g.value.scrollTop);
++			let e = x - h.paddingTop, t = P.findIndexForOffset(Math.max(0, e)), n = F[t];
+ 			return n === void 0 ? null : { candidates: [{
+ 				key: n,
+ 				withinItem: e - P.getOffsetForIndex(t),
+@@ -336,7 +336,7 @@ var re = class e {
+ 		}, V = () => {
+ 			if (F.length === 0) return null;
+ 			if (g.value) {
+-				S = g.value.scrollTop;
++				x = g.value.scrollTop;
+ 				let e = g.value.getBoundingClientRect();
+ 				if (e.height > 0 && Math.abs(e.height - g.value.clientHeight) < 2) {
+ 					let t = [];
+@@ -358,19 +358,19 @@ var re = class e {
+ 					})) };
+ 				}
+ 			}
+-			return Ae();
++			return je();
+ 		}, H = (e) => {
+ 			let t = Math.max(0, e);
+-			x.value = t, fe.value && (fe.value.style.height = `${t + h.paddingTop + h.paddingBottom}px`);
++			ge.value = t, fe.value && (fe.value.style.height = `${t + h.paddingTop + h.paddingBottom}px`);
+ 		}, U = (e, t, n = !1) => {
+ 			let r = g.value;
+ 			if (!r) return;
+-			let i = Math.max(0, x.value + h.paddingTop + h.paddingBottom - r.clientHeight), a = Math.max(0, Math.min(e, i));
+-			w = t, T = a, _e = n, n ? r.scrollTo({
++			let i = Math.max(0, ge.value + h.paddingTop + h.paddingBottom - r.clientHeight), a = Math.max(0, Math.min(e, i));
++			C = t, w = a, T = n, n ? r.scrollTo({
+ 				top: a,
+ 				behavior: "smooth"
+-			}) : r.scrollTop = a, S = r.scrollTop;
+-		}, je = (e) => w !== null && (w === "jump" || _e || T !== null && Math.abs(e - T) < 1), Me = (e) => {
++			}) : r.scrollTop = a, x = r.scrollTop;
++		}, Me = (e) => C !== null && (C === "jump" || T || w !== null && Math.abs(e - w) < 1), Ne = (e) => {
+ 			if (!e || !g.value) return !1;
+ 			let t;
+ 			for (let n of e.candidates) {
+@@ -386,14 +386,14 @@ var re = class e {
+ 			if (!t) return !1;
+ 			let n = h.paddingTop + P.getOffsetForIndex(t.index) + t.point.withinItem;
+ 			if (Math.abs(n - g.value.scrollTop) < m) return !0;
+-			let r = C;
+-			return C = "compensatingLayout", U(n, "compensation"), C = r, !0;
+-		}, Ne = () => Math.max(0, S - Math.max(0, h.paddingTop)), Pe = () => h.maintainBottom && C === "followingBottom" && !E && !_e, W = () => {
+-			let { overscanTop: e, overscanBottom: t, maxWindow: n } = Fe();
++			let r = S;
++			return S = "compensatingLayout", U(n, "compensation"), S = r, !0;
++		}, Pe = () => Math.max(0, x - Math.max(0, h.paddingTop)), Fe = () => h.maintainBottom && S === "followingBottom" && !E && !T, W = () => {
++			let { overscanTop: e, overscanBottom: t, maxWindow: n } = Ie();
+ 			P.updateOverscan(e, t), P.updateMaxWindow(n);
+-			let r = Pe() ? Math.max(0, P.getTotalHeight() + h.paddingBottom - _.value) : Ne(), i = P.computeRange(r, _.value);
+-			y.value !== i.startIndex && (y.value = i.startIndex), b.value !== i.endIndex && (b.value = i.endIndex), pe.value !== i.offsetY && (pe.value = i.offsetY), me.value !== i.totalHeight && (me.value = i.totalHeight);
+-		}, Fe = () => {
++			let r = Fe() ? Math.max(0, P.getTotalHeight() + h.paddingBottom - _.value) : Pe(), i = P.computeRange(r, _.value);
++			y.value !== i.startIndex && (y.value = i.startIndex), b.value !== i.endIndex && (b.value = i.endIndex), me.value !== i.offsetY && (me.value = i.offsetY), he.value !== i.totalHeight && (he.value = i.totalHeight);
++		}, Ie = () => {
+ 			let e = Number.isFinite(h.overscan) ? Math.max(0, h.overscan) : 200, t = Number.isFinite(h.tailCount) ? Math.max(0, Math.floor(h.tailCount)) : 0, n = _.value / de;
+ 			return {
+ 				overscanTop: e,
+@@ -402,72 +402,72 @@ var re = class e {
+ 			};
+ 		}, G = () => {
+ 			if (h.prefetchOverscan <= 0 || F.length === 0) return;
+-			let e = Number.isFinite(h.prefetchOverscan) ? Math.max(0, h.prefetchOverscan) : 0, t = Ne(), n = P.findIndexForOffset(Math.max(0, t - e)), r = P.findIndexForOffset(Math.min(P.getTotalHeight(), t + _.value + e));
+-			(n !== N || r !== Ee) && (N = n, Ee = r, le("prefetchRange", {
++			let e = Number.isFinite(h.prefetchOverscan) ? Math.max(0, h.prefetchOverscan) : 0, t = Pe(), n = P.findIndexForOffset(Math.max(0, t - e)), r = P.findIndexForOffset(Math.min(P.getTotalHeight(), t + _.value + e));
++			(n !== N || r !== De) && (N = n, De = r, le("prefetchRange", {
+ 				startIndex: n,
+ 				endIndex: r
+ 			}));
+-		}, Ie = (e, t) => {
++		}, Le = (e, t) => {
+ 			H(P.getTotalHeight()), t && h.maintainBottom ? o(() => {
+-				!O && C === "followingBottom" && !E && $();
+-			}) : Me(e);
+-		}, K = (e, t) => {
+-			E ? Me(e) : Ie(e, t);
+-		}, Le = () => x.value + h.paddingTop + h.paddingBottom, q = (e, t) => {
++				O || S !== "followingBottom" || E || Q || bt();
++			}) : Ne(e);
++		}, Re = (e, t) => {
++			E ? Ne(e) : Le(e, t);
++		}, ze = () => ge.value + h.paddingTop + h.paddingBottom, K = (e, t) => {
+ 			let n = g.value;
+ 			if (!n) return;
+-			let r = Le() - (n.scrollTop + n.clientHeight), i = r <= h.bottomThreshold;
+-			v.value = i, t || (e < -.5 && r > h.autoscrollThreshold ? C = "userBrowsing" : e > m && i && h.maintainBottom && (C = "followingBottom"));
+-		}, Re = () => {
+-			let e = S <= m;
+-			e && !we && le("reachTop"), !e && S > 1.5 ? we = !1 : e && (we = !0), v.value && !Te && le("reachBottom");
++			let r = ze() - (n.scrollTop + n.clientHeight), i = r <= h.bottomThreshold;
++			v.value = i, t || (e < -.5 && r > h.autoscrollThreshold ? S = "userBrowsing" : e > m && i && h.maintainBottom && (S = "followingBottom"));
++		}, Be = () => {
++			let e = x <= m;
++			e && !Te && le("reachTop"), !e && x > 1.5 ? Te = !1 : e && (Te = !0), v.value && !Ee && le("reachBottom");
+ 			let t = g.value;
+-			t && (Le() - (t.scrollTop + t.clientHeight) > h.bottomThreshold + 1 ? Te = !1 : v.value && (Te = !0));
+-		}, J = () => {
+-			g.value && (S = g.value.scrollTop, q(0, !0), Re());
+-		}, ze = () => {
+-			k && (be++, B(k), k = 0, Ve()), A &&= (clearTimeout(A), null);
++			t && (ze() - (t.scrollTop + t.clientHeight) > h.bottomThreshold + 1 ? Ee = !1 : v.value && (Ee = !0));
++		}, q = () => {
++			g.value && (x = g.value.scrollTop, K(0, !0), Be());
++		}, Ve = () => {
++			k && (xe++, B(k), k = 0, Ue()), A &&= (clearTimeout(A), null);
+ 			let e = E;
+-			E = !1, ve = 0, g.value && (S = g.value.scrollTop, q(0, !0)), (C === "programmaticJump" || e) && (C = h.maintainBottom && v.value ? "followingBottom" : "userBrowsing"), w = null, T = null;
++			E = !1, ye = 0, g.value && (x = g.value.scrollTop, K(0, !0)), (S === "programmaticJump" || e) && (S = h.maintainBottom && v.value ? "followingBottom" : "userBrowsing"), C = null, w = null;
+ 			let t = P.getTotalHeight();
+-			Math.abs(x.value - t) >= m && Ie(V(), C === "followingBottom"), J();
+-		}, Be = () => {
++			Math.abs(ge.value - t) >= m && Le(V(), S === "followingBottom"), q();
++		}, He = () => {
+ 			A && clearTimeout(A), A = setTimeout(() => {
+-				A = null, D || ze();
++				A = null, D || Ve();
+ 			}, se);
+-		}, Ve = () => {
++		}, Ue = () => {
+ 			k = 0;
+ 			let e = g.value;
+ 			if (!e || O) return;
+-			S = e.scrollTop;
+-			let t = S - ge, n = je(S);
+-			n || (w = null, T = null), !n && Math.abs(t) > m && (E = !0), T !== null && Math.abs(S - T) < 1 && w !== "jump" && (w = null, T = null), q(t, n), W(), G(), ue.__debug && (he.value = S), le("scroll", {
+-				scrollTop: S,
++			x = e.scrollTop;
++			let t = x - ve, n = Me(x);
++			n || (C = null, w = null), !n && Math.abs(t) > m && (E = !0), w !== null && Math.abs(x - w) < 1 && C !== "jump" && (C = null, w = null), K(t, n), W(), G(), ue.__debug && (_e.value = x), le("scroll", {
++				scrollTop: x,
+ 				scrollHeight: e.scrollHeight,
+ 				clientHeight: _.value,
+ 				isAtBottom: v.value
+-			}), Re(), ge = S, (E || w === "jump") && Be();
+-		}, He = () => {
++			}), Be(), ve = x, (E || C === "jump") && He();
++		}, J = () => {
+ 			if (k || O) return;
+-			let e = ++be;
++			let e = ++xe;
+ 			k = z(() => {
+-				e === be && Ve();
++				e === xe && Ue();
+ 			});
+-		}, Ue = () => {
++		}, We = () => {
+ 			if (!g.value) return;
+ 			let e = g.value.scrollTop;
+-			!je(e) && e < S - m && (w = null, T = null, E = !0, q(e - S, !1)), S = e, He();
+-		}, We = () => {
+-			w === "jump" && (ve = Date.now() + se), E = !0, w = null, T = null, M++, v.value || (C = "userBrowsing"), Q(), Be();
+-		}, Ge, Ke = () => {
+-			Ge?.(), Ge = void 0;
++			!Me(e) && e < x - m && (C = null, w = null, E = !0, K(e - x, !1)), x = e, J();
++		}, Ge = () => {
++			(C === "jump" || Q) && (ye = Date.now() + se), $(), E = !0, C = null, w = null, M++, v.value || (S = "userBrowsing"), gt(), He();
++		}, Ke, qe = () => {
++			Ke?.(), Ke = void 0;
+ 			let e = g.value;
+-			e && (e.addEventListener("wheel", We, { passive: !h.maintainBottom }), Ge = () => e.removeEventListener("wheel", We));
+-		}, qe = () => {
+-			D = !0, We();
++			e && (e.addEventListener("wheel", Ge, { passive: !h.maintainBottom }), Ke = () => e.removeEventListener("wheel", Ge));
+ 		}, Je = () => {
+-			D && (D = !1, (E || w === "jump") && Be());
+-		}, Ye = (e) => {
++			D = !0, Ge();
++		}, Ye = () => {
++			D && (D = !1, (E || C === "jump") && He());
++		}, Xe = (e) => {
+ 			[
+ 				"ArrowUp",
+ 				"ArrowDown",
+@@ -476,44 +476,58 @@ var re = class e {
+ 				"Home",
+ 				"End",
+ 				" "
+-			].includes(e.key) && We();
+-		}, Xe = () => {
+-			D || E && Date.now() < ve || (k || E || w === "jump") && ze();
+-		}, Y = /* @__PURE__ */ new Map(), X = /* @__PURE__ */ new Map(), Ze = (e, t) => {
++			].includes(e.key) && Ge();
++		}, Ze = () => {
++			Q || D || E && Date.now() < ye || (k || E || C === "jump") && Ve();
++		}, Y = /* @__PURE__ */ new Map(), X = /* @__PURE__ */ new Map(), Qe = (e, t) => {
+ 			let n = R(t), r = X.get(n);
+ 			if (r) return r;
+ 			let i = (e) => {
+ 				if (e) {
+ 					let t = e instanceof Element ? e : e.$el, r = Y.get(n);
+ 					if (r === t) return;
+-					r && p.unobserve(r), Y.set(n, t), p.observe(t, (e) => {
+-						let t = e.borderBoxSize?.[0]?.blockSize ?? e.contentRect.height;
+-						et(n, t);
+-					});
++					r && p.unobserve(r), Y.set(n, t), st(), et ? $e.set(n, t) : nt(n, t);
+ 				} else {
+ 					let e = Y.get(n);
+-					e && p.unobserve(e), Y.delete(n), X.delete(n);
++					e && p.unobserve(e), $e.delete(n), Y.delete(n), X.delete(n);
+ 				}
+ 			};
+ 			return X.set(n, i), i;
+-		}, Z = /* @__PURE__ */ new Map(), Qe = !1, $e = 0, et = (e, t) => {
+-			let n = Oe(t), r = L.get(e);
+-			r !== void 0 && Math.abs(r - n) < m || (Z.set(e, n), Qe || (Qe = !0, $e = z(tt)));
+-		}, tt = () => {
+-			if (B($e), $e = 0, Qe = !1, Z.size === 0 || O) return;
+-			g.value && (S = g.value.scrollTop);
+-			let e = Ae(), t = !1;
+-			for (let [e, n] of Z) {
+-				let r = I.get(e);
+-				if (r === void 0) continue;
++		}, $e = /* @__PURE__ */ new Map(), et = 0, tt = () => {
++			et = 0;
++			for (let [e, t] of $e) O || Y.get(e) !== t || (ct(e, t.getBoundingClientRect().height), nt(e, t));
++			$e.clear(), rt && lt();
++		}, nt = (e, t) => {
++			p.observe(t, (t) => {
++				let n = t.borderBoxSize?.[0]?.blockSize ?? t.contentRect.height;
++				ct(e, n), at || (at = !0, queueMicrotask(() => {
++					at = !1, lt(!1);
++				}));
++			});
++		}, Z = /* @__PURE__ */ new Map(), rt = !1, it = 0, at = !1, ot = !1, Q = 0, $ = () => {
++			B(Q), Q = 0, T = !1;
++		}, st = () => {
++			ot || (ot = !0, o(() => {
++				ot = !1, O || vt(j);
++			}));
++		}, ct = (e, t) => {
++			let n = ke(t), r = L.get(e);
++			r !== void 0 && Math.abs(r - n) < m || (Z.set(e, n), rt || (rt = !0, it = z(() => lt())));
++		}, lt = (e = !0) => {
++			if (B(it), it = 0, rt = !1, Z.size === 0 || O) return;
++			g.value && (x = g.value.scrollTop);
++			let t = je(), n = P.getTotalHeight(), r = !1;
++			for (let [e, t] of Z) {
++				let n = I.get(e);
++				if (n === void 0) continue;
+ 				let i = L.get(e);
+-				i !== void 0 && Math.abs(i - n) < m || (L.set(e, n), P.setHeight(r, n), t = !0);
++				i !== void 0 && Math.abs(i - t) < m || (L.set(e, t), P.setHeight(n, t), r = !0);
+ 			}
+-			if (Z.clear(), !t) return;
+-			W();
+-			let n = h.maintainBottom && C === "followingBottom" && !E;
+-			K(e, n), J();
+-		}, nt = (e) => {
++			if (Z.clear(), !r) return;
++			e ? W() : (me.value = P.getOffsetForIndex(y.value), he.value = P.getTotalHeight(), pe.value && (pe.value.style.transform = `translateY(${me.value + h.paddingTop}px)`), J());
++			let i = h.maintainBottom && S === "followingBottom" && !E;
++			Re(t, i), !e && n - P.getTotalHeight() > Ie().overscanBottom && (et ||= z(tt), W()), q();
++		}, ut = (e) => {
+ 			let t = new Set(e);
+ 			for (let e of L.keys()) t.has(e) || L.delete(e);
+ 			for (let e of X.keys()) {
+@@ -521,22 +535,22 @@ var re = class e {
+ 				let n = Y.get(e);
+ 				n && p.unobserve(n), Y.delete(e), X.delete(e);
+ 			}
+-		}, rt = (e) => {
+-			F.splice(0, F.length, ...e), ke();
+-		}, it = (e, t = !1) => {
++		}, dt = (e) => {
++			F.splice(0, F.length, ...e), Ae();
++		}, ft = (e, t = !1) => {
+ 			let n = V(), r = e.map(R);
+-			if (t && L.clear(), nt(r), P.replaceHeights(r.map((e) => L.get(e) ?? NaN)), rt(r), W(), N = -1, G(), ye) {
+-				let e = h.maintainBottom && C === "followingBottom" && !E;
+-				K(n, e), J(), e && !t && lt(j);
++			if (t && L.clear(), ut(r), P.replaceHeights(r.map((e) => L.get(e) ?? NaN)), dt(r), W(), N = -1, G(), be) {
++				let e = h.maintainBottom && S === "followingBottom" && !E;
++				Re(n, e), q(), e && !t && vt(j);
+ 			}
+-		}, at = (e, t) => {
++		}, pt = (e, t) => {
+ 			let n = V();
+ 			for (let n = t; n < e.length; n++) {
+ 				let t = R(e[n]);
+ 				F.push(t), I.set(t, n);
+ 			}
+-			P.setCount(e.length), W(), N = -1, G(), ye && (K(n, h.maintainBottom && C === "followingBottom" && !E), J());
+-		}, ot = async (e, t, n) => {
++			P.setCount(e.length), W(), N = -1, G(), be && (Re(n, h.maintainBottom && S === "followingBottom" && !E), q());
++		}, mt = async (e, t, n) => {
+ 			let r = e.slice(0, t).map((e, t) => ({
+ 				item: e,
+ 				index: t,
+@@ -548,78 +562,96 @@ var re = class e {
+ 				Number.isNaN(i[t]) || L.set(e.key, i[t]);
+ 			}), P.bulkInsert(0, i), F.unshift(...r.map((e) => e.key)), P.getCount() < e.length && P.setCount(e.length);
+ 			for (let t = F.length; t < e.length; t++) F.push(R(e[t]));
+-			ke(), W(), N = -1, G(), K(a, !1), J();
+-		}, st = async () => {
++			Ae(), W(), N = -1, G(), Re(a, !1), q();
++		}, ht = async () => {
+ 			let e = ++j, t = h.items, n = t.length, r = F.length;
+-			if (r === 0 || h.mutationMode === "arbitrary" || n === 0) {
+-				it(t);
++			if (r === 0) {
++				ft(t);
++				return;
++			}
++			if (h.mutationMode === "arbitrary") {
++				if (n === r && t.every((e, t) => R(e) === F[t])) return;
++				ft(t);
++				return;
++			}
++			if (n === 0) {
++				ft(t);
+ 				return;
+ 			}
+ 			let i = F[0], a = F[r - 1], o = R(t[0]), s = R(t[n - 1]);
+ 			if (n === r && o === i && s === a) return;
+ 			if (n > r && o === i && R(t[r - 1]) === a) {
+-				at(t, r);
++				pt(t, r);
+ 				return;
+ 			}
+ 			let c = n - r;
+-			if (c > 0 && R(t[c]) === i && R(t[c + r - 1]) === a) await ot(t, c, e);
++			if (c > 0 && R(t[c]) === i && R(t[c + r - 1]) === a) await mt(t, c, e);
+ 			else if (n < r && o === i && s === F[n - 1]) {
+ 				let e = V();
+-				F.splice(n), nt(F), ke(), P.setCount(n), W(), N = -1, G(), ye && (K(e, !1), J());
+-			} else it(t);
+-		}, Q = () => {
+-			Ce++, B(xe), B(Se), xe = 0, Se = 0;
+-		}, ct = (e = !1) => {
+-			Q();
+-			let t = Ce, n = j;
+-			xe = z(() => {
+-				xe = 0, Se = z(() => {
+-					Se = 0, t !== Ce || e && n !== j || O || !h.maintainBottom || $();
++				F.splice(n), ut(F), Ae(), P.setCount(n), W(), N = -1, G(), be && (Re(e, !1), q());
++			} else ft(t);
++		}, gt = () => {
++			we++, B(Se), B(Ce), Se = 0, Ce = 0;
++		}, _t = (e = !1) => {
++			gt();
++			let t = we, n = j;
++			Se = z(() => {
++				Se = 0, Ce = z(() => {
++					Ce = 0, t !== we || e && n !== j || O || !h.maintainBottom || bt();
+ 				});
+ 			});
+-		}, lt = (e, t = 3) => {
++		}, vt = (e, t = 3) => {
+ 			o(() => {
+ 				if (O || e !== j) return;
+ 				let n = y.value, r = b.value;
+-				gt(), t > 1 && (y.value !== n || b.value !== r) && lt(e, t - 1);
++				Et(), t > 1 && (y.value !== n || b.value !== r) && vt(e, t - 1);
+ 			});
+-		}, ut = () => {
+-			j++, M++, be++, B(k), k = 0, A &&= (clearTimeout(A), null), E = !1, D = !1, ve = 0, Q(), Z.clear(), Y.forEach((e) => p.unobserve(e)), Y.clear(), X.clear(), L.clear(), C = h.maintainBottom ? "followingBottom" : "userBrowsing", w = null, T = null, _e = !1, S = 0, ge = 0, N = -1, Ee = -1, g.value && (g.value.scrollTop = 0), it(h.items, !0), H(P.getTotalHeight()), Pe() && $(), J(), lt(j), h.maintainBottom && ct();
+-		}, $ = (e = {}) => {
++		}, yt = () => {
++			$(), j++, M++, xe++, B(k), k = 0, A &&= (clearTimeout(A), null), E = !1, D = !1, ye = 0, gt(), Z.clear(), Y.forEach((e) => p.unobserve(e)), Y.clear(), X.clear(), L.clear(), S = h.maintainBottom ? "followingBottom" : "userBrowsing", C = null, w = null, T = !1, x = 0, ve = 0, N = -1, De = -1, g.value && (g.value.scrollTop = 0), ft(h.items, !0), H(P.getTotalHeight()), Fe() && bt(), q(), vt(j), h.maintainBottom && _t();
++		}, bt = (e = {}) => {
+ 			if (!g.value) return;
+-			C = "followingBottom", H(P.getTotalHeight());
+-			let t = Math.max(0, Le() - g.value.clientHeight);
+-			U(t, "bottom", e.smooth === !0), He();
+-		}, dt = (e, t, n) => {
++			$(), S = "followingBottom", H(P.getTotalHeight());
++			let t = Math.max(0, ze() - g.value.clientHeight);
++			if (e.smooth && typeof requestAnimationFrame == "function" && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
++				let e = g.value.scrollTop, t, n = (r) => {
++					if (O || !g.value) return;
++					t ??= r;
++					let i = Math.min(1, Math.max(0, (r - t) / 280)), a = Math.max(0, ze() - g.value.clientHeight);
++					U(e + (a - e) * (1 - (1 - i) ** 3), "bottom"), T = i < 1, Q = i < 1 ? requestAnimationFrame(n) : 0, J();
++				};
++				T = !0, Q = requestAnimationFrame(n);
++			} else U(t, "bottom");
++			J();
++		}, xt = (e, t, n) => {
+ 			let r = P.getOffsetForIndex(e) + h.paddingTop;
+ 			return t === "center" ? r -= _.value / 2 - n / 2 : t === "end" && (r -= _.value - n), Math.max(0, r);
+-		}, ft = (e, t = {}) => {
++		}, St = (e, t = {}) => {
+ 			if (!g.value || !Number.isSafeInteger(e) || e < 0 || e >= h.items.length) return;
+-			Q();
++			$(), gt();
+ 			let n = ++M, r = t.align ?? "start", i = F[e];
+-			C = "programmaticJump", H(P.getTotalHeight());
++			S = "programmaticJump", H(P.getTotalHeight());
+ 			let a = L.get(i) ?? P.getMeasuredHeight(e) ?? de;
+-			U(dt(e, r, a), "jump", t.smooth === !0), He(), o(() => {
++			U(xt(e, r, a), "jump", t.smooth === !0), J(), o(() => {
+ 				z(() => {
+ 					if (n !== M || O) return;
+ 					let e = I.get(i);
+ 					if (e === void 0) return;
+ 					let a = Y.get(i)?.getBoundingClientRect().height;
+ 					if (a && a > 0) {
+-						let t = Oe(a);
++						let t = ke(a);
+ 						L.set(i, t), P.setHeight(e, t), W(), H(P.getTotalHeight());
+ 					}
+ 					let o = L.get(i) ?? P.getMeasuredHeight(e) ?? de;
+-					U(dt(e, r, o), "jump", t.smooth === !0), He();
++					U(xt(e, r, o), "jump", t.smooth === !0), J();
+ 				});
+ 			});
+-		}, pt = (e, t = {}) => {
++		}, Ct = (e, t = {}) => {
+ 			let n = I.get(e);
+-			n !== void 0 && ft(n, t);
+-		}, mt = () => {
++			n !== void 0 && St(n, t);
++		}, wt = () => {
+ 			let e = g.value;
+-			e && (S = e.scrollTop);
+-			let t = e ? e.scrollHeight - (S + e.clientHeight) : Infinity;
++			e && (x = e.scrollTop);
++			let t = e ? e.scrollHeight - (x + e.clientHeight) : Infinity;
+ 			return {
+ 				version: 1,
+ 				contentKey: h.contentKey,
+@@ -629,94 +661,96 @@ var re = class e {
+ 					withinItem: e.withinItem,
+ 					index: e.index
+ 				})),
+-				scrollTop: S
++				scrollTop: x
+ 			};
+-		}, ht = async (e) => {
++		}, Tt = async (e) => {
+ 			if (!e || e.version !== 1 || e.contentKey !== h.contentKey) return;
+ 			let t = h.contentKey, n = j, r = ++M;
+ 			if (await o(), !g.value || O || r !== M || n !== j || t !== h.contentKey) return;
+ 			if (e.mode === "bottom") {
+-				$();
++				bt();
+ 				return;
+ 			}
+-			Q(), A &&= (clearTimeout(A), null), E = !1, C = "userBrowsing", w = null, T = null;
++			$(), gt(), A &&= (clearTimeout(A), null), E = !1, S = "userBrowsing", C = null, w = null;
+ 			let i = (e.anchors ?? []).filter((e) => (typeof e.key == "string" || typeof e.key == "number") && Number.isFinite(e.withinItem) && Number.isSafeInteger(e.index));
+-			!(i.length > 0 && Me({ candidates: i })) && Number.isFinite(e.scrollTop) && U(e.scrollTop, "jump"), He();
+-		}, gt = () => {
++			!(i.length > 0 && Ne({ candidates: i })) && Number.isFinite(e.scrollTop) && U(e.scrollTop, "jump"), J();
++		}, Et = () => {
+ 			for (let [e, t] of Y) {
+ 				let n = t.getBoundingClientRect().height;
+-				n > 0 && et(e, n);
++				n > 0 && ct(e, n);
+ 			}
+-			Qe ? tt() : W();
+-		}, _t = () => ut(), vt = null, yt = 0, bt = 0, xt = (e) => {
++			rt ? lt() : W();
++		}, Dt = () => yt(), Ot = null, kt = 0, At = 0, jt = (e) => {
+ 			if (!g.value || e === _.value) return;
+ 			let t = V();
+-			_.value = e, W(), Ie(t, h.maintainBottom && C === "followingBottom"), q(0, !0), G();
++			_.value = e, W(), Le(t, h.maintainBottom && S === "followingBottom"), K(0, !0), G();
+ 		};
+ 		return c(() => {
+-			ye = !0, Ke();
++			be = !0, qe();
+ 			let e = g.value;
+-			e && (S = e.scrollTop, ge = e.scrollTop, _.value = e.clientHeight, typeof ResizeObserver < "u" && (vt = new ResizeObserver((e) => {
++			e && (x = e.scrollTop, ve = e.scrollTop, _.value = e.clientHeight, typeof ResizeObserver < "u" && (Ot = new ResizeObserver((e) => {
+ 				let t = e[e.length - 1];
+-				t && (bt = t.contentRect.height, !yt && (yt = z(() => {
+-					yt = 0, O || xt(bt);
++				t && (At = t.contentRect.height, !kt && (kt = z(() => {
++					kt = 0, O || jt(At);
+ 				})));
+-			}), vt.observe(e)), W(), H(P.getTotalHeight()), G(), Pe() && F.length && ($(), lt(j)), h.maintainBottom && ct(!0));
++			}), Ot.observe(e)), W(), H(P.getTotalHeight()), G(), Fe() && F.length && (bt(), vt(j)), h.maintainBottom && _t(!0));
+ 		}), l(() => {
+-			O = !0, Ge?.(), Ge = void 0, j++, M++, be++, B(k), k = 0, Q(), A && clearTimeout(A), vt?.disconnect(), B(yt), yt = 0, Y.forEach((e) => p.unobserve(e)), Y.clear(), X.clear(), Z.clear(), B($e), $e = 0;
++			O = !0, B(et), $e.clear(), $(), Ke?.(), Ke = void 0, j++, M++, xe++, B(k), k = 0, gt(), A && clearTimeout(A), Ot?.disconnect(), B(kt), kt = 0, Y.forEach((e) => p.unobserve(e)), Y.clear(), X.clear(), Z.clear(), B(it), it = 0;
+ 		}), f(() => {
+ 			let e = h.items;
+ 			return h.mutationMode === "arbitrary" ? e.map(R) : [e, e.length];
+-		}, () => void st(), { immediate: !0 }), f(() => h.contentKey, (e, t) => {
+-			e !== t && ut();
++		}, () => void ht(), { immediate: !0 }), f(() => h.rowContentRevision, st, { flush: "post" }), f(() => h.contentKey, (e, t) => {
++			e !== t && yt();
+ 		}), f(() => [h.paddingBottom, h.paddingTop], () => {
+ 			let e = V();
+-			Ie(e, h.maintainBottom && C === "followingBottom");
++			Le(e, h.maintainBottom && S === "followingBottom");
+ 		}), f(() => [h.overscan, h.prefetchOverscan], () => {
+-			N = -1, Ee = -1, W(), G();
++			N = -1, De = -1, W(), G();
+ 		}), f(() => h.tailCount, (e) => {
+ 			P.updateTailCount(e), W();
+ 		}), f(() => h.maintainBottom, (e) => {
+-			Ke(), e && (q(0, !0), C = v.value ? "followingBottom" : "userBrowsing");
++			qe(), e ? (K(0, !0), S = v.value ? "followingBottom" : "userBrowsing") : ($(), S = "userBrowsing");
+ 		}), f(() => h.estimateHeight, (e, t) => {}), re({
+-			scrollToBottom: $,
+-			scrollToIndex: ft,
+-			scrollToItemKey: pt,
+-			captureScrollState: mt,
+-			restoreScrollState: ht,
+-			refreshMeasurements: gt,
+-			reset: _t,
++			scrollToBottom: bt,
++			scrollToIndex: St,
++			scrollToItemKey: Ct,
++			captureScrollState: wt,
++			restoreScrollState: Tt,
++			refreshMeasurements: Et,
++			reset: Dt,
+ 			isAtBottom: v
+ 		}), (t, o) => (u(), r("div", {
+ 			ref_key: "container",
+ 			ref: g,
+ 			class: "or3-scroll",
+-			onScrollPassive: Ue,
+-			onTouchstartPassive: qe,
+-			onTouchendPassive: Je,
+-			onTouchcancelPassive: Je,
+-			onMousedownPassive: We,
+-			onKeydown: Ye,
+-			onScrollendPassive: Xe
++			onScrollPassive: We,
++			onTouchstartPassive: Je,
++			onTouchendPassive: Ye,
++			onTouchcancelPassive: Ye,
++			onMousedownPassive: Ge,
++			onKeydown: Xe,
++			onScrollendPassive: Ze
+ 		}, [i("div", {
+ 			ref_key: "track",
+ 			ref: fe,
+ 			class: "or3-scroll-track",
+-			style: s({ height: x.value + a.paddingTop + a.paddingBottom + "px" })
++			style: s({ height: ge.value + a.paddingTop + a.paddingBottom + "px" })
+ 		}, [
+ 			a.loadingHistory ? (u(), r("div", ae, [te(t.$slots, "prepend-loading", {}, void 0, !0)])) : n("", !0),
+ 			i("div", {
++				ref_key: "slice",
++				ref: pe,
+ 				class: "or3-scroll-slice",
+-				style: s({ transform: `translateY(${pe.value + a.paddingTop}px)` })
++				style: s({ transform: `translateY(${me.value + a.paddingTop}px)` })
+ 			}, [
+ 				o[0] ||= i("div", {
+ 					class: "or3-scroll-edge",
+ 					"aria-hidden": "true"
+ 				}, null, -1),
+-				(u(!0), r(e, null, ee(De.value, (e, n) => (u(), r("div", {
++				(u(!0), r(e, null, ee(Oe.value, (e, n) => (u(), r("div", {
+ 					key: R(e),
+ 					ref_for: !0,
+-					ref: Ze(y.value + n, e),
++					ref: Qe(y.value + n, e),
+ 					class: "or3-scroll-item",
+ 					"data-index": y.value + n
+ 				}, [te(t.$slots, "default", {
+@@ -731,12 +765,12 @@ var re = class e {
+ 			te(t.$slots, "__debug", {
+ 				startIndex: y.value,
+ 				endIndex: b.value,
+-				totalHeight: me.value,
+-				scrollTop: he.value
++				totalHeight: he.value,
++				scrollTop: _e.value
+ 			}, void 0, !0)
+ 		], 4)], 544));
+ 	}
+-}), [["__scopeId", "data-v-d7f9e4c3"]]);
++}), [["__scopeId", "data-v-5479bcd9"]]);
+ // src/lib/composables/useScrollJump.ts
+ function h(e) {
+ 	let { scrollerRef: t, items: n, getItemId: r, loadHistoryUntil: i } = e, a = d({ state: "idle" }), s = 0, c, l = (e) => n.value.findIndex((t) => r(t) === e), u = async (e, n, r) => {
+diff --git a/node_modules/or3-scroll/dist/or3-scroll.umd.cjs b/node_modules/or3-scroll/dist/or3-scroll.umd.cjs
+index 7344d6d..23a46e7 100644
+--- a/node_modules/or3-scroll/dist/or3-scroll.umd.cjs
++++ b/node_modules/or3-scroll/dist/or3-scroll.umd.cjs
+@@ -1 +1 @@
+-(function(e,t){typeof exports==`object`&&typeof module<`u`?t(exports,require("vue")):typeof define==`function`&&define.amd?define([`exports`,`vue`],t):(e=typeof globalThis<`u`?globalThis:e||self,t(e.Or3Scroll={},e.Vue))})(this,function(e,t){Object.defineProperty(e,Symbol.toStringTag,{value:`Module`});var n=class e{tree;capacity;constructor(t){e.assertCapacity(t),this.capacity=t,this.tree=new Float64Array(t+1)}static assertCapacity(e){if(!Number.isSafeInteger(e)||e<0)throw RangeError(`FenwickTree capacity must be a non-negative safe integer.`)}assertIndex(e){if(!Number.isSafeInteger(e)||e<0||e>=this.capacity)throw RangeError(`FenwickTree index must be an integer between 0 and ${Math.max(0,this.capacity-1)}.`)}resize(t,n){e.assertCapacity(t),(t!==this.capacity||n)&&(this.capacity=t,this.tree=new Float64Array(t+1),n&&this.build(n))}grow(t){if(e.assertCapacity(t),t<=this.capacity)return;let n=this.capacity,r=new Float64Array(t);for(let e=0;e<n;e++){let t=this.query(e),n=e>0?this.query(e-1):0;r[e]=t-n}this.capacity=t,this.tree=new Float64Array(t+1),this.build(r)}build(e){this.tree.fill(0);let t=Math.min(this.capacity,e.length);for(let n=0;n<t;n++){if(!Number.isFinite(e[n]))throw RangeError(`FenwickTree values must be finite.`);this.tree[n+1]=e[n]}for(let e=1;e<=this.capacity;e++){let t=e+(e&-e);t<=this.capacity&&(this.tree[t]+=this.tree[e])}}update(e,t){if(this.assertIndex(e),!Number.isFinite(t))throw RangeError(`FenwickTree update delta must be finite.`);let n=e+1;for(;n<=this.capacity;)this.tree[n]+=t,n+=n&-n}query(e){this.assertIndex(e);let t=0,n=e+1;for(;n>0;)t+=this.tree[n],n-=n&-n;return t}lowerBound(e){let t=0,n=1;for(;n<=this.capacity;)n<<=1;for(n>>=1;n>0;){let r=t+n;r<=this.capacity&&e>this.tree[r]&&(t=r,e-=this.tree[t]),n>>=1}return t}upperBound(e){let t=0,n=1;for(;n<=this.capacity;)n<<=1;for(n>>=1;n>0;){let r=t+n;r<=this.capacity&&e>=this.tree[r]&&(t=r,e-=this.tree[t]),n>>=1}return t}total(){return this.capacity===0?0:this.query(this.capacity-1)}getCapacity(){return this.capacity}},r=class{heights;flags;count=0;capacity=0;prefixSums;config;constructor(e){if(!Number.isFinite(e.estimateHeight)||e.estimateHeight<0)throw RangeError(`estimateHeight must be a non-negative finite number.`);this.config={estimateHeight:e.estimateHeight,overscanTop:this.normalizeDistance(e.overscanTop),overscanBottom:this.normalizeDistance(e.overscanBottom),tailCount:this.normalizeCount(e.tailCount,`tailCount`),maxWindow:this.normalizeOptionalWindow(e.maxWindow)},this.heights=new Float64Array,this.flags=new Uint8Array,this.prefixSums=new n(0)}setCount(e){if(e=this.normalizeCount(e,`count`),e===this.count)return;let t=this.count;if(e<t){for(let n=e;n<t;n++)this.prefixSums.update(n,-this.getEffectiveHeight(n)),this.heights[n]=NaN,this.flags[n]=0;this.count=e}else{this.ensureCapacity(e);for(let n=t;n<e;n++)this.heights[n]=NaN,this.flags[n]=0,this.prefixSums.update(n,this.config.estimateHeight);this.count=e}}setHeight(e,t){if(!Number.isSafeInteger(e))throw RangeError(`Height index must be a safe integer.`);if(e<0||e>=this.count)return;if(Number.isNaN(t)){if((this.flags[e]&1)!=1)return;let t=this.heights[e];this.heights[e]=NaN,this.flags[e]=0,this.prefixSums.update(e,this.config.estimateHeight-t);return}this.assertHeight(t);let n=this.heights[e],r=(this.flags[e]&1)==1;if(r&&n===t)return;this.heights[e]=t,this.flags[e]|=1;let i=r?n:this.config.estimateHeight,a=t;this.prefixSums.update(e,a-i)}bulkInsert(e,t){if(!Number.isSafeInteger(e))throw RangeError(`Insertion index must be a safe integer.`);if(e<0||e>this.count)return;let n=t.length;if(n===0)return;this.assertHeightList(t);let r=this.count,i=r+n;this.ensureCapacity(i),this.heights.copyWithin(e+n,e,r),this.flags.copyWithin(e+n,e,r);for(let r=0;r<n;r++){let n=t[r];this.heights[e+r]=n,this.flags[e+r]=0,isNaN(n)||(this.flags[e+r]=1)}this.count=i,this.rebuildPrefixSums()}replaceHeights(e){this.assertHeightList(e);let t=e.length;this.shrinkCapacityForReplacement(t),this.ensureCapacity(t);for(let n=0;n<t;n++){let t=e[n];this.heights[n]=t,this.flags[n]=Number(!Number.isNaN(t))}for(let e=t;e<this.count;e++)this.heights[e]=NaN,this.flags[e]=0;this.count=t,this.rebuildPrefixSums()}computeRange(e,t){if(this.count===0)return{startIndex:0,endIndex:-1,offsetY:0,totalHeight:0};let n=this.getTotalHeight(),r=Number.isFinite(e)?Math.max(0,e):0,i=Number.isFinite(t)?Math.max(0,t):0,a=Math.max(0,r-this.config.overscanTop),o=Math.min(n,r+i+this.config.overscanBottom),s=this.findIndexForOffset(a),c=this.findIndexForOffset(o),l=this.findIndexForOffset(r);if(this.config.tailCount>0&&this.count>0){let e=Math.max(0,this.count-this.config.tailCount);if(o>=this.getOffsetForIndex(e)){let t=this.count-1,n=Math.min(s,e),r=this.config.maxWindow??1/0;if(t-n+1>r){let e=Math.max(0,t-r+1);n=Math.min(l,e)}s=n,c=t}}s=Math.max(0,Math.min(s,this.count-1)),c=Math.max(s,Math.min(c,this.count-1));let u=this.getOffsetForIndex(s);return{startIndex:s,endIndex:c,offsetY:u,totalHeight:n}}findIndexForOffset(e){return Number.isNaN(e)||e<=0?0:e>=this.getTotalHeight()?Math.max(0,this.count-1):Math.min(this.count-1,this.prefixSums.upperBound(e))}getOffsetForIndex(e){if(!Number.isSafeInteger(e)||e<0||e>this.count)throw RangeError(`Offset index must be an integer between 0 and ${this.count}.`);return e<=0?0:this.prefixSums.query(e-1)}getTotalHeight(){return this.count===0?0:this.prefixSums.query(this.count-1)}getCount(){return this.count}getCapacity(){return this.capacity}getMeasuredHeight(e){if(!(!Number.isSafeInteger(e)||e<0||e>=this.count||(this.flags[e]&1)!=1))return this.heights[e]}updateOverscan(e,t){this.config.overscanTop=this.normalizeDistance(e),this.config.overscanBottom=this.normalizeDistance(t)}updateMaxWindow(e){this.config.maxWindow=this.normalizeOptionalWindow(e)}updateTailCount(e){this.config.tailCount=this.normalizeCount(e,`tailCount`)}resetHeights(){this.heights.fill(NaN,0,this.count),this.flags.fill(0,0,this.count),this.rebuildPrefixSums()}getEffectiveHeight(e){return(this.flags[e]&1)==1?this.heights[e]:this.config.estimateHeight}normalizeCount(e,t){if(!Number.isFinite(e)||e<0)throw RangeError(`${t} must be a non-negative finite number.`);let n=Math.floor(e);if(!Number.isSafeInteger(n))throw RangeError(`${t} must fit in a safe integer.`);return n}normalizeDistance(e){return Number.isFinite(e)?Math.max(0,e):0}normalizeOptionalWindow(e){return e===void 0||e===1/0?e:this.normalizeCount(e,`maxWindow`)}assertHeight(e){if(!Number.isFinite(e)||e<0)throw RangeError(`Item heights must be non-negative finite numbers or NaN.`)}assertHeightList(e){for(let t of e)Number.isNaN(t)||this.assertHeight(t)}shrinkCapacityForReplacement(e){if(this.capacity<256)return;let t=e===0?0:16;for(;t<e;)t*=2;t>this.capacity/4||(this.capacity=t,this.heights=new Float64Array(t),this.heights.fill(NaN),this.flags=new Uint8Array(t),this.prefixSums=new n(t))}ensureCapacity(e){if(e<=this.capacity)return;let t=Math.max(16,this.capacity||0);for(;t<e;)t*=2;let r=new Float64Array(t);r.fill(NaN),r.set(this.heights.subarray(0,this.count));let i=new Uint8Array(t);i.set(this.flags.subarray(0,this.count)),this.heights=r,this.flags=i,this.capacity=t;let a=new Float64Array(t);for(let e=0;e<this.count;e++)a[e]=this.getEffectiveHeight(e);this.prefixSums=new n(t),this.prefixSums.build(a)}rebuildPrefixSums(){let e=new Float64Array(this.capacity);for(let t=0;t<this.count;t++)e[t]=this.getEffectiveHeight(t);this.prefixSums.build(e)}},i=new class{ro=null;callbacks;constructor(){this.callbacks=new Map}getObserver(){return this.ro?this.ro:typeof ResizeObserver>`u`?null:(this.ro=new ResizeObserver(e=>{for(let t of e){let e=this.callbacks.get(t.target);e&&e(t)}}),this.ro)}observe(e,t){let n=this.callbacks.has(e);this.callbacks.set(e,t),n||this.getObserver()?.observe(e)}unobserve(e){this.callbacks.delete(e),this.ro?.unobserve(e)}disconnect(){this.ro?.disconnect(),this.ro=null,this.callbacks.clear()}},a={key:0,class:`or3-scroll-prepend-loading`},o=[`data-index`],s=140,c=.5,l=((e,t)=>{let n=e.__vccOpts||e;for(let[e,r]of t)n[e]=r;return n})((0,t.defineComponent)({__name:`Or3Scroll`,props:{items:{},estimateHeight:{default:50},overscan:{default:200},prefetchOverscan:{default:0},itemKey:{},maintainBottom:{type:Boolean,default:!0},loadingHistory:{type:Boolean,default:!1},tailCount:{default:0},paddingBottom:{default:0},paddingTop:{default:0},bottomThreshold:{default:3},autoscrollThreshold:{default:10},mutationMode:{default:`append-prepend`},contentKey:{default:void 0},rowContentRevision:{default:0}},emits:[`scroll`,`reachTop`,`reachBottom`,`prefetchRange`],setup(e,{expose:n,emit:l}){let u=e,d=l,ee=(0,t.useSlots)(),f=Number.isFinite(u.estimateHeight)&&u.estimateHeight>0?u.estimateHeight:50,p=(0,t.ref)(null),m=(0,t.ref)(null),h=(0,t.ref)(0),g=(0,t.ref)(!0),_=(0,t.ref)(0),v=(0,t.ref)(-1),te=(0,t.ref)(0),ne=(0,t.ref)(0),y=(0,t.ref)(0),re=(0,t.ref)(0),b=0,ie=0,x=u.maintainBottom?`followingBottom`:`userBrowsing`,S=null,C=null,ae=!1,w=!1,T=!1,oe=0,se=!1,E=!1,D=0,O=0,ce=0,le=0,k=null,A=0,ue=0,j=0,de=!1,fe=!1,M=-1,pe=-1,N=new r({estimateHeight:f,overscanTop:u.overscan,overscanBottom:u.overscan,tailCount:u.tailCount,maxWindow:void 0}),P=[],F=new Map,I=new Map,me=(0,t.computed)(()=>{u.rowContentRevision;let e=v.value===-1?0:v.value+1;return u.items.slice(_.value,e)}),L=e=>typeof u.itemKey==`function`?u.itemKey(e):e[u.itemKey],R=e=>typeof requestAnimationFrame==`function`?requestAnimationFrame(e):(queueMicrotask(()=>e(Date.now())),0),z=e=>{e&&typeof cancelAnimationFrame==`function`&&cancelAnimationFrame(e)},he=e=>{let t=typeof devicePixelRatio==`number`&&devicePixelRatio>0?devicePixelRatio:1;return Math.round(e*t)/t},ge=()=>{F.clear(),P.forEach((e,t)=>F.set(e,t))},_e=()=>{if(P.length===0)return null;p.value&&(b=p.value.scrollTop);let e=b-u.paddingTop,t=N.findIndexForOffset(Math.max(0,e)),n=P[t];return n===void 0?null:{candidates:[{key:n,withinItem:e-N.getOffsetForIndex(t),index:t}]}},B=()=>{if(P.length===0)return null;if(p.value){b=p.value.scrollTop;let e=p.value.getBoundingClientRect();if(e.height>0&&Math.abs(e.height-p.value.clientHeight)<2){let t=[];for(let[n,r]of Y){let i=r.getBoundingClientRect();if(i.bottom<=e.top+c||i.top>=e.bottom)continue;let a=F.get(n);a!==void 0&&t.push({key:n,top:i.top,withinItem:e.top-i.top,index:a})}if(t.length>0)return t.sort((e,t)=>e.top-t.top),{candidates:t.map(e=>({key:e.key,withinItem:e.withinItem,index:e.index}))}}}return _e()},V=e=>{let t=Math.max(0,e);y.value=t,m.value&&(m.value.style.height=`${t+u.paddingTop+u.paddingBottom}px`)},H=(e,t,n=!1)=>{let r=p.value;if(!r)return;let i=Math.max(0,y.value+u.paddingTop+u.paddingBottom-r.clientHeight),a=Math.max(0,Math.min(e,i));S=t,C=a,ae=n,n?r.scrollTo({top:a,behavior:`smooth`}):r.scrollTop=a,b=r.scrollTop},ve=e=>S!==null&&(S===`jump`||ae||C!==null&&Math.abs(e-C)<1),ye=e=>{if(!e||!p.value)return!1;let t;for(let n of e.candidates){let e=F.get(n.key);if(e===void 0)continue;let r=Math.abs(e-n.index);(!t||r<t.displacement)&&(t={point:n,index:e,displacement:r})}if(!t)return!1;let n=u.paddingTop+N.getOffsetForIndex(t.index)+t.point.withinItem;if(Math.abs(n-p.value.scrollTop)<c)return!0;let r=x;return x=`compensatingLayout`,H(n,`compensation`),x=r,!0},be=()=>Math.max(0,b-Math.max(0,u.paddingTop)),xe=()=>u.maintainBottom&&x===`followingBottom`&&!w&&!ae,U=()=>{let{overscanTop:e,overscanBottom:t,maxWindow:n}=Se();N.updateOverscan(e,t),N.updateMaxWindow(n);let r=xe()?Math.max(0,N.getTotalHeight()+u.paddingBottom-h.value):be(),i=N.computeRange(r,h.value);_.value!==i.startIndex&&(_.value=i.startIndex),v.value!==i.endIndex&&(v.value=i.endIndex),te.value!==i.offsetY&&(te.value=i.offsetY),ne.value!==i.totalHeight&&(ne.value=i.totalHeight)},Se=()=>{let e=Number.isFinite(u.overscan)?Math.max(0,u.overscan):200,t=Number.isFinite(u.tailCount)?Math.max(0,Math.floor(u.tailCount)):0,n=h.value/f;return{overscanTop:e,overscanBottom:e,maxWindow:Math.max(t,Math.ceil(n*2))}},W=()=>{if(u.prefetchOverscan<=0||P.length===0)return;let e=Number.isFinite(u.prefetchOverscan)?Math.max(0,u.prefetchOverscan):0,t=be(),n=N.findIndexForOffset(Math.max(0,t-e)),r=N.findIndexForOffset(Math.min(N.getTotalHeight(),t+h.value+e));(n!==M||r!==pe)&&(M=n,pe=r,d(`prefetchRange`,{startIndex:n,endIndex:r}))},Ce=(e,n)=>{V(N.getTotalHeight()),n&&u.maintainBottom?(0,t.nextTick)(()=>{!E&&x===`followingBottom`&&!w&&$()}):ye(e)},G=(e,t)=>{w?ye(e):Ce(e,t)},we=()=>y.value+u.paddingTop+u.paddingBottom,K=(e,t)=>{let n=p.value;if(!n)return;let r=we()-(n.scrollTop+n.clientHeight),i=r<=u.bottomThreshold;g.value=i,t||(e<-.5&&r>u.autoscrollThreshold?x=`userBrowsing`:e>c&&i&&u.maintainBottom&&(x=`followingBottom`))},Te=()=>{let e=b<=c;e&&!de&&d(`reachTop`),!e&&b>1.5?de=!1:e&&(de=!0),g.value&&!fe&&d(`reachBottom`);let t=p.value;t&&(we()-(t.scrollTop+t.clientHeight)>u.bottomThreshold+1?fe=!1:g.value&&(fe=!0))},q=()=>{p.value&&(b=p.value.scrollTop,K(0,!0),Te())},Ee=()=>{D&&(O++,z(D),D=0,Oe()),k&&=(clearTimeout(k),null);let e=w;w=!1,oe=0,p.value&&(b=p.value.scrollTop,K(0,!0)),(x===`programmaticJump`||e)&&(x=u.maintainBottom&&g.value?`followingBottom`:`userBrowsing`),S=null,C=null;let t=N.getTotalHeight();Math.abs(y.value-t)>=c&&Ce(B(),x===`followingBottom`),q()},De=()=>{k&&clearTimeout(k),k=setTimeout(()=>{k=null,T||Ee()},s)},Oe=()=>{D=0;let e=p.value;if(!e||E)return;b=e.scrollTop;let t=b-ie,n=ve(b);n||(S=null,C=null),!n&&Math.abs(t)>c&&(w=!0),C!==null&&Math.abs(b-C)<1&&S!==`jump`&&(S=null,C=null),K(t,n),U(),W(),ee.__debug&&(re.value=b),d(`scroll`,{scrollTop:b,scrollHeight:e.scrollHeight,clientHeight:h.value,isAtBottom:g.value}),Te(),ie=b,(w||S===`jump`)&&De()},J=()=>{if(D||E)return;let e=++O;D=R(()=>{e===O&&Oe()})},ke=()=>{if(!p.value)return;let e=p.value.scrollTop;!ve(e)&&e<b-c&&(S=null,C=null,w=!0,K(e-b,!1)),b=e,J()},Ae=()=>{S===`jump`&&(oe=Date.now()+s),w=!0,S=null,C=null,j++,g.value||(x=`userBrowsing`),Q(),De()},je,Me=()=>{je?.(),je=void 0;let e=p.value;e&&(e.addEventListener(`wheel`,Ae,{passive:!u.maintainBottom}),je=()=>e.removeEventListener(`wheel`,Ae))},Ne=()=>{T=!0,Ae()},Pe=()=>{T&&(T=!1,(w||S===`jump`)&&De())},Fe=e=>{[`ArrowUp`,`ArrowDown`,`PageUp`,`PageDown`,`Home`,`End`,` `].includes(e.key)&&Ae()},Ie=()=>{T||w&&Date.now()<oe||(D||w||S===`jump`)&&Ee()},Y=new Map,X=new Map,Le=(e,t)=>{let n=L(t),r=X.get(n);if(r)return r;let a=e=>{if(e){let t=e instanceof Element?e:e.$el,r=Y.get(n);if(r===t)return;r&&i.unobserve(r),Y.set(n,t),i.observe(t,e=>{let t=e.borderBoxSize?.[0]?.blockSize??e.contentRect.height;Be(n,t)})}else{let e=Y.get(n);e&&i.unobserve(e),Y.delete(n),X.delete(n)}};return X.set(n,a),a},Z=new Map,Re=!1,ze=0,Be=(e,t)=>{let n=he(t),r=I.get(e);r!==void 0&&Math.abs(r-n)<c||(Z.set(e,n),Re||(Re=!0,ze=R(Ve)))},Ve=()=>{if(z(ze),ze=0,Re=!1,Z.size===0||E)return;p.value&&(b=p.value.scrollTop);let e=_e(),t=!1;for(let[e,n]of Z){let r=F.get(e);if(r===void 0)continue;let i=I.get(e);i!==void 0&&Math.abs(i-n)<c||(I.set(e,n),N.setHeight(r,n),t=!0)}if(Z.clear(),!t)return;U();let n=u.maintainBottom&&x===`followingBottom`&&!w;G(e,n),q()},He=e=>{let t=new Set(e);for(let e of I.keys())t.has(e)||I.delete(e);for(let e of X.keys()){if(t.has(e))continue;let n=Y.get(e);n&&i.unobserve(n),Y.delete(e),X.delete(e)}},Ue=e=>{P.splice(0,P.length,...e),ge()},We=(e,t=!1)=>{let n=B(),r=e.map(L);if(t&&I.clear(),He(r),N.replaceHeights(r.map(e=>I.get(e)??NaN)),Ue(r),U(),M=-1,W(),se){let e=u.maintainBottom&&x===`followingBottom`&&!w;G(n,e),q(),e&&!t&&Ye(A)}},Ge=(e,t)=>{let n=B();for(let n=t;n<e.length;n++){let t=L(e[n]);P.push(t),F.set(t,n)}N.setCount(e.length),U(),M=-1,W(),se&&(G(n,u.maintainBottom&&x===`followingBottom`&&!w),q())},Ke=async(e,t,n)=>{let r=e.slice(0,t).map((e,t)=>({item:e,index:t,key:L(e)})),i=r.map(e=>I.get(e.key)??NaN);if(E||n!==A)return;let a=B();r.forEach((e,t)=>{Number.isNaN(i[t])||I.set(e.key,i[t])}),N.bulkInsert(0,i),P.unshift(...r.map(e=>e.key)),N.getCount()<e.length&&N.setCount(e.length);for(let t=P.length;t<e.length;t++)P.push(L(e[t]));ge(),U(),M=-1,W(),G(a,!1),q()},qe=async()=>{let e=++A,t=u.items,n=t.length,r=P.length;if(r===0||u.mutationMode===`arbitrary`||n===0){We(t);return}let i=P[0],a=P[r-1],o=L(t[0]),s=L(t[n-1]);if(n===r&&o===i&&s===a)return;if(n>r&&o===i&&L(t[r-1])===a){Ge(t,r);return}let c=n-r;if(c>0&&L(t[c])===i&&L(t[c+r-1])===a)await Ke(t,c,e);else if(n<r&&o===i&&s===P[n-1]){let e=B();P.splice(n),He(P),ge(),N.setCount(n),U(),M=-1,W(),se&&(G(e,!1),q())}else We(t)},Q=()=>{ue++,z(ce),z(le),ce=0,le=0},Je=(e=!1)=>{Q();let t=ue,n=A;ce=R(()=>{ce=0,le=R(()=>{le=0,t!==ue||e&&n!==A||E||!u.maintainBottom||$()})})},Ye=(e,n=3)=>{(0,t.nextTick)(()=>{if(E||e!==A)return;let t=_.value,r=v.value;nt(),n>1&&(_.value!==t||v.value!==r)&&Ye(e,n-1)})},Xe=()=>{A++,j++,O++,z(D),D=0,k&&=(clearTimeout(k),null),w=!1,T=!1,oe=0,Q(),Z.clear(),Y.forEach(e=>i.unobserve(e)),Y.clear(),X.clear(),I.clear(),x=u.maintainBottom?`followingBottom`:`userBrowsing`,S=null,C=null,ae=!1,b=0,ie=0,M=-1,pe=-1,p.value&&(p.value.scrollTop=0),We(u.items,!0),V(N.getTotalHeight()),xe()&&$(),q(),Ye(A),u.maintainBottom&&Je()},$=(e={})=>{if(!p.value)return;x=`followingBottom`,V(N.getTotalHeight());let t=Math.max(0,we()-p.value.clientHeight);H(t,`bottom`,e.smooth===!0),J()},Ze=(e,t,n)=>{let r=N.getOffsetForIndex(e)+u.paddingTop;return t===`center`?r-=h.value/2-n/2:t===`end`&&(r-=h.value-n),Math.max(0,r)},Qe=(e,n={})=>{if(!p.value||!Number.isSafeInteger(e)||e<0||e>=u.items.length)return;Q();let r=++j,i=n.align??`start`,a=P[e];x=`programmaticJump`,V(N.getTotalHeight());let o=I.get(a)??N.getMeasuredHeight(e)??f;H(Ze(e,i,o),`jump`,n.smooth===!0),J(),(0,t.nextTick)(()=>{R(()=>{if(r!==j||E)return;let e=F.get(a);if(e===void 0)return;let t=Y.get(a)?.getBoundingClientRect().height;if(t&&t>0){let n=he(t);I.set(a,n),N.setHeight(e,n),U(),V(N.getTotalHeight())}let o=I.get(a)??N.getMeasuredHeight(e)??f;H(Ze(e,i,o),`jump`,n.smooth===!0),J()})})},$e=(e,t={})=>{let n=F.get(e);n!==void 0&&Qe(n,t)},et=()=>{let e=p.value;e&&(b=e.scrollTop);let t=e?e.scrollHeight-(b+e.clientHeight):1/0;return{version:1,contentKey:u.contentKey,mode:t<=u.bottomThreshold?`bottom`:`anchor`,anchors:B()?.candidates.map(e=>({key:e.key,withinItem:e.withinItem,index:e.index})),scrollTop:b}},tt=async e=>{if(!e||e.version!==1||e.contentKey!==u.contentKey)return;let n=u.contentKey,r=A,i=++j;if(await(0,t.nextTick)(),!p.value||E||i!==j||r!==A||n!==u.contentKey)return;if(e.mode===`bottom`){$();return}Q(),k&&=(clearTimeout(k),null),w=!1,x=`userBrowsing`,S=null,C=null;let a=(e.anchors??[]).filter(e=>(typeof e.key==`string`||typeof e.key==`number`)&&Number.isFinite(e.withinItem)&&Number.isSafeInteger(e.index));!(a.length>0&&ye({candidates:a}))&&Number.isFinite(e.scrollTop)&&H(e.scrollTop,`jump`),J()},nt=()=>{for(let[e,t]of Y){let n=t.getBoundingClientRect().height;n>0&&Be(e,n)}Re?Ve():U()},rt=()=>Xe(),it=null,at=0,ot=0,st=e=>{if(!p.value||e===h.value)return;let t=B();h.value=e,U(),Ce(t,u.maintainBottom&&x===`followingBottom`),K(0,!0),W()};return(0,t.onMounted)(()=>{se=!0,Me();let e=p.value;e&&(b=e.scrollTop,ie=e.scrollTop,h.value=e.clientHeight,typeof ResizeObserver<`u`&&(it=new ResizeObserver(e=>{let t=e[e.length-1];t&&(ot=t.contentRect.height,!at&&(at=R(()=>{at=0,E||st(ot)})))}),it.observe(e)),U(),V(N.getTotalHeight()),W(),xe()&&P.length&&($(),Ye(A)),u.maintainBottom&&Je(!0))}),(0,t.onUnmounted)(()=>{E=!0,je?.(),je=void 0,A++,j++,O++,z(D),D=0,Q(),k&&clearTimeout(k),it?.disconnect(),z(at),at=0,Y.forEach(e=>i.unobserve(e)),Y.clear(),X.clear(),Z.clear(),z(ze),ze=0}),(0,t.watch)(()=>{let e=u.items;return u.mutationMode===`arbitrary`?e.map(L):[e,e.length]},()=>void qe(),{immediate:!0}),(0,t.watch)(()=>u.contentKey,(e,t)=>{e!==t&&Xe()}),(0,t.watch)(()=>[u.paddingBottom,u.paddingTop],()=>{let e=B();Ce(e,u.maintainBottom&&x===`followingBottom`)}),(0,t.watch)(()=>[u.overscan,u.prefetchOverscan],()=>{M=-1,pe=-1,U(),W()}),(0,t.watch)(()=>u.tailCount,e=>{N.updateTailCount(e),U()}),(0,t.watch)(()=>u.maintainBottom,e=>{Me(),e&&(K(0,!0),x=g.value?`followingBottom`:`userBrowsing`)}),(0,t.watch)(()=>u.estimateHeight,(e,t)=>{}),n({scrollToBottom:$,scrollToIndex:Qe,scrollToItemKey:$e,captureScrollState:et,restoreScrollState:tt,refreshMeasurements:nt,reset:rt,isAtBottom:g}),(n,r)=>((0,t.openBlock)(),(0,t.createElementBlock)(`div`,{ref_key:`container`,ref:p,class:`or3-scroll`,onScrollPassive:ke,onTouchstartPassive:Ne,onTouchendPassive:Pe,onTouchcancelPassive:Pe,onMousedownPassive:Ae,onKeydown:Fe,onScrollendPassive:Ie},[(0,t.createElementVNode)(`div`,{ref_key:`track`,ref:m,class:`or3-scroll-track`,style:(0,t.normalizeStyle)({height:y.value+e.paddingTop+e.paddingBottom+`px`})},[e.loadingHistory?((0,t.openBlock)(),(0,t.createElementBlock)(`div`,a,[(0,t.renderSlot)(n.$slots,`prepend-loading`,{},void 0,!0)])):(0,t.createCommentVNode)(``,!0),(0,t.createElementVNode)(`div`,{class:`or3-scroll-slice`,style:(0,t.normalizeStyle)({transform:`translateY(${te.value+e.paddingTop}px)`})},[r[0]||=(0,t.createElementVNode)(`div`,{class:`or3-scroll-edge`,"aria-hidden":`true`},null,-1),((0,t.openBlock)(!0),(0,t.createElementBlock)(t.Fragment,null,(0,t.renderList)(me.value,(e,r)=>((0,t.openBlock)(),(0,t.createElementBlock)(`div`,{key:L(e),ref_for:!0,ref:Le(_.value+r,e),class:`or3-scroll-item`,"data-index":_.value+r},[(0,t.renderSlot)(n.$slots,`default`,{item:e,index:_.value+r},void 0,!0)],8,o))),128)),r[1]||=(0,t.createElementVNode)(`div`,{class:`or3-scroll-edge`,"aria-hidden":`true`},null,-1)],4),(0,t.renderSlot)(n.$slots,`__debug`,{startIndex:_.value,endIndex:v.value,totalHeight:ne.value,scrollTop:re.value},void 0,!0)],4)],544))}}),[[`__scopeId`,`data-v-d7f9e4c3`]]);function u(e){let{scrollerRef:n,items:r,getItemId:i,loadHistoryUntil:a}=e,o=(0,t.ref)({state:`idle`}),s=0,c,l=e=>r.value.findIndex(t=>i(t)===e),u=async(e,r,i)=>{if(i!==s||l(e)===-1||(o.value={state:`jumping`,targetId:e,align:r},await(0,t.nextTick)(),i!==s||l(e)===-1))return!1;let a=n.value;return a?(a.scrollToItemKey(e,{align:r}),i===s&&(o.value={state:`idle`}),!0):!1};return(0,t.watch)(()=>{let e=o.value;return e.state===`waitingForHistory`?l(e.targetId):-1},e=>{if(e===-1)return;let t=c;t?.generation===s&&t.settle({kind:`target`})},{flush:`post`}),{jumpTo:async(e,n={})=>{let r=n.align??`center`,i=n.direction??`up`;c?.settle({kind:`superseded`});let d=++s;if(l(e)!==-1){await u(e,r,d)||d===s&&(o.value={state:`idle`});return}o.value={state:`waitingForHistory`,targetId:e,direction:i,align:r};let ee,f=new Promise(e=>{ee=e});c={generation:d,settle:ee};let p=Promise.resolve().then(()=>a(e,i)).then(()=>({kind:`loaded`}),e=>({kind:`error`,error:e})),m=await Promise.race([p,f]);c?.generation===d&&(c=void 0),d===s&&m.kind!==`superseded`&&(m.kind===`error`?(console.error(`[useScrollJump] Failed to load history:`,m.error),o.value={state:`idle`}):(await(0,t.nextTick)(),!await u(e,r,d)&&d===s&&(o.value={state:`idle`})))},jumpState:o}}e.Or3Scroll=l,e.VirtualizerEngine=r,e.useScrollJump=u});
+\ No newline at end of file
++(function(e,t){typeof exports==`object`&&typeof module<`u`?t(exports,require("vue")):typeof define==`function`&&define.amd?define([`exports`,`vue`],t):(e=typeof globalThis<`u`?globalThis:e||self,t(e.Or3Scroll={},e.Vue))})(this,function(e,t){Object.defineProperty(e,Symbol.toStringTag,{value:`Module`});var n=class e{tree;capacity;constructor(t){e.assertCapacity(t),this.capacity=t,this.tree=new Float64Array(t+1)}static assertCapacity(e){if(!Number.isSafeInteger(e)||e<0)throw RangeError(`FenwickTree capacity must be a non-negative safe integer.`)}assertIndex(e){if(!Number.isSafeInteger(e)||e<0||e>=this.capacity)throw RangeError(`FenwickTree index must be an integer between 0 and ${Math.max(0,this.capacity-1)}.`)}resize(t,n){e.assertCapacity(t),(t!==this.capacity||n)&&(this.capacity=t,this.tree=new Float64Array(t+1),n&&this.build(n))}grow(t){if(e.assertCapacity(t),t<=this.capacity)return;let n=this.capacity,r=new Float64Array(t);for(let e=0;e<n;e++){let t=this.query(e),n=e>0?this.query(e-1):0;r[e]=t-n}this.capacity=t,this.tree=new Float64Array(t+1),this.build(r)}build(e){this.tree.fill(0);let t=Math.min(this.capacity,e.length);for(let n=0;n<t;n++){if(!Number.isFinite(e[n]))throw RangeError(`FenwickTree values must be finite.`);this.tree[n+1]=e[n]}for(let e=1;e<=this.capacity;e++){let t=e+(e&-e);t<=this.capacity&&(this.tree[t]+=this.tree[e])}}update(e,t){if(this.assertIndex(e),!Number.isFinite(t))throw RangeError(`FenwickTree update delta must be finite.`);let n=e+1;for(;n<=this.capacity;)this.tree[n]+=t,n+=n&-n}query(e){this.assertIndex(e);let t=0,n=e+1;for(;n>0;)t+=this.tree[n],n-=n&-n;return t}lowerBound(e){let t=0,n=1;for(;n<=this.capacity;)n<<=1;for(n>>=1;n>0;){let r=t+n;r<=this.capacity&&e>this.tree[r]&&(t=r,e-=this.tree[t]),n>>=1}return t}upperBound(e){let t=0,n=1;for(;n<=this.capacity;)n<<=1;for(n>>=1;n>0;){let r=t+n;r<=this.capacity&&e>=this.tree[r]&&(t=r,e-=this.tree[t]),n>>=1}return t}total(){return this.capacity===0?0:this.query(this.capacity-1)}getCapacity(){return this.capacity}},r=class{heights;flags;count=0;capacity=0;prefixSums;config;constructor(e){if(!Number.isFinite(e.estimateHeight)||e.estimateHeight<0)throw RangeError(`estimateHeight must be a non-negative finite number.`);this.config={estimateHeight:e.estimateHeight,overscanTop:this.normalizeDistance(e.overscanTop),overscanBottom:this.normalizeDistance(e.overscanBottom),tailCount:this.normalizeCount(e.tailCount,`tailCount`),maxWindow:this.normalizeOptionalWindow(e.maxWindow)},this.heights=new Float64Array,this.flags=new Uint8Array,this.prefixSums=new n(0)}setCount(e){if(e=this.normalizeCount(e,`count`),e===this.count)return;let t=this.count;if(e<t){for(let n=e;n<t;n++)this.prefixSums.update(n,-this.getEffectiveHeight(n)),this.heights[n]=NaN,this.flags[n]=0;this.count=e}else{this.ensureCapacity(e);for(let n=t;n<e;n++)this.heights[n]=NaN,this.flags[n]=0,this.prefixSums.update(n,this.config.estimateHeight);this.count=e}}setHeight(e,t){if(!Number.isSafeInteger(e))throw RangeError(`Height index must be a safe integer.`);if(e<0||e>=this.count)return;if(Number.isNaN(t)){if((this.flags[e]&1)!=1)return;let t=this.heights[e];this.heights[e]=NaN,this.flags[e]=0,this.prefixSums.update(e,this.config.estimateHeight-t);return}this.assertHeight(t);let n=this.heights[e],r=(this.flags[e]&1)==1;if(r&&n===t)return;this.heights[e]=t,this.flags[e]|=1;let i=r?n:this.config.estimateHeight,a=t;this.prefixSums.update(e,a-i)}bulkInsert(e,t){if(!Number.isSafeInteger(e))throw RangeError(`Insertion index must be a safe integer.`);if(e<0||e>this.count)return;let n=t.length;if(n===0)return;this.assertHeightList(t);let r=this.count,i=r+n;this.ensureCapacity(i),this.heights.copyWithin(e+n,e,r),this.flags.copyWithin(e+n,e,r);for(let r=0;r<n;r++){let n=t[r];this.heights[e+r]=n,this.flags[e+r]=0,isNaN(n)||(this.flags[e+r]=1)}this.count=i,this.rebuildPrefixSums()}replaceHeights(e){this.assertHeightList(e);let t=e.length;this.shrinkCapacityForReplacement(t),this.ensureCapacity(t);for(let n=0;n<t;n++){let t=e[n];this.heights[n]=t,this.flags[n]=Number(!Number.isNaN(t))}for(let e=t;e<this.count;e++)this.heights[e]=NaN,this.flags[e]=0;this.count=t,this.rebuildPrefixSums()}computeRange(e,t){if(this.count===0)return{startIndex:0,endIndex:-1,offsetY:0,totalHeight:0};let n=this.getTotalHeight(),r=Number.isFinite(e)?Math.max(0,e):0,i=Number.isFinite(t)?Math.max(0,t):0,a=Math.max(0,r-this.config.overscanTop),o=Math.min(n,r+i+this.config.overscanBottom),s=this.findIndexForOffset(a),c=this.findIndexForOffset(o),l=this.findIndexForOffset(r);if(this.config.tailCount>0&&this.count>0){let e=Math.max(0,this.count-this.config.tailCount);if(o>=this.getOffsetForIndex(e)){let t=this.count-1,n=Math.min(s,e),r=this.config.maxWindow??1/0;if(t-n+1>r){let e=Math.max(0,t-r+1);n=Math.min(l,e)}s=n,c=t}}s=Math.max(0,Math.min(s,this.count-1)),c=Math.max(s,Math.min(c,this.count-1));let u=this.getOffsetForIndex(s);return{startIndex:s,endIndex:c,offsetY:u,totalHeight:n}}findIndexForOffset(e){return Number.isNaN(e)||e<=0?0:e>=this.getTotalHeight()?Math.max(0,this.count-1):Math.min(this.count-1,this.prefixSums.upperBound(e))}getOffsetForIndex(e){if(!Number.isSafeInteger(e)||e<0||e>this.count)throw RangeError(`Offset index must be an integer between 0 and ${this.count}.`);return e<=0?0:this.prefixSums.query(e-1)}getTotalHeight(){return this.count===0?0:this.prefixSums.query(this.count-1)}getCount(){return this.count}getCapacity(){return this.capacity}getMeasuredHeight(e){if(!(!Number.isSafeInteger(e)||e<0||e>=this.count||(this.flags[e]&1)!=1))return this.heights[e]}updateOverscan(e,t){this.config.overscanTop=this.normalizeDistance(e),this.config.overscanBottom=this.normalizeDistance(t)}updateMaxWindow(e){this.config.maxWindow=this.normalizeOptionalWindow(e)}updateTailCount(e){this.config.tailCount=this.normalizeCount(e,`tailCount`)}resetHeights(){this.heights.fill(NaN,0,this.count),this.flags.fill(0,0,this.count),this.rebuildPrefixSums()}getEffectiveHeight(e){return(this.flags[e]&1)==1?this.heights[e]:this.config.estimateHeight}normalizeCount(e,t){if(!Number.isFinite(e)||e<0)throw RangeError(`${t} must be a non-negative finite number.`);let n=Math.floor(e);if(!Number.isSafeInteger(n))throw RangeError(`${t} must fit in a safe integer.`);return n}normalizeDistance(e){return Number.isFinite(e)?Math.max(0,e):0}normalizeOptionalWindow(e){return e===void 0||e===1/0?e:this.normalizeCount(e,`maxWindow`)}assertHeight(e){if(!Number.isFinite(e)||e<0)throw RangeError(`Item heights must be non-negative finite numbers or NaN.`)}assertHeightList(e){for(let t of e)Number.isNaN(t)||this.assertHeight(t)}shrinkCapacityForReplacement(e){if(this.capacity<256)return;let t=e===0?0:16;for(;t<e;)t*=2;t>this.capacity/4||(this.capacity=t,this.heights=new Float64Array(t),this.heights.fill(NaN),this.flags=new Uint8Array(t),this.prefixSums=new n(t))}ensureCapacity(e){if(e<=this.capacity)return;let t=Math.max(16,this.capacity||0);for(;t<e;)t*=2;let r=new Float64Array(t);r.fill(NaN),r.set(this.heights.subarray(0,this.count));let i=new Uint8Array(t);i.set(this.flags.subarray(0,this.count)),this.heights=r,this.flags=i,this.capacity=t;let a=new Float64Array(t);for(let e=0;e<this.count;e++)a[e]=this.getEffectiveHeight(e);this.prefixSums=new n(t),this.prefixSums.build(a)}rebuildPrefixSums(){let e=new Float64Array(this.capacity);for(let t=0;t<this.count;t++)e[t]=this.getEffectiveHeight(t);this.prefixSums.build(e)}},i=new class{ro=null;callbacks;constructor(){this.callbacks=new Map}getObserver(){return this.ro?this.ro:typeof ResizeObserver>`u`?null:(this.ro=new ResizeObserver(e=>{for(let t of e){let e=this.callbacks.get(t.target);e&&e(t)}}),this.ro)}observe(e,t){let n=this.callbacks.has(e);this.callbacks.set(e,t),n||this.getObserver()?.observe(e)}unobserve(e){this.callbacks.delete(e),this.ro?.unobserve(e)}disconnect(){this.ro?.disconnect(),this.ro=null,this.callbacks.clear()}},a={key:0,class:`or3-scroll-prepend-loading`},o=[`data-index`],s=140,c=.5,l=((e,t)=>{let n=e.__vccOpts||e;for(let[e,r]of t)n[e]=r;return n})((0,t.defineComponent)({__name:`Or3Scroll`,props:{items:{},estimateHeight:{default:50},overscan:{default:200},prefetchOverscan:{default:0},itemKey:{},maintainBottom:{type:Boolean,default:!0},loadingHistory:{type:Boolean,default:!1},tailCount:{default:0},paddingBottom:{default:0},paddingTop:{default:0},bottomThreshold:{default:3},autoscrollThreshold:{default:10},mutationMode:{default:`append-prepend`},contentKey:{default:void 0},rowContentRevision:{default:0}},emits:[`scroll`,`reachTop`,`reachBottom`,`prefetchRange`],setup(e,{expose:n,emit:l}){let u=e,d=l,ee=(0,t.useSlots)(),te=Number.isFinite(u.estimateHeight)&&u.estimateHeight>0?u.estimateHeight:50,f=(0,t.ref)(null),p=(0,t.ref)(null),ne=(0,t.ref)(null),m=(0,t.ref)(0),h=(0,t.ref)(!0),g=(0,t.ref)(0),_=(0,t.ref)(-1),re=(0,t.ref)(0),ie=(0,t.ref)(0),ae=(0,t.ref)(0),oe=(0,t.ref)(0),v=0,se=0,y=u.maintainBottom?`followingBottom`:`userBrowsing`,b=null,x=null,S=!1,C=!1,w=!1,ce=0,le=!1,T=!1,E=0,ue=0,de=0,fe=0,D=null,O=0,pe=0,k=0,me=!1,he=!1,A=-1,ge=-1,j=new r({estimateHeight:te,overscanTop:u.overscan,overscanBottom:u.overscan,tailCount:u.tailCount,maxWindow:void 0}),M=[],N=new Map,P=new Map,_e=(0,t.computed)(()=>{u.rowContentRevision;let e=_.value===-1?0:_.value+1;return u.items.slice(g.value,e)}),F=e=>typeof u.itemKey==`function`?u.itemKey(e):e[u.itemKey],I=e=>typeof requestAnimationFrame==`function`?requestAnimationFrame(e):(queueMicrotask(()=>e(Date.now())),0),L=e=>{e&&typeof cancelAnimationFrame==`function`&&cancelAnimationFrame(e)},ve=e=>{let t=typeof devicePixelRatio==`number`&&devicePixelRatio>0?devicePixelRatio:1;return Math.round(e*t)/t},ye=()=>{N.clear(),M.forEach((e,t)=>N.set(e,t))},be=()=>{if(M.length===0)return null;f.value&&(v=f.value.scrollTop);let e=v-u.paddingTop,t=j.findIndexForOffset(Math.max(0,e)),n=M[t];return n===void 0?null:{candidates:[{key:n,withinItem:e-j.getOffsetForIndex(t),index:t}]}},R=()=>{if(M.length===0)return null;if(f.value){v=f.value.scrollTop;let e=f.value.getBoundingClientRect();if(e.height>0&&Math.abs(e.height-f.value.clientHeight)<2){let t=[];for(let[n,r]of K){let i=r.getBoundingClientRect();if(i.bottom<=e.top+c||i.top>=e.bottom)continue;let a=N.get(n);a!==void 0&&t.push({key:n,top:i.top,withinItem:e.top-i.top,index:a})}if(t.length>0)return t.sort((e,t)=>e.top-t.top),{candidates:t.map(e=>({key:e.key,withinItem:e.withinItem,index:e.index}))}}}return be()},z=e=>{let t=Math.max(0,e);ae.value=t,p.value&&(p.value.style.height=`${t+u.paddingTop+u.paddingBottom}px`)},B=(e,t,n=!1)=>{let r=f.value;if(!r)return;let i=Math.max(0,ae.value+u.paddingTop+u.paddingBottom-r.clientHeight),a=Math.max(0,Math.min(e,i));b=t,x=a,S=n,n?r.scrollTo({top:a,behavior:`smooth`}):r.scrollTop=a,v=r.scrollTop},xe=e=>b!==null&&(b===`jump`||S||x!==null&&Math.abs(e-x)<1),Se=e=>{if(!e||!f.value)return!1;let t;for(let n of e.candidates){let e=N.get(n.key);if(e===void 0)continue;let r=Math.abs(e-n.index);(!t||r<t.displacement)&&(t={point:n,index:e,displacement:r})}if(!t)return!1;let n=u.paddingTop+j.getOffsetForIndex(t.index)+t.point.withinItem;if(Math.abs(n-f.value.scrollTop)<c)return!0;let r=y;return y=`compensatingLayout`,B(n,`compensation`),y=r,!0},Ce=()=>Math.max(0,v-Math.max(0,u.paddingTop)),we=()=>u.maintainBottom&&y===`followingBottom`&&!C&&!S,V=()=>{let{overscanTop:e,overscanBottom:t,maxWindow:n}=Te();j.updateOverscan(e,t),j.updateMaxWindow(n);let r=we()?Math.max(0,j.getTotalHeight()+u.paddingBottom-m.value):Ce(),i=j.computeRange(r,m.value);g.value!==i.startIndex&&(g.value=i.startIndex),_.value!==i.endIndex&&(_.value=i.endIndex),re.value!==i.offsetY&&(re.value=i.offsetY),ie.value!==i.totalHeight&&(ie.value=i.totalHeight)},Te=()=>{let e=Number.isFinite(u.overscan)?Math.max(0,u.overscan):200,t=Number.isFinite(u.tailCount)?Math.max(0,Math.floor(u.tailCount)):0,n=m.value/te;return{overscanTop:e,overscanBottom:e,maxWindow:Math.max(t,Math.ceil(n*2))}},H=()=>{if(u.prefetchOverscan<=0||M.length===0)return;let e=Number.isFinite(u.prefetchOverscan)?Math.max(0,u.prefetchOverscan):0,t=Ce(),n=j.findIndexForOffset(Math.max(0,t-e)),r=j.findIndexForOffset(Math.min(j.getTotalHeight(),t+m.value+e));(n!==A||r!==ge)&&(A=n,ge=r,d(`prefetchRange`,{startIndex:n,endIndex:r}))},Ee=(e,n)=>{z(j.getTotalHeight()),n&&u.maintainBottom?(0,t.nextTick)(()=>{T||y!==`followingBottom`||C||Y||Q()}):Se(e)},De=(e,t)=>{C?Se(e):Ee(e,t)},Oe=()=>ae.value+u.paddingTop+u.paddingBottom,U=(e,t)=>{let n=f.value;if(!n)return;let r=Oe()-(n.scrollTop+n.clientHeight),i=r<=u.bottomThreshold;h.value=i,t||(e<-.5&&r>u.autoscrollThreshold?y=`userBrowsing`:e>c&&i&&u.maintainBottom&&(y=`followingBottom`))},ke=()=>{let e=v<=c;e&&!me&&d(`reachTop`),!e&&v>1.5?me=!1:e&&(me=!0),h.value&&!he&&d(`reachBottom`);let t=f.value;t&&(Oe()-(t.scrollTop+t.clientHeight)>u.bottomThreshold+1?he=!1:h.value&&(he=!0))},W=()=>{f.value&&(v=f.value.scrollTop,U(0,!0),ke())},Ae=()=>{E&&(ue++,L(E),E=0,Me()),D&&=(clearTimeout(D),null);let e=C;C=!1,ce=0,f.value&&(v=f.value.scrollTop,U(0,!0)),(y===`programmaticJump`||e)&&(y=u.maintainBottom&&h.value?`followingBottom`:`userBrowsing`),b=null,x=null;let t=j.getTotalHeight();Math.abs(ae.value-t)>=c&&Ee(R(),y===`followingBottom`),W()},je=()=>{D&&clearTimeout(D),D=setTimeout(()=>{D=null,w||Ae()},s)},Me=()=>{E=0;let e=f.value;if(!e||T)return;v=e.scrollTop;let t=v-se,n=xe(v);n||(b=null,x=null),!n&&Math.abs(t)>c&&(C=!0),x!==null&&Math.abs(v-x)<1&&b!==`jump`&&(b=null,x=null),U(t,n),V(),H(),ee.__debug&&(oe.value=v),d(`scroll`,{scrollTop:v,scrollHeight:e.scrollHeight,clientHeight:m.value,isAtBottom:h.value}),ke(),se=v,(C||b===`jump`)&&je()},G=()=>{if(E||T)return;let e=++ue;E=I(()=>{e===ue&&Me()})},Ne=()=>{if(!f.value)return;let e=f.value.scrollTop;!xe(e)&&e<v-c&&(b=null,x=null,C=!0,U(e-v,!1)),v=e,G()},Pe=()=>{(b===`jump`||Y)&&(ce=Date.now()+s),X(),C=!0,b=null,x=null,k++,h.value||(y=`userBrowsing`),Z(),je()},Fe,Ie=()=>{Fe?.(),Fe=void 0;let e=f.value;e&&(e.addEventListener(`wheel`,Pe,{passive:!u.maintainBottom}),Fe=()=>e.removeEventListener(`wheel`,Pe))},Le=()=>{w=!0,Pe()},Re=()=>{w&&(w=!1,(C||b===`jump`)&&je())},ze=e=>{[`ArrowUp`,`ArrowDown`,`PageUp`,`PageDown`,`Home`,`End`,` `].includes(e.key)&&Pe()},Be=()=>{Y||w||C&&Date.now()<ce||(E||C||b===`jump`)&&Ae()},K=new Map,q=new Map,Ve=(e,t)=>{let n=F(t),r=q.get(n);if(r)return r;let a=e=>{if(e){let t=e instanceof Element?e:e.$el,r=K.get(n);if(r===t)return;r&&i.unobserve(r),K.set(n,t),Xe(),Ue?He.set(n,t):Ge(n,t)}else{let e=K.get(n);e&&i.unobserve(e),He.delete(n),K.delete(n),q.delete(n)}};return q.set(n,a),a},He=new Map,Ue=0,We=()=>{Ue=0;for(let[e,t]of He)T||K.get(e)!==t||(Ze(e,t.getBoundingClientRect().height),Ge(e,t));He.clear(),Ke&&Qe()},Ge=(e,t)=>{i.observe(t,t=>{let n=t.borderBoxSize?.[0]?.blockSize??t.contentRect.height;Ze(e,n),Je||(Je=!0,queueMicrotask(()=>{Je=!1,Qe(!1)}))})},J=new Map,Ke=!1,qe=0,Je=!1,Ye=!1,Y=0,X=()=>{L(Y),Y=0,S=!1},Xe=()=>{Ye||(Ye=!0,(0,t.nextTick)(()=>{Ye=!1,T||ot(O)}))},Ze=(e,t)=>{let n=ve(t),r=P.get(e);r!==void 0&&Math.abs(r-n)<c||(J.set(e,n),Ke||(Ke=!0,qe=I(()=>Qe())))},Qe=(e=!0)=>{if(L(qe),qe=0,Ke=!1,J.size===0||T)return;f.value&&(v=f.value.scrollTop);let t=be(),n=j.getTotalHeight(),r=!1;for(let[e,t]of J){let n=N.get(e);if(n===void 0)continue;let i=P.get(e);i!==void 0&&Math.abs(i-t)<c||(P.set(e,t),j.setHeight(n,t),r=!0)}if(J.clear(),!r)return;e?V():(re.value=j.getOffsetForIndex(g.value),ie.value=j.getTotalHeight(),ne.value&&(ne.value.style.transform=`translateY(${re.value+u.paddingTop}px)`),G());let i=u.maintainBottom&&y===`followingBottom`&&!C;De(t,i),!e&&n-j.getTotalHeight()>Te().overscanBottom&&(Ue||=I(We),V()),W()},$e=e=>{let t=new Set(e);for(let e of P.keys())t.has(e)||P.delete(e);for(let e of q.keys()){if(t.has(e))continue;let n=K.get(e);n&&i.unobserve(n),K.delete(e),q.delete(e)}},et=e=>{M.splice(0,M.length,...e),ye()},tt=(e,t=!1)=>{let n=R(),r=e.map(F);if(t&&P.clear(),$e(r),j.replaceHeights(r.map(e=>P.get(e)??NaN)),et(r),V(),A=-1,H(),le){let e=u.maintainBottom&&y===`followingBottom`&&!C;De(n,e),W(),e&&!t&&ot(O)}},nt=(e,t)=>{let n=R();for(let n=t;n<e.length;n++){let t=F(e[n]);M.push(t),N.set(t,n)}j.setCount(e.length),V(),A=-1,H(),le&&(De(n,u.maintainBottom&&y===`followingBottom`&&!C),W())},rt=async(e,t,n)=>{let r=e.slice(0,t).map((e,t)=>({item:e,index:t,key:F(e)})),i=r.map(e=>P.get(e.key)??NaN);if(T||n!==O)return;let a=R();r.forEach((e,t)=>{Number.isNaN(i[t])||P.set(e.key,i[t])}),j.bulkInsert(0,i),M.unshift(...r.map(e=>e.key)),j.getCount()<e.length&&j.setCount(e.length);for(let t=M.length;t<e.length;t++)M.push(F(e[t]));ye(),V(),A=-1,H(),De(a,!1),W()},it=async()=>{let e=++O,t=u.items,n=t.length,r=M.length;if(r===0){tt(t);return}if(u.mutationMode===`arbitrary`){if(n===r&&t.every((e,t)=>F(e)===M[t]))return;tt(t);return}if(n===0){tt(t);return}let i=M[0],a=M[r-1],o=F(t[0]),s=F(t[n-1]);if(n===r&&o===i&&s===a)return;if(n>r&&o===i&&F(t[r-1])===a){nt(t,r);return}let c=n-r;if(c>0&&F(t[c])===i&&F(t[c+r-1])===a)await rt(t,c,e);else if(n<r&&o===i&&s===M[n-1]){let e=R();M.splice(n),$e(M),ye(),j.setCount(n),V(),A=-1,H(),le&&(De(e,!1),W())}else tt(t)},Z=()=>{pe++,L(de),L(fe),de=0,fe=0},at=(e=!1)=>{Z();let t=pe,n=O;de=I(()=>{de=0,fe=I(()=>{fe=0,t!==pe||e&&n!==O||T||!u.maintainBottom||Q()})})},ot=(e,n=3)=>{(0,t.nextTick)(()=>{if(T||e!==O)return;let t=g.value,r=_.value;pt(),n>1&&(g.value!==t||_.value!==r)&&ot(e,n-1)})},st=()=>{X(),O++,k++,ue++,L(E),E=0,D&&=(clearTimeout(D),null),C=!1,w=!1,ce=0,Z(),J.clear(),K.forEach(e=>i.unobserve(e)),K.clear(),q.clear(),P.clear(),y=u.maintainBottom?`followingBottom`:`userBrowsing`,b=null,x=null,S=!1,v=0,se=0,A=-1,ge=-1,f.value&&(f.value.scrollTop=0),tt(u.items,!0),z(j.getTotalHeight()),we()&&Q(),W(),ot(O),u.maintainBottom&&at()},Q=(e={})=>{if(!f.value)return;X(),y=`followingBottom`,z(j.getTotalHeight());let t=Math.max(0,Oe()-f.value.clientHeight);if(e.smooth&&typeof requestAnimationFrame==`function`&&!window.matchMedia?.(`(prefers-reduced-motion: reduce)`).matches){let e=f.value.scrollTop,t,n=r=>{if(T||!f.value)return;t??=r;let i=Math.min(1,Math.max(0,(r-t)/280)),a=Math.max(0,Oe()-f.value.clientHeight);B(e+(a-e)*(1-(1-i)**3),`bottom`),S=i<1,Y=i<1?requestAnimationFrame(n):0,G()};S=!0,Y=requestAnimationFrame(n)}else B(t,`bottom`);G()},ct=(e,t,n)=>{let r=j.getOffsetForIndex(e)+u.paddingTop;return t===`center`?r-=m.value/2-n/2:t===`end`&&(r-=m.value-n),Math.max(0,r)},lt=(e,n={})=>{if(!f.value||!Number.isSafeInteger(e)||e<0||e>=u.items.length)return;X(),Z();let r=++k,i=n.align??`start`,a=M[e];y=`programmaticJump`,z(j.getTotalHeight());let o=P.get(a)??j.getMeasuredHeight(e)??te;B(ct(e,i,o),`jump`,n.smooth===!0),G(),(0,t.nextTick)(()=>{I(()=>{if(r!==k||T)return;let e=N.get(a);if(e===void 0)return;let t=K.get(a)?.getBoundingClientRect().height;if(t&&t>0){let n=ve(t);P.set(a,n),j.setHeight(e,n),V(),z(j.getTotalHeight())}let o=P.get(a)??j.getMeasuredHeight(e)??te;B(ct(e,i,o),`jump`,n.smooth===!0),G()})})},ut=(e,t={})=>{let n=N.get(e);n!==void 0&&lt(n,t)},dt=()=>{let e=f.value;e&&(v=e.scrollTop);let t=e?e.scrollHeight-(v+e.clientHeight):1/0;return{version:1,contentKey:u.contentKey,mode:t<=u.bottomThreshold?`bottom`:`anchor`,anchors:R()?.candidates.map(e=>({key:e.key,withinItem:e.withinItem,index:e.index})),scrollTop:v}},ft=async e=>{if(!e||e.version!==1||e.contentKey!==u.contentKey)return;let n=u.contentKey,r=O,i=++k;if(await(0,t.nextTick)(),!f.value||T||i!==k||r!==O||n!==u.contentKey)return;if(e.mode===`bottom`){Q();return}X(),Z(),D&&=(clearTimeout(D),null),C=!1,y=`userBrowsing`,b=null,x=null;let a=(e.anchors??[]).filter(e=>(typeof e.key==`string`||typeof e.key==`number`)&&Number.isFinite(e.withinItem)&&Number.isSafeInteger(e.index));!(a.length>0&&Se({candidates:a}))&&Number.isFinite(e.scrollTop)&&B(e.scrollTop,`jump`),G()},pt=()=>{for(let[e,t]of K){let n=t.getBoundingClientRect().height;n>0&&Ze(e,n)}Ke?Qe():V()},mt=()=>st(),ht=null,$=0,gt=0,_t=e=>{if(!f.value||e===m.value)return;let t=R();m.value=e,V(),Ee(t,u.maintainBottom&&y===`followingBottom`),U(0,!0),H()};return(0,t.onMounted)(()=>{le=!0,Ie();let e=f.value;e&&(v=e.scrollTop,se=e.scrollTop,m.value=e.clientHeight,typeof ResizeObserver<`u`&&(ht=new ResizeObserver(e=>{let t=e[e.length-1];t&&(gt=t.contentRect.height,!$&&($=I(()=>{$=0,T||_t(gt)})))}),ht.observe(e)),V(),z(j.getTotalHeight()),H(),we()&&M.length&&(Q(),ot(O)),u.maintainBottom&&at(!0))}),(0,t.onUnmounted)(()=>{T=!0,L(Ue),He.clear(),X(),Fe?.(),Fe=void 0,O++,k++,ue++,L(E),E=0,Z(),D&&clearTimeout(D),ht?.disconnect(),L($),$=0,K.forEach(e=>i.unobserve(e)),K.clear(),q.clear(),J.clear(),L(qe),qe=0}),(0,t.watch)(()=>{let e=u.items;return u.mutationMode===`arbitrary`?e.map(F):[e,e.length]},()=>void it(),{immediate:!0}),(0,t.watch)(()=>u.rowContentRevision,Xe,{flush:`post`}),(0,t.watch)(()=>u.contentKey,(e,t)=>{e!==t&&st()}),(0,t.watch)(()=>[u.paddingBottom,u.paddingTop],()=>{let e=R();Ee(e,u.maintainBottom&&y===`followingBottom`)}),(0,t.watch)(()=>[u.overscan,u.prefetchOverscan],()=>{A=-1,ge=-1,V(),H()}),(0,t.watch)(()=>u.tailCount,e=>{j.updateTailCount(e),V()}),(0,t.watch)(()=>u.maintainBottom,e=>{Ie(),e?(U(0,!0),y=h.value?`followingBottom`:`userBrowsing`):(X(),y=`userBrowsing`)}),(0,t.watch)(()=>u.estimateHeight,(e,t)=>{}),n({scrollToBottom:Q,scrollToIndex:lt,scrollToItemKey:ut,captureScrollState:dt,restoreScrollState:ft,refreshMeasurements:pt,reset:mt,isAtBottom:h}),(n,r)=>((0,t.openBlock)(),(0,t.createElementBlock)(`div`,{ref_key:`container`,ref:f,class:`or3-scroll`,onScrollPassive:Ne,onTouchstartPassive:Le,onTouchendPassive:Re,onTouchcancelPassive:Re,onMousedownPassive:Pe,onKeydown:ze,onScrollendPassive:Be},[(0,t.createElementVNode)(`div`,{ref_key:`track`,ref:p,class:`or3-scroll-track`,style:(0,t.normalizeStyle)({height:ae.value+e.paddingTop+e.paddingBottom+`px`})},[e.loadingHistory?((0,t.openBlock)(),(0,t.createElementBlock)(`div`,a,[(0,t.renderSlot)(n.$slots,`prepend-loading`,{},void 0,!0)])):(0,t.createCommentVNode)(``,!0),(0,t.createElementVNode)(`div`,{ref_key:`slice`,ref:ne,class:`or3-scroll-slice`,style:(0,t.normalizeStyle)({transform:`translateY(${re.value+e.paddingTop}px)`})},[r[0]||=(0,t.createElementVNode)(`div`,{class:`or3-scroll-edge`,"aria-hidden":`true`},null,-1),((0,t.openBlock)(!0),(0,t.createElementBlock)(t.Fragment,null,(0,t.renderList)(_e.value,(e,r)=>((0,t.openBlock)(),(0,t.createElementBlock)(`div`,{key:F(e),ref_for:!0,ref:Ve(g.value+r,e),class:`or3-scroll-item`,"data-index":g.value+r},[(0,t.renderSlot)(n.$slots,`default`,{item:e,index:g.value+r},void 0,!0)],8,o))),128)),r[1]||=(0,t.createElementVNode)(`div`,{class:`or3-scroll-edge`,"aria-hidden":`true`},null,-1)],4),(0,t.renderSlot)(n.$slots,`__debug`,{startIndex:g.value,endIndex:_.value,totalHeight:ie.value,scrollTop:oe.value},void 0,!0)],4)],544))}}),[[`__scopeId`,`data-v-5479bcd9`]]);function u(e){let{scrollerRef:n,items:r,getItemId:i,loadHistoryUntil:a}=e,o=(0,t.ref)({state:`idle`}),s=0,c,l=e=>r.value.findIndex(t=>i(t)===e),u=async(e,r,i)=>{if(i!==s||l(e)===-1||(o.value={state:`jumping`,targetId:e,align:r},await(0,t.nextTick)(),i!==s||l(e)===-1))return!1;let a=n.value;return a?(a.scrollToItemKey(e,{align:r}),i===s&&(o.value={state:`idle`}),!0):!1};return(0,t.watch)(()=>{let e=o.value;return e.state===`waitingForHistory`?l(e.targetId):-1},e=>{if(e===-1)return;let t=c;t?.generation===s&&t.settle({kind:`target`})},{flush:`post`}),{jumpTo:async(e,n={})=>{let r=n.align??`center`,i=n.direction??`up`;c?.settle({kind:`superseded`});let d=++s;if(l(e)!==-1){await u(e,r,d)||d===s&&(o.value={state:`idle`});return}o.value={state:`waitingForHistory`,targetId:e,direction:i,align:r};let ee,te=new Promise(e=>{ee=e});c={generation:d,settle:ee};let f=Promise.resolve().then(()=>a(e,i)).then(()=>({kind:`loaded`}),e=>({kind:`error`,error:e})),p=await Promise.race([f,te]);c?.generation===d&&(c=void 0),d===s&&p.kind!==`superseded`&&(p.kind===`error`?(console.error(`[useScrollJump] Failed to load history:`,p.error),o.value={state:`idle`}):(await(0,t.nextTick)(),!await u(e,r,d)&&d===s&&(o.value={state:`idle`})))},jumpState:o}}e.Or3Scroll=l,e.VirtualizerEngine=r,e.useScrollJump=u});
+\ No newline at end of file
+diff --git a/node_modules/or3-scroll/dist/style.css b/node_modules/or3-scroll/dist/style.css
+index 6e7c794..352073e 100644
+--- a/node_modules/or3-scroll/dist/style.css
++++ b/node_modules/or3-scroll/dist/style.css
+@@ -1,2 +1,2 @@
+-.or3-scroll[data-v-d7f9e4c3]{overflow-anchor:none;width:100%;height:100%;position:relative;overflow-y:auto}.or3-scroll-track[data-v-d7f9e4c3]{width:100%;position:relative}.or3-scroll-slice[data-v-d7f9e4c3]{will-change:transform;width:100%;position:absolute;top:0;left:0}.or3-scroll-prepend-loading[data-v-d7f9e4c3]{z-index:1;width:100%;position:absolute;top:0;left:0}.or3-scroll-item[data-v-d7f9e4c3]{overflow:hidden}
++.or3-scroll[data-v-5479bcd9]{overflow-anchor:none;width:100%;height:100%;position:relative;overflow-y:auto}.or3-scroll-track[data-v-5479bcd9]{width:100%;position:relative;overflow-x:clip}.or3-scroll-slice[data-v-5479bcd9]{will-change:transform;width:100%;position:absolute;top:0;left:0}.or3-scroll-prepend-loading[data-v-5479bcd9]{z-index:1;width:100%;position:absolute;top:0;left:0}.or3-scroll-item[data-v-5479bcd9]{display:flow-root}
+ /*$vite$:1*/
+\ No newline at end of file

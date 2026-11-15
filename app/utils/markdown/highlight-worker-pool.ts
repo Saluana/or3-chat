@@ -5,7 +5,8 @@ export interface HighlightInput {
     language: string;
     theme: ShikiThemeConfig;
 }
-export interface HighlightRequest extends HighlightInput { id: number }
+export interface HighlightRequest extends HighlightInput { id: number; blockId: number }
+export type HighlightWorkerMessage = HighlightRequest | { release: number };
 export type HighlightResponse = { id: number; html: string } | { id: number; failed: true };
 
 type Task = {
@@ -32,6 +33,7 @@ export function createHighlightWorkerPool(createWorker: () => Worker) {
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let idleTimer: ReturnType<typeof setTimeout> | undefined;
     let nextId = 0;
+    let nextBlockId = 0;
     let disposed = false;
     let failed = false;
     const unavailable = () => new Error('Syntax highlighting unavailable');
@@ -88,6 +90,7 @@ export function createHighlightWorkerPool(createWorker: () => Worker) {
     return {
         acquire() {
             const owner = Symbol('code block');
+            const blockId = ++nextBlockId;
             if (!disposed) owners.add(owner);
             clearTimeout(idleTimer);
             idleTimer = undefined;
@@ -104,7 +107,7 @@ export function createHighlightWorkerPool(createWorker: () => Worker) {
                         // Snapshot reactive theme objects into cloneable worker data.
                         const theme = typeof input.theme === 'string' ? input.theme
                             : { light: input.theme.light, dark: input.theme.dark };
-                        queue.set(owner, { owner, input: { ...input, theme, id: ++nextId }, resolve, reject });
+                        queue.set(owner, { owner, input: { ...input, theme, id: ++nextId, blockId }, resolve, reject });
                         pump();
                     });
                 },
@@ -115,6 +118,8 @@ export function createHighlightWorkerPool(createWorker: () => Worker) {
                     // The current worker cannot interrupt synchronous tokenization.
                     // Drop its consumer now; another owner can use it when it ends.
                     if (active?.owner === owner) active.reject(unavailable());
+                    try { worker?.postMessage({ release: blockId } satisfies HighlightWorkerMessage); }
+                    catch { reset(true); }
                     if (owners.size) return;
                     // A failed pool resets now so the next block can retry.
                     if (failed || !worker) reset();

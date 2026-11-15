@@ -1,20 +1,73 @@
+diff --git a/node_modules/streamdown-vue/dist/StreamMarkdown-BN6qzvpl.cjs b/node_modules/streamdown-vue/dist/StreamMarkdown-BN6qzvpl.cjs
+deleted file mode 100644
+index 6d1f21f..0000000
+--- a/node_modules/streamdown-vue/dist/StreamMarkdown-BN6qzvpl.cjs
++++ /dev/null
+@@ -1,46 +0,0 @@
+-var e=Object.create,t=Object.defineProperty,n=Object.getOwnPropertyDescriptor,r=Object.getOwnPropertyNames,i=Object.getPrototypeOf,a=Object.prototype.hasOwnProperty,o=(e,i,o,s)=>{if(i&&typeof i==`object`||typeof i==`function`)for(var c=r(i),l=0,u=c.length,d;l<u;l++)d=c[l],!a.call(e,d)&&d!==o&&t(e,d,{get:(e=>i[e]).bind(null,d),enumerable:!(s=n(i,d))||s.enumerable});return e},s=(n,r,s)=>(s=n==null?{}:e(i(n)),o(r||!n||!n.__esModule||!a.call(n,`default`)?t(s,`default`,{value:n,enumerable:!0}):s,n));let c=require("vue"),l=require("unified"),u=require("remark-parse");u=s(u,1);let d=require("remark-gfm");d=s(d,1);let f=require("remark-math");f=s(f,1);let p=require("remark-rehype");p=s(p,1);let m=require("shiki/core"),h=require("shiki/engine/javascript"),g=require("@shikijs/themes/github-light");g=s(g,1);let _=require("@shikijs/themes/github-dark");_=s(_,1);let v=require("marked");var y=`https://esm.sh/@shikijs/langs@4.4.3/es2022/`;`${y}`;var b=Symbol.for(`streamdown.vue.shikiRemote`),x=e=>(typeof e==`function`&&(e[b]=!0),e),S=e=>typeof e==`function`&&!!e?.[b],C=e=>{let t=()=>import(`@shikijs/langs/${e}`),n=()=>import(`${y}${e}.mjs`);return x(async()=>{if(typeof window>`u`)return t();try{return await n()}catch{return t()}})},w={py:`python`,python3:`python`,shellscript:`shell`,shellsession:`shell`,sh:`shell`,zsh:`shell`,bash:`bash`,"markdown-vue":`vue`,"vue-directives":`vue`,"vue-interpolations":`vue`,"vue-sfc-style-variable-injection":`vue`,md:`markdown`,"html-derivative":`html`,ts:`typescript`,js:`javascript`,yml:`yaml`},T=e=>e.trim().toLowerCase().replace(/^language-/,``),E=e=>{let t=T(e);return t&&(w[t]??t)},D=new Map,O=new Map,k=new Set,A=(e,t)=>{let n=E(e);n&&O.set(n,t)},j=e=>{let t=E(e);if(!t)return;if(D.has(t))return t;let n=O.get(t);if(n&&D.has(n))return n},M=e=>{for(let[t,n]of Array.from(O.entries()))(n===e||t===e)&&O.delete(t)};function N(e){let t=E(e.id);t&&(D.set(t,e.loader),e.lazy?k.add(t):k.delete(t),A(t,t),(e.aliases??[]).forEach(e=>A(e,t)))}function P(e){e.forEach(N)}function F(e){let t=j(e);if(!t){let t=E(e);t&&O.delete(t);return}D.delete(t),k.delete(t),M(t)}function ee(e){e.forEach(F)}function te(e){let t=new Set,n=[],r=[],i=[];return e.forEach(e=>{let a=j(e);if(!a){r.push(E(e)||e);return}if(t.has(a))return;let o=D.get(a);if(!o){r.push(a);return}t.add(a),i.push(a),n.push(o)}),{inputs:n,missing:r,resolved:i}}function ne(){return Array.from(D.keys()).sort()}function re(){return D.size>0}function ie(e){let t=j(e);return t?k.has(t):!1}function ae(){D.clear(),O.clear(),k.clear()}var oe=[{id:`cpp`,aliases:[`c++`],loader:C(`cpp`)},{id:`java`,aliases:[`java`],loader:C(`java`)},{id:`c`,loader:C(`c`)},{id:`csharp`,aliases:[`cs`,`c#`],loader:C(`csharp`)},{id:`php`,loader:C(`php`)},{id:`ruby`,loader:C(`ruby`)},{id:`kotlin`,loader:C(`kotlin`)},{id:`swift`,loader:C(`swift`)},{id:`sql`,loader:C(`sql`)},{id:`typescript`,aliases:[`ts`],loader:()=>import(`@shikijs/langs/typescript`)},{id:`tsx`,loader:()=>import(`@shikijs/langs/tsx`)},{id:`javascript`,aliases:[`js`],loader:()=>import(`@shikijs/langs/javascript`)},{id:`jsx`,loader:()=>import(`@shikijs/langs/jsx`)},{id:`json`,loader:()=>import(`@shikijs/langs/json`)},{id:`bash`,loader:()=>import(`@shikijs/langs/bash`)},{id:`shell`,aliases:[`shellscript`,`shellsession`,`sh`,`zsh`],loader:()=>import(`@shikijs/langs/shellscript`)},{id:`python`,aliases:[`py`],loader:()=>import(`@shikijs/langs/python`)},{id:`diff`,loader:()=>import(`@shikijs/langs/diff`)},{id:`markdown`,aliases:[`md`],loader:()=>import(`@shikijs/langs/markdown`)},{id:`vue`,loader:()=>import(`@shikijs/langs/vue`)},{id:`html`,loader:()=>import(`@shikijs/langs/html`)},{id:`css`,loader:()=>import(`@shikijs/langs/css`)},{id:`go`,loader:()=>import(`@shikijs/langs/go`)},{id:`rust`,loader:()=>import(`@shikijs/langs/rust`)},{id:`yaml`,aliases:[`yml`],loader:()=>import(`@shikijs/langs/yaml`)}],se=!1;function ce(){se||(se=!0,P(oe.slice()))}var le=null,I=null;function ue(){return le}function de(){return I??=import(`rehype-katex`).then(e=>{le=e?.default??e},e=>{throw I=null,e}),I}var L={xmlns:`http://www.w3.org/2000/svg`,width:24,height:24,viewBox:`0 0 24 24`,fill:`none`,stroke:`currentColor`,"stroke-width":2,"stroke-linecap":`round`,"stroke-linejoin":`round`},fe=(...e)=>e.filter((e,t,n)=>!!e&&e.trim()!==``&&n.indexOf(e)===t).join(` `).trim();function R(e){return e!=null}function pe(e,t={}){let n=t.attributeNames??{},r=e=>n[e]??e,i=e.size??e.width??L.width,a=e.size??e.height??L.height,o=e.aliases?.filter(e=>typeof e==`string`&&e.trim()!==``).map(e=>`lucide-${e}`)??[],s=[...e.name?[`lucide-${e.name}`]:[],...o],c=t.className?.split(` `).filter(Boolean)??[],l=t.includeDefaultClasses===!1?fe(...c):fe(`lucide`,...s,...c),u=t.absoluteStrokeWidth?Number(t.strokeWidth??L[`stroke-width`])*Number(e.size??e.width??L.width)/Number(t.size??t.width??L.width):t.strokeWidth??L[`stroke-width`];return[`svg`,{...Object.entries(L).reduce((e,[t,n])=>(e[r(t)]=n,e),{}),...`color`in t&&t.color&&{[r(`stroke`)]:t.color},...`size`in t&&R(t.size)&&{[r(`width`)]:t.size,[r(`height`)]:t.size},...`width`in t&&R(t.width)&&{[r(`width`)]:t.width},...`height`in t&&R(t.height)&&{[r(`height`)]:t.height},[r(`stroke-width`)]:u,...l&&{[r(`class`)]:l},[r(`viewBox`)]:`0 0 ${i} ${a}`,...t.hasA11yProp===!1?{[r(`aria-hidden`)]:`true`}:{},...`attributes`in t&&t.attributes},e.node.map(e=>{let[n,i,a]=e,o=t.nonScalingStroke?{[r(`vector-effect`)]:`non-scaling-stroke`,...i}:i;return a?[n,o,a]:[n,o]})]}var me=e=>{for(let t in e)if(t.startsWith(`aria-`)||t===`role`||t===`title`)return!0;return!1},z=e=>e===``,he=e=>e?.replace(/([a-z0-9])([A-Z])/g,`$1-$2`).toLowerCase(),ge=Symbol(`lucide-icons`);function _e(){return(0,c.inject)(ge,{})}var ve=({name:e,iconNode:t,"icon-node":n,icon:r={name:he(e),node:t??n,size:24,aliases:[]},absoluteStrokeWidth:i,"absolute-stroke-width":a,nonScalingStroke:o,"non-scaling-stroke":s,strokeWidth:l,"stroke-width":u,size:d,width:f=d,height:p=d,color:m,...h},{slots:g})=>{let{size:_,color:v,strokeWidth:y=2,absoluteStrokeWidth:b=!1,nonScalingStroke:x=!1,class:S=``}=_e(),C=z(i)||z(a)||i===!0||a===!0||b===!0,w=z(o)||z(s)||o===!0||s===!0||x===!0;delete h.class;let T=g.default?.(),[,E,D=[]]=pe(r,{color:m??v,width:f??d??_,height:p??d??_,strokeWidth:l??u??y,absoluteStrokeWidth:C,nonScalingStroke:w,className:S,hasA11yProp:T!=null&&T.length>0||me(h),attributes:h});return(0,c.h)(`svg`,E,[...D.map(e=>(0,c.h)(...e)),...T??[]])};function B(e,t=[]){let n=typeof e==`string`?{name:e,node:t}:e;return(e,{slots:t})=>(0,c.h)(ve,{...e,icon:n},t.default?{default:t.default}:void 0)}var ye=B({name:`check`,size:24,node:[[`path`,{d:`M20 6 9 17l-5-5`,key:`1gmf2c`}]]}),be=B({name:`copy`,size:24,node:[[`rect`,{width:`14`,height:`14`,x:`8`,y:`8`,rx:`2`,ry:`2`,key:`17jyea`}],[`path`,{d:`M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2`,key:`zix9uf`}]]}),xe=B({name:`download`,size:24,node:[[`path`,{d:`M12 15V3`,key:`m9g1x1`}],[`path`,{d:`M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4`,key:`ih7n3h`}],[`path`,{d:`m7 10 5 5 5-5`,key:`brsn70`}]]}),V=Symbol(`code-block-meta`),Se=Symbol(`global-code-block-actions`);async function Ce(e,t=typeof navigator>`u`?void 0:navigator.clipboard){if(!e||!t?.writeText)return!1;try{return await t.writeText(e),!0}catch{return!1}}var H=(0,c.defineComponent)({name:`CopyButton`,props:{text:{type:String,required:!1},floating:{type:Boolean,default:!0}},setup(e){let t=(0,c.ref)(!1),n=(0,c.inject)(V,{code:``,language:``}),r=async()=>{await Ce(e.text??n.code)&&(t.value=!0,setTimeout(()=>{t.value=!1},2e3))};return()=>(0,c.h)(`button`,{class:[e.floating?`absolute top-2 right-2 opacity-0 group-hover:opacity-100`:`opacity-80 hover:opacity-100`,`p-1 rounded bg-gray-200 dark:bg-gray-700 transition-opacity flex items-center justify-center`].join(` `),onClick:r,"aria-live":`polite`},[t.value?(0,c.h)(ye,{class:`h-4 w-4`}):(0,c.h)(be,{class:`h-4 w-4`}),(0,c.h)(`span`,{class:`sr-only`},t.value?`Copied`:`Copy`)])}}),we={javascript:`js`,js:`js`,typescript:`ts`,ts:`ts`,json:`json`,vue:`vue`,html:`html`,css:`css`,md:`md`,markdown:`md`,sh:`sh`,bash:`sh`,py:`py`,python:`py`,go:`go`,rust:`rs`,rs:`rs`};function Te(e,t=``,n){if(!e)return null;let r=t&&we[t.toLowerCase()]||`txt`;return{blob:new Blob([e],{type:`text/plain;charset=utf-8`}),filename:n||`file.${r}`}}var Ee=(0,c.defineComponent)({name:`DownloadButton`,props:{text:{type:String,required:!1},filename:{type:String,required:!1},floating:{type:Boolean,default:!0}},setup(e){let t=(0,c.inject)(V,{code:``,language:``}),n=()=>{let n=Te(e.text??t.code,t.language,e.filename);if(n)try{let e=URL.createObjectURL(n.blob),t=document.createElement(`a`);t.href=e,t.download=n.filename,document.body.appendChild(t),t.click(),document.body.removeChild(t),URL.revokeObjectURL(e)}catch{}};return()=>(0,c.h)(`button`,{class:[e.floating?`absolute top-2 right-9 opacity-0 group-hover:opacity-100`:`opacity-80 hover:opacity-100`,`p-1 rounded bg-gray-200 dark:bg-gray-700 transition-opacity flex items-center justify-center`].join(` `),onClick:n,"aria-live":`polite`,title:`Download code`},[(0,c.h)(xe,{class:`h-4 w-4`}),(0,c.h)(`span`,{class:`sr-only`},`Download`)])}}),U=null,W=null,De=[g.default,_.default],Oe=null,ke=()=>(Oe||=(0,h.createJavaScriptRegexEngine)(),Oe),Ae=()=>{if(!re())return console.warn(`[streamdown-vue] No Shiki languages are registered. Code blocks will render without syntax highlighting.`),[];let{inputs:e,missing:t,resolved:n}=te(ne());return t.length&&console.warn(`[streamdown-vue] Some requested Shiki languages are not registered: ${t.join(`, `)}`),e.filter((e,t)=>!S(e)&&!ie(n[t]))};async function je(e){if(!U)return!1;let{inputs:t}=te([e]);return t.length?(await U.loadLanguage(...t),!0):!1}async function Me(){if(!W){let e=Ae();W=(0,m.createHighlighterCore)({themes:De,langs:e,engine:ke()}).then(e=>(U=e,e))}return await W}var G=e=>e.replace(/&/g,`&amp;`).replace(/</g,`&lt;`).replace(/>/g,`&gt;`).replace(/"/g,`&quot;`).replace(/'/g,`&#39;`),K=(e,t,n,r)=>{let i=G(t),a=i?`language-${i}`:``,o=[a];r||o.push(`select-none`);let s=n?e.split(/\r?\n/).map((e,t)=>`<span class="line"><span class="code-line-number select-none opacity-60 pr-4 text-xs" data-line-number data-streamdown="code-line-number">${t+1}</span>${G(e)}</span>`).join(`
+-`):G(e);return`<pre data-streamdown="pre"${o.filter(Boolean).length?` class="${o.join(` `)}"`:``}><code data-streamdown="code"${a?` class="${a}"`:``}>${s}</code></pre>`},q=(0,c.defineComponent)({name:`CodeBlock`,props:{code:{type:String,required:!0},language:{type:String,default:``},theme:{type:[String,Object],default:void 0},showLineNumbers:{type:Boolean,default:!1},selectable:{type:Boolean,default:!0},actions:{type:Array,default:()=>[]},hideCopy:{type:Boolean,default:!1},hideDownload:{type:Boolean,default:!1}},setup(e,{attrs:t,slots:n}){let r=(0,c.ref)(K(e.code,e.language,e.showLineNumbers,e.selectable));(0,c.provide)(V,{get code(){return e.code},get language(){return e.language}});let i=(0,c.inject)(Se,[]),a=null,o=async()=>{},s=0,l=e=>e.replace(/(<pre[^>]*style=")([^"]*)("[^>]*>)/g,(e,t,n,r)=>`${t}${n.split(/;\s*/).filter(e=>e&&!/background(-color)?\s*:/.test(e.toLowerCase())).join(`; `)}${r}`.replace(/style=""/,``)),u=t=>{if(!e.showLineNumbers)return t;let n=0;return t.replace(/<span class="line(.*?)">/g,(e,t)=>(n+=1,`<span class="line${t}"><span class="code-line-number select-none opacity-60 pr-4 text-xs" data-line-number data-streamdown="code-line-number">${n}</span>`))},d=t=>e.selectable?t:t.replace(`<pre`,`<pre class="select-none"`),f=e=>{let t=d(u(l(e)));return p(t)},p=e=>e.replace(/<pre(?![^>]*data-streamdown=)/g,`<pre data-streamdown="pre"`).replace(/<code(?![^>]*data-streamdown=)/g,`<code data-streamdown="code"`),m=()=>{if(typeof document<`u`){let e=`streamdown-dual-theme-styles`;if(!document.getElementById(e)){let t=document.createElement(`style`);t.id=e,t.textContent=`
+-                        html.dark .shiki-themes, html.dark .shiki-themes span {
+-                            color: var(--shiki-dark) !important;
+-                            font-style: var(--shiki-dark-font-style) !important;
+-                            font-weight: var(--shiki-dark-font-weight) !important;
+-                            text-decoration: var(--shiki-dark-text-decoration) !important;
+-                        }
+-                        @media (prefers-color-scheme: dark) {
+-                            html:not(.light) .shiki-themes,
+-                            html:not(.light) .shiki-themes span {
+-                                color: var(--shiki-dark) !important;
+-                                font-style: var(--shiki-dark-font-style) !important;
+-                                font-weight: var(--shiki-dark-font-weight) !important;
+-                                text-decoration: var(--shiki-dark-text-decoration) !important;
+-                            }
+-                        }
+-                    `,document.head.appendChild(t)}}},h=(e,t,n,r)=>{if(typeof n==`object`&&n)return r.codeToHtml(e,{lang:t,themes:{light:n.light,dark:n.dark}});let i=n||(a?.matches?`github-dark`:`github-light`);return r.codeToHtml(e,{lang:t,theme:i})},g=async()=>{let t=++s;try{let n=await Me(),i=e.language||`txt`,a=``;i&&!n.getLoadedLanguages().includes(i)&&t===s&&(r.value=K(e.code,e.language,e.showLineNumbers,e.selectable));try{a=h(e.code,i,e.theme,n)}catch(t){if(i&&!n.getLoadedLanguages().includes(i)){if(!await je(i))throw Error(`missing lang`);a=h(e.code,i,e.theme,n)}else throw t}t===s&&(r.value=f(a))}catch{t===s&&(r.value=K(e.code,e.language,e.showLineNumbers,e.selectable))}};return(0,c.onMounted)(()=>{let t=typeof e.theme==`object`&&e.theme!==null;t&&m(),o=g,o(),!t&&typeof window<`u`&&(a=window.matchMedia(`(prefers-color-scheme: dark)`),a.addEventListener(`change`,o))}),(0,c.watch)(()=>[e.code,e.language,e.theme],()=>{(0,c.nextTick)(()=>o())}),(0,c.onBeforeUnmount)(()=>{a&&a.removeEventListener(`change`,o)}),()=>(0,c.h)(`div`,{class:`group rounded-md border bg-gray-50 dark:bg-gray-800 overflow-hidden`,"data-streamdown":`code-block`,...t},[(0,c.h)(`div`,{class:`flex items-center justify-between text-xs px-2 py-1 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 gap-2`,"data-streamdown":`code-block-header`},[e.language?(0,c.h)(`span`,{class:`px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 font-mono text-[10px] leading-none tracking-wide`,"data-streamdown":`code-lang`},e.language):(0,c.h)(`span`,{class:`h-4`,"data-streamdown":`code-lang-empty`}),(0,c.h)(`div`,{class:`flex items-center gap-1`,"data-streamdown":`code-actions`},[...e.actions.map((t,n)=>(0,c.h)(t,{key:n,code:e.code,language:e.language})),...i.map((t,n)=>(0,c.h)(t,{key:`g-${n}`,code:e.code,language:e.language})),...n.actions?n.actions():[],e.hideDownload?null:(0,c.h)(Ee,{floating:!1,"data-streamdown":`download-button`}),e.hideCopy?null:(0,c.h)(H,{floating:!1,"data-streamdown":`copy-button`})].filter(Boolean))]),(0,c.h)(`div`,{innerHTML:r.value,class:`px-4 py-3 overflow-x-auto`,"data-streamdown":`code-body`})])}}),Ne=!1,J={},Pe=e=>{let t=0;for(let n=0;n<e.length;n++)t=(t<<5)-t+e.charCodeAt(n),t|=0;return Math.abs(t).toString(36)},Fe=(0,c.defineComponent)({name:`MermaidBlock`,props:{code:{type:String,required:!0}},setup(e){let t=(0,c.ref)(``),n=(0,c.ref)(``),r=(0,c.ref)(``),i=(0,c.ref)(!0),a=`streamdown-vue-mermaid-${Pe(e.code)}`;return(0,c.onMounted)(async()=>{i.value=!0;try{let o=(await import(`mermaid`)).default;if(Ne||=(o.initialize({startOnLoad:!1}),!0),J[a]){t.value=J[a],i.value=!1;return}let{svg:s}=await o.render(a,e.code);t.value=s,n.value=s,J[a]=s,r.value=``}catch(e){r.value=e.message||`Failed to render mermaid diagram`,t.value=n.value}finally{i.value=!1}}),()=>(0,c.h)(`div`,{class:`relative group`,"data-streamdown":`mermaid`},[i.value?(0,c.h)(`div`,{class:`flex justify-center py-8`},[(0,c.h)(`div`,{class:`h-5 w-5 border-2 border-gray-300 border-t-transparent rounded-full animate-spin`})]):t.value?(0,c.h)(`div`,{innerHTML:t.value}):(0,c.h)(`div`,{class:`text-red-500 text-sm`},r.value),!i.value&&r.value&&t.value?(0,c.h)(`div`,{class:`text-red-500 text-sm mt-2`},r.value):null,(0,c.h)(H,{text:e.code,"data-streamdown":`copy-button`})])}}),Y=(e,t)=>{let n=[];return Array.isArray(e)?n.push(...e):typeof e==`string`&&n.push(e),t&&n.push(t),n.join(` `).trim()},X=(e,t=``,n)=>(r,{slots:i})=>{let a=Y(r.class||r.className,t),o={...r,class:a||void 0};return n&&(o[`data-streamdown`]=n),delete o.className,(0,c.h)(e,o,i.default?i.default():[])},Ie={p:X(`p`,`mb-2`,`p`),a:(e,{slots:t})=>{let n=Y(e.class||e.className,`underline text-blue-600`),r={...e,class:n||void 0,"data-streamdown":`a`,target:`_blank`,rel:`noreferrer`};return delete r.className,(0,c.h)(`a`,r,t.default?t.default():[])},code:X(`code`,`bg-muted px-1.5 py-0.5 font-mono text-sm`,`inline-code`),ul:X(`ul`,`list-disc pl-6`,`ul`),ol:X(`ol`,`list-decimal pl-6`,`ol`),li:X(`li`,``,`li`),hr:X(`hr`,`my-6 border-border`,`hr`),strong:X(`strong`,``,`strong`),em:X(`em`,``,`em`),h1:X(`h1`,`text-3xl font-bold`,`h1`),h2:X(`h2`,`text-2xl font-bold`,`h2`),h3:X(`h3`,`text-xl font-semibold`,`h3`),h4:X(`h4`,`text-lg font-semibold`,`h4`),h5:X(`h5`,`font-semibold`,`h5`),h6:X(`h6`,`font-semibold`,`h6`),blockquote:X(`blockquote`,`border-l-4 pl-4 italic`,`blockquote`),table:(e,{slots:t})=>{let n=Y(e.class||e.className,`w-full text-sm`),r={...e,class:n||void 0,"data-streamdown":`table`};delete r.className;let i=(0,c.h)(`table`,r,t.default?t.default():[]);return(0,c.h)(`div`,{class:`overflow-x-auto`,"data-streamdown":`table-wrapper`},[i])},thead:X(`thead`,``,`thead`),tbody:X(`tbody`,``,`tbody`),tr:X(`tr`,``,`tr`),th:X(`th`,`border px-2 py-1`,`th`),td:X(`td`,`border px-2 py-1`,`td`),img:e=>{let t=Y(e.class||e.className,``),n={...e,class:t||void 0,"data-streamdown":`img`};return delete n.className,(0,c.h)(`img`,n)}},Z=(e,t=0)=>{let n=t;for(;n<t+3&&e[n]===` `;)n++;return e[n]},Le=/^ {0,3}(?:=+|-+) *$/,Re=/^\s*$/,ze=/^(?: {0,3}(?:[*+-]|\d{1,9}[.)]) |(?: {4}| {0,3}\t)| {0,3}(?:`{3,}|~{3,})| {0,3}>| {0,3}#{1,6}(?:\s|$)| {0,3}<[^\n>]+>$| {0,3}\|?(?:[:\- ]*\|)+[:\- ]*$)/,Be=class extends v.Tokenizer{hr(e){let t=Z(e);return t===`-`||t===`_`||t===`*`?super.hr(e):void 0}blockquote(e){return Z(e)===`>`?super.blockquote(e):void 0}html(e){return Z(e)===`<`?super.html(e):void 0}table(e){let t=e.indexOf(`
+-`),n=t===-1?void 0:Z(e,t+1);return n===`|`||n===`:`||n===`-`?super.table(e):void 0}lheading(e){let t=e.indexOf(`
+-`)+1;for(;t>0;){let n=e.indexOf(`
+-`,t),r=e.slice(t,n===-1?void 0:n);if(Le.test(r))return super.lheading(e);if(Re.test(r)||ze.test(r))return;t=n+1}}},Ve=e=>{let t=new v.Lexer({gfm:!0,tokenizer:new Be}).blockTokens(e.replace(/\r\n|\r/g,`
+-`)).map(e=>e.raw),n=[];for(let e=0;e<t.length;e++){let r=t[e];if(typeof r==`string`){if(r.trim()===`$$`&&n.length>0){let e=n[n.length-1];if(e===void 0){n.push(r);continue}let t=e.trimStart().startsWith(`$$`),i=(e.match(/\$\$/g)||[]).length;if(t&&i%2==1){n[n.length-1]=e+r;continue}}if(n.length>0&&r.trimEnd().endsWith(`$$`)){let e=n[n.length-1];if(e===void 0){n.push(r);continue}let t=e.trimStart().startsWith(`$$`),i=(e.match(/\$\$/g)||[]).length,a=(r.match(/\$\$/g)||[]).length;if(t&&i%2==1&&!r.trimStart().startsWith(`$$`)&&a===1){n[n.length-1]=e+r;continue}}n.push(r)}}return n},He=/(!?\[)([^\]]*?)$/,Ue=/(\*\*)([^*]*?)$/,We=/(__)([^_]*?)$/,Ge=/(\*\*\*)([^*]*?)$/,Ke=/(\*)([^*]*?)$/,qe=/(_)([^_]*?)$/,Je=/(~~)([^~]*?)$/,Ye=null,Q=``,$=e=>{if(e===Ye)return Q;let t=e.split(``),n=(e,n)=>{for(let r=e;r<n;r++)t[r]!==`
+-`&&(t[r]=` `)},r=0;for(;r<e.length;){if(e[r]!=="`"){r++;continue}let t=r;for(;t<e.length&&e[t]==="`";)t++;let i=t-r,a=r;for(;e[a-1]===` `||e[a-1]===`	`;)a--;let o=a===0||e[a-1]===`
+-`;if(i>=3&&o){let a=RegExp(`\\n[ \\t]*\`{${i},}[ \\t]*(?:\\n|$)`),o=e.slice(t).match(a),s=o&&o.index!==void 0?t+o.index+o[0].length:e.length;n(r,s),r=s;continue}let s=t,c=!1;for(;s<e.length;){if(e[s]!=="`"){s++;continue}let t=s;for(;t<e.length&&e[t]==="`";)t++;if(t-s===i){s=t,c=!0;break}s=t}let l=c?s:e.length;n(r,l),r=l}return Ye=e,Q=t.join(``),Q},Xe=e=>{let t=$(e),n=t.match(He);if(n){let r=n[1];if(r){let n=t.lastIndexOf(r);if(n>=0)return e.substring(0,n)}}return e},Ze=e=>{let t=$(e);return t.match(Ue)&&(t.match(/\*\*/g)||[]).length%2==1?`${e}**`:e},Qe=e=>{let t=$(e);return t.match(We)&&(t.match(/__/g)||[]).length%2==1?`${e}__`:e},$e=e=>{let t=0,n=!1;for(let r=0;r<e.length;r++){let i=e[r];if(i===`
+-`){n=!1;continue}if(i===`*`){let i=e[r-1],a=e[r+1];i!==`\\`&&!(!n&&(a===` `||a===`	`))&&i!==`*`&&a!==`*`&&t++}!n&&i.trim()!==``&&(n=!0)}return t},et=e=>{let t=$(e);return t.match(Ke)&&$e(t)%2==1?`${e}*`:e},tt=e=>{let t=0,n=!1,r=!1;for(let i=0;i<e.length;i++){let a=e[i];if(a===`\\`&&e[i+1]===`$`){i++;continue}if(a===`$`){e[i+1]===`$`?(r=!r,i++,n=!1):r||(n=!n);continue}if(a!==`_`||n||r)continue;let o=e[i-1],s=e[i+1];o!==`\\`&&o!==`_`&&s!==`_`&&t++}return t},nt=e=>{let t=$(e);return t.match(qe)&&tt(t)%2==1?`${e}_`:e},rt=/^[ \t]*(?:>[ \t]*)*(`{3,}|~{3,})([^\n]*)$/,it=e=>{let t=0,n=``;for(let r=0;r<=e.length;){let i=e.indexOf(`
+-`,r);i===-1&&(i=e.length);let a=e.slice(r,i),o=rt.exec(a),s=o?.[1]??``,c=o?.[2]??``;n?s[0]===n[0]&&s.length>=n.length&&!c.trim()&&(n=``,t=i+1):s&&(s[0]===`~`||!c.includes("`"))?n=s:i<e.length&&!a.trim()&&(t=i+1),r=i+1}if(n)return e;let r=(e.slice(t).match(/`+/g)??[]).map(e=>e.length),i=[],a=new Map;for(let e=r.length-1;e>=0;e--)i[e]=a.get(r[e])??-1,a.set(r[e],e);for(let t=0;t<r.length;t++)if(i[t]!==-1)t=i[t];else if(r[t]===1)return`${e}\``;return e},at=e=>{if(e.match(/^```[^`\n]*```?$/)&&!e.includes(`
+-`))return e.endsWith("``")&&!e.endsWith("```")?`${e}\``:e;let t=(e.match(/```/g)||[]).length,n=t%2==1;return t>0&&t%2==0&&e.includes(`
+-`)||(e.endsWith("```\n")||e.endsWith("```"))&&t%2==0||n?e:it(e)},ot=e=>{let t=$(e);return t.match(Je)&&(t.match(/~~/g)||[]).length%2==1?`${e}~~`:e},st=e=>{let t=$(e);if((t.match(/\$\$/g)||[]).length%2==0||(t.match(/\\begin\{[^}]+\}/g)||[]).length!==(t.match(/\\end\{[^}]+\}/g)||[]).length)return e;let n=t.indexOf(`$$`);return n!==-1&&t.indexOf(`
+-`,n)!==-1&&!e.endsWith(`
+-`)?`${e}\n$$`:`${e}$$`},ct=e=>{let t=0,n=e.match(/\*+/g)||[];for(let e of n){let n=e.length;n>=3&&(t+=Math.floor(n/3))}return t},lt=e=>{if(/^\*{4,}$/.test(e))return e;let t=$(e);return t.match(Ge)&&ct(t)%2==1?`${e}***`:e},ut=e=>{if(!e||typeof e!=`string`)return e;let t=e;return t.length,(t.match(/\$\$/g)||[]).length,t=Xe(t),t=lt(t),t=Ze(t),t=Qe(t),t=et(t),t=nt(t),t=at(t),t=ot(t),t=st(t),t},dt=/(\\begin\{(?:b|p|B|v|V)?matrix\})([\s\S]*?)(\\end\{(?:b|p|B|v|V)?matrix\})/g;function ft(e){return e.replace(dt,(e,t,n,r,i)=>{let a=n.split(/\n+/g).map(e=>e.trim()).filter(e=>e.length>0&&e!==`\\`);if(a.some(e=>/\\\\/.test(e))){let e=[];for(let t of a)if(/\\\\/.test(t)){let n=t.split(/\\\\\s*/).map(e=>e.trim()).filter(e=>e.length>0&&e!==`\\`);for(let t of n)e.push(t)}else e.push(t);a=e}return a.length===0?`${t}\n${r}`:`${t}\n${a.map((e,t)=>t<a.length-1?/\\\\\s*$/.test(e)?e:/\\\s*$/.test(e)?e.replace(/\\\s*$/,` \\\\`):e+` \\\\`:e.replace(/\\\s*$/,``)).join(`
+-`)}\n${r}`})}function pt(e){return e.replace(/\$\$([\s\S]*?)\$\$/g,(e,t)=>{if(!/\\begin\{(?:b|p|B|v|V)?matrix\}/.test(t))return e;let n=/^\s*\n/.test(t),r=/\n\s*$/.test(t);return n&&r?e:`$$
+-`+t.trim().replace(/(\\begin\{[^}]+\})/,`$1
+-`).replace(/(\\\\)\s*(?=\S)/g,`$1
+-`).replace(/(\\end\{[^}]+\})/,`
+-$1`).trim()+`
+-$$`})}function mt(e){let t=e.replace(/\r\n?/g,`
+-`).split(`
+-`),n=[],r=!1,i=``,a=0,o=!1,s=``,c=``,l=e=>{n.push(e.length?s+e:s)},u=e=>s&&e.startsWith(s)?e.slice(s.length):c&&e.startsWith(c)?e.slice(c.length):e.trimStart();for(let e of t){if(!o){let t=e.match(/^(\s*(?:>\s*)*)([`~]{3,})/);if(t){let o=t[2];if(!o){n.push(e);continue}if(r)o[0]===i&&o.length>=a&&(r=!1,i=``,a=0);else{if(!o.length){n.push(e);continue}r=!0,i=o[0],a=o.length}n.push(e);continue}}if(r){n.push(e);continue}if(!o){let t=e.match(/^(\s*(?:>\s*)*)\\\[(.*)$/);if(!t){n.push(e);continue}o=!0,c=t[1]??``,s=c.includes(`>`)&&!/\s$/.test(c)?c+` `:c,n.length>0&&n[n.length-1]?.trim().length&&n.push(s.includes(`>`)?s:``),n.push(s+`$$`);let r=t[2]??``,i=r.indexOf(`\\]`);if(i!==-1){let e=r.slice(0,i);e.length>0&&l(u(e).trimStart()),n.push(s+`$$`),o=!1;let t=r.slice(i+2);t.length>0&&n.push(s+t.trimStart())}else r.trim().length>0&&l(u(r).trimStart());continue}let t=e.indexOf(`\\]`);if(t!==-1){let r=e.slice(0,t);r.length>0&&l(u(r)),n.push(s+`$$`),o=!1;let i=e.slice(t+2);i.length>0&&n.push(s+i.trimStart())}else l(u(e))}let d=[],f=!1,p=``,m=0;for(let e of n){let t=e,n=t.match(/^(\s*(?:>\s*)*)([`~]{3,})/);if(n){let e=n[2]??``;f?e[0]===p&&e.length>=m&&(f=!1,p=``,m=0):(f=!0,p=e[0]??``,m=e.length),d.push(t);continue}if(f){d.push(t);continue}if(/\\\[.*?\\\]/.test(t)&&!/^\s*\\\[/.test(t)){let e=[],n=/\\\[([^\n]*?)\\\]/g,r=0,i;for(;i=n.exec(t);){let n=t.slice(r,i.index);n.trim().length&&e.push(n);let a=(i[1]??``).trim();e.push(`$$`),a.length&&e.push(a),e.push(`$$`),r=i.index+i[0].length}let a=t.slice(r);a.trim().length&&e.push(a);for(let t of e)d.push(t===`$$`?`$$`:t)}else d.push(t)}return d.join(`
+-`)}var ht=/\\\[|\\begin\{[bpBvV]?matrix\}/,gt=/`|~~~|\t| {4}/,_t=e=>pt(mt(ft(e)));function vt(e,t){let n=e.replace(/\r\n?/g,`
+-`);if(!ht.test(n))return n;if(!gt.test(n))return _t(n);let r=[],i=e=>{if(e.type===`code`||e.type===`inlineCode`){let t=e.position?.start.offset,n=e.position?.end.offset;t!==void 0&&n!==void 0&&r.push([t,n]);return}e.children?.forEach(i)};if(i(t(n)),!r.length)return _t(n);let a=`STREAMDOWN_CODE_`;for(;n.includes(a);)a+=`_`;let o=[],s=RegExp(`${a}(\\d+)_`,`g`),c=e=>e.replace(s,(e,t)=>o[Number(t)]),l=e=>`${a}${o.push(c(e))-1}_`,u=``,d=0;for(let[e,t]of r)u+=n.slice(d,e)+l(n.slice(e,t)),d=t;u+=n.slice(d);let f=new RegExp(String.raw`\\begin\{[bpBvV]?matrix\}(?:(?!${a}|\\end\{[bpBvV]?matrix\})[\s\S])*(?=${a})`,`g`),p=new RegExp(String.raw`(?<=^[^\S\n]*(?:>[^\S\n]*)*)\\\[(?:(?!${a}|\\\])[\s\S])*(?=${a})|\\\[(?:(?!${a}|\\\])[^\n])*(?=${a})`,`gm`),m=ft(u.replace(f,l));return m=mt(m.replace(p,l)),m=m.replace(/\$\$[\s\S]*?\$\$/g,e=>e.includes(a)?l(e):e),c(pt(m))}var yt=(e,t)=>{if(!t)return e;try{return new URL(e,t).toString()}catch{return e}},bt=(e,t,n)=>{if(!e)return null;let r=e.trim();r=yt(r,n);let i=r.toLowerCase();return i.startsWith(`javascript:`)||!t.some(e=>i.startsWith(e))?null:r},xt=(e,t)=>bt(e,t.allowedLinkPrefixes,t.defaultOrigin),St=(e,t)=>bt(e,t.allowedImagePrefixes,t.defaultOrigin),Ct=(0,c.defineComponent)({name:`StreamMarkdown`,props:{content:{type:String,default:``},class:{type:String,default:``},className:{type:String,default:``},components:{type:Object,default:()=>({})},remarkPlugins:{type:Array,default:()=>[]},rehypePlugins:{type:Array,default:()=>[]},defaultOrigin:{type:String,default:void 0},allowedImagePrefixes:{type:Array,default:()=>[`https://`,`http://`]},allowedLinkPrefixes:{type:Array,default:()=>[`https://`,`http://`]},parseIncompleteMarkdown:{type:Boolean,default:!0},shikiTheme:{type:[String,Object],default:void 0},codeBlockActions:{type:Array,default:()=>[]},codeBlockShowLineNumbers:{type:Boolean,default:!1},codeBlockSelectable:{type:Boolean,default:!0},codeBlockHideCopy:{type:Boolean,default:!1},codeBlockHideDownload:{type:Boolean,default:!1}},setup(e,{slots:t}){let n=e=>e&&typeof e==`object`&&`default`in e?e.default:e,r=e.remarkPlugins.some(e=>{let t=Array.isArray(e)?e[0]:e;return n(t)===f.default}),i=e.remarkPlugins.length>0||e.rehypePlugins.length>0,a=()=>{let t=(0,l.unified)().use(n(u.default)).use(n(d.default));r||t.use(n(f.default),{singleDollarTextMath:!1}),e.remarkPlugins.forEach(e=>{if(Array.isArray(e)){let[r,i]=e;t.use(n(r),i)}else t.use(n(e))}),t.use(n(p.default),{allowDangerousHtml:!1});let i=ue();return i&&t.use(n(i)),e.rehypePlugins.forEach(e=>{if(Array.isArray(e)){let[r,i]=e;t.use(n(r),i)}else t.use(n(e))}),{processor:t,hasKatex:!!i}},{processor:o,hasKatex:s}=a(),m=(0,c.shallowRef)(0),h=!1,g=e=>e?.type===`element`&&e.tagName===`code`&&(e.properties?.className||[]).includes(`language-math`),_=e=>g(e)||Array.isArray(e?.children)&&e.children.some(_),v={allowedImagePrefixes:e.allowedImagePrefixes,allowedLinkPrefixes:e.allowedLinkPrefixes,defaultOrigin:e.defaultOrigin},y={...Ie,...e.components||{}},b=(e,t)=>e.map(e=>C(e,t)).filter(Boolean);function x(e){return e.type===`text`?e.value:e.children?e.children.map(x).join(``):``}let S=(e,t,n)=>typeof e==`string`?n&&n.length?(0,c.h)(e,t,n):(0,c.h)(e,t):!n||Array.isArray(n)&&n.length===0?(0,c.h)(e,t):(0,c.h)(e,t,{default:Array.isArray(n)?()=>n:()=>[n]}),C=(t,n)=>{if(!t)return null;if(t.type===`text`)return t.value;if(t.type!==`element`)return null;let r=t,i=Object.fromEntries(Object.entries(r.properties||{}).map(([e,t])=>[e,Array.isArray(t)?[...t]:t])),a=b(r.children||[],r.tagName),o=r.tagName;if(o===`a`){let e=xt(String(i.href||``),v);if(!e)return a;i.href=e,i.target=`_blank`,i.rel=`noreferrer`}if(o===`img`){let e=St(String(i.src||``),v);if(!e)return null;i.src=e}if(o===`pre`&&r.children&&r.children[0]&&r.children[0].tagName===`code`){let t=r.children[0],n=x(t),i=t.properties?.className||[],a=i.find(e=>e.startsWith(`language-`)),o=a?a.replace(`language-`,``):``;if(o===`math`)return(0,c.h)(`pre`,{"data-streamdown":`math-pending`},[(0,c.h)(`code`,{class:i},n)]);if(o===`mermaid`)return(0,c.h)(Fe,{code:n});let s=y.codeblock||q;return(0,c.h)(s,{code:n,language:o,theme:e.shikiTheme,actions:e.codeBlockActions,showLineNumbers:e.codeBlockShowLineNumbers,selectable:e.codeBlockSelectable,hideCopy:e.codeBlockHideCopy,hideDownload:e.codeBlockHideDownload})}g(r)&&(i[`data-streamdown`]=`math-pending`);let s=y[o];return S(s||o,i,a)},w={source:null,parseIncomplete:!0,records:[]},T=/(?:^|\n)[ \t]*(?:>[ \t]*|[-+*][ \t]+|\d{1,9}[.)][ \t]+)*\[[^\]\n]+\]:/,E=e=>e.trim().length===0;return(0,c.onBeforeUnmount)(()=>{h=!0,w.records.length=0,w.source=null}),()=>{m.value,!s&&ue()&&({processor:o,hasKatex:s}=a(),w.records=[],w.source=null);let n=e.content,r=t.default?t.default():[];if(r&&r.length>0){let e=r.map(e=>typeof e.children==`string`?e.children:``).join(``);e.trim()&&(n=e)}let l=null;if(e.parseIncompleteMarkdown&&typeof n==`string`&&n.length){let e=n.replace(/\r\n?/g,`
+-`).split(`
+-`),t=[];for(let n=0;n<e.length;n++){let r=e[n]??``;/^\s*```/.test(r)&&t.push(n)}if(t.length>0&&t.length%2==1){let n=t[t.length-1],r=(e[n]??``).replace(/^\s*```+/,``),i=``,a=``;if(r.trim().length){let e=r.match(/^([a-zA-Z0-9_-]+)(\s+|$)(.*)$/);e?(i=(e[1]||``).trim(),a=(e[3]||``).trimEnd()):a=r.trimEnd()}let o=n+1<e.length?e.slice(n+1):[];a&&o.unshift(a),l={prefix:n>0?e.slice(0,n).join(`
+-`):``,code:o.join(`
+-`),lang:i}}}let u=t=>vt(t,t=>o.parse(e.parseIncompleteMarkdown?it(t):t)),d=T.test(n),f=w.source!==null&&n.startsWith(w.source),p=w.parseIncomplete===e.parseIncompleteMarkdown,g=!i&&!d,v=g&&f&&p,x=u(l?l.prefix:n),S=Ve(e.parseIncompleteMarkdown?ut(x):x),C=[],D=[],O=0,k=()=>{D.length&&(C.push(D.join(`
+-
+-`)),D=[],O=0)};for(let e of S){let t=(e.match(/\$\$/g)||[]).length;if(D.length===0){if(t%2==1){D.push(e),O+=t;continue}C.push(e);continue}D.push(e),O+=t,O%2==0&&k()}k();let A=C.map(e=>e).map(t=>e.parseIncompleteMarkdown?ut(t.trimEnd()):t),j=-1;for(let e=A.length-1;e>=0;e--)if(!E(A[e])){j=e;break}let M=0;if(v){let e=Math.min(w.records.length,A.length);for(;M<e&&M<j&&w.records[M].input===A[M];)M++}let N=[],P=[],F=!1;for(let e=0;e<A.length;e++){let t=A[e];if(e<M){let t=w.records[e];g&&N.push(t),P.push(...b(t.tree.children));continue}let n=o.runSync(o.parse(t));!s&&!F&&(F=_(n)),g&&N.push({input:t,tree:n}),P.push(...b(n.children))}if(w.records=g?N:[],w.source=n,w.parseIncomplete=e.parseIncompleteMarkdown,F&&de().then(()=>{h||m.value++},()=>{}),l){let t=y.codeblock||q;P.push((0,c.h)(t,{code:l.code,language:l.lang,theme:e.shikiTheme,actions:e.codeBlockActions,showLineNumbers:e.codeBlockShowLineNumbers,selectable:e.codeBlockSelectable,hideCopy:e.codeBlockHideCopy,hideDownload:e.codeBlockHideDownload,"data-open-fence":`true`,"data-streaming":`true`}))}let ee=[`streamdown-vue space-y-4`,e.class,e.className].filter(Boolean).join(` `);return(0,c.h)(`div`,{class:ee||void 0},P)}}});Object.defineProperty(exports,"_",{enumerable:!0,get:function(){return N}}),Object.defineProperty(exports,"a",{enumerable:!0,get:function(){return q}}),Object.defineProperty(exports,"c",{enumerable:!0,get:function(){return Ee}}),Object.defineProperty(exports,"d",{enumerable:!0,get:function(){return Se}}),Object.defineProperty(exports,"f",{enumerable:!0,get:function(){return de}}),Object.defineProperty(exports,"g",{enumerable:!0,get:function(){return ie}}),Object.defineProperty(exports,"h",{enumerable:!0,get:function(){return ee}}),Object.defineProperty(exports,"i",{enumerable:!0,get:function(){return Fe}}),Object.defineProperty(exports,"l",{enumerable:!0,get:function(){return H}}),Object.defineProperty(exports,"m",{enumerable:!0,get:function(){return ae}}),Object.defineProperty(exports,"n",{enumerable:!0,get:function(){return ut}}),Object.defineProperty(exports,"o",{enumerable:!0,get:function(){return je}}),Object.defineProperty(exports,"p",{enumerable:!0,get:function(){return ce}}),Object.defineProperty(exports,"r",{enumerable:!0,get:function(){return Ve}}),Object.defineProperty(exports,"s",{enumerable:!0,get:function(){return Me}}),Object.defineProperty(exports,"t",{enumerable:!0,get:function(){return Ct}}),Object.defineProperty(exports,"u",{enumerable:!0,get:function(){return V}}),Object.defineProperty(exports,"v",{enumerable:!0,get:function(){return P}}),Object.defineProperty(exports,"y",{enumerable:!0,get:function(){return F}});
+\ No newline at end of file
 diff --git a/node_modules/streamdown-vue/dist/StreamMarkdown-C1L-FrYN.js b/node_modules/streamdown-vue/dist/StreamMarkdown-C1L-FrYN.js
-index a99aec1..bbc8a6e 100644
+deleted file mode 100644
+index a99aec1..0000000
 --- a/node_modules/streamdown-vue/dist/StreamMarkdown-C1L-FrYN.js
-+++ b/node_modules/streamdown-vue/dist/StreamMarkdown-C1L-FrYN.js
-@@ -1,240 +1,11 @@
- import { defineComponent as e, h as t, inject as n, nextTick as r, onBeforeUnmount as i, onMounted as a, provide as o, ref as s, shallowRef as c, watch as l } from "vue";
-+import { x, S, C, w, T, E, D, O, k, A, j, M, N, P, F, I, ee, te, ne, re, ie, ae, oe, se, ce, le, U, W, ke, Ae, je, Me, Ne, Pe } from "./shiki.es.js";
- import { unified as u } from "unified";
- import d from "remark-parse";
- import f from "remark-gfm";
- import p from "remark-math";
- import m from "remark-rehype";
++++ /dev/null
+@@ -1,1328 +0,0 @@
+-import { defineComponent as e, h as t, inject as n, nextTick as r, onBeforeUnmount as i, onMounted as a, provide as o, ref as s, shallowRef as c, watch as l } from "vue";
+-import { unified as u } from "unified";
+-import d from "remark-parse";
+-import f from "remark-gfm";
+-import p from "remark-math";
+-import m from "remark-rehype";
 -import { createHighlighterCore as h } from "shiki/core";
 -import { createJavaScriptRegexEngine as g } from "shiki/engine/javascript";
 -import _ from "@shikijs/themes/github-light";
 -import v from "@shikijs/themes/github-dark";
- import { Lexer as y, Tokenizer as b } from "marked";
+-import { Lexer as y, Tokenizer as b } from "marked";
 -var x = "https://esm.sh/@shikijs/langs@4.4.3/es2022/";
 -`${x}`;
 -var S = Symbol.for("streamdown.vue.shikiRemote"), C = (e) => (typeof e == "function" && (e[S] = !0), e), w = (e) => typeof e == "function" && !!e?.[S], T = (e) => {
@@ -241,13 +294,250 @@ index a99aec1..bbc8a6e 100644
 -	ce || (ce = !0, I(se.slice()));
 -}
 -//#endregion
- //#region src/math.ts
- var ue = null, L = null;
- function de() {
-@@ -479,27 +250,7 @@ var Oe = e({
- 			title: "Download code"
- 		}, [t(Se, { class: "h-4 w-4" }), t("span", { class: "sr-only" }, "Download")]);
- 	}
+-//#region src/math.ts
+-var ue = null, L = null;
+-function de() {
+-	return ue;
+-}
+-function fe() {
+-	return L ??= import("rehype-katex").then((e) => {
+-		ue = e?.default ?? e;
+-	}, (e) => {
+-		throw L = null, e;
+-	}), L;
+-}
+-//#endregion
+-//#region node_modules/@lucide/vue/dist/esm/shared/src/build/defaultAttributes.mjs
+-var R = {
+-	xmlns: "http://www.w3.org/2000/svg",
+-	width: 24,
+-	height: 24,
+-	viewBox: "0 0 24 24",
+-	fill: "none",
+-	stroke: "currentColor",
+-	"stroke-width": 2,
+-	"stroke-linecap": "round",
+-	"stroke-linejoin": "round"
+-}, pe = (...e) => e.filter((e, t, n) => !!e && e.trim() !== "" && n.indexOf(e) === t).join(" ").trim();
+-//#endregion
+-//#region node_modules/@lucide/vue/dist/esm/shared/src/build/buildLucideIconNode.mjs
+-function z(e) {
+-	return e != null;
+-}
+-function me(e, t = {}) {
+-	let n = t.attributeNames ?? {}, r = (e) => n[e] ?? e, i = e.size ?? e.width ?? R.width, a = e.size ?? e.height ?? R.height, o = e.aliases?.filter((e) => typeof e == "string" && e.trim() !== "").map((e) => `lucide-${e}`) ?? [], s = [...e.name ? [`lucide-${e.name}`] : [], ...o], c = t.className?.split(" ").filter(Boolean) ?? [], l = t.includeDefaultClasses === !1 ? pe(...c) : pe("lucide", ...s, ...c), u = t.absoluteStrokeWidth ? Number(t.strokeWidth ?? R["stroke-width"]) * Number(e.size ?? e.width ?? R.width) / Number(t.size ?? t.width ?? R.width) : t.strokeWidth ?? R["stroke-width"];
+-	return [
+-		"svg",
+-		{
+-			...Object.entries(R).reduce((e, [t, n]) => (e[r(t)] = n, e), {}),
+-			..."color" in t && t.color && { [r("stroke")]: t.color },
+-			..."size" in t && z(t.size) && {
+-				[r("width")]: t.size,
+-				[r("height")]: t.size
+-			},
+-			..."width" in t && z(t.width) && { [r("width")]: t.width },
+-			..."height" in t && z(t.height) && { [r("height")]: t.height },
+-			[r("stroke-width")]: u,
+-			...l && { [r("class")]: l },
+-			[r("viewBox")]: `0 0 ${i} ${a}`,
+-			...t.hasA11yProp === !1 ? { [r("aria-hidden")]: "true" } : {},
+-			..."attributes" in t && t.attributes
+-		},
+-		e.node.map((e) => {
+-			let [n, i, a] = e, o = t.nonScalingStroke ? {
+-				[r("vector-effect")]: "non-scaling-stroke",
+-				...i
+-			} : i;
+-			return a ? [
+-				n,
+-				o,
+-				a
+-			] : [n, o];
+-		})
+-	];
+-}
+-//#endregion
+-//#region node_modules/@lucide/vue/dist/esm/shared/src/utils/hasA11yProp.mjs
+-var he = (e) => {
+-	for (let t in e) if (t.startsWith("aria-") || t === "role" || t === "title") return !0;
+-	return !1;
+-}, B = (e) => e === "", ge = (e) => e?.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase(), _e = /* @__PURE__ */ Symbol("lucide-icons");
+-function ve() {
+-	return n(_e, {});
+-}
+-//#endregion
+-//#region node_modules/@lucide/vue/dist/esm/Icon.mjs
+-var ye = ({ name: e, iconNode: n, "icon-node": r, icon: i = {
+-	name: ge(e),
+-	node: n ?? r,
+-	size: 24,
+-	aliases: []
+-}, absoluteStrokeWidth: a, "absolute-stroke-width": o, nonScalingStroke: s, "non-scaling-stroke": c, strokeWidth: l, "stroke-width": u, size: d, width: f = d, height: p = d, color: m, ...h }, { slots: g }) => {
+-	let { size: _, color: v, strokeWidth: y = 2, absoluteStrokeWidth: b = !1, nonScalingStroke: x = !1, class: S = "" } = ve(), C = B(a) || B(o) || a === !0 || o === !0 || b === !0, w = B(s) || B(c) || s === !0 || c === !0 || x === !0;
+-	delete h.class;
+-	let T = g.default?.(), [, E, D = []] = me(i, {
+-		color: m ?? v,
+-		width: f ?? d ?? _,
+-		height: p ?? d ?? _,
+-		strokeWidth: l ?? u ?? y,
+-		absoluteStrokeWidth: C,
+-		nonScalingStroke: w,
+-		className: S,
+-		hasA11yProp: T != null && T.length > 0 || he(h),
+-		attributes: h
+-	});
+-	return t("svg", E, [...D.map((e) => t(...e)), ...T ?? []]);
+-};
+-//#endregion
+-//#region node_modules/@lucide/vue/dist/esm/createLucideIcon.mjs
+-function V(e, n = []) {
+-	let r = typeof e == "string" ? {
+-		name: e,
+-		node: n
+-	} : e;
+-	return (e, { slots: n }) => t(ye, {
+-		...e,
+-		icon: r
+-	}, n.default ? { default: n.default } : void 0);
+-}
+-var be = V({
+-	name: "check",
+-	size: 24,
+-	node: [["path", {
+-		d: "M20 6 9 17l-5-5",
+-		key: "1gmf2c"
+-	}]]
+-}), xe = V({
+-	name: "copy",
+-	size: 24,
+-	node: [["rect", {
+-		width: "14",
+-		height: "14",
+-		x: "8",
+-		y: "8",
+-		rx: "2",
+-		ry: "2",
+-		key: "17jyea"
+-	}], ["path", {
+-		d: "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2",
+-		key: "zix9uf"
+-	}]]
+-}), Se = V({
+-	name: "download",
+-	size: 24,
+-	node: [
+-		["path", {
+-			d: "M12 15V3",
+-			key: "m9g1x1"
+-		}],
+-		["path", {
+-			d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4",
+-			key: "ih7n3h"
+-		}],
+-		["path", {
+-			d: "m7 10 5 5 5-5",
+-			key: "brsn70"
+-		}]
+-	]
+-}), H = Symbol("code-block-meta"), Ce = Symbol("global-code-block-actions");
+-//#endregion
+-//#region src/components/CopyButton.ts
+-async function we(e, t = typeof navigator > "u" ? void 0 : navigator.clipboard) {
+-	if (!e || !t?.writeText) return !1;
+-	try {
+-		return await t.writeText(e), !0;
+-	} catch {
+-		return !1;
+-	}
+-}
+-var Te = e({
+-	name: "CopyButton",
+-	props: {
+-		text: {
+-			type: String,
+-			required: !1
+-		},
+-		floating: {
+-			type: Boolean,
+-			default: !0
+-		}
+-	},
+-	setup(e) {
+-		let r = s(!1), i = n(H, {
+-			code: "",
+-			language: ""
+-		}), a = async () => {
+-			await we(e.text ?? i.code) && (r.value = !0, setTimeout(() => {
+-				r.value = !1;
+-			}, 2e3));
+-		};
+-		return () => t("button", {
+-			class: [e.floating ? "absolute top-2 right-2 opacity-0 group-hover:opacity-100" : "opacity-80 hover:opacity-100", "p-1 rounded bg-gray-200 dark:bg-gray-700 transition-opacity flex items-center justify-center"].join(" "),
+-			onClick: a,
+-			"aria-live": "polite"
+-		}, [r.value ? t(be, { class: "h-4 w-4" }) : t(xe, { class: "h-4 w-4" }), t("span", { class: "sr-only" }, r.value ? "Copied" : "Copy")]);
+-	}
+-}), Ee = {
+-	javascript: "js",
+-	js: "js",
+-	typescript: "ts",
+-	ts: "ts",
+-	json: "json",
+-	vue: "vue",
+-	html: "html",
+-	css: "css",
+-	md: "md",
+-	markdown: "md",
+-	sh: "sh",
+-	bash: "sh",
+-	py: "py",
+-	python: "py",
+-	go: "go",
+-	rust: "rs",
+-	rs: "rs"
+-};
+-function De(e, t = "", n) {
+-	if (!e) return null;
+-	let r = t && Ee[t.toLowerCase()] || "txt";
+-	return {
+-		blob: new Blob([e], { type: "text/plain;charset=utf-8" }),
+-		filename: n || `file.${r}`
+-	};
+-}
+-var Oe = e({
+-	name: "DownloadButton",
+-	props: {
+-		text: {
+-			type: String,
+-			required: !1
+-		},
+-		filename: {
+-			type: String,
+-			required: !1
+-		},
+-		floating: {
+-			type: Boolean,
+-			default: !0
+-		}
+-	},
+-	setup(e) {
+-		let r = n(H, {
+-			code: "",
+-			language: ""
+-		}), i = () => {
+-			let t = De(e.text ?? r.code, r.language, e.filename);
+-			if (t) try {
+-				let e = URL.createObjectURL(t.blob), n = document.createElement("a");
+-				n.href = e, n.download = t.filename, document.body.appendChild(n), n.click(), document.body.removeChild(n), URL.revokeObjectURL(e);
+-			} catch {}
+-		};
+-		return () => t("button", {
+-			class: [e.floating ? "absolute top-2 right-9 opacity-0 group-hover:opacity-100" : "opacity-80 hover:opacity-100", "p-1 rounded bg-gray-200 dark:bg-gray-700 transition-opacity flex items-center justify-center"].join(" "),
+-			onClick: i,
+-			"aria-live": "polite",
+-			title: "Download code"
+-		}, [t(Se, { class: "h-4 w-4" }), t("span", { class: "sr-only" }, "Download")]);
+-	}
 -}), U = null, W = null, ke = [_, v], Ae = null, je = () => (Ae ||= g(), Ae), Me = () => {
 -	if (!ie()) return console.warn("[streamdown-vue] No Shiki languages are registered. Code blocks will render without syntax highlighting."), [];
 -	let { inputs: e, missing: t, resolved: n } = ne(re());
@@ -269,88 +559,2335 @@ index a99aec1..bbc8a6e 100644
 -	}
 -	return await W;
 -}
+-//#endregion
+-//#region src/components/CodeBlock.ts
+-var G = (e) => e.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"), K = (e, t, n, r) => {
+-	let i = G(t), a = i ? `language-${i}` : "", o = [a];
+-	r || o.push("select-none");
+-	let s = n ? e.split(/\r?\n/).map((e, t) => `<span class="line"><span class="code-line-number select-none opacity-60 pr-4 text-xs" data-line-number data-streamdown="code-line-number">${t + 1}</span>${G(e)}</span>`).join("\n") : G(e);
+-	return `<pre data-streamdown="pre"${o.filter(Boolean).length ? ` class="${o.join(" ")}"` : ""}><code data-streamdown="code"${a ? ` class="${a}"` : ""}>${s}</code></pre>`;
+-}, q = e({
+-	name: "CodeBlock",
+-	props: {
+-		code: {
+-			type: String,
+-			required: !0
+-		},
+-		language: {
+-			type: String,
+-			default: ""
+-		},
+-		theme: {
+-			type: [String, Object],
+-			default: void 0
+-		},
+-		showLineNumbers: {
+-			type: Boolean,
+-			default: !1
+-		},
+-		selectable: {
+-			type: Boolean,
+-			default: !0
+-		},
+-		actions: {
+-			type: Array,
+-			default: () => []
+-		},
+-		hideCopy: {
+-			type: Boolean,
+-			default: !1
+-		},
+-		hideDownload: {
+-			type: Boolean,
+-			default: !1
+-		}
+-	},
+-	setup(e, { attrs: c, slots: u }) {
+-		let d = s(K(e.code, e.language, e.showLineNumbers, e.selectable));
+-		o(H, {
+-			get code() {
+-				return e.code;
+-			},
+-			get language() {
+-				return e.language;
+-			}
+-		});
+-		let f = n(Ce, []), p = null, m = async () => {}, h = 0, g = (e) => e.replace(/(<pre[^>]*style=")([^"]*)("[^>]*>)/g, (e, t, n, r) => `${t}${n.split(/;\s*/).filter((e) => e && !/background(-color)?\s*:/.test(e.toLowerCase())).join("; ")}${r}`.replace(/style=""/, "")), _ = (t) => {
+-			if (!e.showLineNumbers) return t;
+-			let n = 0;
+-			return t.replace(/<span class="line(.*?)">/g, (e, t) => (n += 1, `<span class="line${t}"><span class="code-line-number select-none opacity-60 pr-4 text-xs" data-line-number data-streamdown="code-line-number">${n}</span>`));
+-		}, v = (t) => e.selectable ? t : t.replace("<pre", "<pre class=\"select-none\""), y = (e) => {
+-			let t = v(_(g(e)));
+-			return b(t);
+-		}, b = (e) => e.replace(/<pre(?![^>]*data-streamdown=)/g, "<pre data-streamdown=\"pre\"").replace(/<code(?![^>]*data-streamdown=)/g, "<code data-streamdown=\"code\""), x = () => {
+-			if (typeof document < "u") {
+-				let e = "streamdown-dual-theme-styles";
+-				if (!document.getElementById(e)) {
+-					let t = document.createElement("style");
+-					t.id = e, t.textContent = "\n                        html.dark .shiki-themes, html.dark .shiki-themes span {\n                            color: var(--shiki-dark) !important;\n                            font-style: var(--shiki-dark-font-style) !important;\n                            font-weight: var(--shiki-dark-font-weight) !important;\n                            text-decoration: var(--shiki-dark-text-decoration) !important;\n                        }\n                        @media (prefers-color-scheme: dark) {\n                            html:not(.light) .shiki-themes,\n                            html:not(.light) .shiki-themes span {\n                                color: var(--shiki-dark) !important;\n                                font-style: var(--shiki-dark-font-style) !important;\n                                font-weight: var(--shiki-dark-font-weight) !important;\n                                text-decoration: var(--shiki-dark-text-decoration) !important;\n                            }\n                        }\n                    ", document.head.appendChild(t);
+-				}
+-			}
+-		}, S = (e, t, n, r) => {
+-			if (typeof n == "object" && n) return r.codeToHtml(e, {
+-				lang: t,
+-				themes: {
+-					light: n.light,
+-					dark: n.dark
+-				}
+-			});
+-			let i = n || (p?.matches ? "github-dark" : "github-light");
+-			return r.codeToHtml(e, {
+-				lang: t,
+-				theme: i
+-			});
+-		}, C = async () => {
+-			let t = ++h;
+-			try {
+-				let n = await Pe(), r = e.language || "txt", i = "";
+-				r && !n.getLoadedLanguages().includes(r) && t === h && (d.value = K(e.code, e.language, e.showLineNumbers, e.selectable));
+-				try {
+-					i = S(e.code, r, e.theme, n);
+-				} catch (t) {
+-					if (r && !n.getLoadedLanguages().includes(r)) {
+-						if (!await Ne(r)) throw Error("missing lang");
+-						i = S(e.code, r, e.theme, n);
+-					} else throw t;
+-				}
+-				t === h && (d.value = y(i));
+-			} catch {
+-				t === h && (d.value = K(e.code, e.language, e.showLineNumbers, e.selectable));
+-			}
+-		};
+-		return a(() => {
+-			let t = typeof e.theme == "object" && e.theme !== null;
+-			t && x(), m = C, m(), !t && typeof window < "u" && (p = window.matchMedia("(prefers-color-scheme: dark)"), p.addEventListener("change", m));
+-		}), l(() => [
+-			e.code,
+-			e.language,
+-			e.theme
+-		], () => {
+-			r(() => m());
+-		}), i(() => {
+-			p && p.removeEventListener("change", m);
+-		}), () => t("div", {
+-			class: "group rounded-md border bg-gray-50 dark:bg-gray-800 overflow-hidden",
+-			"data-streamdown": "code-block",
+-			...c
+-		}, [t("div", {
+-			class: "flex items-center justify-between text-xs px-2 py-1 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 gap-2",
+-			"data-streamdown": "code-block-header"
+-		}, [e.language ? t("span", {
+-			class: "px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 font-mono text-[10px] leading-none tracking-wide",
+-			"data-streamdown": "code-lang"
+-		}, e.language) : t("span", {
+-			class: "h-4",
+-			"data-streamdown": "code-lang-empty"
+-		}), t("div", {
+-			class: "flex items-center gap-1",
+-			"data-streamdown": "code-actions"
+-		}, [
+-			...e.actions.map((n, r) => t(n, {
+-				key: r,
+-				code: e.code,
+-				language: e.language
+-			})),
+-			...f.map((n, r) => t(n, {
+-				key: `g-${r}`,
+-				code: e.code,
+-				language: e.language
+-			})),
+-			...u.actions ? u.actions() : [],
+-			e.hideDownload ? null : t(Oe, {
+-				floating: !1,
+-				"data-streamdown": "download-button"
+-			}),
+-			e.hideCopy ? null : t(Te, {
+-				floating: !1,
+-				"data-streamdown": "copy-button"
+-			})
+-		].filter(Boolean))]), t("div", {
+-			innerHTML: d.value,
+-			class: "px-4 py-3 overflow-x-auto",
+-			"data-streamdown": "code-body"
+-		})]);
+-	}
+-}), Fe = !1, J = {}, Ie = (e) => {
+-	let t = 0;
+-	for (let n = 0; n < e.length; n++) t = (t << 5) - t + e.charCodeAt(n), t |= 0;
+-	return Math.abs(t).toString(36);
+-}, Le = e({
+-	name: "MermaidBlock",
+-	props: { code: {
+-		type: String,
+-		required: !0
+-	} },
+-	setup(e) {
+-		let n = s(""), r = s(""), i = s(""), o = s(!0), c = `streamdown-vue-mermaid-${Ie(e.code)}`;
+-		return a(async () => {
+-			o.value = !0;
+-			try {
+-				let t = (await import("mermaid")).default;
+-				if (Fe ||= (t.initialize({ startOnLoad: !1 }), !0), J[c]) {
+-					n.value = J[c], o.value = !1;
+-					return;
+-				}
+-				let { svg: a } = await t.render(c, e.code);
+-				n.value = a, r.value = a, J[c] = a, i.value = "";
+-			} catch (e) {
+-				i.value = e.message || "Failed to render mermaid diagram", n.value = r.value;
+-			} finally {
+-				o.value = !1;
+-			}
+-		}), () => t("div", {
+-			class: "relative group",
+-			"data-streamdown": "mermaid"
+-		}, [
+-			o.value ? t("div", { class: "flex justify-center py-8" }, [t("div", { class: "h-5 w-5 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" })]) : n.value ? t("div", { innerHTML: n.value }) : t("div", { class: "text-red-500 text-sm" }, i.value),
+-			!o.value && i.value && n.value ? t("div", { class: "text-red-500 text-sm mt-2" }, i.value) : null,
+-			t(Te, {
+-				text: e.code,
+-				"data-streamdown": "copy-button"
+-			})
+-		]);
+-	}
+-}), Y = (e, t) => {
+-	let n = [];
+-	return Array.isArray(e) ? n.push(...e) : typeof e == "string" && n.push(e), t && n.push(t), n.join(" ").trim();
+-}, X = (e, n = "", r) => (i, { slots: a }) => {
+-	let o = Y(i.class || i.className, n), s = {
+-		...i,
+-		class: o || void 0
+-	};
+-	return r && (s["data-streamdown"] = r), delete s.className, t(e, s, a.default ? a.default() : []);
+-}, Re = {
+-	p: X("p", "mb-2", "p"),
+-	a: (e, { slots: n }) => {
+-		let r = Y(e.class || e.className, "underline text-blue-600"), i = {
+-			...e,
+-			class: r || void 0,
+-			"data-streamdown": "a",
+-			target: "_blank",
+-			rel: "noreferrer"
+-		};
+-		return delete i.className, t("a", i, n.default ? n.default() : []);
+-	},
+-	code: X("code", "bg-muted px-1.5 py-0.5 font-mono text-sm", "inline-code"),
+-	ul: X("ul", "list-disc pl-6", "ul"),
+-	ol: X("ol", "list-decimal pl-6", "ol"),
+-	li: X("li", "", "li"),
+-	hr: X("hr", "my-6 border-border", "hr"),
+-	strong: X("strong", "", "strong"),
+-	em: X("em", "", "em"),
+-	h1: X("h1", "text-3xl font-bold", "h1"),
+-	h2: X("h2", "text-2xl font-bold", "h2"),
+-	h3: X("h3", "text-xl font-semibold", "h3"),
+-	h4: X("h4", "text-lg font-semibold", "h4"),
+-	h5: X("h5", "font-semibold", "h5"),
+-	h6: X("h6", "font-semibold", "h6"),
+-	blockquote: X("blockquote", "border-l-4 pl-4 italic", "blockquote"),
+-	table: (e, { slots: n }) => {
+-		let r = Y(e.class || e.className, "w-full text-sm"), i = {
+-			...e,
+-			class: r || void 0,
+-			"data-streamdown": "table"
+-		};
+-		delete i.className;
+-		let a = t("table", i, n.default ? n.default() : []);
+-		return t("div", {
+-			class: "overflow-x-auto",
+-			"data-streamdown": "table-wrapper"
+-		}, [a]);
+-	},
+-	thead: X("thead", "", "thead"),
+-	tbody: X("tbody", "", "tbody"),
+-	tr: X("tr", "", "tr"),
+-	th: X("th", "border px-2 py-1", "th"),
+-	td: X("td", "border px-2 py-1", "td"),
+-	img: (e) => {
+-		let n = Y(e.class || e.className, ""), r = {
+-			...e,
+-			class: n || void 0,
+-			"data-streamdown": "img"
+-		};
+-		return delete r.className, t("img", r);
+-	}
+-}, Z = (e, t = 0) => {
+-	let n = t;
+-	for (; n < t + 3 && e[n] === " ";) n++;
+-	return e[n];
+-}, ze = /^ {0,3}(?:=+|-+) *$/, Be = /^\s*$/, Ve = /^(?: {0,3}(?:[*+-]|\d{1,9}[.)]) |(?: {4}| {0,3}\t)| {0,3}(?:`{3,}|~{3,})| {0,3}>| {0,3}#{1,6}(?:\s|$)| {0,3}<[^\n>]+>$| {0,3}\|?(?:[:\- ]*\|)+[:\- ]*$)/, He = class extends b {
+-	hr(e) {
+-		let t = Z(e);
+-		return t === "-" || t === "_" || t === "*" ? super.hr(e) : void 0;
+-	}
+-	blockquote(e) {
+-		return Z(e) === ">" ? super.blockquote(e) : void 0;
+-	}
+-	html(e) {
+-		return Z(e) === "<" ? super.html(e) : void 0;
+-	}
+-	table(e) {
+-		let t = e.indexOf("\n"), n = t === -1 ? void 0 : Z(e, t + 1);
+-		return n === "|" || n === ":" || n === "-" ? super.table(e) : void 0;
+-	}
+-	lheading(e) {
+-		let t = e.indexOf("\n") + 1;
+-		for (; t > 0;) {
+-			let n = e.indexOf("\n", t), r = e.slice(t, n === -1 ? void 0 : n);
+-			if (ze.test(r)) return super.lheading(e);
+-			if (Be.test(r) || Ve.test(r)) return;
+-			t = n + 1;
+-		}
+-	}
+-}, Ue = (e) => {
+-	let t = new y({
+-		gfm: !0,
+-		tokenizer: new He()
+-	}).blockTokens(e.replace(/\r\n|\r/g, "\n")).map((e) => e.raw), n = [];
+-	for (let e = 0; e < t.length; e++) {
+-		let r = t[e];
+-		if (typeof r == "string") {
+-			if (r.trim() === "$$" && n.length > 0) {
+-				let e = n[n.length - 1];
+-				if (e === void 0) {
+-					n.push(r);
+-					continue;
+-				}
+-				let t = e.trimStart().startsWith("$$"), i = (e.match(/\$\$/g) || []).length;
+-				if (t && i % 2 == 1) {
+-					n[n.length - 1] = e + r;
+-					continue;
+-				}
+-			}
+-			if (n.length > 0 && r.trimEnd().endsWith("$$")) {
+-				let e = n[n.length - 1];
+-				if (e === void 0) {
+-					n.push(r);
+-					continue;
+-				}
+-				let t = e.trimStart().startsWith("$$"), i = (e.match(/\$\$/g) || []).length, a = (r.match(/\$\$/g) || []).length;
+-				if (t && i % 2 == 1 && !r.trimStart().startsWith("$$") && a === 1) {
+-					n[n.length - 1] = e + r;
+-					continue;
+-				}
+-			}
+-			n.push(r);
+-		}
+-	}
+-	return n;
+-}, We = /(!?\[)([^\]]*?)$/, Ge = /(\*\*)([^*]*?)$/, Ke = /(__)([^_]*?)$/, qe = /(\*\*\*)([^*]*?)$/, Je = /(\*)([^*]*?)$/, Ye = /(_)([^_]*?)$/, Xe = /(~~)([^~]*?)$/, Ze = null, Q = "", $ = (e) => {
+-	if (e === Ze) return Q;
+-	let t = e.split(""), n = (e, n) => {
+-		for (let r = e; r < n; r++) t[r] !== "\n" && (t[r] = " ");
+-	}, r = 0;
+-	for (; r < e.length;) {
+-		if (e[r] !== "`") {
+-			r++;
+-			continue;
+-		}
+-		let t = r;
+-		for (; t < e.length && e[t] === "`";) t++;
+-		let i = t - r, a = r;
+-		for (; e[a - 1] === " " || e[a - 1] === "	";) a--;
+-		let o = a === 0 || e[a - 1] === "\n";
+-		if (i >= 3 && o) {
+-			let a = RegExp(`\\n[ \\t]*\`{${i},}[ \\t]*(?:\\n|$)`), o = e.slice(t).match(a), s = o && o.index !== void 0 ? t + o.index + o[0].length : e.length;
+-			n(r, s), r = s;
+-			continue;
+-		}
+-		let s = t, c = !1;
+-		for (; s < e.length;) {
+-			if (e[s] !== "`") {
+-				s++;
+-				continue;
+-			}
+-			let t = s;
+-			for (; t < e.length && e[t] === "`";) t++;
+-			if (t - s === i) {
+-				s = t, c = !0;
+-				break;
+-			}
+-			s = t;
+-		}
+-		let l = c ? s : e.length;
+-		n(r, l), r = l;
+-	}
+-	return Ze = e, Q = t.join(""), Q;
+-}, Qe = (e) => {
+-	let t = $(e), n = t.match(We);
+-	if (n) {
+-		let r = n[1];
+-		if (r) {
+-			let n = t.lastIndexOf(r);
+-			if (n >= 0) return e.substring(0, n);
+-		}
+-	}
+-	return e;
+-}, $e = (e) => {
+-	let t = $(e);
+-	return t.match(Ge) && (t.match(/\*\*/g) || []).length % 2 == 1 ? `${e}**` : e;
+-}, et = (e) => {
+-	let t = $(e);
+-	return t.match(Ke) && (t.match(/__/g) || []).length % 2 == 1 ? `${e}__` : e;
+-}, tt = (e) => {
+-	let t = 0, n = !1;
+-	for (let r = 0; r < e.length; r++) {
+-		let i = e[r];
+-		if (i === "\n") {
+-			n = !1;
+-			continue;
+-		}
+-		if (i === "*") {
+-			let i = e[r - 1], a = e[r + 1];
+-			i !== "\\" && !(!n && (a === " " || a === "	")) && i !== "*" && a !== "*" && t++;
+-		}
+-		!n && i.trim() !== "" && (n = !0);
+-	}
+-	return t;
+-}, nt = (e) => {
+-	let t = $(e);
+-	return t.match(Je) && tt(t) % 2 == 1 ? `${e}*` : e;
+-}, rt = (e) => {
+-	let t = 0, n = !1, r = !1;
+-	for (let i = 0; i < e.length; i++) {
+-		let a = e[i];
+-		if (a === "\\" && e[i + 1] === "$") {
+-			i++;
+-			continue;
+-		}
+-		if (a === "$") {
+-			e[i + 1] === "$" ? (r = !r, i++, n = !1) : r || (n = !n);
+-			continue;
+-		}
+-		if (a !== "_" || n || r) continue;
+-		let o = e[i - 1], s = e[i + 1];
+-		o !== "\\" && o !== "_" && s !== "_" && t++;
+-	}
+-	return t;
+-}, it = (e) => {
+-	let t = $(e);
+-	return t.match(Ye) && rt(t) % 2 == 1 ? `${e}_` : e;
+-}, at = /^[ \t]*(?:>[ \t]*)*(`{3,}|~{3,})([^\n]*)$/, ot = (e) => {
+-	let t = 0, n = "";
+-	for (let r = 0; r <= e.length;) {
+-		let i = e.indexOf("\n", r);
+-		i === -1 && (i = e.length);
+-		let a = e.slice(r, i), o = at.exec(a), s = o?.[1] ?? "", c = o?.[2] ?? "";
+-		n ? s[0] === n[0] && s.length >= n.length && !c.trim() && (n = "", t = i + 1) : s && (s[0] === "~" || !c.includes("`")) ? n = s : i < e.length && !a.trim() && (t = i + 1), r = i + 1;
+-	}
+-	if (n) return e;
+-	let r = (e.slice(t).match(/`+/g) ?? []).map((e) => e.length), i = [], a = /* @__PURE__ */ new Map();
+-	for (let e = r.length - 1; e >= 0; e--) i[e] = a.get(r[e]) ?? -1, a.set(r[e], e);
+-	for (let t = 0; t < r.length; t++) if (i[t] !== -1) t = i[t];
+-	else if (r[t] === 1) return `${e}\``;
+-	return e;
+-}, st = (e) => {
+-	if (e.match(/^```[^`\n]*```?$/) && !e.includes("\n")) return e.endsWith("``") && !e.endsWith("```") ? `${e}\`` : e;
+-	let t = (e.match(/```/g) || []).length, n = t % 2 == 1;
+-	return t > 0 && t % 2 == 0 && e.includes("\n") || (e.endsWith("```\n") || e.endsWith("```")) && t % 2 == 0 || n ? e : ot(e);
+-}, ct = (e) => {
+-	let t = $(e);
+-	return t.match(Xe) && (t.match(/~~/g) || []).length % 2 == 1 ? `${e}~~` : e;
+-}, lt = (e) => {
+-	let t = $(e);
+-	if ((t.match(/\$\$/g) || []).length % 2 == 0 || (t.match(/\\begin\{[^}]+\}/g) || []).length !== (t.match(/\\end\{[^}]+\}/g) || []).length) return e;
+-	let n = t.indexOf("$$");
+-	return n !== -1 && t.indexOf("\n", n) !== -1 && !e.endsWith("\n") ? `${e}\n$$` : `${e}$$`;
+-}, ut = (e) => {
+-	let t = 0, n = e.match(/\*+/g) || [];
+-	for (let e of n) {
+-		let n = e.length;
+-		n >= 3 && (t += Math.floor(n / 3));
+-	}
+-	return t;
+-}, dt = (e) => {
+-	if (/^\*{4,}$/.test(e)) return e;
+-	let t = $(e);
+-	return t.match(qe) && ut(t) % 2 == 1 ? `${e}***` : e;
+-}, ft = (e) => {
+-	if (!e || typeof e != "string") return e;
+-	let t = e;
+-	return t.length, (t.match(/\$\$/g) || []).length, t = Qe(t), t = dt(t), t = $e(t), t = et(t), t = nt(t), t = it(t), t = st(t), t = ct(t), t = lt(t), t;
+-}, pt = /(\\begin\{(?:b|p|B|v|V)?matrix\})([\s\S]*?)(\\end\{(?:b|p|B|v|V)?matrix\})/g;
+-function mt(e) {
+-	return e.replace(pt, (e, t, n, r, i) => {
+-		let a = n.split(/\n+/g).map((e) => e.trim()).filter((e) => e.length > 0 && e !== "\\");
+-		if (a.some((e) => /\\\\/.test(e))) {
+-			let e = [];
+-			for (let t of a) if (/\\\\/.test(t)) {
+-				let n = t.split(/\\\\\s*/).map((e) => e.trim()).filter((e) => e.length > 0 && e !== "\\");
+-				for (let t of n) e.push(t);
+-			} else e.push(t);
+-			a = e;
+-		}
+-		return a.length === 0 ? `${t}\n${r}` : `${t}\n${a.map((e, t) => t < a.length - 1 ? /\\\\\s*$/.test(e) ? e : /\\\s*$/.test(e) ? e.replace(/\\\s*$/, " \\\\") : e + " \\\\" : e.replace(/\\\s*$/, "")).join("\n")}\n${r}`;
+-	});
+-}
+-function ht(e) {
+-	return e.replace(/\$\$([\s\S]*?)\$\$/g, (e, t) => {
+-		if (!/\\begin\{(?:b|p|B|v|V)?matrix\}/.test(t)) return e;
+-		let n = /^\s*\n/.test(t), r = /\n\s*$/.test(t);
+-		return n && r ? e : "$$\n" + t.trim().replace(/(\\begin\{[^}]+\})/, "$1\n").replace(/(\\\\)\s*(?=\S)/g, "$1\n").replace(/(\\end\{[^}]+\})/, "\n$1").trim() + "\n$$";
+-	});
+-}
+-function gt(e) {
+-	let t = e.replace(/\r\n?/g, "\n").split("\n"), n = [], r = !1, i = "", a = 0, o = !1, s = "", c = "", l = (e) => {
+-		n.push(e.length ? s + e : s);
+-	}, u = (e) => s && e.startsWith(s) ? e.slice(s.length) : c && e.startsWith(c) ? e.slice(c.length) : e.trimStart();
+-	for (let e of t) {
+-		if (!o) {
+-			let t = e.match(/^(\s*(?:>\s*)*)([`~]{3,})/);
+-			if (t) {
+-				let o = t[2];
+-				if (!o) {
+-					n.push(e);
+-					continue;
+-				}
+-				if (r) o[0] === i && o.length >= a && (r = !1, i = "", a = 0);
+-				else {
+-					if (!o.length) {
+-						n.push(e);
+-						continue;
+-					}
+-					r = !0, i = o[0], a = o.length;
+-				}
+-				n.push(e);
+-				continue;
+-			}
+-		}
+-		if (r) {
+-			n.push(e);
+-			continue;
+-		}
+-		if (!o) {
+-			let t = e.match(/^(\s*(?:>\s*)*)\\\[(.*)$/);
+-			if (!t) {
+-				n.push(e);
+-				continue;
+-			}
+-			o = !0, c = t[1] ?? "", s = c.includes(">") && !/\s$/.test(c) ? c + " " : c, n.length > 0 && n[n.length - 1]?.trim().length && n.push(s.includes(">") ? s : ""), n.push(s + "$$");
+-			let r = t[2] ?? "", i = r.indexOf("\\]");
+-			if (i !== -1) {
+-				let e = r.slice(0, i);
+-				e.length > 0 && l(u(e).trimStart()), n.push(s + "$$"), o = !1;
+-				let t = r.slice(i + 2);
+-				t.length > 0 && n.push(s + t.trimStart());
+-			} else r.trim().length > 0 && l(u(r).trimStart());
+-			continue;
+-		}
+-		let t = e.indexOf("\\]");
+-		if (t !== -1) {
+-			let r = e.slice(0, t);
+-			r.length > 0 && l(u(r)), n.push(s + "$$"), o = !1;
+-			let i = e.slice(t + 2);
+-			i.length > 0 && n.push(s + i.trimStart());
+-		} else l(u(e));
+-	}
+-	let d = [], f = !1, p = "", m = 0;
+-	for (let e of n) {
+-		let t = e, n = t.match(/^(\s*(?:>\s*)*)([`~]{3,})/);
+-		if (n) {
+-			let e = n[2] ?? "";
+-			f ? e[0] === p && e.length >= m && (f = !1, p = "", m = 0) : (f = !0, p = e[0] ?? "", m = e.length), d.push(t);
+-			continue;
+-		}
+-		if (f) {
+-			d.push(t);
+-			continue;
+-		}
+-		if (/\\\[.*?\\\]/.test(t) && !/^\s*\\\[/.test(t)) {
+-			let e = [], n = /\\\[([^\n]*?)\\\]/g, r = 0, i;
+-			for (; i = n.exec(t);) {
+-				let n = t.slice(r, i.index);
+-				n.trim().length && e.push(n);
+-				let a = (i[1] ?? "").trim();
+-				e.push("$$"), a.length && e.push(a), e.push("$$"), r = i.index + i[0].length;
+-			}
+-			let a = t.slice(r);
+-			a.trim().length && e.push(a);
+-			for (let t of e) d.push(t === "$$" ? "$$" : t);
+-		} else d.push(t);
+-	}
+-	return d.join("\n");
+-}
+-var _t = /\\\[|\\begin\{[bpBvV]?matrix\}/, vt = /`|~~~|\t| {4}/, yt = (e) => ht(gt(mt(e)));
+-function bt(e, t) {
+-	let n = e.replace(/\r\n?/g, "\n");
+-	if (!_t.test(n)) return n;
+-	if (!vt.test(n)) return yt(n);
+-	let r = [], i = (e) => {
+-		if (e.type === "code" || e.type === "inlineCode") {
+-			let t = e.position?.start.offset, n = e.position?.end.offset;
+-			t !== void 0 && n !== void 0 && r.push([t, n]);
+-			return;
+-		}
+-		e.children?.forEach(i);
+-	};
+-	if (i(t(n)), !r.length) return yt(n);
+-	let a = "STREAMDOWN_CODE_";
+-	for (; n.includes(a);) a += "_";
+-	let o = [], s = RegExp(`${a}(\\d+)_`, "g"), c = (e) => e.replace(s, (e, t) => o[Number(t)]), l = (e) => `${a}${o.push(c(e)) - 1}_`, u = "", d = 0;
+-	for (let [e, t] of r) u += n.slice(d, e) + l(n.slice(e, t)), d = t;
+-	u += n.slice(d);
+-	let f = new RegExp(String.raw`\\begin\{[bpBvV]?matrix\}(?:(?!${a}|\\end\{[bpBvV]?matrix\})[\s\S])*(?=${a})`, "g"), p = new RegExp(String.raw`(?<=^[^\S\n]*(?:>[^\S\n]*)*)\\\[(?:(?!${a}|\\\])[\s\S])*(?=${a})|\\\[(?:(?!${a}|\\\])[^\n])*(?=${a})`, "gm"), m = mt(u.replace(f, l));
+-	return m = gt(m.replace(p, l)), m = m.replace(/\$\$[\s\S]*?\$\$/g, (e) => e.includes(a) ? l(e) : e), c(ht(m));
+-}
+-//#endregion
+-//#region src/security/harden-vue-markdown.ts
+-var xt = (e, t) => {
+-	if (!t) return e;
+-	try {
+-		return new URL(e, t).toString();
+-	} catch {
+-		return e;
+-	}
+-}, St = (e, t, n) => {
+-	if (!e) return null;
+-	let r = e.trim();
+-	r = xt(r, n);
+-	let i = r.toLowerCase();
+-	return i.startsWith("javascript:") || !t.some((e) => i.startsWith(e)) ? null : r;
+-}, Ct = (e, t) => St(e, t.allowedLinkPrefixes, t.defaultOrigin), wt = (e, t) => St(e, t.allowedImagePrefixes, t.defaultOrigin), Tt = e({
+-	name: "StreamMarkdown",
+-	props: {
+-		content: {
+-			type: String,
+-			default: ""
+-		},
+-		class: {
+-			type: String,
+-			default: ""
+-		},
+-		className: {
+-			type: String,
+-			default: ""
+-		},
+-		components: {
+-			type: Object,
+-			default: () => ({})
+-		},
+-		remarkPlugins: {
+-			type: Array,
+-			default: () => []
+-		},
+-		rehypePlugins: {
+-			type: Array,
+-			default: () => []
+-		},
+-		defaultOrigin: {
+-			type: String,
+-			default: void 0
+-		},
+-		allowedImagePrefixes: {
+-			type: Array,
+-			default: () => ["https://", "http://"]
+-		},
+-		allowedLinkPrefixes: {
+-			type: Array,
+-			default: () => ["https://", "http://"]
+-		},
+-		parseIncompleteMarkdown: {
+-			type: Boolean,
+-			default: !0
+-		},
+-		shikiTheme: {
+-			type: [String, Object],
+-			default: void 0
+-		},
+-		codeBlockActions: {
+-			type: Array,
+-			default: () => []
+-		},
+-		codeBlockShowLineNumbers: {
+-			type: Boolean,
+-			default: !1
+-		},
+-		codeBlockSelectable: {
+-			type: Boolean,
+-			default: !0
+-		},
+-		codeBlockHideCopy: {
+-			type: Boolean,
+-			default: !1
+-		},
+-		codeBlockHideDownload: {
+-			type: Boolean,
+-			default: !1
+-		}
+-	},
+-	setup(e, { slots: n }) {
+-		let r = (e) => e && typeof e == "object" && "default" in e ? e.default : e, a = e.remarkPlugins.some((e) => {
+-			let t = Array.isArray(e) ? e[0] : e;
+-			return r(t) === p;
+-		}), o = e.remarkPlugins.length > 0 || e.rehypePlugins.length > 0, s = () => {
+-			let t = u().use(r(d)).use(r(f));
+-			a || t.use(r(p), { singleDollarTextMath: !1 }), e.remarkPlugins.forEach((e) => {
+-				if (Array.isArray(e)) {
+-					let [n, i] = e;
+-					t.use(r(n), i);
+-				} else t.use(r(e));
+-			}), t.use(r(m), { allowDangerousHtml: !1 });
+-			let n = de();
+-			return n && t.use(r(n)), e.rehypePlugins.forEach((e) => {
+-				if (Array.isArray(e)) {
+-					let [n, i] = e;
+-					t.use(r(n), i);
+-				} else t.use(r(e));
+-			}), {
+-				processor: t,
+-				hasKatex: !!n
+-			};
+-		}, { processor: l, hasKatex: h } = s(), g = c(0), _ = !1, v = (e) => e?.type === "element" && e.tagName === "code" && (e.properties?.className || []).includes("language-math"), y = (e) => v(e) || Array.isArray(e?.children) && e.children.some(y), b = {
+-			allowedImagePrefixes: e.allowedImagePrefixes,
+-			allowedLinkPrefixes: e.allowedLinkPrefixes,
+-			defaultOrigin: e.defaultOrigin
+-		}, x = {
+-			...Re,
+-			...e.components || {}
+-		}, S = (e, t) => e.map((e) => T(e, t)).filter(Boolean);
+-		function C(e) {
+-			return e.type === "text" ? e.value : e.children ? e.children.map(C).join("") : "";
+-		}
+-		let w = (e, n, r) => typeof e == "string" ? r && r.length ? t(e, n, r) : t(e, n) : !r || Array.isArray(r) && r.length === 0 ? t(e, n) : t(e, n, { default: Array.isArray(r) ? () => r : () => [r] }), T = (n, r) => {
+-			if (!n) return null;
+-			if (n.type === "text") return n.value;
+-			if (n.type !== "element") return null;
+-			let i = n, a = Object.fromEntries(Object.entries(i.properties || {}).map(([e, t]) => [e, Array.isArray(t) ? [...t] : t])), o = S(i.children || [], i.tagName), s = i.tagName;
+-			if (s === "a") {
+-				let e = Ct(String(a.href || ""), b);
+-				if (!e) return o;
+-				a.href = e, a.target = "_blank", a.rel = "noreferrer";
+-			}
+-			if (s === "img") {
+-				let e = wt(String(a.src || ""), b);
+-				if (!e) return null;
+-				a.src = e;
+-			}
+-			if (s === "pre" && i.children && i.children[0] && i.children[0].tagName === "code") {
+-				let n = i.children[0], r = C(n), a = n.properties?.className || [], o = a.find((e) => e.startsWith("language-")), s = o ? o.replace("language-", "") : "";
+-				if (s === "math") return t("pre", { "data-streamdown": "math-pending" }, [t("code", { class: a }, r)]);
+-				if (s === "mermaid") return t(Le, { code: r });
+-				let c = x.codeblock || q;
+-				return t(c, {
+-					code: r,
+-					language: s,
+-					theme: e.shikiTheme,
+-					actions: e.codeBlockActions,
+-					showLineNumbers: e.codeBlockShowLineNumbers,
+-					selectable: e.codeBlockSelectable,
+-					hideCopy: e.codeBlockHideCopy,
+-					hideDownload: e.codeBlockHideDownload
+-				});
+-			}
+-			v(i) && (a["data-streamdown"] = "math-pending");
+-			let c = x[s];
+-			return w(c || s, a, o);
+-		}, E = {
+-			source: null,
+-			parseIncomplete: !0,
+-			records: []
+-		}, D = /(?:^|\n)[ \t]*(?:>[ \t]*|[-+*][ \t]+|\d{1,9}[.)][ \t]+)*\[[^\]\n]+\]:/, O = (e) => e.trim().length === 0;
+-		return i(() => {
+-			_ = !0, E.records.length = 0, E.source = null;
+-		}), () => {
+-			g.value, !h && de() && ({processor: l, hasKatex: h} = s(), E.records = [], E.source = null);
+-			let r = e.content, i = n.default ? n.default() : [];
+-			if (i && i.length > 0) {
+-				let e = i.map((e) => typeof e.children == "string" ? e.children : "").join("");
+-				e.trim() && (r = e);
+-			}
+-			let a = null;
+-			if (e.parseIncompleteMarkdown && typeof r == "string" && r.length) {
+-				let e = r.replace(/\r\n?/g, "\n").split("\n"), t = [];
+-				for (let n = 0; n < e.length; n++) {
+-					let r = e[n] ?? "";
+-					/^\s*```/.test(r) && t.push(n);
+-				}
+-				if (t.length > 0 && t.length % 2 == 1) {
+-					let n = t[t.length - 1], r = (e[n] ?? "").replace(/^\s*```+/, ""), i = "", o = "";
+-					if (r.trim().length) {
+-						let e = r.match(/^([a-zA-Z0-9_-]+)(\s+|$)(.*)$/);
+-						e ? (i = (e[1] || "").trim(), o = (e[3] || "").trimEnd()) : o = r.trimEnd();
+-					}
+-					let s = n + 1 < e.length ? e.slice(n + 1) : [];
+-					o && s.unshift(o), a = {
+-						prefix: n > 0 ? e.slice(0, n).join("\n") : "",
+-						code: s.join("\n"),
+-						lang: i
+-					};
+-				}
+-			}
+-			let c = (t) => bt(t, (t) => l.parse(e.parseIncompleteMarkdown ? ot(t) : t)), u = D.test(r), d = E.source !== null && r.startsWith(E.source), f = E.parseIncomplete === e.parseIncompleteMarkdown, p = !o && !u, m = p && d && f, v = c(a ? a.prefix : r), b = Ue(e.parseIncompleteMarkdown ? ft(v) : v), C = [], w = [], T = 0, k = () => {
+-				w.length && (C.push(w.join("\n\n")), w = [], T = 0);
+-			};
+-			for (let e of b) {
+-				let t = (e.match(/\$\$/g) || []).length;
+-				if (w.length === 0) {
+-					if (t % 2 == 1) {
+-						w.push(e), T += t;
+-						continue;
+-					}
+-					C.push(e);
+-					continue;
+-				}
+-				w.push(e), T += t, T % 2 == 0 && k();
+-			}
+-			k();
+-			let A = C.map((e) => e).map((t) => e.parseIncompleteMarkdown ? ft(t.trimEnd()) : t), j = -1;
+-			for (let e = A.length - 1; e >= 0; e--) if (!O(A[e])) {
+-				j = e;
+-				break;
+-			}
+-			let M = 0;
+-			if (m) {
+-				let e = Math.min(E.records.length, A.length);
+-				for (; M < e && M < j && E.records[M].input === A[M];) M++;
+-			}
+-			let N = [], P = [], F = !1;
+-			for (let e = 0; e < A.length; e++) {
+-				let t = A[e];
+-				if (e < M) {
+-					let t = E.records[e];
+-					p && N.push(t), P.push(...S(t.tree.children));
+-					continue;
+-				}
+-				let n = l.runSync(l.parse(t));
+-				!h && !F && (F = y(n)), p && N.push({
+-					input: t,
+-					tree: n
+-				}), P.push(...S(n.children));
+-			}
+-			if (E.records = p ? N : [], E.source = r, E.parseIncomplete = e.parseIncompleteMarkdown, F && fe().then(() => {
+-				_ || g.value++;
+-			}, () => {}), a) {
+-				let n = x.codeblock || q;
+-				P.push(t(n, {
+-					code: a.code,
+-					language: a.lang,
+-					theme: e.shikiTheme,
+-					actions: e.codeBlockActions,
+-					showLineNumbers: e.codeBlockShowLineNumbers,
+-					selectable: e.codeBlockSelectable,
+-					hideCopy: e.codeBlockHideCopy,
+-					hideDownload: e.codeBlockHideDownload,
+-					"data-open-fence": "true",
+-					"data-streaming": "true"
+-				}));
+-			}
+-			let I = [
+-				"streamdown-vue space-y-4",
+-				e.class,
+-				e.className
+-			].filter(Boolean).join(" ");
+-			return t("div", { class: I || void 0 }, P);
+-		};
+-	}
+-});
+-//#endregion
+-export { F as _, q as a, Oe as c, Ce as d, fe as f, ae as g, te as h, Le as i, Te as l, oe as m, ft as n, Ne as o, le as p, Ue as r, Pe as s, Tt as t, H as u, I as v, ee as y };
+diff --git a/node_modules/streamdown-vue/dist/StreamMarkdown-CqSJXi5m.js b/node_modules/streamdown-vue/dist/StreamMarkdown-CqSJXi5m.js
+new file mode 100644
+index 0000000..c1627ed
+--- /dev/null
++++ b/node_modules/streamdown-vue/dist/StreamMarkdown-CqSJXi5m.js
+@@ -0,0 +1,1200 @@
++import { n as e, r as t, t as n } from "./streaming-Dma7ypXK.js";
++import { defineComponent as r, h as i, inject as a, isVNode as o, onBeforeUnmount as s, onMounted as c, provide as l, ref as u, shallowRef as d, watch as f, withMemo as p } from "vue";
++import { unified as m } from "unified";
++import h from "remark-parse";
++import g from "remark-gfm";
++import _ from "remark-math";
++import v from "remark-rehype";
++import { Lexer as y, Tokenizer as b } from "marked";
++//#region src/math.ts
++var x = null, S = null;
++function C() {
++	return x;
++}
++function w() {
++	return S ??= import("rehype-katex").then((e) => {
++		x = e?.default ?? e;
++	}, (e) => {
++		throw S = null, e;
++	}), S;
++}
++//#endregion
++//#region node_modules/@lucide/vue/dist/esm/shared/src/build/defaultAttributes.mjs
++var T = {
++	xmlns: "http://www.w3.org/2000/svg",
++	width: 24,
++	height: 24,
++	viewBox: "0 0 24 24",
++	fill: "none",
++	stroke: "currentColor",
++	"stroke-width": 2,
++	"stroke-linecap": "round",
++	"stroke-linejoin": "round"
++}, E = (...e) => e.filter((e, t, n) => !!e && e.trim() !== "" && n.indexOf(e) === t).join(" ").trim();
++//#endregion
++//#region node_modules/@lucide/vue/dist/esm/shared/src/build/buildLucideIconNode.mjs
++function D(e) {
++	return e != null;
++}
++function O(e, t = {}) {
++	let n = t.attributeNames ?? {}, r = (e) => n[e] ?? e, i = e.size ?? e.width ?? T.width, a = e.size ?? e.height ?? T.height, o = e.aliases?.filter((e) => typeof e == "string" && e.trim() !== "").map((e) => `lucide-${e}`) ?? [], s = [...e.name ? [`lucide-${e.name}`] : [], ...o], c = t.className?.split(" ").filter(Boolean) ?? [], l = t.includeDefaultClasses === !1 ? E(...c) : E("lucide", ...s, ...c), u = t.absoluteStrokeWidth ? Number(t.strokeWidth ?? T["stroke-width"]) * Number(e.size ?? e.width ?? T.width) / Number(t.size ?? t.width ?? T.width) : t.strokeWidth ?? T["stroke-width"];
++	return [
++		"svg",
++		{
++			...Object.entries(T).reduce((e, [t, n]) => (e[r(t)] = n, e), {}),
++			..."color" in t && t.color && { [r("stroke")]: t.color },
++			..."size" in t && D(t.size) && {
++				[r("width")]: t.size,
++				[r("height")]: t.size
++			},
++			..."width" in t && D(t.width) && { [r("width")]: t.width },
++			..."height" in t && D(t.height) && { [r("height")]: t.height },
++			[r("stroke-width")]: u,
++			...l && { [r("class")]: l },
++			[r("viewBox")]: `0 0 ${i} ${a}`,
++			...t.hasA11yProp === !1 ? { [r("aria-hidden")]: "true" } : {},
++			..."attributes" in t && t.attributes
++		},
++		e.node.map((e) => {
++			let [n, i, a] = e, o = t.nonScalingStroke ? {
++				[r("vector-effect")]: "non-scaling-stroke",
++				...i
++			} : i;
++			return a ? [
++				n,
++				o,
++				a
++			] : [n, o];
++		})
++	];
++}
++//#endregion
++//#region node_modules/@lucide/vue/dist/esm/shared/src/utils/hasA11yProp.mjs
++var k = (e) => {
++	for (let t in e) if (t.startsWith("aria-") || t === "role" || t === "title") return !0;
++	return !1;
++}, A = (e) => e === "", j = (e) => e?.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase(), M = /* @__PURE__ */ Symbol("lucide-icons");
++function N() {
++	return a(M, {});
++}
++//#endregion
++//#region node_modules/@lucide/vue/dist/esm/Icon.mjs
++var P = ({ name: e, iconNode: t, "icon-node": n, icon: r = {
++	name: j(e),
++	node: t ?? n,
++	size: 24,
++	aliases: []
++}, absoluteStrokeWidth: a, "absolute-stroke-width": o, nonScalingStroke: s, "non-scaling-stroke": c, strokeWidth: l, "stroke-width": u, size: d, width: f = d, height: p = d, color: m, ...h }, { slots: g }) => {
++	let { size: _, color: v, strokeWidth: y = 2, absoluteStrokeWidth: b = !1, nonScalingStroke: x = !1, class: S = "" } = N(), C = A(a) || A(o) || a === !0 || o === !0 || b === !0, w = A(s) || A(c) || s === !0 || c === !0 || x === !0;
++	delete h.class;
++	let T = g.default?.(), [, E, D = []] = O(r, {
++		color: m ?? v,
++		width: f ?? d ?? _,
++		height: p ?? d ?? _,
++		strokeWidth: l ?? u ?? y,
++		absoluteStrokeWidth: C,
++		nonScalingStroke: w,
++		className: S,
++		hasA11yProp: T != null && T.length > 0 || k(h),
++		attributes: h
++	});
++	return i("svg", E, [...D.map((e) => i(...e)), ...T ?? []]);
++};
++//#endregion
++//#region node_modules/@lucide/vue/dist/esm/createLucideIcon.mjs
++function F(e, t = []) {
++	let n = typeof e == "string" ? {
++		name: e,
++		node: t
++	} : e;
++	return (e, { slots: t }) => i(P, {
++		...e,
++		icon: n
++	}, t.default ? { default: t.default } : void 0);
++}
++var I = F({
++	name: "check",
++	size: 24,
++	node: [["path", {
++		d: "M20 6 9 17l-5-5",
++		key: "1gmf2c"
++	}]]
++}), L = F({
++	name: "copy",
++	size: 24,
++	node: [["rect", {
++		width: "14",
++		height: "14",
++		x: "8",
++		y: "8",
++		rx: "2",
++		ry: "2",
++		key: "17jyea"
++	}], ["path", {
++		d: "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2",
++		key: "zix9uf"
++	}]]
++}), R = F({
++	name: "download",
++	size: 24,
++	node: [
++		["path", {
++			d: "M12 15V3",
++			key: "m9g1x1"
++		}],
++		["path", {
++			d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4",
++			key: "ih7n3h"
++		}],
++		["path", {
++			d: "m7 10 5 5 5-5",
++			key: "brsn70"
++		}]
++	]
++}), z = Symbol("code-block-meta"), B = Symbol("global-code-block-actions");
++//#endregion
++//#region src/components/CopyButton.ts
++async function ee(e, t = typeof navigator > "u" ? void 0 : navigator.clipboard) {
++	if (!e || !t?.writeText) return !1;
++	try {
++		return await t.writeText(e), !0;
++	} catch {
++		return !1;
++	}
++}
++var V = r({
++	name: "CopyButton",
++	props: {
++		text: {
++			type: String,
++			required: !1
++		},
++		floating: {
++			type: Boolean,
++			default: !0
++		}
++	},
++	setup(e) {
++		let t = u(!1), n = a(z, {
++			code: "",
++			language: ""
++		}), r = async () => {
++			await ee(e.text ?? n.code) && (t.value = !0, setTimeout(() => {
++				t.value = !1;
++			}, 2e3));
++		};
++		return () => i("button", {
++			class: [e.floating ? "absolute top-2 right-2 opacity-0 group-hover:opacity-100" : "opacity-80 hover:opacity-100", "p-1 rounded bg-gray-200 dark:bg-gray-700 transition-opacity flex items-center justify-center"].join(" "),
++			onClick: r,
++			"aria-live": "polite"
++		}, [t.value ? i(I, { class: "h-4 w-4" }) : i(L, { class: "h-4 w-4" }), i("span", { class: "sr-only" }, t.value ? "Copied" : "Copy")]);
++	}
++}), te = {
++	javascript: "js",
++	js: "js",
++	typescript: "ts",
++	ts: "ts",
++	json: "json",
++	vue: "vue",
++	html: "html",
++	css: "css",
++	md: "md",
++	markdown: "md",
++	sh: "sh",
++	bash: "sh",
++	py: "py",
++	python: "py",
++	go: "go",
++	rust: "rs",
++	rs: "rs"
++};
++function ne(e, t = "", n) {
++	if (!e) return null;
++	let r = t && te[t.toLowerCase()] || "txt";
++	return {
++		blob: new Blob([e], { type: "text/plain;charset=utf-8" }),
++		filename: n || `file.${r}`
++	};
++}
++var re = r({
++	name: "DownloadButton",
++	props: {
++		text: {
++			type: String,
++			required: !1
++		},
++		filename: {
++			type: String,
++			required: !1
++		},
++		floating: {
++			type: Boolean,
++			default: !0
++		}
++	},
++	setup(e) {
++		let t = a(z, {
++			code: "",
++			language: ""
++		}), n = () => {
++			let n = ne(e.text ?? t.code, t.language, e.filename);
++			if (n) try {
++				let e = URL.createObjectURL(n.blob), t = document.createElement("a");
++				t.href = e, t.download = n.filename, document.body.appendChild(t), t.click(), document.body.removeChild(t), URL.revokeObjectURL(e);
++			} catch {}
++		};
++		return () => i("button", {
++			class: [e.floating ? "absolute top-2 right-9 opacity-0 group-hover:opacity-100" : "opacity-80 hover:opacity-100", "p-1 rounded bg-gray-200 dark:bg-gray-700 transition-opacity flex items-center justify-center"].join(" "),
++			onClick: n,
++			"aria-live": "polite",
++			title: "Download code"
++		}, [i(R, { class: "h-4 w-4" }), i("span", { class: "sr-only" }, "Download")]);
++	}
 +});
- //#endregion
- //#region src/components/CodeBlock.ts
- var G = (e) => e.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"), K = (e, t, n, r) => {
-@@ -510,6 +261,7 @@ var G = (e) => e.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt
- }, q = e({
- 	name: "CodeBlock",
- 	props: {
-+		highlight: { type: Function, default: void 0 },
- 		code: {
- 			type: String,
- 			required: !0
-@@ -584,6 +336,11 @@ var G = (e) => e.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt
- 		}, C = async () => {
- 			let t = ++h;
- 			try {
-+				if (e.highlight) {
-+					let n = await e.highlight({ code: e.code, language: e.language || "txt", theme: e.theme || (p?.matches ? "github-dark" : "github-light") });
-+					t === h && (d.value = y(n));
++//#endregion
++//#region src/components/patch-code-html.ts
++function ie(e, t) {
++	let n = e.ownerDocument.getSelection(), r;
++	if (n?.rangeCount && e.contains(n.anchorNode) && e.contains(n.focusNode)) {
++		let t = n.getRangeAt(0), i = t.cloneRange();
++		i.selectNodeContents(e), i.setEnd(t.startContainer, t.startOffset);
++		let a = i.toString().length;
++		r = {
++			start: a,
++			end: a + t.toString().length,
++			backwards: n.anchorNode === t.endContainer && n.anchorOffset === t.endOffset
++		};
++	}
++	let i = e.ownerDocument.createElement("template");
++	i.innerHTML = t;
++	let a = (e, t) => {
++		let n = [...e.childNodes], r = [...t.childNodes];
++		r.forEach((t, r) => {
++			let i = n[r];
++			if (!i) {
++				e.appendChild(t);
++				return;
++			}
++			if (!i.isEqualNode(t)) {
++				if (i.nodeType !== t.nodeType || i.nodeName !== t.nodeName) e.replaceChild(t, i);
++				else if (i.nodeType === Node.ELEMENT_NODE) {
++					let e = i, n = t;
++					for (let t of [...e.attributes]) n.hasAttribute(t.name) || e.removeAttribute(t.name);
++					for (let t of [...n.attributes]) e.getAttribute(t.name) !== t.value && e.setAttribute(t.name, t.value);
++					a(e, n);
++				} else i.nodeValue = t.nodeValue;
++			}
++		}), n.slice(r.length).forEach((t) => e.removeChild(t));
++	};
++	if (a(e, i.content), r && n) {
++		let t = e.ownerDocument.createTreeWalker(e, NodeFilter.SHOW_TEXT), i = (n) => {
++			t.currentNode = e;
++			let r, i = e;
++			for (; r = t.nextNode();) {
++				let e = r.textContent?.length ?? 0;
++				if (n <= e) return [r, n];
++				n -= e, i = r;
++			}
++			return [i, i === e ? 0 : i.textContent?.length ?? 0];
++		}, a = i(r.start), o = i(r.end);
++		n.setBaseAndExtent(...r.backwards ? [...o, ...a] : [...a, ...o]);
++	}
++}
++//#endregion
++//#region src/components/CodeBlock.ts
++var H = (e) => e.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"), ae = (e, t, n, r) => {
++	let i = H(t), a = i ? `language-${i}` : "", o = [a];
++	r || o.push("select-none");
++	let s = n ? e.split(/\r?\n/).map((e, t) => `<span class="line"><span class="code-line-number select-none opacity-60 pr-4 text-xs" data-line-number data-streamdown="code-line-number">${t + 1}</span>${H(e)}</span>`).join("\n") : H(e);
++	return `<pre data-streamdown="pre"${o.filter(Boolean).length ? ` class="${o.join(" ")}"` : ""}><code data-streamdown="code"${a ? ` class="${a}"` : ""}>${s}</code></pre>`;
++}, U = r({
++	name: "CodeBlock",
++	props: {
++		code: {
++			type: String,
++			required: !0
++		},
++		highlight: {
++			type: Function,
++			default: void 0
++		},
++		language: {
++			type: String,
++			default: ""
++		},
++		theme: {
++			type: [String, Object],
++			default: void 0
++		},
++		showLineNumbers: {
++			type: Boolean,
++			default: !1
++		},
++		selectable: {
++			type: Boolean,
++			default: !0
++		},
++		actions: {
++			type: Array,
++			default: () => []
++		},
++		hideCopy: {
++			type: Boolean,
++			default: !1
++		},
++		hideDownload: {
++			type: Boolean,
++			default: !1
++		}
++	},
++	setup(r, { attrs: o, slots: d }) {
++		let p = ae(r.code, r.language, r.showLineNumbers, r.selectable), m = u(p), h = u(null);
++		f(m, (e) => {
++			h.value && ie(h.value, e);
++		}, { flush: "post" }), l(z, {
++			get code() {
++				return r.code;
++			},
++			get language() {
++				return r.language;
++			}
++		});
++		let g = a(B, []), _ = null, v = async () => {}, y = 0, b = 0, x = !1, S = 0, C = null, w, T = () => {
++			let e = r.theme || (_?.matches ? "github-dark" : "github-light");
++			return typeof e == "string" ? e : {
++				light: e.light,
++				dark: e.dark
++			};
++		}, E = (e) => e.language === (r.language || "txt") && JSON.stringify(e.theme) === JSON.stringify(T()), D = (e) => e.replace(/(<pre[^>]*style=")([^"]*)("[^>]*>)/g, (e, t, n, r) => `${t}${n.split(/;\s*/).filter((e) => e && !/background(-color)?\s*:/.test(e.toLowerCase())).join("; ")}${r}`.replace(/style=""/, "")), O = (e) => {
++			if (!r.showLineNumbers) return e;
++			let t = 0;
++			return e.replace(/<span class="line(.*?)">/g, (e, n) => (t += 1, `<span class="line${n}"><span class="code-line-number select-none opacity-60 pr-4 text-xs" data-line-number data-streamdown="code-line-number">${t}</span>`));
++		}, k = (e) => r.selectable ? e : e.replace(/<pre\b([^>]*)>/, (e, t) => `<pre${/\bclass="/.test(t) ? t.replace(/\bclass="/, "class=\"select-none ") : `${t} class="select-none"`}>`), A = (e) => {
++			let t = k(O(D(e)));
++			return j(t);
++		}, j = (e) => e.replace(/<pre(?![^>]*data-streamdown=)/g, "<pre data-streamdown=\"pre\"").replace(/<code(?![^>]*data-streamdown=)/g, "<code data-streamdown=\"code\""), M = () => {
++			if (typeof document < "u") {
++				let e = "streamdown-dual-theme-styles";
++				if (!document.getElementById(e)) {
++					let t = document.createElement("style");
++					t.id = e, t.textContent = "\n                        html.dark .shiki-themes, html.dark .shiki-themes span {\n                            color: var(--shiki-dark) !important;\n                            font-style: var(--shiki-dark-font-style) !important;\n                            font-weight: var(--shiki-dark-font-weight) !important;\n                            text-decoration: var(--shiki-dark-text-decoration) !important;\n                        }\n                        @media (prefers-color-scheme: dark) {\n                            html:not(.light) .shiki-themes,\n                            html:not(.light) .shiki-themes span {\n                                color: var(--shiki-dark) !important;\n                                font-style: var(--shiki-dark-font-style) !important;\n                                font-weight: var(--shiki-dark-font-weight) !important;\n                                text-decoration: var(--shiki-dark-text-decoration) !important;\n                            }\n                        }\n                    ", document.head.appendChild(t);
++				}
++			}
++		}, N = () => {
++			let e = C;
++			if (e && E(e.input) && r.code.startsWith(e.input.code)) {
++				if (e.input.code === r.code) {
++					m.value = A(e.raw);
 +					return;
 +				}
- 				let n = await Pe(), r = e.language || "txt", i = "";
- 				r && !n.getLoadedLanguages().includes(r) && t === h && (d.value = K(e.code, e.language, e.showLineNumbers, e.selectable));
- 				try {
-@@ -609,6 +366,7 @@ var G = (e) => e.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt
- 		], () => {
- 			r(() => m());
- 		}), i(() => {
-+			h++;
- 			p && p.removeEventListener("change", m);
- 		}), () => t("div", {
- 			class: "group rounded-md border bg-gray-50 dark:bg-gray-800 overflow-hidden",
-@@ -1193,7 +951,9 @@ var xt = (e, t) => {
- 			if (!n) return null;
- 			if (n.type === "text") return n.value;
- 			if (n.type !== "element") return null;
--			let i = n, a = Object.fromEntries(Object.entries(i.properties || {}).map(([e, t]) => [e, Array.isArray(t) ? [...t] : t])), o = S(i.children || [], i.tagName), s = i.tagName;
-+			// Vue normalizes `class` arrays to strings. HAST's `className` would
-+			// instead rewrite the DOM property for every fresh array on each render.
-+			let i = n, a = Object.fromEntries(Object.entries(i.properties || {}).map(([e, t]) => [e === "className" ? "class" : e, Array.isArray(t) ? [...t] : t])), o = S(i.children || [], i.tagName), s = i.tagName;
- 			if (s === "a") {
- 				let e = Ct(String(a.href || ""), b);
- 				if (!e) return o;
++				let t = e.raw.match(/^(<pre\b[^>]*><code\b[^>]*>)([\s\S]*)(<\/code><\/pre>)$/);
++				if (t) {
++					let n = (e.input.code.match(/\n/g) || []).length, i = e.input.code.lastIndexOf("\n") + 1, a = t[2].split("\n").slice(0, n), o = r.code.slice(i).split(/\r?\n/).map((e) => `<span class="line">${H(e)}</span>`);
++					m.value = A(t[1] + [...a, ...o].join("\n") + t[3]);
++					return;
++				}
++			}
++			m.value = ae(r.code, r.language, r.showLineNumbers, r.selectable);
++		}, P = async () => {
++			let i = ++y, a = S, o = {
++				code: r.code,
++				language: r.language || "txt",
++				theme: T()
++			};
++			try {
++				let s;
++				if (r.highlight) s = await r.highlight(o);
++				else {
++					let r = await t();
++					r.getLoadedLanguages().includes(o.language) || await e(o.language), w ??= n(r), s = w(o);
++				}
++				!x && a === S && i > b && E(o) && r.code.startsWith(o.code) && (b = i, C = {
++					input: o,
++					raw: s
++				}, N());
++			} catch {
++				!x && a === S && i === y && N();
++			}
++		};
++		return c(() => {
++			M(), typeof window < "u" && typeof window.matchMedia == "function" && (_ = window.matchMedia("(prefers-color-scheme: dark)"), _.addEventListener("change", P)), v = P, v();
++		}), f(() => [
++			r.code,
++			r.language,
++			JSON.stringify(r.theme),
++			r.highlight
++		], (e, t) => {
++			(!e[0].startsWith(t[0]) || e.slice(1).some((e, n) => e !== t[n + 1])) && (S++, C = null), N(), v();
++		}, { flush: "post" }), f(() => [r.showLineNumbers, r.selectable], N, { flush: "post" }), s(() => {
++			x = !0, S++, C = null, w = void 0, _ && _.removeEventListener("change", v);
++		}), () => i("div", {
++			class: "group rounded-md border bg-gray-50 dark:bg-gray-800 overflow-hidden",
++			"data-streamdown": "code-block",
++			...o
++		}, [i("div", {
++			class: "flex items-center justify-between text-xs px-2 py-1 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 gap-2",
++			"data-streamdown": "code-block-header"
++		}, [r.language ? i("span", {
++			class: "px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 font-mono text-[10px] leading-none tracking-wide",
++			"data-streamdown": "code-lang"
++		}, r.language) : i("span", {
++			class: "h-4",
++			"data-streamdown": "code-lang-empty"
++		}), i("div", {
++			class: "flex items-center gap-1",
++			"data-streamdown": "code-actions"
++		}, [
++			...r.actions.map((e, t) => i(e, {
++				key: t,
++				code: r.code,
++				language: r.language
++			})),
++			...g.map((e, t) => i(e, {
++				key: `g-${t}`,
++				code: r.code,
++				language: r.language
++			})),
++			...d.actions ? d.actions() : [],
++			r.hideDownload ? null : i(re, {
++				floating: !1,
++				"data-streamdown": "download-button"
++			}),
++			r.hideCopy ? null : i(V, {
++				floating: !1,
++				"data-streamdown": "copy-button"
++			})
++		].filter(Boolean))]), i("div", {
++			ref: h,
++			innerHTML: p,
++			class: "px-4 py-3 overflow-x-auto",
++			"data-streamdown": "code-body"
++		})]);
++	}
++}), oe = !1, se = 0, W = /* @__PURE__ */ new Map(), ce = 32, G = (e, t) => {
++	let n = new DOMParser().parseFromString(e, "image/svg+xml"), r = /* @__PURE__ */ new Map();
++	n.querySelectorAll("[id]").forEach((e, n) => {
++		let i = `${t}-${n}`;
++		r.set(e.id, i), e.id = i;
++	});
++	let i = [...r.keys()].sort((e, t) => t.length - e.length).map((e) => e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), a = RegExp(`#(${i})(?![\\w-])`, "g"), o = (e) => e.replace(a, (e, t) => `#${r.get(t)}`);
++	return n.querySelectorAll("*").forEach((e) => {
++		for (let t of [...e.attributes]) {
++			let n = t.name === "aria-labelledby" || t.name === "aria-describedby" ? t.value.split(/\s+/).map((e) => r.get(e) ?? e).join(" ") : o(t.value);
++			n !== t.value && e.setAttribute(t.name, n);
++		}
++		e.tagName === "style" && (e.textContent = o(e.textContent ?? ""));
++	}), new XMLSerializer().serializeToString(n.documentElement);
++}, K = r({
++	name: "MermaidBlock",
++	props: {
++		code: {
++			type: String,
++			required: !0
++		},
++		streaming: {
++			type: Boolean,
++			default: !1
++		}
++	},
++	setup(e) {
++		let t = u(""), n = `streamdown-mermaid-view-${++se}`, r = u(""), a = 0, o = !1, l = async () => {
++			let i = ++a;
++			if (e.streaming) {
++				t.value = "", r.value = "";
++				return;
++			}
++			let s = e.code, c = W.get(s);
++			if (c) {
++				t.value = G(c, n), r.value = "";
++				return;
++			}
++			try {
++				let e = (await import("mermaid")).default;
++				if (o || i !== a) return;
++				oe ||= (e.initialize({ startOnLoad: !1 }), !0);
++				let { svg: c } = await e.render(`streamdown-mermaid-${++se}`, s);
++				if (W.delete(s), W.set(s, c), W.size > ce && W.delete(W.keys().next().value), o || i !== a) return;
++				t.value = G(c, n), r.value = "";
++			} catch (e) {
++				if (o || i !== a) return;
++				r.value = e instanceof Error ? e.message : "Failed to render mermaid diagram";
++			}
++		};
++		return c(() => {
++			f(() => [e.code, e.streaming], l, { immediate: !0 });
++		}), s(() => {
++			o = !0, a++;
++		}), () => i("div", {
++			class: "relative group",
++			"data-streamdown": "mermaid"
++		}, [
++			t.value ? i("div", { innerHTML: t.value }) : i("pre", { "data-streamdown": "pre" }, [i("code", e.code)]),
++			r.value ? i("div", {
++				class: "text-red-500 text-sm mt-2",
++				role: "status"
++			}, r.value) : null,
++			i(V, {
++				text: e.code,
++				"data-streamdown": "copy-button"
++			})
++		]);
++	}
++}), q = (e, t) => {
++	let n = [];
++	return Array.isArray(e) ? n.push(...e) : typeof e == "string" && n.push(e), t && n.push(t), n.join(" ").trim();
++}, J = (e, t = "", n) => (r, { slots: a }) => {
++	let o = q(r.class || r.className, t), s = {
++		...r,
++		class: o || void 0
++	};
++	return n && (s["data-streamdown"] = n), delete s.className, i(e, s, a.default ? a.default() : []);
++}, Y = {
++	p: J("p", "mb-2", "p"),
++	a: (e, { slots: t }) => {
++		let n = q(e.class || e.className, "underline text-blue-600"), r = {
++			...e,
++			class: n || void 0,
++			"data-streamdown": "a",
++			target: "_blank",
++			rel: "noreferrer"
++		};
++		return delete r.className, i("a", r, t.default ? t.default() : []);
++	},
++	code: J("code", "bg-muted px-1.5 py-0.5 font-mono text-sm", "inline-code"),
++	ul: J("ul", "list-disc pl-6", "ul"),
++	ol: J("ol", "list-decimal pl-6", "ol"),
++	li: J("li", "", "li"),
++	hr: J("hr", "my-6 border-border", "hr"),
++	strong: J("strong", "", "strong"),
++	em: J("em", "", "em"),
++	h1: J("h1", "text-3xl font-bold", "h1"),
++	h2: J("h2", "text-2xl font-bold", "h2"),
++	h3: J("h3", "text-xl font-semibold", "h3"),
++	h4: J("h4", "text-lg font-semibold", "h4"),
++	h5: J("h5", "font-semibold", "h5"),
++	h6: J("h6", "font-semibold", "h6"),
++	blockquote: J("blockquote", "border-l-4 pl-4 italic", "blockquote"),
++	table: (e, { slots: t }) => {
++		let n = q(e.class || e.className, "w-full text-sm"), r = {
++			...e,
++			class: n || void 0,
++			"data-streamdown": "table"
++		};
++		delete r.className;
++		let a = i("table", r, t.default ? t.default() : []);
++		return i("div", {
++			class: "overflow-x-auto",
++			"data-streamdown": "table-wrapper"
++		}, [a]);
++	},
++	thead: J("thead", "", "thead"),
++	tbody: J("tbody", "", "tbody"),
++	tr: J("tr", "", "tr"),
++	th: J("th", "border px-2 py-1", "th"),
++	td: J("td", "border px-2 py-1", "td"),
++	img: (e) => {
++		let t = q(e.class || e.className, ""), n = {
++			...e,
++			class: t || void 0,
++			"data-streamdown": "img"
++		};
++		return delete n.className, i("img", n);
++	}
++}, X = (e, t = 0) => {
++	let n = t;
++	for (; n < t + 3 && e[n] === " ";) n++;
++	return e[n];
++}, le = /^ {0,3}(?:=+|-+) *$/, ue = /^\s*$/, de = /^(?: {0,3}(?:[*+-]|\d{1,9}[.)]) |(?: {4}| {0,3}\t)| {0,3}(?:`{3,}|~{3,})| {0,3}>| {0,3}#{1,6}(?:\s|$)| {0,3}<[^\n>]+>$| {0,3}\|?(?:[:\- ]*\|)+[:\- ]*$)/, fe = class extends b {
++	hr(e) {
++		let t = X(e);
++		return t === "-" || t === "_" || t === "*" ? super.hr(e) : void 0;
++	}
++	blockquote(e) {
++		return X(e) === ">" ? super.blockquote(e) : void 0;
++	}
++	html(e) {
++		return X(e) === "<" ? super.html(e) : void 0;
++	}
++	table(e) {
++		let t = e.indexOf("\n"), n = t === -1 ? void 0 : X(e, t + 1);
++		return n === "|" || n === ":" || n === "-" ? super.table(e) : void 0;
++	}
++	lheading(e) {
++		let t = e.indexOf("\n") + 1;
++		for (; t > 0;) {
++			let n = e.indexOf("\n", t), r = e.slice(t, n === -1 ? void 0 : n);
++			if (le.test(r)) return super.lheading(e);
++			if (ue.test(r) || de.test(r)) return;
++			t = n + 1;
++		}
++	}
++}, pe = (e) => {
++	let t = new y({
++		gfm: !0,
++		tokenizer: new fe()
++	}).blockTokens(e.replace(/\r\n|\r/g, "\n")).map((e) => e.raw), n = [];
++	for (let e = 0; e < t.length; e++) {
++		let r = t[e];
++		if (typeof r == "string") {
++			if (r.trim() === "$$" && n.length > 0) {
++				let e = n[n.length - 1];
++				if (e === void 0) {
++					n.push(r);
++					continue;
++				}
++				let t = e.trimStart().startsWith("$$"), i = (e.match(/\$\$/g) || []).length;
++				if (t && i % 2 == 1) {
++					n[n.length - 1] = e + r;
++					continue;
++				}
++			}
++			if (n.length > 0 && r.trimEnd().endsWith("$$")) {
++				let e = n[n.length - 1];
++				if (e === void 0) {
++					n.push(r);
++					continue;
++				}
++				let t = e.trimStart().startsWith("$$"), i = (e.match(/\$\$/g) || []).length, a = (r.match(/\$\$/g) || []).length;
++				if (t && i % 2 == 1 && !r.trimStart().startsWith("$$") && a === 1) {
++					n[n.length - 1] = e + r;
++					continue;
++				}
++			}
++			n.push(r);
++		}
++	}
++	return n;
++}, me = /(!?\[)([^\]]*?)$/, he = /(\*\*)([^*]*?)$/, ge = /(__)([^_]*?)$/, _e = /(\*\*\*)([^*]*?)$/, ve = /(\*)([^*]*?)$/, ye = /(_)([^_]*?)$/, be = /(~~)([^~]*?)$/, xe = null, Z = "", Q = (e) => {
++	if (e === xe) return Z;
++	let t = e.split(""), n = (e, n) => {
++		for (let r = e; r < n; r++) t[r] !== "\n" && (t[r] = " ");
++	}, r = 0;
++	for (; r < e.length;) {
++		if (e[r] !== "`") {
++			r++;
++			continue;
++		}
++		let t = r;
++		for (; t < e.length && e[t] === "`";) t++;
++		let i = t - r, a = r;
++		for (; e[a - 1] === " " || e[a - 1] === "	";) a--;
++		let o = a === 0 || e[a - 1] === "\n";
++		if (i >= 3 && o) {
++			let a = RegExp(`\\n[ \\t]*\`{${i},}[ \\t]*(?:\\n|$)`), o = e.slice(t).match(a), s = o && o.index !== void 0 ? t + o.index + o[0].length : e.length;
++			n(r, s), r = s;
++			continue;
++		}
++		let s = t, c = !1;
++		for (; s < e.length;) {
++			if (e[s] !== "`") {
++				s++;
++				continue;
++			}
++			let t = s;
++			for (; t < e.length && e[t] === "`";) t++;
++			if (t - s === i) {
++				s = t, c = !0;
++				break;
++			}
++			s = t;
++		}
++		let l = c ? s : e.length;
++		n(r, l), r = l;
++	}
++	return xe = e, Z = t.join(""), Z;
++}, Se = (e) => {
++	let t = Q(e), n = t.match(me);
++	if (n) {
++		let r = n[1];
++		if (r) {
++			let n = t.lastIndexOf(r);
++			if (n >= 0) return e.substring(0, n);
++		}
++	}
++	return e;
++}, Ce = (e) => {
++	let t = Q(e);
++	return t.match(he) && (t.match(/\*\*/g) || []).length % 2 == 1 ? `${e}**` : e;
++}, we = (e) => {
++	let t = Q(e);
++	return t.match(ge) && (t.match(/__/g) || []).length % 2 == 1 ? `${e}__` : e;
++}, Te = (e) => {
++	let t = 0, n = !1;
++	for (let r = 0; r < e.length; r++) {
++		let i = e[r];
++		if (i === "\n") {
++			n = !1;
++			continue;
++		}
++		if (i === "*") {
++			let i = e[r - 1], a = e[r + 1];
++			i !== "\\" && !(!n && (a === " " || a === "	")) && i !== "*" && a !== "*" && t++;
++		}
++		!n && i.trim() !== "" && (n = !0);
++	}
++	return t;
++}, Ee = (e) => {
++	let t = Q(e);
++	return t.match(ve) && Te(t) % 2 == 1 ? `${e}*` : e;
++}, De = (e) => {
++	let t = 0, n = !1, r = !1;
++	for (let i = 0; i < e.length; i++) {
++		let a = e[i];
++		if (a === "\\" && e[i + 1] === "$") {
++			i++;
++			continue;
++		}
++		if (a === "$") {
++			e[i + 1] === "$" ? (r = !r, i++, n = !1) : r || (n = !n);
++			continue;
++		}
++		if (a !== "_" || n || r) continue;
++		let o = e[i - 1], s = e[i + 1];
++		o !== "\\" && o !== "_" && s !== "_" && t++;
++	}
++	return t;
++}, Oe = (e) => {
++	let t = Q(e);
++	return t.match(ye) && De(t) % 2 == 1 ? `${e}_` : e;
++}, ke = /^[ \t]*(?:>[ \t]*)*(`{3,}|~{3,})([^\n]*)$/, Ae = (e) => {
++	let t = 0, n = "";
++	for (let r = 0; r <= e.length;) {
++		let i = e.indexOf("\n", r);
++		i === -1 && (i = e.length);
++		let a = e.slice(r, i), o = ke.exec(a), s = o?.[1] ?? "", c = o?.[2] ?? "";
++		n ? s[0] === n[0] && s.length >= n.length && !c.trim() && (n = "", t = i + 1) : s && (s[0] === "~" || !c.includes("`")) ? n = s : i < e.length && !a.trim() && (t = i + 1), r = i + 1;
++	}
++	if (n) return e;
++	let r = (e.slice(t).match(/`+/g) ?? []).map((e) => e.length), i = [], a = /* @__PURE__ */ new Map();
++	for (let e = r.length - 1; e >= 0; e--) i[e] = a.get(r[e]) ?? -1, a.set(r[e], e);
++	for (let t = 0; t < r.length; t++) if (i[t] !== -1) t = i[t];
++	else if (r[t] === 1) return `${e}\``;
++	return e;
++}, je = (e) => {
++	if (e.match(/^```[^`\n]*```?$/) && !e.includes("\n")) return e.endsWith("``") && !e.endsWith("```") ? `${e}\`` : e;
++	let t = (e.match(/```/g) || []).length, n = t % 2 == 1;
++	return t > 0 && t % 2 == 0 && e.includes("\n") || (e.endsWith("```\n") || e.endsWith("```")) && t % 2 == 0 || n ? e : Ae(e);
++}, Me = (e) => {
++	let t = Q(e);
++	return t.match(be) && (t.match(/~~/g) || []).length % 2 == 1 ? `${e}~~` : e;
++}, Ne = (e) => {
++	let t = Q(e);
++	if ((t.match(/\$\$/g) || []).length % 2 == 0 || (t.match(/\\begin\{[^}]+\}/g) || []).length !== (t.match(/\\end\{[^}]+\}/g) || []).length) return e;
++	let n = t.indexOf("$$");
++	return n !== -1 && t.indexOf("\n", n) !== -1 && !e.endsWith("\n") ? `${e}\n$$` : `${e}$$`;
++}, Pe = (e) => {
++	let t = 0, n = e.match(/\*+/g) || [];
++	for (let e of n) {
++		let n = e.length;
++		n >= 3 && (t += Math.floor(n / 3));
++	}
++	return t;
++}, Fe = (e) => {
++	if (/^\*{4,}$/.test(e)) return e;
++	let t = Q(e);
++	return t.match(_e) && Pe(t) % 2 == 1 ? `${e}***` : e;
++}, Ie = (e) => {
++	if (!e || typeof e != "string") return e;
++	let t = e;
++	return t.length, (t.match(/\$\$/g) || []).length, t = Se(t), t = Fe(t), t = Ce(t), t = we(t), t = Ee(t), t = Oe(t), t = je(t), t = Me(t), t = Ne(t), t;
++}, Le = /(\\begin\{(?:b|p|B|v|V)?matrix\})([\s\S]*?)(\\end\{(?:b|p|B|v|V)?matrix\})/g;
++function Re(e) {
++	return e.replace(Le, (e, t, n, r, i) => {
++		let a = n.split(/\n+/g).map((e) => e.trim()).filter((e) => e.length > 0 && e !== "\\");
++		if (a.some((e) => /\\\\/.test(e))) {
++			let e = [];
++			for (let t of a) if (/\\\\/.test(t)) {
++				let n = t.split(/\\\\\s*/).map((e) => e.trim()).filter((e) => e.length > 0 && e !== "\\");
++				for (let t of n) e.push(t);
++			} else e.push(t);
++			a = e;
++		}
++		return a.length === 0 ? `${t}\n${r}` : `${t}\n${a.map((e, t) => t < a.length - 1 ? /\\\\\s*$/.test(e) ? e : /\\\s*$/.test(e) ? e.replace(/\\\s*$/, " \\\\") : e + " \\\\" : e.replace(/\\\s*$/, "")).join("\n")}\n${r}`;
++	});
++}
++function ze(e) {
++	return e.replace(/\$\$([\s\S]*?)\$\$/g, (e, t) => {
++		if (!/\\begin\{(?:b|p|B|v|V)?matrix\}/.test(t)) return e;
++		let n = /^\s*\n/.test(t), r = /\n\s*$/.test(t);
++		return n && r ? e : "$$\n" + t.trim().replace(/(\\begin\{[^}]+\})/, "$1\n").replace(/(\\\\)\s*(?=\S)/g, "$1\n").replace(/(\\end\{[^}]+\})/, "\n$1").trim() + "\n$$";
++	});
++}
++function Be(e) {
++	let t = e.replace(/\r\n?/g, "\n").split("\n"), n = [], r = !1, i = "", a = 0, o = !1, s = "", c = "", l = (e) => {
++		n.push(e.length ? s + e : s);
++	}, u = (e) => s && e.startsWith(s) ? e.slice(s.length) : c && e.startsWith(c) ? e.slice(c.length) : e.trimStart();
++	for (let e of t) {
++		if (!o) {
++			let t = e.match(/^(\s*(?:>\s*)*)([`~]{3,})/);
++			if (t) {
++				let o = t[2];
++				if (!o) {
++					n.push(e);
++					continue;
++				}
++				if (r) o[0] === i && o.length >= a && (r = !1, i = "", a = 0);
++				else {
++					if (!o.length) {
++						n.push(e);
++						continue;
++					}
++					r = !0, i = o[0], a = o.length;
++				}
++				n.push(e);
++				continue;
++			}
++		}
++		if (r) {
++			n.push(e);
++			continue;
++		}
++		if (!o) {
++			let t = e.match(/^(\s*(?:>\s*)*)\\\[(.*)$/);
++			if (!t) {
++				n.push(e);
++				continue;
++			}
++			o = !0, c = t[1] ?? "", s = c.includes(">") && !/\s$/.test(c) ? c + " " : c, n.length > 0 && n[n.length - 1]?.trim().length && n.push(s.includes(">") ? s : ""), n.push(s + "$$");
++			let r = t[2] ?? "", i = r.indexOf("\\]");
++			if (i !== -1) {
++				let e = r.slice(0, i);
++				e.length > 0 && l(u(e).trimStart()), n.push(s + "$$"), o = !1;
++				let t = r.slice(i + 2);
++				t.length > 0 && n.push(s + t.trimStart());
++			} else r.trim().length > 0 && l(u(r).trimStart());
++			continue;
++		}
++		let t = e.indexOf("\\]");
++		if (t !== -1) {
++			let r = e.slice(0, t);
++			r.length > 0 && l(u(r)), n.push(s + "$$"), o = !1;
++			let i = e.slice(t + 2);
++			i.length > 0 && n.push(s + i.trimStart());
++		} else l(u(e));
++	}
++	let d = [], f = !1, p = "", m = 0;
++	for (let e of n) {
++		let t = e, n = t.match(/^(\s*(?:>\s*)*)([`~]{3,})/);
++		if (n) {
++			let e = n[2] ?? "";
++			f ? e[0] === p && e.length >= m && (f = !1, p = "", m = 0) : (f = !0, p = e[0] ?? "", m = e.length), d.push(t);
++			continue;
++		}
++		if (f) {
++			d.push(t);
++			continue;
++		}
++		if (/\\\[.*?\\\]/.test(t) && !/^\s*\\\[/.test(t)) {
++			let e = [], n = /\\\[([^\n]*?)\\\]/g, r = 0, i;
++			for (; i = n.exec(t);) {
++				let n = t.slice(r, i.index);
++				n.trim().length && e.push(n);
++				let a = (i[1] ?? "").trim();
++				e.push("$$"), a.length && e.push(a), e.push("$$"), r = i.index + i[0].length;
++			}
++			let a = t.slice(r);
++			a.trim().length && e.push(a);
++			for (let t of e) d.push(t === "$$" ? "$$" : t);
++		} else d.push(t);
++	}
++	return d.join("\n");
++}
++var Ve = /\\\[|\\begin\{[bpBvV]?matrix\}/, He = /`|~~~|\t| {4}/, $ = (e) => ze(Be(Re(e)));
++function Ue(e, t) {
++	let n = e.replace(/\r\n?/g, "\n");
++	if (!Ve.test(n)) return n;
++	if (!He.test(n)) return $(n);
++	let r = [], i = (e) => {
++		if (e.type === "code" || e.type === "inlineCode") {
++			let t = e.position?.start.offset, n = e.position?.end.offset;
++			t !== void 0 && n !== void 0 && r.push([t, n]);
++			return;
++		}
++		e.children?.forEach(i);
++	};
++	if (i(t(n)), !r.length) return $(n);
++	let a = "STREAMDOWN_CODE_";
++	for (; n.includes(a);) a += "_";
++	let o = [], s = RegExp(`${a}(\\d+)_`, "g"), c = (e) => e.replace(s, (e, t) => o[Number(t)]), l = (e) => `${a}${o.push(c(e)) - 1}_`, u = "", d = 0;
++	for (let [e, t] of r) u += n.slice(d, e) + l(n.slice(e, t)), d = t;
++	u += n.slice(d);
++	let f = new RegExp(String.raw`\\begin\{[bpBvV]?matrix\}(?:(?!${a}|\\end\{[bpBvV]?matrix\})[\s\S])*(?=${a})`, "g"), p = new RegExp(String.raw`(?<=^[^\S\n]*(?:>[^\S\n]*)*)\\\[(?:(?!${a}|\\\])[\s\S])*(?=${a})|\\\[(?:(?!${a}|\\\])[^\n])*(?=${a})`, "gm"), m = Re(u.replace(f, l));
++	return m = Be(m.replace(p, l)), m = m.replace(/\$\$[\s\S]*?\$\$/g, (e) => e.includes(a) ? l(e) : e), c(ze(m));
++}
++//#endregion
++//#region src/security/harden-vue-markdown.ts
++var We = (e, t) => {
++	if (!t) return e;
++	try {
++		return new URL(e, t).toString();
++	} catch {
++		return e;
++	}
++}, Ge = (e, t, n) => {
++	if (!e) return null;
++	let r = e.trim();
++	r = We(r, n);
++	let i = r.toLowerCase();
++	return i.startsWith("javascript:") || !t.some((e) => i.startsWith(e)) ? null : r;
++}, Ke = (e, t) => Ge(e, t.allowedLinkPrefixes, t.defaultOrigin), qe = (e, t) => Ge(e, t.allowedImagePrefixes, t.defaultOrigin), Je = r({
++	name: "StreamMarkdown",
++	props: {
++		content: {
++			type: String,
++			default: ""
++		},
++		class: {
++			type: String,
++			default: ""
++		},
++		className: {
++			type: String,
++			default: ""
++		},
++		components: {
++			type: Object,
++			default: () => ({})
++		},
++		remarkPlugins: {
++			type: Array,
++			default: () => []
++		},
++		rehypePlugins: {
++			type: Array,
++			default: () => []
++		},
++		defaultOrigin: {
++			type: String,
++			default: void 0
++		},
++		allowedImagePrefixes: {
++			type: Array,
++			default: () => ["https://", "http://"]
++		},
++		allowedLinkPrefixes: {
++			type: Array,
++			default: () => ["https://", "http://"]
++		},
++		parseIncompleteMarkdown: {
++			type: Boolean,
++			default: !0
++		},
++		shikiTheme: {
++			type: [String, Object],
++			default: void 0
++		},
++		codeBlockActions: {
++			type: Array,
++			default: () => []
++		},
++		codeBlockShowLineNumbers: {
++			type: Boolean,
++			default: !1
++		},
++		codeBlockSelectable: {
++			type: Boolean,
++			default: !0
++		},
++		codeBlockHideCopy: {
++			type: Boolean,
++			default: !1
++		},
++		codeBlockHideDownload: {
++			type: Boolean,
++			default: !1
++		}
++	},
++	setup(e, { slots: t }) {
++		let n = (e) => e && typeof e == "object" && "default" in e ? e.default : e, r = e.remarkPlugins.some((e) => {
++			let t = Array.isArray(e) ? e[0] : e;
++			return n(t) === _;
++		}), a = e.remarkPlugins.length > 0 || e.rehypePlugins.length > 0, c = () => {
++			let t = m().use(n(h)).use(n(g));
++			r || t.use(n(_), { singleDollarTextMath: !1 }), e.remarkPlugins.forEach((e) => {
++				if (Array.isArray(e)) {
++					let [r, i] = e;
++					t.use(n(r), i);
++				} else t.use(n(e));
++			}), t.use(n(v), { allowDangerousHtml: !1 });
++			let i = C();
++			return i && t.use(n(i)), e.rehypePlugins.forEach((e) => {
++				if (Array.isArray(e)) {
++					let [r, i] = e;
++					t.use(n(r), i);
++				} else t.use(n(e));
++			}), {
++				processor: t,
++				hasKatex: !!i
++			};
++		}, { processor: l, hasKatex: u } = c(), f = d(0), y = !1, b = (e) => e?.type === "element" && e.tagName === "code" && (e.properties?.className || []).includes("language-math"), x = (e) => b(e) || Array.isArray(e?.children) && e.children.some(x), S = {
++			allowedImagePrefixes: e.allowedImagePrefixes,
++			allowedLinkPrefixes: e.allowedLinkPrefixes,
++			defaultOrigin: e.defaultOrigin
++		}, T = {
++			...Y,
++			...e.components || {}
++		}, E = (e, t) => e.map((e) => k(e, t)).filter(Boolean);
++		function D(e) {
++			return e.type === "text" ? e.value : e.children ? e.children.map(D).join("") : "";
++		}
++		let O = (e, t, n) => typeof e == "string" ? n && n.length ? i(e, t, n) : i(e, t) : !n || Array.isArray(n) && n.length === 0 ? i(e, t) : i(e, t, { default: Array.isArray(n) ? () => n : () => [n] }), k = (t, n) => {
++			if (!t) return null;
++			if (t.type === "text") return t.value;
++			if (t.type !== "element") return null;
++			let r = t, a = Object.fromEntries(Object.entries(r.properties || {}).map(([t, n]) => [t === "className" && !e.components[r.tagName] ? "class" : t, Array.isArray(n) ? [...n] : n])), o = E(r.children || [], r.tagName), s = r.tagName;
++			if (s === "a") {
++				let e = Ke(String(a.href || ""), S);
++				if (!e) return o;
++				a.href = e, a.target = "_blank", a.rel = "noreferrer";
++			}
++			if (s === "img") {
++				let e = qe(String(a.src || ""), S);
++				if (!e) return null;
++				a.src = e;
++			}
++			if (s === "pre" && r.children && r.children[0] && r.children[0].tagName === "code") {
++				let t = r.children[0], n = D(t), a = t.properties?.className || [], o = a.find((e) => e.startsWith("language-")), s = o ? o.replace("language-", "") : "";
++				if (s === "math") return i("pre", { "data-streamdown": "math-pending" }, [i("code", { class: a }, n)]);
++				if (s === "mermaid") return i(K, { code: n });
++				let c = T.codeblock || U;
++				return i(c, {
++					code: n,
++					language: s,
++					theme: e.shikiTheme,
++					actions: e.codeBlockActions,
++					showLineNumbers: e.codeBlockShowLineNumbers,
++					selectable: e.codeBlockSelectable,
++					hideCopy: e.codeBlockHideCopy,
++					hideDownload: e.codeBlockHideDownload
++				});
++			}
++			b(r) && (a["data-streamdown"] = "math-pending");
++			let c = T[s];
++			return c ? c === Y[s] && !e.components[s] ? c(a, { slots: { default: () => o } }) : O(c, a, o) : O(s, a, o);
++		}, A = (e) => {
++			let t = [];
++			return e.map((e, n) => o(e) ? p([], () => e, t, n) : e);
++		}, j = {
++			source: null,
++			records: []
++		}, M = /(?:^|\n)[ \t]*(?:>[ \t]*|[-+*][ \t]+|\d{1,9}[.)][ \t]+)*\[[^\]\n]+\]:/, N = (e) => e.trim().length === 0;
++		return s(() => {
++			y = !0, j.records.length = 0, j.source = null;
++		}), () => {
++			f.value, !u && C() && ({processor: l, hasKatex: u} = c(), j.records = [], j.source = null), T = {
++				...Y,
++				...e.components
++			}, S.allowedImagePrefixes = e.allowedImagePrefixes, S.allowedLinkPrefixes = e.allowedLinkPrefixes, S.defaultOrigin = e.defaultOrigin;
++			let n = [
++				...Object.entries(e.components).flat(),
++				...e.allowedImagePrefixes,
++				null,
++				...e.allowedLinkPrefixes,
++				e.defaultOrigin,
++				JSON.stringify(e.shikiTheme),
++				e.codeBlockShowLineNumbers,
++				e.codeBlockSelectable,
++				e.codeBlockHideCopy,
++				e.codeBlockHideDownload,
++				...e.codeBlockActions
++			], r = (e) => e.length === n.length && e.every((e, t) => e === n[t]), o = e.content, s = t.default ? t.default() : [];
++			if (s && s.length > 0) {
++				let e = s.map((e) => typeof e.children == "string" ? e.children : "").join("");
++				e.trim() && (o = e);
++			}
++			let d = null;
++			if (e.parseIncompleteMarkdown && typeof o == "string" && o.length) {
++				let e = o.replace(/\r\n?/g, "\n").split("\n"), t = [];
++				for (let n = 0; n < e.length; n++) {
++					let r = e[n] ?? "";
++					/^\s*```/.test(r) && t.push(n);
++				}
++				if (t.length > 0 && t.length % 2 == 1) {
++					let n = t[t.length - 1], r = (e[n] ?? "").replace(/^\s*```+/, ""), i = "", a = "";
++					if (r.trim().length) {
++						let e = r.match(/^([a-zA-Z0-9_-]+)(\s+|$)(.*)$/);
++						e ? (i = (e[1] || "").trim(), a = (e[3] || "").trimEnd()) : a = r.trimEnd();
++					}
++					let o = n + 1 < e.length ? e.slice(n + 1) : [];
++					a && o.unshift(a), d = {
++						prefix: n > 0 ? e.slice(0, n).join("\n") : "",
++						code: o.join("\n"),
++						lang: i
++					};
++				}
++			}
++			let p = (t) => Ue(t, (t) => l.parse(e.parseIncompleteMarkdown ? Ae(t) : t)), m = M.test(o), h = j.source !== null && o.startsWith(j.source), g = !a && !m, _ = g && h, v = d ? d.prefix : o;
++			e.parseIncompleteMarkdown && (v = v.replace(/\n {0,3}-[ \t]*$/, ""));
++			let b = pe(p(v)), D = [], O = [], k = 0, P = () => {
++				O.length && (D.push(O.join("\n\n")), O = [], k = 0);
++			};
++			for (let e of b) {
++				let t = (e.match(/\$\$/g) || []).length;
++				if (O.length === 0) {
++					if (t % 2 == 1) {
++						O.push(e), k += t;
++						continue;
++					}
++					D.push(e);
++					continue;
++				}
++				O.push(e), k += t, k % 2 == 0 && P();
++			}
++			P();
++			let F = D.findLastIndex((e) => !N(e)), I = D.map((t, n) => e.parseIncompleteMarkdown && !d && n === F ? Ie(t.trimEnd()) : t);
++			I = I.map((e, t) => t < F ? e.replace(/\n+$/, "") : e);
++			let L = 0;
++			if (_) {
++				let e = Math.min(j.records.length, I.length);
++				for (; L < e && L < F && j.records[L].input === I[L];) L++;
++			}
++			let R = [], z = [], B = !1;
++			for (let e = 0; e < I.length; e++) {
++				let t = I[e];
++				if (e < L) {
++					let t = j.records[e];
++					g && R.push(t), (!t.completed || !r(t.context)) && (t.vnodes = A(E(t.tree.children)), t.context = n, t.completed = !0), z.push(...t.vnodes);
++					continue;
++				}
++				let i = l.runSync(l.parse(t));
++				!u && !B && (B = x(i));
++				let a = E(i.children), o = e < F || !!d, s = o ? A(a) : a;
++				g && R.push({
++					input: t,
++					tree: i,
++					vnodes: s,
++					context: n,
++					completed: o
++				}), z.push(...s);
++			}
++			if (j.records = g ? R : [], j.source = o, B && w().then(() => {
++				y || f.value++;
++			}, () => {}), d) {
++				let t = T.codeblock || U;
++				z.push(d.lang === "mermaid" ? i(K, {
++					code: d.code,
++					streaming: !0
++				}) : i(t, {
++					code: d.code,
++					language: d.lang,
++					theme: e.shikiTheme,
++					actions: e.codeBlockActions,
++					showLineNumbers: e.codeBlockShowLineNumbers,
++					selectable: e.codeBlockSelectable,
++					hideCopy: e.codeBlockHideCopy,
++					hideDownload: e.codeBlockHideDownload,
++					"data-open-fence": "true",
++					"data-streaming": "true"
++				}));
++			}
++			let ee = [
++				"streamdown-vue space-y-4",
++				e.class,
++				e.className
++			].filter(Boolean).join(" ");
++			return i("div", { class: ee || void 0 }, z);
++		};
++	}
++});
++//#endregion
++export { U as a, z as c, K as i, B as l, Ie as n, re as o, pe as r, V as s, Je as t, w as u };
+diff --git a/node_modules/streamdown-vue/dist/StreamMarkdown-n5aAv6tj.cjs b/node_modules/streamdown-vue/dist/StreamMarkdown-n5aAv6tj.cjs
+new file mode 100644
+index 0000000..1e7aaca
+--- /dev/null
++++ b/node_modules/streamdown-vue/dist/StreamMarkdown-n5aAv6tj.cjs
+@@ -0,0 +1,49 @@
++const e=require("./streaming-C3icnMHg.cjs");let t=require("vue"),n=require("unified"),r=require("remark-parse");r=e.m(r,1);let i=require("remark-gfm");i=e.m(i,1);let a=require("remark-math");a=e.m(a,1);let o=require("remark-rehype");o=e.m(o,1);let s=require("marked");var c=null,l=null;function u(){return c}function d(){return l??=import(`rehype-katex`).then(e=>{c=e?.default??e},e=>{throw l=null,e}),l}var f={xmlns:`http://www.w3.org/2000/svg`,width:24,height:24,viewBox:`0 0 24 24`,fill:`none`,stroke:`currentColor`,"stroke-width":2,"stroke-linecap":`round`,"stroke-linejoin":`round`},p=(...e)=>e.filter((e,t,n)=>!!e&&e.trim()!==``&&n.indexOf(e)===t).join(` `).trim();function m(e){return e!=null}function h(e,t={}){let n=t.attributeNames??{},r=e=>n[e]??e,i=e.size??e.width??f.width,a=e.size??e.height??f.height,o=e.aliases?.filter(e=>typeof e==`string`&&e.trim()!==``).map(e=>`lucide-${e}`)??[],s=[...e.name?[`lucide-${e.name}`]:[],...o],c=t.className?.split(` `).filter(Boolean)??[],l=t.includeDefaultClasses===!1?p(...c):p(`lucide`,...s,...c),u=t.absoluteStrokeWidth?Number(t.strokeWidth??f[`stroke-width`])*Number(e.size??e.width??f.width)/Number(t.size??t.width??f.width):t.strokeWidth??f[`stroke-width`];return[`svg`,{...Object.entries(f).reduce((e,[t,n])=>(e[r(t)]=n,e),{}),...`color`in t&&t.color&&{[r(`stroke`)]:t.color},...`size`in t&&m(t.size)&&{[r(`width`)]:t.size,[r(`height`)]:t.size},...`width`in t&&m(t.width)&&{[r(`width`)]:t.width},...`height`in t&&m(t.height)&&{[r(`height`)]:t.height},[r(`stroke-width`)]:u,...l&&{[r(`class`)]:l},[r(`viewBox`)]:`0 0 ${i} ${a}`,...t.hasA11yProp===!1?{[r(`aria-hidden`)]:`true`}:{},...`attributes`in t&&t.attributes},e.node.map(e=>{let[n,i,a]=e,o=t.nonScalingStroke?{[r(`vector-effect`)]:`non-scaling-stroke`,...i}:i;return a?[n,o,a]:[n,o]})]}var g=e=>{for(let t in e)if(t.startsWith(`aria-`)||t===`role`||t===`title`)return!0;return!1},_=e=>e===``,v=e=>e?.replace(/([a-z0-9])([A-Z])/g,`$1-$2`).toLowerCase(),y=Symbol(`lucide-icons`);function b(){return(0,t.inject)(y,{})}var x=({name:e,iconNode:n,"icon-node":r,icon:i={name:v(e),node:n??r,size:24,aliases:[]},absoluteStrokeWidth:a,"absolute-stroke-width":o,nonScalingStroke:s,"non-scaling-stroke":c,strokeWidth:l,"stroke-width":u,size:d,width:f=d,height:p=d,color:m,...y},{slots:x})=>{let{size:S,color:C,strokeWidth:w=2,absoluteStrokeWidth:T=!1,nonScalingStroke:E=!1,class:D=``}=b(),O=_(a)||_(o)||a===!0||o===!0||T===!0,k=_(s)||_(c)||s===!0||c===!0||E===!0;delete y.class;let A=x.default?.(),[,j,M=[]]=h(i,{color:m??C,width:f??d??S,height:p??d??S,strokeWidth:l??u??w,absoluteStrokeWidth:O,nonScalingStroke:k,className:D,hasA11yProp:A!=null&&A.length>0||g(y),attributes:y});return(0,t.h)(`svg`,j,[...M.map(e=>(0,t.h)(...e)),...A??[]])};function S(e,n=[]){let r=typeof e==`string`?{name:e,node:n}:e;return(e,{slots:n})=>(0,t.h)(x,{...e,icon:r},n.default?{default:n.default}:void 0)}var C=S({name:`check`,size:24,node:[[`path`,{d:`M20 6 9 17l-5-5`,key:`1gmf2c`}]]}),w=S({name:`copy`,size:24,node:[[`rect`,{width:`14`,height:`14`,x:`8`,y:`8`,rx:`2`,ry:`2`,key:`17jyea`}],[`path`,{d:`M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2`,key:`zix9uf`}]]}),T=S({name:`download`,size:24,node:[[`path`,{d:`M12 15V3`,key:`m9g1x1`}],[`path`,{d:`M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4`,key:`ih7n3h`}],[`path`,{d:`m7 10 5 5 5-5`,key:`brsn70`}]]}),E=Symbol(`code-block-meta`),D=Symbol(`global-code-block-actions`);async function O(e,t=typeof navigator>`u`?void 0:navigator.clipboard){if(!e||!t?.writeText)return!1;try{return await t.writeText(e),!0}catch{return!1}}var k=(0,t.defineComponent)({name:`CopyButton`,props:{text:{type:String,required:!1},floating:{type:Boolean,default:!0}},setup(e){let n=(0,t.ref)(!1),r=(0,t.inject)(E,{code:``,language:``}),i=async()=>{await O(e.text??r.code)&&(n.value=!0,setTimeout(()=>{n.value=!1},2e3))};return()=>(0,t.h)(`button`,{class:[e.floating?`absolute top-2 right-2 opacity-0 group-hover:opacity-100`:`opacity-80 hover:opacity-100`,`p-1 rounded bg-gray-200 dark:bg-gray-700 transition-opacity flex items-center justify-center`].join(` `),onClick:i,"aria-live":`polite`},[n.value?(0,t.h)(C,{class:`h-4 w-4`}):(0,t.h)(w,{class:`h-4 w-4`}),(0,t.h)(`span`,{class:`sr-only`},n.value?`Copied`:`Copy`)])}}),A={javascript:`js`,js:`js`,typescript:`ts`,ts:`ts`,json:`json`,vue:`vue`,html:`html`,css:`css`,md:`md`,markdown:`md`,sh:`sh`,bash:`sh`,py:`py`,python:`py`,go:`go`,rust:`rs`,rs:`rs`};function j(e,t=``,n){if(!e)return null;let r=t&&A[t.toLowerCase()]||`txt`;return{blob:new Blob([e],{type:`text/plain;charset=utf-8`}),filename:n||`file.${r}`}}var M=(0,t.defineComponent)({name:`DownloadButton`,props:{text:{type:String,required:!1},filename:{type:String,required:!1},floating:{type:Boolean,default:!0}},setup(e){let n=(0,t.inject)(E,{code:``,language:``}),r=()=>{let t=j(e.text??n.code,n.language,e.filename);if(t)try{let e=URL.createObjectURL(t.blob),n=document.createElement(`a`);n.href=e,n.download=t.filename,document.body.appendChild(n),n.click(),document.body.removeChild(n),URL.revokeObjectURL(e)}catch{}};return()=>(0,t.h)(`button`,{class:[e.floating?`absolute top-2 right-9 opacity-0 group-hover:opacity-100`:`opacity-80 hover:opacity-100`,`p-1 rounded bg-gray-200 dark:bg-gray-700 transition-opacity flex items-center justify-center`].join(` `),onClick:r,"aria-live":`polite`,title:`Download code`},[(0,t.h)(T,{class:`h-4 w-4`}),(0,t.h)(`span`,{class:`sr-only`},`Download`)])}});function N(e,t){let n=e.ownerDocument.getSelection(),r;if(n?.rangeCount&&e.contains(n.anchorNode)&&e.contains(n.focusNode)){let t=n.getRangeAt(0),i=t.cloneRange();i.selectNodeContents(e),i.setEnd(t.startContainer,t.startOffset);let a=i.toString().length;r={start:a,end:a+t.toString().length,backwards:n.anchorNode===t.endContainer&&n.anchorOffset===t.endOffset}}let i=e.ownerDocument.createElement(`template`);i.innerHTML=t;let a=(e,t)=>{let n=[...e.childNodes],r=[...t.childNodes];r.forEach((t,r)=>{let i=n[r];if(!i){e.appendChild(t);return}if(!i.isEqualNode(t)){if(i.nodeType!==t.nodeType||i.nodeName!==t.nodeName)e.replaceChild(t,i);else if(i.nodeType===Node.ELEMENT_NODE){let e=i,n=t;for(let t of[...e.attributes])n.hasAttribute(t.name)||e.removeAttribute(t.name);for(let t of[...n.attributes])e.getAttribute(t.name)!==t.value&&e.setAttribute(t.name,t.value);a(e,n)}else i.nodeValue=t.nodeValue}}),n.slice(r.length).forEach(t=>e.removeChild(t))};if(a(e,i.content),r&&n){let t=e.ownerDocument.createTreeWalker(e,NodeFilter.SHOW_TEXT),i=n=>{t.currentNode=e;let r,i=e;for(;r=t.nextNode();){let e=r.textContent?.length??0;if(n<=e)return[r,n];n-=e,i=r}return[i,i===e?0:i.textContent?.length??0]},a=i(r.start),o=i(r.end);n.setBaseAndExtent(...r.backwards?[...o,...a]:[...a,...o])}}var P=e=>e.replace(/&/g,`&amp;`).replace(/</g,`&lt;`).replace(/>/g,`&gt;`).replace(/"/g,`&quot;`).replace(/'/g,`&#39;`),F=(e,t,n,r)=>{let i=P(t),a=i?`language-${i}`:``,o=[a];r||o.push(`select-none`);let s=n?e.split(/\r?\n/).map((e,t)=>`<span class="line"><span class="code-line-number select-none opacity-60 pr-4 text-xs" data-line-number data-streamdown="code-line-number">${t+1}</span>${P(e)}</span>`).join(`
++`):P(e);return`<pre data-streamdown="pre"${o.filter(Boolean).length?` class="${o.join(` `)}"`:``}><code data-streamdown="code"${a?` class="${a}"`:``}>${s}</code></pre>`},I=(0,t.defineComponent)({name:`CodeBlock`,props:{code:{type:String,required:!0},highlight:{type:Function,default:void 0},language:{type:String,default:``},theme:{type:[String,Object],default:void 0},showLineNumbers:{type:Boolean,default:!1},selectable:{type:Boolean,default:!0},actions:{type:Array,default:()=>[]},hideCopy:{type:Boolean,default:!1},hideDownload:{type:Boolean,default:!1}},setup(n,{attrs:r,slots:i}){let a=F(n.code,n.language,n.showLineNumbers,n.selectable),o=(0,t.ref)(a),s=(0,t.ref)(null);(0,t.watch)(o,e=>{s.value&&N(s.value,e)},{flush:`post`}),(0,t.provide)(E,{get code(){return n.code},get language(){return n.language}});let c=(0,t.inject)(D,[]),l=null,u=async()=>{},d=0,f=0,p=!1,m=0,h=null,g,_=()=>{let e=n.theme||(l?.matches?`github-dark`:`github-light`);return typeof e==`string`?e:{light:e.light,dark:e.dark}},v=e=>e.language===(n.language||`txt`)&&JSON.stringify(e.theme)===JSON.stringify(_()),y=e=>e.replace(/(<pre[^>]*style=")([^"]*)("[^>]*>)/g,(e,t,n,r)=>`${t}${n.split(/;\s*/).filter(e=>e&&!/background(-color)?\s*:/.test(e.toLowerCase())).join(`; `)}${r}`.replace(/style=""/,``)),b=e=>{if(!n.showLineNumbers)return e;let t=0;return e.replace(/<span class="line(.*?)">/g,(e,n)=>(t+=1,`<span class="line${n}"><span class="code-line-number select-none opacity-60 pr-4 text-xs" data-line-number data-streamdown="code-line-number">${t}</span>`))},x=e=>n.selectable?e:e.replace(/<pre\b([^>]*)>/,(e,t)=>`<pre${/\bclass="/.test(t)?t.replace(/\bclass="/,`class="select-none `):`${t} class="select-none"`}>`),S=e=>{let t=x(b(y(e)));return C(t)},C=e=>e.replace(/<pre(?![^>]*data-streamdown=)/g,`<pre data-streamdown="pre"`).replace(/<code(?![^>]*data-streamdown=)/g,`<code data-streamdown="code"`),w=()=>{if(typeof document<`u`){let e=`streamdown-dual-theme-styles`;if(!document.getElementById(e)){let t=document.createElement(`style`);t.id=e,t.textContent=`
++                        html.dark .shiki-themes, html.dark .shiki-themes span {
++                            color: var(--shiki-dark) !important;
++                            font-style: var(--shiki-dark-font-style) !important;
++                            font-weight: var(--shiki-dark-font-weight) !important;
++                            text-decoration: var(--shiki-dark-text-decoration) !important;
++                        }
++                        @media (prefers-color-scheme: dark) {
++                            html:not(.light) .shiki-themes,
++                            html:not(.light) .shiki-themes span {
++                                color: var(--shiki-dark) !important;
++                                font-style: var(--shiki-dark-font-style) !important;
++                                font-weight: var(--shiki-dark-font-weight) !important;
++                                text-decoration: var(--shiki-dark-text-decoration) !important;
++                            }
++                        }
++                    `,document.head.appendChild(t)}}},T=()=>{let e=h;if(e&&v(e.input)&&n.code.startsWith(e.input.code)){if(e.input.code===n.code){o.value=S(e.raw);return}let t=e.raw.match(/^(<pre\b[^>]*><code\b[^>]*>)([\s\S]*)(<\/code><\/pre>)$/);if(t){let r=(e.input.code.match(/\n/g)||[]).length,i=e.input.code.lastIndexOf(`
++`)+1,a=t[2].split(`
++`).slice(0,r),s=n.code.slice(i).split(/\r?\n/).map(e=>`<span class="line">${P(e)}</span>`);o.value=S(t[1]+[...a,...s].join(`
++`)+t[3]);return}}o.value=F(n.code,n.language,n.showLineNumbers,n.selectable)},O=async()=>{let t=++d,r=m,i={code:n.code,language:n.language||`txt`,theme:_()};try{let a;if(n.highlight)a=await n.highlight(i);else{let t=await e.r();t.getLoadedLanguages().includes(i.language)||await e.n(i.language),g??=e.t(t),a=g(i)}!p&&r===m&&t>f&&v(i)&&n.code.startsWith(i.code)&&(f=t,h={input:i,raw:a},T())}catch{!p&&r===m&&t===d&&T()}};return(0,t.onMounted)(()=>{w(),typeof window<`u`&&typeof window.matchMedia==`function`&&(l=window.matchMedia(`(prefers-color-scheme: dark)`),l.addEventListener(`change`,O)),u=O,u()}),(0,t.watch)(()=>[n.code,n.language,JSON.stringify(n.theme),n.highlight],(e,t)=>{(!e[0].startsWith(t[0])||e.slice(1).some((e,n)=>e!==t[n+1]))&&(m++,h=null),T(),u()},{flush:`post`}),(0,t.watch)(()=>[n.showLineNumbers,n.selectable],T,{flush:`post`}),(0,t.onBeforeUnmount)(()=>{p=!0,m++,h=null,g=void 0,l&&l.removeEventListener(`change`,u)}),()=>(0,t.h)(`div`,{class:`group rounded-md border bg-gray-50 dark:bg-gray-800 overflow-hidden`,"data-streamdown":`code-block`,...r},[(0,t.h)(`div`,{class:`flex items-center justify-between text-xs px-2 py-1 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 gap-2`,"data-streamdown":`code-block-header`},[n.language?(0,t.h)(`span`,{class:`px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 font-mono text-[10px] leading-none tracking-wide`,"data-streamdown":`code-lang`},n.language):(0,t.h)(`span`,{class:`h-4`,"data-streamdown":`code-lang-empty`}),(0,t.h)(`div`,{class:`flex items-center gap-1`,"data-streamdown":`code-actions`},[...n.actions.map((e,r)=>(0,t.h)(e,{key:r,code:n.code,language:n.language})),...c.map((e,r)=>(0,t.h)(e,{key:`g-${r}`,code:n.code,language:n.language})),...i.actions?i.actions():[],n.hideDownload?null:(0,t.h)(M,{floating:!1,"data-streamdown":`download-button`}),n.hideCopy?null:(0,t.h)(k,{floating:!1,"data-streamdown":`copy-button`})].filter(Boolean))]),(0,t.h)(`div`,{ref:s,innerHTML:a,class:`px-4 py-3 overflow-x-auto`,"data-streamdown":`code-body`})])}}),L=!1,R=0,z=new Map,B=32,V=(e,t)=>{let n=new DOMParser().parseFromString(e,`image/svg+xml`),r=new Map;n.querySelectorAll(`[id]`).forEach((e,n)=>{let i=`${t}-${n}`;r.set(e.id,i),e.id=i});let i=[...r.keys()].sort((e,t)=>t.length-e.length).map(e=>e.replace(/[.*+?^${}()|[\]\\]/g,`\\$&`)).join(`|`),a=RegExp(`#(${i})(?![\\w-])`,`g`),o=e=>e.replace(a,(e,t)=>`#${r.get(t)}`);return n.querySelectorAll(`*`).forEach(e=>{for(let t of[...e.attributes]){let n=t.name===`aria-labelledby`||t.name===`aria-describedby`?t.value.split(/\s+/).map(e=>r.get(e)??e).join(` `):o(t.value);n!==t.value&&e.setAttribute(t.name,n)}e.tagName===`style`&&(e.textContent=o(e.textContent??``))}),new XMLSerializer().serializeToString(n.documentElement)},H=(0,t.defineComponent)({name:`MermaidBlock`,props:{code:{type:String,required:!0},streaming:{type:Boolean,default:!1}},setup(e){let n=(0,t.ref)(``),r=`streamdown-mermaid-view-${++R}`,i=(0,t.ref)(``),a=0,o=!1,s=async()=>{let t=++a;if(e.streaming){n.value=``,i.value=``;return}let s=e.code,c=z.get(s);if(c){n.value=V(c,r),i.value=``;return}try{let e=(await import(`mermaid`)).default;if(o||t!==a)return;L||=(e.initialize({startOnLoad:!1}),!0);let{svg:c}=await e.render(`streamdown-mermaid-${++R}`,s);if(z.delete(s),z.set(s,c),z.size>B&&z.delete(z.keys().next().value),o||t!==a)return;n.value=V(c,r),i.value=``}catch(e){if(o||t!==a)return;i.value=e instanceof Error?e.message:`Failed to render mermaid diagram`}};return(0,t.onMounted)(()=>{(0,t.watch)(()=>[e.code,e.streaming],s,{immediate:!0})}),(0,t.onBeforeUnmount)(()=>{o=!0,a++}),()=>(0,t.h)(`div`,{class:`relative group`,"data-streamdown":`mermaid`},[n.value?(0,t.h)(`div`,{innerHTML:n.value}):(0,t.h)(`pre`,{"data-streamdown":`pre`},[(0,t.h)(`code`,e.code)]),i.value?(0,t.h)(`div`,{class:`text-red-500 text-sm mt-2`,role:`status`},i.value):null,(0,t.h)(k,{text:e.code,"data-streamdown":`copy-button`})])}}),U=(e,t)=>{let n=[];return Array.isArray(e)?n.push(...e):typeof e==`string`&&n.push(e),t&&n.push(t),n.join(` `).trim()},W=(e,n=``,r)=>(i,{slots:a})=>{let o=U(i.class||i.className,n),s={...i,class:o||void 0};return r&&(s[`data-streamdown`]=r),delete s.className,(0,t.h)(e,s,a.default?a.default():[])},G={p:W(`p`,`mb-2`,`p`),a:(e,{slots:n})=>{let r=U(e.class||e.className,`underline text-blue-600`),i={...e,class:r||void 0,"data-streamdown":`a`,target:`_blank`,rel:`noreferrer`};return delete i.className,(0,t.h)(`a`,i,n.default?n.default():[])},code:W(`code`,`bg-muted px-1.5 py-0.5 font-mono text-sm`,`inline-code`),ul:W(`ul`,`list-disc pl-6`,`ul`),ol:W(`ol`,`list-decimal pl-6`,`ol`),li:W(`li`,``,`li`),hr:W(`hr`,`my-6 border-border`,`hr`),strong:W(`strong`,``,`strong`),em:W(`em`,``,`em`),h1:W(`h1`,`text-3xl font-bold`,`h1`),h2:W(`h2`,`text-2xl font-bold`,`h2`),h3:W(`h3`,`text-xl font-semibold`,`h3`),h4:W(`h4`,`text-lg font-semibold`,`h4`),h5:W(`h5`,`font-semibold`,`h5`),h6:W(`h6`,`font-semibold`,`h6`),blockquote:W(`blockquote`,`border-l-4 pl-4 italic`,`blockquote`),table:(e,{slots:n})=>{let r=U(e.class||e.className,`w-full text-sm`),i={...e,class:r||void 0,"data-streamdown":`table`};delete i.className;let a=(0,t.h)(`table`,i,n.default?n.default():[]);return(0,t.h)(`div`,{class:`overflow-x-auto`,"data-streamdown":`table-wrapper`},[a])},thead:W(`thead`,``,`thead`),tbody:W(`tbody`,``,`tbody`),tr:W(`tr`,``,`tr`),th:W(`th`,`border px-2 py-1`,`th`),td:W(`td`,`border px-2 py-1`,`td`),img:e=>{let n=U(e.class||e.className,``),r={...e,class:n||void 0,"data-streamdown":`img`};return delete r.className,(0,t.h)(`img`,r)}},K=(e,t=0)=>{let n=t;for(;n<t+3&&e[n]===` `;)n++;return e[n]},ee=/^ {0,3}(?:=+|-+) *$/,te=/^\s*$/,ne=/^(?: {0,3}(?:[*+-]|\d{1,9}[.)]) |(?: {4}| {0,3}\t)| {0,3}(?:`{3,}|~{3,})| {0,3}>| {0,3}#{1,6}(?:\s|$)| {0,3}<[^\n>]+>$| {0,3}\|?(?:[:\- ]*\|)+[:\- ]*$)/,re=class extends s.Tokenizer{hr(e){let t=K(e);return t===`-`||t===`_`||t===`*`?super.hr(e):void 0}blockquote(e){return K(e)===`>`?super.blockquote(e):void 0}html(e){return K(e)===`<`?super.html(e):void 0}table(e){let t=e.indexOf(`
++`),n=t===-1?void 0:K(e,t+1);return n===`|`||n===`:`||n===`-`?super.table(e):void 0}lheading(e){let t=e.indexOf(`
++`)+1;for(;t>0;){let n=e.indexOf(`
++`,t),r=e.slice(t,n===-1?void 0:n);if(ee.test(r))return super.lheading(e);if(te.test(r)||ne.test(r))return;t=n+1}}},q=e=>{let t=new s.Lexer({gfm:!0,tokenizer:new re}).blockTokens(e.replace(/\r\n|\r/g,`
++`)).map(e=>e.raw),n=[];for(let e=0;e<t.length;e++){let r=t[e];if(typeof r==`string`){if(r.trim()===`$$`&&n.length>0){let e=n[n.length-1];if(e===void 0){n.push(r);continue}let t=e.trimStart().startsWith(`$$`),i=(e.match(/\$\$/g)||[]).length;if(t&&i%2==1){n[n.length-1]=e+r;continue}}if(n.length>0&&r.trimEnd().endsWith(`$$`)){let e=n[n.length-1];if(e===void 0){n.push(r);continue}let t=e.trimStart().startsWith(`$$`),i=(e.match(/\$\$/g)||[]).length,a=(r.match(/\$\$/g)||[]).length;if(t&&i%2==1&&!r.trimStart().startsWith(`$$`)&&a===1){n[n.length-1]=e+r;continue}}n.push(r)}}return n},ie=/(!?\[)([^\]]*?)$/,ae=/(\*\*)([^*]*?)$/,oe=/(__)([^_]*?)$/,se=/(\*\*\*)([^*]*?)$/,ce=/(\*)([^*]*?)$/,le=/(_)([^_]*?)$/,ue=/(~~)([^~]*?)$/,J=null,Y=``,X=e=>{if(e===J)return Y;let t=e.split(``),n=(e,n)=>{for(let r=e;r<n;r++)t[r]!==`
++`&&(t[r]=` `)},r=0;for(;r<e.length;){if(e[r]!=="`"){r++;continue}let t=r;for(;t<e.length&&e[t]==="`";)t++;let i=t-r,a=r;for(;e[a-1]===` `||e[a-1]===`	`;)a--;let o=a===0||e[a-1]===`
++`;if(i>=3&&o){let a=RegExp(`\\n[ \\t]*\`{${i},}[ \\t]*(?:\\n|$)`),o=e.slice(t).match(a),s=o&&o.index!==void 0?t+o.index+o[0].length:e.length;n(r,s),r=s;continue}let s=t,c=!1;for(;s<e.length;){if(e[s]!=="`"){s++;continue}let t=s;for(;t<e.length&&e[t]==="`";)t++;if(t-s===i){s=t,c=!0;break}s=t}let l=c?s:e.length;n(r,l),r=l}return J=e,Y=t.join(``),Y},de=e=>{let t=X(e),n=t.match(ie);if(n){let r=n[1];if(r){let n=t.lastIndexOf(r);if(n>=0)return e.substring(0,n)}}return e},fe=e=>{let t=X(e);return t.match(ae)&&(t.match(/\*\*/g)||[]).length%2==1?`${e}**`:e},pe=e=>{let t=X(e);return t.match(oe)&&(t.match(/__/g)||[]).length%2==1?`${e}__`:e},me=e=>{let t=0,n=!1;for(let r=0;r<e.length;r++){let i=e[r];if(i===`
++`){n=!1;continue}if(i===`*`){let i=e[r-1],a=e[r+1];i!==`\\`&&!(!n&&(a===` `||a===`	`))&&i!==`*`&&a!==`*`&&t++}!n&&i.trim()!==``&&(n=!0)}return t},he=e=>{let t=X(e);return t.match(ce)&&me(t)%2==1?`${e}*`:e},ge=e=>{let t=0,n=!1,r=!1;for(let i=0;i<e.length;i++){let a=e[i];if(a===`\\`&&e[i+1]===`$`){i++;continue}if(a===`$`){e[i+1]===`$`?(r=!r,i++,n=!1):r||(n=!n);continue}if(a!==`_`||n||r)continue;let o=e[i-1],s=e[i+1];o!==`\\`&&o!==`_`&&s!==`_`&&t++}return t},_e=e=>{let t=X(e);return t.match(le)&&ge(t)%2==1?`${e}_`:e},ve=/^[ \t]*(?:>[ \t]*)*(`{3,}|~{3,})([^\n]*)$/,Z=e=>{let t=0,n=``;for(let r=0;r<=e.length;){let i=e.indexOf(`
++`,r);i===-1&&(i=e.length);let a=e.slice(r,i),o=ve.exec(a),s=o?.[1]??``,c=o?.[2]??``;n?s[0]===n[0]&&s.length>=n.length&&!c.trim()&&(n=``,t=i+1):s&&(s[0]===`~`||!c.includes("`"))?n=s:i<e.length&&!a.trim()&&(t=i+1),r=i+1}if(n)return e;let r=(e.slice(t).match(/`+/g)??[]).map(e=>e.length),i=[],a=new Map;for(let e=r.length-1;e>=0;e--)i[e]=a.get(r[e])??-1,a.set(r[e],e);for(let t=0;t<r.length;t++)if(i[t]!==-1)t=i[t];else if(r[t]===1)return`${e}\``;return e},ye=e=>{if(e.match(/^```[^`\n]*```?$/)&&!e.includes(`
++`))return e.endsWith("``")&&!e.endsWith("```")?`${e}\``:e;let t=(e.match(/```/g)||[]).length,n=t%2==1;return t>0&&t%2==0&&e.includes(`
++`)||(e.endsWith("```\n")||e.endsWith("```"))&&t%2==0||n?e:Z(e)},be=e=>{let t=X(e);return t.match(ue)&&(t.match(/~~/g)||[]).length%2==1?`${e}~~`:e},xe=e=>{let t=X(e);if((t.match(/\$\$/g)||[]).length%2==0||(t.match(/\\begin\{[^}]+\}/g)||[]).length!==(t.match(/\\end\{[^}]+\}/g)||[]).length)return e;let n=t.indexOf(`$$`);return n!==-1&&t.indexOf(`
++`,n)!==-1&&!e.endsWith(`
++`)?`${e}\n$$`:`${e}$$`},Se=e=>{let t=0,n=e.match(/\*+/g)||[];for(let e of n){let n=e.length;n>=3&&(t+=Math.floor(n/3))}return t},Ce=e=>{if(/^\*{4,}$/.test(e))return e;let t=X(e);return t.match(se)&&Se(t)%2==1?`${e}***`:e},Q=e=>{if(!e||typeof e!=`string`)return e;let t=e;return t.length,(t.match(/\$\$/g)||[]).length,t=de(t),t=Ce(t),t=fe(t),t=pe(t),t=he(t),t=_e(t),t=ye(t),t=be(t),t=xe(t),t},we=/(\\begin\{(?:b|p|B|v|V)?matrix\})([\s\S]*?)(\\end\{(?:b|p|B|v|V)?matrix\})/g;function Te(e){return e.replace(we,(e,t,n,r,i)=>{let a=n.split(/\n+/g).map(e=>e.trim()).filter(e=>e.length>0&&e!==`\\`);if(a.some(e=>/\\\\/.test(e))){let e=[];for(let t of a)if(/\\\\/.test(t)){let n=t.split(/\\\\\s*/).map(e=>e.trim()).filter(e=>e.length>0&&e!==`\\`);for(let t of n)e.push(t)}else e.push(t);a=e}return a.length===0?`${t}\n${r}`:`${t}\n${a.map((e,t)=>t<a.length-1?/\\\\\s*$/.test(e)?e:/\\\s*$/.test(e)?e.replace(/\\\s*$/,` \\\\`):e+` \\\\`:e.replace(/\\\s*$/,``)).join(`
++`)}\n${r}`})}function Ee(e){return e.replace(/\$\$([\s\S]*?)\$\$/g,(e,t)=>{if(!/\\begin\{(?:b|p|B|v|V)?matrix\}/.test(t))return e;let n=/^\s*\n/.test(t),r=/\n\s*$/.test(t);return n&&r?e:`$$
++`+t.trim().replace(/(\\begin\{[^}]+\})/,`$1
++`).replace(/(\\\\)\s*(?=\S)/g,`$1
++`).replace(/(\\end\{[^}]+\})/,`
++$1`).trim()+`
++$$`})}function De(e){let t=e.replace(/\r\n?/g,`
++`).split(`
++`),n=[],r=!1,i=``,a=0,o=!1,s=``,c=``,l=e=>{n.push(e.length?s+e:s)},u=e=>s&&e.startsWith(s)?e.slice(s.length):c&&e.startsWith(c)?e.slice(c.length):e.trimStart();for(let e of t){if(!o){let t=e.match(/^(\s*(?:>\s*)*)([`~]{3,})/);if(t){let o=t[2];if(!o){n.push(e);continue}if(r)o[0]===i&&o.length>=a&&(r=!1,i=``,a=0);else{if(!o.length){n.push(e);continue}r=!0,i=o[0],a=o.length}n.push(e);continue}}if(r){n.push(e);continue}if(!o){let t=e.match(/^(\s*(?:>\s*)*)\\\[(.*)$/);if(!t){n.push(e);continue}o=!0,c=t[1]??``,s=c.includes(`>`)&&!/\s$/.test(c)?c+` `:c,n.length>0&&n[n.length-1]?.trim().length&&n.push(s.includes(`>`)?s:``),n.push(s+`$$`);let r=t[2]??``,i=r.indexOf(`\\]`);if(i!==-1){let e=r.slice(0,i);e.length>0&&l(u(e).trimStart()),n.push(s+`$$`),o=!1;let t=r.slice(i+2);t.length>0&&n.push(s+t.trimStart())}else r.trim().length>0&&l(u(r).trimStart());continue}let t=e.indexOf(`\\]`);if(t!==-1){let r=e.slice(0,t);r.length>0&&l(u(r)),n.push(s+`$$`),o=!1;let i=e.slice(t+2);i.length>0&&n.push(s+i.trimStart())}else l(u(e))}let d=[],f=!1,p=``,m=0;for(let e of n){let t=e,n=t.match(/^(\s*(?:>\s*)*)([`~]{3,})/);if(n){let e=n[2]??``;f?e[0]===p&&e.length>=m&&(f=!1,p=``,m=0):(f=!0,p=e[0]??``,m=e.length),d.push(t);continue}if(f){d.push(t);continue}if(/\\\[.*?\\\]/.test(t)&&!/^\s*\\\[/.test(t)){let e=[],n=/\\\[([^\n]*?)\\\]/g,r=0,i;for(;i=n.exec(t);){let n=t.slice(r,i.index);n.trim().length&&e.push(n);let a=(i[1]??``).trim();e.push(`$$`),a.length&&e.push(a),e.push(`$$`),r=i.index+i[0].length}let a=t.slice(r);a.trim().length&&e.push(a);for(let t of e)d.push(t===`$$`?`$$`:t)}else d.push(t)}return d.join(`
++`)}var Oe=/\\\[|\\begin\{[bpBvV]?matrix\}/,ke=/`|~~~|\t| {4}/,Ae=e=>Ee(De(Te(e)));function je(e,t){let n=e.replace(/\r\n?/g,`
++`);if(!Oe.test(n))return n;if(!ke.test(n))return Ae(n);let r=[],i=e=>{if(e.type===`code`||e.type===`inlineCode`){let t=e.position?.start.offset,n=e.position?.end.offset;t!==void 0&&n!==void 0&&r.push([t,n]);return}e.children?.forEach(i)};if(i(t(n)),!r.length)return Ae(n);let a=`STREAMDOWN_CODE_`;for(;n.includes(a);)a+=`_`;let o=[],s=RegExp(`${a}(\\d+)_`,`g`),c=e=>e.replace(s,(e,t)=>o[Number(t)]),l=e=>`${a}${o.push(c(e))-1}_`,u=``,d=0;for(let[e,t]of r)u+=n.slice(d,e)+l(n.slice(e,t)),d=t;u+=n.slice(d);let f=new RegExp(String.raw`\\begin\{[bpBvV]?matrix\}(?:(?!${a}|\\end\{[bpBvV]?matrix\})[\s\S])*(?=${a})`,`g`),p=new RegExp(String.raw`(?<=^[^\S\n]*(?:>[^\S\n]*)*)\\\[(?:(?!${a}|\\\])[\s\S])*(?=${a})|\\\[(?:(?!${a}|\\\])[^\n])*(?=${a})`,`gm`),m=Te(u.replace(f,l));return m=De(m.replace(p,l)),m=m.replace(/\$\$[\s\S]*?\$\$/g,e=>e.includes(a)?l(e):e),c(Ee(m))}var Me=(e,t)=>{if(!t)return e;try{return new URL(e,t).toString()}catch{return e}},$=(e,t,n)=>{if(!e)return null;let r=e.trim();r=Me(r,n);let i=r.toLowerCase();return i.startsWith(`javascript:`)||!t.some(e=>i.startsWith(e))?null:r},Ne=(e,t)=>$(e,t.allowedLinkPrefixes,t.defaultOrigin),Pe=(e,t)=>$(e,t.allowedImagePrefixes,t.defaultOrigin),Fe=(0,t.defineComponent)({name:`StreamMarkdown`,props:{content:{type:String,default:``},class:{type:String,default:``},className:{type:String,default:``},components:{type:Object,default:()=>({})},remarkPlugins:{type:Array,default:()=>[]},rehypePlugins:{type:Array,default:()=>[]},defaultOrigin:{type:String,default:void 0},allowedImagePrefixes:{type:Array,default:()=>[`https://`,`http://`]},allowedLinkPrefixes:{type:Array,default:()=>[`https://`,`http://`]},parseIncompleteMarkdown:{type:Boolean,default:!0},shikiTheme:{type:[String,Object],default:void 0},codeBlockActions:{type:Array,default:()=>[]},codeBlockShowLineNumbers:{type:Boolean,default:!1},codeBlockSelectable:{type:Boolean,default:!0},codeBlockHideCopy:{type:Boolean,default:!1},codeBlockHideDownload:{type:Boolean,default:!1}},setup(e,{slots:s}){let c=e=>e&&typeof e==`object`&&`default`in e?e.default:e,l=e.remarkPlugins.some(e=>{let t=Array.isArray(e)?e[0]:e;return c(t)===a.default}),f=e.remarkPlugins.length>0||e.rehypePlugins.length>0,p=()=>{let t=(0,n.unified)().use(c(r.default)).use(c(i.default));l||t.use(c(a.default),{singleDollarTextMath:!1}),e.remarkPlugins.forEach(e=>{if(Array.isArray(e)){let[n,r]=e;t.use(c(n),r)}else t.use(c(e))}),t.use(c(o.default),{allowDangerousHtml:!1});let s=u();return s&&t.use(c(s)),e.rehypePlugins.forEach(e=>{if(Array.isArray(e)){let[n,r]=e;t.use(c(n),r)}else t.use(c(e))}),{processor:t,hasKatex:!!s}},{processor:m,hasKatex:h}=p(),g=(0,t.shallowRef)(0),_=!1,v=e=>e?.type===`element`&&e.tagName===`code`&&(e.properties?.className||[]).includes(`language-math`),y=e=>v(e)||Array.isArray(e?.children)&&e.children.some(y),b={allowedImagePrefixes:e.allowedImagePrefixes,allowedLinkPrefixes:e.allowedLinkPrefixes,defaultOrigin:e.defaultOrigin},x={...G,...e.components||{}},S=(e,t)=>e.map(e=>T(e,t)).filter(Boolean);function C(e){return e.type===`text`?e.value:e.children?e.children.map(C).join(``):``}let w=(e,n,r)=>typeof e==`string`?r&&r.length?(0,t.h)(e,n,r):(0,t.h)(e,n):!r||Array.isArray(r)&&r.length===0?(0,t.h)(e,n):(0,t.h)(e,n,{default:Array.isArray(r)?()=>r:()=>[r]}),T=(n,r)=>{if(!n)return null;if(n.type===`text`)return n.value;if(n.type!==`element`)return null;let i=n,a=Object.fromEntries(Object.entries(i.properties||{}).map(([t,n])=>[t===`className`&&!e.components[i.tagName]?`class`:t,Array.isArray(n)?[...n]:n])),o=S(i.children||[],i.tagName),s=i.tagName;if(s===`a`){let e=Ne(String(a.href||``),b);if(!e)return o;a.href=e,a.target=`_blank`,a.rel=`noreferrer`}if(s===`img`){let e=Pe(String(a.src||``),b);if(!e)return null;a.src=e}if(s===`pre`&&i.children&&i.children[0]&&i.children[0].tagName===`code`){let n=i.children[0],r=C(n),a=n.properties?.className||[],o=a.find(e=>e.startsWith(`language-`)),s=o?o.replace(`language-`,``):``;if(s===`math`)return(0,t.h)(`pre`,{"data-streamdown":`math-pending`},[(0,t.h)(`code`,{class:a},r)]);if(s===`mermaid`)return(0,t.h)(H,{code:r});let c=x.codeblock||I;return(0,t.h)(c,{code:r,language:s,theme:e.shikiTheme,actions:e.codeBlockActions,showLineNumbers:e.codeBlockShowLineNumbers,selectable:e.codeBlockSelectable,hideCopy:e.codeBlockHideCopy,hideDownload:e.codeBlockHideDownload})}v(i)&&(a[`data-streamdown`]=`math-pending`);let c=x[s];return c?c===G[s]&&!e.components[s]?c(a,{slots:{default:()=>o}}):w(c,a,o):w(s,a,o)},E=e=>{let n=[];return e.map((e,r)=>(0,t.isVNode)(e)?(0,t.withMemo)([],()=>e,n,r):e)},D={source:null,records:[]},O=/(?:^|\n)[ \t]*(?:>[ \t]*|[-+*][ \t]+|\d{1,9}[.)][ \t]+)*\[[^\]\n]+\]:/,k=e=>e.trim().length===0;return(0,t.onBeforeUnmount)(()=>{_=!0,D.records.length=0,D.source=null}),()=>{g.value,!h&&u()&&({processor:m,hasKatex:h}=p(),D.records=[],D.source=null),x={...G,...e.components},b.allowedImagePrefixes=e.allowedImagePrefixes,b.allowedLinkPrefixes=e.allowedLinkPrefixes,b.defaultOrigin=e.defaultOrigin;let n=[...Object.entries(e.components).flat(),...e.allowedImagePrefixes,null,...e.allowedLinkPrefixes,e.defaultOrigin,JSON.stringify(e.shikiTheme),e.codeBlockShowLineNumbers,e.codeBlockSelectable,e.codeBlockHideCopy,e.codeBlockHideDownload,...e.codeBlockActions],r=e=>e.length===n.length&&e.every((e,t)=>e===n[t]),i=e.content,a=s.default?s.default():[];if(a&&a.length>0){let e=a.map(e=>typeof e.children==`string`?e.children:``).join(``);e.trim()&&(i=e)}let o=null;if(e.parseIncompleteMarkdown&&typeof i==`string`&&i.length){let e=i.replace(/\r\n?/g,`
++`).split(`
++`),t=[];for(let n=0;n<e.length;n++){let r=e[n]??``;/^\s*```/.test(r)&&t.push(n)}if(t.length>0&&t.length%2==1){let n=t[t.length-1],r=(e[n]??``).replace(/^\s*```+/,``),i=``,a=``;if(r.trim().length){let e=r.match(/^([a-zA-Z0-9_-]+)(\s+|$)(.*)$/);e?(i=(e[1]||``).trim(),a=(e[3]||``).trimEnd()):a=r.trimEnd()}let s=n+1<e.length?e.slice(n+1):[];a&&s.unshift(a),o={prefix:n>0?e.slice(0,n).join(`
++`):``,code:s.join(`
++`),lang:i}}}let c=t=>je(t,t=>m.parse(e.parseIncompleteMarkdown?Z(t):t)),l=O.test(i),v=D.source!==null&&i.startsWith(D.source),C=!f&&!l,w=C&&v,T=o?o.prefix:i;e.parseIncompleteMarkdown&&(T=T.replace(/\n {0,3}-[ \t]*$/,``));let A=q(c(T)),j=[],M=[],N=0,P=()=>{M.length&&(j.push(M.join(`
++
++`)),M=[],N=0)};for(let e of A){let t=(e.match(/\$\$/g)||[]).length;if(M.length===0){if(t%2==1){M.push(e),N+=t;continue}j.push(e);continue}M.push(e),N+=t,N%2==0&&P()}P();let F=j.findLastIndex(e=>!k(e)),L=j.map((t,n)=>e.parseIncompleteMarkdown&&!o&&n===F?Q(t.trimEnd()):t);L=L.map((e,t)=>t<F?e.replace(/\n+$/,``):e);let R=0;if(w){let e=Math.min(D.records.length,L.length);for(;R<e&&R<F&&D.records[R].input===L[R];)R++}let z=[],B=[],V=!1;for(let e=0;e<L.length;e++){let t=L[e];if(e<R){let t=D.records[e];C&&z.push(t),(!t.completed||!r(t.context))&&(t.vnodes=E(S(t.tree.children)),t.context=n,t.completed=!0),B.push(...t.vnodes);continue}let i=m.runSync(m.parse(t));!h&&!V&&(V=y(i));let a=S(i.children),s=e<F||!!o,c=s?E(a):a;C&&z.push({input:t,tree:i,vnodes:c,context:n,completed:s}),B.push(...c)}if(D.records=C?z:[],D.source=i,V&&d().then(()=>{_||g.value++},()=>{}),o){let n=x.codeblock||I;B.push(o.lang===`mermaid`?(0,t.h)(H,{code:o.code,streaming:!0}):(0,t.h)(n,{code:o.code,language:o.lang,theme:e.shikiTheme,actions:e.codeBlockActions,showLineNumbers:e.codeBlockShowLineNumbers,selectable:e.codeBlockSelectable,hideCopy:e.codeBlockHideCopy,hideDownload:e.codeBlockHideDownload,"data-open-fence":`true`,"data-streaming":`true`}))}let U=[`streamdown-vue space-y-4`,e.class,e.className].filter(Boolean).join(` `);return(0,t.h)(`div`,{class:U||void 0},B)}}});Object.defineProperty(exports,"a",{enumerable:!0,get:function(){return I}}),Object.defineProperty(exports,"c",{enumerable:!0,get:function(){return E}}),Object.defineProperty(exports,"i",{enumerable:!0,get:function(){return H}}),Object.defineProperty(exports,"l",{enumerable:!0,get:function(){return D}}),Object.defineProperty(exports,"n",{enumerable:!0,get:function(){return Q}}),Object.defineProperty(exports,"o",{enumerable:!0,get:function(){return M}}),Object.defineProperty(exports,"r",{enumerable:!0,get:function(){return q}}),Object.defineProperty(exports,"s",{enumerable:!0,get:function(){return k}}),Object.defineProperty(exports,"t",{enumerable:!0,get:function(){return Fe}}),Object.defineProperty(exports,"u",{enumerable:!0,get:function(){return d}});
+\ No newline at end of file
+diff --git a/node_modules/streamdown-vue/dist/core.cjs b/node_modules/streamdown-vue/dist/core.cjs
+index c585f08..c505244 100644
+--- a/node_modules/streamdown-vue/dist/core.cjs
++++ b/node_modules/streamdown-vue/dist/core.cjs
+@@ -1 +1 @@
+-Object.defineProperty(exports,Symbol.toStringTag,{value:`Module`});const e=require("./StreamMarkdown-BN6qzvpl.cjs");exports.CODE_BLOCK_META_KEY=e.u,exports.CodeBlock=e.a,exports.CopyButton=e.l,exports.DownloadButton=e.c,exports.GLOBAL_CODE_BLOCK_ACTIONS=e.d,exports.MermaidBlock=e.i,exports.StreamMarkdown=e.t,exports.clearRegisteredShikiLanguages=e.m,exports.excludeShikiLanguages=e.h,exports.isLazyShikiLanguage=e.g,exports.loadRegisteredShikiLanguage=e.o,exports.parseBlocks=e.r,exports.parseIncompleteMarkdown=e.n,exports.preloadMath=e.f,exports.registerDefaultShikiLanguages=e.p,exports.registerShikiLanguage=e._,exports.registerShikiLanguages=e.v,exports.unregisterShikiLanguage=e.y,exports.useShikiHighlighter=e.s;
+\ No newline at end of file
++Object.defineProperty(exports,Symbol.toStringTag,{value:`Module`});const e=require("./streaming-C3icnMHg.cjs"),t=require("./StreamMarkdown-n5aAv6tj.cjs");exports.CODE_BLOCK_META_KEY=t.c,exports.CodeBlock=t.a,exports.CopyButton=t.s,exports.DownloadButton=t.o,exports.GLOBAL_CODE_BLOCK_ACTIONS=t.l,exports.MermaidBlock=t.i,exports.StreamMarkdown=t.t,exports.clearRegisteredShikiLanguages=e.a,exports.createStreamingHighlighter=e.t,exports.excludeShikiLanguages=e.o,exports.isLazyShikiLanguage=e.l,exports.loadRegisteredShikiLanguage=e.n,exports.parseBlocks=t.r,exports.parseIncompleteMarkdown=t.n,exports.preloadMath=t.u,exports.registerDefaultShikiLanguages=e.i,exports.registerShikiLanguage=e.u,exports.registerShikiLanguages=e.d,exports.unregisterShikiLanguage=e.p,exports.useShikiHighlighter=e.r;
+\ No newline at end of file
+diff --git a/node_modules/streamdown-vue/dist/core.es.js b/node_modules/streamdown-vue/dist/core.es.js
+index 16d4052..728e167 100644
+--- a/node_modules/streamdown-vue/dist/core.es.js
++++ b/node_modules/streamdown-vue/dist/core.es.js
+@@ -1,2 +1,3 @@
+-import { _ as e, a as t, c as n, d as r, f as i, g as a, h as o, i as s, l as c, m as l, n as u, o as d, p as f, r as p, s as m, t as h, u as g, v as _, y as v } from "./StreamMarkdown-C1L-FrYN.js";
+-export { g as CODE_BLOCK_META_KEY, t as CodeBlock, c as CopyButton, n as DownloadButton, r as GLOBAL_CODE_BLOCK_ACTIONS, s as MermaidBlock, h as StreamMarkdown, l as clearRegisteredShikiLanguages, o as excludeShikiLanguages, a as isLazyShikiLanguage, d as loadRegisteredShikiLanguage, p as parseBlocks, u as parseIncompleteMarkdown, i as preloadMath, f as registerDefaultShikiLanguages, e as registerShikiLanguage, _ as registerShikiLanguages, v as unregisterShikiLanguage, m as useShikiHighlighter };
++import { a as e, d as t, i as n, l as r, n as i, o as a, p as o, r as s, t as c, u as l } from "./streaming-Dma7ypXK.js";
++import { a as u, c as d, i as f, l as p, n as m, o as h, r as g, s as _, t as v, u as y } from "./StreamMarkdown-CqSJXi5m.js";
++export { d as CODE_BLOCK_META_KEY, u as CodeBlock, _ as CopyButton, h as DownloadButton, p as GLOBAL_CODE_BLOCK_ACTIONS, f as MermaidBlock, v as StreamMarkdown, e as clearRegisteredShikiLanguages, c as createStreamingHighlighter, a as excludeShikiLanguages, r as isLazyShikiLanguage, i as loadRegisteredShikiLanguage, g as parseBlocks, m as parseIncompleteMarkdown, y as preloadMath, n as registerDefaultShikiLanguages, l as registerShikiLanguage, t as registerShikiLanguages, o as unregisterShikiLanguage, s as useShikiHighlighter };
+diff --git a/node_modules/streamdown-vue/dist/index.cjs b/node_modules/streamdown-vue/dist/index.cjs
+index e3801b2..e70b648 100644
+--- a/node_modules/streamdown-vue/dist/index.cjs
++++ b/node_modules/streamdown-vue/dist/index.cjs
+@@ -1 +1 @@
+-Object.defineProperty(exports,Symbol.toStringTag,{value:`Module`});const e=require("./StreamMarkdown-BN6qzvpl.cjs");e.p(),exports.CODE_BLOCK_META_KEY=e.u,exports.CodeBlock=e.a,exports.CopyButton=e.l,exports.DownloadButton=e.c,exports.GLOBAL_CODE_BLOCK_ACTIONS=e.d,exports.MermaidBlock=e.i,exports.StreamMarkdown=e.t,exports.clearRegisteredShikiLanguages=e.m,exports.excludeShikiLanguages=e.h,exports.isLazyShikiLanguage=e.g,exports.loadRegisteredShikiLanguage=e.o,exports.parseBlocks=e.r,exports.parseIncompleteMarkdown=e.n,exports.preloadMath=e.f,exports.registerDefaultShikiLanguages=e.p,exports.registerShikiLanguage=e._,exports.registerShikiLanguages=e.v,exports.unregisterShikiLanguage=e.y,exports.useShikiHighlighter=e.s;
+\ No newline at end of file
++Object.defineProperty(exports,Symbol.toStringTag,{value:`Module`});const e=require("./streaming-C3icnMHg.cjs"),t=require("./StreamMarkdown-n5aAv6tj.cjs");e.i(),exports.CODE_BLOCK_META_KEY=t.c,exports.CodeBlock=t.a,exports.CopyButton=t.s,exports.DownloadButton=t.o,exports.GLOBAL_CODE_BLOCK_ACTIONS=t.l,exports.MermaidBlock=t.i,exports.StreamMarkdown=t.t,exports.clearRegisteredShikiLanguages=e.a,exports.createStreamingHighlighter=e.t,exports.excludeShikiLanguages=e.o,exports.isLazyShikiLanguage=e.l,exports.loadRegisteredShikiLanguage=e.n,exports.parseBlocks=t.r,exports.parseIncompleteMarkdown=t.n,exports.preloadMath=t.u,exports.registerDefaultShikiLanguages=e.i,exports.registerShikiLanguage=e.u,exports.registerShikiLanguages=e.d,exports.unregisterShikiLanguage=e.p,exports.useShikiHighlighter=e.r;
+\ No newline at end of file
+diff --git a/node_modules/streamdown-vue/dist/index.es.js b/node_modules/streamdown-vue/dist/index.es.js
+index 00c6e60..1171f0d 100644
+--- a/node_modules/streamdown-vue/dist/index.es.js
++++ b/node_modules/streamdown-vue/dist/index.es.js
+@@ -1,5 +1,6 @@
+-import { _ as e, a as t, c as n, d as r, f as i, g as a, h as o, i as s, l as c, m as l, n as u, o as d, p as f, r as p, s as m, t as h, u as g, v as _, y as v } from "./StreamMarkdown-C1L-FrYN.js";
++import { a as e, d as t, i as n, l as r, n as i, o as a, p as o, r as s, t as c, u as l } from "./streaming-Dma7ypXK.js";
++import { a as u, c as d, i as f, l as p, n as m, o as h, r as g, s as _, t as v, u as y } from "./StreamMarkdown-CqSJXi5m.js";
+ //#region index.ts
+-f();
++n();
+ //#endregion
+-export { g as CODE_BLOCK_META_KEY, t as CodeBlock, c as CopyButton, n as DownloadButton, r as GLOBAL_CODE_BLOCK_ACTIONS, s as MermaidBlock, h as StreamMarkdown, l as clearRegisteredShikiLanguages, o as excludeShikiLanguages, a as isLazyShikiLanguage, d as loadRegisteredShikiLanguage, p as parseBlocks, u as parseIncompleteMarkdown, i as preloadMath, f as registerDefaultShikiLanguages, e as registerShikiLanguage, _ as registerShikiLanguages, v as unregisterShikiLanguage, m as useShikiHighlighter };
++export { d as CODE_BLOCK_META_KEY, u as CodeBlock, _ as CopyButton, h as DownloadButton, p as GLOBAL_CODE_BLOCK_ACTIONS, f as MermaidBlock, v as StreamMarkdown, e as clearRegisteredShikiLanguages, c as createStreamingHighlighter, a as excludeShikiLanguages, r as isLazyShikiLanguage, i as loadRegisteredShikiLanguage, g as parseBlocks, m as parseIncompleteMarkdown, y as preloadMath, n as registerDefaultShikiLanguages, l as registerShikiLanguage, t as registerShikiLanguages, o as unregisterShikiLanguage, s as useShikiHighlighter };
+diff --git a/node_modules/streamdown-vue/dist/shiki.cjs b/node_modules/streamdown-vue/dist/shiki.cjs
+new file mode 100644
+index 0000000..9d9a5b6
+--- /dev/null
++++ b/node_modules/streamdown-vue/dist/shiki.cjs
+@@ -0,0 +1 @@
++Object.defineProperty(exports,Symbol.toStringTag,{value:`Module`});const e=require("./streaming-C3icnMHg.cjs");exports.clearRegisteredShikiLanguages=e.a,exports.createStreamingHighlighter=e.t,exports.excludeShikiLanguages=e.o,exports.getRegisteredLanguageIds=e.s,exports.hasRegisteredLanguages=e.c,exports.isLazyShikiLanguage=e.l,exports.loadRegisteredShikiLanguage=e.n,exports.registerDefaultShikiLanguages=e.i,exports.registerShikiLanguage=e.u,exports.registerShikiLanguages=e.d,exports.resolveLanguageInputs=e.f,exports.unregisterShikiLanguage=e.p,exports.useShikiHighlighter=e.r;
+\ No newline at end of file
 diff --git a/node_modules/streamdown-vue/dist/shiki.d.ts b/node_modules/streamdown-vue/dist/shiki.d.ts
 new file mode 100644
-index 0000000..ba940f6
+index 0000000..5236b01
 --- /dev/null
 +++ b/node_modules/streamdown-vue/dist/shiki.d.ts
-@@ -0,0 +1,3 @@
-+export { useShikiHighlighter, loadRegisteredShikiLanguage } from "./src/use-shiki-highlighter";
-+export { registerShikiLanguage, registerShikiLanguages, unregisterShikiLanguage, excludeShikiLanguages, clearRegisteredShikiLanguages, isLazyShikiLanguage, type ShikiLanguageConfig } from "./src/shiki/registry";
-+export { registerDefaultShikiLanguages } from "./src/shiki/register-default-languages";
+@@ -0,0 +1,5 @@
++export { useShikiHighlighter, loadRegisteredShikiLanguage, } from './src/use-shiki-highlighter';
++export * from './src/shiki/registry';
++export { registerDefaultShikiLanguages } from './src/shiki/register-default-languages';
++export { createStreamingHighlighter } from './src/shiki/streaming';
++export type { ShikiThemeConfig, CodeHighlightInput } from './src/types';
 diff --git a/node_modules/streamdown-vue/dist/shiki.es.js b/node_modules/streamdown-vue/dist/shiki.es.js
 new file mode 100644
-index 0000000..41cd78b
+index 0000000..9ad1aa9
 --- /dev/null
 +++ b/node_modules/streamdown-vue/dist/shiki.es.js
-@@ -0,0 +1,254 @@
-+import { createHighlighterCore as h } from "shiki/core";
-+import { createJavaScriptRegexEngine as g } from "shiki/engine/javascript";
-+import _ from "@shikijs/themes/github-light";
-+import v from "@shikijs/themes/github-dark";
-+var x = "https://esm.sh/@shikijs/langs@4.4.3/es2022/";
-+`${x}`;
-+var S = Symbol.for("streamdown.vue.shikiRemote"), C = (e) => (typeof e == "function" && (e[S] = !0), e), w = (e) => typeof e == "function" && !!e?.[S], T = (e) => {
+@@ -0,0 +1,2 @@
++import { a as e, c as t, d as n, f as r, i, l as a, n as o, o as s, p as c, r as l, s as u, t as d, u as f } from "./streaming-Dma7ypXK.js";
++export { e as clearRegisteredShikiLanguages, d as createStreamingHighlighter, s as excludeShikiLanguages, u as getRegisteredLanguageIds, t as hasRegisteredLanguages, a as isLazyShikiLanguage, o as loadRegisteredShikiLanguage, i as registerDefaultShikiLanguages, f as registerShikiLanguage, n as registerShikiLanguages, r as resolveLanguageInputs, c as unregisterShikiLanguage, l as useShikiHighlighter };
+diff --git a/node_modules/streamdown-vue/dist/src/StreamMarkdown.d.ts b/node_modules/streamdown-vue/dist/src/StreamMarkdown.d.ts
+index 118b6a3..206cabc 100644
+--- a/node_modules/streamdown-vue/dist/src/StreamMarkdown.d.ts
++++ b/node_modules/streamdown-vue/dist/src/StreamMarkdown.d.ts
+@@ -1,3 +1,4 @@
++import { type VNode } from 'vue';
+ import type { PropType } from 'vue';
+ import { type ComponentMap } from './components/components';
+ import type { ShikiThemeConfig } from './types';
+@@ -66,7 +67,7 @@ export declare const StreamMarkdown: import("vue").DefineComponent<import("vue")
+         type: BooleanConstructor;
+         default: boolean;
+     };
+-}>, () => import("vue").VNode<import("vue").RendererNode, import("vue").RendererElement, {
++}>, () => VNode<import("vue").RendererNode, import("vue").RendererElement, {
+     [key: string]: any;
+ }>, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, {}, string, import("vue").PublicProps, Readonly<import("vue").ExtractPropTypes<{
+     content: {
+diff --git a/node_modules/streamdown-vue/dist/src/components/CodeBlock.d.ts b/node_modules/streamdown-vue/dist/src/components/CodeBlock.d.ts
+index 1a4aac0..b73a998 100644
+--- a/node_modules/streamdown-vue/dist/src/components/CodeBlock.d.ts
++++ b/node_modules/streamdown-vue/dist/src/components/CodeBlock.d.ts
+@@ -1,11 +1,15 @@
+ import type { PropType } from 'vue';
+-import type { ShikiThemeConfig } from '../types';
++import type { ShikiThemeConfig, CodeHighlightInput } from '../types';
+ import { type CodeBlockAction } from './codeblock-context';
+ declare const _default: import("vue").DefineComponent<import("vue").ExtractPropTypes<{
+     code: {
+         type: StringConstructor;
+         required: true;
+     };
++    highlight: {
++        type: PropType<(input: CodeHighlightInput) => Promise<string>>;
++        default: undefined;
++    };
+     language: {
+         type: StringConstructor;
+         default: string;
+@@ -41,6 +45,10 @@ declare const _default: import("vue").DefineComponent<import("vue").ExtractPropT
+         type: StringConstructor;
+         required: true;
+     };
++    highlight: {
++        type: PropType<(input: CodeHighlightInput) => Promise<string>>;
++        default: undefined;
++    };
+     language: {
+         type: StringConstructor;
+         default: string;
+@@ -72,6 +80,7 @@ declare const _default: import("vue").DefineComponent<import("vue").ExtractPropT
+ }>> & Readonly<{}>, {
+     language: string;
+     theme: ShikiThemeConfig;
++    highlight: (input: CodeHighlightInput) => Promise<string>;
+     showLineNumbers: boolean;
+     selectable: boolean;
+     actions: any[];
+diff --git a/node_modules/streamdown-vue/dist/src/components/MermaidBlock.d.ts b/node_modules/streamdown-vue/dist/src/components/MermaidBlock.d.ts
+index 2ff9853..0adc023 100644
+--- a/node_modules/streamdown-vue/dist/src/components/MermaidBlock.d.ts
++++ b/node_modules/streamdown-vue/dist/src/components/MermaidBlock.d.ts
+@@ -3,6 +3,10 @@ declare const _default: import("vue").DefineComponent<import("vue").ExtractPropT
+         type: StringConstructor;
+         required: true;
+     };
++    streaming: {
++        type: BooleanConstructor;
++        default: boolean;
++    };
+ }>, () => import("vue").VNode<import("vue").RendererNode, import("vue").RendererElement, {
+     [key: string]: any;
+ }>, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, {}, string, import("vue").PublicProps, Readonly<import("vue").ExtractPropTypes<{
+@@ -10,5 +14,11 @@ declare const _default: import("vue").DefineComponent<import("vue").ExtractPropT
+         type: StringConstructor;
+         required: true;
+     };
+-}>> & Readonly<{}>, {}, {}, {}, {}, string, import("vue").ComponentProvideOptions, true, {}, any>;
++    streaming: {
++        type: BooleanConstructor;
++        default: boolean;
++    };
++}>> & Readonly<{}>, {
++    streaming: boolean;
++}, {}, {}, {}, string, import("vue").ComponentProvideOptions, true, {}, any>;
+ export default _default;
+diff --git a/node_modules/streamdown-vue/dist/src/components/patch-code-html.d.ts b/node_modules/streamdown-vue/dist/src/components/patch-code-html.d.ts
+new file mode 100644
+index 0000000..3586e04
+--- /dev/null
++++ b/node_modules/streamdown-vue/dist/src/components/patch-code-html.d.ts
+@@ -0,0 +1 @@
++export declare function patchCodeHtml(body: HTMLElement, html: string): void;
+diff --git a/node_modules/streamdown-vue/dist/src/public-api.d.ts b/node_modules/streamdown-vue/dist/src/public-api.d.ts
+index 2617772..4f67e37 100644
+--- a/node_modules/streamdown-vue/dist/src/public-api.d.ts
++++ b/node_modules/streamdown-vue/dist/src/public-api.d.ts
+@@ -1,6 +1,7 @@
+ export { StreamMarkdown, StreamMarkdown as default } from './StreamMarkdown';
+ export { preloadMath } from './math';
+-export type { ShikiThemeConfig } from './types';
++export type { ShikiThemeConfig, CodeHighlightInput } from './types';
++export { createStreamingHighlighter } from './shiki/streaming';
+ export { default as CodeBlock } from './components/CodeBlock';
+ export { default as MermaidBlock } from './components/MermaidBlock';
+ export { default as CopyButton } from './components/CopyButton';
+diff --git a/node_modules/streamdown-vue/dist/src/shiki/streaming.d.ts b/node_modules/streamdown-vue/dist/src/shiki/streaming.d.ts
+new file mode 100644
+index 0000000..92c3135
+--- /dev/null
++++ b/node_modules/streamdown-vue/dist/src/shiki/streaming.d.ts
+@@ -0,0 +1,4 @@
++import { type HighlighterCore } from 'shiki/core';
++import type { CodeHighlightInput } from '../types';
++/** A single code block's tokenizer. Release the function when its block unmounts. */
++export declare function createStreamingHighlighter(highlighter: HighlighterCore): ({ code, language, theme }: CodeHighlightInput) => string;
+diff --git a/node_modules/streamdown-vue/dist/src/types.d.ts b/node_modules/streamdown-vue/dist/src/types.d.ts
+index a02531c..eea2f6d 100644
+--- a/node_modules/streamdown-vue/dist/src/types.d.ts
++++ b/node_modules/streamdown-vue/dist/src/types.d.ts
+@@ -17,3 +17,9 @@ export type ShikiThemeConfig = string | {
+     light: string;
+     dark: string;
+ };
++/** Immutable input for a trusted asynchronous code highlighter (for example a worker). */
++export interface CodeHighlightInput {
++    code: string;
++    language: string;
++    theme: ShikiThemeConfig;
++}
+diff --git a/node_modules/streamdown-vue/dist/streaming-C3icnMHg.cjs b/node_modules/streamdown-vue/dist/streaming-C3icnMHg.cjs
+new file mode 100644
+index 0000000..3dbd926
+--- /dev/null
++++ b/node_modules/streamdown-vue/dist/streaming-C3icnMHg.cjs
+@@ -0,0 +1,5 @@
++var e=Object.create,t=Object.defineProperty,n=Object.getOwnPropertyDescriptor,r=Object.getOwnPropertyNames,i=Object.getPrototypeOf,a=Object.prototype.hasOwnProperty,o=(e,i,o,s)=>{if(i&&typeof i==`object`||typeof i==`function`)for(var c=r(i),l=0,u=c.length,d;l<u;l++)d=c[l],!a.call(e,d)&&d!==o&&t(e,d,{get:(e=>i[e]).bind(null,d),enumerable:!(s=n(i,d))||s.enumerable});return e},s=(n,r,s)=>(s=n==null?{}:e(i(n)),o(r||!n||!n.__esModule||!a.call(n,`default`)?t(s,`default`,{value:n,enumerable:!0}):s,n));let c=require("shiki/core"),l=require("shiki/engine/javascript"),u=require("@shikijs/themes/github-light");u=s(u,1);let d=require("@shikijs/themes/github-dark");d=s(d,1);var f=`https://esm.sh/@shikijs/langs@4.4.3/es2022/`;`${f}`;var p=Symbol.for(`streamdown.vue.shikiRemote`),m=e=>(typeof e==`function`&&(e[p]=!0),e),h=e=>typeof e==`function`&&!!e?.[p],g=e=>{let t=()=>import(`@shikijs/langs/${e}`),n=()=>import(`${f}${e}.mjs`);return m(async()=>{if(typeof window>`u`&&typeof self>`u`)return t();try{return await n()}catch{return t()}})},_={py:`python`,python3:`python`,shellscript:`shell`,shellsession:`shell`,sh:`shell`,zsh:`shell`,bash:`bash`,"markdown-vue":`vue`,"vue-directives":`vue`,"vue-interpolations":`vue`,"vue-sfc-style-variable-injection":`vue`,md:`markdown`,"html-derivative":`html`,ts:`typescript`,js:`javascript`,yml:`yaml`},v=e=>e.trim().toLowerCase().replace(/^language-/,``),y=e=>{let t=v(e);return t&&(_[t]??t)},b=new Map,x=new Map,S=new Set,C=(e,t)=>{let n=y(e);n&&x.set(n,t)},w=e=>{let t=y(e);if(!t)return;if(b.has(t))return t;let n=x.get(t);if(n&&b.has(n))return n},T=e=>{for(let[t,n]of Array.from(x.entries()))(n===e||t===e)&&x.delete(t)};function E(e){let t=y(e.id);t&&(b.set(t,e.loader),e.lazy?S.add(t):S.delete(t),C(t,t),(e.aliases??[]).forEach(e=>C(e,t)))}function D(e){e.forEach(E)}function O(e){let t=w(e);if(!t){let t=y(e);t&&x.delete(t);return}b.delete(t),S.delete(t),T(t)}function k(e){e.forEach(O)}function A(e){let t=new Set,n=[],r=[],i=[];return e.forEach(e=>{let a=w(e);if(!a){r.push(y(e)||e);return}if(t.has(a))return;let o=b.get(a);if(!o){r.push(a);return}t.add(a),i.push(a),n.push(o)}),{inputs:n,missing:r,resolved:i}}function j(){return Array.from(b.keys()).sort()}function M(){return b.size>0}function N(e){let t=w(e);return t?S.has(t):!1}function P(){b.clear(),x.clear(),S.clear()}var F=[{id:`cpp`,aliases:[`c++`],loader:g(`cpp`)},{id:`java`,aliases:[`java`],loader:g(`java`)},{id:`c`,loader:g(`c`)},{id:`csharp`,aliases:[`cs`,`c#`],loader:g(`csharp`)},{id:`php`,loader:g(`php`)},{id:`ruby`,loader:g(`ruby`)},{id:`kotlin`,loader:g(`kotlin`)},{id:`swift`,loader:g(`swift`)},{id:`sql`,loader:g(`sql`)},{id:`typescript`,aliases:[`ts`],loader:()=>import(`@shikijs/langs/typescript`)},{id:`tsx`,loader:()=>import(`@shikijs/langs/tsx`)},{id:`javascript`,aliases:[`js`],loader:()=>import(`@shikijs/langs/javascript`)},{id:`jsx`,loader:()=>import(`@shikijs/langs/jsx`)},{id:`json`,loader:()=>import(`@shikijs/langs/json`)},{id:`bash`,loader:()=>import(`@shikijs/langs/bash`)},{id:`shell`,aliases:[`shellscript`,`shellsession`,`sh`,`zsh`],loader:()=>import(`@shikijs/langs/shellscript`)},{id:`python`,aliases:[`py`],loader:()=>import(`@shikijs/langs/python`)},{id:`diff`,loader:()=>import(`@shikijs/langs/diff`)},{id:`markdown`,aliases:[`md`],loader:()=>import(`@shikijs/langs/markdown`)},{id:`vue`,loader:()=>import(`@shikijs/langs/vue`)},{id:`html`,loader:()=>import(`@shikijs/langs/html`)},{id:`css`,loader:()=>import(`@shikijs/langs/css`)},{id:`go`,loader:()=>import(`@shikijs/langs/go`)},{id:`rust`,loader:()=>import(`@shikijs/langs/rust`)},{id:`yaml`,aliases:[`yml`],loader:()=>import(`@shikijs/langs/yaml`)}],I=!1;function L(){I||(I=!0,D(F.slice()))}var R=null,z=null,B=[u.default,d.default],V=null,H=()=>(V||=(0,l.createJavaScriptRegexEngine)(),V),U=()=>{if(!M())return console.warn(`[streamdown-vue] No Shiki languages are registered. Code blocks will render without syntax highlighting.`),[];let{inputs:e,missing:t,resolved:n}=A(j());return t.length&&console.warn(`[streamdown-vue] Some requested Shiki languages are not registered: ${t.join(`, `)}`),e.filter((e,t)=>!h(e)&&!N(n[t]))};async function W(e){if(!R)return!1;let{inputs:t}=A([e]);return t.length?(await R.loadLanguage(...t),!0):!1}async function G(){if(!z){let e=U();z=(0,c.createHighlighterCore)({themes:B,langs:e,engine:H()}).then(e=>(R=e,e))}return await z}function K(e){let t=``,n=0,r=[],i,a=[],o=``,s=e=>e.children[0].children[0];return({code:l,language:u,theme:d})=>{let f=typeof d==`string`?{theme:d}:{themes:d};if(u===`ansi`)return e.codeToHtml(l,{lang:u,...f});let p=[u,(0,c.isSpecialLang)(u)?null:e.getLanguage(u),...Object.values(f.themes??{single:f.theme}).map(t=>e.getTheme(t))],m=l.replace(/\r\n/g,`
++`);if(!m.startsWith(t)||p.length!==a.length||p.some((e,t)=>e!==a[t]))t=``,n=0,r=[],i=void 0;else if(m===t&&o)return o;a=p;let h=m.lastIndexOf(`
++`)+1;if(h>n){let t=e.codeToHast(m.slice(n,h-1),{lang:u,...f,grammarState:i});r.length&&r.push({type:`text`,value:`
++`}),r.push(...s(t).children),i=e.getLastGrammarState(t),n=h}let g=e.codeToHast(m.slice(n),{lang:u,...f,grammarState:i}),_=s(g);return _.children=r.length?[...r,{type:`text`,value:`
++`},..._.children]:_.children,t=m,o=(0,c.hastToHtml)(g),o}}Object.defineProperty(exports,"a",{enumerable:!0,get:function(){return P}}),Object.defineProperty(exports,"c",{enumerable:!0,get:function(){return M}}),Object.defineProperty(exports,"d",{enumerable:!0,get:function(){return D}}),Object.defineProperty(exports,"f",{enumerable:!0,get:function(){return A}}),Object.defineProperty(exports,"i",{enumerable:!0,get:function(){return L}}),Object.defineProperty(exports,"l",{enumerable:!0,get:function(){return N}}),Object.defineProperty(exports,"m",{enumerable:!0,get:function(){return s}}),Object.defineProperty(exports,"n",{enumerable:!0,get:function(){return W}}),Object.defineProperty(exports,"o",{enumerable:!0,get:function(){return k}}),Object.defineProperty(exports,"p",{enumerable:!0,get:function(){return O}}),Object.defineProperty(exports,"r",{enumerable:!0,get:function(){return G}}),Object.defineProperty(exports,"s",{enumerable:!0,get:function(){return j}}),Object.defineProperty(exports,"t",{enumerable:!0,get:function(){return K}}),Object.defineProperty(exports,"u",{enumerable:!0,get:function(){return E}});
+\ No newline at end of file
+diff --git a/node_modules/streamdown-vue/dist/streaming-Dma7ypXK.js b/node_modules/streamdown-vue/dist/streaming-Dma7ypXK.js
+new file mode 100644
+index 0000000..130ef2e
+--- /dev/null
++++ b/node_modules/streamdown-vue/dist/streaming-Dma7ypXK.js
+@@ -0,0 +1,299 @@
++import { createHighlighterCore as e, hastToHtml as t, isSpecialLang as n } from "shiki/core";
++import { createJavaScriptRegexEngine as r } from "shiki/engine/javascript";
++import i from "@shikijs/themes/github-light";
++import a from "@shikijs/themes/github-dark";
++var o = "https://esm.sh/@shikijs/langs@4.4.3/es2022/";
++`${o}`;
++var s = Symbol.for("streamdown.vue.shikiRemote"), c = (e) => (typeof e == "function" && (e[s] = !0), e), l = (e) => typeof e == "function" && !!e?.[s], u = (e) => {
 +	let t = () => import(
 +		/* @vite-ignore */
 +		`@shikijs/langs/${e}`
 +), n = () => import(
 +		/* webpackIgnore: true */
 +		/* @vite-ignore */
-+		`${x}${e}.mjs`
++		`${o}${e}.mjs`
 +);
-+	return C(async () => {
-+		if (typeof window > "u" && typeof WorkerGlobalScope > "u") return t();
++	return c(async () => {
++		if (typeof window > "u" && typeof self > "u") return t();
 +		try {
 +			return await n();
 +		} catch {
 +			return t();
 +		}
 +	});
-+}, E = {
++}, d = {
 +	py: "python",
 +	python3: "python",
 +	shellscript: "shell",
@@ -367,50 +2904,50 @@ index 0000000..41cd78b
 +	ts: "typescript",
 +	js: "javascript",
 +	yml: "yaml"
-+}, D = (e) => e.trim().toLowerCase().replace(/^language-/, ""), O = (e) => {
-+	let t = D(e);
-+	return t && (E[t] ?? t);
-+}, k = /* @__PURE__ */ new Map(), A = /* @__PURE__ */ new Map(), j = /* @__PURE__ */ new Set(), M = (e, t) => {
-+	let n = O(e);
-+	n && A.set(n, t);
-+}, N = (e) => {
-+	let t = O(e);
++}, f = (e) => e.trim().toLowerCase().replace(/^language-/, ""), p = (e) => {
++	let t = f(e);
++	return t && (d[t] ?? t);
++}, m = /* @__PURE__ */ new Map(), h = /* @__PURE__ */ new Map(), g = /* @__PURE__ */ new Set(), _ = (e, t) => {
++	let n = p(e);
++	n && h.set(n, t);
++}, v = (e) => {
++	let t = p(e);
 +	if (!t) return;
-+	if (k.has(t)) return t;
-+	let n = A.get(t);
-+	if (n && k.has(n)) return n;
-+}, P = (e) => {
-+	for (let [t, n] of Array.from(A.entries())) (n === e || t === e) && A.delete(t);
++	if (m.has(t)) return t;
++	let n = h.get(t);
++	if (n && m.has(n)) return n;
++}, y = (e) => {
++	for (let [t, n] of Array.from(h.entries())) (n === e || t === e) && h.delete(t);
 +};
-+function F(e) {
-+	let t = O(e.id);
-+	t && (k.set(t, e.loader), e.lazy ? j.add(t) : j.delete(t), M(t, t), (e.aliases ?? []).forEach((e) => M(e, t)));
++function b(e) {
++	let t = p(e.id);
++	t && (m.set(t, e.loader), e.lazy ? g.add(t) : g.delete(t), _(t, t), (e.aliases ?? []).forEach((e) => _(e, t)));
 +}
-+function I(e) {
-+	e.forEach(F);
++function x(e) {
++	e.forEach(b);
 +}
-+function ee(e) {
-+	let t = N(e);
++function S(e) {
++	let t = v(e);
 +	if (!t) {
-+		let t = O(e);
-+		t && A.delete(t);
++		let t = p(e);
++		t && h.delete(t);
 +		return;
 +	}
-+	k.delete(t), j.delete(t), P(t);
++	m.delete(t), g.delete(t), y(t);
 +}
-+function te(e) {
-+	e.forEach(ee);
++function C(e) {
++	e.forEach(S);
 +}
-+function ne(e) {
++function w(e) {
 +	let t = /* @__PURE__ */ new Set(), n = [], r = [], i = [];
 +	return e.forEach((e) => {
-+		let a = N(e);
++		let a = v(e);
 +		if (!a) {
-+			r.push(O(e) || e);
++			r.push(p(e) || e);
 +			return;
 +		}
 +		if (t.has(a)) return;
-+		let o = k.get(a);
++		let o = m.get(a);
 +		if (!o) {
 +			r.push(a);
 +			return;
@@ -422,60 +2959,60 @@ index 0000000..41cd78b
 +		resolved: i
 +	};
 +}
-+function re() {
-+	return Array.from(k.keys()).sort();
++function T() {
++	return Array.from(m.keys()).sort();
 +}
-+function ie() {
-+	return k.size > 0;
++function E() {
++	return m.size > 0;
 +}
-+function ae(e) {
-+	let t = N(e);
-+	return t ? j.has(t) : !1;
++function D(e) {
++	let t = v(e);
++	return t ? g.has(t) : !1;
 +}
-+function oe() {
-+	k.clear(), A.clear(), j.clear();
++function O() {
++	m.clear(), h.clear(), g.clear();
 +}
 +//#endregion
 +//#region src/shiki/register-default-languages.ts
-+var se = [
++var k = [
 +	{
 +		id: "cpp",
 +		aliases: ["c++"],
-+		loader: T("cpp")
++		loader: u("cpp")
 +	},
 +	{
 +		id: "java",
 +		aliases: ["java"],
-+		loader: T("java")
++		loader: u("java")
 +	},
 +	{
 +		id: "c",
-+		loader: T("c")
++		loader: u("c")
 +	},
 +	{
 +		id: "csharp",
 +		aliases: ["cs", "c#"],
-+		loader: T("csharp")
++		loader: u("csharp")
 +	},
 +	{
 +		id: "php",
-+		loader: T("php")
++		loader: u("php")
 +	},
 +	{
 +		id: "ruby",
-+		loader: T("ruby")
++		loader: u("ruby")
 +	},
 +	{
 +		id: "kotlin",
-+		loader: T("kotlin")
++		loader: u("kotlin")
 +	},
 +	{
 +		id: "swift",
-+		loader: T("swift")
++		loader: u("swift")
 +	},
 +	{
 +		id: "sql",
-+		loader: T("sql")
++		loader: u("sql")
 +	},
 +	{
 +		id: "typescript",
@@ -552,64 +3089,284 @@ index 0000000..41cd78b
 +		aliases: ["yml"],
 +		loader: () => import("@shikijs/langs/yaml")
 +	}
-+], ce = !1;
-+function le() {
-+	ce || (ce = !0, I(se.slice()));
++], A = !1;
++function j() {
++	A || (A = !0, x(k.slice()));
 +}
 +//#endregion
-+var  U = null, W = null, ke = [_, v], Ae = null, je = () => (Ae ||= g(), Ae), Me = () => {
-+	if (!ie()) return console.warn("[streamdown-vue] No Shiki languages are registered. Code blocks will render without syntax highlighting."), [];
-+	let { inputs: e, missing: t, resolved: n } = ne(re());
-+	return t.length && console.warn(`[streamdown-vue] Some requested Shiki languages are not registered: ${t.join(", ")}`), e.filter((e, t) => !w(e) && !ae(n[t]));
++//#region src/use-shiki-highlighter.ts
++var M = null, N = null, P = [i, a], F = null, I = () => (F ||= r(), F), L = () => {
++	if (!E()) return console.warn("[streamdown-vue] No Shiki languages are registered. Code blocks will render without syntax highlighting."), [];
++	let { inputs: e, missing: t, resolved: n } = w(T());
++	return t.length && console.warn(`[streamdown-vue] Some requested Shiki languages are not registered: ${t.join(", ")}`), e.filter((e, t) => !l(e) && !D(n[t]));
 +};
-+async function Ne(e) {
-+	if (!U) return !1;
-+	let { inputs: t } = ne([e]);
-+	return t.length ? (await U.loadLanguage(...t), !0) : !1;
++async function R(e) {
++	if (!M) return !1;
++	let { inputs: t } = w([e]);
++	return t.length ? (await M.loadLanguage(...t), !0) : !1;
 +}
-+async function Pe() {
-+	if (!W) {
-+		let e = Me();
-+		W = h({
-+			themes: ke,
-+			langs: e,
-+			engine: je()
-+		}).then((e) => (U = e, e));
++async function z() {
++	if (!N) {
++		let t = L();
++		N = e({
++			themes: P,
++			langs: t,
++			engine: I()
++		}).then((e) => (M = e, e));
 +	}
-+	return await W;
++	return await N;
 +}
-+
-+export { x, S, C, w, T, E, D, O, k, A, j, M, N, P, F, I, ee, te, ne, re, ie, ae, oe, se, ce, le, U, W, ke, Ae, je, Me, Ne, Pe };
-+export { I as registerShikiLanguages, le as registerDefaultShikiLanguages, F as registerShikiLanguage, ae as isLazyShikiLanguage, te as excludeShikiLanguages, Ne as loadRegisteredShikiLanguage, oe as clearRegisteredShikiLanguages, Pe as useShikiHighlighter, ee as unregisterShikiLanguage };
-diff --git a/node_modules/streamdown-vue/dist/src/components/CodeBlock.d.ts b/node_modules/streamdown-vue/dist/src/components/CodeBlock.d.ts
-index 1a4aac0..0638860 100644
---- a/node_modules/streamdown-vue/dist/src/components/CodeBlock.d.ts
-+++ b/node_modules/streamdown-vue/dist/src/components/CodeBlock.d.ts
-@@ -2,6 +2,7 @@ import type { PropType } from 'vue';
- import type { ShikiThemeConfig } from '../types';
- import { type CodeBlockAction } from './codeblock-context';
- declare const _default: import("vue").DefineComponent<import("vue").ExtractPropTypes<{
-+    highlight: { type: PropType<(input: { code: string; language: string; theme: ShikiThemeConfig }) => Promise<string>>; default: undefined; };
-     code: {
-         type: StringConstructor;
-         required: true;
-@@ -37,6 +38,7 @@ declare const _default: import("vue").DefineComponent<import("vue").ExtractPropT
- }>, () => import("vue").VNode<import("vue").RendererNode, import("vue").RendererElement, {
-     [key: string]: any;
- }>, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, {}, string, import("vue").PublicProps, Readonly<import("vue").ExtractPropTypes<{
-+    highlight: { type: PropType<(input: { code: string; language: string; theme: ShikiThemeConfig }) => Promise<string>>; default: undefined; };
-     code: {
-         type: StringConstructor;
-         required: true;
++//#endregion
++//#region src/shiki/streaming.ts
++function B(e) {
++	let r = "", i = 0, a = [], o, s = [], c = "", l = (e) => e.children[0].children[0];
++	return ({ code: u, language: d, theme: f }) => {
++		let p = typeof f == "string" ? { theme: f } : { themes: f };
++		if (d === "ansi") return e.codeToHtml(u, {
++			lang: d,
++			...p
++		});
++		let m = [
++			d,
++			n(d) ? null : e.getLanguage(d),
++			...Object.values(p.themes ?? { single: p.theme }).map((t) => e.getTheme(t))
++		], h = u.replace(/\r\n/g, "\n");
++		if (!h.startsWith(r) || m.length !== s.length || m.some((e, t) => e !== s[t])) r = "", i = 0, a = [], o = void 0;
++		else if (h === r && c) return c;
++		s = m;
++		let g = h.lastIndexOf("\n") + 1;
++		if (g > i) {
++			let t = e.codeToHast(h.slice(i, g - 1), {
++				lang: d,
++				...p,
++				grammarState: o
++			});
++			a.length && a.push({
++				type: "text",
++				value: "\n"
++			}), a.push(...l(t).children), o = e.getLastGrammarState(t), i = g;
++		}
++		let _ = e.codeToHast(h.slice(i), {
++			lang: d,
++			...p,
++			grammarState: o
++		}), v = l(_);
++		return v.children = a.length ? [
++			...a,
++			{
++				type: "text",
++				value: "\n"
++			},
++			...v.children
++		] : v.children, r = h, c = t(_), c;
++	};
++}
++//#endregion
++export { O as a, E as c, x as d, w as f, j as i, D as l, R as n, C as o, S as p, z as r, T as s, B as t, b as u };
 diff --git a/node_modules/streamdown-vue/package.json b/node_modules/streamdown-vue/package.json
-index dd036b2..9fe5367 100644
+index dd036b2..3d3b3ac 100644
 --- a/node_modules/streamdown-vue/package.json
 +++ b/node_modules/streamdown-vue/package.json
-@@ -17,6 +17,7 @@
-             "import": "./dist/core.es.js",
-             "require": "./dist/core.cjs"
-         },
-+        "./shiki": { "types": "./dist/shiki.d.ts", "import": "./dist/shiki.es.js" },
-         "./style.css": "./dist/style.css"
+@@ -1,101 +1,106 @@
+ {
+-    "name": "streamdown-vue",
+-    "version": "2.0.0",
+-    "description": "Streamdown-style streaming Markdown renderer for Vue 3/Nuxt 3 with Shiki, KaTeX, Mermaid, and secure streaming helpers.",
+-    "type": "module",
+-    "main": "dist/index.cjs",
+-    "module": "dist/index.es.js",
+-    "types": "dist/index.d.ts",
+-    "exports": {
+-        ".": {
+-            "types": "./dist/index.d.ts",
+-            "import": "./dist/index.es.js",
+-            "require": "./dist/index.cjs"
+-        },
+-        "./core": {
+-            "types": "./dist/core.d.ts",
+-            "import": "./dist/core.es.js",
+-            "require": "./dist/core.cjs"
+-        },
+-        "./style.css": "./dist/style.css"
++  "name": "streamdown-vue",
++  "version": "2.0.0",
++  "description": "Streamdown-style streaming Markdown renderer for Vue 3/Nuxt 3 with Shiki, KaTeX, Mermaid, and secure streaming helpers.",
++  "type": "module",
++  "main": "dist/index.cjs",
++  "module": "dist/index.es.js",
++  "types": "dist/index.d.ts",
++  "exports": {
++    ".": {
++      "types": "./dist/index.d.ts",
++      "import": "./dist/index.es.js",
++      "require": "./dist/index.cjs"
      },
-     "scripts": {
+-    "scripts": {
+-        "dev": "vite examples/basic --config vite.config.ts",
+-        "dev:hydration": "vite examples/hydration --config vite.config.ts",
+-        "dev:performance": "vite examples/performance --config vite.config.ts --host 127.0.0.1",
+-        "profile:cache": "node scripts/profile-parse-cache.mjs",
+-        "build": "bun run clean && bun run build:types && bun run build:vite && bun run build:css",
+-        "build:vite": "vite build",
+-        "build:css": "node build-css.mjs",
+-        "build:types": "tsc -p tsconfig.build.json",
+-        "typecheck": "tsc -p tsconfig.json",
+-        "clean": "rm -rf dist",
+-        "prepublishOnly": "bun run test",
+-        "test:run": "bun test",
+-        "test:package": "node tests/package-consumer-smoke.mjs",
+-        "test": "bun run build && bun run test:run && bun run test:package"
++    "./core": {
++      "types": "./dist/core.d.ts",
++      "import": "./dist/core.es.js",
++      "require": "./dist/core.cjs"
+     },
+-    "files": [
+-        "dist",
+-        "README.md",
+-        "LICENSE",
+-        "package.json"
+-    ],
+-    "keywords": [
+-        "vue",
+-        "markdown",
+-        "streaming",
+-        "streamdown",
+-        "katex",
+-        "mermaid",
+-        "syntax-highlighting"
+-    ],
+-    "repository": {
+-        "type": "git",
+-        "url": "git+https://github.com/Saluana/streamdown-vue.git"
++    "./shiki": {
++      "types": "./dist/shiki.d.ts",
++      "import": "./dist/shiki.es.js",
++      "require": "./dist/shiki.cjs"
+     },
+-    "homepage": "https://github.com/Saluana/streamdown-vue#readme",
+-    "bugs": {
+-        "url": "https://github.com/Saluana/streamdown-vue/issues"
+-    },
+-    "license": "Apache-2.0",
+-    "author": "@Saluana",
+-    "sideEffects": [
+-        "./dist/index.es.js",
+-        "./dist/index.cjs"
+-    ],
+-    "dependencies": {
+-        "@lucide/vue": "^1.47.0",
+-        "@shikijs/engine-javascript": "^4.4.3",
+-        "@shikijs/langs": "^4.4.3",
+-        "@shikijs/themes": "^4.4.3",
+-        "hast-util-to-text": "^4.0.2",
+-        "katex": "^0.18.7",
+-        "marked": "^18.0.13",
+-        "mermaid": "^11.17.2",
+-        "rehype-katex": "^7.0.1",
+-        "remark-gfm": "^4.0.1",
+-        "remark-math": "^6.0.0",
+-        "remark-parse": "^11.0.0",
+-        "remark-rehype": "^11.1.2",
+-        "shiki": "^4.4.3",
+-        "unified": "^11.0.5"
+-    },
+-    "peerDependencies": {
+-        "vue": "^3.5.21",
+-        "typescript": ">=5.0.0 <8.0.0"
+-    },
+-    "devDependencies": {
+-        "@types/node": "^26.5.1",
+-        "@vitejs/plugin-vue": "^6.0.9",
+-        "@vue/server-renderer": "^3.5.43",
+-        "@vue/test-utils": "^2.5.1",
+-        "bun-types": "^1.4.2",
+-        "lightningcss": "^1.33.0",
+-        "playwright": "1.63.0",
+-        "typescript": "^6.0.3",
+-        "vite": "^8.3.5",
+-        "vite-bundle-visualizer": "^1.2.1",
+-        "vue": "^3.5.43"
+-    }
++    "./style.css": "./dist/style.css"
++  },
++  "scripts": {
++    "dev": "vite examples/basic --config vite.config.ts",
++    "dev:hydration": "vite examples/hydration --config vite.config.ts",
++    "dev:performance": "vite examples/performance --config vite.config.ts --host 127.0.0.1",
++    "profile:cache": "node scripts/profile-parse-cache.mjs",
++    "build": "bun run clean && bun run build:types && bun run build:vite && bun run build:css",
++    "build:vite": "vite build",
++    "build:css": "node build-css.mjs",
++    "build:types": "tsc -p tsconfig.build.json",
++    "typecheck": "tsc -p tsconfig.json",
++    "clean": "rm -rf dist",
++    "prepublishOnly": "bun run test",
++    "test:run": "bun test",
++    "test:package": "node tests/package-consumer-smoke.mjs",
++    "test": "bun run build && bun run test:run && bun run test:package"
++  },
++  "files": [
++    "dist",
++    "README.md",
++    "LICENSE",
++    "package.json"
++  ],
++  "keywords": [
++    "vue",
++    "markdown",
++    "streaming",
++    "streamdown",
++    "katex",
++    "mermaid",
++    "syntax-highlighting"
++  ],
++  "repository": {
++    "type": "git",
++    "url": "git+https://github.com/Saluana/streamdown-vue.git"
++  },
++  "homepage": "https://github.com/Saluana/streamdown-vue#readme",
++  "bugs": {
++    "url": "https://github.com/Saluana/streamdown-vue/issues"
++  },
++  "license": "Apache-2.0",
++  "author": "@Saluana",
++  "sideEffects": [
++    "./dist/index.es.js",
++    "./dist/index.cjs"
++  ],
++  "dependencies": {
++    "@lucide/vue": "^1.47.0",
++    "@shikijs/engine-javascript": "^4.4.3",
++    "@shikijs/langs": "^4.4.3",
++    "@shikijs/themes": "^4.4.3",
++    "hast-util-to-text": "^4.0.2",
++    "katex": "^0.18.7",
++    "marked": "^18.0.13",
++    "mermaid": "^11.17.2",
++    "rehype-katex": "^7.0.1",
++    "remark-gfm": "^4.0.1",
++    "remark-math": "^6.0.0",
++    "remark-parse": "^11.0.0",
++    "remark-rehype": "^11.1.2",
++    "shiki": "^4.4.3",
++    "unified": "^11.0.5"
++  },
++  "peerDependencies": {
++    "vue": "^3.5.21",
++    "typescript": ">=5.0.0 <8.0.0"
++  },
++  "devDependencies": {
++    "@types/node": "^26.5.1",
++    "@vitejs/plugin-vue": "^6.0.9",
++    "@vue/server-renderer": "^3.5.43",
++    "@vue/test-utils": "^2.5.1",
++    "bun-types": "^1.4.2",
++    "lightningcss": "^1.33.0",
++    "playwright": "1.63.0",
++    "typescript": "^6.0.3",
++    "vite": "^8.3.5",
++    "vite-bundle-visualizer": "^1.2.1",
++    "vue": "^3.5.43"
++  }
+ }

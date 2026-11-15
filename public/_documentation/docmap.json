@@ -877,7 +877,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Understand chat admission, persistence, direct OpenAI cache boundaries and live qualification, literal user-message editing, streaming, recovery, tab and pane navigation ownership, retired command handles, durable layouts, attachment resource cleanup, and local token estimates."
+                    "summary": "Understand chat admission, persistence, direct OpenAI cache boundaries and live qualification, literal user-message editing, streaming, recovery, tab and pane navigation ownership, dashboard subpages preserved across unrelated URL updates, retired command handles, durable layouts, attachment resource cleanup, and local token estimates, streaming Markdown prefix reuse with custom images and tail-only repair, cached Mermaid remounts, worker highlighting, pre-paint scroll anchoring and collapse refill, and smooth navigation."
                 },
                 {
                     "name": "ai-preferences.md",
