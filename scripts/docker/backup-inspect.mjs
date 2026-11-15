@@ -81,7 +81,7 @@ function openCanonicalDatabase(Database, databasePath) {
     for (const name of ['s_file_meta', 'kysely_migration']) {
       if (db.prepare('SELECT type FROM sqlite_master WHERE name = ?').get(name)?.type !== 'table') throw new Error('Unsupported offline canonical SQLite schema');
     }
-    const migrationNames = db.prepare('SELECT substr(name,1,128) AS name FROM kysely_migration ORDER BY name LIMIT ?').all(QUALIFIED_MIGRATIONS.length + 1).map(row => row.name);
+    const migrationNames = db.prepare('SELECT CASE WHEN length(CAST(name AS BLOB)) <= 128 THEN name ELSE NULL END AS name FROM kysely_migration ORDER BY name LIMIT ?').all(QUALIFIED_MIGRATIONS.length + 1).map(row => row.name);
     // Accept previously published histories and the current candidate.
     // Interrupted upgrades remain unsupported.
     const expectedMigrations = QUALIFIED_MIGRATIONS.slice(0, migrationNames.length);
@@ -129,7 +129,7 @@ function validSyncPayload(table, value, pk) {
   return true;
 }
 
-/** Read-only, bounded certification; diagnostics contain numeric locators only. */
+/** Read-only, bounded certification; diagnostics contain sanitized locators only. */
 export function inspectSyncSemantics(Database, databasePath) {
   const db = openCanonicalDatabase(Database, databasePath);
   const faults = [];
@@ -187,7 +187,7 @@ export function inspectSyncSemantics(Database, databasePath) {
     scan('change_log', ['workspace_id', 'server_version', 'table_name', 'pk', 'op', 'payload_json', 'clock', 'hlc', 'device_id', 'op_id'], row => {
       identity('change_log', row); revision('change_log', row, true);
       if (!safe(row.server_version) || row.server_version === 0) fault('change_log', row, 'invalid_server_version');
-      if (!text(row.device_id?.trim()) || row.device_id.trim().length > 256) fault('change_log', row, 'invalid_device_id');
+      if (typeof row.device_id !== 'string' || !text(row.device_id.trim()) || row.device_id.trim().length > 256) fault('change_log', row, 'invalid_device_id');
       if (!text(row.workspace_id)) fault('change_log', row, 'invalid_workspace');
       if (!['put', 'delete'].includes(row.op)) fault('change_log', row, 'invalid_operation');
       json('change_log', row, 'payload_json', row.op === 'put');
@@ -225,7 +225,7 @@ export function inspectSyncSemantics(Database, databasePath) {
       if (row.kind === 'tombstone' && (!safe(row.server_deleted_at) || row.payload_json !== null)) fault('sync_snapshot_items', row, 'invalid_tombstone');
       json('sync_snapshot_items', row, 'payload_json', row.kind === 'row');
     }, `,EXISTS(SELECT 1 FROM sync_snapshots s WHERE s.id=t.snapshot_id) AS has_snapshot,
-      EXISTS(SELECT 1 FROM sync_snapshots s,json_each(CASE WHEN json_valid(s.tables_json) THEN s.tables_json ELSE '[]' END) j WHERE s.id=t.snapshot_id AND j.value=t.table_name) AS in_snapshot_tables,
+      EXISTS(SELECT 1 FROM sync_snapshots s,json_each(CASE WHEN length(CAST(s.tables_json AS BLOB)) <= ${MAX_ROW_BYTES} THEN CASE WHEN json_valid(s.tables_json) THEN s.tables_json ELSE '[]' END ELSE '[]' END) j WHERE s.id=t.snapshot_id AND j.value=t.table_name) AS in_snapshot_tables,
       EXISTS(SELECT 1 FROM sync_snapshots s JOIN change_log l ON l.workspace_id=s.workspace_id AND l.op_id=t.op_id WHERE s.id=t.snapshot_id AND l.server_version>s.high_watermark) AS after_watermark`);
     scan('server_version_counter', ['workspace_id', 'value'], row => {
       if (!safe(row.value)) fault('server_version_counter', row, 'invalid_counter');
