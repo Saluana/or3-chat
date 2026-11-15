@@ -280,24 +280,10 @@
             </Or3Scroll>
 
             <!-- Loading state (absolute overlay) -->
-            <div
+            <SidebarListSkeleton
                 v-if="loading"
-                class="absolute inset-0 p-4 space-y-4 animate-pulse bg-[var(--md-surface)]"
-            >
-                <div v-for="i in 3" :key="i" class="flex items-center gap-3">
-                    <div
-                        class="w-8 h-8 rounded-[var(--md-border-radius)] bg-[var(--md-surface-variant)]"
-                    />
-                    <div class="flex-1 space-y-2">
-                        <div
-                            class="h-4 w-3/4 rounded bg-[var(--md-surface-variant)]"
-                        />
-                        <div
-                            class="h-3 w-1/4 rounded bg-[var(--md-surface-variant)]"
-                        />
-                    </div>
-                </div>
-            </div>
+                class="absolute inset-0 bg-[var(--md-surface)]"
+            />
             <template #fallback>
                 <div class="flex-1 min-h-0 p-3 space-y-3" aria-hidden="true">
                     <div class="h-9 w-full bg-[var(--md-surface-variant)] animate-pulse" />

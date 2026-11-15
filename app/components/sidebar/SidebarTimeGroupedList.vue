@@ -17,7 +17,7 @@
                         <slot name="header" />
                     </div>
                     <div v-else-if="item.type === 'status'" class="px-2 py-4 text-xs text-[var(--md-on-surface-variant)]">
-                        <p v-if="loading" role="status">Loading activity…</p>
+                        <p v-if="loading" class="or3-loading-delay" role="status">Loading activity…</p>
                         <template v-else>
                             <p class="font-medium">{{ emptyMessage || 'Nothing here yet' }}</p>
                             <p class="mt-1 leading-relaxed">{{ resolvedEmptyDescription }}</p>

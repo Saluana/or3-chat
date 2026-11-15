@@ -113,7 +113,6 @@
                                     @pointerenter="warmChatSettings"
                                     @pointerdown="warmChatSettings"
                                     @focus="warmChatSettings"
-                                    :disabled="loading && !compactionInProgress"
                                 >
                                     <UIcon
                                         :name="iconModelSettings"
@@ -392,6 +391,7 @@
 </template>
 
 <script setup lang="ts">
+import { useCachedViewActivity } from '~/composables/core/useCachedViewActivity';
 import { acceptsImageInput } from '~/utils/modelCatalog';
 import { useChatToolPreferences } from '~/composables/chat/useChatToolPreferences';
 import { openRouterCatalogLookupId, openRouterToolCapability, stripLegacyThinkingSuffix } from '~~/shared/openrouter/selection';
@@ -534,6 +534,10 @@ const props = defineProps<{
 // Background recovery can finish before this async input hydrates. Start with
 // the same idle controls as SSR, then show the recovered state after our mount.
 const composerMounted = ref(false);
+// Keep persistence alive in cached panes, but pause UI-only computation and
+// prevent asynchronous initialization from reclaiming another view's bridge.
+const inputActive = useCachedViewActivity();
+let inputReady = false;
 const loading = computed(() => composerMounted.value && props.loading);
 const streaming = computed(() => composerMounted.value && props.streaming);
 onMounted(() => { composerMounted.value = true; });
@@ -702,7 +706,8 @@ onMounted(async () => {
     window.addEventListener('pagehide', saveDraftNow);
     document.addEventListener('visibilitychange', saveDraftWhenHidden);
     await initializeEditor();
-    if (props.paneId && !componentDisposed) {
+    inputReady = true;
+    if (props.paneId && !componentDisposed && inputActive.value) {
         registerPaneInput(props.paneId, { setText, focus, triggerSend, insertReference, attachFile });
     }
 });
@@ -937,7 +942,7 @@ const previewReasoning = computed(() => {
     return thinkingEnabled.value && modelSupportsThinking.value ? resolveReasoningConfig({ model: metadata, enabled: true, effort: reasoningEffort.value }) : undefined;
 });
 const contextPreview = useContextPreview({ threadId: () => props.threadId, draftId: promptOwnerId, model: previewModel,
-    enabled: () => Boolean(props.threadId || connected.value || apiKey.value || hasInstanceKey.value || isOpenAiModel(selectedModel.value) || settingsPopoverOpen.value || showModelCatalog.value),
+    enabled: () => inputActive.value && Boolean(props.threadId || connected.value || apiKey.value || hasInstanceKey.value || isOpenAiModel(selectedModel.value) || settingsPopoverOpen.value || showModelCatalog.value),
     text: promptText, extraText: () => largeTextBlocks.value.map((block) => block.text).join('\n\n'),
     attachments: () => attachments.value, promptSelection: stagedPromptId,
     revision: () => [props.contextRevision, promptSelectionRevision.value], reasoning: previewReasoning });
@@ -977,9 +982,9 @@ function automaticCompactionDue() {
         >= aiSettings.value.autoCompactThresholdPercent / 100;
 }
 let autoCompactionAttempt: string | undefined;
-watch(() => [contextPreview.state.value, aiSettings.value.autoCompactContext, aiSettings.value.autoCompactThresholdPercent, props.contextRevision,
+watch(() => [inputActive.value, contextPreview.state.value, aiSettings.value.autoCompactContext, aiSettings.value.autoCompactThresholdPercent, props.contextRevision,
     props.threadId, props.loading, props.streaming, compactionInProgress.value], async () => {
-    if (!import.meta.client || componentDisposed || !aiSettings.value.autoCompactContext || !props.threadId || !props.compactThread
+    if (!import.meta.client || componentDisposed || !inputActive.value || !aiSettings.value.autoCompactContext || !props.threadId || !props.compactThread
         || props.loading || props.streaming || compactionInProgress.value || props.compactionBlockedReason) return;
     if (!automaticCompactionDue()) return;
     const threadId = props.threadId; const generation = getWorkspaceGeneration();
@@ -990,14 +995,14 @@ watch(() => [contextPreview.state.value, aiSettings.value.autoCompactContext, ai
     if (autoCompactionAttempt === attempt) return;
     autoCompactionAttempt = attempt;
     try {
-        if (!await claimAutomaticCompaction(threadId, () => !componentDisposed && props.threadId === threadId
+        if (!await claimAutomaticCompaction(threadId, () => !componentDisposed && inputActive.value && props.threadId === threadId
             && !props.loading && !props.streaming && aiSettings.value.autoCompactContext && !compactionInProgress.value && automaticCompactionDue())) return;
     }
     catch (error) {
         if (!(error instanceof CompactionError)) console.warn('[chat-memory] Could not check automatic compaction eligibility.');
         return;
     }
-    if (componentDisposed || props.threadId !== threadId || getWorkspaceGeneration() !== generation || props.loading || props.streaming
+    if (componentDisposed || !inputActive.value || props.threadId !== threadId || getWorkspaceGeneration() !== generation || props.loading || props.streaming
         || !aiSettings.value.autoCompactContext || compactionInProgress.value || !automaticCompactionDue()) return;
     await compactFromSettings();
 });
@@ -1609,6 +1614,15 @@ defineExpose({ setText, focus, triggerSend, insertReference, attachFile, capture
 onBeforeUnmount(() => {
     if (props.paneId) unregisterPaneInput(props.paneId);
 });
+// A cached (hidden) chat view must not receive input meant for the view now
+// showing in its pane.
+watch(inputActive, (active) => {
+    if (!active) {
+        if (props.paneId) unregisterPaneInput(props.paneId);
+    } else if (props.paneId && !componentDisposed && inputReady) {
+        registerPaneInput(props.paneId, { setText, focus, triggerSend, insertReference, attachFile });
+    }
+}, { flush: 'sync' });
 
 const handlePromptSelected = (id: string) => {
     promptSelectionRevision.value++;

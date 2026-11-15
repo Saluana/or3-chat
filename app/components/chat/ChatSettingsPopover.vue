@@ -78,6 +78,7 @@
                         v-model="selectedModel"
                         :items="modelItems"
                         value-key="value"
+                        :filter-fields="['label', 'description']"
                         :search-input="modelSearchInput"
                         :disabled="loading"
                         aria-label="Current model"
@@ -644,6 +645,7 @@ const reasoningEffort = defineModel<string | undefined>('reasoningEffort');
 // default accent ring, matching the settings cards.
 const selectMenuUi = {
     trailing: 'hidden',
+    itemLabel: 'whitespace-normal',
     content:
         'ring-0! border-[length:var(--md-border-width)] border-[color:color-mix(in_srgb,var(--md-border-color)_45%,transparent)] data-[state=open]:animate-[fade-in_170ms_ease-out] data-[state=closed]:animate-[fade-out_120ms_ease-in]',
 } as const;
@@ -704,13 +706,15 @@ const modelItems = computed(() =>
         .map((model) => {
             const value = model.canonical_slug ?? model.id;
             if (!value) return null;
-            return { label: `${formatModelName(model.name || value)} · ${modelIdentity(model).platformName}`, value, slug: providerSlugFor(value) };
+            // Name and platform on separate lines so long names are not cut off.
+            return { label: formatModelName(model.name || value), description: modelIdentity(model).platformName, value, slug: providerSlugFor(value) };
         })
         .filter(
             (
                 item
             ): item is {
                 label: string;
+                description: string;
                 value: string;
                 slug: string;
             } => Boolean(item)

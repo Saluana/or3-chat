@@ -65,6 +65,8 @@ Thread selection returns `true` after applying the selection and loaded history,
 or `false` for a veto, stale operation, or missing pane. Tab activation publishes
 only the pending target while filters run. It preserves the outgoing document or
 history until selection succeeds, and rolls back a rejected activation.
+When a first send creates a conversation after its chat view has been hidden,
+the view promotes its originating tab without binding the currently visible pane.
 Pending selection cleanup follows the stable pane ID across split reordering and
 runs on cancellation. An older activation cannot clear a newer activation's intent.
 
@@ -255,6 +257,20 @@ route before opening an unavailable resource. Development pre-optimization inclu
 points so opening them does not trigger a Vite dependency reload.
 
 The tab session owns the open-tab manifest and active bindings. The pane adapter owns the mounted panes; chat and document controllers own content. Changing an active tab should not create a second content store.
+
+Cached core views pause context previews, automatic compaction admission, document
+statistics, and syntax-highlighting leases while hidden. Newly mounted children
+inherit the cached view's visibility. Reactivation resumes presentation work;
+draft persistence and already-running generation retain their existing owners.
+Scroll restoration is cancelled when its tab, conversation, or activation changes.
+Each pane caches one chat view per recent chat tab (keyed by the tab once the
+pane shows that tab's thread) and one document view; a returning chat restores
+its exact pixel position rather than the tab's anchor memento.
+
+The root, `/chat/:id?` and `/docs/:id?` URLs use distinct route records with one
+page key, so the workspace shell stays mounted across navigation. Moving between
+resources pushes a history entry that records the tab; Back/Forward reactivate
+that tab, or open the resource when the tab has changed or closed.
 
 Tab manifests persist to localStorage by workspace and profile. A failed read keeps the original manifest protected even if writes later work: scheduled saves, Retry and unload cannot publish the temporary layout until a successful restore has read that scope. Reload after storage becomes readable restores the original tab IDs and their drafts. Storage failures never break the workspace: blocked storage (even a throwing `window.localStorage` getter), quota errors and failed debounced writes keep the unsaved layout pending, expose `persistenceStatus` (`ok`, `unavailable`, `write_failed`, `corrupt`), and raise one persistent "Tab layout could not be saved" toast per failure episode with Retry. Draft restoration depends on the saved tab IDs: before browser unload, a failed layout is retried synchronously and an unresolved layout or draft save failure requests the browser's unsaved-change confirmation. This is best effort; browsers can suppress confirmations and users can accept them. A saved layout that is invalid JSON or fails the schema is reported as corrupt rather than missing: the original is copied to `<key>:corrupt` (latest only) before a fresh layout can replace it, and is never overwritten while that copy cannot be made. The persistent "Saved tab layout was unreadable" notice offers **Download original** (`or3-tab-layout-backup.txt`) and **Discard original**; each closes the notice, and the copy stays until it is discarded. The buttons act on the layout key the notice was raised for, so switching workspace or profile first cannot make them touch another layout's copy (`getCorruptLayoutBackup(key)` / `discardCorruptLayoutBackup(key)` take that key). No buttons are shown when the copy could not be made. `useWorkspaceTabs` exposes `getCorruptLayoutBackup()` and `discardCorruptLayoutBackup()` for the same purpose. `flushPersistence()` always saves the current layout, which pane swaps rely on; the debounce, `pagehide` and scope switches write only pending changes.
 

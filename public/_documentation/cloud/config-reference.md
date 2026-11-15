@@ -57,6 +57,7 @@ Exceptions:
 - Notes:
   - Ignored unless `SSR_AUTH_ENABLED=true`.
   - Applies only to protected shell routes: `/`, `/chat`, `/chat/[id]`, `/docs`, `/docs/[id]`, and `/connect`.
+  - Access is checked on protected navigation, including between chats and documents. Recent successful checks are cached briefly.
   - Admin routes remain reachable.
   - Guest access bypasses the lock page when `auth.guestAccessEnabled=true`.
   - The lock page route is fixed at `/welcome`.

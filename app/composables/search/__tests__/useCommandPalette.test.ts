@@ -318,6 +318,9 @@ describe('useCommandPalette', () => {
         palette.close();
         expect(cleanup).toHaveBeenCalledTimes(2);
         expect(palette.preview.value).toBeNull();
+        // The query stays for the leave transition, then clears.
+        expect(palette.query.value).toBe('image');
+        palette.resetAfterClose();
         expect(palette.query.value).toBe('');
     });
 

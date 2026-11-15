@@ -89,8 +89,8 @@ const { connection, refresh, save, remove } = useOpenAiKey();
 
 export async function connectOpenAi(input: string): Promise<boolean> {
   await save(input); // validates the `sk-` format first
-  await refresh(); // updates connection.connected, .available and .instance
-  return connection.connected;
+  await refresh(); // updates connection.value.connected, .available and .instance
+  return connection.value.connected;
 }
 
 export const disconnectOpenAi = remove;

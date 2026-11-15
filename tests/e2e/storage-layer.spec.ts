@@ -157,6 +157,28 @@ test.describe('Storage Layer', () => {
         expect(await readFile(path, 'utf8')).toBe('Offline original recovery bytes.');
         await info.attach('offline-original-bytes', { path, contentType: 'text/plain' });
     });
+    test('Files waits for text composition to finish before saving a rename', async ({ page }) => {
+        const files = page.getByRole('region', { name: 'Workspace Files', exact: true });
+        await files.getByLabel('Upload files', { exact: true }).setInputFiles({
+            name: 'composition.txt', mimeType: 'text/plain', buffer: Buffer.from('Composition test.'),
+        });
+        const item = files.getByRole('listitem').filter({ hasText: 'composition.txt' });
+        await item.getByRole('button', { name: /^More actions for/ }).click();
+        await page.getByRole('menuitem', { name: 'Rename', exact: true }).click();
+        const dialog = page.getByRole('dialog', { name: 'Rename item' });
+        const title = dialog.getByRole('textbox', { name: 'Item title' });
+        await title.fill('renamed.txt');
+        await title.evaluate(input => {
+            input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+            input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true }));
+        });
+        await page.waitForTimeout(500); // Allow an unintended asynchronous rename to finish.
+        await expect(dialog).toBeVisible();
+        await title.evaluate(input => input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })));
+        await title.press('Enter');
+        await expect(dialog).toHaveCount(0);
+        await expect(files.getByRole('button', { name: 'Open renamed.txt', exact: true })).toBeVisible();
+    });
     test('a trusted file plugin receives lifecycle events, adds an action and cleans up', async ({ page }, info) => {
         await page.getByTestId('file-plugin-enable').click();
         const files = page.getByRole('region', { name: 'Workspace Files', exact: true });

@@ -55,6 +55,10 @@ const DEFAULT_POLL_INTERVAL_MS = 2000;
 const DEFAULT_PULL_LIMIT = 100;
 const DEFAULT_MAX_RETRY_AFTER_MS = 5 * 60 * 1000;
 const MAX_OUTAGE_BACKOFF_MS = 60_000;
+// While the version channel is down the client polls every interval, so a
+// brief channel failure should not cost a full minute of polling.
+const CHANNEL_RECONNECT_MIN_MS = 5_000;
+const CHANNEL_RECONNECT_MAX_MS = 60_000;
 
 // This transport is also imported by server-side sync error handling. Keep
 // browser activity access structural so the server type graph needs no DOM lib.
@@ -408,6 +412,7 @@ export function createGatewaySyncProvider(
             let lastSuccessfulPollAt = Date.now();
             let notifiedVersion: number | undefined;
             let reconnect: ReturnType<typeof setTimeout> | undefined;
+            let reconnectDelay = CHANNEL_RECONNECT_MIN_MS;
             const closeChannel = () => {
                 channelLive = false;
                 channel?.close(); channel = undefined;
@@ -422,6 +427,7 @@ export function createGatewaySyncProvider(
                 current.onopen = () => {
                     if (channel !== current || !active) return;
                     channelLive = true;
+                    reconnectDelay = CHANNEL_RECONNECT_MIN_MS;
                     // Rotating the auth session must not postpone recovery of
                     // a missed notification indefinitely.
                     schedule(Math.max(0, lastSuccessfulPollAt + Math.max(60_000, pollIntervalMs) - Date.now()));
@@ -442,7 +448,8 @@ export function createGatewaySyncProvider(
                     if (channel !== current) return;
                     closeChannel();
                     schedule(pollIntervalMs);
-                    reconnect = setTimeout(connectChannel, 60_000);
+                    reconnect = setTimeout(connectChannel, reconnectDelay);
+                    reconnectDelay = Math.min(reconnectDelay * 2, CHANNEL_RECONNECT_MAX_MS);
                 };
             };
             const canPoll = () =>

@@ -10,7 +10,7 @@
         ]"
         :aria-busy="paneRebinding || undefined"
     >
-        <div v-if="paneRebinding" class="chat-rebinding-status" role="status">Loading…</div>
+        <div v-if="paneRebinding" class="chat-rebinding-status or3-loading-delay" role="status">Loading…</div>
         <!-- Virtualized messages (Req 3.1) -->
         <!-- Or3Scroll is now the scroll container -->
         <!-- Virtualized messages (Req 3.1) -->
@@ -78,12 +78,14 @@
                 </template>
             </Or3Scroll>
             <template #fallback>
+                <!-- Bottom-anchored like the real list, so messages replace the
+                     placeholder in place instead of dropping in from the top. -->
                 <div
-                    class="chat-message-list flex-1 min-h-0 px-4 pt-8"
-                    :style="scrollParentStyle"
+                    class="chat-message-list flex-1 min-h-0 px-4 pt-7 flex flex-col justify-end"
+                    :style="{ ...scrollParentStyle, paddingBottom: `${bottomPad}px` }"
                     aria-hidden="true"
                 >
-                    <div v-if="threadId" class="mx-auto max-w-[780px] space-y-6 animate-pulse">
+                    <div v-if="threadId" class="mx-auto w-full max-w-[780px] space-y-6 animate-pulse">
                         <div class="ml-auto h-12 w-2/3 bg-[var(--md-surface-variant)]" />
                         <div class="h-24 w-5/6 bg-[var(--md-surface-variant)]" />
                     </div>
@@ -116,7 +118,7 @@
                  replaces the empty state. Its pending Suspense placeholder must
                  not become an anchor in the chat's outer render block. -->
             <div v-if="emptyAppearance" class="contents">
-                <component :is="$theme.activeComponents.value['chat-empty-state'] || CORE_APP_COMPONENT_DEFAULTS['chat-empty-state']"
+                <component :is="emptyStateComponent"
                     :key="emptyMediaKey" v-bind="emptyStateMediaProps" :appearance="emptyAppearance" :actions="emptyActions" @action="onEmptyChatAction" />
             </div>
             <div
@@ -201,7 +203,9 @@ import {
     type Ref,
     type CSSProperties,
     type Component,
+    onActivated,
     onBeforeUnmount,
+    onDeactivated,
     onMounted,
     nextTick,
     inject,
@@ -222,6 +226,8 @@ import type {
 } from '~/utils/chat/types';
 import { Or3Scroll } from 'or3-scroll';
 import ChatInputDropper from '~/components/chat/ChatInputDropper.vue';
+import ChatEmptyState from '~/components/chat/ChatEmptyState.vue';
+import { useCachedViewActivity } from '~/composables/core/useCachedViewActivity';
 import ChatMessageHost from '~/components/chat/ChatMessageHost.vue';
 import ChatEmptyStateColorMedia from './ChatEmptyStateColorMedia.vue';
 import { resolveChatEmptyState, type EmptyChatActionId } from '~/theme/_shared/chat-empty-state';
@@ -231,7 +237,7 @@ import { focusPaneInput } from '~/composables/chat/useChatInputBridge';
 import { useNuxtApp } from '#app';
 import { CORE_APP_COMPONENT_DEFAULTS } from '~/theme/_shared/theme-components-registry';
 import 'or3-scroll/style.css';
-import { useElementSize } from '@vueuse/core';
+import { useElementSize, useEventListener } from '@vueuse/core';
 import { isMobile } from '~/state/global';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
@@ -452,7 +458,7 @@ const chat = shallowRef<ChatInstance>(
         props.messageHistory,
         props.threadId,
         pendingPromptId.value || undefined,
-        { historyAlreadyLoaded: true, toolDraftId: () => promptOwnerId.value }
+        { historyAlreadyLoaded: true, toolDraftId: () => promptOwnerId.value, paneBindingOwnedByView: true }
     ) as ChatInstance
 );
 // The child runner owns its foreground stream independently of any pane.
@@ -627,7 +633,8 @@ const streamingActive = computed(
 watch(
     [() => props.tabId, streamingActive],
     ([tabId, streaming]) => {
-        if (tabId) emit('tab-status', streaming ? 'streaming' : 'idle');
+        // Name the tab: a cached hidden view must not mark the pane's current one.
+        if (tabId) emit('tab-status', streaming ? 'streaming' : 'idle', tabId);
     },
     { immediate: true }
 );
@@ -959,6 +966,8 @@ type ScrollApi = {
     refreshMeasurements?: () => void;
 };
 const scroller = ref<ScrollApi | null>(null);
+// Descendants created by a continuing stream also inherit the hidden state.
+const viewActive = useCachedViewActivity();
 const compactionNavigation = shallowRef<{ threadId: string; messageId: string; generation: number; origin: string | undefined }>();
 function onViewRelatedThread(message: UiChatMessage, target: { threadId: string; originThreadId: string; anchorMessageId: string; generation: number }) {
     if (currentThreadId.value !== target.originThreadId || props.threadId !== target.originThreadId
@@ -1059,6 +1068,9 @@ function onScroll(payload: {
     clientHeight: number;
     isAtBottom: boolean;
 }) {
+    // Once the cached view's DOM is detached the scroller reports zeros;
+    // keep the last real position for reactivation.
+    if (!(scroller.value as { $el?: HTMLElement } | null)?.$el?.isConnected) return;
     lastScrollTop.value = payload.scrollTop;
     atBottom.value = payload.isAtBottom;
     distanceFromBottom.value =
@@ -1099,7 +1111,9 @@ function captureViewState() {
 }
 
 async function restoreViewState(saved?: ReturnType<typeof captureViewState>) {
-    if (!saved?.scroll) return;
+    // A cached view that is putting back its exact pixel position wins over
+    // the tab's anchor memento, which cannot re-anchor reattached rows.
+    if (!saved?.scroll || keptViewRestored) return;
     await nextTick();
     if (saved.scroll.mode === 'bottom') {
         scroller.value?.scrollToBottom?.({ smooth: false });
@@ -1571,11 +1585,16 @@ const emptyMediaVariants = computed(() => {
     const definition = emptyTheme.getTheme(emptyTheme.activeTheme.value)?.chatEmptyState;
     return { light: resolveChatEmptyState(definition, 'light'), dark: resolveChatEmptyState(definition, 'dark') };
 });
-const emptyStateMediaProps = computed(() => {
+// The core empty state ships in this chunk: loading it separately mounted it
+// after the composer and pushed the composer down on every new chat.
+const emptyStateIsCore = computed(() => {
     const component = emptyTheme.activeComponents.value['chat-empty-state'];
-    return !component || component === CORE_APP_COMPONENT_DEFAULTS['chat-empty-state']
-        ? { mediaVariants: emptyMediaVariants.value } : {};
+    return !component || component === CORE_APP_COMPONENT_DEFAULTS['chat-empty-state'];
 });
+const emptyStateComponent = computed(() => emptyStateIsCore.value
+    ? ChatEmptyState : emptyTheme.activeComponents.value['chat-empty-state']!);
+const emptyStateMediaProps = computed(() => emptyStateIsCore.value
+    ? { mediaVariants: emptyMediaVariants.value } : {});
 // Paired media already contains both modes; retain its DOM through hydration
 // so creating a hidden img cannot eagerly request the opposite mode's source.
 const emptyMediaKey = computed(() => emptyTheme.activeTheme.value +
@@ -1606,6 +1625,71 @@ async function onEmptyChatAction(id: EmptyChatActionId) {
     if (id === 'start-chat') focusPaneInput(props.paneId);
     else emptyActionHost?.request(id, { paneId: props.paneId, tabId: props.tabId });
 }
+
+// The shell caches this view while a document tab shows in its pane. Moving
+// the DOM out and back resets its scroll, and the scroller cannot re-anchor
+// after the move. The messages are unchanged, so restore the last pixel
+// position seen by the scroll handler. A different thread is restored by its tab.
+let hiddenView: { threadId?: string; tabId?: string; top: number; bottom: boolean } | null = null;
+// The scroller's own event is not emitted for every scroll; read the element
+// directly while it is attached, before deactivation moves it out.
+let attachedScrollTop = 0;
+let attachedAtBottom = true;
+// Set while a reactivated view shows its own retained position, so the tab's
+// anchor memento (which cannot re-anchor reattached rows) does not move it.
+let keptViewRestored = false;
+useEventListener(() => (scroller.value as { $el?: HTMLElement } | null)?.$el, 'scroll', (event: Event) => {
+    const root = event.currentTarget as HTMLElement;
+    if (!root.isConnected) return;
+    attachedScrollTop = root.scrollTop;
+    attachedAtBottom = root.scrollHeight - root.scrollTop - root.clientHeight <= 2;
+}, { passive: true });
+let scrollRestoreRevision = 0;
+let revealRestoringScroll: (() => void) | undefined;
+function cancelScrollRestore() {
+    scrollRestoreRevision++;
+    revealRestoringScroll?.();
+    revealRestoringScroll = undefined;
+}
+watch([() => props.threadId, () => props.tabId], () => { keptViewRestored = false; cancelScrollRestore(); }, { flush: 'sync' });
+onBeforeUnmount(cancelScrollRestore);
+onDeactivated(() => {
+    cancelScrollRestore();
+    keptViewRestored = false;
+    hiddenView = { threadId: props.threadId, tabId: props.tabId, top: attachedScrollTop, bottom: attachedAtBottom };
+});
+onActivated(async () => {
+    cancelScrollRestore();
+    const revision = scrollRestoreRevision;
+    const view = hiddenView;
+    hiddenView = null;
+    if (!view || view.threadId !== props.threadId || view.tabId !== props.tabId) return;
+    keptViewRestored = true;
+    // Hide the list until it is back in place, so the top of the thread does
+    // not flash while rows re-measure (activation runs before paint).
+    const root = (scroller.value as { $el?: HTMLElement } | null)?.$el;
+    if (!root) return;
+    const previousVisibility = root.style.visibility;
+    const restoringScroller = scroller.value;
+    revealRestoringScroll = () => { root.style.visibility = previousVisibility; };
+    root.style.visibility = 'hidden';
+    const isCurrent = () => revision === scrollRestoreRevision
+        && props.threadId === view.threadId && props.tabId === view.tabId
+        && viewActive.value && root.isConnected && scroller.value === restoringScroller;
+    try {
+        await nextTick();
+        // Retry until the list is tall enough to hold the position (≤ ~0.5s).
+        // Unchanged messages put the bottom at the same offset as before.
+        for (let attempt = 0; attempt < 30 && isCurrent(); attempt++) {
+            root.scrollTop = view.top;
+            if (Math.abs(root.scrollTop - view.top) < 2) break;
+            await new Promise(resolve => setTimeout(resolve, 16));
+        }
+        if (isCurrent() && view.bottom) scroller.value?.scrollToBottom?.({ smooth: false });
+    } finally {
+        if (revision === scrollRestoreRevision) cancelScrollRestore();
+    }
+});
 
 defineExpose({ captureViewState, restoreViewState, scrollToMessage, compactThread,
     captureDraft: () => cardComposer.value?.captureDraft?.(),

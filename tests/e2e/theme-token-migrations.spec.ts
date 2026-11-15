@@ -4,6 +4,23 @@ import { expect, test, webkit, type Page, type TestInfo } from '@playwright/test
 type ThemeName = 'blank' | 'retro' | 'cyberpunk';
 const themes: ThemeName[] = ['blank', 'retro', 'cyberpunk'];
 
+test('light composer styling remains consistent across OS color preferences', async ({ page }) => {
+    await openResponsiveChat(page, 'cyberpunk', 'light');
+    await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; }' });
+    await page.waitForTimeout(1000); // Let theme activation finish before comparing its styles.
+    const composer = page.locator('.chat-composer-shell:visible').first();
+    const styles = () => composer.evaluate(element => {
+        const style = getComputedStyle(element);
+        return { background: style.backgroundColor, border: style.borderColor, shadow: style.boxShadow };
+    });
+    await page.emulateMedia({ colorScheme: 'light' });
+    const light = await styles();
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.waitForTimeout(1000); // Let any theme-token transitions settle.
+    expect(await styles()).toEqual(light);
+    await expect(page.locator('html')).toHaveClass(/\blight\b/);
+});
+
 for (const theme of themes) test(`UI audit: ${theme} phone model selection works through Settings without a toast`, async ({ page }, info) => {
     await page.setViewportSize({ width: 320, height: 640 });
     await page.route(/\/models(?:\?|$)/, route => route.fulfill({ json: { data: [{
@@ -49,6 +66,79 @@ test('UI audit: blank tabs have distinct names and retain independent drafts aft
     await page.getByRole('tab', { name: 'New chat 2', exact: true }).click();
     await expect(input).toHaveText('Second unsent draft');
     await captureChat(page, info, 'ui-audit-draft-tabs');
+});
+
+test('workspace history restores blank tabs and opens the documents route', async ({ page }) => {
+    await openResponsiveChat(page, 'blank', 'light');
+    const input = page.getByRole('textbox', { name: 'Message input' });
+    await input.fill('First history draft');
+    await page.locator('.workspace-tab-new').first().click();
+    await input.fill('Second history draft');
+    await page.getByTestId('sidebar-inner').getByRole('button', { name: 'Create a document', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Document title', exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/docs\/.+/);
+    await page.goBack();
+    await expect(input).toHaveText('Second history draft');
+    await page.goBack();
+    await expect(input).toHaveText('First history draft');
+    await page.goForward();
+    await expect(input).toHaveText('Second history draft');
+    await page.goForward();
+    await expect(page.getByRole('textbox', { name: 'Document title', exact: true })).toBeVisible();
+    await page.evaluate(async () => {
+        const root = document.querySelector('#__nuxt') as HTMLElement & { __vue_app__: { config: { globalProperties: { $router: { push(path: string): Promise<unknown> } } } } };
+        await root.__vue_app__.config.globalProperties.$router.push('/docs');
+    });
+    await expect(page).toHaveURL(/\/docs$/);
+    await expect(page.getByText('Select a document or create one from the sidebar.')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Document title', exact: true })).not.toBeVisible();
+    await page.goBack();
+    await expect(page.getByRole('textbox', { name: 'Document title', exact: true })).toBeVisible();
+});
+
+test('closing a split preserves a blank chat with a selected system prompt', async ({ page }) => {
+    await openResponsiveChat(page, 'blank', 'light');
+    await page.getByRole('button', { name: 'New split', exact: true }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).last().click();
+    await page.getByRole('button', { name: 'System prompt for this chat', exact: true }).click();
+    await page.getByRole('option', { name: /Disabled Send no system prompt/ }).click();
+    await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Close split', exact: true }).last().click();
+    await expect(page.getByRole('tab', { name: 'New chat 2', exact: true })).toBeVisible();
+    await page.reload();
+    await page.getByRole('tab', { name: 'New chat 2', exact: true }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'System prompt for this chat', exact: true }).click();
+    await expect(page.getByRole('option', { name: /Disabled Send no system prompt/ })).toHaveAttribute('aria-selected', 'true');
+});
+
+test('the documents landing route is distinct and protected', async ({ page }) => {
+    await openResponsiveChat(page, 'blank', 'light');
+    const protectedRoute = await page.evaluate(async () => {
+        const root = document.querySelector('#__nuxt') as HTMLElement & { __vue_app__: { config: { globalProperties: { $router: {
+            push(path: string): Promise<unknown>; resolve(path: string): { meta: { lockPageProtected?: boolean } };
+        } } } } };
+        const router = root.__vue_app__.config.globalProperties.$router;
+        await router.push('/docs');
+        return router.resolve('/docs').meta.lockPageProtected;
+    });
+    expect(protectedRoute).toBe(true);
+    await expect(page).toHaveURL(/\/docs$/);
+    await expect(page.getByText('Select a document or create one from the sidebar.')).toBeVisible();
+});
+
+test('opening the documents landing route restores tabs without replacing the requested route', async ({ page }) => {
+    await openResponsiveChat(page, 'blank', 'light');
+    await page.getByRole('textbox', { name: 'Message input' }).fill('Draft before opening documents');
+    await page.locator('.workspace-tab-new').first().click();
+    await expect(page.getByRole('tab', { name: 'New chat 2', exact: true })).toBeVisible();
+    await page.goto('/docs');
+    await expect(page).toHaveURL(/\/docs$/);
+    await expect(page.getByText('Select a document or create one from the sidebar.')).toBeVisible();
+    await page.getByRole('tab', { name: 'New chat 2', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
+    await page.getByRole('tab', { name: 'New chat 1', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toHaveText('Draft before opening documents');
 });
 
 test('UI audit: prompt title and instructions are named and remain saved after reopening', async ({ page }, info) => {

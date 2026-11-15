@@ -398,6 +398,10 @@ async function change(row: Post, changes: { title?: string; trashed?: boolean })
         rename.value = false;
     });
 }
+function renameOnEnter(event: KeyboardEvent) {
+    if (event.isComposing || event.keyCode === 229 || !actionTarget.value) return;
+    void change(actionTarget.value, { title: newTitle.value });
+}
 async function open(row: Post) {
     previewTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     error.value = '';
@@ -619,10 +623,32 @@ function resetScope() {
 }
 watch(() => [sessionData.value?.session?.user?.id, sessionData.value?.session?.role,
     sessionData.value?.session?.authorizationRevision, sessionData.value?.session?.authenticated], resetScope);
+// The container query widths in the styles below (page and list).
+const LAYOUT_BREAKPOINTS = [600, 800, 1050];
+const layoutTier = (width: number) => LAYOUT_BREAKPOINTS.filter(breakpoint => width > breakpoint).length;
+let pageTier: number | undefined;
+let listTier: number | undefined;
+// Opening or closing a split crosses breakpoints in one frame (table ↔ cards).
+// Fade the content in its new layout instead of cutting to it.
+function softenLayoutChange(page: HTMLElement) {
+    const list = page.querySelector<HTMLElement>('.files-list');
+    const nextPageTier = layoutTier(page.clientWidth);
+    const nextListTier = list ? layoutTier(list.clientWidth) : undefined;
+    const changed = (pageTier !== undefined && nextPageTier !== pageTier)
+        || (listTier !== undefined && nextListTier !== undefined && nextListTier !== listTier);
+    pageTier = nextPageTier;
+    listTier = nextListTier;
+    if (changed && !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+        page.querySelector('.files-content')?.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
+}
 onMounted(async () => {
     if (pageElement.value) {
+        const page = pageElement.value;
         // Match DocumentEditorRoot.css: full-pane inspector below 720px.
-        resizeObserver = new ResizeObserver(entries => { widePreview.value = (entries[0]?.contentRect.width ?? 0) >= 720; });
+        resizeObserver = new ResizeObserver(entries => {
+            widePreview.value = (entries[0]?.contentRect.width ?? 0) >= 720;
+            softenLayoutChange(page);
+        });
         resizeObserver.observe(pageElement.value);
     }
     stop = subscribeActiveWorkspaceDb(resetScope);
@@ -730,7 +756,7 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
                 <div class="files-columns" :data-trash="trash" aria-hidden="true">
                     <span class="files-name-label">Name</span><span class="files-type-column">Type</span><span class="files-project-column">Project</span><span class="files-date-column">Last modified</span><span class="files-size-column">Size</span><span />
                 </div>
-                <div v-if="loading && !filtered.length" class="files-empty" role="status">
+                <div v-if="loading && !filtered.length" class="files-empty or3-loading-delay" role="status">
                     <UIcon :name="icons.folder.value" class="size-9 opacity-50" /><p>Loading your files…</p>
                 </div>
                 <div v-else-if="!filtered.length && !error" class="files-empty">
@@ -786,7 +812,7 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
         </aside>
         </Transition>
         <AppModal v-model:open="rename" title="Rename item" close-label="Close">
-            <UInput v-model="newTitle" aria-label="Item title" class="w-full" size="workspace" @keydown.enter="actionTarget && change(actionTarget, { title: newTitle })" />
+            <UInput v-model="newTitle" aria-label="Item title" class="w-full" size="workspace" @keydown.enter="renameOnEnter" />
             <UAlert v-if="error" role="alert" color="error" variant="soft" title="Could not rename item" :description="error" class="mt-4" />
             <template #footer><UButton size="workspace" label="Save title" :disabled="busy || readOnly" @click="actionTarget && change(actionTarget, { title: newTitle })" /></template>
         </AppModal>

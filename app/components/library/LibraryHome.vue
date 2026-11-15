@@ -292,14 +292,14 @@ const terminalReason = computed(() => {
 
 <template>
     <section class="mx-auto max-w-3xl p-6" aria-label="Marketplace library">
-        <p v-if="library.configured.value" class="mt-1 text-sm text-[var(--md-on-surface-variant)]">
+        <p v-if="library.status.value && library.configured.value" class="mt-1 text-sm text-[var(--md-on-surface-variant)]">
             Connect your marketplace account to download plugins you own.
             The link grants temporary download access and is private to you.
         </p>
 
         <p
             v-if="library.loading.value && !library.status.value"
-            class="mt-6 text-sm text-slate-500"
+            class="mt-6 text-sm text-slate-500 or3-loading-delay"
             aria-live="polite"
         >
             Loading your Library link…

@@ -23,7 +23,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Connect OpenRouter, choose a model through chat settings or desktop favorites, send a message, set the default-off per-chat tool switch and dashboard tool default, and understand draft and system-prompt recovery and saved work."
+                    "summary": "Connect OpenRouter, choose a model through chat settings or desktop favorites, inspect settings while streaming, send a message, set the default-off per-chat tool switch and dashboard tool default, and understand draft and system-prompt recovery and saved work."
                 },
                 {
                     "name": "command-palette.md",

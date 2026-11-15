@@ -121,6 +121,15 @@ html[data-theme="blank"] {
         backdrop-filter: blur(14px) saturate(1.08);
     }
 
+    /* On desktop nothing scrolls under the tab bar: the blur only covers the
+       static content background, so it looks the same without it. A backdrop
+       blur also samples past the bar's edge, so the browser recomputed it for
+       every scroll frame of the content below and the tabs flashed. */
+    .workspace-chrome:not(.workspace-chrome--mobile) {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+
     .workspace-tab-wrap.is-active .workspace-tab,
     .workspace-tab-wrap.is-visible:not(.is-active) .workspace-tab {
         box-shadow: none;

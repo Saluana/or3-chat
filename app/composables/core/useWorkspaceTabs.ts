@@ -102,7 +102,11 @@ export interface WorkspaceTabsOptions {
     workspaceId: () => string | null | undefined;
     profileId: () => string | null | undefined;
     storage?: WorkspaceTabStorage | null;
-    /** A chat without a thread may still hold an unsent composer draft. */
+    /**
+     * A chat without a thread may still hold an unsent composer draft. True
+     * when the blank tab has none: it may be reused, or discarded when its
+     * split closes.
+     */
     canReuseActiveBlank?: (tabId: string) => boolean;
     /** Capture should make the outgoing view locally safe, never remotely block. */
     captureOutgoing?: (
@@ -346,6 +350,7 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
         const opened = openTab(state.value, resource, {
             allowDuplicate: options_.allowDuplicate,
             reuseActiveBlank: options_.target !== 'background' && options_.reuseActiveBlank !== false &&
+                resource.kind === 'chat' &&
                 options.canReuseActiveBlank?.(state.value.activeTabId) !== false,
         });
         // The activation transaction must still see the outgoing binding.
@@ -489,9 +494,12 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
         try {
             if (tabId) await options.captureOutgoing?.(tabId, paneId, activation);
             if (!activation.isCurrent()) return false;
+            // Decide while the split's composer is mounted: the check captures
+            // its pending draft. A blank tab with a draft is kept.
+            const discardBlankTabId = tabId && isUntouchedBlankChat(tabId) ? tabId : undefined;
             await options.host.closePane(paneId);
             if (generation !== scopeGeneration || options.host.paneIds().includes(paneId)) return false;
-            commit(transitionCloseSplit(state.value, paneId));
+            commit(transitionCloseSplit(state.value, paneId, undefined, discardBlankTabId));
             coordinator.cancel(paneId);
             return true;
         } catch (error) {
@@ -527,8 +535,16 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
     }
 
     function paneClosedExternally(paneId: string): void {
+        // The pane is already gone, so its pending draft cannot be captured;
+        // keep its tab rather than risk discarding unsent text.
         coordinator.cancel(paneId);
         commit(transitionCloseSplit(state.value, paneId));
+    }
+
+    function isUntouchedBlankChat(tabId: string): boolean {
+        const tab = state.value.tabs.find((entry) => entry.id === tabId);
+        return Boolean(tab?.ephemeral && tab.resource.kind === 'chat' && tab.resource.threadId === null &&
+            options.canReuseActiveBlank?.(tabId) !== false);
     }
 
     async function applySnapshot(
@@ -700,7 +716,10 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
             current.resource.threadId === null
         ) {
             const focused = transitionActivateTab(state.value, current.id);
-            const opened = openTab(focused, resource, { reuseActiveBlank: true });
+            const opened = openTab(focused, resource, {
+                reuseActiveBlank: resource.kind === 'chat' && (resource.threadId !== null
+                    || options.canReuseActiveBlank?.(current.id) !== false),
+            });
             if (opened.tabId) {
                 commit(bindTabToPane(opened.state, paneId, opened.tabId));
             }

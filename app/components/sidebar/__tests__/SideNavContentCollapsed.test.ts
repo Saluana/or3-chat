@@ -222,6 +222,25 @@ describe('SideNavContentCollapsed', () => {
         expect(testPageButton.attributes('aria-pressed')).toBe('false');
     });
 
+    it('activates a page once when Enter produces a native button click', async () => {
+        const wrapper = mount(SideNavContentCollapsed, {
+            global: {
+                stubs: {
+                    UIcon: true,
+                    UButton: { template: '<button><slot /></button>' },
+                    UTooltip: { template: '<div><slot /></div>' },
+                    SideBottomNav: true,
+                    ClientOnly: { template: '<div><slot /></div>' },
+                },
+            },
+        });
+        const button = wrapper.find('#btn-page-test-page-1');
+        await button.trigger('keydown', { key: 'Enter' });
+        await button.trigger('click');
+        expect(mockSetActivePage).toHaveBeenCalledTimes(1);
+        expect(mockSetActivePage).toHaveBeenCalledWith('test-page-1');
+    });
+
     it('filters out default page from navigation', () => {
         // Update mock to include home page
         mockListSidebarPages.value = [

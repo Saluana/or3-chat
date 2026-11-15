@@ -250,6 +250,8 @@ const sectionDescriptions: Record<string, string> = {
 };
 const query = ref('');
 const projects = ref<Array<{ project: Project; pinned: boolean }>>([]);
+// Hold the empty state until the first read, so "No projects yet" never flashes.
+const projectsLoaded = ref(false);
 const state = ref<Awaited<ReturnType<typeof readProjectWorkspace>> | null>(
     null,
 );
@@ -458,6 +460,7 @@ function connect() {
     if (useRuntimeConfig().public.ssrAuthEnabled && !getCachedSessionContext()?.authenticated) {
         state.value = null;
         projects.value = [];
+        projectsLoaded.value = false;
         chats.value = [];
         documents.value = [];
         files.value = [];
@@ -603,6 +606,7 @@ function subscribePage() {
             clearTimeout(intakeRefresh);
             allChats.value = value.all;
             projects.value = value.list;
+            if (!projectId) projectsLoaded.value = true;
             state.value = value.current;
             if (projectId && !value.current) {
                 drafts.delete(projectId);
@@ -1144,7 +1148,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                 </template>
             </Or3Scroll>
             <SidebarEmptyState
-                v-else
+                v-else-if="projectsLoaded"
                 class="flex-1 min-h-0"
                 :icon="projectIcon"
                 :title="
@@ -2713,7 +2717,11 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                 </footer>
             </div>
         </template>
-        <p v-else class="p-3 text-sm text-[var(--md-on-surface-variant)]">
+        <p
+            v-else
+            class="p-3 text-sm text-[var(--md-on-surface-variant)]"
+            :class="{ 'or3-loading-delay': !error }"
+        >
             {{
                 error
                     ? 'Return to Projects to choose another workspace.'

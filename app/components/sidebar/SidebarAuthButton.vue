@@ -15,6 +15,8 @@
             type="button"
             :data-connection-state="connectionState"
             :aria-label="ariaLabel"
+            @pointerenter="checkOpenAi(30_000)"
+            @focus="checkOpenAi(30_000)"
         >
             <template #default>
                 <span class="flex flex-col items-center gap-1 w-full">
@@ -244,7 +246,7 @@ const buttonProps = computed(() => {
 // page, or removing a key, must be an explicit, labelled choice.
 const menuOpen = ref(false);
 const openRouterActive = computed(() => isConnected.value || usingInstanceKey.value);
-const needsConnection = computed(() => !openRouterActive.value && !openAi.connected && !openAi.instance);
+const needsConnection = computed(() => !openRouterActive.value && !openAi.value.connected && !openAi.value.instance);
 const openRouterStatus = computed(() => {
     if (isConnected.value) return 'Your key';
     if (isManaged.value) return 'Managed by your administrator';
@@ -261,16 +263,16 @@ function askDisconnect() {
 }
 
 // OpenAI: a personal API key, saved from here without a trip through Settings.
-const { connection: openAi, refresh: refreshOpenAi, save: saveOpenAiKey, remove: removeOpenAiKey } = useOpenAiKey();
+const { connection: openAi, scope: openAiScope, refresh: refreshOpenAi, save: saveOpenAiKey, remove: removeOpenAiKey } = useOpenAiKey();
 const { refreshModels } = useModelStore();
 const openAiFormOpen = ref(false);
 const openAiKeyInput = ref('');
 const openAiBusy = ref(false);
 const openAiError = ref('');
 const openAiStatus = computed(() => {
-    if (openAi.connected) return 'Your API key';
-    if (openAi.instance) return 'Workspace key';
-    if (!openAi.available) return 'Personal keys are unavailable here';
+    if (openAi.value.connected) return 'Your API key';
+    if (openAi.value.instance) return 'Workspace key';
+    if (!openAi.value.available) return 'Personal keys are unavailable here';
     return 'Not connected';
 });
 async function changeOpenAi(action: () => Promise<void>) {
@@ -300,8 +302,28 @@ watch(menuOpen, (open) => {
         openAiError.value = '';
         return;
     }
-    refreshOpenAi().catch(() => undefined);
+    checkOpenAi(5_000);
 });
+// The status was fetched only on open, so the menu first showed "Not
+// connected" and then changed. Start the check when the pointer or focus
+// reaches the button; opening re-checks only if that is not recent.
+let openAiCheckedAt = 0;
+let openAiCheck: Promise<void> | null = null;
+watch(openAiScope, () => {
+    openAiCheckedAt = 0;
+    openAiCheck = null;
+    if (menuOpen.value) checkOpenAi(0);
+});
+function checkOpenAi(maxAgeMs: number): void {
+    if (openAiCheck || Date.now() - openAiCheckedAt < maxAgeMs) return;
+    const scope = openAiScope.value;
+    const check = refreshOpenAi().then(() => {
+        if (scope === openAiScope.value) openAiCheckedAt = Date.now();
+    }).catch(() => undefined).finally(() => {
+        if (openAiCheck === check) openAiCheck = null;
+    });
+    openAiCheck = check;
+}
 
 const confirmDisconnectOpen = ref(false);
 function disconnectOpenRouter() {

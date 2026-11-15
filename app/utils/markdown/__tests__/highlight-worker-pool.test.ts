@@ -26,7 +26,8 @@ const input = (code: string) => ({ code, language: 'ts', theme: 'github-light' }
 afterEach(() => vi.useRealTimers());
 
 describe('syntax highlighting worker ownership', () => {
-    it('shares one worker, coalesces queued snapshots, and releases it with its last owner', async () => {
+    it('shares one worker, coalesces queued snapshots, and releases it after its last owner idles', async () => {
+        vi.useFakeTimers();
         const { pool, workers, finish } = fixture();
         const left = pool.acquire(), right = pool.acquire();
         expect(workers).toHaveLength(0);
@@ -52,6 +53,17 @@ describe('syntax highlighting worker ownership', () => {
             left.release();
             expect(workers[0]!.terminate).not.toHaveBeenCalled();
             right.release();
+            // A block mounted within the idle window reuses the warm worker.
+            vi.advanceTimersByTime(29_000);
+            expect(workers[0]!.terminate).not.toHaveBeenCalled();
+            const returning = pool.acquire();
+            vi.advanceTimersByTime(5_000);
+            const warm = returning.highlight(input('warm'));
+            expect(workers).toHaveLength(1);
+            finish(0, 'warm html');
+            expect(await warm).toBe('warm html');
+            returning.release();
+            vi.advanceTimersByTime(30_000);
             expect(workers[0]!.terminate).toHaveBeenCalledOnce();
             const next = pool.acquire();
             const result = next.highlight(input('new owner'));
@@ -63,6 +75,7 @@ describe('syntax highlighting worker ownership', () => {
     });
 
     it('drops unmounted consumers while allowing another block to finish', async () => {
+        vi.useFakeTimers();
         const { pool, workers, finish } = fixture();
         const left = pool.acquire(), right = pool.acquire();
         try {
@@ -74,6 +87,7 @@ describe('syntax highlighting worker ownership', () => {
             finish(0, 'remaining html');
             expect(await pending).toBe('remaining html');
             right.release();
+            vi.advanceTimersByTime(30_000);
             expect(workers[0]!.terminate).toHaveBeenCalledOnce();
             await expect(left.highlight(input('late'))).rejects.toThrow('unavailable');
         } finally { pool.dispose(); }

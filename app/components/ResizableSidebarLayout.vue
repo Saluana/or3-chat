@@ -82,7 +82,7 @@
                     id="sidebar-container-expanded"
                     :class="[
                         'relative flex-1 min-w-0 min-h-0',
-                        collapsed
+                        collapsed || expanding
                             ? 'overflow-hidden'
                             : 'overflow-auto overscroll-contain',
                     ]"
@@ -90,9 +90,11 @@
                     <!-- Collapsed, the expanded content keeps its size but is hidden and
                          inert. display:none would zero every virtual-list row height and
                          force the list to remount all of them on expand. -->
+                    <!-- While expanding, the content keeps its final width and is clipped,
+                         so text does not re-wrap on every frame of the width transition. -->
                     <div
                         :class="collapsed ? 'invisible absolute inset-y-0 start-0' : 'flex-1 h-full'"
-                        :style="collapsed ? { width: `${width}px` } : undefined"
+                        :style="collapsed || expanding ? { width: `calc(${width}px - var(--md-border-width, 0px))` } : undefined"
                         :inert="collapsed"
                     >
                         <slot name="sidebar-expanded">
@@ -506,6 +508,16 @@ function toggleCollapse() {
     }
     collapsed.value = !collapsed.value;
 }
+
+// True for the duration of the desktop expand transition (duration-200).
+const expanding = ref(false);
+let expandTimer: ReturnType<typeof setTimeout> | undefined;
+watch(collapsed, (value, previous) => {
+    clearTimeout(expandTimer);
+    expanding.value = !value && previous && isDesktop.value && initialized.value;
+    if (expanding.value) expandTimer = setTimeout(() => { expanding.value = false; }, 220);
+});
+onBeforeUnmount(() => clearTimeout(expandTimer));
 
 // Resize logic (desktop only)
 const isDragging = ref(false);

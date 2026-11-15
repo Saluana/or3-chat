@@ -20,6 +20,9 @@ type Task = {
 const MAX_QUEUED = 64;
 const MAX_CODE_LENGTH = 250_000;
 const JOB_TIMEOUT_MS = 20_000;
+// Switching tabs releases code block leases. Keep the warmed worker briefly so
+// returning to a chat does not reload the highlighter and reflow its blocks.
+const IDLE_TERMINATE_MS = 30_000;
 
 export function createHighlightWorkerPool(createWorker: () => Worker) {
     const owners = new Set<symbol>();
@@ -27,13 +30,18 @@ export function createHighlightWorkerPool(createWorker: () => Worker) {
     let worker: Worker | undefined;
     let active: Task | undefined;
     let timeout: ReturnType<typeof setTimeout> | undefined;
+    let idleTimer: ReturnType<typeof setTimeout> | undefined;
     let nextId = 0;
     let disposed = false;
     let failed = false;
     const unavailable = () => new Error('Syntax highlighting unavailable');
 
     function reset(markFailed = false) {
-        failed = markFailed;
+        // Only suppress retries for the owners that witnessed the failure.
+        // A retained worker can fail after its last owner has already left.
+        failed = markFailed && owners.size > 0;
+        clearTimeout(idleTimer);
+        idleTimer = undefined;
         clearTimeout(timeout);
         timeout = undefined;
         worker?.terminate();
@@ -81,6 +89,8 @@ export function createHighlightWorkerPool(createWorker: () => Worker) {
         acquire() {
             const owner = Symbol('code block');
             if (!disposed) owners.add(owner);
+            clearTimeout(idleTimer);
+            idleTimer = undefined;
             return {
                 highlight(input: HighlightInput): Promise<string> {
                     if (disposed || failed || !owners.has(owner) || input.code.length > MAX_CODE_LENGTH) return Promise.reject(unavailable());
@@ -99,13 +109,16 @@ export function createHighlightWorkerPool(createWorker: () => Worker) {
                     });
                 },
                 release() {
-                    owners.delete(owner);
+                    if (!owners.delete(owner)) return;
                     queue.get(owner)?.reject(unavailable());
                     queue.delete(owner);
                     // The current worker cannot interrupt synchronous tokenization.
                     // Drop its consumer now; another owner can use it when it ends.
                     if (active?.owner === owner) active.reject(unavailable());
-                    if (!owners.size) reset();
+                    if (owners.size) return;
+                    // A failed pool resets now so the next block can retry.
+                    if (failed || !worker) reset();
+                    else idleTimer = setTimeout(() => { if (!owners.size) reset(); }, IDLE_TERMINATE_MS);
                 },
             };
         },

@@ -64,7 +64,8 @@ function runCommand(command, commandArgs, { timeoutMs = 600_000 } = {}) {
       clearTimeout(timer);
       resolvePromise({ ok: false, stdout, stderr: String(error) });
     });
-    child.once('exit', (code) => {
+    // `exit` can precede delivery of the final stdout/stderr chunks.
+    child.once('close', (code) => {
       clearTimeout(timer);
       resolvePromise({ ok: code === 0, stdout, stderr });
     });

@@ -190,7 +190,8 @@
 .document-title-field { width: 100%; font-size: clamp(2rem, 5cqw, 3rem); }
 /* Themes floor every textarea at 16px with !important; the title inherits its larger size from the field. */
 .document-title-field :deep(#document-title) { font-size: inherit !important; }
-.document-title-field :deep(textarea) { display: block; width: 100%; min-height: 1.2em; resize: none; overflow: hidden; border: 0; padding: 0; background: transparent; color: var(--md-on-surface); font-family: var(--font-heading, var(--font-sans, ui-sans-serif, system-ui, sans-serif)); font-weight: 720; letter-spacing: -0.035em; line-height: 1.08; outline: none; box-shadow: none; }
+/* `field-sizing` sizes the title in its first layout; Nuxt UI autoresize only runs after a timeout, which made a long title grow and push the document down. Three lines, matching `maxrows`. */
+.document-title-field :deep(textarea) { display: block; width: 100%; min-height: 1.2em; field-sizing: content; max-height: 3lh; resize: none; overflow: hidden; border: 0; padding: 0; background: transparent; color: var(--md-on-surface); font-family: var(--font-heading, var(--font-sans, ui-sans-serif, system-ui, sans-serif)); font-weight: 720; letter-spacing: -0.035em; line-height: 1.08; outline: none; box-shadow: none; }
 .document-title-field :deep(textarea::placeholder) { color: color-mix(in oklab, var(--md-on-surface-variant), transparent 55%); }
 .document-byline { display: flex; gap: 0.8rem; margin: 0.85rem 0 3rem; color: var(--md-on-surface-variant); font-size: 0.72rem; }
 
@@ -281,6 +282,9 @@
 /* Match document-canvas width + centering at every container size. */
 .ai-composer-dock { position: sticky; z-index: 18; bottom: 1rem; width: min(var(--editor-canvas), calc(100% - 3rem)); margin: -10rem auto 1rem; pointer-events: none; }
 .ai-composer-dock > * { pointer-events: auto; }
+/* Fade text into the composer instead of cutting it off at its edge. Spans the
+   text column (themes may narrow the composer) and takes no space in the flow. */
+.ai-composer-fade { position: sticky; z-index: 17; bottom: 0; width: min(var(--editor-canvas), calc(100% - 3rem)); height: 7rem; margin: -7rem auto 0; background: linear-gradient(to bottom, transparent, var(--md-surface) 2.5rem); pointer-events: none; }
 .ai-composer-loading { padding: 0.8rem 1rem; border: var(--md-border-width) solid var(--md-border-color); border-radius: var(--chat-composer-border-radius, var(--md-border-radius-large, var(--md-border-radius))); background: var(--md-surface); color: var(--md-on-surface-variant); font-size: 0.72rem; box-shadow: 0 12px 35px rgb(0 0 0 / 10%); }
 
 .inspector-backdrop { display: none; }
@@ -295,6 +299,7 @@
 @container (min-width: 720px) and (max-width: 1119px) {
 .document-inspector { flex-basis: 300px; min-width: 300px; }
 .document-canvas,
+.ai-composer-fade,
 .ai-composer-dock { width: min(var(--editor-canvas), calc(100% - 2.25rem)); }
 }
 
@@ -311,6 +316,7 @@
     padding-inline-end: calc(var(--or3-pane-chrome-right-clearance, 0px) + 0.45rem);
 }
 .document-canvas,
+.ai-composer-fade,
 .ai-composer-dock { width: calc(100% - 2rem); }
 .document-canvas { padding-top: 2.25rem; }
 .document-title-field { font-size: 2rem; }

@@ -98,7 +98,7 @@
                         <div
                             v-if="shouldDeferDashboardGrid"
                             id="dashboard-grid-loading"
-                            class="text-sm opacity-70"
+                            class="text-sm opacity-70 or3-loading-delay"
                         >
                             Loading dashboard…
                         </div>
@@ -156,7 +156,7 @@
                             <div
                                 v-if="state.loadingPage"
                                 id="dashboard-page-loading"
-                                class="text-sm opacity-70 px-[var(--dashboard-gutter)]"
+                                class="text-sm opacity-70 or3-loading-delay px-[var(--dashboard-gutter)]"
                             >
                                 Loading…
                             </div>
@@ -476,6 +476,11 @@ const landingPageButtonProps = computed(() => {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
+    /* Reserve the back row (32px + gap) on every page and keep the title at
+       the bottom, so moving between top-level and sub-pages does not move
+       the header or the content below it. */
+    justify-content: flex-end;
+    min-height: calc(32px + 6px + 30px * 1.15);
     gap: 6px;
     min-width: 0;
 }

@@ -374,7 +374,15 @@
                         </UTooltip>
                     </div>
 
+                    <!-- Each pane keeps a mounted view per recent chat tab plus one
+                         document view, so switching back shows the same DOM at the
+                         same scroll position instead of rebuilding it. -->
+                    <div v-if="pane.mode === 'doc' && !pane.documentId" class="flex flex-1 items-center justify-center p-8 text-center text-[var(--md-on-surface-variant)]" role="status">
+                        Select a document or create one from the sidebar.
+                    </div>
+                    <KeepAlive v-else :include="CACHED_PANE_VIEWS" :max="PANE_VIEW_CACHE_SIZE">
                     <component
+                        :key="paneViewKey(pane)"
                         :ref="(instance: any) => setPaneComponentRef(pane.id, instance)"
                         :is="resolvePaneComponent(pane)"
                         v-bind="buildPaneProps(pane, i)"
@@ -392,6 +400,7 @@
                             (title: string) => onPaneTabTitle(pane.id, title)
                         "
                     />
+                    </KeepAlive>
 
                     <!-- Resize handle (only between panes, not after the last one) -->
                     <PaneResizeHandle
@@ -478,6 +487,7 @@ import {
 } from '~/composables/documents/useDocumentEditorSessions';
 import {
     clearPanePendingPromptAfter,
+    getPanePendingPrompt,
 } from '~/composables/core/usePanePrompt';
 import { useWorkspaceTabDrafts } from '~/composables/core/useWorkspaceTabDrafts';
 import { usePaneDocuments } from '~/composables/documents/usePaneDocuments';
@@ -505,6 +515,7 @@ import type { ThemePlugin } from '~/plugins/90.theme.client';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 import { usePageShellTheme } from '~/composables/core/usePageShellTheme';
 import { CORE_APP_COMPONENT_DEFAULTS } from '~/theme/_shared/theme-components-registry';
+import { loadAsyncComponent, prefetchWhenIdle } from '~/utils/prefetch-when-idle';
 import {
     validateDbRecordWithRetry,
     type ValidationStatus,
@@ -696,11 +707,12 @@ const workspaceTabs = useWorkspaceTabs({
             .find(([, boundTabId]) => boundTabId === tabId)?.[0];
         // Capture before checking: typing may still be inside the draft debounce.
         if (paneId) paneComponentRefs.get(paneId)?.captureDraft?.();
+        if (typeof getPanePendingPrompt(tabId) === 'string') return false;
         if (!workspaceTabDrafts.isLoaded(tabId)) return false;
         const draft = workspaceTabDrafts.read(tabId);
         return !draft || (!draft.text.trim() && !draft.attachments.length &&
             !draft.attachmentRefs?.length && !draft.missingAttachments?.length &&
-            !draft.largeTextBlocks.length);
+            !draft.largeTextBlocks.length && !draft.composer?.pendingPromptId);
     },
     async captureOutgoing(tabId, paneId) {
         const tab = workspaceTabs.state.value.tabs.find((entry) => entry.id === tabId);
@@ -990,6 +1002,20 @@ useHookEffect('db.documents.update:action:after', () =>
 );
 
 const themePlugin = useNuxtApp().$theme as ThemePlugin | undefined;
+// After the workspace is restored, load the code the first chat open, ⌘K and
+// document would otherwise download on click (~740 KB for the message renderer).
+if (import.meta.client && props.routeSync) {
+    const stopPrefetchWatch = watch(hasSyncedInitial, (ready) => {
+        if (!ready) return;
+        stopPrefetchWatch();
+        const components = themePlugin?.activeComponents.value ?? CORE_APP_COMPONENT_DEFAULTS;
+        prefetchWhenIdle([
+            () => loadAsyncComponent(components['chat-message']),
+            () => import('~/components/search/CommandPalette.vue'),
+            ...(documentsEnabled.value ? [() => loadAsyncComponent(components['document-editor'])] : []),
+        ]);
+    });
+}
 const {
     sidebarExpandedComponent,
     sidebarCollapsedComponent,
@@ -1066,6 +1092,12 @@ whenever(shiftRight, () => {
  * Resolve the component to render for a pane based on its mode.
  * Returns the appropriate component for built-in modes or registered custom apps.
  */
+// Only the core views, which release pane-keyed registrations while hidden.
+// Theme and plugin pane components are not written for deactivation.
+// Nuxt names components by folder: documents/DocumentEditor.vue is
+// DocumentsDocumentEditor.
+const CACHED_PANE_VIEWS = ['ChatContainer', 'DocumentsDocumentEditor'];
+
 function resolvePaneComponent(pane: PaneState): Component {
     // Built-in: chat
     if (pane.mode === 'chat') {
@@ -1141,7 +1173,7 @@ function buildPaneProps(
             messageHistory: pane.messages,
             threadId: pane.threadId,
             paneId: pane.id,
-            tabId: tabIdForPane(pane.id),
+            tabId: chatViewTabId(pane),
         };
     }
 
@@ -1185,6 +1217,29 @@ function tabIdForPane(paneId: string): string {
     return workspaceTabs.state.value.paneBindings.get(paneId) ?? paneId;
 }
 
+// A pane's binding moves to the incoming tab before that tab's thread has
+// loaded. The chat view (and the tab id it saves drafts and status under)
+// follows only once the pane shows the bound tab's thread, so the outgoing
+// view never adopts the incoming tab. Reconciled bindings settle the same way.
+const PANE_VIEW_CACHE_SIZE = 6;
+const settledChatViewTabs = new Map<string, string>();
+function chatViewTabId(pane: PaneState): string {
+    const tabId = tabIdForPane(pane.id);
+    if (!workspaceTabsEnabled.value) return tabId;
+    const tab = workspaceTabs.state.value.tabs.find(entry => entry.id === tabId);
+    // The thread is assigned in the same tick as its history; the pending
+    // marker clears a tick later, too late to keep the outgoing view intact.
+    if (tab?.resource.kind === 'chat' && (tab.resource.threadId ?? '') === (pane.threadId || '')) {
+        settledChatViewTabs.set(pane.id, tab.id);
+    }
+    return settledChatViewTabs.get(pane.id) ?? tabId;
+}
+function paneViewKey(pane: PaneState): string {
+    // Theme chat components are not cached: keep one instance that rebinds.
+    if (pane.mode === 'chat') return resolvePaneComponent(pane) === ChatContainer ? `chat:${chatViewTabId(pane)}` : 'chat';
+    return pane.mode === 'doc' ? 'doc' : `app:${pane.mode}`;
+}
+
 function setPaneComponentRef(paneId: string, instance: unknown): void {
     if (instance) paneComponentRefs.set(paneId, instance as MountedPaneView);
     else paneComponentRefs.delete(paneId);
@@ -1207,7 +1262,11 @@ function onWorkspaceTabActivate(
     tabId: string,
     reason: 'pointer' | 'keyboard'
 ): void {
-    void workspaceTabs.activateTab(tabId, reason);
+    const pane = panes.value[activePaneIndex.value];
+    // The /docs landing view has no resource of its own. Its restored tab
+    // remains selected, so clicking that tab must rebind its actual resource.
+    const showingDocumentsLanding = pane?.mode === 'doc' && !pane.documentId;
+    void workspaceTabs.activateTab(tabId, reason, showingDocumentsLanding);
 }
 
 function onWorkspaceTabClose(tabId: string): void {
@@ -1563,6 +1622,16 @@ async function initInitial(preserveWorkspaceRestore = false) {
         return;
     }
     if (workspaceTabsEnabled.value && preserveWorkspaceRestore) {
+        // A direct /docs request means the documents landing view, even when
+        // the saved workspace restores a different active tab.
+        if (props.defaultMode === 'doc' && documentsEnabled.value) {
+            const active = panes.value[activePaneIndex.value];
+            if (active) {
+                active.mode = 'doc';
+                active.documentId = undefined;
+                active.threadId = '';
+            }
+        }
         hasSyncedInitial.value = true;
         updateUrl(true);
         return;
@@ -1735,8 +1804,11 @@ function redirectNotFound(kind: 'chat' | 'doc') {
 }
 
 // --------------- URL Sync ---------------
-function updateUrl(force = false) {
+let routeTargetsInFlight = 0;
+/** `replace` keeps focus moves between visible split panes out of history. */
+function updateUrl(force = false, replace = false) {
     if (!process.client || !props.routeSync) return;
+    if (routeTargetsInFlight) return;
     if (!force && !hasSyncedInitial.value) return;
     // Prevent route sync from clobbering the OAuth callback path while the
     // OpenRouter token exchange page is mounting. The callback component
@@ -1747,30 +1819,113 @@ function updateUrl(force = false) {
     const pane = panes.value[activePaneIndex.value];
     if (!pane) return;
 
-    // Skip route sync for custom pane apps (only sync chat/doc modes)
-    if (pane.mode !== 'chat' && pane.mode !== 'doc') return;
+    const isRecordPane = pane.mode === 'chat' || pane.mode === 'doc';
+    // App panes (Files, plugins) have no route of their own. With saved tabs,
+    // the bare /chat entry restores the active tab on reload, so a reload no
+    // longer reopens the chat or document that was shown before the app.
+    if (!isRecordPane && !workspaceTabsEnabled.value) return;
 
     const base = pane.mode === 'doc' ? '/docs' : '/chat';
-    const id = pane.mode === 'doc' ? pane.documentId : pane.threadId;
+    const id = !isRecordPane ? undefined : pane.mode === 'doc' ? pane.documentId : pane.threadId;
     const newPath = id ? `${base}/${id}` : base;
-    if (window.location.pathname === newPath) return;
+    const tabId = workspaceTabsEnabled.value ? workspaceTabs.activeTabId.value : undefined;
+    const entryTabId = window.history.state?.or3TabId as string | undefined;
+    if (currentPath === newPath && entryTabId === tabId) return;
     // The root entry point can become /chat while a dashboard deep link is
     // mounting. Keep its operation context through that one route rewrite.
     const params = new URLSearchParams(window.location.search);
     const dashboardQuery = parseDashboardDeepLink(Object.fromEntries(params))
-        ? window.location.search : '';
+        ? Object.fromEntries(params) : undefined;
     // An invite link (`/?invite=`) is read by the auth provider's account
     // control after it mounts, so the token also survives this rewrite.
     const invite = params.get('invite');
-    const query = dashboardQuery || (invite ? `?${new URLSearchParams({ invite })}` : '');
-    window.history.replaceState(window.history.state, '', `${newPath}${query}`);
+    const query = dashboardQuery ?? (invite ? { invite } : {});
+    // A new chat or document receiving its id, the boot rewrite and the
+    // same tab re-recording its entry replace it. Moving between resources
+    // adds an entry, so Back/Forward stay in the app (see onRouteTarget).
+    const binding = currentPath === '/' || (currentPath === newPath && (!entryTabId || entryTabId === tabId)) ||
+        (entryTabId === tabId && currentPath === base && newPath.startsWith(`${base}/`));
+    const location = { path: newPath, query, state: { or3TabId: tabId }, force: true };
+    void (force || replace || binding ? router.replace(location) : router.push(location));
 }
+
+// Back/Forward and links (notifications, plugins) change the route of this
+// same page instance. Show the entry's tab when it still holds that resource,
+// otherwise open the resource, which finds or creates its tab.
+async function onRouteTarget() {
+    if (!props.routeSync || !shellActive.value || !hasSyncedInitial.value) return;
+    if (route.path === '/') { updateUrl(true); return; } // Home keeps the current tab.
+    const kind = route.path === '/docs' || route.path.startsWith('/docs/') ? 'doc'
+        : route.path === '/chat' || route.path.startsWith('/chat/') ? 'chat' : null;
+    if (!kind) return;
+    const id = typeof route.params.id === 'string' ? route.params.id : '';
+    const pane = panes.value[activePaneIndex.value];
+    const entryTabId = window.history.state?.or3TabId as string | undefined;
+    const tab = workspaceTabsEnabled.value && entryTabId
+        ? workspaceTabs.tabs.value.find(entry => entry.id === entryTabId) : undefined;
+    const resource = tab?.resource;
+    const holdsEntry = resource && (resource.kind === 'app' ? !id
+        : resource.kind === 'document' ? kind === 'doc' && resource.documentId === id
+        : kind === 'chat' && (resource.threadId ?? '') === id);
+    routeTargetsInFlight++;
+    try {
+        if (tab && holdsEntry) {
+            if (tab.id !== workspaceTabs.activeTabId.value || pane?.mode !== kind ||
+                (kind === 'doc' ? pane.documentId ?? '' : pane.threadId || '') !== id)
+                await workspaceTabs.activateTab(tab.id, 'command', true);
+        } else if (pane?.mode === kind && (kind === 'doc' ? pane.documentId ?? '' : pane.threadId || '') === id) {
+            return;
+        } else if (id) {
+            if (kind === 'doc') await onDocumentSelected(id);
+            else if (workspaceTabsEnabled.value) await workspaceTabs.openResource({ kind: 'chat', threadId: id });
+            else await setPaneThread(activePaneIndex.value, id);
+        } else if (kind === 'chat') {
+            if (workspaceTabsEnabled.value) await workspaceTabs.openResource({ kind: 'chat', threadId: null });
+            else await setPaneThread(activePaneIndex.value, '');
+        } else if (documentsEnabled.value && pane) {
+            if (pane.mode === 'doc' && pane.documentId) {
+                await captureDocumentEditor(pane.documentId);
+                await flushDocument(pane.documentId);
+            }
+            if (route.path !== '/docs' || panes.value[activePaneIndex.value] !== pane) return;
+            pane.mode = 'doc';
+            pane.documentId = undefined;
+            pane.threadId = '';
+        }
+        await nextTick();
+    } catch (error) {
+        console.error('[workspace-tabs] Failed to apply navigation', error);
+    } finally {
+        routeTargetsInFlight--;
+    }
+}
+watch(() => route.fullPath, onRouteTarget);
+if (import.meta.client) {
+    const onHistoryPop = () => {
+        if (window.location.pathname === route.path) void nextTick(onRouteTarget);
+    };
+    window.addEventListener('popstate', onHistoryPop);
+    onUnmounted(() => window.removeEventListener('popstate', onHistoryPop));
+}
+
+const shellTitle = computed(() => {
+    const appName = runtimeConfig.public?.branding?.appName || 'OR3';
+    // The server only knows a blank tab; name it once saved tabs are restored.
+    if (!props.routeSync || !workspaceTabsEnabled.value || !hasSyncedInitial.value) return appName;
+    const tab = workspaceTabs.state.value.tabs.find(item => item.id === workspaceTabs.activeTabId.value);
+    const title = tab ? workspaceTabMetadata.titleFor(tab).title : '';
+    return title ? `${title} · ${appName}` : appName;
+});
+useHead({ title: shellTitle });
 
 watch(
     () => {
         const active = panes.value[activePaneIndex.value];
         if (!active) return '';
-        return `${active.mode}:${active.threadId || ''}:${
+        // The bound resource only: the active tab id changes before its
+        // resource is bound, and would record the outgoing path for it.
+        const tabId = workspaceTabs.state.value.paneBindings.get(active.id) || '';
+        return `${tabId}:${active.mode}:${active.threadId || ''}:${
             active.documentId || ''
         }`;
     },
@@ -1779,7 +1934,7 @@ watch(
 
 watch(
     () => activePaneIndex.value,
-    () => updateUrl()
+    () => updateUrl(false, true)
 );
 
 // Empty-chat creation is scoped to its originating pane/tab and workspace.

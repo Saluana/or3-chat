@@ -58,23 +58,12 @@
                         </div>
                     </template>
                     <template #fallback>
-                        <div
-                            id="page-loading-fallback"
-                            class="flex-1 flex items-center justify-center"
-                        >
-                            <div class="text-sm opacity-70">
-                                Loading page…
-                            </div>
-                        </div>
+                        <SidebarListSkeleton id="page-loading-fallback" class="flex-1" />
                     </template>
                 </Suspense>
             </div>
             <template #fallback>
-                <div id="nav-scroll-area" class="flex-1 min-h-0 p-3 space-y-3" aria-hidden="true">
-                    <div class="h-9 w-full bg-[var(--md-surface-variant)] animate-pulse" />
-                    <div class="h-9 w-4/5 bg-[var(--md-surface-variant)] animate-pulse" />
-                    <div class="h-9 w-full bg-[var(--md-surface-variant)] animate-pulse" />
-                </div>
+                <SidebarListSkeleton id="nav-scroll-area" class="flex-1 min-h-0" />
             </template>
         </ClientOnly>
 

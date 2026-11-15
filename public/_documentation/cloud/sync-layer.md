@@ -66,8 +66,9 @@ session refreshes do not reset that deadline.
 Managed restart and shutdown close these read-only notification streams before
 draining writes. Clients reconnect through the normal notification or polling path.
 Older adapters, unavailable channels, and browsers without EventSource retain
-the two-second polling fallback with jitter. Reconnection is attempted after a
-minute. Duplicate version hints do not generate pulls.
+the two-second polling fallback with jitter. After a channel error the client
+retries the channel after 5 seconds, doubling to at most a minute, and resets
+that delay once a channel opens. Duplicate version hints do not generate pulls.
 
 SQLite shares one indexed version-counter check every two seconds per watched
 workspace and server process, regardless of its listener count. Convex shares a

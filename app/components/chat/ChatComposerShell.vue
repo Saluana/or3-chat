@@ -98,31 +98,6 @@ defineExpose({ rootElement });
   min-height: var(--chat-composer-editor-min-height);
 }
 
-@media (prefers-color-scheme: dark) {
-  .chat-composer-shell {
-    background: color-mix(in srgb, var(--md-surface) 90%, white 10%);
-    border-color: color-mix(in srgb, var(--md-outline) 30%, transparent);
-    box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--md-outline) 15%, transparent),
-      0 1px 4px rgb(0 0 0 / 30%),
-      0 4px 16px -4px rgb(0 0 0 / 40%);
-  }
-
-  .chat-composer-shell:hover:not(:focus-within) {
-    border-color: color-mix(in srgb, var(--md-outline) 55%, transparent);
-  }
-
-  .chat-composer-shell:focus-within,
-  .chat-composer-shell.external-agent-composer--dragging {
-    border-color: color-mix(in srgb, var(--md-primary) 60%, transparent);
-    box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--md-primary) 25%, transparent),
-      0 0 0 4px color-mix(in srgb, var(--md-primary) 12%, transparent),
-      0 2px 8px rgb(0 0 0 / 30%),
-      0 8px 24px -8px rgb(0 0 0 / 40%);
-  }
-}
-
 :global(.dark) .chat-composer-shell {
   background: color-mix(in srgb, var(--md-surface) 90%, white 10%);
   border-color: color-mix(in srgb, var(--md-outline) 30%, transparent);

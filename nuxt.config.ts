@@ -1,7 +1,7 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { themeCompilerPlugin } from './plugins/vite-theme-compiler';
-import { existsSync } from 'node:fs';
-import { basename, resolve } from 'path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { basename, join, resolve } from 'path';
 import { or3CloudConfig } from './config.or3cloud';
 import { or3Config } from './config.or3';
 import { printStartupBanner as printOr3StartupBanner } from './shared/dev/startup-banner';
@@ -56,6 +56,29 @@ const sqliteNativeTraceIncludes =
 // never breaks the app.
 const localPackages = resolveLocalPackageAliases(__dirname);
 const localPackageAliases = [...localPackages.aliases];
+
+// Client asset output, recorded at build so the manifest hook can inspect files.
+let clientAssetsDir: string | undefined;
+// Client files the workspace shell loads at startup (`_nuxt/<file>`), set from
+// the client manifest. Only these chunks are precached; the rest are cached by
+// the service worker when first used.
+let pwaShellFiles: Set<string> | undefined;
+
+const UNHASHED_IMAGE_CACHE = {
+    headers: { 'cache-control': 'public,max-age=604800,stale-while-revalidate=86400' },
+};
+function publicImageCacheRules(): Record<string, typeof UNHASHED_IMAGE_CACHE> {
+    const rules: Record<string, typeof UNHASHED_IMAGE_CACHE> = {};
+    for (const dir of ['logos', 'chat-artwork', 'lock-page', 'screenshots']) {
+        rules[`/${dir}/**`] = UNHASHED_IMAGE_CACHE;
+    }
+    const publicDir = resolve(__dirname, 'public');
+    if (!existsSync(publicDir)) return rules;
+    for (const name of readdirSync(publicDir)) {
+        if (/\.(?:ico|png|svg|webp|avif|jpe?g)$/.test(name)) rules[`/${name}`] = UNHASHED_IMAGE_CACHE;
+    }
+    return rules;
+}
 
 // The SDK checkout exposes TypeScript source through its `exports`. Vite can
 // transpile that source, but Nitro's Rollup pipeline cannot parse TypeScript
@@ -332,6 +355,16 @@ export default defineNuxtConfig({
         clientBundle: {
             // Custom icons must also work in static builds without an icon API.
             includeCustomCollections: true,
+            // Bundle literal icon names from app templates and registries so
+            // menus, dialogs and pickers render their icons in the first frame
+            // instead of waiting on /api/_nuxt_icon (~22 KB gzip for ~400 icons).
+            scan: {
+                globInclude: ['app/**/*.{vue,ts}'],
+                globExclude: ['node_modules', 'dist', '**/__tests__/**', '**/*.test.ts', '**/*.spec.ts', '.*'],
+            },
+            // The scan brings the bundle to ~205 KB uncompressed (default
+            // limit 256 KB, which fails the build). Leave room for new icons.
+            sizeLimitKb: 384,
             // Theme tokens are resolved at runtime and cannot be discovered by
             // Nuxt Icon's source scan. Bundle the selected glyphs for static and
             // offline use; custom collections are already included above.
@@ -407,55 +440,21 @@ export default defineNuxtConfig({
                     'cache-control': 'public,max-age=31536000,immutable',
                 },
             },
-            // Static images with versioning - cache for 1 week
-            '/**/*.webp': {
-                headers: {
-                    'cache-control':
-                        'public,max-age=604800,stale-while-revalidate=86400',
-                },
-            },
-            '/**/*.png': {
-                headers: {
-                    'cache-control':
-                        'public,max-age=604800,stale-while-revalidate=86400',
-                },
-            },
-            '/**/*.svg': {
-                headers: {
-                    'cache-control':
-                        'public,max-age=604800,stale-while-revalidate=86400',
-                },
-            },
-            '/**/*.jpg': {
-                headers: {
-                    'cache-control':
-                        'public,max-age=604800,stale-while-revalidate=86400',
-                },
-            },
-            '/**/*.jpeg': {
-                headers: {
-                    'cache-control':
-                        'public,max-age=604800,stale-while-revalidate=86400',
-                },
-            },
-            // Font files (both woff and woff2)
-            '/**/*.woff': {
+            // Theme selector CSS is unhashed but versioned by build ID.
+            '/themes/**': {
                 headers: {
                     'cache-control': 'public,max-age=31536000,immutable',
                 },
             },
-            '/**/*.woff2': {
+            '/manifest.webmanifest': {
                 headers: {
                     'cache-control':
-                        'public,max-age=604800,stale-while-revalidate=86400',
+                        'public,max-age=86400,stale-while-revalidate=604800',
                 },
             },
-            // CSS files from Nuxt build
-            '/**/*.css': {
-                headers: {
-                    'cache-control': 'public,max-age=31536000,immutable',
-                },
-            },
+            // Unhashed images and icons. Nitro route rules match path
+            // prefixes, not extensions, so list the folders and top-level files.
+            ...publicImageCacheRules(),
         },
     },
     // PWA configuration
@@ -515,6 +514,20 @@ export default defineNuxtConfig({
                             entry.url.endsWith('.js') &&
                             entry.size > 1.5 * 1024 * 1024
                         )
+                            return false;
+                        // Large on-demand workers (PDF extraction) are cached after use.
+                        if (/\.worker-[^/]+\.js$/.test(entry.url) && entry.size > 256 * 1024)
+                            return false;
+                        // Large artwork (theme backgrounds, sign-in and lock-page
+                        // art, the 1024px install icon) is not needed for the
+                        // offline shell: the static-images runtime cache keeps
+                        // what is shown. This was ~2.9 MB of the first visit.
+                        if (/\.(?:png|webp)$/i.test(entry.url) && entry.size > 32 * 1024)
+                            return false;
+                        // Feature chunks (editor, settings, admin, viewers) are
+                        // cached by the `nuxt-chunks` rule when first loaded.
+                        // Precaching all of them was ~400 files on a first visit.
+                        if (pwaShellFiles && /^_nuxt\/.+\.js$/.test(entry.url) && !pwaShellFiles.has(entry.url))
                             return false;
                         return true;
                     }),
@@ -582,14 +595,20 @@ export default defineNuxtConfig({
                               }),
                     },
                 },
-                // Nuxt chunks
+                // Build chunks have content-hashed names, so a cached copy is
+                // always current. This keeps every feature used once available
+                // offline. Build metadata (`/_nuxt/builds/`) stays network-only.
                 {
-                    urlPattern: /^\/_nuxt\//,
-                    handler: 'NetworkFirst',
+                    urlPattern: ({ url, sameOrigin }) =>
+                        sameOrigin &&
+                        url.pathname.startsWith('/_nuxt/') &&
+                        !url.pathname.startsWith('/_nuxt/builds/'),
+                    handler: 'CacheFirst',
                     method: 'GET',
                     options: {
-                        cacheName: 'nuxt-dev-chunks',
-                        expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 },
+                        cacheName: 'nuxt-chunks',
+                        expiration: { maxEntries: 800, maxAgeSeconds: 30 * 24 * 60 * 60 },
+                        cacheableResponse: { statuses: [200] },
                     },
                 },
                 // Static images
@@ -851,6 +870,7 @@ export default defineNuxtConfig({
     hooks: {
         'vite:extendConfig'(config, { isClient }) {
             if (!isClient) return;
+            clientAssetsDir = resolve(config.root ?? __dirname, config.build?.outDir ?? '', config.build?.assetsDir ?? '');
             // Nuxt UI requests server transpilation for Reka. Nuxt also turns
             // that into a client optimizer exclusion, causing hundreds of
             // startup requests for its already-compiled ESM. Keep SSR handling
@@ -927,8 +947,19 @@ export default defineNuxtConfig({
                     ])],
                 };
             }
+            // Theme stylesheets are URL assets: the theme plugin links only the
+            // active one. A preload here fetches inactive themes too, and its
+            // crossorigin mode differs from the theme link, downloading twice.
+            const urlAssets = new Set(Object.values(manifest).flatMap(resource => resource.assets ?? []));
+            // An empty stylesheet still costs a render-blocking request.
+            const isEmptyCss = (file: string) => {
+                const path = clientAssetsDir && join(clientAssetsDir, file);
+                return Boolean(path && file.endsWith('.css') && existsSync(path) && !readFileSync(path, 'utf8').trim());
+            };
             for (const resource of Object.values(manifest)) {
                 resource.prefetch = false;
+                if (resource.file.endsWith('.css') && urlAssets.has(resource.file)) resource.preload = false;
+                if (resource.css) resource.css = resource.css.filter(file => !isEmptyCss(file));
                 // Plain theme modules do not register as rendered Vue components.
                 // Give SSR a stable key for the selected theme's emitted chunk.
                 if (resource.name?.startsWith('theme-')) {
@@ -940,8 +971,25 @@ export default defineNuxtConfig({
                     resource.preload = false;
                 }
             }
+            // Precache the startup shell: the entry and the workspace page with
+            // their static imports and stylesheets.
+            const shellFiles = new Set<string>();
+            const pending = Object.keys(manifest).filter(key =>
+                manifest[key]?.isEntry || key === 'pages/chat/[[id]].vue' || key === 'components/PageShell.vue');
+            const seen = new Set<string>();
+            for (let key = pending.pop(); key !== undefined; key = pending.pop()) {
+                const resource = manifest[key];
+                if (!resource || seen.has(key)) continue;
+                seen.add(key);
+                for (const file of [resource.file, ...(resource.css ?? [])]) shellFiles.add(`_nuxt/${file}`);
+                pending.push(...(resource.imports ?? []));
+            }
+            pwaShellFiles = shellFiles;
         },
         'pages:extend'(pages) {
+            const workspacePage = resolve(__dirname, 'app/pages/chat/[[id]].vue');
+            pages.push({ name: 'or3-docs', path: '/docs/:id?', file: workspacePage });
+            pages.push({ name: 'or3-home', path: '/', file: workspacePage });
             if (process.env.NODE_ENV !== 'production' && process.env.OR3_CHAT_TOOLS_CLOUD_TEST_HARNESS === 'true')
                 pages.push({ name: 'or3-cloud-tools-test', path: '/__or3-cloud-tools-test',
                     file: resolve(__dirname, 'tests/e2e/fixtures/CloudToolBridgeJourney.vue') });

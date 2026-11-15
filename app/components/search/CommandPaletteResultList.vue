@@ -134,7 +134,7 @@
         </ul>
 
         <!-- Skeleton while the first index warms -->
-        <div v-if="showSkeleton" class="space-y-1.5 px-2 py-2">
+        <div v-if="showSkeleton" class="space-y-1.5 px-2 py-2 or3-loading-delay">
             <div
                 v-for="row in 4"
                 :key="`palette-skeleton-${row}`"

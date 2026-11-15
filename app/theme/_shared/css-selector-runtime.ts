@@ -19,6 +19,7 @@
  */
 
 import type { CSSelectorConfig } from './types';
+import { themeCssHref } from './theme-head';
 
 /**
  * Internal cache for class application per element.
@@ -232,7 +233,7 @@ export function removeThemeClasses(
  * Constraints:
  * - No error is thrown when CSS is missing
  */
-export async function loadThemeCSS(themeName: string): Promise<void> {
+export async function loadThemeCSS(themeName: string, buildId?: string): Promise<void> {
     // Check if CSS is already loaded
     const existingLink = document.querySelector<HTMLLinkElement>(
         `link[data-theme-css="${themeName}"]`
@@ -248,7 +249,7 @@ export async function loadThemeCSS(themeName: string): Promise<void> {
         link.rel = 'stylesheet';
         link.href = import.meta.dev
             ? `/themes/${themeName}.css?t=${Date.now()}`
-            : `/themes/${themeName}.css`;
+            : themeCssHref(themeName, buildId);
         link.setAttribute('data-theme-css', themeName);
 
         link.onload = () => resolve();

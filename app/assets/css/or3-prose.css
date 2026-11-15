@@ -324,11 +324,6 @@
     background: var(--md-surface-container-high);
 }
 
-/* A trailing newline in the source renders as an empty, numbered last line. */
-.or3-prose :deep([data-streamdown='code'] .line:last-child:has(> [data-streamdown='code-line-number']:only-child)) {
-    display: none;
-}
-
 .or3-prose :deep([data-streamdown='code-line-number']) {
     margin-right: 0.75rem;
     padding: 0;
@@ -337,4 +332,11 @@
 }
 .or3-prose :deep([data-streamdown='pre']) {
     padding-left: 0;
+}
+
+/* KaTeX loads the first time math appears. Keep the TeX source invisible
+   briefly so a quick load swaps straight to rendered math; a slow or failed
+   load still shows the source. */
+.or3-prose :deep([data-streamdown='math-pending']) {
+    animation: or3-loading-reveal 160ms ease-out 400ms backwards;
 }

@@ -571,7 +571,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                 await Promise.all([
                     loadThemeStylesheets(manifest),
                     theme.hasStyleSelectors
-                        ? loadThemeCSS(target)
+                        ? loadThemeCSS(target, runtimeConfig.app.buildId)
                         : Promise.resolve(),
                 ]);
             } catch (error) {
