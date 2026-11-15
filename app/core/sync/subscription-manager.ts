@@ -1063,7 +1063,7 @@ export class SubscriptionManager {
     }
 
     private filterRecentOps(changes: SyncChange[]): SyncChange[] {
-        const filtered = changes.filter((c) => !isRecentOpId(c.stamp?.opId ?? ''));
+        const filtered = changes.filter((c) => !isRecentOpId(c.stamp?.opId ?? '', { dbName: this.db.name, historyIncarnation: this.history?.historyIncarnation }));
         if (import.meta.dev) {
             const dropped = changes
                 .filter((c) => !filtered.includes(c))

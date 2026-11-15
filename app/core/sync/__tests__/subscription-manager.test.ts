@@ -448,7 +448,7 @@ describe('SubscriptionManager', () => {
 
         const onChanges = (provider.subscribe as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]![2] as (changes: SyncChange[]) => void;
 
-        markRecentOpId(testUuid('op-echo'));
+        markRecentOpId(testUuid('op-echo'), { dbName: db.name });
 
         await onChanges([
             {
@@ -543,7 +543,7 @@ describe('SubscriptionManager', () => {
 
         const onChanges = (provider.subscribe as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]![2] as (changes: SyncChange[]) => void;
 
-        markRecentOpId(testUuid('op-only'));
+        markRecentOpId(testUuid('op-only'), { dbName: db.name });
 
         await onChanges([
             {

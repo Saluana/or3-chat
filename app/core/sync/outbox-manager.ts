@@ -498,7 +498,7 @@ export class OutboxManager {
             });
             await this.db.pending_ops.delete(op.id);
         });
-        unmarkRecentOpId(op.stamp.opId);
+        unmarkRecentOpId(op.stamp.opId, { dbName: this.db.name, historyIncarnation: this.historyGuard?.historyIncarnation ?? this.db.syncHistoryAtOpen });
     }
 
     private async recoverAbandonedOps(): Promise<void> {
@@ -731,7 +731,7 @@ export class OutboxManager {
                 return { successCount: 0, failCount: 0, deferred: false };
             }
             for (const op of batch) {
-                markRecentOpId(op.stamp.opId);
+                markRecentOpId(op.stamp.opId, { dbName: this.db.name, historyIncarnation: this.historyGuard?.historyIncarnation ?? this.db.syncHistoryAtOpen });
             }
 
             const signal = this.pushAbortController?.signal;
@@ -798,7 +798,7 @@ export class OutboxManager {
                     }
                     try {
                         if (await this.acknowledgeOp(op, winner)) {
-                            unmarkRecentOpId(op.stamp.opId);
+                            unmarkRecentOpId(op.stamp.opId, { dbName: this.db.name, historyIncarnation: this.historyGuard?.historyIncarnation ?? this.db.syncHistoryAtOpen });
                             successCount++;
                         }
                     } catch (error) {

@@ -401,7 +401,7 @@ export class HookBridge {
         }
 
         // Mark opId immediately to suppress echo before push completes
-        markRecentOpId(stamp.opId);
+        markRecentOpId(stamp.opId, { dbName: this.db.name, historyIncarnation: this.db.syncHistoryAtOpen });
 
         // Auto-generate order_key for messages if missing
         if (tableName === 'messages' && operation === 'put' && payload) {

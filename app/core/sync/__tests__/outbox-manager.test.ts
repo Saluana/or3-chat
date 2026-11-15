@@ -698,14 +698,14 @@ describe('OutboxManager', () => {
             }],
             serverVersion: 4,
         }));
-        markRecentOpId('op-local');
+        markRecentOpId('op-local', { dbName: db.name });
         const outbox = new OutboxManager(db as any, provider, { workspaceId: 'workspace-1' });
 
         await outbox.flush();
 
         expect(pendingOps.__rows.size).toBe(0);
         expect(messages.__rows.get('m1')).toMatchObject(winner);
-        expect(isRecentOpId('op-local')).toBe(false);
+        expect(isRecentOpId('op-local', { dbName: db.name })).toBe(false);
     });
 
     it('keeps the outbox row when applied: false has no winner payload', async () => {

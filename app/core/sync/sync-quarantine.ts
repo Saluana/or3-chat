@@ -175,7 +175,7 @@ async function reconstruct(
         }
         const fresh: SyncRevision = { clock: tombRevision.clock, hlc: generateHLC(), opId: createRuntimeUuid() };
         await tx.table('tombstones').update(`${tableName}:${pk}`, { hlc: fresh.hlc, opId: fresh.opId });
-        markRecentOpId(fresh.opId);
+        markRecentOpId(fresh.opId, { dbName: tx.db.name, historyIncarnation: (tx.db as Or3DB).syncHistoryAtOpen });
         return {
             kind: 'repaired',
             note: 'rebuilt from tombstone with a new op_id',
@@ -225,7 +225,7 @@ async function reconstruct(
     }
     // Row and outbox must carry the same tuple, exactly as live capture does.
     await tx.table(tableName).update(pk, { hlc: fresh.hlc, op_id: fresh.opId });
-    markRecentOpId(fresh.opId);
+    markRecentOpId(fresh.opId, { dbName: tx.db.name, historyIncarnation: (tx.db as Or3DB).syncHistoryAtOpen });
     return {
         kind: 'repaired',
         note: 'rebuilt from local row with a new op_id',
@@ -405,7 +405,7 @@ export async function holdHistoryInTx(tx: Transaction, scope: import('~~/shared/
             tableName, pk: typeof record.pk === 'string' ? record.pk : key,
             source: 'snapshot_apply', status: 'quarantined', op: record,
             ...(kind === 'row' ? { localRow: record } : kind === 'tombstone' ? { localTombstone: record } : {}),
-            diagnostics: ['Saved changes from before server recovery; commit unknown in discarded history'], quarantinedAt: Date.now() });
+            diagnostics: [sourceIncarnation === 'unknown' ? 'Changes from an outdated client; origin unknown' : 'Saved changes from before server recovery; commit unknown in discarded history'], quarantinedAt: Date.now() });
     };
     for (const tableName of [...SYNCED_TABLES, 'tombstones', 'pending_ops', 'file_transfers']) {
         let after: string | undefined;
