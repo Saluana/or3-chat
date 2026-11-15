@@ -95,9 +95,10 @@ vi.mock('~/utils/workspace-backup-stream', async () => {
     };
 });
 
-vi.mock('~/db/client', () => {
+vi.mock('~/db/client', async importOriginal => {
     const mockDb = { name: 'test-workspace', verno: 1 } as any;
     return {
+        ...(await importOriginal<typeof import('~/db/client')>()),
         db: mockDb,
         getDb: () => backupContext.db ?? mockDb,
     };
