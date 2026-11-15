@@ -49,6 +49,7 @@ export type FakeDockerConfig = {
   volumeAllocatedKiB?: number;
   volumeFreeKiB?: number;
   scratchFreeKiB?: number;
+  syncAudit?: unknown;
   s3Verification?: unknown;
   s3InventoryVerification?: unknown;
   s3Check?: unknown;
@@ -224,6 +225,7 @@ const containerScript = () => {
   if (joined.includes('df -Pk /scratch')) return out(config.scratchFreeKiB ?? 512 * 1024);
   if (joined.includes('df -Pk')) return out(config.volumeFreeKiB ?? 1000000);
   if (joined.includes('tar czf')) return process.stdout.write(gzipSync(Buffer.from('fixture archive bytes')));
+  if (joined.includes('backup-inspect.mjs sync')) return out(JSON.stringify(config.syncAudit ?? {contract:1,complete:true,healthy:true}));
   if (joined.includes('quick_check')) return out(JSON.stringify([{ path: 'auth.sqlite', quickCheck: 'ok', tables: 1 }, { path: 'sync.sqlite', quickCheck: 'ok', tables: 1 }]));
   if (joined.includes('accessSync')) {
     if (state.running && config.healthy) return;
@@ -237,6 +239,7 @@ if (args[0] === 'run') { containerScript(); process.exit(0); }
 if (args[0] === 'exec') {
   if (joined.includes('__probe_env__')) out(sha(process.env.OR3_STORAGE_S3_SECRET_ACCESS_KEY ?? ''));
   else if (joined.includes('backup-inspect.mjs inventory')) out(JSON.stringify({selected:['./sync.sqlite'],bytes:1000}));
+  else if (joined.includes('backup-inspect.mjs sync')) out(JSON.stringify(config.syncAudit ?? {contract:1,complete:true,healthy:true}));
   else if (joined.includes('backup-inspect.mjs references')) out(JSON.stringify({contract:1,complete:true,liveAttachments:0}));
   else if (joined.includes('backup-inspect.mjs s3-summary')) out(JSON.stringify({contract:2,references:1,payloadBytes:23}));
   else if (joined.includes('remote-objects.mjs capture')) process.stdout.write('fixture-remote-archive');

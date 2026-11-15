@@ -9,3 +9,6 @@ export function readBackupInventory(text: string): BackupInventory;
 export function inspectCanonicalReferences(Database: Function, databasePath: string, inventory: BackupInventory, storageRoot: string): { contract: number; inspectedMetadata: number; liveAttachments: number; complete: boolean };
 export function iterateS3References(Database: Function, databasePath: string, options: { keyPrefix: string }): Generator<{ workspaceId: string; hash: string; storageId: string; sizeBytes: number }>;
 export function summarizeS3References(Database: Function, databasePath: string, options: { keyPrefix: string }): { contract: 2; references: number; payloadBytes: number };
+
+export type SyncSemanticAudit = { contract: 1; complete: boolean; healthy: boolean; inspectedRecords: number; faultCount: number; faults: Array<{ table: string; rowid?: string; keySha256?: string; itemOrdinal?: string; serverVersion?: string; reason: string }>; diagnosticsTruncated: boolean };
+export function inspectSyncSemantics(Database: Function, databasePath: string): SyncSemanticAudit;

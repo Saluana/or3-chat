@@ -302,6 +302,47 @@ test('canonical missing-reference refusal precedes journal and live service muta
   expect(trace).toContain('--network none');
 });
 
+test.each([
+  { failures: [{ match: 'backup-inspect.mjs sync', message: 'Sync semantic certification failed: change_log rowid=1 invalid_op_id' }] },
+  { syncAudit: { contract: 1, complete: true, healthy: false } },
+  { syncAudit: { contract: 1, complete: false, healthy: true } },
+  { syncAudit: { complete: true, healthy: true } },
+])('restore refuses poison or unqualified semantic certification before live mutation: %j', async change => {
+  const fixture = await sandbox();
+  const id = await createBackup(fixture);
+  const archive = join(fixture.directory, '.or3-cloud/backups', id, 'data.tgz');
+  const bytes = await readFile(archive);
+  const before = await fixture.readStateText();
+  await fixture.reset(); await fixture.configure(change);
+  const refused = await fixture.cli(['restore', id, '--yes']);
+  expect(refused.exitCode, refused.output).toBe(1);
+  expect(refused.output).toMatch(/semantic|certification/i);
+  expect(await fixture.readStateText()).toBe(before);
+  expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+  expect(await readFile(archive)).toEqual(bytes);
+});
+
+test('extracted candidate semantic faults prevent target startup and safety recovery reports degradation', async () => {
+  const fixture = await sandbox();
+  const id = await createBackup(fixture);
+  const archive = join(fixture.directory, '.or3-cloud/backups', id, 'data.tgz');
+  const bytes = await readFile(archive);
+  await fixture.reset();
+  await fixture.configure({ failures: [{ match: 'backup-inspect.mjs sync /data/sync.sqlite', message: 'Sync semantic certification failed: tombstones rowid=1 invalid_deleted_at' }] });
+  const refused = await fixture.cli(['restore', id, '--yes']);
+  expect(refused.exitCode, refused.output).toBe(1);
+  expect(refused.output).toContain('pre-restore snapshot');
+  expect(refused.output).toContain('sync semantic health is not certified');
+  const trace = await fixture.traceText();
+  const extracts = [...trace.matchAll(/tar xzf/g)].map(match => match.index!);
+  expect(extracts).toHaveLength(2);
+  // Only recovery may start; the failed target never reaches public startup.
+  expect(trace.slice(extracts[0], extracts[1])).not.toMatch(/compose .* up\b/);
+  expect(trace.slice(extracts[1])).toMatch(/compose .* up\b/);
+  expect((await fixture.readState()).incompleteOperation).toBeUndefined();
+  expect(await readFile(archive)).toEqual(bytes);
+});
+
 test('backup refuses an incomplete canonical archive, restarts the original app and removes only its unverified artifact', async () => {
   const fixture = await sandbox();
   await fixture.configure({ failures: [{ match: 'backup-inspect.mjs references', message: 'missing canonical attachment pair' }] });

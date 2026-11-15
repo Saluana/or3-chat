@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 // App-owned offline compatibility contract v1, not a provider runtime export.
 // Only trusted image code runs; archived databases are opened without migration.
 import { createRequire } from 'node:module';
@@ -8,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 export const INSPECTION_PROFILE = Object.freeze({ contract: 1, sqlite: '0.0.30', filesystem: '0.0.18' });
 export const S3_INSPECTION_PROFILE = Object.freeze({ contract: 2, sqlite: '0.0.30', s3: '0.0.15' });
 export const QUALIFIED_MIGRATIONS = ['001_init', '002_sync_tables', '003_sync_hardening', '004_auth_invites', '005_admin_stores', '006_sync_snapshots', '007_device_cursor_ownership', '008_upload_intents', '009_or3_connect', '010_connect_user_code_hmac', '011_connect_environment_scope_indexes', '012_connect_credential_redelivery', '013_connect_environment_lifecycle', '014_connect_retention_activation', '015_rate_limits', '016_connect_runtime_binding', '017_background_jobs', '018_background_admission_cancels', '019_background_generation_history', '020_background_generation_receipts', '021_background_request_usage', '022_canonical_chat_reader', '023_legacy_chat_seek_index', '024_signup_invites', '025_background_shutdown_accounting', '026_retained_storage_usage', '027_verified_storage_usage', '028_user_scoped_device_cursors', '029_delegation_wait', '030_storage_generations', '031_storage_generation_uploads', '032_sync_observations', '033_tool_result_operation_ids'];
+// Explicitly retain complete published histories when a future migration is added.
+const QUALIFIED_MIGRATION_COUNTS = [24, 26, 28, 29, 31, 32, 33];
 const MAX_ENTRIES = 100_000;
 const MAX_DATABASE_BYTES = 192 * 1024 * 1024;
 // One MiB accommodates the admitted 256 KiB payload and persisted fields.
@@ -78,11 +81,11 @@ function openCanonicalDatabase(Database, databasePath) {
     for (const name of ['s_file_meta', 'kysely_migration']) {
       if (db.prepare('SELECT type FROM sqlite_master WHERE name = ?').get(name)?.type !== 'table') throw new Error('Unsupported offline canonical SQLite schema');
     }
-    const migrationNames = db.prepare('SELECT name FROM kysely_migration ORDER BY name LIMIT ?').all(QUALIFIED_MIGRATIONS.length + 1).map(row => row.name);
+    const migrationNames = db.prepare('SELECT CASE WHEN length(CAST(name AS BLOB)) <= 128 THEN name ELSE NULL END AS name FROM kysely_migration ORDER BY name LIMIT ?').all(QUALIFIED_MIGRATIONS.length + 1).map(row => row.name);
     // Accept previously published histories and the current candidate.
     // Interrupted upgrades remain unsupported.
-    const expectedMigrations = [24, 26, 28, 29, 31, 32].includes(migrationNames.length) ? QUALIFIED_MIGRATIONS.slice(0, migrationNames.length) : QUALIFIED_MIGRATIONS;
-    if (JSON.stringify(migrationNames) !== JSON.stringify(expectedMigrations)) throw new Error('Unsupported offline canonical SQLite migration history');
+    const expectedMigrations = QUALIFIED_MIGRATIONS.slice(0, migrationNames.length);
+    if (!QUALIFIED_MIGRATION_COUNTS.includes(migrationNames.length) || JSON.stringify(migrationNames) !== JSON.stringify(expectedMigrations)) throw new Error('Unsupported offline canonical SQLite migration history');
     const columns = db.prepare('PRAGMA table_info(s_file_meta)').all();
     for (const [name, type, pk] of [['workspace_id', 'TEXT', 1], ['id', 'TEXT', 2], ['data_json', 'TEXT', 0], ['deleted', 'INTEGER', 0]]) {
       if (!columns.some(column => column.name === name && column.type === type && column.pk === pk)) throw new Error('Unsupported offline canonical SQLite columns');
@@ -92,6 +95,174 @@ function openCanonicalDatabase(Database, databasePath) {
     db.close();
     throw error;
   }
+}
+
+// The offline image runs plain Node without host TypeScript aliases. Keep these
+// payload checks aligned with shared/sync/schemas.ts: incremental stamps require
+// UUIDs and 1..512 HLC characters; snapshot revisions deliberately allow legacy
+// nonempty IDs/HLCs. No stricter HLC grammar is implied by the reader contract.
+const SYNC_TABLES = ['threads', 'messages', 'projects', 'posts', 'file_meta', 'kv', 'notifications'];
+const UUID = /^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$/;
+// Migration 033 repairs this specific historical writer defect, including its
+// embedded payload copy. It is not one of the legitimate legacy revision IDs.
+const BACKGROUND_TOOL_ID = /^background-tool:[a-f0-9]{64}$/i;
+const safe = value => Number.isSafeInteger(value) && value >= 0;
+const text = value => typeof value === 'string' && value.length > 0;
+
+function validSyncPayload(table, value, pk) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  // Readers normalize legacy camelCase wire fields before schema validation.
+  const payload = { ...value };
+  for (const [key, item] of Object.entries(value)) {
+    const snake = key.replace(/[A-Z]/g, char => `_${char.toLowerCase()}`);
+    if (!(snake in payload)) payload[snake] = item;
+  }
+  const strings = {
+    threads: ['id', 'status'], messages: ['id', 'thread_id', 'role', 'order_key'],
+    projects: ['id', 'name'], posts: ['id', 'title', 'content', 'post_type'],
+    file_meta: ['hash'], kv: ['id', 'name'], notifications: ['id', 'user_id', 'type', 'title'],
+  }[table];
+  if (!strings || strings.some(key => typeof payload[key] !== 'string')) return false;
+  if (payload[table === 'file_meta' ? 'hash' : 'id'] !== pk) return false;
+  if (['created_at', 'updated_at', 'clock', ...(table === 'messages' ? ['index'] : [])].some(key => typeof payload[key] !== 'number' || !Number.isFinite(payload[key]))) return false;
+  // Payload clocks are plain finite numbers in the reader; the separate
+  // revision clock is the nonnegative safe integer used by sync ordering.
+  if (table !== 'kv' && typeof payload.deleted !== 'boolean') return false;
+  if (table === 'threads' && typeof payload.pinned !== 'boolean') return false;
+  const optionalStrings = {
+    messages: ['hlc'], file_meta: ['kind', 'mime_type'],
+    notifications: ['thread_id', 'document_id', 'body'],
+  }[table] ?? [];
+  if (optionalStrings.some(key => payload[key] !== undefined && typeof payload[key] !== 'string')) return false;
+  const optionalNumbers = { file_meta: ['size_bytes'], notifications: ['read_at', 'deleted_at'] }[table] ?? [];
+  if (optionalNumbers.some(key => payload[key] !== undefined && (typeof payload[key] !== 'number' || !Number.isFinite(payload[key])))) return false;
+  if ((table === 'threads' || table === 'posts') && payload.title_source !== undefined && !['temporary', 'generating', 'generated', 'heading', 'manual', 'failed'].includes(payload.title_source)) return false;
+  if (table === 'threads') {
+    if (['title', 'root_thread_id', 'summary_message_id'].some(key => payload[key] !== undefined && payload[key] !== null && typeof payload[key] !== 'string')) return false;
+    if (payload.branch_mode !== undefined && payload.branch_mode !== null && !['reference', 'copy', 'compacted'].includes(payload.branch_mode)) return false;
+    if (payload.fork_reason !== undefined && !['manual', 'retry', 'compaction'].includes(payload.fork_reason)) return false;
+  }
+  if (table === 'notifications' && payload.actions !== undefined && !Array.isArray(payload.actions)) return false;
+  return true;
+}
+
+/** Read-only, bounded certification; diagnostics contain sanitized locators only. */
+export function inspectSyncSemantics(Database, databasePath) {
+  const db = openCanonicalDatabase(Database, databasePath);
+  const faults = [];
+  let inspectedRecords = 0, faultCount = 0, complete = true;
+  const started = Date.now();
+  const fault = (table, row, reason) => {
+    faultCount++;
+    if (faults.length < 100) faults.push({ table, ...(row.locator === undefined
+      ? { itemOrdinal: row.itemOrdinal, ...(row.oversized ? {} : { keySha256: createHash('sha256').update(JSON.stringify([row.snapshot_id, row.table_name, row.pk, row.kind])).digest('hex') }) }
+      : { rowid: row.locator }),
+      ...(!/^[-]?[0-9]{1,19}$/.test(row.version_locator ?? '') ? {} : { serverVersion: row.version_locator }), reason });
+  };
+  // Bound every TEXT transfer, not just JSON. A poisoned key/stamp must not
+  // force a large allocation before it can be classified. SQL identifiers here
+  // come exclusively from the fixed schema, never archived values.
+  const scan = (table, fields, visit, extra = '') => {
+    if (!complete) return;
+    const selections = fields.map(name => `CASE WHEN length(CAST(t.${name} AS BLOB)) <= ${MAX_ROW_BYTES} THEN t.${name} ELSE NULL END AS ${name}`);
+    const oversized = fields.map(name => `length(CAST(t.${name} AS BLOB)) > ${MAX_ROW_BYTES}`).join(' OR ');
+    const versions = fields.includes('server_version') ? ",CASE WHEN typeof(t.server_version) IN ('integer','real') THEN CAST(t.server_version AS TEXT) END AS version_locator" : '';
+    const locator = table === 'sync_snapshot_items' ? '' : 'CAST(t.rowid AS TEXT) AS locator,';
+    const order = table === 'sync_snapshot_items' ? ' ORDER BY snapshot_id,table_name,pk,kind'
+      : table === 'change_log' ? ' ORDER BY workspace_id,server_version' : '';
+    const rows = db.prepare(`SELECT ${locator}${selections.join(',')},(${oversized}) AS oversized${versions}${extra} FROM ${table} t${order}`).iterate();
+    let ordinal = 0;
+    for (const row of rows) {
+      if (table === 'sync_snapshot_items') row.itemOrdinal = String(++ordinal);
+      if (++inspectedRecords > MAX_ENTRIES || Date.now() - started > 60_000) {
+        complete = false; fault(table, row, 'audit_resource_limit'); break;
+      }
+      if (row.oversized) { fault(table, row, 'row_too_large'); continue; }
+      visit(row);
+    }
+  };
+  const revision = (table, row, incremental = false, allowEmpty = false) => {
+    if (!safe(row.clock)) fault(table, row, 'invalid_clock');
+    if (typeof row.hlc !== 'string' || (!allowEmpty && !text(row.hlc)) || (incremental && row.hlc.length > 512)) fault(table, row, 'invalid_hlc');
+    if (typeof row.op_id !== 'string' || BACKGROUND_TOOL_ID.test(row.op_id) || (incremental ? !UUID.test(row.op_id) : !allowEmpty && !text(row.op_id))) fault(table, row, 'invalid_op_id');
+  };
+  const identity = (table, row) => {
+    if (!SYNC_TABLES.includes(row.table_name)) fault(table, row, 'invalid_table');
+    if (!text(row.pk)) fault(table, row, 'invalid_key');
+  };
+  const json = (table, row, name, required) => {
+    if (row[name] === null && !required) return;
+    let value;
+    try { value = JSON.parse(row[name]); }
+    catch { fault(table, row, 'invalid_json'); return; }
+    if (value && typeof value === 'object' && typeof value.op_id === 'string' && BACKGROUND_TOOL_ID.test(value.op_id)) fault(table, row, 'invalid_payload_op_id');
+    if (required && !validSyncPayload(row.table_name, value, row.pk)) fault(table, row, 'invalid_payload');
+  };
+  try {
+    for (const table of ['change_log', 'server_version_counter', 'tombstones', 'sync_snapshots', 'sync_snapshot_items', ...SYNC_TABLES.map(name => `s_${name}`)]) {
+      if (db.prepare('SELECT type FROM sqlite_master WHERE name=?').get(table)?.type !== 'table') throw new Error('Unsupported offline sync SQLite schema');
+    }
+    // One SQLite read transaction keeps the inspected head/captures consistent.
+    db.prepare('BEGIN').run();
+    let previousLogVersion;
+    scan('change_log', ['workspace_id', 'server_version', 'table_name', 'pk', 'op', 'payload_json', 'clock', 'hlc', 'device_id', 'op_id'], row => {
+      identity('change_log', row); revision('change_log', row, true);
+      if (!safe(row.server_version) || row.server_version === 0) fault('change_log', row, 'invalid_server_version');
+      if (previousLogVersion?.[0] === row.workspace_id && previousLogVersion[1] === row.server_version) fault('change_log', row, 'duplicate_server_version');
+      previousLogVersion = [row.workspace_id, row.server_version];
+      if (typeof row.device_id !== 'string' || !text(row.device_id.trim()) || row.device_id.trim().length > 256) fault('change_log', row, 'invalid_device_id');
+      if (!text(row.workspace_id)) fault('change_log', row, 'invalid_workspace');
+      if (!['put', 'delete'].includes(row.op)) fault('change_log', row, 'invalid_operation');
+      json('change_log', row, 'payload_json', row.op === 'put');
+      if (!row.has_counter) fault('change_log', row, 'missing_counter');
+    }, ',EXISTS(SELECT 1 FROM server_version_counter c WHERE c.workspace_id=t.workspace_id) AS has_counter');
+    for (const name of SYNC_TABLES) {
+      const table = `s_${name}`;
+      scan(table, ['workspace_id', 'id', 'data_json', 'clock', 'hlc', 'op_id', 'deleted'], row => {
+        revision(table, row, false, true);
+        if (!text(row.workspace_id) || !text(row.id)) fault(table, row, 'invalid_key');
+        if (row.deleted !== 0 && row.deleted !== 1) fault(table, row, 'invalid_deleted');
+        // Delete-before-put placeholders do not have a live payload schema.
+        json(table, { ...row, table_name: name, pk: row.id }, 'data_json', row.deleted === 0);
+      });
+    }
+    scan('tombstones', ['workspace_id', 'table_name', 'pk', 'clock', 'hlc', 'op_id', 'deleted_at', 'server_version'], row => {
+      identity('tombstones', row);
+      if (!text(row.workspace_id)) fault('tombstones', row, 'invalid_workspace');
+      revision('tombstones', row, false, true);
+      if (!safe(row.deleted_at)) fault('tombstones', row, 'invalid_deleted_at');
+      if (!safe(row.server_version)) fault('tombstones', row, 'invalid_server_version');
+    });
+    scan('sync_snapshots', ['workspace_id', 'id', 'high_watermark', 'tables_json', 'created_at', 'expires_at'], row => {
+      if (!safe(row.high_watermark) || !safe(row.created_at) || !safe(row.expires_at) || row.expires_at < row.created_at) fault('sync_snapshots', row, 'invalid_snapshot_metadata');
+      if (row.high_watermark > (row.counter ?? 0)) fault('sync_snapshots', row, 'snapshot_above_counter');
+      let tables;
+      try { tables = JSON.parse(row.tables_json); } catch { fault('sync_snapshots', row, 'invalid_json'); return; }
+      if (!Array.isArray(tables) || tables.some(name => !SYNC_TABLES.includes(name)) || new Set(tables).size !== tables.length) fault('sync_snapshots', row, 'invalid_table');
+    }, ",(SELECT CASE WHEN typeof(c.value) IN ('integer','real') THEN c.value END FROM server_version_counter c WHERE c.workspace_id=t.workspace_id) AS counter");
+    let previousSnapshotKey;
+    scan('sync_snapshot_items', ['snapshot_id', 'table_name', 'pk', 'kind', 'payload_json', 'clock', 'hlc', 'op_id', 'server_deleted_at'], row => {
+      // Primary-key order makes contradictory kinds adjacent. Keep only one
+      // tuple, without delimiter ambiguity or a set growing with the database.
+      const key = [row.snapshot_id, row.table_name, row.pk];
+      if (previousSnapshotKey?.every((part, index) => part === key[index])) fault('sync_snapshot_items', row, 'duplicate_snapshot_key');
+      previousSnapshotKey = key;
+      identity('sync_snapshot_items', row); revision('sync_snapshot_items', row);
+      if (!row.has_snapshot) fault('sync_snapshot_items', row, 'missing_snapshot');
+      else if (!row.in_snapshot_tables) fault('sync_snapshot_items', row, 'snapshot_table_mismatch');
+      if (row.after_watermark) fault('sync_snapshot_items', row, 'snapshot_after_watermark');
+      if (!['row', 'tombstone'].includes(row.kind)) fault('sync_snapshot_items', row, 'invalid_kind');
+      if (row.kind === 'tombstone' && (!safe(row.server_deleted_at) || row.payload_json !== null)) fault('sync_snapshot_items', row, 'invalid_tombstone');
+      json('sync_snapshot_items', row, 'payload_json', row.kind === 'row');
+    }, `,EXISTS(SELECT 1 FROM sync_snapshots s WHERE s.id=t.snapshot_id) AS has_snapshot,
+      EXISTS(SELECT 1 FROM sync_snapshots s,json_each(CASE WHEN length(CAST(s.tables_json AS BLOB)) <= ${MAX_ROW_BYTES} THEN CASE WHEN json_valid(s.tables_json) THEN s.tables_json ELSE '[]' END ELSE '[]' END) j WHERE s.id=t.snapshot_id AND j.value=t.table_name) AS in_snapshot_tables,
+      EXISTS(SELECT 1 FROM sync_snapshots s JOIN change_log l ON l.workspace_id=s.workspace_id AND l.op_id=t.op_id WHERE s.id=t.snapshot_id AND l.server_version>s.high_watermark) AS after_watermark`);
+    scan('server_version_counter', ['workspace_id', 'value'], row => {
+      if (!safe(row.value)) fault('server_version_counter', row, 'invalid_counter');
+      if (row.value < row.log_head) fault('server_version_counter', row, 'counter_below_log');
+    }, ",(SELECT MAX(CASE WHEN typeof(l.server_version) IN ('integer','real') THEN l.server_version END) FROM change_log l WHERE l.workspace_id=t.workspace_id) AS log_head");
+    return { contract: 1, complete, healthy: complete && faultCount === 0, inspectedRecords, faultCount, faults, diagnosticsTruncated: faultCount > faults.length };
+  } finally { db.close(); }
 }
 
 export function inspectCanonicalReferences(Database, databasePath, inventory, storageRoot) {
@@ -210,7 +381,16 @@ export function summarizeS3References(Database, databasePath, options) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const profile = JSON.parse(readFileSync(new URL('./backup-inspection-profile.json', import.meta.url), 'utf8'));
-    if (process.argv[2] === 's3-summary') {
+    if (process.argv[2] === 'sync') {
+      assertArchiveInspectionProfile(profile);
+      const Database = createRequire(import.meta.url)('/app/.output/server/node_modules/better-sqlite3');
+      const result = inspectSyncSemantics(Database, process.argv[3] ?? '/scratch/sync.sqlite');
+      console.log(JSON.stringify(result));
+      if (!result.healthy) {
+        console.error(`Sync semantic certification failed: ${JSON.stringify(result)}`);
+        process.exitCode = 1;
+      }
+    } else if (process.argv[2] === 's3-summary') {
       assertS3InspectionProfile(profile);
       const Database = createRequire(import.meta.url)('/app/.output/server/node_modules/better-sqlite3');
       console.log(JSON.stringify(summarizeS3References(Database, '/scratch/sync.sqlite', { keyPrefix: process.argv[3] })));

@@ -337,7 +337,23 @@ including when its previous image predates the offline attachment inspector.
 Archive checks, native SQLite integrity and committed filesystem hashes still
 apply. This preserves the recorded prior state without certifying that every
 canonical attachment existed before the update. Ordinary requested restores
-continue to require the inspector.
+require the qualified target image's sync semantic inspector before live data
+replacement and again on the extracted candidate before public startup. The
+bounded audit checks log stamps/JSON/payloads, materialized rows, tombstones,
+snapshot consistency and version counters. Payload checks include the reader's
+optional fields and nullable values. Legacy snapshot revision IDs remain valid;
+the known `background-tool:<64 hex>` incident ID is rejected in stored revisions
+and embedded payload `op_id`. A physical SQLite integrity check or
+archive checksum alone does not certify sync health. Diagnostics contain table
+and rowid/server-version locators, or a primary-key-order ordinal and SHA-256 of
+`JSON([snapshot_id, table_name, pk, kind])` for WITHOUT ROWID snapshot items;
+they never include record contents. An incomplete/resource-limited audit or an
+older image without this contract refuses ordinary restore. This flow has no
+isolated migration stage: it does not start public writers to attempt repairs.
+Prepare a separately qualified repaired backup when required; authenticated
+archive bytes are never edited to pass. Recorded safety recovery remains a
+byte-preservation path and explicitly reports sync semantic health as uncertified,
+even when physical checks and process health pass.
 
 ## Contributor release qualification
 

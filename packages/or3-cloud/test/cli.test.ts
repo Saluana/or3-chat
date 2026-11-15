@@ -195,6 +195,7 @@ const fixtureEnv = ${JSON.stringify(env)};
 fixtureEnv.OR3_ADMIN_DATA_DIR = '/data/admin'; fixtureEnv.OR3_EXTENSIONS_ROOT = '/data/extensions';
 if (text.includes('tar czf')) { await Bun.stdout.write(gzipSync(Buffer.from('fixture archive bytes'))); }
 else if (text.includes('backup-inspect.mjs inventory')) console.log(JSON.stringify({selected:['./sync.sqlite'],bytes:1000}));
+else if (text.includes('backup-inspect.mjs sync')) console.log(JSON.stringify({contract:1,complete:true,healthy:true}));
 else if (text.includes('backup-inspect.mjs references')) console.log(JSON.stringify({contract:1,complete:true,liveAttachments:0}));
 else if (args[0] === 'volume' && args[1] === 'inspect') {
   console.log(text.includes('.Labels') ? ${JSON.stringify(JSON.stringify(labels))} : ${JSON.stringify(state.volumeName)});

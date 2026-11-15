@@ -674,7 +674,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 9,
-                    "summary": "Set up and operate the SQLite provider for authentication and synchronization."
+                    "summary": "Configure SQLite sync, background history and storage accounting, qualified 0.0.30 backup inspection, supported 032/033 histories, and pre-start semantic restore certification."
                 },
                 {
                     "name": "provider-fs.md",
@@ -719,7 +719,7 @@
                     "category": "Operations",
                     "categoryOrder": 3,
                     "order": 14,
-                    "summary": "Operational runbook for OR3 Cloud SSR deployments, including generation-aware backup inspection, authenticated offline restore and safety-snapshot recovery, resumable SQLite migrations 030–032, and incomplete-upgrade refusal."
+                    "summary": "Operational runbook for OR3 Cloud SSR deployments, including bounded reader-aligned sync semantic certification before restore startup, incident ID detection, sanitized fault locators, generation-aware inspection, explicitly degraded safety recovery, and supported migration histories."
                 },
                 {
                     "name": "troubleshooting.md",
