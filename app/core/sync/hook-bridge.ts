@@ -13,7 +13,7 @@ import { type Transaction } from 'dexie';
 import { generateHLC, getDeviceId, hlcToOrderKey } from './hlc';
 import { LOCAL_ONLY_KV_NAMES } from '~~/shared/sync/local-only-kv';
 import type { PendingOp, ChangeStamp, Tombstone } from '~~/shared/sync/types';
-import type { Or3DB } from '~/db/client';
+import { logicalStoreName, type Or3DB } from '~/db/client';
 import { useHooks } from '~/core/hooks/useHooks';
 import { nowSec } from '~/db/util';
 import { sanitizePayloadForSync, SyncPayloadTooLargeError } from '~~/shared/sync/sanitize';
@@ -152,7 +152,7 @@ export class HookBridge {
             return;
         }
 
-        const existingTables = new Set(this.db.tables.map((t) => t.name));
+        const existingTables = new Set(this.db.tables.map((t) => logicalStoreName(t.name)));
 
         const tableNames = SYNCED_TABLES as unknown as string[];
         for (const tableName of tableNames) {
@@ -313,7 +313,7 @@ export class HookBridge {
         // A connection is tied to the view it opened. After atomic replacement,
         // old editor/generation/transfer callbacks abort until the view reloads.
         if (this.db.syncHistoryAtOpen !== undefined) {
-            if (!transaction.storeNames.includes('sync_state')) {
+            if (!transaction.storeNames.map(logicalStoreName).includes('sync_state')) {
                 transaction.abort();
                 throw new Error('Local sync writes require sync_state in their transaction');
             }
@@ -456,14 +456,14 @@ export class HookBridge {
             } : {}),
         };
 
-        const tableNames = transaction.storeNames;
+        const tableNames = transaction.storeNames.map(logicalStoreName);
         const hasPendingOps = tableNames.includes('pending_ops');
         const hasTombstones = tableNames.includes('tombstones');
         const hasPendingOpsTable = this.db.tables.some(
-            (table) => table.name === 'pending_ops'
+            (table) => logicalStoreName(table.name) === 'pending_ops'
         );
         const hasTombstonesTable = this.db.tables.some(
-            (table) => table.name === 'tombstones'
+            (table) => logicalStoreName(table.name) === 'tombstones'
         );
 
         if (!hasPendingOpsTable) {

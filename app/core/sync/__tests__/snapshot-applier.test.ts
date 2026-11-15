@@ -1,10 +1,12 @@
 import Dexie from 'dexie';
+import legacySchema from './fixtures/legacy-v31-schema.json';
+import { HookBridge as LegacyHookBridge } from './fixtures/legacy-v31-hook-bridge';
 import { getWriteTxTableNames } from '~/db/util';
 import { ConflictResolver } from '../conflict-resolver';
 import { discardQuarantined, exportQuarantined, listQuarantined, recoverHistoryPut } from '../sync-quarantine';
 import { getSyncStateId } from '../cursor-manager';
-import { afterEach, describe, expect, it } from 'vitest';
-import { Or3DB } from '~/db/client';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { Or3DB, databaseRecovery } from '~/db/client';
 import type { SnapshotResponse, SyncProvider } from '~~/shared/sync/types';
 import { applySnapshotChain, SnapshotStager } from '../snapshot-applier';
 import { setHookEngine } from '~/core/hooks/useHooks';
@@ -15,6 +17,7 @@ import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { makeAssistantPersister } from '~/utils/chat/useAi-internal/persistence';
 import { getHookBridge } from '../hook-bridge';
+import { OutboxManager } from '../outbox-manager';
 import { ThreadSchema } from '~/db/schema';
 import type { StoredMessage } from '~/utils/chat/useAi-internal/types';
 
@@ -928,7 +931,7 @@ describe('P0-5 browser connection boundaries', () => {
     });
     it('waits for an old schema connection without clearing intent, then rejects its old native version', async () => {
         const db = createDb();
-        const schema = Object.fromEntries(db.tables.map(table => [table.name, [table.schema.primKey.src, ...table.schema.indexes.map(index => index.src)].join(',')]));
+        const schema = legacySchema;
         const old = new Dexie(db.name); old.version(30).stores(schema);
         await old.open();
         await old.table('pending_ops').put({ id: 'legacy', status: 'pending', payload: { original: true } });
@@ -950,15 +953,120 @@ describe('P0-5 browser connection boundaries', () => {
     });
 });
 
-// Approval blocker: Dexie 4 retries VersionError without a native version. This
-// expected-failure acceptance test MUST become an ordinary passing test before
-// claiming that the release excludes explicitly reopened old browser bundles.
-it.fails('P0-5.9 BLOCKER: an explicitly reopened old Dexie bundle must be refused', async () => {
-    const db = createDb(); const old = new Dexie(db.name); old.version(30).stores({ sync_state: 'id' });
+// The frozen v31 schema and capture hooks are the actual pre-fence application,
+// including streaming-without-an-op and sync-marked remote writes.
+it('P0-5.9 reopened legacy Dexie cannot mutate, coalesce or launder installed history', async () => {
+    setHookEngine(createTypedHookEngine(createHookEngine()));
+    const db = createDb(); const old = new Dexie(db.name);
+    old.version(31).stores(legacySchema);
+    const bridge = new LegacyHookBridge(old as Or3DB); bridge.start({ coalesceUnsent: true });
+    const versions: number[] = [];
+    const nativeOpen = indexedDB.open.bind(indexedDB);
+    const spy = vi.spyOn(indexedDB, 'open').mockImplementation((...args) => {
+        const request = nativeOpen(...args);
+        request.addEventListener('upgradeneeded', () => versions.push(request.result.version));
+        return request;
+    });
     try {
         await old.open(); old.close(); await db.open();
-        await expect(old.open()).rejects.toMatchObject({ name: 'VersionError' });
-    } finally { old.close(); }
+        await db.sync_state.put({ id: 'sync_history', historyIncarnation: 'J', phase: 'ready', resetTarget: null, cursor: 80, deviceId: 'new', lastSyncAt: 1 });
+        const row = { id: 'current', name: 'current', value: 'J', deleted: false, clock: 1, hlc: '1:0:new', created_at: 1, updated_at: 1 };
+        await db.kv.put(row);
+        await db.pending_ops.put({ id: 'current-op', tableName: 'kv', pk: 'current', operation: 'put', payload: row, status: 'pending', attempts: 0, createdAt: 1,
+            stamp: { deviceId: 'new', opId: testUuid('J-op'), clock: 1, hlc: '1:0:new' } });
+        await db.sync_quarantine.put({ id: 'evidence', tableName: 'kv', pk: 'current', source: 'manual', status: 'quarantined', op: { original: true }, diagnostics: [], quarantinedAt: 1 });
+        const state = () => Promise.all([db.kv.toArray(), db.messages.toArray(), db.pending_ops.toArray(), db.sync_state.toArray(), db.tombstones.toArray(), db.sync_quarantine.toArray()]);
+        const before = await state();
+        // Dexie 4.4.6 is allowed to reopen without the declared version.
+        await old.open();
+        const scope = ['kv', 'messages', 'pending_ops', 'tombstones', 'sync_state'];
+        const attempts = [
+            () => old.transaction('rw', scope, () => old.table('kv').put({ ...row, value: 'stale', clock: 999 })),
+            () => old.transaction('rw', scope, () => old.table('kv').delete('current')),
+            () => old.transaction('rw', scope, () => old.table('messages').put({ id: 'stream', thread_id: 'thread', pending: true, data: { content: 'old stream' } })),
+            () => old.transaction('rw', scope, async tx => {
+                bridge.markSyncTransaction(tx);
+                await old.table('kv').put({ ...row, value: 'late remote', clock: 999 });
+                await old.table('pending_ops').clear();
+            }),
+            () => old.table('pending_ops').put({ id: 'injected', tableName: 'kv', pk: 'current', status: 'pending' }),
+            () => old.table('sync_quarantine').delete('evidence'),
+        ];
+        for (const attempt of attempts) {
+            // Dexie may recreate isolated legacy stores. Success or rejection is
+            // immaterial; no write may reach current state.
+            await attempt().catch(() => undefined);
+            expect(await state()).toEqual(before);
+        }
+        expect(await old.table('kv').get('current')).toMatchObject({ value: 'late remote' });
+        // Coexisting/reopened clients must stabilize, not patch each other forever.
+        for (let cycle = 0; cycle < 4; cycle++) {
+            old.close(); await old.open(); db.close(); await db.open();
+            await old.table('pending_ops').put({ id: `sink-${cycle}`, status: 'pending', payload: { value: 'never publish' } });
+            await db.kv.put({ ...row, updated_at: cycle + 2 });
+            expect(await db.pending_ops.count()).toBe(1);
+            expect(await db.sync_state.get('sync_history')).toEqual(before[3]![0]);
+            expect(await db.sync_quarantine.toArray()).toEqual(before[5]);
+        }
+        expect(versions).toEqual([310, 320, 321]);
+        // A legitimate current edit cannot inherit stale fields/publication.
+        db.syncHistoryAtOpen = 'J'; getHookBridge(db).start();
+        await db.transaction('rw', getWriteTxTableNames(db, 'kv'), () => db.kv.update('current', { updated_at: 2 }));
+        const queued = await db.pending_ops.toArray();
+        expect(queued.every(op => (op.payload as { value?: string })?.value === 'J')).toBe(true);
+        expect(await db.messages.count()).toBe(0);
+        const published: PendingOp[] = [];
+        const provider = { id: 'fence-proof', capabilities: { historyIncarnation: 'v1' }, push: async (batch: { ops: PendingOp[] }) => {
+            published.push(...batch.ops);
+            return { historyIncarnation: 'J', serverVersion: 81, results: batch.ops.map(op => ({ opId: op.stamp.opId, success: true })) };
+        } } as unknown as SyncProvider;
+        const manager = new OutboxManager(db, provider, { workspaceId: db.name });
+        try { await manager.flush(); } finally { await manager.stop(); }
+        expect(published.length).toBeGreaterThan(0);
+        expect(published.every(op => (op.payload as { value?: string })?.value === 'J')).toBe(true);
+        expect(await old.table('pending_ops').count()).toBeGreaterThan(0);
+    } finally { spy.mockRestore(); bridge.stop(); old.close(); }
+});
+
+it('namespace upgrade preserves every store/index and rolls back an interrupted copy before explicit retry', async () => {
+    const db = createDb(); const old = new Dexie(db.name); old.version(31).stores(legacySchema);
+    await old.open();
+    const originals = new Map<string, unknown>();
+    for (const table of old.tables) {
+        const key = String(table.schema.primKey.keyPath);
+        const row = { [key]: 'saved', name: 'saved', payload: { draft: 'original' }, readyAt: 7, secret: 'local only' };
+        await table.put(row); originals.set(table.name, row);
+    }
+    old.close();
+    // Abort the actual native upgrade after earlier stores have already copied.
+    const nativeAdd = IDBObjectStore.prototype.add;
+    const fault = vi.spyOn(IDBObjectStore.prototype, 'add').mockImplementation(function(this: IDBObjectStore, ...args) {
+        if (this.name === 'current_messages') {
+            this.transaction.abort();
+            throw new DOMException('Injected copy quota failure', 'QuotaExceededError');
+        }
+        return nativeAdd.apply(this, args);
+    });
+    try { await expect(db.open()).rejects.toBeDefined(); } finally { fault.mockRestore(); }
+    expect(databaseRecovery.value?.phase).toBe('failed');
+    expect(databaseRecovery.value?.db).toBe(db);
+    // A native read proves there was no compensating partial write or lost store.
+    const read = await new Promise<IDBDatabase>((resolve, reject) => {
+        const req = indexedDB.open(db.name); req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error);
+    });
+    expect(read.version).toBe(310);
+    expect([...read.objectStoreNames]).toEqual(Object.keys(legacySchema).sort());
+    read.close(); await old.open();
+    for (const [name, row] of originals) expect(await old.table(name).get('saved')).toEqual(row);
+    old.close(); await db.open();
+    expect(databaseRecovery.value).toBeNull();
+    for (const [name, row] of originals) {
+        expect(await db.table(name).get('saved')).toEqual(row);
+        const expected = old.table(name).schema;
+        expect(db.table(name).schema.indexes.map(index => index.src)).toEqual(expected.indexes.map(index => index.src));
+    }
+    expect([...db.backendDB().objectStoreNames]).not.toContain('messages');
+    expect(db.file_blobs.name).toBe('file_blobs');
 });
 
 it('P0-5.3 explicit recovery checks parents, creates a new put and retains linked original evidence', async () => {

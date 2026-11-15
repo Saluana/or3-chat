@@ -216,7 +216,7 @@ type KvApiKeyRow = {
 };
 
 function hasKvTable(db: { tables?: Array<{ name?: string }> }): boolean {
-    return Array.isArray(db.tables) && db.tables.some((t) => t.name === 'kv');
+    return Array.isArray(db.tables) && db.tables.some((t) => t === db.kv);
 }
 
 export function hydrateUserApiKeyFromKv(): Promise<void> {
@@ -289,7 +289,7 @@ export async function clearPersistedUserApiKey(): Promise<void> {
         const retained = new Dexie(name);
         try {
             await retained.open();
-            if (!retained.tables.some(table => table.name === 'kv')) return;
+            if (!retained.tables.some(table => table === retained.kv)) return;
             await retained.transaction('rw', retained.table('kv'), async () => {
                 if (generation !== kvHydrationGeneration) return;
                 await retained.table('kv').where('name').equals('openrouter_api_key').delete();

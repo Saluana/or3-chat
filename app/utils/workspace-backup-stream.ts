@@ -21,7 +21,7 @@
 
 import Dexie from 'dexie';
 import type { IndexableType } from 'dexie';
-import type { Or3DB } from '~/db/client';
+import { logicalStoreName, type Or3DB } from '~/db/client';
 import { STATIC_FILE_CEILING } from '~~/shared/storage/file-policy';
 
 /**
@@ -306,7 +306,7 @@ async function streamWorkspaceExportCore({
         };
         const summaries = await Promise.all(
             db.tables.map(async (table) => ({
-                name: table.name,
+                name: logicalStoreName(table.name),
                 inbound: Boolean(table.schema.primKey.keyPath),
                 rowCount: await table.count(),
             }))
@@ -568,7 +568,7 @@ export async function importWorkspaceStream({
         throw new Error('Backup requires a newer app version.');
     }
 
-    const tableByName = new Map(db.tables.map((table) => [table.name, table]));
+    const tableByName = new Map(db.tables.map((table) => [logicalStoreName(table.name), table]));
     const inboundMap = new Map(
         header.tables.map((table) => [table.name, table.inbound])
     );
@@ -600,7 +600,7 @@ export async function importWorkspaceStream({
     }
 
     for (const table of tableByName.values()) {
-        if (expectedRowsByTable.has(table.name) && !table.schema.primKey.keyPath) {
+        if (expectedRowsByTable.has(logicalStoreName(table.name)) && !table.schema.primKey.keyPath) {
             throw new Error(`Backup table "${table.name}" requires an inline primary key.`);
         }
     }

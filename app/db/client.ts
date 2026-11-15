@@ -14,6 +14,7 @@
  * - Remote sync orchestration
  */
 import Dexie, { type Table } from 'dexie';
+import { shallowRef } from 'vue';
 import { installHistoryRevisionTracking } from '~/utils/chat/history-revisions';
 import type { NativeRecoveryCheckpoint } from '~/utils/chat/native-recovery';
 import type { PersistedWorkspaceTabDraft } from '~/components/chat/chat-input/types';
@@ -41,6 +42,16 @@ import {
     computeProjectChatIds,
     installDerivedIndexHooks,
 } from './derived-indexes';
+
+/** Recoverable open/upgrade state; explicit retry never clears workspace data. */
+export const databaseRecovery = shallowRef<{ db: Or3DB; phase: 'blocked' | 'failed' } | null>(null);
+
+// Fixed once at activation, never per server-history reset. Blob bytes stay put.
+const STORE_PREFIX = 'current_';
+/** Backup/entity names stay logical; only native object-store names change. */
+export const logicalStoreName = (name: string): string => name.startsWith(STORE_PREFIX) ? name.slice(STORE_PREFIX.length) : name;
+const physicalStore = (name: string): string => name === 'file_blobs' || name.startsWith(STORE_PREFIX)
+    ? name : `${STORE_PREFIX}${name}`;
 
 /** Maximum number of workspace DBs to keep open (prevents IndexedDB connection exhaustion) */
 const MAX_CACHED_WORKSPACE_DBS = 10;
@@ -451,13 +462,79 @@ export class Or3DB extends Dexie {
         // Sparse metadata index: origin-wide budgeting never needs Blob values.
         this.version(30).stores({ file_blobs: 'hash, cache_accessed_at, [cache_accessed_at+cache_bytes+hash]' });
 
-        // A mandatory version boundary evicts old tabs that cannot enforce the shared guard.
+        // v31's control row is retained for upgrades from pre-contract databases.
         this.version(31).stores({ sync_state: 'id' }).upgrade(async tx => {
             await tx.table('sync_state').put({ id: 'sync_history', historyIncarnation: null,
                 phase: 'unbound', resetTarget: null, cursor: 0, lastSyncAt: 0, deviceId: '' });
         });
+
+        // One atomic namespace break: Dexie 4 may reopen an old bundle at the
+        // new version, but its legacy stores cannot reach the new protected namespace.
+        // Dexie may recreate them as isolated sinks (schema patch on reopen).
+        const retired = this.tables.filter(table => table.name !== 'file_blobs');
+        const stores: Record<string, string | null> = {};
+        for (const table of retired) {
+            stores[table.name] = null;
+            stores[physicalStore(table.name)] = [table.schema.primKey.src, ...table.schema.indexes.map(index => index.src)].join(',');
+        }
+        this.version(32).stores(stores).upgrade(async tx => {
+            for (const table of retired) {
+                // Native cursor copying preserves exact values (no capture or
+                // derived-index hooks), with only one row held in JS at a time.
+                await new Dexie.Promise<void>((resolve, reject) => {
+                    const source = tx.idbtrans.objectStore(table.name);
+                    const target = tx.idbtrans.objectStore(physicalStore(table.name));
+                    const cursor = source.openCursor();
+                    cursor.onerror = () => reject(cursor.error);
+                    cursor.onsuccess = () => {
+                        const row = cursor.result;
+                        if (!row) { resolve(); return; }
+                        try {
+                            const copy = target.add(row.value);
+                            copy.onerror = () => reject(copy.error);
+                            copy.onsuccess = () => row.continue();
+                        } catch (error) { reject(error); }
+                    };
+                });
+            }
+            // Dexie deletes retired stores only after this upgrader completes,
+            // inside the same native versionchange transaction.
+        });
+
+        // Keep the existing logical accessors and transaction API. Table objects
+        // carry their real physical names, so Dexie scopes/hooks remain native.
+        const table = this.table.bind(this);
+        this.table = ((name: string) => table(physicalStore(name))) as typeof this.table;
+        for (const entry of retired) {
+            Object.defineProperty(this, entry.name, { configurable: true, get: () => this.table(entry.name) });
+        }
+        const transaction = this.transaction.bind(this);
+        this.transaction = ((mode: string, ...args: unknown[]) => {
+            const map = (arg: unknown): unknown => typeof arg === 'string' ? physicalStore(arg)
+                : Array.isArray(arg) ? arg.map(map) : arg;
+            return transaction(mode as 'rw', ...args.map(map) as [Table, () => unknown]);
+        }) as typeof this.transaction;
+        const txTable = this.Transaction.prototype.table;
+        this.Transaction.prototype.table = function(name: string) {
+            // Earlier upgrade steps still address their original schema.
+            return txTable.call(this, this.schema[name] ? name : physicalStore(name));
+        } as typeof txTable;
+
+        const open = this.open.bind(this);
+        this.open = (() => open().catch(error => {
+            this.close(); // Disable implicit auto-open; retry is a user action.
+            databaseRecovery.value = { db: this, phase: 'failed' };
+            throw error;
+        })) as typeof this.open;
+        this.on('blocked', () => { databaseRecovery.value = { db: this, phase: 'blocked' }; });
         this.on('versionchange', () => this.close());
+        let warnedLegacySink = false;
         this.on('ready', async () => {
+            if (!warnedLegacySink && retired.some(table => this.backendDB().objectStoreNames.contains(table.name))) {
+                warnedLegacySink = true;
+                console.warn('[db] Changes from an outdated client; origin unknown. Isolated legacy stores are retained; current sync never reads or publishes them.');
+            }
+            if (databaseRecovery.value?.db === this) databaseRecovery.value = null;
             const guard = await this.sync_state.get('sync_history');
             this.syncHistoryAtOpen = guard ? guard.historyIncarnation ?? null : undefined;
         });

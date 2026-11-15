@@ -22,7 +22,7 @@ export function createTrustedNetworkAccess(input: {
         return row && !row.deleted && row.value ? JSON.parse(row.value) as string[] : [];
     };
     const change = async (fn: (previous: string[]) => string[]) => {
-        await input.db.transaction('rw', input.db.tables.filter(t => ['kv','pending_ops','tombstones'].includes(t.name)), async () => {
+        await input.db.transaction('rw', [input.db.kv, input.db.pending_ops, input.db.tombstones, input.db.sync_state], async () => {
             const previous = await read();
             await setKvByName(key, JSON.stringify(fn(previous)), input.db, { isValid: input.current });
         });
