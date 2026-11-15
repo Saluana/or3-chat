@@ -1693,15 +1693,29 @@ test('documents created from project chat messages join the project', async ({ p
                 request.onerror = () => reject(request.error);
             });
             const project = (await read('projects')).find(row => row.id === 'workspace-journey-project');
-            const docs = (await read('posts')).filter(row => row.postType === 'doc' && !row.deleted);
+            const posts = await read('posts');
+            const docs = posts.filter(row => row.postType === 'doc' && !row.deleted);
+            const sources = posts.filter(row => row.postType === 'or3:project-source' && row.title === 'workspace-journey-project' && !row.deleted).map(row => JSON.parse(row.content));
             db.close();
-            if (project) return { project, docs };
+            if (project) return { project, docs, sources };
         }
         return null;
     });
     await expect.poll(async () => {
         const state = await membership();
         return state?.project.data?.filter((entry: any) => entry.kind === 'doc' && state.docs.some(doc => doc.id === entry.id && String(doc.content).includes('Hello from deterministic stream.'))).length;
+    }).toBe(1);
+    await expect.poll(async () => {
+        const state = await membership();
+        const doc = state?.docs.find(doc => String(doc.content).includes('Hello from deterministic stream.'));
+        return state?.sources.filter(source => source.item_id === doc?.id && source.mode === 'relevant').length;
+    }).toBe(1);
+    await reply.hover();
+    await reply.getByRole('button', { name: 'Create document', exact: true }).click();
+    await expect.poll(async () => {
+        const state = await membership();
+        const doc = state?.docs.find(doc => String(doc.content).includes('Hello from deterministic stream.'));
+        return state?.sources.filter(source => source.item_id === doc?.id).length;
     }).toBe(1);
     const path = info.outputPath('project-message-document.json');
     await writeFile(path, JSON.stringify(await membership(), null, 2));
