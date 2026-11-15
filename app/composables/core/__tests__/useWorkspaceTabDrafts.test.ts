@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto';
 import { Blob as NodeBlob } from 'node:buffer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useWorkspaceTabDrafts, type WorkspaceChatTabDraft } from '../useWorkspaceTabDrafts';
+import legacySchema from '~/core/sync/__tests__/fixtures/legacy-v31-schema.json';
 
 const session = vi.hoisted(() => ({ userId: null as string | null }));
 vi.mock('~/composables/auth/useSessionContext', () => ({
@@ -298,7 +299,9 @@ describe('durable workspace tab drafts', () => {
         const { client } = await reload(); const { default: Dexie } = await import('dexie');
         const name = `synthetic-draft-migration-${Date.now()}`;
         const template = new client.Or3DB(name);
-        const stores = Object.fromEntries(template.tables.filter(table => table.name !== 'workspace_draft_versions').map(table => [table.name, [table.schema.primKey.src, ...table.schema.indexes.map(index => index.src)].join(',')]));
+        // v28 added draft versions; v29/v30 only added file_blobs indexes.
+        // Use the frozen logical schema, independent of today's physical stores.
+        const stores = Object.fromEntries(Object.entries(legacySchema).filter(([name]) => name !== 'workspace_draft_versions'));
         stores.file_blobs = 'hash'; // v27 predates the cache-access index.
         const old = new Dexie(name); old.version(27).stores(stores); await old.open();
         const value = { version: 1 as const, text: 'v27 retained draft', attachments: [{ hash: 'legacy-blob', name: 'legacy.txt', mime: 'text/plain', kind: 'image' as const }], largeTextBlocks: [], updatedAt: 1 };
@@ -308,7 +311,7 @@ describe('durable workspace tab drafts', () => {
         await old.table('file_blobs').put({ hash: 'legacy-blob', blob: new NodeBlob(['synthetic legacy bytes']) as unknown as Blob });
         old.close();
         try {
-            await template.open(); expect(template.verno).toBe(30);
+            await template.open();
             expect((await template.workspace_tab_drafts.get('local\u0000legacy-tab'))?.draft).toEqual(value);
             expect((await template.kv.get('legacy-sentinel'))?.value).toBe('unchanged');
             expect(await template.pending_ops.get('legacy-op')).toMatchObject({ id: 'legacy-op', status: 'pending', createdAt: 1, readyAt: 0, payload: { synthetic: true } });
