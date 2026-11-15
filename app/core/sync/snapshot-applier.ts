@@ -1,3 +1,4 @@
+import { compareSyncTuple } from '~~/shared/sync/schemas';
 import { getSyncStateId } from './cursor-manager';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 import type { Transaction } from 'dexie';
@@ -104,7 +105,7 @@ export class SnapshotStager {
     private readonly localOnlyKv = getLocalOnlyKvNames();
     private snapshotId: string | null = null;
     private highWatermark = 0;
-    private previousKey: string | null = null;
+    private previousKey: string[] | null = null;
     private previousLogicalKey: string | null = null;
     private sequence = 0;
     private complete = false;
@@ -144,12 +145,12 @@ export class SnapshotStager {
 
         const rows: SnapshotStageRow[] = [];
         for (const item of page.items) {
-            const logicalKey = `${item.tableName}\0${item.pk}`;
-            const key = `${logicalKey}\0${item.kind}`;
+            const logicalKey = JSON.stringify([item.tableName, item.pk]);
+            const key = [item.tableName, item.pk, item.kind];
             if (logicalKey === this.previousLogicalKey) {
                 throw new Error('Snapshot contains duplicate or contradictory entries for one record');
             }
-            if (this.previousKey !== null && key <= this.previousKey) {
+            if (this.previousKey !== null && compareSyncTuple(key, this.previousKey) <= 0) {
                 throw new Error('Snapshot items are duplicated or out of order');
             }
             this.previousKey = key;

@@ -10,6 +10,7 @@ import { requireWorkspaceItemCapability } from "../../utils/sync/workspace-item-
  */
 import { defineEventHandler, createError, setResponseHeader } from 'h3';
 import {
+    MAX_SYNC_SNAPSHOT_REQUEST_BYTES,
     SnapshotRequestSchema,
     SnapshotResponseSchema,
     getSnapshotResponseContractError,
@@ -38,7 +39,7 @@ export default defineEventHandler(async (event) => {
     }
 
     setNoCacheHeaders(event);
-    const request = SnapshotRequestSchema.safeParse(await readLimitedJsonBody(event, 8 * 1024));
+    const request = SnapshotRequestSchema.safeParse(await readLimitedJsonBody(event, MAX_SYNC_SNAPSHOT_REQUEST_BYTES));
     if (!request.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid snapshot request' });
     }

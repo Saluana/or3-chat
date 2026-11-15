@@ -15,6 +15,26 @@ export const MAX_SYNC_PUSH_BATCH_BYTES = 2 * 1024 * 1024;
 const MAX_SYNC_IDENTIFIER_LENGTH = 256;
 const MAX_SYNC_TABLE_FILTERS = 50;
 
+/** Bounds include JSON escaping of every currently admitted 1,024-unit key. */
+export const MAX_SYNC_SNAPSHOT_TOKEN_LENGTH = 65_536;
+export const MAX_SYNC_SNAPSHOT_REQUEST_BYTES = 96 * 1024;
+export const MAX_SYNC_RESPONSE_BYTES = 2 * 1024 * 1024;
+
+/** UTF-8 BINARY ordering, component by component; never flatten with delimiters. */
+export function compareSyncTuple(a: readonly string[], b: readonly string[]): number {
+    const encoder = new TextEncoder();
+    for (let i = 0; i < Math.min(a.length, b.length); i++) {
+        const left = encoder.encode(a[i]!);
+        const right = encoder.encode(b[i]!);
+        for (let j = 0; j < Math.min(left.length, right.length); j++) {
+            if (left[j] !== right[j]) return left[j]! - right[j]!;
+        }
+        if (left.length !== right.length) return left.length - right.length;
+    }
+    return a.length - b.length;
+}
+
+
 export function syncJsonByteLength(value: unknown): number {
     try {
         return new TextEncoder().encode(JSON.stringify(value)).length;
@@ -313,7 +333,7 @@ export const PullResponseSchema = z
 export const SnapshotRequestSchema = z.object({
     scope: SyncScopeSchema,
     pageSize: z.number().int().positive().max(1000),
-    pageToken: z.string().min(1).max(4096).optional(),
+    pageToken: z.string().min(1).max(MAX_SYNC_SNAPSHOT_TOKEN_LENGTH).optional(),
     tables: z
         .array(z.string().trim().min(1).max(128))
         .max(MAX_SYNC_TABLE_FILTERS)
@@ -351,15 +371,15 @@ export const SnapshotResponseSchema = z
         snapshotId: z.string().min(1),
         highWatermark: z.number().int().nonnegative(),
         items: z.array(SnapshotItemSchema).max(1000),
-        nextPageToken: z.string().min(1).max(4096).nullable(),
+        nextPageToken: z.string().min(1).max(MAX_SYNC_SNAPSHOT_TOKEN_LENGTH).nullable(),
     })
     .superRefine((response, ctx) => {
-        let previousKey: string | null = null;
+        let previousKey: string[] | null = null;
         const logicalKeys = new Set<string>();
         for (const [index, item] of response.items.entries()) {
-            const logicalKey = `${item.tableName}\0${item.pk}`;
-            const orderedKey = `${logicalKey}\0${item.kind}`;
-            if (previousKey !== null && orderedKey <= previousKey) {
+            const logicalKey = JSON.stringify([item.tableName, item.pk]);
+            const orderedKey = [item.tableName, item.pk, item.kind];
+            if (previousKey !== null && compareSyncTuple(orderedKey, previousKey) <= 0) {
                 ctx.addIssue({
                     code: 'custom',
                     path: ['items', index],
