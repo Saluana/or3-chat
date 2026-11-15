@@ -1,3 +1,6 @@
+import { readHistory, assertHistory, type HistoryGuard } from './history-incarnation';
+import { holdHistoryInTx } from './sync-quarantine';
+import { clearRecentOpIds } from './recent-op-cache';
 import { MAX_SYNC_PAYLOAD_BYTES } from '~~/shared/sync/sanitize';
 import { assertIncomingIdentity, isSyncTable } from '~~/shared/sync/incoming-records';
 import { retainIncomingEvidenceInTx } from './incoming-evidence';
@@ -9,7 +12,7 @@ import type { Or3DB, SnapshotStageRow, StagedUnavailableRecord } from '~/db/clie
 import type { Message } from '~/db/schema';
 import type { PendingOp, SnapshotItem, SnapshotResponse, SyncScope } from '~~/shared/sync/types';
 import { compareSyncRevision } from '~~/shared/sync/revision';
-import { getHookBridge, getLocalOnlyKvNames } from './hook-bridge';
+import { SYNCED_TABLES, getHookBridge, getLocalOnlyKvNames } from './hook-bridge';
 import { normalizeSyncPayload } from './sync-payload-normalizer';
 import { QUARANTINE_SUPPORT_TABLES, collectReplayableOps, pruneResolvedQuarantineBestEffort } from './sync-quarantine';
 
@@ -113,6 +116,8 @@ export class SnapshotStager {
     private sequence = 0;
     private readonly unavailableKeys = new Set<string>();
     private complete = false;
+    private historyIncarnation: string | undefined;
+    private expectedHistory: HistoryGuard | undefined;
 
     constructor(
         private readonly db: Or3DB,
@@ -124,7 +129,8 @@ export class SnapshotStager {
         // An interrupted attempt leaves only expendable staging rows. A workspace
         // database has one active snapshot generation. The sentinel prevents an
         // invalidated older lifecycle from clearing a newer attempt on dispose.
-        await this.db.transaction('rw', this.db.snapshot_staging, async () => {
+        await this.db.transaction('rw', [this.db.snapshot_staging, this.db.sync_state], async () => {
+            this.expectedHistory = await readHistory(this.db);
             await this.db.snapshot_staging.clear();
             await this.db.snapshot_staging.put({
                 id: '__active__',
@@ -139,6 +145,11 @@ export class SnapshotStager {
         if (this.complete) throw new Error('Snapshot chain ended before the supplied final page');
         if (page.workspaceId !== this.scope.workspaceId) {
             throw new Error('Snapshot workspace does not match the requested scope');
+        }
+        if (this.snapshotId === null) {
+            this.historyIncarnation = page.historyIncarnation;
+        } else if (page.historyIncarnation !== this.historyIncarnation) {
+            throw new Error('Snapshot history incarnation changed');
         }
         if (this.snapshotId === null) {
             this.snapshotId = page.snapshotId;
@@ -211,6 +222,9 @@ export class SnapshotStager {
         if (!this.complete || this.snapshotId === null) {
             throw new Error('Snapshot chain is incomplete');
         }
+        const crossHistory = this.historyIncarnation !== undefined &&
+            (this.expectedHistory?.phase !== 'ready' || this.expectedHistory.historyIncarnation !== this.historyIncarnation);
+        if (crossHistory) replacementTables = [...SYNCED_TABLES];
         replacementTables = replacementTables.filter(isSyncTable);
         const tableNames = [...new Set([
             ...this.requestedTables,
@@ -222,6 +236,7 @@ export class SnapshotStager {
             // Foreground rows need a live parent check when restored below.
             ...(tableNames.includes('messages') ? [this.db.threads] : []),
             this.db.sync_state,
+            ...(crossHistory ? [this.db.file_transfers] : []),
             this.db.snapshot_staging,
             ...QUARANTINE_SUPPORT_TABLES.map((name) => this.db.table(name)),
         ];
@@ -234,6 +249,12 @@ export class SnapshotStager {
                 await tx.table('snapshot_staging').get('__active__') as SnapshotStageRow | undefined;
             if (active?.generation !== this.generation) abortSnapshotApply();
 
+            if (this.historyIncarnation !== undefined) {
+                if (!this.expectedHistory) abortSnapshotApply();
+                await assertHistory(tx, this.expectedHistory);
+                if (this.expectedHistory.resetTarget && this.expectedHistory.resetTarget !== this.historyIncarnation) abortSnapshotApply();
+                if (crossHistory) await holdHistoryInTx(tx, this.scope, this.expectedHistory.historyIncarnation ?? 'unknown');
+            }
             const preserved: { tableName: string; pk: string; row: unknown; tombstone: unknown }[] = [];
             let evidenceSequence = 0;
             while (evidenceSequence < this.sequence) {
@@ -246,10 +267,10 @@ export class SnapshotStager {
                     const item = row.item;
                     if (item?.kind !== 'unavailable') continue;
                     await retainIncomingEvidenceInTx(tx, { ...item, source: 'incoming_snapshot',
-                        reference: item.snapshotId, record: item.record ?? item });
+                        historyIncarnation: this.historyIncarnation, reference: item.snapshotId, record: item.record ?? item });
                     // Evidence is deduplicated across retries. Its archived local
                     // copy may predate edits/deletes made before this installation.
-                    if (isSyncTable(item.tableName)) preserved.push({ tableName: item.tableName, pk: item.pk,
+                    if (!crossHistory && isSyncTable(item.tableName)) preserved.push({ tableName: item.tableName, pk: item.pk,
                         row: await tx.table(item.tableName).get(item.pk),
                         tombstone: await tx.table('tombstones').get(`${item.tableName}:${item.pk}`) });
                 }
@@ -261,7 +282,7 @@ export class SnapshotStager {
             // restored too: replacing the table would otherwise erase the only
             // copy of that content. Corrupt operations are quarantined and
             // rebuilt from the still-present local rows before anything is cleared.
-            const pendingOps = await collectReplayableOps(
+            const pendingOps = crossHistory ? [] : await collectReplayableOps(
                 tx,
                 (tableName, pk) => tableNames.includes(tableName) && !this.unavailableKeys.has(JSON.stringify([tableName, pk])),
                 deviceId
@@ -269,7 +290,7 @@ export class SnapshotStager {
             // Streaming assistants intentionally have no sync operation. Their
             // local progress and lease must survive the same atomic replacement
             // as the outbox, including expired leases recoverable after reload.
-            const foregroundRows: Message[] = tableNames.includes('messages')
+            const foregroundRows: Message[] = !crossHistory && tableNames.includes('messages')
                 ? await this.db.messages.filter((row: Message) => {
                     const data = row.data as Record<string, unknown> | null;
                     return row.role === 'assistant' && row.pending === true && !row.deleted
@@ -299,7 +320,7 @@ export class SnapshotStager {
                     await tx.table('kv').toCollection()
                         .filter((row: { name?: string }) => !localOnlyKv.has(row.name ?? ''))
                         .delete();
-                } else if (tableName === 'notifications' && this.scope.principalId) {
+                } else if (!crossHistory && tableName === 'notifications' && this.scope.principalId) {
                     await tx.table(tableName).filter(row => row.user_id === this.scope.principalId).delete();
                 } else {
                     await tx.table(tableName).clear();
@@ -311,7 +332,7 @@ export class SnapshotStager {
                     .filter((row: { tableName?: string; pk?: string }) =>
                         replaced.has(row.tableName ?? '') &&
                         // Other accounts may still need their notification deletion watermarks.
-                        !(row.tableName === 'notifications' && this.scope.principalId) &&
+                        !(!crossHistory && row.tableName === 'notifications' && this.scope.principalId) &&
                         !(row.tableName === 'kv' && localOnlyKv.has((row.pk ?? '').replace(/^kv:/, '')))
                     )
                     .delete();
@@ -404,7 +425,13 @@ export class SnapshotStager {
             }
             if (!shouldContinue()) abortSnapshotApply();
             await tx.table('snapshot_staging').delete('__active__');
+            if (crossHistory) await tx.table('sync_state').clear();
+            if (this.historyIncarnation !== undefined) await tx.table('sync_state').put({
+                id: 'sync_history', historyIncarnation: this.historyIncarnation, phase: 'ready', resetTarget: null,
+                cursor: 0, deviceId, lastSyncAt: Date.now(),
+            });
             await tx.table('sync_state').put({
+                historyIncarnation: this.historyIncarnation,
                 id: getSyncStateId(this.scope),
                 cursor: this.highWatermark,
                 lastSyncAt: Date.now(),
@@ -412,10 +439,13 @@ export class SnapshotStager {
             });
         });
 
+        if (crossHistory) clearRecentOpIds();
         // Recovery itself resolves quarantine entries, so retention runs here too.
         await pruneResolvedQuarantineBestEffort(this.db);
         return this.highWatermark;
     }
+
+    getHistoryIncarnation(): string | undefined { return this.historyIncarnation; }
 
     async dispose(): Promise<void> {
         try {

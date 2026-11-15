@@ -1,3 +1,5 @@
+import { isHistoryProtocolBoundary } from '../history-incarnation';
+import { HistoryIncarnationSchema } from '~~/shared/sync/schemas';
 import { WORKSPACE_ITEM_CAPABILITY } from "~~/shared/posts/workspace-item-capability";
 import { normalizeError, type ErrorCode } from '~~/shared/errors';
 import { prepareJsonBody } from '~/utils/compress-json';
@@ -92,6 +94,7 @@ export interface GatewaySyncProviderConfig {
 }
 
 class GatewaySyncRequestError extends Error {
+    data?: { code?: string; historyIncarnation?: string; requiresSnapshot?: boolean };
     readonly source = 'sync' as const;
     code: ErrorCode;
     retryable: boolean;
@@ -249,6 +252,10 @@ async function requestJsonRaw<T>(
             sanitized,
             retryAfterMs
         );
+        try {
+            const decoded = JSON.parse(text) as { data?: GatewaySyncRequestError['data'] };
+            error.data = decoded.data;
+        } catch { /* Text errors retain their status without inventing protocol data. */ }
         notifyInvalidSyncSession(error);
         throw error;
     }
@@ -265,12 +272,16 @@ async function requestJsonRaw<T>(
     try {
         decoded = JSON.parse(text);
     } catch {
-        throw new Error(`[gateway-sync] ${path} returned invalid JSON`);
+        throw Object.assign(new Error(`[gateway-sync] ${path} returned invalid JSON`), { code: 'OR3_SYNC_HISTORY_UNSUPPORTED' });
     }
     if (options.schema) {
+        if (!decoded || typeof decoded !== 'object' || !('historyIncarnation' in decoded) ||
+            !HistoryIncarnationSchema.safeParse(decoded.historyIncarnation).success) {
+            throw Object.assign(new Error('Sync server requires history incarnation qualification'), { code: 'OR3_SYNC_HISTORY_UNSUPPORTED' });
+        }
         const parsed = options.schema.safeParse(decoded);
         if (!parsed.success) {
-            throw new Error(`[gateway-sync] ${path} returned invalid response`);
+            throw Object.assign(new Error(`[gateway-sync] ${path} returned invalid response`), { code: 'OR3_SYNC_HISTORY_UNSUPPORTED' });
         }
         return parsed.data;
     }
@@ -282,9 +293,9 @@ function assertGatewayResponseContract(
     contractError: string | null
 ): void {
     if (contractError) {
-        throw new Error(
+        throw Object.assign(new Error(
             `[gateway-sync] ${path} returned invalid response: ${contractError}`
-        );
+        ), { code: 'OR3_SYNC_HISTORY_UNSUPPORTED' });
     }
 }
 
@@ -366,7 +377,7 @@ export function createGatewaySyncProvider(
         try {
             const response = await requestJson<PullResponse>(
                 '/api/sync/pull',
-                { ...request, unavailableRecordCapability: 'unavailable-v1', workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
+                { ...request, historyIncarnationCapability: 'incarnation-v1', unavailableRecordCapability: 'unavailable-v1', workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
                 baseUrl, { signal, schema: PullResponseSchema }
             );
             assertGatewayResponseContract('/api/sync/pull', getPullResponseContractError(request, response));
@@ -384,6 +395,7 @@ export function createGatewaySyncProvider(
         id: config.id ?? 'gateway',
         mode: 'gateway',
         capabilities: {
+            historyIncarnation: 'v1', // Transport support only; each server response must prove support.
             snapshotBootstrap: 'snapshot-v1',
             historyRetention: 'snapshot-v1',
             subscriptionPages: 'v1',
@@ -397,6 +409,7 @@ export function createGatewaySyncProvider(
         ): Promise<() => void> {
             let active = true;
             let cursor = options?.cursor ?? 0;
+            const historyIncarnation = options?.historyIncarnation ?? null;
             const limit = options?.limit ?? pullLimit;
             let timeout: ReturnType<typeof setTimeout> | null = null;
             let running = false;
@@ -422,7 +435,7 @@ export function createGatewaySyncProvider(
             const connectChannel = () => {
                 const EventSourceClass = (globalThis as { EventSource?: new (url: string, options: { withCredentials: boolean }) => VersionChannel }).EventSource;
                 if (!EventSourceClass || channel || !active || !canPoll()) return;
-                const current = new EventSourceClass(`${baseUrl}/api/sync/events?workspaceId=${encodeURIComponent(scope.workspaceId)}`, { withCredentials: true });
+                const current = new EventSourceClass(`${baseUrl}/api/sync/events?workspaceId=${encodeURIComponent(scope.workspaceId)}&historyIncarnationCapability=incarnation-v1&historyIncarnation=${encodeURIComponent(historyIncarnation ?? '')}`, { withCredentials: true });
                 channel = current;
                 current.onopen = () => {
                     if (channel !== current || !active) return;
@@ -437,6 +450,7 @@ export function createGatewaySyncProvider(
                     try {
                         const message: unknown = JSON.parse(event.data);
                         if (!message || typeof message !== 'object') return;
+                        if ('historyIncarnation' in message && message.historyIncarnation !== historyIncarnation) { void run(); return; }
                         if ('refresh' in message && message.refresh === true) { closeChannel(); connectChannel(); return; }
                         const version: unknown = 'version' in message ? message.version : undefined;
                         if (!Number.isSafeInteger(version) || (version as number) < 0) return;
@@ -480,7 +494,7 @@ export function createGatewaySyncProvider(
                 while (active && canPoll() && hasMore) {
                     const previousCursor = cursor;
                     const request: PullRequest = {
-                        scope,
+                        scope, historyIncarnation,
                         cursor,
                         limit,
                         tables,
@@ -532,7 +546,10 @@ export function createGatewaySyncProvider(
                     retry.notBefore = 0;
                 } catch (error) {
                     if (isAbortLikeError(error)) return;
-                    if (
+                    if (isHistoryProtocolBoundary(error)) {
+                        console.error('[gateway-sync] Sync paused at an incompatible history boundary', error);
+                        unsubscribe();
+                    } else if (
                         error instanceof GatewaySyncRequestError &&
                         (error.status === 401 || error.status === 403)
                     ) {
@@ -607,7 +624,7 @@ export function createGatewaySyncProvider(
         async snapshot(request: SnapshotRequest, options?: SyncRequestOptions): Promise<SnapshotResponse> {
             const response = await requestJson<SnapshotResponse>(
                 '/api/sync/snapshot',
-                { ...request, unavailableRecordCapability: 'unavailable-v1', workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
+                { ...request, historyIncarnationCapability: 'incarnation-v1', unavailableRecordCapability: 'unavailable-v1', workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
                 baseUrl,
                 { signal: options?.signal, schema: SnapshotResponseSchema }
             );
@@ -621,7 +638,7 @@ export function createGatewaySyncProvider(
         async push(batch: PushBatch, options?: SyncRequestOptions): Promise<PushResult> {
             const response = await requestJson<PushResult>(
                 '/api/sync/push',
-                { ...batch, unavailableRecordCapability: 'unavailable-v1', workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
+                { ...batch, historyIncarnationCapability: 'incarnation-v1', unavailableRecordCapability: 'unavailable-v1', workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
                 baseUrl,
                 { signal: options?.signal, schema: PushResultSchema }
             );
@@ -633,12 +650,13 @@ export function createGatewaySyncProvider(
         },
 
         async updateCursor(scope: SyncScope, deviceId: string, version: number, options?: SyncRequestOptions): Promise<void> {
-            await requestJson(
+            const response = await requestJson<{ ok: boolean; historyIncarnation: string }>(
                 '/api/sync/update-cursor',
-                { scope, deviceId, version },
-                baseUrl,
-                { allowEmpty: true, signal: options?.signal }
+                { scope, deviceId, version, historyIncarnation: options?.historyIncarnation, historyIncarnationCapability: 'incarnation-v1' },
+                baseUrl, { signal: options?.signal }
             );
+            if (!response.ok || response.historyIncarnation !== options?.historyIncarnation ||
+                !HistoryIncarnationSchema.safeParse(response.historyIncarnation).success) throw Object.assign(new Error('Invalid history cursor acknowledgement'), { code: 'OR3_SYNC_HISTORY_UNSUPPORTED' });
         },
 
         async gcTombstones(scope: SyncScope, retentionSeconds: number): Promise<void> {

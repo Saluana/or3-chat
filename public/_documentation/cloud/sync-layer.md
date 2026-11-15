@@ -9,6 +9,45 @@ content, clocks, server versions, and cursors, so existing clients can resume
 sync without resetting their workspace. Offline backup inspection accepts both
 the earlier migration history and the repaired history.
 
+## History replacement and saved work
+
+The matched history-incarnation contract identifies a database history with an
+opaque token. Every pull, snapshot, push, cursor acknowledgement and events
+request negotiates `historyIncarnationCapability: 'incarnation-v1'`. Legacy
+requests receive HTTP 426. An adapter must advertise `historyIncarnation: 'v1'`
+and return a bound token; the gateway transport alone does not qualify a server.
+Published SQLite 0.0.30, the current prefix-GC branch, Convex/direct mode and D1
+are **unqualified** for this contract. They encounter an explicit sync boundary;
+this host change is not a release or a claim of restore safety.
+
+An unbound browser or a different token requires a complete materialized
+snapshot, even when its numeric cursor equals or trails the new head. One
+workspace-wide `sync_history` control row in Dexie's `sync_state` fences pushes,
+ACKs and stale completions. A follower tab can close this guard; the subscription
+owner resumes checked snapshot recovery. The atomic install saves original
+outbox entries, acknowledged local content, tombstones, streaming work and
+transfer references in the existing quarantine, replaces authorized canonical
+state, invalidates other scopes and installs the exact token/cursor pair.
+Edits committed while downloading are included. Quota failure preserves the old
+state and leaves pushes closed. Same-history expiry keeps ordinary pending replay.
+
+Workspace sync status shows **Saved changes from before server recovery** with
+account-scoped inspection/export and deliberate Recover/Discard actions.
+Retry all excludes these entries. Lost acknowledgements have unknown commit
+status in the discarded history. Supported recovery puts create a fresh explicit
+action after checking current history, record and parent dependencies; original
+evidence remains. Deletes, files and complex entities require manual recovery.
+Secrets and local-only KV/drafts are excluded from exports; held attachment bytes
+are protected from cleanup until deliberate resolution.
+
+Dexie schema 31 closes existing old connections and waits for blocked upgrades
+without clearing data. **Activation blocker:** installed Dexie retries an explicit
+lower-version `open()` without a native version after `VersionError`; an explicitly
+reopened old bundle can therefore bypass a version-only exclusion. The repeatable
+expected-failure P0-5.9 test records this unresolved design requirement. Do not
+activate or certify the matched release until that old-writer boundary is resolved,
+then qualify the packed SQLite runtime and real multi-tab/browser lifecycle.
+
 ## Materialized snapshot bootstrap contract
 
 Cold bootstrap uses a provider-neutral materialized snapshot instead of cursor

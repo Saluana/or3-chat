@@ -1,8 +1,10 @@
+import Dexie from 'dexie';
+import { getWriteTxTableNames } from '~/db/util';
 import { ConflictResolver } from '../conflict-resolver';
-import { exportQuarantined } from '../sync-quarantine';
+import { exportQuarantined, recoverHistoryPut } from '../sync-quarantine';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Or3DB } from '~/db/client';
-import type { SnapshotResponse } from '~~/shared/sync/types';
+import type { SnapshotResponse, SyncProvider } from '~~/shared/sync/types';
 import { applySnapshotChain, SnapshotStager } from '../snapshot-applier';
 import { setHookEngine } from '~/core/hooks/useHooks';
 import { testUuid } from './sync-test-utils';
@@ -773,4 +775,146 @@ describe('snapshot recovery of unsynced local content', () => {
         expect(await db.sync_quarantine.count()).toBe(0);
         expect(await db.messages.get('message-intact')).toMatchObject({ op_id: testUuid('message-intact-op') });
     });
+});
+
+describe('P0-5 history replacement', () => {
+    it('holds every old row and original intent without replay, includes edits during staging, and installs a lower cursor atomically', async () => {
+        const db = createDb(); await db.open();
+        await db.sync_state.put({ id: 'sync_history', historyIncarnation: 'I', phase: 'resetting', resetTarget: 'J', cursor: 0, lastSyncAt: 0, deviceId: '' });
+        await db.sync_state.put({ id: 'sync_state:workspace-1:default', historyIncarnation: 'I', cursor: 100, lastSyncAt: 1, deviceId: 'd' });
+        await db.kv.put({ id: 'acknowledged', name: 'acknowledged', value: 'old', deleted: false, created_at: 1, updated_at: 1, clock: 1 });
+        const stager = new SnapshotStager(db, { workspaceId: 'workspace-1' }); await stager.start();
+        await stager.appendPage({ historyIncarnation: 'J', workspaceId: 'workspace-1', snapshotId: 'j', highWatermark: 80, items: [], nextPageToken: null });
+        const original = { id: 'lost-ack', tableName: 'messages', pk: 'orphan', operation: 'delete', stamp: { opId: testUuid('lost-ack'), deviceId: 'd', clock: 2, hlc: '2:d' }, createdAt: 1, attempts: 1, status: 'in_flight', claimId: 'claim' } as PendingOp;
+        await db.pending_ops.put(original);
+        await stager.apply('d', () => true, ['kv', 'messages']);
+        expect(await db.pending_ops.count()).toBe(0);
+        expect(await db.kv.get('acknowledged')).toBeUndefined();
+        expect(await db.sync_quarantine.toArray()).toEqual(expect.arrayContaining([
+            expect.objectContaining({ variant: 'history_reset', sourceIncarnation: 'I', op: original }),
+            expect.objectContaining({ variant: 'history_reset', sourceIncarnation: 'I', localRow: expect.objectContaining({ value: 'old' }) }),
+        ]));
+        expect(await db.sync_state.get('sync_history')).toMatchObject({ historyIncarnation: 'J', phase: 'ready' });
+        expect(await db.sync_state.get('sync_state:workspace-1:default')).toMatchObject({ historyIncarnation: 'J', cursor: 80 });
+    });
+    it('rejects a chain that changes incarnation even with identical snapshot ID and watermark', async () => {
+        const db = createDb(); await db.open();
+        const stager = new SnapshotStager(db, { workspaceId: 'workspace-1' }); await stager.start();
+        const page = { ...pages()[0]!, historyIncarnation: 'I' }; await stager.appendPage(page);
+        await expect(stager.appendPage({ ...pages()[1]!, historyIncarnation: 'J' })).rejects.toThrow(/history|incarnation/i);
+        expect(await db.messages.count()).toBe(0);
+    });
+});
+
+
+describe('P0-5 durable reset failures', () => {
+    it('holds file metadata by hash across bounded archive pages', async () => {
+        const db = createDb(); await db.open();
+        await db.sync_state.put({ id: 'sync_history', historyIncarnation: 'I', phase: 'resetting', resetTarget: 'J', cursor: 0, lastSyncAt: 0, deviceId: '' });
+        await db.table('file_meta').bulkPut(Array.from({ length: 203 }, (_, i) => ({ hash: `hash-${String(i).padStart(3, '0')}`, name: 'file', deleted: false })));
+        const stager = new SnapshotStager(db, { workspaceId: 'workspace-1' }); await stager.start();
+        await stager.appendPage({ historyIncarnation: 'J', workspaceId: 'workspace-1', snapshotId: 'j', highWatermark: 80, items: [], nextPageToken: null });
+        await stager.apply('d');
+        const held = await db.sync_quarantine.toArray();
+        expect(held.filter(row => row.tableName === 'file_meta')).toHaveLength(203);
+        expect(held.some(row => row.pk === 'hash-202')).toBe(true);
+    });
+    it('rolls back archive, canonical replacement and cursor on quota while keeping reset closed', async () => {
+        const db = createDb(); await db.open();
+        const guard = { id: 'sync_history', historyIncarnation: 'I', phase: 'resetting' as const, resetTarget: 'J', cursor: 0, lastSyncAt: 0, deviceId: '' };
+        await db.sync_state.put(guard);
+        await db.kv.put({ id: 'old', name: 'old', value: 'bytes', deleted: false, created_at: 1, updated_at: 1, clock: 1 });
+        const stager = new SnapshotStager(db, { workspaceId: 'workspace-1' }); await stager.start();
+        await stager.appendPage({ historyIncarnation: 'J', workspaceId: 'workspace-1', snapshotId: 'j', highWatermark: 80, items: [], nextPageToken: null });
+        const quota = () => { throw new DOMException('quota', 'QuotaExceededError'); };
+        db.sync_quarantine.hook('creating', quota);
+        await expect(stager.apply('d')).rejects.toMatchObject({ name: 'QuotaExceededError' });
+        db.sync_quarantine.hook('creating').unsubscribe(quota);
+        expect((await db.kv.get('old'))?.value).toBe('bytes');
+        expect(await db.sync_quarantine.count()).toBe(0);
+        expect(await db.sync_state.get('sync_history')).toEqual(guard);
+        await stager.apply('d');
+        expect(await db.sync_state.get('sync_history')).toMatchObject({ historyIncarnation: 'J', phase: 'ready' });
+    });
+    it('does not let a delayed old mismatch reset an installed new history', async () => {
+        const { requestHistoryReset } = await import('../history-incarnation');
+        const db = createDb(); await db.open();
+        await db.sync_state.put({ id: 'sync_history', historyIncarnation: 'J', phase: 'ready', resetTarget: null, cursor: 0, lastSyncAt: 0, deviceId: '' });
+        expect(await requestHistoryReset(db, { historyIncarnation: 'I', phase: 'ready', resetTarget: null }, 'K')).toBe(false);
+        expect(await db.sync_state.get('sync_history')).toMatchObject({ historyIncarnation: 'J', phase: 'ready' });
+    });
+});
+
+
+describe('P0-5 browser connection boundaries', () => {
+    it('aborts stale local editor and foreground-generation writes after atomic installation', async () => {
+        setHookEngine(createTypedHookEngine(createHookEngine()));
+        const db = createDb(); await db.open();
+        db.syncHistoryAtOpen = 'I'; getHookBridge(db).start();
+        await db.sync_state.put({ id: 'sync_history', historyIncarnation: 'I', phase: 'ready', resetTarget: null, cursor: 0, lastSyncAt: 0, deviceId: '' });
+        const write = () => db.transaction('rw', getWriteTxTableNames(db, 'messages'), () => db.messages.put({ id: 'stale', thread_id: 'thread-1', role: 'assistant', index: 0, order_key: '2:0:local', data: { content: 'old generation' }, pending: true, deleted: false, created_at: 1, updated_at: 2, clock: 2, hlc: '2:0:local', op_id: testUuid('stale') }));
+        await write();
+        await db.transaction('rw', db.sync_state, db.messages, db.pending_ops, async tx => {
+            getHookBridge(db).markSyncTransaction(tx);
+            await db.messages.clear(); await db.pending_ops.clear();
+            await db.sync_state.update('sync_history', { historyIncarnation: 'J' });
+        });
+        await expect(write()).rejects.toMatchObject({ name: 'AbortError' });
+        expect(await db.messages.get('stale')).toBeUndefined();
+        expect(await db.pending_ops.count()).toBe(0);
+    });
+    it('waits for an old schema connection without clearing intent, then rejects its old native version', async () => {
+        const db = createDb();
+        const schema = Object.fromEntries(db.tables.map(table => [table.name, [table.schema.primKey.src, ...table.schema.indexes.map(index => index.src)].join(',')]));
+        const old = new Dexie(db.name); old.version(30).stores(schema);
+        await old.open();
+        await old.table('pending_ops').put({ id: 'legacy', status: 'pending', payload: { original: true } });
+        old.on('versionchange', () => false);
+        let blocked = false; db.on('blocked', () => { blocked = true; });
+        const upgrade = db.open();
+        await new Promise(resolve => setTimeout(resolve, 20));
+        expect(blocked).toBe(true);
+        expect(await old.table('pending_ops').count()).toBe(1);
+        old.close(); await upgrade;
+        expect(await db.sync_state.get('sync_history')).toMatchObject({ phase: 'unbound', historyIncarnation: null });
+        expect(await db.pending_ops.get('legacy')).toMatchObject({ payload: { original: true } });
+        const nativeReopen = new Promise((resolve, reject) => {
+            const request = indexedDB.open(db.name, 300);
+            request.onsuccess = () => { request.result.close(); resolve(undefined); };
+            request.onerror = () => reject(request.error);
+        });
+        await expect(nativeReopen).rejects.toMatchObject({ name: 'VersionError' });
+    });
+});
+
+// Approval blocker: Dexie 4 retries VersionError without a native version. This
+// expected-failure acceptance test MUST become an ordinary passing test before
+// claiming that the release excludes explicitly reopened old browser bundles.
+it.fails('P0-5.9 BLOCKER: an explicitly reopened old Dexie bundle must be refused', async () => {
+    const db = createDb(); const old = new Dexie(db.name); old.version(30).stores({ sync_state: 'id' });
+    try {
+        await old.open(); old.close(); await db.open();
+        await expect(old.open()).rejects.toMatchObject({ name: 'VersionError' });
+    } finally { old.close(); }
+});
+
+it('P0-5.3 explicit recovery checks parents, creates a new put and retains linked original evidence', async () => {
+    setHookEngine(createTypedHookEngine(createHookEngine()));
+    const db = createDb(); await db.open(); db.syncHistoryAtOpen = 'J'; getHookBridge(db).start();
+    await db.sync_state.put({ id: 'sync_history', historyIncarnation: 'J', phase: 'ready', resetTarget: null, cursor: 0, lastSyncAt: 0, deviceId: '' });
+    const provider = { pull: async () => ({ historyIncarnation: 'J', changes: [], nextCursor: 0, hasMore: false, requiresSnapshot: false }) } as unknown as SyncProvider;
+    await db.sync_quarantine.put({ id: 'held-parent', variant: 'history_reset', sourceIncarnation: 'I', accountId: 'user',
+        tableName: 'messages', pk: 'orphan', status: 'quarantined', source: 'snapshot_apply', diagnostics: [], quarantinedAt: 1,
+        op: { operation: 'put', payload: { id: 'orphan', thread_id: 'missing-parent' } } });
+    await expect(recoverHistoryPut(db, provider, { workspaceId: 'workspace-1', principalId: 'user' }, 'held-parent', 'J')).rejects.toThrow(/parent/);
+    expect(await db.pending_ops.count()).toBe(0);
+    const originalId = testUuid('original-held');
+    await db.sync_quarantine.put({ id: 'held-put', variant: 'history_reset', sourceIncarnation: 'I', accountId: 'user',
+        tableName: 'kv', pk: 'saved', status: 'quarantined', source: 'snapshot_apply', diagnostics: [], quarantinedAt: 1,
+        op: { operation: 'put', stamp: { opId: originalId }, payload: { id: 'saved', name: 'saved', value: 'original', deleted: false, created_at: 1, updated_at: 1, clock: 9 } } });
+    expect(await recoverHistoryPut(db, provider, { workspaceId: 'workspace-1', principalId: 'user' }, 'held-put', 'J')).toBe(true);
+    const action = await db.pending_ops.toCollection().first();
+    expect(action?.stamp.opId).not.toBe(originalId);
+    expect(await db.kv.get('saved')).toMatchObject({ value: 'original' });
+    expect(await db.sync_quarantine.get('held-put')).toMatchObject({ status: 'repaired', repairedOpId: action?.id, op: { stamp: { opId: originalId } } });
 });

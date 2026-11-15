@@ -1,3 +1,4 @@
+import { assertHistory, type HistoryGuard } from './history-incarnation';
 /**
  * @module app/core/sync/cursor-manager
  *
@@ -48,6 +49,9 @@ export class CursorManager {
     private scope: SyncScope;
     private deviceId: string;
     private syncStateId: string;
+    private history?: HistoryGuard;
+
+    bindHistory(history: HistoryGuard): void { this.history = history; }
 
     constructor(db: Or3DB, scope: SyncScope) {
         this.db = db;
@@ -111,7 +115,10 @@ export class CursorManager {
      * Reset cursor (for testing or recovery scenarios)
      */
     async reset(): Promise<void> {
-        await this.db.table('sync_state').delete(this.syncStateId);
+        await this.db.transaction('rw', this.db.table('sync_state'), async () => {
+            if (this.history) await assertHistory(this.db, this.history);
+            await this.db.table('sync_state').delete(this.syncStateId);
+        });
     }
 
     /**
@@ -133,10 +140,12 @@ export class CursorManager {
      */
     private async writeState(version?: number): Promise<void> {
         await this.db.transaction('rw', this.db.table('sync_state'), async () => {
+            if (this.history) await assertHistory(this.db, this.history);
             const existing = await this.getState();
             const state: SyncState = {
+                historyIncarnation: this.history?.historyIncarnation,
                 id: this.syncStateId,
-                cursor: Math.max(existing?.cursor ?? 0, version ?? 0),
+                cursor: Math.max(!this.history || existing?.historyIncarnation === this.history.historyIncarnation ? existing?.cursor ?? 0 : 0, version ?? 0),
                 lastSyncAt: version === undefined ? Date.now() : existing?.lastSyncAt ?? Date.now(),
                 deviceId: this.deviceId,
             };

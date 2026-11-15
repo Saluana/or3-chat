@@ -122,5 +122,6 @@ export function getWriteTxTableNames(
         names.add('tombstones');
     }
 
+    if (existing.has('sync_state')) names.add('sync_state');
     return [...names];
 }

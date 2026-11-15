@@ -95,3 +95,6 @@ export function isRecentOpId(opId: string | undefined | null): boolean {
     }
     return true;
 }
+
+/** A history switch invalidates every old echo-suppression obligation. */
+export function clearRecentOpIds(): void { recentOps.clear(); }

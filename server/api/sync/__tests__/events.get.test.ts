@@ -1,5 +1,5 @@
 // Incarnation negotiation has its own route-boundary suite; retain these tests' original focus.
-vi.mock('../../../utils/sync/history-incarnation', () => ({ requireHistoryCapability: () => {}, checkHistory: async () => undefined, assertHistoryResponse: () => {} }));
+vi.mock('../../../utils/sync/history-incarnation', () => ({ requireHistoryCapability: () => {}, checkHistory: async () => 'I', assertHistoryResponse: () => {} }));
 /* @vitest-environment node */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createApp, toWebHandler } from 'h3';
@@ -9,7 +9,7 @@ import { createApp, toWebHandler } from 'h3';
 const state = vi.hoisted(() => ({ session: vi.fn(), access: vi.fn(), watch: vi.fn(),
     push: vi.fn(async () => {}), close: vi.fn(async () => {}), closed: undefined as undefined | (() => void),
     closers: [] as Array<() => void>,
-    version: undefined as undefined | ((version: number) => void), stop: vi.fn(),
+    version: undefined as undefined | ((version: { historyIncarnation: string; version: number }) => void), stop: vi.fn(),
 }));
 vi.mock('h3', async original => {
     const actual = await original<typeof import('h3')>();
@@ -43,11 +43,11 @@ it('denies a nonmember before subscribing', async () => {
 it('rechecks membership for notifications and closes when access is revoked', async () => {
     const route = (await import('../events.get')).default as any;
     await route({ context: {} });
-    state.version?.(4);
+    state.version?.({ historyIncarnation: 'I', version: 4 });
     await vi.advanceTimersByTimeAsync(0);
-    expect(state.push).toHaveBeenCalledWith(JSON.stringify({ version: 4 }));
+    expect(state.push).toHaveBeenCalledWith(JSON.stringify({ historyIncarnation: 'I', version: 4 }));
     state.access.mockRejectedValue(Object.assign(new Error('Forbidden'), { statusCode: 403 }));
-    state.version?.(5);
+    state.version?.({ historyIncarnation: 'I', version: 5 });
     await vi.advanceTimersByTimeAsync(0);
     expect(state.push).toHaveBeenCalledTimes(1);
     expect(state.stop).toHaveBeenCalledTimes(1);
@@ -66,13 +66,13 @@ it('releases the subscription at the session refresh deadline even during a stal
     await route({ context: {} });
     let release!: () => void;
     state.access.mockImplementation(() => new Promise<void>(resolve => { release = resolve; }));
-    state.version?.(4);
+    state.version?.({ historyIncarnation: 'I', version: 4 });
     await vi.advanceTimersByTimeAsync(60_000);
     expect(state.stop).toHaveBeenCalledTimes(1);
     expect(state.close).toHaveBeenCalledTimes(1);
     release();
     await vi.advanceTimersByTimeAsync(0);
-    expect(state.push).not.toHaveBeenCalledWith(JSON.stringify({ version: 4 }));
+    expect(state.push).not.toHaveBeenCalledWith(JSON.stringify({ historyIncarnation: 'I', version: 4 }));
 });
 
 it('does not extend session expiry by time spent checking initial membership', async () => {
@@ -91,7 +91,7 @@ it('does not extend session expiry by time spent checking initial membership', a
 it('delivers real SSE frames and closes the H3 stream when membership is revoked', async () => {
     state.watch.mockImplementation(async (_event, _scope, version) => {
         state.version = version;
-        version(7);
+        version({ historyIncarnation: 'I', version: 7 });
         return state.stop;
     });
     const route = (await import('../events.get')).default;
@@ -104,9 +104,9 @@ it('delivers real SSE frames and closes the H3 stream when membership is revoked
     const reader = response.body!.getReader();
     try {
         const first = await reader.read();
-        expect(new TextDecoder().decode(first.value)).toContain('data: {"version":7}');
+        expect(new TextDecoder().decode(first.value)).toContain('data: {"historyIncarnation":"I","version":7}');
         state.access.mockRejectedValue(new Error('Revoked'));
-        state.version?.(8);
+        state.version?.({ historyIncarnation: 'I', version: 8 });
         await vi.advanceTimersByTimeAsync(0);
         expect((await reader.read()).done).toBe(true);
         expect(state.stop).toHaveBeenCalledTimes(1);

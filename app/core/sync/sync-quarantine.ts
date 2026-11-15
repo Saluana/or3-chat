@@ -35,7 +35,7 @@ import { ChangeStampSchema } from '~~/shared/sync/schemas';
 import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
 import { getPkField } from '~~/shared/sync/table-metadata';
 import { generateHLC } from './hlc';
-import { SYNCED_TABLES, getHookBridge } from './hook-bridge';
+import { SYNCED_TABLES, getHookBridge, getLocalOnlyKvNames } from './hook-bridge';
 import { markRecentOpId } from './recent-op-cache';
 import { normalizeSyncPayload } from './sync-payload-normalizer';
 
@@ -327,11 +327,13 @@ export async function quarantineCorruptOps(
     selected?: PendingOp[]
 ): Promise<QuarantineSummary> {
     const bridge = getHookBridge(db);
-    const scopeTables = [...QUARANTINE_SUPPORT_TABLES, ...SYNCED_TABLES].map((name) => db.table(name));
+    const scopeTables = [...QUARANTINE_SUPPORT_TABLES, ...SYNCED_TABLES, 'sync_state'].map((name) => db.table(name));
     const candidates = selected ?? await db.transaction('r', db.pending_ops, (tx) => readOps(tx, SCAN_STATUSES));
     const summary: QuarantineSummary = { quarantined: 0, repaired: 0 };
     for (const candidate of candidates) {
         await db.transaction('rw', scopeTables, async (tx) => {
+            const guard = await tx.table('sync_state').get('sync_history') as { phase?: string } | undefined;
+            if (guard && guard.phase !== 'ready') return;
             bridge.markSyncTransaction(tx);
             // Re-read: the row may have been resolved or completed since the scan.
             const current = await tx.table('pending_ops').get(candidate.id) as PendingOp | undefined;
@@ -369,20 +371,20 @@ export async function pruneResolvedQuarantineBestEffort(db: Or3DB): Promise<void
     }
 }
 
-export function listQuarantined(db: Or3DB): Promise<SyncQuarantineRow[]> {
-    return db.sync_quarantine.orderBy('quarantinedAt').toArray();
+export function listQuarantined(db: Or3DB, principalId?: string): Promise<SyncQuarantineRow[]> {
+    return db.sync_quarantine.orderBy('quarantinedAt').filter(entry => entry.variant !== 'history_reset' || !entry.accountId || entry.accountId === principalId).toArray();
 }
 
 /** Self-contained JSON for support or manual recovery. */
-export async function exportQuarantined(db: Or3DB): Promise<string> {
-    return JSON.stringify({ exportedAt: Date.now(), entries: await listQuarantined(db) }, null, 2);
+export async function exportQuarantined(db: Or3DB, principalId?: string): Promise<string> {
+    return JSON.stringify({ exportedAt: Date.now(), entries: await listQuarantined(db, principalId) }, null, 2);
 }
 
 /** Explicit user decision to give up on an entry; the audit row stays until pruned. */
-export async function discardQuarantined(db: Or3DB, id: string): Promise<boolean> {
+export async function discardQuarantined(db: Or3DB, id: string, principalId?: string): Promise<boolean> {
     const discarded = await db.transaction('rw', db.sync_quarantine, async () => {
         const entry = await db.sync_quarantine.get(id);
-        if (entry?.status !== 'quarantined') return false;
+        if (entry?.status !== 'quarantined' || entry.variant === 'history_reset' && entry.accountId && entry.accountId !== principalId) return false;
         await db.sync_quarantine.put({
             ...entry, status: 'discarded', resolvedAt: Date.now(), resolution: 'discarded by user',
         });
@@ -390,4 +392,82 @@ export async function discardQuarantined(db: Or3DB, id: string): Promise<boolean
     });
     if (discarded) await pruneResolvedQuarantineBestEffort(db);
     return discarded;
+}
+
+/** Atomic archive, bounded reads, immutable originals. Never reconstruct old intent. */
+export async function holdHistoryInTx(tx: Transaction, scope: import('~~/shared/sync/types').SyncScope, sourceIncarnation: string): Promise<void> {
+    const localOnly = getLocalOnlyKvNames();
+    const archive = async (kind: string, tableName: string, key: string, record: Record<string, unknown>) => {
+        const id = JSON.stringify(['history_reset', sourceIncarnation, kind, tableName, key]);
+        if (await tx.table('sync_quarantine').get(id)) return;
+        await tx.table('sync_quarantine').put({ id, variant: 'history_reset', sourceIncarnation, scope,
+            accountId: tableName === 'notifications' ? String(record.user_id ?? (record.payload as { user_id?: string } | undefined)?.user_id ?? 'unknown') : scope.principalId,
+            tableName, pk: typeof record.pk === 'string' ? record.pk : key,
+            source: 'snapshot_apply', status: 'quarantined', op: record,
+            ...(kind === 'row' ? { localRow: record } : kind === 'tombstone' ? { localTombstone: record } : {}),
+            diagnostics: ['Saved changes from before server recovery; commit unknown in discarded history'], quarantinedAt: Date.now() });
+    };
+    for (const tableName of [...SYNCED_TABLES, 'tombstones', 'pending_ops', 'file_transfers']) {
+        let after: string | undefined;
+        for (;;) {
+            const table = tx.table(tableName);
+            const rows = await (after === undefined ? table.orderBy(':id') : table.where(':id').above(after)).limit(200).toArray() as Record<string, unknown>[];
+            if (!rows.length) break;
+            for (const row of rows) {
+                const key = String(tableName === 'file_meta' ? row.hash : row.id);
+                after = key;
+                const target = typeof row.tableName === 'string' ? row.tableName : tableName;
+                const pk = typeof row.pk === 'string' ? row.pk : key;
+                if (target === 'kv' && localOnly.has(typeof row.name === 'string' ? row.name : typeof (row.payload as { name?: unknown } | undefined)?.name === 'string' ? (row.payload as { name: string }).name : pk.replace(/^kv:/, ''))) continue;
+                await archive(tableName === 'pending_ops' ? 'op' : tableName === 'tombstones' ? 'tombstone' : 'row', target, key, row);
+            }
+        }
+    }
+    await tx.table('pending_ops').clear();
+    await tx.table('file_transfers').clear();
+}
+
+/** Deliberate recovery of a reviewed put. Deletes and complex entities stay held for export/manual review. */
+export async function recoverHistoryPut(db: Or3DB, provider: import('~~/shared/sync/types').SyncProvider,
+    scope: import('~~/shared/sync/types').SyncScope, id: string, reviewedHistory: string): Promise<boolean> {
+    const { readHistory, assertHistory } = await import('./history-incarnation');
+    const { getSyncStateId } = await import('./cursor-manager');
+    const guard = await readHistory(db);
+    if (guard.phase !== 'ready' || guard.historyIncarnation !== reviewedHistory) throw new Error('Server history changed; review this change again.');
+    const cursor = (await db.sync_state.get(getSyncStateId(scope)))?.cursor ?? 0;
+    const page = await provider.pull({ scope, cursor, limit: 1, historyIncarnation: reviewedHistory, historyIncarnationCapability: 'incarnation-v1' });
+    if (page.historyIncarnation !== reviewedHistory || page.requiresSnapshot || page.nextCursor !== cursor || page.hasMore) throw new Error('Wait for current sync, then review this change again.');
+    const entry = await db.sync_quarantine.get(id);
+    if (entry?.variant !== 'history_reset' || entry.status !== 'quarantined' ||
+        entry.accountId && entry.accountId !== scope.principalId) return false;
+    if (!['threads', 'messages', 'kv'].includes(entry.tableName)) throw new Error('Export this item for manual recovery.');
+    const op = entry.op as Partial<PendingOp>;
+    if (op.operation === 'delete' || entry.localTombstone) throw new Error('Review the current record and make a new delete explicitly.');
+    const payload = (entry.localRow ?? op.payload) as Record<string, unknown> | undefined;
+    if (!payload || payload.deleted === true || entry.tableName === 'kv' && getLocalOnlyKvNames().has(String(payload.name ?? ''))) throw new Error('This item requires manual recovery.');
+    return db.transaction('rw', [...SYNCED_TABLES, ...QUARANTINE_SUPPORT_TABLES, 'sync_state'], async tx => {
+        await assertHistory(tx, guard);
+        const currentEvidence = await db.sync_quarantine.get(id);
+        if (currentEvidence?.status !== 'quarantined') return false;
+        if (entry.tableName === 'messages') {
+            const parent = await db.threads.get(String(payload.thread_id ?? ''));
+            if (!parent || parent.deleted || await db.tombstones.get(`threads:${parent.id}`)) throw new Error('Recover or select the parent conversation first.');
+        }
+        const current = await db.table(entry.tableName).get(entry.pk) as Record<string, unknown> | undefined;
+        const tombstone = await db.tombstones.get(`${entry.tableName}:${entry.pk}`);
+        const clock = Math.max(Number(current?.clock ?? 0), tombstone?.clock ?? 0) + 1;
+        if (!Number.isSafeInteger(clock)) throw new Error('Record revision cannot advance.');
+        const freshId = createRuntimeUuid();
+        const stamp = { clock, hlc: generateHLC(), deviceId: getHookBridge(db).getDeviceId(), opId: freshId };
+        const normalized = normalizeSyncPayload(entry.tableName, entry.pk, { ...payload, clock, hlc: stamp.hlc, op_id: freshId, pending: false }, stamp);
+        if (!normalized.isValid) throw new Error('Saved content needs manual schema recovery.');
+        // The regular local hook captures this new explicit action with a fresh UUID.
+        await db.table(entry.tableName).put(normalized.payload);
+        const captured = await db.pending_ops.where('[tableName+pk]').equals([entry.tableName, entry.pk]).toArray();
+        const action = captured.find(candidate => candidate.stamp.opId !== (op.stamp?.opId ?? '') && candidate.stamp.clock === clock);
+        if (!action) throw new Error('Local capture unavailable; saved evidence remains held.');
+        await db.sync_quarantine.put({ ...currentEvidence, status: 'repaired', repairedOpId: action.id,
+            resolvedAt: Date.now(), resolution: `Explicit put reviewed in ${reviewedHistory}` });
+        return true;
+    });
 }

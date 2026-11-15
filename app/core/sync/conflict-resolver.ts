@@ -1,3 +1,4 @@
+import { assertHistory, type HistoryGuard } from './history-incarnation';
 import { MAX_SYNC_PAYLOAD_BYTES } from '~~/shared/sync/sanitize';
 import { assertIncomingIdentity, isSyncTable } from '~~/shared/sync/incoming-records';
 import { PullUnavailableRecordSchema, SyncChangeSchema, syncJsonByteLength } from '~~/shared/sync/schemas';
@@ -89,7 +90,7 @@ export class ConflictResolver {
     /**
      * Apply a batch of remote changes
      */
-    async applyChanges(changes: SyncChange[], unavailable: PullUnavailableRecord[] = [], signal?: AbortSignal): Promise<ApplyResult> {
+    async applyChanges(changes: SyncChange[], unavailable: PullUnavailableRecord[] = [], signal?: AbortSignal, history?: HistoryGuard): Promise<ApplyResult> {
         const result: ApplyResult = {
             applied: 0,
             skipped: 0,
@@ -117,7 +118,7 @@ export class ConflictResolver {
         // Collect unique table names for the transaction
         const tableNames = Array.from(new Set([...changes, ...defective.map(({ change }) => change), ...unavailable]
             .map(c => c.tableName).filter(isSyncTable)));
-        const tables = [...tableNames, 'tombstones', ...(defective.length || unavailable.length ? ['sync_quarantine'] : [])];
+        const tables = [...tableNames, 'tombstones', 'sync_state', ...(defective.length || unavailable.length ? ['sync_quarantine'] : [])];
 
         // Collect conflicts to emit hooks AFTER transaction completes
         // (calling async hooks inside transaction causes PrematureCommitError)
@@ -131,6 +132,7 @@ export class ConflictResolver {
 
         // Apply in a single transaction for atomicity and performance
         await this.db.transaction('rw', tables, async (tx) => {
+            if (history) await assertHistory(tx, history);
             // Mark this specific transaction as a sync transaction
             getHookBridge(this.db).markSyncTransaction(tx);
 

@@ -49,12 +49,12 @@ export default defineEventHandler(async (event) => {
     requireCloudMutation(event);
 
     const body: unknown = await readLimitedJsonBody(event, 8 * 1024);
+    requireHistoryCapability(body);
     const parsed = UpdateCursorSchema.safeParse(body);
     if (!parsed.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid cursor request' });
     }
 
-    requireHistoryCapability(body);
     const session = await resolveSessionContext(event);
     if (!session.authenticated || !session.user || !session.workspace) {
         throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });

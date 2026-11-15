@@ -310,6 +310,18 @@ export class HookBridge {
         payload: unknown,
         softDelete = false
     ): Record<string, unknown> | void {
+        // A connection is tied to the view it opened. After atomic replacement,
+        // old editor/generation/transfer callbacks abort until the view reloads.
+        if (this.db.syncHistoryAtOpen !== undefined) {
+            if (!transaction.storeNames.includes('sync_state')) {
+                transaction.abort();
+                throw new Error('Local sync writes require sync_state in their transaction');
+            }
+            const origin = this.db.syncHistoryAtOpen;
+            transaction.table('sync_state').get('sync_history').then(guard => {
+                if ((guard?.historyIncarnation ?? null) !== origin) transaction.abort();
+            }).catch(() => transaction.abort());
+        }
         // Safe record access pattern - payload can be undefined for delete operations
         const safePayload = (payload && typeof payload === 'object') 
             ? payload as Record<string, unknown> 
@@ -462,7 +474,7 @@ export class HookBridge {
         if (hasPendingOps) {
             const request = transaction.table('pending_ops').add(pendingOp);
             void Promise.resolve(request).then(async () => {
-                if (!this.coalesceUnsent || pendingOp.status !== 'pending') return;
+                if (this.db.syncHistoryAtOpen !== undefined || !this.coalesceUnsent || pendingOp.status !== 'pending') return;
                 const table = transaction.table<PendingOp, string>('pending_ops');
                 // Never replace an operation already attempted/claimed by another tab.
                 // Its id must remain available for the server's idempotent replay.

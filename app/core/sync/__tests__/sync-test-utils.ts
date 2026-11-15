@@ -248,11 +248,15 @@ export function createPendingOpsTable(initial: PendingOp[] = []) {
  * - Exposes the db on `global.__MOCK_DB__` to support HookBridge hook callbacks
  */
 export function createMockDb<T extends Record<string, unknown>>(tables: T) {
+    const syncState = createMemoryTable('id');
+    syncState.__rows.set('sync_history', { id: 'sync_history', historyIncarnation: 'I', phase: 'ready', resetTarget: null });
+    const resolved = { sync_state: syncState, ...tables };
     const db = {
+        sync_state: syncState,
         ...tables,
         name: 'mock-db',
         table(name: string) {
-            return (tables as Record<string, unknown>)[name] ?? null;
+            return (resolved as Record<string, unknown>)[name] ?? null;
         },
         async transaction(mode: string, tableNames: string[], callback: (tx: { mode: string; tableNames: string[]; table: (n: string) => unknown }) => Promise<unknown>) {
             const tx = {

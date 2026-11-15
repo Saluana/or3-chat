@@ -95,7 +95,10 @@ export interface SyncQuarantineRow {
     status: 'quarantined' | 'repaired' | 'discarded';
     source: 'snapshot_apply' | 'manual' | 'incoming_pull' | 'incoming_snapshot';
     /** Absent on legacy outgoing entries. Incoming entries never reconstruct ops. */
-    variant?: 'incoming';
+    variant?: 'incoming' | 'history_reset';
+    sourceIncarnation?: string;
+    scope?: import('~~/shared/sync/types').SyncScope;
+    accountId?: string;
     evidenceRef?: string;
     pendingIntent?: PendingOp[];
     /** The operation exactly as found. */
@@ -149,6 +152,8 @@ export interface WorkspaceDraftVersionRow {
  * - Does not enforce business rules beyond schema definitions.
  */
 export class Or3DB extends Dexie {
+    /** Connection origin; local callbacks must refresh views after replacement. */
+    syncHistoryAtOpen?: string | null;
     projects!: Table<Project, string>;
     threads!: Table<Thread, string>;
     messages!: Table<Message, string>;
@@ -445,6 +450,17 @@ export class Or3DB extends Dexie {
         this.version(29).stores({ file_blobs: 'hash, cache_accessed_at' });
         // Sparse metadata index: origin-wide budgeting never needs Blob values.
         this.version(30).stores({ file_blobs: 'hash, cache_accessed_at, [cache_accessed_at+cache_bytes+hash]' });
+
+        // A mandatory version boundary evicts old tabs that cannot enforce the shared guard.
+        this.version(31).stores({ sync_state: 'id' }).upgrade(async tx => {
+            await tx.table('sync_state').put({ id: 'sync_history', historyIncarnation: null,
+                phase: 'unbound', resetTarget: null, cursor: 0, lastSyncAt: 0, deviceId: '' });
+        });
+        this.on('versionchange', () => this.close());
+        this.on('ready', async () => {
+            const guard = await this.sync_state.get('sync_history');
+            this.syncHistoryAtOpen = guard ? guard.historyIncarnation ?? null : undefined;
+        });
 
         // Derived-key maintenance must run on every instance, including
         // workspace DBs, and independently of sync capture suppression.

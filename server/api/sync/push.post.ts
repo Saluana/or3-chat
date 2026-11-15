@@ -130,12 +130,12 @@ export default defineEventHandler(async (event) => {
         MAX_SYNC_PUSH_BATCH_BYTES,
         { allowGzip: true }
     );
+    requireHistoryCapability(body);
     const envelope = PushEnvelopeSchema.safeParse(body);
     if (!envelope.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid push request' });
     }
 
-    requireHistoryCapability(body);
     const session = await resolveSessionContext(event);
     if (!session.authenticated || !session.user || !session.workspace) {
         throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });

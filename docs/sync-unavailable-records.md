@@ -164,3 +164,22 @@ suite. At that point qualify `backup-inspection-profile.json` with
 and accepted inspector histories together. Current 0.0.30 and S2 advertise no
 capability and fail closed with `OR3_SYNC_HISTORY_UNSUPPORTED`. D1 and direct
 Convex remain separate qualification lanes. No publication is performed here.
+
+
+### Activation blocker found during H5 validation
+
+Dexie's installed `dexieOpen` catches native `VersionError` and retries with no
+version. Schema 31 closes normal old connections, but an explicit old-bundle
+`open()` can reconnect and write shared tables. The expected-failure P0-5.9 test in
+`snapshot-applier.test.ts` reproduces this. The approved version-only exclusion
+therefore needs a design decision; do not advertise/release the matched contract
+until that boundary and real browser qualification are complete. Current provider
+and generated image profiles remain unqualified. S3 must not treat the host
+transport constant or native test fixture as activation approval.
+
+The image reset helper reads `backup-inspection-profile.json`: activation requires
+`historyIncarnation: 'v1'` and exact `historyMigrations`, bound to the packed runtime
+and inspector's accepted historical migration sets. `prepare-backup-inspection.mjs`
+currently emits `unqualified`. Extend the existing allowlists after packed-provider
+qualification, preserving older accepted histories. The post-reset semantic audit
+must echo the installed token; a generic healthy result cannot certify replacement.

@@ -45,6 +45,7 @@ vi.mock('~/core/sync/cursor-manager', async original => {
     const actual = await original<typeof import('~/core/sync/cursor-manager')>();
     const state = { cursor: 100 };
     const api = {
+        bindHistory: vi.fn(),
         getCursor: vi.fn(async () => state.cursor),
         setCursor: vi.fn(async (next: number) => {
             state.cursor = next;
@@ -229,10 +230,10 @@ describe('SubscriptionManager', () => {
         vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit) => {
             const body = JSON.parse(init.body as string);
             calls.push({ path, cursor: body.cursor, version: body.version });
-            if (path.endsWith('/update-cursor')) return new Response('{}');
+            if (path.endsWith('/update-cursor')) return new Response(JSON.stringify({ historyIncarnation: 'I', ok: true }));
             const item = buildChange(body.cursor === 100 ? 101 : 103);
             item.stamp.opId = testUuid(String(item.serverVersion));
-            return new Response(JSON.stringify({
+            return new Response(JSON.stringify({ historyIncarnation: 'I',
                 ...FULL_HISTORY_PULL_RETENTION,
                 changes: !remoteChangesAvailable || (body.cursor !== 100 && !hasMore) ? [] : [item],
                 nextCursor: !remoteChangesAvailable ? 100 : body.cursor === 100 ? 102 : hasMore ? 103 : 102,
@@ -1135,17 +1136,17 @@ describe('SubscriptionManager', () => {
                     timeout = true;
                     throw new DOMException('request timeout', 'TimeoutError');
                 }
-                return new Response(JSON.stringify({ workspaceId: 'ws-1', snapshotId: 'snap-retry', highWatermark: 40,
+                return new Response(JSON.stringify({ historyIncarnation: 'I', workspaceId: 'ws-1', snapshotId: 'snap-retry', highWatermark: 40,
                     items: [{ kind: 'row', tableName: 'kv', pk: `retry-${String(sequence).padStart(3, '0')}`, payload: { id: `retry-${String(sequence).padStart(3, '0')}`, name: `retry-${sequence}`, value: sequence, created_at: 1, updated_at: 1, clock: 1 }, revision: { clock: 1, hlc: '1:0:test', opId: testUuid(`retry-${sequence}`) } }], nextPageToken: sequence < 121 ? String(sequence + 1) : null }));
             }
-            if (path.endsWith('/pull')) return new Response(JSON.stringify({ changes: [], nextCursor: body.cursor, hasMore: false, ...FULL_HISTORY_PULL_RETENTION }));
-            return new Response('{}');
+            if (path.endsWith('/pull')) return new Response(JSON.stringify({ historyIncarnation: 'I', changes: [], nextCursor: body.cursor, hasMore: false, ...FULL_HISTORY_PULL_RETENTION }));
+            return new Response(JSON.stringify({ historyIncarnation: 'I', ok: true }));
         }));
         const provider = createGatewaySyncProvider();
         const manager = new SubscriptionManager(db, provider, { workspaceId: 'ws-1' }, { reconnectDelays: [60_000] });
         try {
             const starting = manager.start();
-            for (let i = 0; i < 300 && tokens.length < 121; i++) await vi.advanceTimersByTimeAsync(0);
+            for (let i = 0; i < 1000 && tokens.length < 121; i++) await vi.advanceTimersByTimeAsync(0);
             expect(tokens).toHaveLength(121);
             if (outcome === 'expired' || outcome === 'fatal') {
                 await starting;
@@ -1313,5 +1314,42 @@ describe('SubscriptionManager', () => {
         } finally {
             await db.delete();
         }
+    });
+
+    it('pauses immediately at an incapable snapshot provider instead of retrying its 503', async () => {
+        const db = new Or3DB(`incapable-${crypto.randomUUID()}`); await db.open();
+        await db.sync_state.put({ id: 'sync_history', historyIncarnation: null, phase: 'unbound', resetTarget: null, cursor: 0, deviceId: '', lastSyncAt: 0 });
+        const snapshot = vi.fn(async () => { throw Object.assign(new Error('unqualified'), { status: 503, data: { code: 'OR3_SYNC_HISTORY_UNSUPPORTED' } }); });
+        const provider: SyncProvider = { id: db.name, mode: 'gateway', capabilities: { historyIncarnation: 'v1' }, snapshot,
+            pull: vi.fn(), push: vi.fn(), subscribe: vi.fn(), updateCursor: vi.fn(), dispose: vi.fn() };
+        const manager = new SubscriptionManager(db, provider, { workspaceId: 'ws-1' });
+        const starting = manager.start();
+        try {
+            for (let i = 0; i < 30; i++) await vi.advanceTimersByTimeAsync(500);
+            expect(snapshot).toHaveBeenCalledTimes(1);
+            expect(manager.getStatus()).toBe('error');
+            expect(provider.subscribe).not.toHaveBeenCalled();
+        } finally { await manager.stop(); await starting; await db.delete(); }
+    });
+
+    it('wakes the subscription owner when a follower closes the durable reset guard', async () => {
+        const { requestHistoryReset } = await import('../history-incarnation');
+        const db = new Or3DB(`owner-wake-${crypto.randomUUID()}`); await db.open();
+        const guard = { historyIncarnation: 'I', phase: 'ready' as const, resetTarget: null };
+        await db.sync_state.put({ id: 'sync_history', ...guard, cursor: 0, deviceId: '', lastSyncAt: 0 });
+        const cursor = cursorManagerModule.getCursorManager(db, { workspaceId: 'ws-1' });
+        vi.mocked(cursor.isBootstrapNeeded).mockResolvedValue(false); vi.mocked(cursor.isCursorPotentiallyExpired).mockResolvedValue(false);
+        const snapshot = vi.fn(async () => ({ historyIncarnation: 'J', workspaceId: 'ws-1', snapshotId: 'j', highWatermark: 80, items: [], nextPageToken: null }));
+        const provider: SyncProvider = { id: db.name, mode: 'gateway', capabilities: { historyIncarnation: 'v1' }, snapshot,
+            pull: vi.fn(async request => ({ historyIncarnation: request.historyIncarnation!, changes: [], nextCursor: request.cursor, hasMore: false, ...FULL_HISTORY_PULL_RETENTION })),
+            push: vi.fn(), subscribe: vi.fn(async () => () => undefined), updateCursor: vi.fn(), dispose: vi.fn() };
+        const manager = new SubscriptionManager(db, provider, { workspaceId: 'ws-1' });
+        try {
+            await manager.start(); expect(manager.getStatus()).toBe('connected');
+            await requestHistoryReset(db, guard, 'J');
+            for (let i = 0; i < 50; i++) await vi.advanceTimersByTimeAsync(100);
+            expect(snapshot).toHaveBeenCalledTimes(1);
+            expect(await db.sync_state.get('sync_history')).toMatchObject({ historyIncarnation: 'J', phase: 'ready' });
+        } finally { await manager.stop(); await db.delete(); }
     });
 });

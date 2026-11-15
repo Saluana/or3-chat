@@ -1,4 +1,5 @@
 import type { Transaction } from 'dexie';
+import type { SyncState } from '~~/shared/sync/types';
 import type { SyncQuarantineRow } from '~/db/client';
 import { isSyncTable } from '~~/shared/sync/incoming-records';
 
@@ -11,8 +12,10 @@ export async function retainIncomingEvidenceInTx(tx: Transaction, input: {
     evidenceRef?: string;
     reason: string;
     record: unknown;
+    historyIncarnation?: string;
 }): Promise<SyncQuarantineRow> {
-    const id = JSON.stringify(['incoming', input.source, input.reference, input.tableName, input.pk]);
+    const history = (tx.storeNames?.includes('sync_state') ? await tx.table('sync_state').get('sync_history') : undefined) as SyncState | undefined;
+    const id = JSON.stringify(['incoming', input.historyIncarnation ?? history?.historyIncarnation ?? 'unknown', input.source, input.reference, input.tableName, input.pk]);
     const entries = tx.table('sync_quarantine');
     const existing = await entries.get(id) as SyncQuarantineRow | undefined;
     if (existing) return existing;

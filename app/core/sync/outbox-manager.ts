@@ -1,3 +1,4 @@
+import { readHistory, sameHistory, requestHistoryReset, changedHistoryFromError, isHistoryProtocolBoundary, type HistoryGuard } from './history-incarnation';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { errorDiagnostics, presentError, type ErrorMetadata } from '~~/shared/errors';
 /**
@@ -252,6 +253,9 @@ export class OutboxManager {
     // the session, so consecutive auth failures back off instead of looping.
     private authFailures = 0;
     private lifecycleGeneration = 0;
+    private historyGuard: HistoryGuard | undefined;
+    private superseded = new Map<string, PendingOp[]>();
+    private historyPaused = false;
     private nextStatus: EligibleStatus = 'retry_wait';
 
     constructor(
@@ -333,6 +337,13 @@ export class OutboxManager {
             return false;
         }
 
+        if (this.historyPaused) return false;
+        if (this.provider.capabilities?.historyIncarnation === 'v1') {
+            const captured = await readHistory(this.db);
+            if (generation !== this.lifecycleGeneration || this.flushOwner) return false;
+            this.historyGuard = captured;
+            if (this.historyGuard.phase !== 'ready' || !this.historyGuard.historyIncarnation) return false;
+        }
         // Check circuit breaker before attempting flush
         const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
         if (!circuitBreaker.canRetry()) {
@@ -357,8 +368,11 @@ export class OutboxManager {
             await this.recoverAbandonedOps();
             if (generation !== this.lifecycleGeneration) return false;
             if (this.needsSyncingRecovery) {
-                await this.db.pending_ops.where('status').equals('failed_retryable')
-                    .modify({ status: 'retry_wait', nextAttemptAt: undefined, failureKind: undefined, failedAt: undefined });
+                await this.db.transaction('rw', ['pending_ops', 'sync_state'], async () => {
+                    if (!await this.historyMatches()) return;
+                    await this.db.pending_ops.where('status').equals('failed_retryable')
+                        .modify({ status: 'retry_wait', nextAttemptAt: undefined, failureKind: undefined, failedAt: undefined });
+                });
                 await pruneResolvedQuarantineBestEffort(this.db);
                 if (generation !== this.lifecycleGeneration) return false;
                 this.needsSyncingRecovery = false;
@@ -465,6 +479,7 @@ export class OutboxManager {
             if (generation !== this.lifecycleGeneration && claimed.length) {
                 await this.releaseBatchForDeferredRetry(claimed, 0);
             }
+            this.superseded.clear();
             if (this.pushAbortController === controller) this.pushAbortController = null;
             if (this.flushOwner === owner) this.flushOwner = null;
         }
@@ -472,7 +487,7 @@ export class OutboxManager {
 
     /** Hold uncertain committed intent without reconstruction or automatic re-ID. */
     private async holdOp(op: PendingOp, reason: string, serverWinner?: PushWinner): Promise<void> {
-        await this.db.transaction('rw', ['pending_ops', 'sync_quarantine', 'tombstones', op.tableName], async () => {
+        await this.db.transaction('rw', ['pending_ops', 'sync_quarantine', 'tombstones', 'sync_state', op.tableName], async () => {
             if (!await this.ownsClaim(op)) return;
             await this.db.sync_quarantine.put({
                 id: op.id, tableName: op.tableName, pk: op.pk, source: 'manual',
@@ -487,7 +502,8 @@ export class OutboxManager {
     }
 
     private async recoverAbandonedOps(): Promise<void> {
-        await this.db.transaction('rw', ['pending_ops'], async () => {
+        await this.db.transaction('rw', ['pending_ops', 'sync_state'], async () => {
+            if (!await this.historyMatches()) return;
             for (const status of ['syncing', 'in_flight'] as const) {
                 const rows = await this.db.pending_ops.where('status').equals(status).toArray();
                 for (const op of rows) {
@@ -500,31 +516,40 @@ export class OutboxManager {
     }
 
     private async claimBatch(selected: PendingOp[]): Promise<PendingOp[]> {
-        return this.db.transaction('rw', ['pending_ops'], async () => {
+        return this.db.transaction('rw', ['pending_ops', 'sync_state'], async () => {
+            if (!await this.historyMatches()) return [];
             const current = (await Promise.all(selected.map((op) => this.db.pending_ops.get(op.id))))
                 .filter((op): op is PendingOp => !!op && (op.status === 'pending' || op.status === 'retry_wait')
                     && getReadyAt(op) <= Date.now() && hasComparableRevision(op));
             const winners = this.coalesceOps(current);
             const winnerIds = new Set(winners.map((op) => op.id));
             const dropped = current.filter((op) => !winnerIds.has(op.id));
-            if (dropped.length) await this.db.pending_ops.bulkDelete(dropped.map((op) => op.id));
+            if (!this.historyGuard && dropped.length) await this.db.pending_ops.bulkDelete(dropped.map((op) => op.id));
             const claimId = createRuntimeUuid();
             const batch = this.packDueOps(this.restoreFairOrder(winners)).map((op) => ({
                 ...op, claimId, claimExpiresAt: Date.now() + CLAIM_DURATION_MS,
             }));
+            if (this.historyGuard) for (const winner of batch) {
+                this.superseded.set(winner.id, dropped.filter(op => op.tableName === winner.tableName && op.pk === winner.pk));
+            }
             await this.db.pending_ops.bulkPut(batch.map((op) => ({ ...op, status: 'in_flight' as const })));
             return batch;
         });
     }
 
+    private async historyMatches(): Promise<boolean> {
+        return !this.historyGuard || sameHistory(await readHistory(this.db), this.historyGuard);
+    }
+
     private async ownsClaim(op: PendingOp): Promise<boolean> {
+        if (!await this.historyMatches()) return false;
         const current = await this.db.pending_ops.get(op.id);
         return !!current && current.status === 'in_flight' && !!op.claimId
             && current.claimId === op.claimId && (current.claimExpiresAt ?? 0) > Date.now();
     }
 
     private async updateClaimedOp(op: PendingOp, update: PendingOp): Promise<boolean> {
-        return this.db.transaction('rw', ['pending_ops'], async () => {
+        return this.db.transaction('rw', ['pending_ops', 'sync_state'], async () => {
             if (!await this.ownsClaim(op)) return false;
             const current = (await this.db.pending_ops.get(op.id))!;
             // A cancellation can still hold the pre-normalization claim copy.
@@ -689,7 +714,7 @@ export class OutboxManager {
             }
             // Persist before the provider sees the UUID; retries, split batches
             // and a replacement manager all reuse the exact same wire payload.
-            const owned = await this.db.transaction('rw', ['pending_ops'], async () => {
+            const owned = await this.db.transaction('rw', ['pending_ops', 'sync_state'], async () => {
                 if (!await this.ownsClaim(op)) return false;
                 await this.db.pending_ops.put({ ...normalized, status: 'in_flight' });
                 return true;
@@ -716,12 +741,18 @@ export class OutboxManager {
                 const aborted = () => reject(signal?.reason ?? new Error('Sync push aborted'));
                 if (signal?.aborted) { aborted(); return; }
                 signal?.addEventListener('abort', aborted, { once: true });
-                this.provider.push({ scope: this.scope, ops: sanitizedBatch }, { signal })
+                this.provider.push({ scope: this.scope, ops: sanitizedBatch, ...(this.historyGuard ? { historyIncarnation: this.historyGuard.historyIncarnation, historyIncarnationCapability: 'incarnation-v1' } : {}) }, { signal })
                     .then(resolve, reject)
                     .finally(() => signal?.removeEventListener('abort', aborted));
             });
             if (generation !== this.lifecycleGeneration) {
                 return { successCount: 0, failCount: 0, deferred: false };
+            }
+            if (!await this.historyMatches()) return { successCount: 0, failCount: 0, deferred: true };
+            if (this.historyGuard && result.historyIncarnation !== this.historyGuard.historyIncarnation) {
+                if (result.historyIncarnation) await requestHistoryReset(this.db, this.historyGuard, result.historyIncarnation);
+                else this.historyPaused = true;
+                return { successCount: 0, failCount: 0, deferred: true };
             }
             this.authFailures = 0;
 
@@ -820,6 +851,18 @@ export class OutboxManager {
                 return { successCount: 0, failCount: 0, deferred: false };
             }
 
+            if (isHistoryProtocolBoundary(error)) {
+                this.historyPaused = true;
+                await this.releaseBatchForDeferredRetry(batch, 0);
+                console.error('[OutboxManager] Sync paused: server history contract is unavailable', error);
+                return { successCount: 0, failCount: 0, deferred: true };
+            }
+            const target = changedHistoryFromError(error);
+            if (this.historyGuard && target) {
+                await requestHistoryReset(this.db, this.historyGuard, target);
+                return { successCount: 0, failCount: 0, deferred: true };
+            }
+            if (!await this.historyMatches()) return { successCount: 0, failCount: 0, deferred: true };
             const status = httpStatusOf(error);
             // Connectivity can disappear after flush() claims the batch. A
             // transport failure while offline must preserve the same retry
@@ -929,7 +972,7 @@ export class OutboxManager {
     }
 
     private async acknowledgeOp(op: PendingOp, winner?: PushWinner, serverVersion?: number): Promise<boolean> {
-        return this.db.transaction('rw', Array.from(new Set(['pending_ops', 'tombstones', op.tableName])), async () => {
+        return this.db.transaction('rw', Array.from(new Set(['pending_ops', 'sync_state', 'tombstones', op.tableName])), async () => {
             if (!await this.ownsClaim(op)) return false;
             if (winner) {
                 // Legacy live-winner payloads may omit HLC; keep that existing
@@ -946,6 +989,13 @@ export class OutboxManager {
                 await this.applyRemoteWinner(op, winner);
             }
             else if (op.operation === 'delete') await this.markTombstoneSynced(op, serverVersion);
+            for (const original of this.superseded.get(op.id) ?? []) {
+                const current = await this.db.pending_ops.get(original.id);
+                if (current && (current.status === 'pending' || current.status === 'retry_wait') &&
+                    current.stamp.opId === original.stamp.opId && current.attempts === original.attempts) {
+                    await this.db.pending_ops.delete(current.id);
+                }
+            }
             await this.db.pending_ops.delete(op.id);
             return true;
         });
@@ -953,9 +1003,10 @@ export class OutboxManager {
 
     private async applyRemoteWinner(op: PendingOp, winner: PushWinner): Promise<void> {
         const hookBridge = getHookBridge(this.db);
-        const tableNames = Array.from(new Set([op.tableName, 'tombstones']));
+        const tableNames = Array.from(new Set([op.tableName, 'tombstones', 'sync_state']));
         await this.db.transaction('rw', tableNames, async (tx) => {
             hookBridge.markSyncTransaction(tx);
+            if (!await this.historyMatches()) return;
             const table = tx.table(op.tableName);
             if (winner.kind === 'put') {
                 // Eligibility-first selection can push an older revision while a
@@ -1252,17 +1303,17 @@ export class OutboxManager {
 
     /** Quarantine entries, oldest first, for inspection. */
     getQuarantined(): Promise<SyncQuarantineRow[]> {
-        return listQuarantined(this.db);
+        return listQuarantined(this.db, this.scope.principalId);
     }
 
     /** Self-contained JSON of every quarantine entry for support or manual recovery. */
     exportQuarantined(): Promise<string> {
-        return exportQuarantined(this.db);
+        return exportQuarantined(this.db, this.scope.principalId);
     }
 
     /** Give up on one unresolved entry. Returns false when it is missing or already resolved. */
     discardQuarantined(id: string): Promise<boolean> {
-        return discardQuarantined(this.db, id);
+        return discardQuarantined(this.db, id, this.scope.principalId);
     }
 
 }
@@ -1317,7 +1368,9 @@ export async function listFailedOps(db: Or3DB, limit = 50): Promise<{ ops: Pendi
  * Returns the number requeued.
  */
 export function retryFailedOps(db: Or3DB, ref?: FailedOpRef): Promise<number> {
-    return db.transaction('rw', ['pending_ops'], async () => {
+    return db.transaction('rw', ['pending_ops', 'sync_state'], async () => {
+        const guard = await db.sync_state.get('sync_history');
+        if (guard && guard.phase !== 'ready') return 0;
         const failed = ref === undefined ? await readFailedOps(db) : [await findFailedOp(db, ref)].filter(isFailedOp);
         if (failed.length) {
             await db.pending_ops.bulkPut(failed.map((op) => ({
@@ -1342,7 +1395,9 @@ export function retryFailedOps(db: Or3DB, ref?: FailedOpRef): Promise<number> {
  * the op is no longer failed (for example, another tab retried it).
  */
 export function discardFailedOp(db: Or3DB, ref: FailedOpRef, reason = 'user_discarded'): Promise<boolean> {
-    return db.transaction('rw', ['pending_ops'], async () => {
+    return db.transaction('rw', ['pending_ops', 'sync_state'], async () => {
+        const guard = await db.sync_state.get('sync_history');
+        if (guard && guard.phase !== 'ready') return false;
         const failed = await findFailedOp(db, ref);
         if (!failed) return false;
         await db.pending_ops.put({ ...failed, status: 'discarded', discardedAt: Date.now(), discardReason: reason });

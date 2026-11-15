@@ -1,3 +1,4 @@
+import { liveQuery } from 'dexie';
 /**
  * Sync Engine Plugin
  *
@@ -130,8 +131,17 @@ function requestEngine(scope: SyncScope | null, force = false, authorizationRevi
         }
         if (generation !== lifecycleGeneration) return;
         const db = createWorkspaceDb(scope.workspaceId);
+        if (provider.capabilities?.historyIncarnation !== 'v1') throw new Error('Selected sync mode requires separate history incarnation qualification');
+        await db.transaction('rw', ['sync_state'], async () => {
+            if (!await db.sync_state.get('sync_history')) await db.sync_state.put({ id: 'sync_history',
+                historyIncarnation: null, phase: 'unbound', resetTarget: null, cursor: 0, deviceId: '', lastSyncAt: 0 });
+        });
+        if (db.syncHistoryAtOpen === undefined) db.syncHistoryAtOpen = (await db.sync_state.get('sync_history'))?.historyIncarnation ?? null;
         const hookBridge = getHookBridge(db);
         hookBridge.start();
+        const refreshHistory = liveQuery(() => db.sync_state.get('sync_history')).subscribe(guard => {
+            if (guard?.phase === 'ready' && guard.historyIncarnation !== db.syncHistoryAtOpen) window.location.reload();
+        });
         const subscriptionManager = createSubscriptionManager(db, provider, scope);
         const cancel = () => subscriptionManager.stop();
         cancelStartup = cancel;
@@ -144,6 +154,7 @@ function requestEngine(scope: SyncScope | null, force = false, authorizationRevi
                     return () => subscriptionManager.stop();
                 })();
             if (generation !== lifecycleGeneration) {
+                refreshHistory.unsubscribe();
                 await stopSubscription();
                 cleanupSubscriptionManager(getScopeKey(scope));
                 cleanupCursorManager(db.name, scope);
@@ -155,8 +166,9 @@ function requestEngine(scope: SyncScope | null, force = false, authorizationRevi
             const gcManager = new GcManager(db, provider, scope);
             gcManager.start();
             engineState = { db, provider, scope, hookBridge, outboxManager,
-                subscriptionManager, stopSubscription, gcManager };
+                subscriptionManager, stopSubscription: async () => { refreshHistory.unsubscribe(); await stopSubscription!(); }, gcManager };
         } catch (error) {
+            refreshHistory.unsubscribe();
             await (stopSubscription ? stopSubscription() : subscriptionManager.stop());
             cleanupSubscriptionManager(getScopeKey(scope));
             cleanupCursorManager(db.name, scope);

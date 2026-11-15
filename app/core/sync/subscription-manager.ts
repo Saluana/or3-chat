@@ -1,3 +1,5 @@
+import { liveQuery } from 'dexie';
+import { readHistory, sameHistory, assertHistory, requestHistoryReset, changedHistoryFromError, isHistoryProtocolBoundary, type HistoryGuard, StaleHistoryError } from './history-incarnation';
 import { assertIncomingIdentity } from '~~/shared/sync/incoming-records';
 import { isStorageQuotaError } from './incoming-evidence';
 /**
@@ -108,6 +110,8 @@ export class SubscriptionManager {
     private config: Required<SubscriptionManagerConfig>;
     private circuitBreakerKey: string;
 
+    private history?: HistoryGuard;
+    private stopHistoryWatch?: () => void;
     private cursorManager: CursorManager;
     private conflictResolver: ConflictResolver;
 
@@ -174,12 +178,25 @@ export class SubscriptionManager {
             return;
         }
 
+        this.stopHistoryWatch?.();
+        this.stopHistoryWatch = undefined;
         this.requestController.abort();
         this.requestController = new AbortController();
         const generation = ++this.lifecycleGeneration;
         this.setStatus('connecting');
 
         try {
+            if (this.provider.capabilities?.historyIncarnation === 'v1') {
+                this.history = await readHistory(this.db);
+                this.cursorManager.bindHistory(this.history);
+                // Only the subscription owner starts this manager. A follower's
+                // durable CAS wakes that owner without bypassing its Web Lock.
+                const watch = liveQuery(() => readHistory(this.db)).subscribe(guard => {
+                    if (this.isCurrentGeneration(generation) && this.status === 'connected' &&
+                        this.history && !sameHistory(guard, this.history)) this.scheduleReconnect(generation);
+                });
+                this.stopHistoryWatch = () => watch.unsubscribe();
+            }
             const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
             const probe = circuitBreaker.acquireProbe();
             if (!probe) {
@@ -193,7 +210,7 @@ export class SubscriptionManager {
             signal.addEventListener('abort', cancelProbe, { once: true });
             let probeSettled = false;
             try {
-                const needsBootstrap = await this.cursorManager.isBootstrapNeeded();
+                const needsBootstrap = (this.history && this.history.phase !== 'ready') || await this.cursorManager.isBootstrapNeeded();
                 if (!this.isCurrentGeneration(generation)) return;
                 if (needsBootstrap) {
                     await this.bootstrap(generation);
@@ -218,7 +235,7 @@ export class SubscriptionManager {
                 probe.success();
                 probeSettled = true;
             } catch (error) {
-                if (isStorageQuotaError(error)) {
+                if (isStorageQuotaError(error) || error instanceof StaleHistoryError || error instanceof SnapshotIdentityExpiredError || isHistoryProtocolBoundary(error)) {
                     circuitBreaker.recordSuccess();
                     probeSettled = true;
                 }
@@ -233,12 +250,12 @@ export class SubscriptionManager {
                 }
             }
         } catch (error) {
-            if (!this.isCurrentGeneration(generation) || isAbortLikeError(error)) {
+            if (!this.isCurrentGeneration(generation) || isAbortLikeError(error) && !(error instanceof StaleHistoryError)) {
                 return;
             }
             console.error('[SubscriptionManager] Failed to start:', error);
             this.setStatus('error');
-            if (!(error instanceof SnapshotRecoveryPausedError) && !isStorageQuotaError(error)) {
+            if (!(error instanceof SnapshotRecoveryPausedError) && !isStorageQuotaError(error) && !isHistoryProtocolBoundary(error)) {
                 this.scheduleReconnect(generation);
             }
         }
@@ -248,6 +265,8 @@ export class SubscriptionManager {
      * Stop the subscription
      */
     async stop(): Promise<void> {
+        this.stopHistoryWatch?.();
+        this.stopHistoryWatch = undefined;
         this.lifecycleGeneration++;
         this.requestController.abort();
         this.clearReconnectTimeout();
@@ -367,7 +386,7 @@ export class SubscriptionManager {
                     pendingFetch = null;
                 }
 
-                await this.conflictResolver.applyChanges([], response.unavailable);
+                await this.conflictResolver.applyChanges([], response.unavailable, undefined, this.history);
                 if (!this.isCurrentGeneration(generation)) return;
                 if (response.changes.length > 0) {
                     const filtered = this.filterRecentOps(response.changes);
@@ -402,7 +421,7 @@ export class SubscriptionManager {
 
             // Fire-and-forget: remote cursor update is best-effort;
             // the local cursor is already persisted above.
-            this.provider.updateCursor(
+            this.acknowledgeCursor(
                 this.scope,
                 this.cursorManager.getDeviceId(),
                 cursor, { signal: this.requestController.signal }
@@ -441,12 +460,22 @@ export class SubscriptionManager {
         for (;;) {
             if (signal.aborted) throw new DOMException('Snapshot cancelled', 'AbortError');
             if (Date.now() >= expiresAt) throw new SnapshotIdentityExpiredError('Snapshot identity expired');
+            const captured = this.history;
             try {
-                return await snapshot(request, { signal });
+                const page = await snapshot({ ...request, ...(captured ? { historyIncarnation: request.historyIncarnation ?? (captured.phase === 'resetting' ? captured.resetTarget : captured.historyIncarnation) } : {}) }, { signal });
+                if (captured) await assertHistory(this.db, captured);
+                return page;
             } catch (error) {
                 if (signal.aborted) throw new DOMException('Snapshot cancelled', 'AbortError');
                 const fault = error as { status?: number; statusCode?: number; retryAfterMs?: number; retryable?: boolean; name?: string } | null;
                 const status = fault?.status ?? fault?.statusCode;
+                const target = changedHistoryFromError(error);
+                if (target && captured) {
+                    if (!await requestHistoryReset(this.db, captured, target)) throw new StaleHistoryError();
+                    this.history = await readHistory(this.db);
+                    throw new SnapshotIdentityExpiredError('History changed during snapshot');
+                }
+                if (isHistoryProtocolBoundary(error)) throw error;
                 const transient = status !== undefined
                     ? [408, 429, 500, 502, 503, 504].includes(status)
                     : error instanceof TypeError || fault?.name === 'TimeoutError' || fault?.retryable === true;
@@ -496,6 +525,7 @@ export class SubscriptionManager {
         const { stager } = state;
         if (!this.pausedSnapshot) await stager.start();
         this.pausedSnapshot = null;
+        let chainHistory = stager.getHistoryIncarnation();
         let highWatermark: number;
         try {
             while (!state.downloadComplete) {
@@ -506,6 +536,7 @@ export class SubscriptionManager {
 
                 const page = state.pendingPage ?? await this.fetchSnapshotPage(snapshot, {
                     scope: this.scope,
+                    historyIncarnation: chainHistory,
                     pageSize: this.config.bootstrapPageSize,
                     unavailableRecordCapability: 'unavailable-v1',
                     tables: this.config.tables,
@@ -513,6 +544,7 @@ export class SubscriptionManager {
                 }, this.requestController.signal, startTime + SNAPSHOT_TTL_MS);
                 if (!this.isCurrentGeneration(generation)) return;
 
+                chainHistory = page.historyIncarnation;
                 state.pendingPage = page;
                 await stager.appendPage(page);
                 state.pendingPage = undefined;
@@ -549,12 +581,17 @@ export class SubscriptionManager {
             const status = (error as { status?: number; statusCode?: number } | null)?.status ??
                 (error as { statusCode?: number } | null)?.statusCode;
             if (this.requestController.signal.aborted || isAbortLikeError(error) ||
-                status === 410 || error instanceof SnapshotIdentityExpiredError) throw error;
+                status === 410 || error instanceof SnapshotIdentityExpiredError || error instanceof StaleHistoryError || isHistoryProtocolBoundary(error)) throw error;
             // A fatal chain or admission failure needs deliberate recovery;
             // reconnect must not silently download a fresh identity.
             throw new SnapshotRecoveryPausedError('Snapshot recovery paused after a non-transient failure', { cause: error });
         } finally {
             if (this.pausedSnapshot !== state) await stager.dispose();
+        }
+        if (this.history) {
+            this.history = await readHistory(this.db);
+            this.cursorManager.bindHistory(this.history);
+            this.pendingCursorAcknowledgement = null;
         }
         let totalPulled = state.totalPulled;
         if (!this.isCurrentGeneration(generation)) return;
@@ -570,7 +607,7 @@ export class SubscriptionManager {
         await this.cursorManager.markSyncComplete();
         if (!this.isCurrentGeneration(generation)) return;
 
-        this.provider.updateCursor(
+        this.acknowledgeCursor(
             this.scope,
             this.cursorManager.getDeviceId(),
             replay.cursor, { signal: this.requestController.signal }
@@ -628,14 +665,15 @@ export class SubscriptionManager {
                 limit: 1,
                 tables: this.config.tables,
             });
-        } catch {
+        } catch (error) {
+            if (this.history || isHistoryProtocolBoundary(error)) throw error;
             return false;
         }
         if (!this.isCurrentGeneration(generation)) return true;
         if (typeof probe.requiresSnapshot !== 'boolean') return false;
         // An authoritative reset is no longer an optional capability probe.
         // In particular, quota must reach start's storage-pause handling.
-        if (probe.requiresSnapshot) await this.recoverFromExpiredCursor(generation);
+        await this.honorRequiresSnapshot(probe, generation);
         return true;
     }
 
@@ -655,6 +693,20 @@ export class SubscriptionManager {
         response: PullResponse,
         generation: number
     ): Promise<boolean> {
+        if (this.history) {
+            const expected = this.history;
+            await assertHistory(this.db, expected);
+            if (!response.historyIncarnation) throw new Error('Server lacks history incarnation support');
+            if (response.historyIncarnation !== expected.historyIncarnation) {
+                if (!await requestHistoryReset(this.db, expected, response.historyIncarnation)) throw new StaleHistoryError();
+                this.history = await readHistory(this.db);
+                this.pendingCursorAcknowledgement = null;
+                this.lastSubscriptionCursor = null;
+                this.cursorManager.bindHistory(this.history);
+                await this.recoverFromExpiredCursor(generation);
+                return true;
+            }
+        }
         if (!response.requiresSnapshot) return false;
         await this.recoverFromExpiredCursor(generation);
         return true;
@@ -714,7 +766,7 @@ export class SubscriptionManager {
                 if (!this.isCurrentGeneration(generation)) return;
                 if (await this.honorRequiresSnapshot(response, generation)) return;
 
-                await this.conflictResolver.applyChanges([], response.unavailable);
+                await this.conflictResolver.applyChanges([], response.unavailable, undefined, this.history);
                 if (!this.isCurrentGeneration(generation)) return;
                 if (response.changes.length) {
                     const filtered = this.filterRecentOps(response.changes);
@@ -749,7 +801,7 @@ export class SubscriptionManager {
             if (!this.isCurrentGeneration(generation)) return;
 
             // Fire-and-forget: remote cursor update is best-effort
-            this.provider.updateCursor(
+            this.acknowledgeCursor(
                 this.scope,
                 this.cursorManager.getDeviceId(),
                 cursor, { signal: this.requestController.signal }
@@ -803,14 +855,16 @@ export class SubscriptionManager {
             this.unsubscribe = null;
         }
 
+        const captured = this.history;
         const unsubscribe = await this.provider.subscribe(
             this.scope,
             this.config.tables,
             (changes) => this.enqueueChanges(changes, generation),
             {
+                historyIncarnation: this.history?.historyIncarnation,
                 cursor, limit: this.config.bootstrapPageSize,
                 ...(this.provider.capabilities?.subscriptionPages === 'v1' ? {
-                    onPage: (fromCursor: number, page: PullResponse) => this.enqueuePage(fromCursor, page, generation),
+                    onPage: (fromCursor: number, page: PullResponse) => this.enqueuePage(fromCursor, page, generation, captured),
                 } : {}),
             }
         );
@@ -822,12 +876,17 @@ export class SubscriptionManager {
         this.unsubscribe = unsubscribe;
     }
 
-    private enqueuePage(fromCursor: number, page: PullResponse, generation: number): Promise<void> {
-        const apply = this.changeQueue.then(() => this.handlePage(fromCursor, page, generation));
+    private enqueuePage(fromCursor: number, page: PullResponse, generation: number, captured = this.history): Promise<void> {
+        const apply = this.changeQueue.then(async () => {
+            if (!this.isCurrentGeneration(generation)) return;
+            if (captured) await assertHistory(this.db, captured);
+            return this.handlePage(fromCursor, page, generation);
+        });
         // Keep the queue usable after a failure, but reject this page's receipt
         // so the transport cannot advance past an unsuccessful apply.
         this.changeQueue = apply.catch(error => {
-            if (this.isCurrentGeneration(generation) && !isAbortLikeError(error)) this.handleError(error, generation);
+            if (this.isCurrentGeneration(generation) && error instanceof StaleHistoryError) this.scheduleReconnect(generation);
+            else if (this.isCurrentGeneration(generation) && !isAbortLikeError(error)) this.handleError(error, generation);
         });
         return apply;
     }
@@ -849,7 +908,7 @@ export class SubscriptionManager {
         if (!Number.isSafeInteger(fromCursor) || fromCursor < 0 || fromCursor > cursor) {
             throw new Error('Subscription page skipped the durable cursor');
         }
-        await this.conflictResolver.applyChanges([], parsed.unavailable);
+        await this.conflictResolver.applyChanges([], parsed.unavailable, undefined, this.history);
         if (!this.isCurrentGeneration(generation)) return;
         const changes = parsed.changes.filter(change => change.serverVersion > cursor);
         const filtered = this.filterRecentOps(changes);
@@ -871,7 +930,7 @@ export class SubscriptionManager {
         }
         if (!this.isCurrentGeneration(generation)) return;
         if (!parsed.hasMore && this.pendingCursorAcknowledgement !== null) {
-            await this.provider.updateCursor(this.scope, this.cursorManager.getDeviceId(), this.pendingCursorAcknowledgement, { signal: this.requestController.signal });
+            await this.acknowledgeCursor(this.scope, this.cursorManager.getDeviceId(), this.pendingCursorAcknowledgement, { signal: this.requestController.signal });
             if (!this.isCurrentGeneration(generation)) return;
             this.pendingCursorAcknowledgement = null;
         }
@@ -967,7 +1026,7 @@ export class SubscriptionManager {
             }
 
             await this.cursorManager.markSyncComplete();
-            await this.provider.updateCursor(
+            await this.acknowledgeCursor(
                 this.scope,
                 this.cursorManager.getDeviceId(),
                 maxVersion, { signal: this.requestController.signal }
@@ -1000,7 +1059,7 @@ export class SubscriptionManager {
      * Apply changes via ConflictResolver
      */
     private async applyChanges(changes: SyncChange[]) {
-        return this.conflictResolver.applyChanges(changes, [], this.requestController.signal);
+        return this.conflictResolver.applyChanges(changes, [], this.requestController.signal, this.history);
     }
 
     private filterRecentOps(changes: SyncChange[]): SyncChange[] {
@@ -1067,7 +1126,7 @@ export class SubscriptionManager {
                 break;
             }
 
-            await this.conflictResolver.applyChanges([], response.unavailable);
+            await this.conflictResolver.applyChanges([], response.unavailable, undefined, this.history);
             if (!this.isCurrentGeneration(generation)) break;
             const newChanges = response.changes.filter(
                 (change) => change.serverVersion > cursor
@@ -1115,7 +1174,7 @@ export class SubscriptionManager {
             this.unsubscribe = null;
         }
         this.setStatus('error');
-        if (!(error instanceof SnapshotRecoveryPausedError) && !isStorageQuotaError(error)) {
+        if (!(error instanceof SnapshotRecoveryPausedError) && !isStorageQuotaError(error) && !isHistoryProtocolBoundary(error)) {
             this.scheduleReconnect(generation);
         }
     }
@@ -1126,6 +1185,9 @@ export class SubscriptionManager {
     private scheduleReconnect(generation: number): void {
         if (!this.isCurrentGeneration(generation)) return;
         this.clearReconnectTimeout();
+        this.unsubscribe?.();
+        this.unsubscribe = null;
+        this.lastSubscriptionCursor = null;
 
         // Retain diagnostics at the former retry limit, but never strand a
         // durable cursor after a long outage. Backoff stays capped below.
@@ -1190,8 +1252,26 @@ export class SubscriptionManager {
             getSyncCircuitBreaker(this.circuitBreakerKey).canRetry();
     }
 
+    private async acknowledgeCursor(scope: SyncScope, deviceId: string, version: number, options?: { signal?: AbortSignal }): Promise<void> {
+        const captured = this.history;
+        if (captured) {
+            await assertHistory(this.db, captured);
+            if (captured.phase !== 'ready') throw new StaleHistoryError();
+        }
+        try {
+            await this.provider.updateCursor(scope, deviceId, version, { ...options, historyIncarnation: captured?.historyIncarnation });
+            if (captured) await assertHistory(this.db, captured);
+        } catch (error) {
+            const target = changedHistoryFromError(error);
+            if (captured && target && await requestHistoryReset(this.db, captured, target)) this.scheduleReconnect(this.lifecycleGeneration);
+            throw error;
+        }
+    }
+
     private async pull(request: PullRequest): Promise<PullResponse> {
-        const response = await this.provider.pull({ ...request, unavailableRecordCapability: 'unavailable-v1' }, { signal: this.requestController.signal });
+        const captured = this.history;
+        const response = await this.provider.pull({ ...request, ...(captured ? { historyIncarnation: captured.historyIncarnation } : {}), unavailableRecordCapability: 'unavailable-v1' }, { signal: this.requestController.signal });
+        if (captured) await assertHistory(this.db, captured);
         // Check coverage before callers filter already-seen versions. A corrupt
         // version cannot be silently dropped by the cursor comparison.
         for (const change of response.changes) {

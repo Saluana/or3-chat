@@ -42,12 +42,12 @@ export default defineEventHandler(async (event) => {
 
     setNoCacheHeaders(event);
     const body = await readLimitedJsonBody(event, MAX_SYNC_SNAPSHOT_REQUEST_BYTES);
+    requireHistoryCapability(body);
     const request = SnapshotRequestSchema.safeParse(body);
     if (!request.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid snapshot request' });
     }
 
-    requireHistoryCapability(body);
     const session = await resolveSessionContext(event);
     if (!session.authenticated || !session.user || !session.workspace) {
         throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });

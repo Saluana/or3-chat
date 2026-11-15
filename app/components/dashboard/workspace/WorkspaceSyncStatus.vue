@@ -115,6 +115,23 @@
             </div>
         </section>
 
+        <section v-if="heldCount" class="dashboard-list-group" aria-labelledby="workspace-history-held">
+            <h3 id="workspace-history-held" class="dashboard-list-heading">Saved changes from before server recovery</h3>
+            <p class="dashboard-list-footnote">Current sync can run while {{ heldCount }} older items need review. Their commit status in the discarded history is unknown.</p>
+            <div class="dashboard-list">
+                <DashboardListRow v-for="entry in held" :key="entry.id" static
+                    :label="`${KIND_LABELS[entry.tableName] ?? entry.tableName}: ${entry.pk}`" :description="entry.diagnostics.join('; ')">
+                    <template #trailing>
+                        <UButton v-bind="secondaryButtonProps" @click="inspectHeld(entry)">Inspect / export</UButton>
+                        <UButton v-bind="secondaryButtonProps" @click="reviewHeld(entry)">Recover</UButton>
+                        <UButton v-bind="secondaryButtonProps" @click="discardHeld(entry)">Discard</UButton>
+                    </template>
+                </DashboardListRow>
+            </div>
+            <p v-if="heldReview" class="dashboard-list-footnote" role="status">{{ heldReview }}</p>
+            <p v-if="heldError" class="dashboard-list-footnote text-error" role="alert">{{ heldError }}</p>
+        </section>
+
         <section
             v-if="scope && backupEnabled"
             class="dashboard-list-group"
@@ -155,6 +172,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { liveQuery, type Subscription } from 'dexie';
+import { discardQuarantined, recoverHistoryPut } from '~/core/sync/sync-quarantine';
+import { getActiveSyncProvider } from '~/core/sync/sync-provider-registry';
+import type { SyncQuarantineRow } from '~/db/client';
 import type { PendingOp } from '~~/shared/sync/types';
 import {
     getActiveWorkspaceId,
@@ -212,6 +232,39 @@ const statusHeading = ref<HTMLElement | null>(null);
 
 const scope = shallowRef<{ db: Or3DB; generation: number } | null>(null);
 const snapshot = shallowRef<{ ops: PendingOp[]; total: number; waiting: number } | null>(null);
+const held = shallowRef<SyncQuarantineRow[]>([]);
+const heldCount = ref(0);
+const heldReview = ref('');
+const heldError = ref('');
+const reviewed = new Map<string, string>();
+function inspectHeld(entry: SyncQuarantineRow) {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(entry, null, 2)], { type: 'application/json' }));
+    const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'or3-saved-history.json'; anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+async function reviewHeld(entry: SyncQuarantineRow) {
+    const current = scope.value; if (!current) return;
+    heldError.value = '';
+    const history = (await current.db.sync_state.get('sync_history'))?.historyIncarnation;
+    if (!history) return;
+    if (reviewed.get(entry.id) !== history) {
+        reviewed.set(entry.id, history);
+        heldReview.value = `Review the exported content and current ${entry.tableName} record. Select Recover again to create a new put; deletes and unsupported items stay saved.`;
+        return;
+    }
+    try {
+        const provider = getActiveSyncProvider();
+        const sessionContext = session.data.value?.session;
+        if (!provider || !sessionContext?.role || !['owner', 'admin', 'editor'].includes(sessionContext.role)) throw new Error('Current workspace write permission is required.');
+        await recoverHistoryPut(current.db, provider, { workspaceId: getActiveWorkspaceId()!, principalId: sessionContext.user?.id }, entry.id, history);
+        heldReview.value = 'Created a new current-history change. The original evidence remains saved.';
+    } catch (error) { heldError.value = error instanceof Error ? error.message : String(error); }
+}
+async function discardHeld(entry: SyncQuarantineRow) {
+    const current = scope.value; if (!current) return;
+    if (reviewed.get(entry.id) !== 'discard') { reviewed.set(entry.id, 'discard'); heldReview.value = 'Select Discard again to resolve this saved item deliberately.'; return; }
+    await discardQuarantined(current.db, entry.id, session.data.value?.session?.user?.id);
+}
 const loadError = ref('');
 const actionError = ref('');
 const busyId = ref<string | null>(null);
@@ -333,7 +386,7 @@ function bind() {
     revision += 1;
     subscription?.unsubscribe();
     subscription = undefined;
-    snapshot.value = null;
+    snapshot.value = null; held.value = []; heldCount.value = 0; reviewed.clear(); heldReview.value = ''; heldError.value = '';
     loadError.value = '';
     actionError.value = '';
     busyId.value = null;
@@ -349,11 +402,15 @@ function bind() {
     scope.value = { db, generation: getWorkspaceGeneration() };
     subscription = liveQuery(async () => {
         const [failed, waiting] = await Promise.all([listFailedOps(db, LIST_LIMIT), countWaiting(db)]);
-        return { ...failed, waiting };
+        const account = session.data.value?.session?.user?.id;
+        const query = db.sync_quarantine.filter(entry => entry.variant === 'history_reset' && entry.status === 'quarantined' && (!entry.accountId || entry.accountId === account));
+        const savedCount = await query.clone().count();
+        const saved = await query.limit(LIST_LIMIT).toArray();
+        return { ...failed, waiting, held: saved, heldCount: savedCount };
     }).subscribe({
         next: (value) => {
             if (!isCurrent(token, db)) return;
-            snapshot.value = value;
+            snapshot.value = value; held.value = value.held; heldCount.value = value.heldCount;
             loadError.value = '';
             if (confirming.value && !value.ops.some((op) => op.id === confirming.value)) {
                 confirming.value = null;

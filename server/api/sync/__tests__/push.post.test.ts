@@ -451,7 +451,7 @@ describe('POST /api/sync/push', () => {
             successfulPushResult(STAMP_1.opId)
         );
 
-        expect(pushMock).toHaveBeenCalledWith(expect.anything(), body);
+        expect(pushMock).toHaveBeenCalledWith(expect.anything(), { ...body, historyIncarnationCapability: 'incarnation-v1' });
         expect(recordSyncRequestMock).toHaveBeenCalledWith('user-1', 'sync:push');
     });
 

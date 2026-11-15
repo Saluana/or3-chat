@@ -2085,3 +2085,43 @@ describe('OutboxManager quarantine (real Dexie)', () => {
         await expect(outbox.quarantineCorruptOps()).rejects.toThrow(/push is running/);
     });
 });
+
+describe('P0-5 fenced outbox on the shared Dexie database', () => {
+    async function fresh() {
+        const db = new Or3DB(`h5-outbox-${crypto.randomUUID()}`); await db.open();
+        await db.sync_state.put({ id: 'sync_history', historyIncarnation: 'I', phase: 'ready', resetTarget: null, cursor: 0, lastSyncAt: 0, deviceId: '' });
+        const ops = [1, 2].map(clock => createPendingOp({ id: `original-${clock}`, tableName: 'kv', pk: 'edit',
+            payload: { id: 'edit', name: 'edit', value: `original-${clock}`, deleted: false, created_at: 1, updated_at: clock, clock },
+            stamp: { clock, opId: crypto.randomUUID(), hlc: `${String(clock).padStart(13, '0')}:0000:d`, deviceId: 'd' } }));
+        await db.pending_ops.bulkPut(ops);
+        const provider = Object.assign(new SpyProvider(), { capabilities: { historyIncarnation: 'v1' as const } });
+        return { db, ops, provider, manager: new OutboxManager(db, provider, { workspaceId: 'workspace-1' }) };
+    }
+    it('follower mismatch closes the shared guard without coalescing away any original', async () => {
+        const { db, ops, provider, manager } = await fresh();
+        try {
+            provider.push.mockRejectedValue(Object.assign(new Error('replaced'), { status: 409, data: { code: 'OR3_SYNC_HISTORY_CHANGED', historyIncarnation: 'J', requiresSnapshot: true } }));
+            await manager.flush();
+            expect(await db.sync_state.get('sync_history')).toMatchObject({ historyIncarnation: 'I', phase: 'resetting', resetTarget: 'J' });
+            expect((await db.pending_ops.toArray()).map(op => ({ id: op.id, payload: op.payload, stamp: op.stamp }))).toEqual(ops.map(op => ({ id: op.id, payload: op.payload, stamp: op.stamp })));
+            await manager.flush(); expect(provider.push).toHaveBeenCalledTimes(1);
+        } finally { await manager.stop(); db.close(); await Dexie.delete(db.name); }
+    });
+    it('late old successful push cannot delete or apply a winner to new-history work', async () => {
+        const { db, ops, provider, manager } = await fresh();
+        try {
+            let finish!: (result: PushResult) => void;
+            provider.push.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+            const flushing = manager.flush(); await vi.waitFor(() => expect(provider.push).toHaveBeenCalledTimes(1));
+            // Models the single atomic snapshot installer; the row IDs are deliberately reused.
+            await db.transaction('rw', db.sync_state, db.pending_ops, async () => {
+                await db.sync_state.update('sync_history', { historyIncarnation: 'J' });
+                await db.pending_ops.put({ ...ops[1]!, status: 'pending', claimId: undefined, payload: { ...(ops[1]!.payload as Record<string, unknown>), value: 'J edit' } });
+            });
+            finish({ historyIncarnation: 'I', serverVersion: 101, results: [{ opId: ops[1]!.stamp.opId, success: true }] });
+            await flushing;
+            expect((await db.pending_ops.get(ops[1]!.id))?.payload).toMatchObject({ value: 'J edit' });
+            expect(await db.sync_state.get('sync_history')).toMatchObject({ historyIncarnation: 'J', phase: 'ready' });
+        } finally { await manager.stop(); db.close(); await Dexie.delete(db.name); }
+    });
+});

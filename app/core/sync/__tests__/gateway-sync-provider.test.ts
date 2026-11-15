@@ -29,7 +29,7 @@ function makeOkResponse(body: unknown) {
     return {
         ok: true,
         status: 200,
-        text: vi.fn(async () => JSON.stringify(payload)),
+        text: vi.fn(async () => JSON.stringify(payload && typeof payload === 'object' ? { historyIncarnation: 'I', ...payload } : payload)),
     } as unknown as Response;
 }
 
@@ -132,8 +132,10 @@ describe('GatewaySyncProvider', () => {
             constructor() { source = this; sources += 1; }
         });
         let version = 0;
-        const fetchMock = vi.fn(async () => makeOkResponse({ changes: [change(version, String(version))],
-            nextCursor: version, hasMore: false }));
+        const fetchMock = vi.fn(async (_path: string, init: RequestInit) => {
+            const { cursor } = JSON.parse(init.body as string) as { cursor: number };
+            return makeOkResponse({ changes: version > cursor ? [change(version, String(version))] : [], nextCursor: version, hasMore: false });
+        });
         vi.stubGlobal('fetch', fetchMock);
         const apply = vi.fn(async () => {});
         const provider = createGatewaySyncProvider({ pollIntervalMs: 2000 });
@@ -670,7 +672,7 @@ describe('GatewaySyncProvider', () => {
             pageSize: 50,
             pageToken: 'opaque-page',
             tables: ['messages'],
-        })).resolves.toEqual(response);
+        })).resolves.toEqual({ historyIncarnation: 'I', ...response });
 
         expect(fetchMock).toHaveBeenCalledWith(
             'https://sync.example.test/api/sync/snapshot',
@@ -681,7 +683,7 @@ describe('GatewaySyncProvider', () => {
             })
         );
         expect(JSON.parse((fetchMock.mock.calls as unknown as [string, RequestInit][])[0]![1].body as string)).toEqual({
-            scope: { workspaceId: 'ws-1' }, pageSize: 50, pageToken: 'opaque-page', tables: ['messages'],
+            historyIncarnationCapability: 'incarnation-v1', scope: { workspaceId: 'ws-1' }, pageSize: 50, pageToken: 'opaque-page', tables: ['messages'],
             workspaceItemCapability: 'v1', fileKindCapability: 'v1', unavailableRecordCapability: 'unavailable-v1',
         });
     });
@@ -929,7 +931,7 @@ describe('GatewaySyncProvider', () => {
         );
     });
 
-    it('keeps an outbox operation pending when a successful gateway push omits its result', async () => {
+    it('pauses without consuming intent or retry budget when a successful gateway push omits its result', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => undefined);
         vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         const fetchMock = vi.fn(async () =>
@@ -950,8 +952,11 @@ describe('GatewaySyncProvider', () => {
         expect(pendingOps.__rows.get(pending.id)).toMatchObject({
             id: pending.id,
             status: 'retry_wait',
-            attempts: 1,
+            attempts: 0,
         });
+        await vi.advanceTimersByTimeAsync(10_000);
+        await outbox.flush();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it.each([

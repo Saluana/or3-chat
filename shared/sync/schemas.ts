@@ -313,7 +313,7 @@ export const TABLE_PAYLOAD_SCHEMAS: Record<string, z.ZodSchema> = {
 // ============================================================
 
 export const HISTORY_INCARNATION_CAPABILITY = 'incarnation-v1' as const;
-export const HistoryIncarnationSchema = z.string().min(1).max(128).regex(/^[\x21-\x7e]+$/);
+export const HistoryIncarnationSchema = z.string().min(1).max(128).regex(/^[\x00-\x7f]+$/);
 export const HistoryRequestFields = {
     historyIncarnation: HistoryIncarnationSchema.nullable().optional(),
     historyIncarnationCapability: z.literal(HISTORY_INCARNATION_CAPABILITY).optional(),

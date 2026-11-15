@@ -26,7 +26,7 @@ vi.mock('~/composables/workspace/useWorkspaceManager', () => ({
 }));
 vi.mock('~/composables/auth/useAuthTokenBroker.client', () => ({ useAuthTokenBroker: () => ({}) }));
 vi.mock('../sync-provider-registry', () => ({
-    getActiveSyncProvider: () => ({ id: 'test-direct', mode: 'direct', dispose: () => state.dispose() }),
+    getActiveSyncProvider: () => ({ id: 'test-direct', mode: 'direct', capabilities: { historyIncarnation: 'v1' }, dispose: () => state.dispose() }),
     registerSyncProvider: vi.fn(), setActiveSyncProvider: vi.fn(),
 }));
 vi.mock('../subscription-manager', () => ({
@@ -68,8 +68,8 @@ describe('sync lifecycle with real local write capture', () => {
             await vi.waitFor(() => expect(control.isRunning()).toBe(false));
             await write('after expiry', 2);
             await write('latest edit', 3);
-            expect(await db.pending_ops.count()).toBe(1);
-            expect((await db.pending_ops.toCollection().first())?.payload).toMatchObject({ value: 'latest edit' });
+            expect(await db.pending_ops.count()).toBe(3);
+            expect((await db.pending_ops.toArray()).map(op => op.payload)).toEqual(expect.arrayContaining([expect.objectContaining({ value: 'latest edit' })]));
             expect(state.starts).toEqual([id]);
         } finally {
             scope.stop(); await control?.stop(); setActiveWorkspaceDb(null); evictWorkspaceDb(id); await Dexie.delete(db.name);
