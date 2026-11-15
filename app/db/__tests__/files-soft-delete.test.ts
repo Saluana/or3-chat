@@ -46,6 +46,7 @@ vi.mock('../client', () => {
     const mockDb = {
         messages: { filter: () => ({ first: async () => undefined }) },
         posts: { filter: () => ({ first: async () => undefined }) },
+        sync_quarantine: { filter: () => ({ first: async () => undefined }) },
         file_meta: table,
         tombstones: { get: async () => undefined },
         file_blobs: {
