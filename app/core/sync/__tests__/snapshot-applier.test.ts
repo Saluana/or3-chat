@@ -1043,7 +1043,7 @@ it('namespace upgrade preserves every store/index and rolls back an interrupted 
     // Abort the actual native upgrade after earlier stores have already copied.
     const nativeAdd = IDBObjectStore.prototype.add;
     const fault = vi.spyOn(IDBObjectStore.prototype, 'add').mockImplementation(function(this: IDBObjectStore, ...args) {
-        if (this.name === 'current_messages') {
+        if (this.name === 'current_pending_ops') {
             this.transaction.abort();
             throw new DOMException('Injected copy quota failure', 'QuotaExceededError');
         }

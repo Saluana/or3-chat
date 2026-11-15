@@ -129,5 +129,16 @@ The raw query above includes soft-deleted rows; use entity query helpers or appl
 ## Versioning tips
 
 -   Add new schema changes with `this.version(<next>).stores({...})` and a transactional upgrade when stored rows need repair.
--   Older clients cannot open a database created by a newer schema. Restore backups only into the same or a newer application version.
+-   Old Dexie clients may reopen a newer database and recreate isolated legacy stores; they cannot access current protected tables. Restore backups only into the same or a newer application version.
 -   Workspace database instances are held in a bounded LRU cache. The active workspace is kept hot while inactive connections are evicted, and closed cached instances can reopen if browser storage is cleared.
+
+## Physical namespace boundary (version 32)
+
+Logical table accessors and backup/wire names stay unchanged. All native stores move once to `current_<name>` in one atomic upgrade.
+`file_blobs` is renamed in place without copying its large payloads; other stores
+are copied with their indexes before retiring the original names. Use `db.table(logicalName)` and normal transaction scopes;
+`Table.name` and native `objectStoreNames` identify physical names. Never open a
+retired store directly or replay it. Old Dexie can recreate isolated legacy sinks;
+new connections tolerate their presence. Blocked/failed upgrades preserve saved
+data; the app offers explicit nondestructive retry after failure. See the
+[sync history boundary](/documentation/cloud/sync-layer).

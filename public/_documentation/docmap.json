@@ -161,7 +161,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 2,
-                    "summary": "Workspace-safe writes, atomic sync and tombstone scopes, hooks outside transactions, retained tool chunks across message transfers, explicit database failure policies, safe UI errors, deletion, and upgrades."
+                    "summary": "Workspace-safe writes, atomic sync and tombstone scopes, hooks outside transactions, retained tool chunks across message transfers, explicit database failure policies, safe UI errors, deletion, atomic store migration, and nondestructive upgrade retry."
                 },
                 {
                     "name": "threads.md",
@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Sync history capability fences, atomic held-intent recovery, account-scoped inspection/export, stale-completion protection, the Dexie explicit-reopen activation blocker, and separate provider qualification."
+                    "summary": "Sync history capability fences, atomic held-intent recovery, account-scoped inspection/export, stale-completion protection, atomic physical store isolation, stable old/new Dexie coexistence and nondestructive upgrade retry, and separate provider qualification."
                 },
                 {
                     "name": "storage-layer.md",

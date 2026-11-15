@@ -1,4 +1,4 @@
-// Frozen from 302481d5 app/core/sync/hook-bridge.ts; only relative import paths adjusted.
+// Frozen from 302481d5 app/core/sync/hook-bridge.ts; only relative import paths and trailing whitespace adjusted.
 /**
  * HookBridge - Captures Dexie writes for sync
  *
@@ -324,10 +324,10 @@ export class HookBridge {
             }).catch(() => transaction.abort());
         }
         // Safe record access pattern - payload can be undefined for delete operations
-        const safePayload = (payload && typeof payload === 'object') 
-            ? payload as Record<string, unknown> 
+        const safePayload = (payload && typeof payload === 'object')
+            ? payload as Record<string, unknown>
             : {};
-        
+
         const pkField = getPkField(tableName);
         const pk = String(primKey ?? safePayload[pkField] ?? '');
 
@@ -433,7 +433,7 @@ export class HookBridge {
             pk,
             // For delete, include deleted_at in payload (sanitized) to sync deletion time
             payload: operation === 'put'
-                ? payloadForSync 
+                ? payloadForSync
                 : sanitizePayloadForSync(
                     tableName,
                     softDelete

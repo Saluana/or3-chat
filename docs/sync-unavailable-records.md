@@ -166,16 +166,35 @@ capability and fail closed with `OR3_SYNC_HISTORY_UNSUPPORTED`. D1 and direct
 Convex remain separate qualification lanes. No publication is performed here.
 
 
-### Activation blocker found during H5 validation
+### Browser activation boundary
 
-Dexie's installed `dexieOpen` catches native `VersionError` and retries with no
-version. Schema 31 closes normal old connections, but an explicit old-bundle
-`open()` can reconnect and write shared tables. The expected-failure P0-5.9 test in
-`snapshot-applier.test.ts` reproduces this. The approved version-only exclusion
-therefore needs a design decision; do not advertise/release the matched contract
-until that boundary and real browser qualification are complete. Current provider
-and generated image profiles remain unqualified. S3 must not treat the host
-transport constant or native test fixture as activation approval.
+Schema 32 performs a one-time atomic physical-store migration inside the same
+`or3-db-${workspaceId}` database. All stores move to `current_<logical-name>`, preserving exact rows and indexes.
+The large content-addressed `file_blobs` store uses native IDB store renaming
+in place; its payloads are excluded from copying.
+This protects attachment/transfer metadata, local-only KV, drafts, staging,
+cursors/guard, outbox, tombstones and recovery evidence together. Blob bytes are
+not duplicated. Renaming them also prevents an old deletion from seeing empty
+reference sinks and deleting bytes still needed by current held attachments.
+App table accessors, backup table names and wire entities remain logical names.
+
+Dexie 4.4.6 retries VersionError, then can recreate missing legacy stores during
+its schema patch (`dexie.mjs:4561–4567`, `patchCurrentVersion:3763`). Old clients
+may reopen/write these isolated sinks. They cannot reach current state or publish
+through a current outbox. New opens tolerate the extra stores without schema
+ping-pong; no new reader, coalescer, importer or automatic replay consumes them.
+The P0-5.9 ordinary acceptance test uses frozen actual v31 schema/hooks and
+checks repeated coexistence, current state and provider publication. Failed or
+blocked upgrade preserves every original row. Failed opens pause automatic
+reopen and show explicit retry/storage guidance; blocked upgrades wait for tabs.
+
+Sink detection emits one bounded diagnostic per connection: **Changes from an
+outdated client; origin unknown**. A read-only sink inspection/export and deliberate
+discard surface is a follow-up; automatic recovery is forbidden. Existing held
+history recovery remains account scoped and excluded from Retry all. Per-op
+provenance tags are deferred: the physical namespace supplies writer exclusion.
+The matched provider/image/browser lifecycle still needs separate qualification;
+provider and generated image profiles remain unqualified until that is complete.
 
 The image reset helper reads `backup-inspection-profile.json`: activation requires
 `historyIncarnation: 'v1'` and exact `historyMigrations`, bound to the packed runtime
