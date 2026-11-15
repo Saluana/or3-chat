@@ -44,31 +44,42 @@ The real installed resolver regression is `tests/unit/nuxt-icon-resolution.test.
 Production measurements and limits are in
 `audit-evidence/performance-20261022/ICON-RESOLUTION.md`.
 
-## streamdown-vue 1.0.35
+## or3-scroll 0.1.6
 
-The ESM renderer passed HAST `className` arrays directly to Vue's native DOM
-property path. Rebuilding virtual nodes for a completed math block therefore
-assigned identical classes again on every later token, invalidating style and
-layout. The patch maps HAST `className` to Vue's `class` prop, whose normalization
-produces comparable strings. Other attributes, parsed trees, security filtering,
-component overrides, and actual formula edits retain their existing paths.
+Carries the matching upstream scroller fixes: pre-paint measurement settlement,
+immediate observer compensation with deferred row recycling (and pre-paint refill
+for contractions beyond overscan), deferred observation of rows mounted by that
+refill, same-key
+reconciliation avoidance, unclipped row formatting contexts, and cancellable
+smooth navigation that follows a growing bottom. The intentional non-passive
+wheel listener remains to protect browsing intent. Remove after qualifying an
+upstream release with the native browser scroll canary.
 
-The patch also exposes the existing Shiki implementation as a DOM-free
-`streamdown-vue/shiki` ESM entry. The renderer imports that same registry and
-highlighter rather than creating a second copy. Remote grammar resolution
-recognizes browser workers as browser environments. This avoids pulling the
-Markdown parser's browser-only character decoder into a worker.
+## streamdown-vue 2.0.0
 
-`CodeBlock` gains an optional asynchronous `highlight({ code, language, theme })`
-prop. Its output passes through the existing line-number/theme/selection path;
-rejection uses the existing escaped plain-code fallback. The normal path remains
-when the prop is absent, and unmount invalidates pending results. Host components
-use this hook through Streamdown's existing `components.codeblock` override;
-the trusted plugin UI kit retains its raw renderer/highlighter APIs.
+Carries the matching upstream renderer fixes in both ESM and CommonJS: native
+built-in elements, parsed/VNode prefix reuse including custom image overrides
+with context invalidation, tail-only incomplete-Markdown repair, normalized
+KaTeX classes, a bounded Mermaid SVG cache with per-mount ID namespaces,
+progressive Mermaid source/SVG updates, ambiguous streaming dash
+handling, and grammar-state incremental code highlighting. Code updates patch
+existing DOM and retain selections. Stale async results are rejected across source,
+language, theme, provider and lifecycle changes; the latest suffix stays escaped
+and visible while a useful completed prefix is highlighted.
 
-This targets the ESM renderer used by Nuxt, including all host Markdown surfaces.
-The new Shiki subpath is ESM-only. The CommonJS renderer is unused by this application and is unchanged. The existing
-install, Docker, and generated-project patch steps apply this pinned patch.
-Remove it after qualifying the same behavior in an upstream release with the
-real-renderer `StreamMarkdownXmlRender.test.ts` regression, worker ownership and browser fallback tests, and concurrent rich
-stream probes in `audit-evidence/performance-20261022/`.
+`CodeBlock.highlight({ code, language, theme })` is a trusted HTML-provider hook.
+The `streamdown-vue/shiki` entry exposes the shared DOM-free registry/highlighter
+and per-block `createStreamingHighlighter` for OR3's worker. Browser workers use
+browser grammar resolution. State is released with each block lease.
+
+Both patches target the exact installed versions without publishing or changing
+pins. Install, Docker and generated-project patch steps apply them. Remove after
+qualifying upstream releases with the renderer browser regressions, package
+consumer smoke, worker ownership tests and OR3 scroll canary.
+
+After changing these patches without changing package versions, restart any dev
+server with a fresh Vite dependency cache. Stop the server, remove only the
+applicable generated Vite cache (`node_modules/.cache/vite` for normal dev or
+`node_modules/.cache/vite-e2e-scroll` for the scroll harness), then restart. A stale optimized JavaScript
+copy can retain an old Vue CSS scope while loading the new stylesheet. Clean
+installs and production builds do not reuse this development cache.

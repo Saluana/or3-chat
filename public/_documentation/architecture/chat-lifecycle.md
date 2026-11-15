@@ -139,6 +139,9 @@ navigation.
 The default message renderer loads through the theme registry when a message
 row mounts. Empty chats keep Markdown and highlighting out of the initial
 preload graph; theme-provided message components keep their existing selection.
+The default message loader also awaits `preloadMath()` within this lazy boundary,
+so the first message formula mounts with KaTeX. A failed optional load leaves the
+renderer's readable-source fallback and retry path available.
 
 `ChatMessageHost.vue` owns stable edit and navigation handlers for each mounted
 row, so token updates do not repeatedly update the lazy wrappers of settled
@@ -155,11 +158,21 @@ chat keeps the renderer and its styles lazy. Code highlighting runs in one
 browser worker shared by mounted host code blocks. The existing Streamdown
 registry loads local grammars on first use, with aliases and plain-text fallback.
 The renderer retains its toolbar, line numbers, escaping and theme handling;
-an older asynchronous result cannot overwrite newer code.
+the newest completed result can style an unchanged prefix while the latest
+suffix stays visible as escaped text. Results from another source, language,
+theme or provider cannot overwrite current code. Completed lines reuse Shiki
+grammar state, including multiline comments/templates. Existing code DOM and
+text selection survive appends; final HTML serialization still scales with size.
+Completed Markdown blocks reuse their rendered output with host image overrides
+in place. Only the growing tail receives incomplete-Markdown repair, so literal
+unmatched markers in earlier paragraphs remain unchanged when streaming ends.
+The last 32 finished Mermaid diagrams are cached by source across row unmounts;
+each mounted SVG uses separate IDs and internal references for duplicate diagrams.
 
-Each block owns a worker lease. Its queued snapshot is replaced by newer input;
-there is one in-flight job and at most 64 queued jobs. The last unmount and HMR
-release the worker. Worker failure, a 20-second job timeout, queue overflow, or
+Each block owns a worker lease and a tokenizer state released with that lease.
+Its queued snapshot is replaced by newer input; there is one in-flight job and
+at most 64 queued jobs. The last unmount starts a 30-second worker idle window;
+HMR releases it immediately. Worker failure, a 20-second job timeout, queue overflow, or
 a block over 250,000 characters leaves readable plain code. Highlighting never
 changes the source text saved or copied. A failed worker is not repeatedly
 restarted while its existing owners remain mounted.
@@ -202,9 +215,17 @@ the browser applies native scrolling. This prevents an automatic layout-follow
 write from displacing a clamped wheel jump. It does not cancel the default wheel
 action. The owned listener updates with `maintainBottom` and is removed on
 unmount; lists with bottom following disabled retain passive wheel handling.
-Layout following keeps its existing next-tick path and checks active browsing,
-without adding another animation frame. Row-height and anchor formulas are
-unchanged. Wheel input on a following scroller can wait for a busy main thread;
+Newly mounted rows and row-content revisions settle before paint. Observer
+resizes compensate immediately; row recycling normally waits for the next frame.
+A contraction larger than the bottom overscan refills the range before paint
+instead, after restoring the visible anchor. Rows mounted by this refill are
+measured before paint and observed on the following frame to avoid observer
+delivery loops. Unchanged keys skip reconciliation even
+when a parent recreates its key callback. Smooth bottom navigation follows the
+growing destination and yields to native wheel/touch/key input, other navigation,
+reduced motion and teardown. Rows contain margins with `flow-root`; the shared
+track contains horizontal overflow without clipping each row's focus/sticky
+content. Wheel input on a following scroller can wait for a busy main thread;
 reducing that work remains part of performance qualification.
 
 ### Cancellation and terminal writes
