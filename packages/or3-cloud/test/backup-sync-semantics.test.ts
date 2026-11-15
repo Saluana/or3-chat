@@ -164,3 +164,17 @@ test('offline revisions preserve exact incremental and legacy reader rules', asy
   db.close();
   expect(f.audit()).toMatchObject({ healthy: true, complete: true, faults: [] });
 });
+
+test.each([
+  ['ffffffff-ffff-ffff-ffff-ffffffffffff', true],
+  ['FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF', false],
+  ['00000000-0000-0000-0000-000000000000', true],
+  [opId.toUpperCase(), true],
+] as const)('offline UUID acceptance agrees with reader for %s', async (opId, accepted) => {
+  expect(ChangeStampSchema.safeParse({ deviceId: 'device', opId, hlc: 'opaque', clock: 1 }).success).toBe(accepted);
+  const f = await fixture();
+  const db = new Database(f.path);
+  db.query('UPDATE change_log SET op_id=?').run(opId);
+  db.close();
+  expect(f.audit()).toMatchObject({ healthy: accepted, complete: true });
+});

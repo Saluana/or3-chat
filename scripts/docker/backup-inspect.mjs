@@ -102,7 +102,7 @@ function openCanonicalDatabase(Database, databasePath) {
 // UUIDs and 1..512 HLC characters; snapshot revisions deliberately allow legacy
 // nonempty IDs/HLCs. No stricter HLC grammar is implied by the reader contract.
 const SYNC_TABLES = ['threads', 'messages', 'projects', 'posts', 'file_meta', 'kv', 'notifications'];
-const UUID = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$/i;
+const UUID = /^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$/;
 // Migration 033 repairs this specific historical writer defect, including its
 // embedded payload copy. It is not one of the legitimate legacy revision IDs.
 const BACKGROUND_TOOL_ID = /^background-tool:[a-f0-9]{64}$/i;
