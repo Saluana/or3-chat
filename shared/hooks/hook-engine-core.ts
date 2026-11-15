@@ -91,7 +91,7 @@ interface CompiledPattern {
 
 /** Internal opt-in delivery used by sync observations, never filters. */
 export interface ActionObserverDispatch {
-    include: (callback: HookFn) => boolean;
+    active: WeakMap<HookFn, Set<string>>;
     pending: Promise<unknown>[];
 }
 
@@ -125,7 +125,7 @@ export interface HookEngine {
     doActionSync: (name: string, ...args: unknown[]) => void;
 
     /** Invoke observers now, in registry order, without serial completion waits. */
-    _dispatchActionObservers: (name: string, args: unknown[], include: (callback: HookFn) => boolean) => Promise<void>;
+    _dispatchActionObservers: (name: string, args: unknown[]) => Promise<void>;
 
     hasFilter: (name?: string, fn?: HookFn) => boolean | number;
     /** True only when this callback is the sole matching filter, including wildcards. */
@@ -544,6 +544,8 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
         return runAsyncBody(callbacks, name, args, isFilter, initialValue);
     }
 
+    const activeObservers = new WeakMap<HookFn, Set<string>>();
+
     function runSyncBody(
         callbacks: CallbackEntry[],
         name: string,
@@ -554,7 +556,13 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
     ) {
         let value = initialValue;
         for (const { fn, priority, acceptedArgs } of callbacks) {
-            if (observers && !observers.include(fn)) continue;
+            const active = observers && (observers.active.get(fn) ?? new Set<string>());
+            if (active?.has(name)) continue;
+            if (active) {
+                observers!.active.set(fn, active);
+                active.add(name); // Reserve before invocation, including reentrant dispatch.
+            }
+            let asynchronous = false;
             if (priorityAls) {
                 const store = priorityAls.getStore();
                 if (store && store.length > 0) {
@@ -590,10 +598,11 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
                         : fn(...callArgs);
                     if (isThenable(result)) {
                         if (observers) {
+                            asynchronous = true;
                             observers.pending.push(Promise.resolve(result).catch(error => {
                                 recordError(name);
                                 logCallbackError(error, name, false);
-                            }));
+                            }).then(() => { active!.delete(name); }));
                         } else {
                             reportSyncThenable(result, name, false);
                         }
@@ -603,6 +612,7 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
                 recordError(name);
                 logCallbackError(error, name, isFilter);
             } finally {
+                if (!asynchronous) active?.delete(name);
                 recordTiming(name, performance.now() - start);
             }
         }
@@ -689,9 +699,9 @@ export function createHookEngine(options: HookEngineOptions = {}): HookEngine {
 
             callSync(callbacks, name, args, false);
         },
-        _dispatchActionObservers(name, args, include) {
+        _dispatchActionObservers(name, args) {
             const pending: Promise<unknown>[] = [];
-            callSync(getMatching(actions, actionWildcards, name), name, args, false, undefined, { include, pending });
+            callSync(getMatching(actions, actionWildcards, name), name, args, false, undefined, { active: activeObservers, pending });
             return Promise.all(pending).then(() => undefined);
         },
         hasFilter(name?: string, fn?: HookFn) {

@@ -21,21 +21,13 @@ type SyncObservationAction =
     | 'sync.subscription:action:statusChange'
     | 'sync.subscription:action:maxRetriesExceeded';
 
-// Callback metadata in the existing registry, not a second listener registry.
-const synchronous = Symbol.for('or3.sync-phase-observer');
-
-/** Reviewed host-only synchronous phase/invalidation work must receive every event. */
-export function synchronousSyncObserver<T extends (...args: never[]) => void>(callback: T): T {
-    return Object.assign(callback, { [synchronous]: true });
-}
-
 const pending = new WeakMap<object, Map<SyncObservationAction, Promise<void>>>();
 const OBSERVER_WAIT_MS = 250;
 
 /**
  * Invoke all listeners in registry order/phase, but bound completion waiting. An unresolved
- * observer chain retains just one slot per action/engine; subsequent events
- * are coalesced away until it settles, except synchronous host phase work.
+ * callback retains one slot per action/engine; only that callback's repeats
+ * are coalesced away until it settles. Ready listeners receive every event.
  * No background queue or late listener invocation.
  */
 export async function observeSyncAction<K extends SyncObservationAction>(
@@ -43,34 +35,29 @@ export async function observeSyncAction<K extends SyncObservationAction>(
     name: K,
     ...args: InferHookParams<K>
 ): Promise<void> {
-    const key = hooks._engine ?? hooks.doAction;
-    let actions = pending.get(key);
-    if (!actions) { actions = new Map(); pending.set(key, actions); }
     const engine = hooks._engine;
-    if (actions.has(name)) {
-        // Never delay start/complete suppression or post-commit invalidation.
-        // Only the reviewed synchronous callbacks run again; no async backlog.
-        await engine?._dispatchActionObservers(name, args, callback =>
-            synchronous in callback);
-        return;
-    }
-
-    let settle!: () => void;
-    const dispatch = new Promise<void>(resolve => { settle = resolve; });
-    actions.set(name, dispatch);
-    void dispatch.then(() => { actions.delete(name); });
-    try {
-        // Invoke in this phase, before yielding: no delayed start callbacks can
-        // run after complete or after a stop/workspace change.
-        const completion = engine
-            ? engine._dispatchActionObservers(name, args, () => true)
-            : hooks.doAction(name, ...args);
-        void Promise.resolve(completion).catch(() => {
+    let dispatch: Promise<void>;
+    if (engine) {
+        // Invoke now, in this phase. The engine bounds each listener independently.
+        dispatch = engine._dispatchActionObservers(name, args);
+    } else {
+        // Preserve the aggregate bound for engine-less dispatch adapters.
+        const key = hooks.doAction;
+        let actions = pending.get(key);
+        if (!actions) { actions = new Map(); pending.set(key, actions); }
+        if (actions.has(name)) return;
+        let settle!: () => void;
+        dispatch = new Promise<void>(resolve => { settle = resolve; });
+        actions.set(name, dispatch);
+        void dispatch.then(() => { actions.delete(name); });
+        try {
+            void Promise.resolve(hooks.doAction(name, ...args)).catch(() => {
+                console.warn('[sync-observers] Observer failed:', name);
+            }).then(settle);
+        } catch {
             console.warn('[sync-observers] Observer failed:', name);
-        }).then(settle);
-    } catch {
-        console.warn('[sync-observers] Observer failed:', name);
-        settle();
+            settle();
+        }
     }
     let timer!: ReturnType<typeof setTimeout>;
     try {

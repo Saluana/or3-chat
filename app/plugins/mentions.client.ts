@@ -2,7 +2,6 @@
  * Mentions Plugin - Nuxt Registration (Lazy Loaded)
  */
 
-import { synchronousSyncObserver } from '~/core/sync/sync-observers';
 import { defineNuxtPlugin } from '#app';
 import { useAppConfig, useHooks } from '#imports';
 import { useOr3Config, isMentionSourceEnabled } from '~/composables/useOr3Config';
@@ -98,7 +97,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     const refreshDisposers: Array<() => void> = [];
     let disposed = false;
     // Workspace switches and sync batches keep an already-used index warm.
-    const refreshMentions = synchronousSyncObserver(() => {
+    const refreshMentions = () => {
         resetIndex();
         if (!indexRequested) return;
         clearTimeout(refreshTimer);
@@ -106,7 +105,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         refreshTimer = setTimeout(() => {
             if (!disposed && generation === getWorkspaceGeneration()) void mentionsModule?.initMentionsIndex();
         }, 120);
-    });
+    };
     // Local item writes (document autosaves, chat and file updates) only
     // invalidate. The next search, including an open picker, which subscribes
     // to invalidation, rebuilds instead of rescanning after every edit.

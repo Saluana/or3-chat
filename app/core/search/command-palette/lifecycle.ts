@@ -1,4 +1,3 @@
-import { synchronousSyncObserver } from '~/core/sync/sync-observers';
 import { getWorkspaceGeneration } from '~/db/client';
 import { useHooks } from '~/core/hooks/useHooks';
 import type { PaletteCoordinator } from './coordinator';
@@ -54,7 +53,7 @@ export function bindPaletteLifecycle(
             void (records ? coordinator.refreshSources(ids, records) : coordinator.refreshSources(ids));
         }, RECONCILE_DEBOUNCE_MS);
     };
-    const scheduleFullReconcile = synchronousSyncObserver(() => scheduleReconcile());
+    const scheduleFullReconcile = () => scheduleReconcile();
 
     const syncEvents = [
         'sync.bootstrap:action:complete',

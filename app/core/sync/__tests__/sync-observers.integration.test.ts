@@ -4,6 +4,7 @@ import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { createHookEngine } from '~~/shared/hooks/hook-engine-core';
 import { createHookEngineV2 } from '~~/shared/hooks/hook-engine-v2';
 import { setHookEngine } from '~/core/hooks/useHooks';
+import { observeSyncAction } from '../sync-observers';
 import { SubscriptionManager } from '../subscription-manager';
 import { OutboxManager } from '../outbox-manager';
 import { startCoordinatedSubscription } from '../subscription-coordinator';
@@ -121,4 +122,58 @@ describe.each(['v1', 'v2'] as const)('sync observer liveness (%s engine)', versi
             expect(later.mock.invocationCallOrder[0]).toBeGreaterThan(invoked.mock.invocationCallOrder[0]!);
         }
     );
+});
+
+
+describe.each([createHookEngine, createHookEngineV2])('sync observer delivery isolation (%#)', factory => {
+    afterEach(() => { vi.useRealTimers(); });
+
+    it.each(['sync.pull:action:applied', 'sync.conflict:action:detected', 'sync.error:action'] as const)(
+        'delivers every %s to ready listeners while only the slow listener coalesces', async name => {
+            vi.useFakeTimers();
+            const engine = factory();
+            const hooks = createTypedHookEngine(engine);
+            const seen: unknown[] = [];
+            const slow = vi.fn(() => new Promise<void>(resolve => setTimeout(resolve, 300)));
+            const fast = vi.fn(async (payload: unknown) => { await Promise.resolve(); seen.push(payload); });
+            const sync = vi.fn();
+            engine.addAction(name, slow, 0);
+            engine.addAction(name, fast, 10);
+            engine.addAction(name, sync, 20);
+            const emit = (event: number) => observeSyncAction(hooks, name, { event } as never);
+            const first = emit(1);
+            await vi.advanceTimersByTimeAsync(250);
+            await first;
+            const second = emit(2);
+            await vi.advanceTimersByTimeAsync(0);
+            await second;
+            expect(seen).toEqual([{ event: 1 }, { event: 2 }]);
+            expect(sync.mock.calls).toEqual([[{ event: 1 }], [{ event: 2 }]]);
+            expect(slow).toHaveBeenCalledTimes(1);
+            await vi.advanceTimersByTimeAsync(50);
+            expect(slow).toHaveBeenCalledTimes(1); // No late replay of event 2.
+            const third = emit(3);
+            await vi.advanceTimersByTimeAsync(300);
+            await third;
+            expect(slow).toHaveBeenCalledTimes(2);
+            expect(seen).toEqual([{ event: 1 }, { event: 2 }, { event: 3 }]);
+        }
+    );
+
+    it('keeps invocation priority, wildcard, once, argument and rejection contracts', async () => {
+        const errors = vi.fn();
+        const engine = factory({ logCallbackError: errors });
+        const hooks = createTypedHookEngine(engine);
+        const order: unknown[] = [];
+        const name = 'sync.pull:action:applied';
+        engine.addAction('sync.pull:*', () => { order.push('wildcard'); }, 0);
+        engine.onceAction(name, async () => { order.push('once'); throw new Error('once rejection'); }, 5);
+        engine.addAction(name, (...args) => { order.push(args); }, 10, 0);
+        const emit = () => observeSyncAction(hooks, name, {} as never);
+        await emit();
+        await emit();
+        expect(order).toEqual(['wildcard', 'once', [], 'wildcard', []]);
+        expect(errors).toHaveBeenCalledTimes(1);
+        expect(engine._diagnostics.errors[name]).toBe(1);
+    });
 });

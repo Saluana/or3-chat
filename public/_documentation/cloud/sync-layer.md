@@ -735,9 +735,10 @@ Sync observations (bootstrap/rescan phases, push before/after, queue/retry, pull
 received/applied/error, conflicts, permanent-error notifications and subscription
 diagnostics) wait at most 250 ms: observer completion does not gate sync. Listeners
 are invoked in priority/registration order without awaiting earlier completions.
-One unresolved batch per action/engine is retained; ordinary repeats coalesce
-without a backlog. Reviewed synchronous host suppression/invalidation callbacks
-still run on every event, so start precedes complete and cache/search invalidation
-follows the data commit even behind a hung observer. Observers must capture and
+One unresolved invocation per callback/action/engine is retained. Only that busy
+callback drops overlapping events until it settles, without queued replay. Other
+ready callbacks, including async listeners, receive each event. Synchronous
+suppression/invalidation callbacks run on every event, so start precedes complete
+and cache/search invalidation follows the data commit even behind a hung observer. Observers must capture and
 guard scope before awaiting; a timeout cannot cancel their side effects. Protocol
 persistence, page receipts, pending-op capture and filters remain awaited.
