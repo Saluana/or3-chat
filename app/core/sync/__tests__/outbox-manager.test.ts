@@ -14,7 +14,7 @@ import type {
 } from '~~/shared/sync/types';
 import { FULL_HISTORY_PULL_RETENTION } from '~~/shared/sync/types';
 import { listFailedOps, OutboxManager } from '../outbox-manager';
-import { _resetSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
+import { _resetSyncCircuitBreaker, getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 import { isRecentOpId, markRecentOpId } from '../recent-op-cache';
 import { Or3DB } from '~/db/client';
 import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
@@ -1704,6 +1704,100 @@ describe('OutboxManager quarantine (real Dexie)', () => {
     function manager(db: Or3DB, provider = new SpyProvider()) {
         return new OutboxManager(db, provider, scope);
     }
+
+    it('persists legacy timestamp normalization before sending and replays it after a lost ACK', async () => {
+        const db = await freshDb();
+        const original = { ...corruptPut('posts', 'legacy'), tableName: 'threads', payload: { id: 'legacy', title: 'legacy' } };
+        await db.pending_ops.put(original);
+        const provider = new SpyProvider();
+        const wires: PendingOp[] = [];
+        provider.push.mockImplementation(async batch => {
+            const wire = batch.ops[0]!;
+            wires.push(structuredClone(wire));
+            expect((await db.pending_ops.get(original.id))?.payload).toEqual(wire.payload);
+            if (wires.length === 1) throw new Error('lost ACK');
+            return { results: [{ opId: wire.stamp.opId, success: true, serverVersion: 1 }], serverVersion: 1 };
+        });
+        await manager(db, provider).flush();
+        await db.pending_ops.update(original.id, { nextAttemptAt: 0 });
+        await manager(db, provider).flush();
+        expect(wires).toHaveLength(2);
+        expect(wires[1]!.payload).toEqual(wires[0]!.payload);
+        expect(wires[1]!.stamp).toEqual(wires[0]!.stamp);
+        expect(await db.pending_ops.count()).toBe(0);
+    });
+
+    it('preserves frozen wire intent when cancellation releases an older claim copy', async () => {
+        const db = await freshDb();
+        const original = { ...corruptPut('posts', 'cancel-wire'), tableName: 'threads', payload: { id: 'cancel-wire' } };
+        await db.pending_ops.put(original);
+        const provider = new SpyProvider();
+        let sent!: () => void;
+        const sending = new Promise<void>(resolve => { sent = resolve; });
+        let release!: () => void;
+        const lostAck = new Promise<void>(resolve => { release = resolve; });
+        const payloads: unknown[] = [];
+        provider.push.mockImplementation(async batch => {
+            payloads.push(structuredClone(batch.ops[0]!.payload));
+            if (payloads.length === 1) { sent(); await lostAck; }
+            return { results: [{ opId: original.stamp.opId, success: true, serverVersion: 1 }], serverVersion: 1 };
+        });
+        const outbox = manager(db, provider);
+        const flushing = outbox.flush();
+        await sending;
+        outbox.stop();
+        await flushing;
+        expect((await db.pending_ops.get(original.id))?.payload).toEqual(payloads[0]);
+        release();
+        await manager(db, provider).flush();
+        expect(payloads).toHaveLength(2);
+        expect(payloads[1]).toEqual(payloads[0]);
+        expect(await db.pending_ops.count()).toBe(0);
+    });
+
+    it('replays old complete wire intent unchanged and holds uncertain legacy timestamps', async () => {
+        const db = await freshDb();
+        const complete = corruptPut('messages', 'complete', { payload: message('complete', 'old lost ACK'), attempts: 1 });
+        const oldWire = sanitizePayloadForSync('messages', complete.payload, 'put');
+        const uncertain = { ...corruptPut('posts', 'uncertain'), tableName: 'threads', payload: { id: 'uncertain' }, attempts: 1 };
+        await db.pending_ops.bulkPut([complete, uncertain]);
+        const provider = new SpyProvider();
+        provider.push.mockImplementation(async batch => {
+            expect(batch.ops.map(op => op.id)).toEqual([complete.id]);
+            expect(batch.ops[0]!.payload).toEqual(oldWire);
+            return { results: [{ opId: complete.stamp.opId, success: true, serverVersion: 1 }], serverVersion: 1 };
+        });
+        await manager(db, provider).flush();
+        expect(await db.pending_ops.count()).toBe(0);
+        expect(await db.sync_quarantine.get(uncertain.id)).toMatchObject({ status: 'quarantined', op: uncertain });
+    });
+
+    it('quarantines only identity reuse and corrupt winners, settles siblings, and leaves the breaker healthy', async () => {
+        const db = await freshDb();
+        const ops = ['identity', 'winner', 'healthy', 'generic'].map(id => corruptPut('messages', id, { payload: message(id, id) }));
+        await db.pending_ops.bulkPut(ops);
+        const badWinner = { kind: 'put' as const, payload: { id: 'winner', role: 42 }, revision: { clock: 10, hlc: '10', opId: testUuid('remote') } };
+        const provider = new SpyProvider();
+        provider.push.mockImplementation(async () => ({ results: [
+            { opId: ops[0]!.stamp.opId, success: false, errorCode: 'CONFLICT', error: `Conflicting operation reuses processed op_id ${ops[0]!.stamp.opId}` },
+            { opId: ops[1]!.stamp.opId, success: true, applied: false, winner: badWinner, serverVersion: 2 },
+            { opId: ops[2]!.stamp.opId, success: true, serverVersion: 3 },
+            { opId: ops[3]!.stamp.opId, success: false, errorCode: 'CONFLICT', error: 'temporary application conflict' },
+        ], serverVersion: 3 }));
+        await manager(db, provider).flush();
+        expect(await db.pending_ops.get(ops[2]!.id)).toBeUndefined();
+        expect(await db.sync_quarantine.get(ops[0]!.id)).toMatchObject({ status: 'quarantined', op: { stamp: ops[0]!.stamp } });
+        expect(await db.sync_quarantine.get(ops[1]!.id)).toMatchObject({ status: 'quarantined', serverWinner: badWinner });
+        expect(await db.pending_ops.get(ops[3]!.id)).toMatchObject({ status: 'retry_wait' });
+        // Generic conflicts retain retries. Test content-only results separately.
+        await db.pending_ops.clear();
+        await db.pending_ops.put(ops[0]!);
+        provider.push.mockResolvedValue({ results: [{ opId: ops[0]!.stamp.opId, success: false, errorCode: 'CONFLICT', error: `Conflicting operation reuses processed op_id ${ops[0]!.stamp.opId}` }], serverVersion: 3 });
+        const breaker = getSyncCircuitBreaker(`${scope.workspaceId}:${provider.id}`);
+        breaker.reset();
+        await manager(db, provider).flush();
+        expect(breaker.getFailureCount()).toBe(0);
+    });
 
     it('preserves corrupt operations, rebuilds them from local rows and pushes the recovered content', async () => {
         const db = await freshDb();

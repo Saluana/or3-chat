@@ -642,3 +642,13 @@ Background history adapters should throw errors with `status` or `statusCode`, a
 A shared workspace/provider circuit breaker limits retries. Half-open probes have
 owned, expiring leases: stopping or cancelling an attempt releases its lease,
 and late results from that attempt cannot settle a replacement probe.
+
+Outgoing operations freeze their sanitized wire payload durably before the first
+send, preserving UUID intent through retries and lost acknowledgements. Existing
+complete legacy payloads keep their previous normalization. Previously attempted
+legacy threads whose send-time timestamps cannot be recovered are held in the
+existing sync quarantine for export and explicit recovery. An explicit processed
+UUID identity-reuse rejection or malformed server winner also holds only that
+operation, preserving local content and winner evidence; healthy siblings settle.
+These content failures do not consume the provider outage budget. Other provider
+conflicts retain their existing retry behavior.

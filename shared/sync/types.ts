@@ -56,6 +56,8 @@ export interface PendingOp {
     /** Local-only durable push ownership; stripped from provider requests. */
     claimId?: string;
     claimExpiresAt?: number;
+    /** Local-only: payload frozen before first send; false marks an abandoned legacy attempt. */
+    wireNormalized?: boolean;
     status: PendingOpStatus;
     lastError?: string;
     lastErrorDetails?: ErrorMetadata;
