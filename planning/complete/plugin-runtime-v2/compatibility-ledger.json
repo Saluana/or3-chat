@@ -12,7 +12,7 @@
   },
   "coverage": {
     "moduleCount": 39,
-    "exportCount": 608,
+    "exportCount": 609,
     "callableExportCount": 283,
     "nuxtAutoImportCount": 310
   },
@@ -11606,7 +11606,7 @@
     },
     {
       "source": "app/core/hooks/hooks.ts",
-      "apiSha256": "5a7c046a17235e1c2bd3d1bcaa51c7236c78507311c7a4c263d4628345b602f4",
+      "apiSha256": "e4704e129156a1aace3f630c8da1a80ec216ee635eddb878fc5d4368a657c2df",
       "runtime": "client",
       "publicPaths": [
         "~/core/hooks",
@@ -11653,9 +11653,9 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-engine-core.ts",
-              "line": 92,
+              "line": 98,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface HookEngine {\n    addFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    applyFilters: <T>(name: string, value: T, ...args: unknown[]) => Promise<T>;\n    applyFiltersSync: <T>(name: string, value: T, ...args: unknown[]) => T;\n\n    addAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    doAction: (name: string, ...args: unknown[]) => Promise<void>;\n    doActionSync: (name: string, ...args: unknown[]) => void;\n\n    hasFilter: (name?: string, fn?: HookFn) => boolean | number;\n    /** True only when this callback is the sole matching filter, including wildcards. */\n    hasOnlyFilter: (name: string, fn: HookFn) => boolean;\n    /** Read-only ownership receipt; dispatching a filter is never part of validation. */\n    captureFilterChain: (names: readonly string[]) => () => boolean;\n    hasAction: (name?: string, fn?: HookFn) => boolean | number;\n    removeAllCallbacks: (priority?: number) => void;\n    currentPriority: () => number | false;\n\n    onceAction: (name: string, fn: HookFn, priority?: number) => () => void;\n    on: (name: string, fn: HookFn, opts?: OnOptions) => () => void;\n    off: (disposer: () => void) => void;\n\n    _diagnostics: {\n        timings: Record<string, number[]>;\n        errors: Record<string, number>;\n        callbacks(actionOrFilter?: HookKind): number;\n    };\n}"
+              "text": "export interface HookEngine {\n    addFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    applyFilters: <T>(name: string, value: T, ...args: unknown[]) => Promise<T>;\n    applyFiltersSync: <T>(name: string, value: T, ...args: unknown[]) => T;\n\n    addAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    doAction: (name: string, ...args: unknown[]) => Promise<void>;\n    doActionSync: (name: string, ...args: unknown[]) => void;\n\n    /** Invoke observers now, in registry order, without serial completion waits. */\n    _dispatchActionObservers: (name: string, args: unknown[]) => Promise<void>;\n\n    hasFilter: (name?: string, fn?: HookFn) => boolean | number;\n    /** True only when this callback is the sole matching filter, including wildcards. */\n    hasOnlyFilter: (name: string, fn: HookFn) => boolean;\n    /** Read-only ownership receipt; dispatching a filter is never part of validation. */\n    captureFilterChain: (names: readonly string[]) => () => boolean;\n    hasAction: (name?: string, fn?: HookFn) => boolean | number;\n    removeAllCallbacks: (priority?: number) => void;\n    currentPriority: () => number | false;\n\n    onceAction: (name: string, fn: HookFn, priority?: number) => () => void;\n    on: (name: string, fn: HookFn, opts?: OnOptions) => () => void;\n    off: (disposer: () => void) => void;\n\n    _diagnostics: {\n        timings: Record<string, number[]>;\n        errors: Record<string, number>;\n        callbacks(actionOrFilter?: HookKind): number;\n    };\n}"
             }
           ]
         },
@@ -12315,7 +12315,7 @@
     },
     {
       "source": "server/hooks/hook-engine.ts",
-      "apiSha256": "18b1999c0367541a77d143e407e11a1a6ce4e44e9c701e3e833791db88c022ff",
+      "apiSha256": "74c8ad0cf2d624604c3e473b8c5098928595ce4e7684fd6b28ec25dca4d6f4e2",
       "runtime": "server",
       "publicPaths": [
         "~~/server/hooks/hook-engine"
@@ -12360,9 +12360,9 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-engine-core.ts",
-              "line": 92,
+              "line": 98,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface HookEngine {\n    addFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    applyFilters: <T>(name: string, value: T, ...args: unknown[]) => Promise<T>;\n    applyFiltersSync: <T>(name: string, value: T, ...args: unknown[]) => T;\n\n    addAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    doAction: (name: string, ...args: unknown[]) => Promise<void>;\n    doActionSync: (name: string, ...args: unknown[]) => void;\n\n    hasFilter: (name?: string, fn?: HookFn) => boolean | number;\n    /** True only when this callback is the sole matching filter, including wildcards. */\n    hasOnlyFilter: (name: string, fn: HookFn) => boolean;\n    /** Read-only ownership receipt; dispatching a filter is never part of validation. */\n    captureFilterChain: (names: readonly string[]) => () => boolean;\n    hasAction: (name?: string, fn?: HookFn) => boolean | number;\n    removeAllCallbacks: (priority?: number) => void;\n    currentPriority: () => number | false;\n\n    onceAction: (name: string, fn: HookFn, priority?: number) => () => void;\n    on: (name: string, fn: HookFn, opts?: OnOptions) => () => void;\n    off: (disposer: () => void) => void;\n\n    _diagnostics: {\n        timings: Record<string, number[]>;\n        errors: Record<string, number>;\n        callbacks(actionOrFilter?: HookKind): number;\n    };\n}"
+              "text": "export interface HookEngine {\n    addFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    applyFilters: <T>(name: string, value: T, ...args: unknown[]) => Promise<T>;\n    applyFiltersSync: <T>(name: string, value: T, ...args: unknown[]) => T;\n\n    addAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    doAction: (name: string, ...args: unknown[]) => Promise<void>;\n    doActionSync: (name: string, ...args: unknown[]) => void;\n\n    /** Invoke observers now, in registry order, without serial completion waits. */\n    _dispatchActionObservers: (name: string, args: unknown[]) => Promise<void>;\n\n    hasFilter: (name?: string, fn?: HookFn) => boolean | number;\n    /** True only when this callback is the sole matching filter, including wildcards. */\n    hasOnlyFilter: (name: string, fn: HookFn) => boolean;\n    /** Read-only ownership receipt; dispatching a filter is never part of validation. */\n    captureFilterChain: (names: readonly string[]) => () => boolean;\n    hasAction: (name?: string, fn?: HookFn) => boolean | number;\n    removeAllCallbacks: (priority?: number) => void;\n    currentPriority: () => number | false;\n\n    onceAction: (name: string, fn: HookFn, priority?: number) => () => void;\n    on: (name: string, fn: HookFn, opts?: OnOptions) => () => void;\n    off: (disposer: () => void) => void;\n\n    _diagnostics: {\n        timings: Record<string, number[]>;\n        errors: Record<string, number>;\n        callbacks(actionOrFilter?: HookKind): number;\n    };\n}"
             }
           ]
         },
@@ -12833,7 +12833,7 @@
     },
     {
       "source": "shared/hooks/hook-engine-core.ts",
-      "apiSha256": "8a0a60081c5a6c3bde6bffd3c38f9f7108e0e6f9bee86e1c84e4f39c07f917b4",
+      "apiSha256": "98bba36817fa8e4086b2d06f52953d8aa93044fb16178245309a5aaa01e339e9",
       "runtime": "shared",
       "publicPaths": [
         "~~/shared/hooks/hook-engine-core"
@@ -12845,6 +12845,20 @@
       "behaviorProfileIds": [],
       "exports": [
         {
+          "name": "ActionObserverDispatch",
+          "kind": "type",
+          "nuxtAutoImport": false,
+          "signatures": [],
+          "declarations": [
+            {
+              "source": "shared/hooks/hook-engine-core.ts",
+              "line": 93,
+              "syntaxKind": "InterfaceDeclaration",
+              "text": "export interface ActionObserverDispatch {\n    active: WeakMap<HookFn, Set<string>>;\n    pending: Promise<unknown>[];\n}"
+            }
+          ]
+        },
+        {
           "name": "createHookEngine",
           "kind": "value",
           "nuxtAutoImport": false,
@@ -12855,7 +12869,7 @@
               "resolvedReturnType": "HookEngine",
               "declaration": {
                 "source": "shared/hooks/hook-engine-core.ts",
-                "line": 192,
+                "line": 201,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function createHookEngine(options: HookEngineOptions = {}): HookEngine;"
               }
@@ -12864,7 +12878,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-engine-core.ts",
-              "line": 192,
+              "line": 201,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function createHookEngine(options: HookEngineOptions = {}): HookEngine;"
             }
@@ -12878,9 +12892,9 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-engine-core.ts",
-              "line": 92,
+              "line": 98,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface HookEngine {\n    addFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    applyFilters: <T>(name: string, value: T, ...args: unknown[]) => Promise<T>;\n    applyFiltersSync: <T>(name: string, value: T, ...args: unknown[]) => T;\n\n    addAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    doAction: (name: string, ...args: unknown[]) => Promise<void>;\n    doActionSync: (name: string, ...args: unknown[]) => void;\n\n    hasFilter: (name?: string, fn?: HookFn) => boolean | number;\n    /** True only when this callback is the sole matching filter, including wildcards. */\n    hasOnlyFilter: (name: string, fn: HookFn) => boolean;\n    /** Read-only ownership receipt; dispatching a filter is never part of validation. */\n    captureFilterChain: (names: readonly string[]) => () => boolean;\n    hasAction: (name?: string, fn?: HookFn) => boolean | number;\n    removeAllCallbacks: (priority?: number) => void;\n    currentPriority: () => number | false;\n\n    onceAction: (name: string, fn: HookFn, priority?: number) => () => void;\n    on: (name: string, fn: HookFn, opts?: OnOptions) => () => void;\n    off: (disposer: () => void) => void;\n\n    _diagnostics: {\n        timings: Record<string, number[]>;\n        errors: Record<string, number>;\n        callbacks(actionOrFilter?: HookKind): number;\n    };\n}"
+              "text": "export interface HookEngine {\n    addFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeFilter: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    applyFilters: <T>(name: string, value: T, ...args: unknown[]) => Promise<T>;\n    applyFiltersSync: <T>(name: string, value: T, ...args: unknown[]) => T;\n\n    addAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number,\n        acceptedArgs?: number\n    ) => void;\n    removeAction: <F extends HookFn>(\n        name: string,\n        fn: F,\n        priority?: number\n    ) => void;\n    doAction: (name: string, ...args: unknown[]) => Promise<void>;\n    doActionSync: (name: string, ...args: unknown[]) => void;\n\n    /** Invoke observers now, in registry order, without serial completion waits. */\n    _dispatchActionObservers: (name: string, args: unknown[]) => Promise<void>;\n\n    hasFilter: (name?: string, fn?: HookFn) => boolean | number;\n    /** True only when this callback is the sole matching filter, including wildcards. */\n    hasOnlyFilter: (name: string, fn: HookFn) => boolean;\n    /** Read-only ownership receipt; dispatching a filter is never part of validation. */\n    captureFilterChain: (names: readonly string[]) => () => boolean;\n    hasAction: (name?: string, fn?: HookFn) => boolean | number;\n    removeAllCallbacks: (priority?: number) => void;\n    currentPriority: () => number | false;\n\n    onceAction: (name: string, fn: HookFn, priority?: number) => () => void;\n    on: (name: string, fn: HookFn, opts?: OnOptions) => () => void;\n    off: (disposer: () => void) => void;\n\n    _diagnostics: {\n        timings: Record<string, number[]>;\n        errors: Record<string, number>;\n        callbacks(actionOrFilter?: HookKind): number;\n    };\n}"
             }
           ]
         },
@@ -12892,7 +12906,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-engine-core.ts",
-              "line": 141,
+              "line": 150,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface HookEngineErrorContext {\n    error: unknown;\n    isFilter: boolean;\n    name: string;\n}"
             }
@@ -12906,7 +12920,7 @@
           "declarations": [
             {
               "source": "shared/hooks/hook-engine-core.ts",
-              "line": 147,
+              "line": 156,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface HookEngineOptions {\n    logCallbackError?: (context: HookEngineErrorContext) => void;\n    resolveOnKind?: (name: string, explicitKind: HookKind | undefined) => HookKind;\n    onOffError?: (error: unknown) => void;\n}"
             }
