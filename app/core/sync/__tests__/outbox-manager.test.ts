@@ -1705,6 +1705,36 @@ describe('OutboxManager quarantine (real Dexie)', () => {
         return new OutboxManager(db, provider, scope);
     }
 
+    it('bounds a hung push observer without accumulating dispatches or stranding healthy pushes', async () => {
+        const db = await freshDb();
+        const provider = new SpyProvider();
+        provider.push.mockImplementation(async batch => ({ results: batch.ops.map(op => ({ opId: op.stamp.opId, success: true, serverVersion: 1 })), serverVersion: 1 }));
+        let release!: () => void;
+        const hung = new Promise<void>(resolve => { release = resolve; });
+        hookState.doAction.mockImplementation(name => name === 'sync.push:action:before' ? hung : Promise.resolve());
+        let flushing: Promise<boolean> | undefined;
+        try {
+            const outbox = manager(db, provider);
+            for (const id of ['observer-first', 'observer-second']) {
+                await db.pending_ops.put(corruptPut('messages', id, { payload: message(id, id) }));
+                flushing = outbox.flush();
+                let timer!: ReturnType<typeof setTimeout>;
+                try {
+                    await Promise.race([flushing, new Promise((_, reject) => {
+                        timer = setTimeout(() => reject(new Error('Observer stranded flush')), 1000);
+                    })]);
+                } finally { clearTimeout(timer); }
+            }
+            expect(await db.pending_ops.count()).toBe(0);
+            expect(provider.push).toHaveBeenCalledTimes(2);
+            expect(hookState.doAction.mock.calls.filter(([name]) => name === 'sync.push:action:before')).toHaveLength(1);
+        } finally {
+            release();
+            await flushing;
+            hookState.doAction.mockReset();
+        }
+    });
+
     it('persists legacy timestamp normalization before sending and replays it after a lost ACK', async () => {
         const db = await freshDb();
         const original = { ...corruptPut('posts', 'legacy'), tableName: 'threads', payload: { id: 'legacy', title: 'legacy' } };

@@ -31,6 +31,7 @@ import { errorDiagnostics, presentError, type ErrorMetadata } from '~~/shared/er
  */
 import type { Or3DB, SyncQuarantineRow } from '~/db/client';
 import type { SyncProvider, SyncScope, PendingOp, PushWinner } from '~~/shared/sync/types';
+import { observeSyncAction } from './sync-observers';
 import { useHooks } from '~/core/hooks/useHooks';
 import { nowSec } from '~/db/util';
 import { sanitizePayloadForSync, SyncPayloadTooLargeError } from '~~/shared/sync/sanitize';
@@ -391,7 +392,7 @@ export class OutboxManager {
             if (generation !== this.lifecycleGeneration) return false;
             if (totalQueued >= MAX_PENDING_OPS) {
                 console.warn('[OutboxManager] Queue near capacity:', totalQueued);
-                await hooks.doAction('sync.queue:action:full', {
+                await observeSyncAction(hooks, 'sync.queue:action:full', {
                     pendingCount: totalQueued,
                     maxSize: MAX_PENDING_OPS,
                 });
@@ -649,7 +650,7 @@ export class OutboxManager {
             });
         }
 
-        await hooks.doAction('sync.push:action:before', {
+        await observeSyncAction(hooks, 'sync.push:action:before', {
             scope: this.scope,
             count: batch.length,
         });
@@ -783,7 +784,7 @@ export class OutboxManager {
                 }
             }
 
-            await hooks.doAction('sync.push:action:after', {
+            await observeSyncAction(hooks, 'sync.push:action:after', {
                 scope: this.scope,
                 successCount,
                 failCount,
@@ -809,7 +810,7 @@ export class OutboxManager {
             // budget and op_ids as edits queued before going offline.
             if (status === null && typeof navigator !== 'undefined' && navigator.onLine === false) {
                 await this.releaseBatchForDeferredRetry(batch, 0);
-                await hooks.doAction('sync.push:action:after', {
+                await observeSyncAction(hooks, 'sync.push:action:after', {
                     scope: this.scope,
                     successCount: 0,
                     failCount: 0,
@@ -822,7 +823,7 @@ export class OutboxManager {
                     batch,
                     Math.min(MAX_AUTH_RETRY_DELAY_MS, firstDelay * 2 ** this.authFailures++)
                 );
-                await hooks.doAction('sync.push:action:after', {
+                await observeSyncAction(hooks, 'sync.push:action:after', {
                     scope: this.scope,
                     successCount: 0,
                     failCount: 0,
@@ -860,7 +861,7 @@ export class OutboxManager {
                     this.providerRateLimitedUntil,
                     Date.now() + deferredRetryDelayMs
                 );
-                await hooks.doAction('sync.push:action:after', {
+                await observeSyncAction(hooks, 'sync.push:action:after', {
                     scope: this.scope,
                     successCount: 0,
                     failCount: 0,
@@ -881,7 +882,7 @@ export class OutboxManager {
                 await this.handleFailedOp(op, message, undefined, errorDiagnostics(error, { source: 'sync' }));
                 failCount += 1;
             }
-            await hooks.doAction('sync.push:action:after', {
+            await observeSyncAction(hooks, 'sync.push:action:after', {
                 scope: this.scope,
                 successCount: 0,
                 failCount,
@@ -1030,7 +1031,7 @@ export class OutboxManager {
                 nextAttemptAt,
             };
             if (!await this.updateClaimedOp(op, updatedOp)) return;
-            await hooks.doAction('sync.retry:action', { op: updatedOp, attempt: op.attempts });
+            await observeSyncAction(hooks, 'sync.retry:action', { op: updatedOp, attempt: op.attempts });
             return;
         }
 
@@ -1083,7 +1084,7 @@ export class OutboxManager {
             };
             if (!await this.updateClaimedOp(op, updatedOp)) return;
             console.warn('[OutboxManager] Op will retry:', op.stamp.opId, 'attempt', attempts);
-            await hooks.doAction('sync.retry:action', { op: updatedOp, attempt: attempts });
+            await observeSyncAction(hooks, 'sync.retry:action', { op: updatedOp, attempt: attempts });
         }
     }
 

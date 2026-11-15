@@ -41,6 +41,7 @@ import type {
 } from '~~/shared/sync/types';
 import { ConflictResolver } from './conflict-resolver';
 import { getCursorManager, type CursorManager } from './cursor-manager';
+import { observeSyncAction } from './sync-observers';
 import { useHooks } from '~/core/hooks/useHooks';
 import { SYNCED_TABLES, getHookBridge } from './hook-bridge';
 import { isRecentOpId } from './recent-op-cache';
@@ -816,7 +817,7 @@ export class SubscriptionManager {
         const changes = parsed.changes.filter(change => change.serverVersion > cursor);
         const filtered = this.filterRecentOps(changes);
         if (changes.length) {
-            await useHooks().doAction('sync.pull:action:received', { scope: this.scope, changeCount: changes.length });
+            await observeSyncAction(useHooks(), 'sync.pull:action:received', { scope: this.scope, changeCount: changes.length });
             if (!this.isCurrentGeneration(generation)) return;
         }
         const result = filtered.length
@@ -888,7 +889,7 @@ export class SubscriptionManager {
         if (newChanges.length === 0) return; // Nothing new to process
 
         try {
-            await useHooks().doAction('sync.pull:action:received', {
+            await observeSyncAction(useHooks(), 'sync.pull:action:received', {
                 scope: this.scope,
                 changeCount: newChanges.length,
             });
@@ -946,7 +947,7 @@ export class SubscriptionManager {
                 return;
             }
             console.error('[SubscriptionManager] Failed to apply changes:', error);
-            await useHooks().doAction('sync.pull:action:error', {
+            await observeSyncAction(useHooks(), 'sync.pull:action:error', {
                 scope: this.scope,
                 error: error instanceof Error ? error.message : String(error),
             });
@@ -1084,7 +1085,7 @@ export class SubscriptionManager {
         // Retain diagnostics at the former retry limit, but never strand a
         // durable cursor after a long outage. Backoff stays capped below.
         if (this.reconnectAttempts === MAX_RECONNECT_ATTEMPTS) {
-            useHooks().doAction('sync.subscription:action:maxRetriesExceeded', {
+            observeSyncAction(useHooks(), 'sync.subscription:action:maxRetriesExceeded', {
                 scope: this.scope, attempts: this.reconnectAttempts,
             }).catch(() => {});
         }
@@ -1128,8 +1129,7 @@ export class SubscriptionManager {
         this.status = status;
 
         if (previousStatus !== status) {
-            useHooks()
-                .doAction('sync.subscription:action:statusChange', {
+            void observeSyncAction(useHooks(), 'sync.subscription:action:statusChange', {
                     scope: this.scope,
                     previousStatus,
                     status,
