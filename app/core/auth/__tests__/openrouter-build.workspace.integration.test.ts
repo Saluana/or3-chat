@@ -9,6 +9,7 @@ import { evictWorkspaceDb, getWorkspaceDb, setActiveWorkspaceDb, type Or3DB } fr
 import { FileMetaSchema } from '~/db/schema';
 import type { SessionContext } from '~/core/hooks/hook-types';
 import { buildOpenRouterMessages } from '../openrouter-build';
+import { prepareToolResultStorage } from '~~/shared/chat/tool-result-artifact';
 
 const boundary = vi.hoisted(() => ({ beforeBlob: async () => {}, session: null as SessionContext | null }));
 vi.mock('~/composables/auth/useSessionContext', () => ({ getCachedSessionContext: () => boundary.session }));
@@ -31,8 +32,12 @@ afterEach(async () => {
     setActiveWorkspaceDb(null); setHookEngine(null);
     for (const { id, db } of databases.splice(0)) { evictWorkspaceDb(id); await Dexie.delete(db.name); }
 });
-async function fixture(kind: 'image' | 'file') {
+async function workspaceFixture() {
     const id = crypto.randomUUID(); const db = getWorkspaceDb(id); databases.push({ id, db }); await db.open();
+    return { id, db };
+}
+async function fixture(kind: 'image' | 'file') {
+    const { id, db } = await workspaceFixture();
     const hash = crypto.randomUUID().replaceAll('-', '');
     const mime = kind === 'image' ? 'image/png' : 'application/pdf';
     await db.file_meta.put(FileMetaSchema.parse({ hash, name: 'private', kind: kind === 'file' ? 'pdf' : kind,
@@ -44,6 +49,24 @@ async function fixture(kind: 'image' | 'file') {
     return { id, db, hash, input };
 }
 describe('provider attachment ownership with real workspace stores', () => {
+    it.each(['abort', 'workspace'] as const)('fences a retained tool result awaiting sync after %s', async change => {
+        const a = await workspaceFixture(); const b = await workspaceFixture(); setActiveWorkspaceDb(a.id);
+        const storage = await prepareToolResultStorage('private tool bytes', { threadId: 'thread', parentAssistantId: 'assistant', callId: 'call' });
+        const controller = new AbortController();
+        let settled = false;
+        const pending = buildOpenRouterMessages([{ role: 'tool', content: storage.result }], { signal: controller.signal })
+            .then(value => ({ value }), error => ({ error })).finally(() => { settled = true; });
+        // Simulate the job stream beating the ordinary sync transfer.
+        await new Promise(resolve => setTimeout(resolve, 50));
+        expect(settled).toBe(false);
+        if (change === 'abort') controller.abort(); else setActiveWorkspaceDb(b.id);
+        await a.db.kv.bulkPut(storage.rows);
+        const result = await pending;
+        expect('error' in result && result.error).toBeInstanceOf(Error);
+        if (change === 'abort') expect('error' in result && result.error.name).toBe('AbortError');
+        expect(await b.db.kv.count()).toBe(0);
+    });
+
     it.each(['image', 'file'] as const)('does not reuse hydrated %s bytes without metadata in the active workspace', async kind => {
         const a = await fixture(kind); const b = await fixture(kind); setActiveWorkspaceDb(a.id);
         const primed = await buildOpenRouterMessages(a.input); expect(primed[0]?.content).toHaveLength(2);

@@ -396,7 +396,10 @@ source reads do not consume the assistant's response budget. History, tool detai
 views and retries resolve the full result with integrity checks. Chunks and the
 foreground tool transcript commit atomically; background providers retain chunks
 before acknowledging the tool outcome. Empty results and older inline transcripts
-remain readable. Retained results still respect the existing 256 KiB per-result
+remain readable. If a background stream finishes ahead of sync, request preparation
+waits up to 10 seconds for missing chunks before capturing its history snapshot.
+Cancellation and workspace/account guards remain active during that wait; a failed
+transfer leaves the draft available to retry. Retained results still respect the existing 256 KiB per-result
 limit and model context admission limits.
 
 The pane loader reconciles separate canonical tool-result rows into their assistant calls before seeding a chat controller. Tool evidence remains visible after tab activation or reload, while plugin-owned message metadata and stored rows remain intact. Tool-call presentation metadata is retained by stable call ID; canonical status, result and error override stale embedded execution fields. Consumers should use this loader rather than treating raw assistant rows as a complete tool transcript.
