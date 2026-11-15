@@ -13,6 +13,7 @@ import { SubscriptionManager } from '../subscription-manager';
 import { Or3DB } from '~/db/client';
 import { createMemoryTable, createMockDb, createPendingOpsTable, testUuid } from './sync-test-utils';
 import * as cursorManagerModule from '~/core/sync/cursor-manager';
+import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 import { markRecentOpId } from '../recent-op-cache';
 import { createGatewaySyncProvider } from '../providers/gateway-sync-provider';
 
@@ -947,6 +948,30 @@ describe('SubscriptionManager', () => {
 
         // Restore
         cursorApi.isBootstrapNeeded = vi.fn(async () => false) as any;
+    });
+
+    it('releases a cancelled half-open pull so healthy pull and push can resume without reload', async () => {
+        const provider = new SubscriptionProvider();
+        provider.id = 'cancelled-probe';
+        let release!: (page: PullResponse) => void;
+        const barrier = new Promise<PullResponse>(resolve => { release = resolve; });
+        const pull = vi.spyOn(provider, 'pull').mockReturnValueOnce(barrier);
+        const breaker = getSyncCircuitBreaker(`ws-1:${provider.id}`);
+        for (let i = 0; i < 5; i++) breaker.recordFailure();
+        await vi.advanceTimersByTimeAsync(30_001);
+        const manager = new SubscriptionManager(createMockDb({ messages: createMemoryTable('id'), tombstones: createMemoryTable('id'), pending_ops: createMemoryTable('id') }) as any, provider, { workspaceId: 'ws-1' });
+        const starting = manager.start();
+        for (let i = 0; i < 30 && !pull.mock.calls.length; i++) await Promise.resolve();
+        expect(breaker.canRetry()).toBe(false);
+        await manager.stop();
+        expect(breaker.canRetry()).toBe(true);
+        await manager.start();
+        expect(manager.getStatus()).toBe('connected');
+        expect(breaker.canRetry()).toBe(true); // same key gates push
+        release({ changes: [], nextCursor: 100, hasMore: false, ...FULL_HISTORY_PULL_RETENTION });
+        await starting;
+        expect(manager.getStatus()).toBe('connected');
+        await manager.stop();
     });
 
     it('ignores a bootstrap pull that resolves after stop', async () => {

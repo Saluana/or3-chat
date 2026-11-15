@@ -161,12 +161,16 @@ export class SubscriptionManager {
 
         try {
             const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
-            if (!circuitBreaker.canRetry() || !circuitBreaker.beginProbe()) {
+            const probe = circuitBreaker.acquireProbe();
+            if (!probe) {
                 throw new Error(
                     'Circuit breaker is open; subscription cannot start'
                 );
             }
             this.probeGeneration = generation;
+            const signal = this.requestController.signal;
+            const cancelProbe = () => probe.cancel();
+            signal.addEventListener('abort', cancelProbe, { once: true });
             let probeSettled = false;
             try {
                 const needsBootstrap = await this.cursorManager.isBootstrapNeeded();
@@ -191,12 +195,15 @@ export class SubscriptionManager {
 
                 this.reconnectAttempts = 0;
                 this.setStatus('connected');
-                circuitBreaker.recordSuccess();
+                probe.success();
                 probeSettled = true;
             } finally {
+                signal.removeEventListener('abort', cancelProbe);
                 if (this.probeGeneration === generation) this.probeGeneration = null;
                 if (!probeSettled && this.isCurrentGeneration(generation)) {
-                    circuitBreaker.recordFailure();
+                    probe.failure();
+                } else if (!probeSettled) {
+                    probe.cancel();
                 }
             }
         } catch (error) {

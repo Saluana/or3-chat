@@ -61,9 +61,9 @@ describe('SyncCircuitBreaker', () => {
         expect(breaker.getState()).toBe('half-open'); // Ready to probe
 
         expect(breaker.canRetry()).toBe(true);
-        expect(breaker.beginProbe()).toBe(true);
+        expect(breaker.acquireProbe()).not.toBeNull();
         expect(breaker.canRetry()).toBe(false);
-        expect(breaker.beginProbe()).toBe(false);
+        expect(breaker.acquireProbe()).toBeNull();
 
         breaker.recordFailure();
         expect(breaker.getState()).toBe('open');
@@ -79,11 +79,28 @@ describe('SyncCircuitBreaker', () => {
 
         expect(breaker.canRetry()).toBe(true);
         expect(breaker.canRetry()).toBe(true);
-        expect(breaker.beginProbe()).toBe(true);
+        expect(breaker.acquireProbe()).not.toBeNull();
         expect(breaker.canRetry()).toBe(false);
 
         breaker.recordSuccess();
         expect(breaker.getState()).toBe('closed');
         expect(breaker.canRetry()).toBe(true);
     });
+    it.each(['success', 'failure', 'cancel'] as const)('fences stale %s after cancellation and expiry', outcome => {
+        for (let i = 0; i < 3; i++) breaker.recordFailure();
+        vi.advanceTimersByTime(5001);
+        const cancelled = breaker.acquireProbe()!;
+        cancelled.cancel();
+        const expired = breaker.acquireProbe()!;
+        vi.advanceTimersByTime(60_001);
+        const current = breaker.acquireProbe()!;
+        cancelled[outcome]();
+        expired[outcome]();
+        expect(breaker.getState()).toBe('half-open');
+        expect(breaker.canRetry()).toBe(false);
+        current.success();
+        expect(breaker.canRetry()).toBe(true);
+        expect(breaker.getState()).toBe('closed');
+    });
+
 });

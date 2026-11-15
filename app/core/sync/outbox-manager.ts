@@ -408,7 +408,8 @@ export class OutboxManager {
             claimed = batch;
             if (!batch.length) return false;
 
-            if (!circuitBreaker.beginProbe()) {
+            const probe = circuitBreaker.acquireProbe();
+            if (!probe) {
                 await this.releaseBatchForDeferredRetry(batch, 0);
                 return false;
             }
@@ -421,6 +422,9 @@ export class OutboxManager {
                 this.nextStatus =
                     lastStatus === 'pending' ? 'retry_wait' : 'pending';
             }
+            const cancelProbe = () => probe.cancel();
+            controller.signal.addEventListener('abort', cancelProbe, { once: true });
+            if (controller.signal.aborted) probe.cancel();
             let probeSettled = false;
 
             try {
@@ -432,22 +436,26 @@ export class OutboxManager {
                 if (generation !== this.lifecycleGeneration) return false;
 
                 if (outcome.deferred) {
-                    circuitBreaker.recordSuccess();
+                    probe.success();
                     probeSettled = true;
                     return false;
                 }
 
                 if (outcome.successCount > 0 && outcome.failCount === 0) {
-                    circuitBreaker.recordSuccess();
+                    probe.success();
                 } else if (outcome.failCount > 0) {
-                    circuitBreaker.recordFailure();
+                    probe.failure();
                 } else {
-                    circuitBreaker.recordSuccess();
+                    probe.success();
                 }
                 probeSettled = true;
                 return true;
             } finally {
-                if (!probeSettled) circuitBreaker.recordFailure();
+                controller.signal.removeEventListener('abort', cancelProbe);
+                if (!probeSettled) {
+                    if (controller.signal.aborted || generation !== this.lifecycleGeneration) probe.cancel();
+                    else probe.failure();
+                }
             }
         } finally {
             clearTimeout(deadline);
