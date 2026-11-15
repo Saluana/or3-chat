@@ -191,3 +191,24 @@ test.each([['workspace', false], ['other-workspace', true]] as const)('duplicate
   expect(result).toMatchObject({ complete: true, healthy });
   if (!healthy) expect(result.faults).toContainEqual(expect.objectContaining({ table: 'change_log', reason: 'duplicate_server_version' }));
 });
+
+test('large healthy log stops with incomplete certification at the work ceiling', async () => {
+  const f = await fixture(`
+    WITH RECURSIVE n(x) AS (VALUES(2) UNION ALL SELECT x+1 FROM n WHERE x<100001)
+    INSERT INTO change_log(id,workspace_id,server_version,table_name,pk,op,clock,hlc,device_id,op_id)
+    SELECT 'log'||x,'workspace',x,'kv','key','delete',1,'h','d',printf('00000000-0000-4000-8000-%012x',x) FROM n;
+    UPDATE server_version_counter SET value=100001;
+  `);
+  expect(f.audit()).toMatchObject({ complete: false, healthy: false, inspectedRecords: 100001, faultCount: 1,
+    faults: [{ table: 'change_log', rowid: '100001', serverVersion: '100001', reason: 'audit_resource_limit' }] });
+});
+
+test('numeric-affinity text and binary stamps are diagnosed without exposing their values', async () => {
+  const f = await fixture("UPDATE change_log SET server_version='PRIVATE-VERSION',device_id=X'50524956415445'; UPDATE server_version_counter SET value='PRIVATE-COUNTER'");
+  const result = f.audit();
+  expect(result).toMatchObject({ healthy: false, complete: true });
+  expect(result.faults).toContainEqual({ table: 'change_log', rowid: '1', reason: 'invalid_server_version' });
+  expect(result.faults).toContainEqual({ table: 'change_log', rowid: '1', reason: 'invalid_device_id' });
+  expect(result.faults).toContainEqual({ table: 'server_version_counter', rowid: '1', reason: 'invalid_counter' });
+  expect(JSON.stringify(result)).not.toContain('PRIVATE');
+});
