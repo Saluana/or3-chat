@@ -69,6 +69,7 @@ test.each([
   ['unknown table', "UPDATE change_log SET table_name='private-table'", 'change_log', 'invalid_table'],
   ['tombstone fault', 'UPDATE tombstones SET deleted_at=-1', 'tombstones', 'invalid_deleted_at'],
   ['orphan snapshot item', 'DELETE FROM sync_snapshots', 'sync_snapshot_items', 'missing_snapshot'],
+  ['contradictory snapshot item', "INSERT INTO sync_snapshot_items SELECT snapshot_id,table_name,pk,'tombstone',NULL,clock,hlc,op_id,1 FROM sync_snapshot_items", 'sync_snapshot_items', 'duplicate_snapshot_key'],
   ['snapshot beyond watermark', 'UPDATE sync_snapshots SET high_watermark=0', 'sync_snapshot_items', 'snapshot_after_watermark'],
   ['inconsistent counter', 'UPDATE server_version_counter SET value=0', 'server_version_counter', 'counter_below_log'],
   ['materialized poison', "UPDATE s_kv SET data_json='{PRIVATE-CONTENT'", 's_kv', 'invalid_json'],

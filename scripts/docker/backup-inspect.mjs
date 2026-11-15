@@ -234,7 +234,13 @@ export function inspectSyncSemantics(Database, databasePath) {
       try { tables = JSON.parse(row.tables_json); } catch { fault('sync_snapshots', row, 'invalid_json'); return; }
       if (!Array.isArray(tables) || tables.some(name => !SYNC_TABLES.includes(name)) || new Set(tables).size !== tables.length) fault('sync_snapshots', row, 'invalid_table');
     });
+    let previousSnapshotKey;
     scan('sync_snapshot_items', ['snapshot_id', 'table_name', 'pk', 'kind', 'payload_json', 'clock', 'hlc', 'op_id', 'server_deleted_at'], row => {
+      // Primary-key order makes contradictory kinds adjacent. Keep only one
+      // tuple, without delimiter ambiguity or a set growing with the database.
+      const key = [row.snapshot_id, row.table_name, row.pk];
+      if (previousSnapshotKey?.every((part, index) => part === key[index])) fault('sync_snapshot_items', row, 'duplicate_snapshot_key');
+      previousSnapshotKey = key;
       identity('sync_snapshot_items', row); revision('sync_snapshot_items', row);
       if (!row.has_snapshot) fault('sync_snapshot_items', row, 'missing_snapshot');
       else if (!row.in_snapshot_tables) fault('sync_snapshot_items', row, 'snapshot_table_mismatch');
