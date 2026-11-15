@@ -50,17 +50,17 @@ test('S3 reference summary counts recoverable bytes and refuses malformed rows',
 });
 
 test('S3 inspection refuses unsupported profile and provider versions', () => {
-  expect(() => inspector.assertS3InspectionProfile({ contract: 2, sqlite: '0.0.29', s3: '0.0.15' })).not.toThrow();
-  for (const profile of [{ contract: 0, sqlite: '0.0.29', s3: '0.0.15' }, { contract: 2, sqlite: '0.0.27', s3: '0.0.15' }, { contract: 2, sqlite: '0.0.29', s3: '0.0.14' }]) {
+  expect(() => inspector.assertS3InspectionProfile({ contract: 2, sqlite: '0.0.30', s3: '0.0.15' })).not.toThrow();
+  for (const profile of [{ contract: 0, sqlite: '0.0.30', s3: '0.0.15' }, { contract: 2, sqlite: '0.0.27', s3: '0.0.15' }, { contract: 2, sqlite: '0.0.30', s3: '0.0.14' }]) {
     expect(() => inspector.assertS3InspectionProfile(profile)).toThrow('Unsupported');
   }
 });
 
 test('archive inventory accepts only a qualified filesystem or S3 inspection profile', () => {
-  expect(() => inspector.assertArchiveInspectionProfile({ contract: 1, sqlite: '0.0.29', filesystem: '0.0.18' })).not.toThrow();
-  expect(() => inspector.assertArchiveInspectionProfile({ contract: 2, sqlite: '0.0.29', s3: '0.0.15' })).not.toThrow();
-  expect(() => inspector.assertArchiveInspectionProfile({ contract: 0, sqlite: '0.0.29', s3: '0.0.15' })).toThrow('Unsupported');
-  expect(() => inspector.assertArchiveInspectionProfile({ contract: 2, sqlite: '0.0.29', s3: '0.0.14' })).toThrow('Unsupported');
+  expect(() => inspector.assertArchiveInspectionProfile({ contract: 1, sqlite: '0.0.30', filesystem: '0.0.18' })).not.toThrow();
+  expect(() => inspector.assertArchiveInspectionProfile({ contract: 2, sqlite: '0.0.30', s3: '0.0.15' })).not.toThrow();
+  expect(() => inspector.assertArchiveInspectionProfile({ contract: 0, sqlite: '0.0.30', s3: '0.0.15' })).toThrow('Unsupported');
+  expect(() => inspector.assertArchiveInspectionProfile({ contract: 2, sqlite: '0.0.30', s3: '0.0.14' })).toThrow('Unsupported');
 });
 
 test('S3 references are bound to canonical live rows and normalized object keys', () => {
@@ -82,8 +82,7 @@ test('S3 references are bound to canonical live rows and normalized object keys'
     expect(() => read()).toThrow('storage ID');
     put('alpha', sha, { size_bytes: 3, storage_id: `prefix/alpha/sha256:${sha}` }, 2);
     expect(() => read()).toThrow('deletion state');
-    db.query('DELETE FROM kysely_migration WHERE name=?').run(inspector.QUALIFIED_MIGRATIONS.at(-1)!);
-    db.query('DELETE FROM kysely_migration WHERE name=?').run(inspector.QUALIFIED_MIGRATIONS.at(-2)!);
+    db.query('DELETE FROM kysely_migration WHERE name=?').run('031_storage_generation_uploads');
     expect(() => read()).toThrow('migration history');
   } finally { db.close(); }
 });
@@ -427,7 +426,7 @@ test('S3 capture command reads qualified references and fails closed on configur
   const builder = Bun.spawn(['node', join(import.meta.dir, '../../../scripts/docker/prepare-remote-helper.mjs'), dir], { env: { ...process.env, OR3_DOCKER_PROFILE: 'clerk-sqlite-s3' }, stdout: 'pipe', stderr: 'pipe' });
   const [buildExit, buildError] = await Promise.all([builder.exited, new Response(builder.stderr).text()]);
   expect(buildExit, buildError).toBe(0);
-  writeFileSync(join(dir, 'backup-inspection-profile.json'), JSON.stringify({ contract: 2, sqlite: '0.0.29', s3: '0.0.15' }));
+  writeFileSync(join(dir, 'backup-inspection-profile.json'), JSON.stringify({ contract: 2, sqlite: '0.0.30', s3: '0.0.15' }));
   const payload = Buffer.from('capture command fixture');
   const hash = `sha256:${createHash('sha256').update(payload).digest('hex')}`;
   const ref = { workspaceId: 'workspace', hash, storageId: `prefix/workspace/${hash}`, sizeBytes: payload.length };
@@ -539,7 +538,7 @@ test('S3 capture command reads qualified references and fails closed on configur
     expect(refused.exitCode).not.toBe(0);
     expect(refused.bytes.length).toBe(0);
     expect(refused.stderr).not.toContain('fixture-secret');
-    writeFileSync(join(dir, 'backup-inspection-profile.json'), JSON.stringify({ contract: 0, sqlite: '0.0.29', s3: '0.0.15' }));
+    writeFileSync(join(dir, 'backup-inspection-profile.json'), JSON.stringify({ contract: 0, sqlite: '0.0.30', s3: '0.0.15' }));
     expect((await run(environment)).exitCode).not.toBe(0);
   } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
 });
