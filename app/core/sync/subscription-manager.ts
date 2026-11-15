@@ -1,3 +1,4 @@
+import { isStorageQuotaError } from './incoming-evidence';
 /**
  * @module app/core/sync/subscription-manager
  *
@@ -36,6 +37,7 @@ import type {
     SyncChange,
     PullResponse,
     PullRequest,
+    SnapshotResponse,
 } from '~~/shared/sync/types';
 import { ConflictResolver } from './conflict-resolver';
 import { getCursorManager, type CursorManager } from './cursor-manager';
@@ -114,6 +116,15 @@ export class SubscriptionManager {
     private requestController = new AbortController();
     private probeGeneration: number | null = null;
     private pendingCursorAcknowledgement: number | null = null;
+    /** Kept only for a recoverable local storage pause; explicit start retries it. */
+    private pausedSnapshot: {
+        stager: SnapshotStager;
+        seenPageTokens: Set<string>;
+        pageToken?: string;
+        totalPulled: number;
+        pendingPage?: SnapshotResponse;
+        downloadComplete: boolean;
+    } | null = null;
 
     constructor(
         db: Or3DB,
@@ -193,6 +204,12 @@ export class SubscriptionManager {
                 this.setStatus('connected');
                 circuitBreaker.recordSuccess();
                 probeSettled = true;
+            } catch (error) {
+                if (isStorageQuotaError(error)) {
+                    circuitBreaker.recordSuccess();
+                    probeSettled = true;
+                }
+                throw error;
             } finally {
                 if (this.probeGeneration === generation) this.probeGeneration = null;
                 if (!probeSettled && this.isCurrentGeneration(generation)) {
@@ -205,7 +222,7 @@ export class SubscriptionManager {
             }
             console.error('[SubscriptionManager] Failed to start:', error);
             this.setStatus('error');
-            this.scheduleReconnect(generation);
+            if (!isStorageQuotaError(error)) this.scheduleReconnect(generation);
         }
     }
 
@@ -332,6 +349,8 @@ export class SubscriptionManager {
                     pendingFetch = null;
                 }
 
+                await this.conflictResolver.applyChanges([], response.unavailable);
+                if (!this.isCurrentGeneration(generation)) return;
                 if (response.changes.length > 0) {
                     const filtered = this.filterRecentOps(response.changes);
                     if (filtered.length) {
@@ -407,46 +426,51 @@ export class SubscriptionManager {
         const snapshot = this.provider.snapshot?.bind(this.provider);
         if (!snapshot) return;
 
-        const stager = new SnapshotStager(this.db, this.scope, this.config.tables);
-        const seenPageTokens = new Set<string>();
-        let pageToken: string | undefined;
-        let totalPulled = 0;
+        const state = this.pausedSnapshot ?? {
+            stager: new SnapshotStager(this.db, this.scope, this.config.tables),
+            seenPageTokens: new Set<string>(), totalPulled: 0, downloadComplete: false,
+            pageToken: undefined, pendingPage: undefined,
+        };
+        const { stager } = state;
+        if (!this.pausedSnapshot) await stager.start();
+        this.pausedSnapshot = null;
         let highWatermark: number;
-
-        await stager.start();
         try {
-            for (;;) {
+            while (!state.downloadComplete) {
                 if (!this.isCurrentGeneration(generation)) return;
                 if (!this.canContinueProbe(generation)) {
                     throw new Error('Circuit breaker opened during snapshot bootstrap');
                 }
 
-                const page = await snapshot({
+                const page = state.pendingPage ?? await snapshot({
                     scope: this.scope,
                     pageSize: this.config.bootstrapPageSize,
+                    unavailableRecordCapability: 'unavailable-v1',
                     tables: this.config.tables,
-                    ...(pageToken ? { pageToken } : {}),
+                    ...(state.pageToken ? { pageToken: state.pageToken } : {}),
                 }, { signal: this.requestController.signal });
                 if (!this.isCurrentGeneration(generation)) return;
 
+                state.pendingPage = page;
                 await stager.appendPage(page);
-                totalPulled += page.items.length;
+                state.pendingPage = undefined;
+                state.totalPulled += page.items.length + (page.unavailable?.length ?? 0);
                 if (emitBootstrapEvents) {
                     await useHooks().doAction('sync.bootstrap:action:progress', {
                         scope: this.scope,
                         cursor: page.highWatermark,
-                        pulledCount: totalPulled,
+                        pulledCount: state.totalPulled,
                         hasMore: page.nextPageToken !== null,
                     });
                     if (!this.isCurrentGeneration(generation)) return;
                 }
 
-                if (page.nextPageToken === null) break;
-                if (seenPageTokens.has(page.nextPageToken)) {
+                if (page.nextPageToken === null) { state.downloadComplete = true; break; }
+                if (state.seenPageTokens.has(page.nextPageToken)) {
                     throw new Error('Snapshot pagination token repeated before completion');
                 }
-                seenPageTokens.add(page.nextPageToken);
-                pageToken = page.nextPageToken;
+                state.seenPageTokens.add(page.nextPageToken);
+                state.pageToken = page.nextPageToken;
             }
 
             highWatermark = await stager.apply(
@@ -454,9 +478,13 @@ export class SubscriptionManager {
                 () => this.isCurrentGeneration(generation),
                 replacementTables
             );
+        } catch (error) {
+            if (isStorageQuotaError(error)) this.pausedSnapshot = state;
+            throw error;
         } finally {
-            await stager.dispose();
+            if (this.pausedSnapshot !== state) await stager.dispose();
         }
+        let totalPulled = state.totalPulled;
         if (!this.isCurrentGeneration(generation)) return;
 
         // The watermark and materialized rows commit atomically. Pull semantics
@@ -613,6 +641,8 @@ export class SubscriptionManager {
                 if (!this.isCurrentGeneration(generation)) return;
                 if (await this.honorRequiresSnapshot(response, generation)) return;
 
+                await this.conflictResolver.applyChanges([], response.unavailable);
+                if (!this.isCurrentGeneration(generation)) return;
                 if (response.changes.length) {
                     const filtered = this.filterRecentOps(response.changes);
                     if (filtered.length) {
@@ -746,6 +776,8 @@ export class SubscriptionManager {
         if (!Number.isSafeInteger(fromCursor) || fromCursor < 0 || fromCursor > cursor) {
             throw new Error('Subscription page skipped the durable cursor');
         }
+        await this.conflictResolver.applyChanges([], parsed.unavailable);
+        if (!this.isCurrentGeneration(generation)) return;
         const changes = parsed.changes.filter(change => change.serverVersion > cursor);
         const filtered = this.filterRecentOps(changes);
         if (changes.length) {
@@ -958,6 +990,8 @@ export class SubscriptionManager {
                 break;
             }
 
+            await this.conflictResolver.applyChanges([], response.unavailable);
+            if (!this.isCurrentGeneration(generation)) break;
             const newChanges = response.changes.filter(
                 (change) => change.serverVersion > cursor
             );
@@ -1004,7 +1038,7 @@ export class SubscriptionManager {
             this.unsubscribe = null;
         }
         this.setStatus('error');
-        this.scheduleReconnect(generation);
+        if (!isStorageQuotaError(error)) this.scheduleReconnect(generation);
     }
 
     /**
@@ -1079,7 +1113,7 @@ export class SubscriptionManager {
     }
 
     private pull(request: PullRequest): Promise<PullResponse> {
-        return this.provider.pull(request, { signal: this.requestController.signal });
+        return this.provider.pull({ ...request, unavailableRecordCapability: 'unavailable-v1' }, { signal: this.requestController.signal });
     }
 
     private getWindow(): Window | null {
