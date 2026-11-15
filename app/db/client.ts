@@ -91,6 +91,8 @@ export interface SyncQuarantineRow {
     /** The operation exactly as found. */
     op: unknown;
     diagnostics: string[];
+    /** Rejected push winner, retained for explicit recovery/export. */
+    serverWinner?: unknown;
     /** Local content captured at quarantine time, so export never depends on the live row. */
     localRow?: unknown;
     localTombstone?: unknown;

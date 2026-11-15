@@ -188,6 +188,19 @@ export default defineEventHandler(async (event) => {
 
         recordSyncRequest(userId, 'sync:push');
 
+        // A UUID denotes one immutable intent. Reject aliases before validating
+        // or dispatching any op; correspondence cannot represent duplicates.
+        const seenOpIds = new Set<string>();
+        for (const raw of envelope.data.ops) {
+            if (!raw || typeof raw !== 'object' || !('stamp' in raw)) continue;
+            const stamp = raw.stamp;
+            if (!stamp || typeof stamp !== 'object' || !('opId' in stamp) || typeof stamp.opId !== 'string') continue;
+            if (seenOpIds.has(stamp.opId)) {
+                throw createError({ statusCode: 400, statusMessage: 'Duplicate push operation ID' });
+            }
+            seenOpIds.add(stamp.opId);
+        }
+
         const merged = new Array<PushResultItem>(envelope.data.ops.length);
         const validOps: PendingOp[] = [];
         const validIndexes: number[] = [];

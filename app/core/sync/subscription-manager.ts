@@ -36,9 +36,12 @@ import type {
     SyncChange,
     PullResponse,
     PullRequest,
+    SnapshotRequest,
+    SnapshotResponse,
 } from '~~/shared/sync/types';
 import { ConflictResolver } from './conflict-resolver';
 import { getCursorManager, type CursorManager } from './cursor-manager';
+import { observeSyncAction } from './sync-observers';
 import { useHooks } from '~/core/hooks/useHooks';
 import { SYNCED_TABLES, getHookBridge } from './hook-bridge';
 import { isRecentOpId } from './recent-op-cache';
@@ -59,6 +62,12 @@ const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000];
 
 /** Emit diagnostics at this retry count; capped retries continue afterward. */
 const MAX_RECONNECT_ATTEMPTS = 20;
+// Snapshot-v1 identities live for one hour. Retry only the current page,
+// bounding both backoff and total retry lifetime without losing staged pages.
+const SNAPSHOT_TTL_MS = 60 * 60 * 1000;
+const MAX_SNAPSHOT_BACKOFF_MS = 30_000;
+class SnapshotIdentityExpiredError extends Error {}
+class SnapshotRecoveryPausedError extends Error {}
 
 /**
  * Purpose:
@@ -161,12 +170,16 @@ export class SubscriptionManager {
 
         try {
             const circuitBreaker = getSyncCircuitBreaker(this.circuitBreakerKey);
-            if (!circuitBreaker.canRetry() || !circuitBreaker.beginProbe()) {
+            const probe = circuitBreaker.acquireProbe();
+            if (!probe) {
                 throw new Error(
                     'Circuit breaker is open; subscription cannot start'
                 );
             }
             this.probeGeneration = generation;
+            const signal = this.requestController.signal;
+            const cancelProbe = () => probe.cancel();
+            signal.addEventListener('abort', cancelProbe, { once: true });
             let probeSettled = false;
             try {
                 const needsBootstrap = await this.cursorManager.isBootstrapNeeded();
@@ -191,12 +204,15 @@ export class SubscriptionManager {
 
                 this.reconnectAttempts = 0;
                 this.setStatus('connected');
-                circuitBreaker.recordSuccess();
+                probe.success();
                 probeSettled = true;
             } finally {
+                signal.removeEventListener('abort', cancelProbe);
                 if (this.probeGeneration === generation) this.probeGeneration = null;
                 if (!probeSettled && this.isCurrentGeneration(generation)) {
-                    circuitBreaker.recordFailure();
+                    probe.failure();
+                } else if (!probeSettled) {
+                    probe.cancel();
                 }
             }
         } catch (error) {
@@ -205,7 +221,7 @@ export class SubscriptionManager {
             }
             console.error('[SubscriptionManager] Failed to start:', error);
             this.setStatus('error');
-            this.scheduleReconnect(generation);
+            if (!(error instanceof SnapshotRecoveryPausedError)) this.scheduleReconnect(generation);
         }
     }
 
@@ -394,6 +410,50 @@ export class SubscriptionManager {
         }
     }
 
+    private async fetchSnapshotPage(
+        snapshot: NonNullable<SyncProvider['snapshot']>,
+        request: SnapshotRequest,
+        signal: AbortSignal,
+        expiresAt: number
+    ): Promise<SnapshotResponse> {
+        let attempts = 0;
+        for (;;) {
+            if (signal.aborted) throw new DOMException('Snapshot cancelled', 'AbortError');
+            if (Date.now() >= expiresAt) throw new SnapshotIdentityExpiredError('Snapshot identity expired');
+            try {
+                return await snapshot(request, { signal });
+            } catch (error) {
+                if (signal.aborted) throw new DOMException('Snapshot cancelled', 'AbortError');
+                const fault = error as { status?: number; statusCode?: number; retryAfterMs?: number; retryable?: boolean; name?: string } | null;
+                const status = fault?.status ?? fault?.statusCode;
+                const transient = status !== undefined
+                    ? [408, 429, 500, 502, 503, 504].includes(status)
+                    : error instanceof TypeError || fault?.name === 'TimeoutError' || fault?.retryable === true;
+                // 410 (invalid/expired identity), authorization and contract
+                // errors escape to recovery; they must never retry this token.
+                if (!transient) throw error;
+                const backoff = Math.min(MAX_SNAPSHOT_BACKOFF_MS, 1000 * 2 ** Math.min(attempts++, 5));
+                const retryAfter = typeof fault?.retryAfterMs === 'number' && Number.isFinite(fault.retryAfterMs)
+                    ? Math.max(0, fault.retryAfterMs) : 0;
+                const remaining = expiresAt - Date.now();
+                const delay = Math.min(remaining, Math.max(backoff, retryAfter));
+                if (delay <= 0) throw new SnapshotIdentityExpiredError('Snapshot identity expired');
+                await new Promise<void>((resolve, reject) => {
+                    const cancel = () => {
+                        clearTimeout(timer);
+                        reject(new DOMException('Snapshot cancelled', 'AbortError'));
+                    };
+                    const timer = setTimeout(() => {
+                        signal.removeEventListener('abort', cancel);
+                        resolve();
+                    }, delay);
+                    signal.addEventListener('abort', cancel, { once: true });
+                    if (signal.aborted) cancel();
+                });
+            }
+        }
+    }
+
     /**
      * Install a bounded provider snapshot, then replay only changes committed
      * after its high-watermark before opening the live subscription.
@@ -421,12 +481,12 @@ export class SubscriptionManager {
                     throw new Error('Circuit breaker opened during snapshot bootstrap');
                 }
 
-                const page = await snapshot({
+                const page = await this.fetchSnapshotPage(snapshot, {
                     scope: this.scope,
                     pageSize: this.config.bootstrapPageSize,
                     tables: this.config.tables,
                     ...(pageToken ? { pageToken } : {}),
-                }, { signal: this.requestController.signal });
+                }, this.requestController.signal, startTime + SNAPSHOT_TTL_MS);
                 if (!this.isCurrentGeneration(generation)) return;
 
                 await stager.appendPage(page);
@@ -454,6 +514,14 @@ export class SubscriptionManager {
                 () => this.isCurrentGeneration(generation),
                 replacementTables
             );
+        } catch (error) {
+            const status = (error as { status?: number; statusCode?: number } | null)?.status ??
+                (error as { statusCode?: number } | null)?.statusCode;
+            if (this.requestController.signal.aborted || isAbortLikeError(error) ||
+                status === 410 || error instanceof SnapshotIdentityExpiredError) throw error;
+            // A fatal chain, admission or storage failure needs deliberate
+            // recovery; reconnect must not silently download a fresh identity.
+            throw new SnapshotRecoveryPausedError('Snapshot recovery paused after a non-transient failure', { cause: error });
         } finally {
             await stager.dispose();
         }
@@ -749,7 +817,7 @@ export class SubscriptionManager {
         const changes = parsed.changes.filter(change => change.serverVersion > cursor);
         const filtered = this.filterRecentOps(changes);
         if (changes.length) {
-            await useHooks().doAction('sync.pull:action:received', { scope: this.scope, changeCount: changes.length });
+            await observeSyncAction(useHooks(), 'sync.pull:action:received', { scope: this.scope, changeCount: changes.length });
             if (!this.isCurrentGeneration(generation)) return;
         }
         const result = filtered.length
@@ -821,7 +889,7 @@ export class SubscriptionManager {
         if (newChanges.length === 0) return; // Nothing new to process
 
         try {
-            await useHooks().doAction('sync.pull:action:received', {
+            await observeSyncAction(useHooks(), 'sync.pull:action:received', {
                 scope: this.scope,
                 changeCount: newChanges.length,
             });
@@ -879,7 +947,7 @@ export class SubscriptionManager {
                 return;
             }
             console.error('[SubscriptionManager] Failed to apply changes:', error);
-            await useHooks().doAction('sync.pull:action:error', {
+            await observeSyncAction(useHooks(), 'sync.pull:action:error', {
                 scope: this.scope,
                 error: error instanceof Error ? error.message : String(error),
             });
@@ -1004,7 +1072,7 @@ export class SubscriptionManager {
             this.unsubscribe = null;
         }
         this.setStatus('error');
-        this.scheduleReconnect(generation);
+        if (!(error instanceof SnapshotRecoveryPausedError)) this.scheduleReconnect(generation);
     }
 
     /**
@@ -1017,7 +1085,7 @@ export class SubscriptionManager {
         // Retain diagnostics at the former retry limit, but never strand a
         // durable cursor after a long outage. Backoff stays capped below.
         if (this.reconnectAttempts === MAX_RECONNECT_ATTEMPTS) {
-            useHooks().doAction('sync.subscription:action:maxRetriesExceeded', {
+            observeSyncAction(useHooks(), 'sync.subscription:action:maxRetriesExceeded', {
                 scope: this.scope, attempts: this.reconnectAttempts,
             }).catch(() => {});
         }
@@ -1061,8 +1129,7 @@ export class SubscriptionManager {
         this.status = status;
 
         if (previousStatus !== status) {
-            useHooks()
-                .doAction('sync.subscription:action:statusChange', {
+            void observeSyncAction(useHooks(), 'sync.subscription:action:statusChange', {
                     scope: this.scope,
                     previousStatus,
                     status,

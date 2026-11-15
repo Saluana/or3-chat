@@ -23,7 +23,7 @@ import { errorDiagnostics, presentError, type ErrorMetadata } from '~~/shared/er
  * - Capacity warning at 500 pending ops
  * - Retry delays: [250ms, 1s, 3s, 5s], then capped retries until recovery
  * - Circuit breaker prevents flush attempts when the provider is down
- * - Payloads are re-sanitized before each push for safety
+ * - Wire payloads are normalized durably before their first push
  *
  * @see core/sync/hook-bridge for the write capture side
  * @see shared/sync/circuit-breaker for circuit breaker implementation
@@ -31,6 +31,7 @@ import { errorDiagnostics, presentError, type ErrorMetadata } from '~~/shared/er
  */
 import type { Or3DB, SyncQuarantineRow } from '~/db/client';
 import type { SyncProvider, SyncScope, PendingOp, PushWinner } from '~~/shared/sync/types';
+import { observeSyncAction } from './sync-observers';
 import { useHooks } from '~/core/hooks/useHooks';
 import { nowSec } from '~/db/util';
 import { sanitizePayloadForSync, SyncPayloadTooLargeError } from '~~/shared/sync/sanitize';
@@ -70,6 +71,8 @@ const MAX_PENDING_OPS = 500;
 const PUSH_TIMEOUT_MS = 30_000;
 const CLAIM_DURATION_MS = 60_000;
 
+class InvalidServerWinnerError extends Error {}
+
 type EligibleStatus = 'pending' | 'retry_wait';
 
 function getReadyAt(op: PendingOp): number {
@@ -90,8 +93,8 @@ function compareSchedulingKey(a: PendingOp, b: PendingOp): number {
     return a.id.localeCompare(b.id);
 }
 
-function stripReadyAt(op: PendingOp): Omit<PendingOp, 'readyAt' | 'claimId' | 'claimExpiresAt'> {
-    const { readyAt: _omitted, claimId: _claim, claimExpiresAt: _expiry, ...rest } = op;
+function stripReadyAt(op: PendingOp): Omit<PendingOp, 'readyAt' | 'claimId' | 'claimExpiresAt' | 'wireNormalized'> {
+    const { readyAt: _omitted, claimId: _claim, claimExpiresAt: _expiry, wireNormalized: _normalized, ...rest } = op;
     return rest;
 }
 
@@ -389,7 +392,7 @@ export class OutboxManager {
             if (generation !== this.lifecycleGeneration) return false;
             if (totalQueued >= MAX_PENDING_OPS) {
                 console.warn('[OutboxManager] Queue near capacity:', totalQueued);
-                await hooks.doAction('sync.queue:action:full', {
+                await observeSyncAction(hooks, 'sync.queue:action:full', {
                     pendingCount: totalQueued,
                     maxSize: MAX_PENDING_OPS,
                 });
@@ -408,7 +411,8 @@ export class OutboxManager {
             claimed = batch;
             if (!batch.length) return false;
 
-            if (!circuitBreaker.beginProbe()) {
+            const probe = circuitBreaker.acquireProbe();
+            if (!probe) {
                 await this.releaseBatchForDeferredRetry(batch, 0);
                 return false;
             }
@@ -421,6 +425,9 @@ export class OutboxManager {
                 this.nextStatus =
                     lastStatus === 'pending' ? 'retry_wait' : 'pending';
             }
+            const cancelProbe = () => probe.cancel();
+            controller.signal.addEventListener('abort', cancelProbe, { once: true });
+            if (controller.signal.aborted) probe.cancel();
             let probeSettled = false;
 
             try {
@@ -432,22 +439,26 @@ export class OutboxManager {
                 if (generation !== this.lifecycleGeneration) return false;
 
                 if (outcome.deferred) {
-                    circuitBreaker.recordSuccess();
+                    probe.success();
                     probeSettled = true;
                     return false;
                 }
 
                 if (outcome.successCount > 0 && outcome.failCount === 0) {
-                    circuitBreaker.recordSuccess();
-                } else if (outcome.failCount > 0) {
-                    circuitBreaker.recordFailure();
+                    probe.success();
+                } else if (outcome.serviceFailure ?? outcome.failCount > 0) {
+                    probe.failure();
                 } else {
-                    circuitBreaker.recordSuccess();
+                    probe.success();
                 }
                 probeSettled = true;
                 return true;
             } finally {
-                if (!probeSettled) circuitBreaker.recordFailure();
+                controller.signal.removeEventListener('abort', cancelProbe);
+                if (!probeSettled) {
+                    if (controller.signal.aborted || generation !== this.lifecycleGeneration) probe.cancel();
+                    else probe.failure();
+                }
             }
         } finally {
             clearTimeout(deadline);
@@ -459,13 +470,29 @@ export class OutboxManager {
         }
     }
 
+    /** Hold uncertain committed intent without reconstruction or automatic re-ID. */
+    private async holdOp(op: PendingOp, reason: string, serverWinner?: PushWinner): Promise<void> {
+        await this.db.transaction('rw', ['pending_ops', 'sync_quarantine', 'tombstones', op.tableName], async () => {
+            if (!await this.ownsClaim(op)) return;
+            await this.db.sync_quarantine.put({
+                id: op.id, tableName: op.tableName, pk: op.pk, source: 'manual',
+                status: 'quarantined', op, diagnostics: [reason], serverWinner,
+                localRow: await this.db.table(op.tableName).get(op.pk),
+                localTombstone: await this.db.tombstones.get(`${op.tableName}:${op.pk}`),
+                quarantinedAt: Date.now(),
+            });
+            await this.db.pending_ops.delete(op.id);
+        });
+        unmarkRecentOpId(op.stamp.opId);
+    }
+
     private async recoverAbandonedOps(): Promise<void> {
         await this.db.transaction('rw', ['pending_ops'], async () => {
             for (const status of ['syncing', 'in_flight'] as const) {
                 const rows = await this.db.pending_ops.where('status').equals(status).toArray();
                 for (const op of rows) {
                     if (op.claimId && (op.claimExpiresAt ?? 0) > Date.now()) continue;
-                    await this.db.pending_ops.put({ ...op, status: 'pending', nextAttemptAt: undefined,
+                    await this.db.pending_ops.put({ ...op, status: 'pending', nextAttemptAt: undefined, wireNormalized: op.wireNormalized ?? false,
                         claimId: undefined, claimExpiresAt: undefined });
                 }
             }
@@ -499,7 +526,12 @@ export class OutboxManager {
     private async updateClaimedOp(op: PendingOp, update: PendingOp): Promise<boolean> {
         return this.db.transaction('rw', ['pending_ops'], async () => {
             if (!await this.ownsClaim(op)) return false;
-            await this.db.pending_ops.put({ ...update, claimId: undefined, claimExpiresAt: undefined });
+            const current = (await this.db.pending_ops.get(op.id))!;
+            // A cancellation can still hold the pre-normalization claim copy.
+            // Never let its scheduling update undo already-frozen wire intent.
+            await this.db.pending_ops.put({ ...update,
+                ...(current.wireNormalized === true ? { payload: current.payload, wireNormalized: true } : {}),
+                claimId: undefined, claimExpiresAt: undefined });
             return true;
         });
     }
@@ -606,7 +638,7 @@ export class OutboxManager {
         batch: PendingOp[],
         generation: number,
         hooks: ReturnType<typeof useHooks>
-    ): Promise<{ successCount: number; failCount: number; deferred: boolean }> {
+    ): Promise<{ successCount: number; failCount: number; deferred: boolean; serviceFailure?: boolean }> {
         if (generation !== this.lifecycleGeneration) {
             return { successCount: 0, failCount: 0, deferred: false };
         }
@@ -618,7 +650,7 @@ export class OutboxManager {
             });
         }
 
-        await hooks.doAction('sync.push:action:before', {
+        await observeSyncAction(hooks, 'sync.push:action:before', {
             scope: this.scope,
             count: batch.length,
         });
@@ -630,19 +662,41 @@ export class OutboxManager {
         const sanitizedBatch: PendingOp[] = [];
         let localFailCount = 0;
         for (const op of batch) {
+            // Old code used the send-time wall clock for missing thread times.
+            // An attempted legacy op cannot be safely normalized under its UUID.
+            const payload = op.payload as Record<string, unknown> | undefined;
+            const unstableLegacy = op.wireNormalized !== true && op.tableName === 'threads' && payload &&
+                (typeof payload.created_at !== 'number' || typeof payload.updated_at !== 'number');
+            if (unstableLegacy && (op.attempts > 0 || op.status === 'retry_wait' || op.wireNormalized === false)) {
+                await this.holdOp(op, 'Legacy timestamp normalization has uncertain prior wire intent');
+                localFailCount++;
+                continue;
+            }
+            let normalized: PendingOp;
             try {
-                sanitizedBatch.push({ ...stripReadyAt(op),
-                    payload: sanitizePayloadForSync(op.tableName, op.payload, op.operation) });
-                valid.push(op);
+                normalized = op.wireNormalized === true ? op : {
+                    ...op, payload: sanitizePayloadForSync(op.tableName, op.payload, op.operation), wireNormalized: true,
+                };
             } catch (error) {
                 await this.handleFailedOp(op, error instanceof Error ? error.message : String(error),
                     error instanceof SyncPayloadTooLargeError ? error.code : 'VALIDATION_ERROR',
                     errorDiagnostics(error, { source: 'sync' }));
-                localFailCount += 1;
+                localFailCount++;
+                continue;
             }
+            // Persist before the provider sees the UUID; retries, split batches
+            // and a replacement manager all reuse the exact same wire payload.
+            const owned = await this.db.transaction('rw', ['pending_ops'], async () => {
+                if (!await this.ownsClaim(op)) return false;
+                await this.db.pending_ops.put({ ...normalized, status: 'in_flight' });
+                return true;
+            });
+            if (!owned) continue;
+            sanitizedBatch.push(stripReadyAt(normalized));
+            valid.push(normalized);
         }
         batch = valid;
-        if (!batch.length) return { successCount: 0, failCount: localFailCount, deferred: false };
+        if (!batch.length) return { successCount: 0, failCount: localFailCount, deferred: false, serviceFailure: false };
 
         try {
             for (const op of batch) {
@@ -668,11 +722,13 @@ export class OutboxManager {
             const resultsById = new Map(result.results.map((res) => [res.opId, res]));
             let successCount = 0;
             let failCount = localFailCount;
+            let serviceFailure = false;
 
             for (const op of batch) {
                 const res = resultsById.get(op.stamp.opId);
                 if (!res) {
                     await this.handleFailedOp(op, 'Missing push result', 'UNKNOWN');
+                    serviceFailure = true;
                     failCount += 1;
                     continue;
                 }
@@ -696,11 +752,18 @@ export class OutboxManager {
                             'UNKNOWN'
                         );
                         failCount += 1;
+                        serviceFailure = true;
                         continue;
                     }
-                    if (await this.acknowledgeOp(op, winner)) {
-                        unmarkRecentOpId(op.stamp.opId);
-                        successCount += 1;
+                    try {
+                        if (await this.acknowledgeOp(op, winner)) {
+                            unmarkRecentOpId(op.stamp.opId);
+                            successCount++;
+                        }
+                    } catch (error) {
+                        if (!(error instanceof InvalidServerWinnerError)) throw error;
+                        await this.holdOp(op, 'Invalid server winner', winner);
+                        failCount++;
                     }
                     continue;
                 }
@@ -708,12 +771,23 @@ export class OutboxManager {
                 if (res.success) {
                     if (await this.acknowledgeOp(op, undefined, res.serverVersion)) successCount += 1;
                 } else {
-                    await this.handleFailedOp(op, res.error, res.errorCode);
-                    failCount += 1;
+                    // SQLite's explicit identity-reuse reason is terminal;
+                    // unrelated provider CONFLICT outcomes keep their retry policy.
+                    const identityReuse = res.errorCode === 'CONFLICT' &&
+                        res.error === `Conflicting operation reuses processed op_id ${op.stamp.opId}`;
+                    if (identityReuse) await this.holdOp(op, 'Server rejected reused operation identity');
+                    else {
+                        await this.handleFailedOp(op, res.error, res.errorCode);
+                        // Retryable content conflicts and throttling are not
+                        // evidence that the shared sync service is unavailable.
+                        if (!this.isPermanentFailure(res.errorCode) &&
+                            !['CONFLICT', 'NOT_FOUND', 'RATE_LIMITED'].includes(res.errorCode ?? '')) serviceFailure = true;
+                    }
+                    failCount++;
                 }
             }
 
-            await hooks.doAction('sync.push:action:after', {
+            await observeSyncAction(hooks, 'sync.push:action:after', {
                 scope: this.scope,
                 successCount,
                 failCount,
@@ -727,7 +801,7 @@ export class OutboxManager {
                 });
             }
 
-            return { successCount, failCount, deferred: false };
+            return { successCount, failCount, deferred: false, serviceFailure };
         } catch (error) {
             if (generation !== this.lifecycleGeneration) {
                 return { successCount: 0, failCount: 0, deferred: false };
@@ -739,7 +813,7 @@ export class OutboxManager {
             // budget and op_ids as edits queued before going offline.
             if (status === null && typeof navigator !== 'undefined' && navigator.onLine === false) {
                 await this.releaseBatchForDeferredRetry(batch, 0);
-                await hooks.doAction('sync.push:action:after', {
+                await observeSyncAction(hooks, 'sync.push:action:after', {
                     scope: this.scope,
                     successCount: 0,
                     failCount: 0,
@@ -752,7 +826,7 @@ export class OutboxManager {
                     batch,
                     Math.min(MAX_AUTH_RETRY_DELAY_MS, firstDelay * 2 ** this.authFailures++)
                 );
-                await hooks.doAction('sync.push:action:after', {
+                await observeSyncAction(hooks, 'sync.push:action:after', {
                     scope: this.scope,
                     successCount: 0,
                     failCount: 0,
@@ -779,6 +853,7 @@ export class OutboxManager {
                     successCount: left.successCount + right.successCount,
                     failCount: localFailCount + left.failCount + right.failCount,
                     deferred: left.deferred || right.deferred,
+                    serviceFailure: !!left.serviceFailure || !!right.serviceFailure,
                 };
             }
 
@@ -789,7 +864,7 @@ export class OutboxManager {
                     this.providerRateLimitedUntil,
                     Date.now() + deferredRetryDelayMs
                 );
-                await hooks.doAction('sync.push:action:after', {
+                await observeSyncAction(hooks, 'sync.push:action:after', {
                     scope: this.scope,
                     successCount: 0,
                     failCount: 0,
@@ -810,13 +885,13 @@ export class OutboxManager {
                 await this.handleFailedOp(op, message, undefined, errorDiagnostics(error, { source: 'sync' }));
                 failCount += 1;
             }
-            await hooks.doAction('sync.push:action:after', {
+            await observeSyncAction(hooks, 'sync.push:action:after', {
                 scope: this.scope,
                 successCount: 0,
                 failCount,
             });
             console.error('[OutboxManager] Push error:', error);
-            return { successCount: 0, failCount, deferred: false };
+            return { successCount: 0, failCount, deferred: false, serviceFailure: !this.isPermanentFailure(undefined, errorDiagnostics(error, { source: 'sync' })) };
         }
     }
 
@@ -828,7 +903,20 @@ export class OutboxManager {
     private async acknowledgeOp(op: PendingOp, winner?: PushWinner, serverVersion?: number): Promise<boolean> {
         return this.db.transaction('rw', Array.from(new Set(['pending_ops', 'tombstones', op.tableName])), async () => {
             if (!await this.ownsClaim(op)) return false;
-            if (winner) await this.applyRemoteWinner(op, winner);
+            if (winner) {
+                // Legacy live-winner payloads may omit HLC; keep that existing
+                // comparison domain while rejecting malformed revisions.
+                if (!winner.revision || !Number.isSafeInteger(winner.revision.clock) || winner.revision.clock < 0 ||
+                    typeof winner.revision.hlc !== 'string' || typeof winner.revision.opId !== 'string' ||
+                    (winner.kind !== 'put' && winner.kind !== 'delete') ||
+                    (winner.kind === 'delete' && winner.serverDeletedAt !== undefined &&
+                        (typeof winner.serverDeletedAt !== 'number' || !Number.isFinite(winner.serverDeletedAt) || winner.serverDeletedAt < 0)) ||
+                    (winner.kind === 'put' && (!winner.payload || typeof winner.payload !== 'object' || Array.isArray(winner.payload) ||
+                        !normalizeSyncPayload(op.tableName, op.pk, winner.payload, winner.revision).isValid))) {
+                    throw new InvalidServerWinnerError('Invalid server winner');
+                }
+                await this.applyRemoteWinner(op, winner);
+            }
             else if (op.operation === 'delete') await this.markTombstoneSynced(op, serverVersion);
             await this.db.pending_ops.delete(op.id);
             return true;
@@ -872,7 +960,7 @@ export class OutboxManager {
                 }
                 const normalized = normalizeSyncPayload(op.tableName, op.pk, winner.payload, winnerRev);
                 if (!normalized.isValid) {
-                    throw new Error(`Invalid server winner for ${op.tableName}:${op.pk}: ${normalized.errors?.join(', ')}`);
+                    throw new InvalidServerWinnerError(`Invalid server winner for ${op.tableName}:${op.pk}: ${normalized.errors?.join(', ')}`);
                 }
                 const localRefCount = (local as { ref_count?: unknown } | undefined)?.ref_count;
                 const payload = op.tableName === 'file_meta'
@@ -949,7 +1037,7 @@ export class OutboxManager {
                 nextAttemptAt,
             };
             if (!await this.updateClaimedOp(op, updatedOp)) return;
-            await hooks.doAction('sync.retry:action', { op: updatedOp, attempt: op.attempts });
+            await observeSyncAction(hooks, 'sync.retry:action', { op: updatedOp, attempt: op.attempts });
             return;
         }
 
@@ -1002,7 +1090,7 @@ export class OutboxManager {
             };
             if (!await this.updateClaimedOp(op, updatedOp)) return;
             console.warn('[OutboxManager] Op will retry:', op.stamp.opId, 'attempt', attempts);
-            await hooks.doAction('sync.retry:action', { op: updatedOp, attempt: attempts });
+            await observeSyncAction(hooks, 'sync.retry:action', { op: updatedOp, attempt: attempts });
         }
     }
 

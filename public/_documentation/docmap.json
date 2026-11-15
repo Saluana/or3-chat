@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Understand workspace synchronization, request compression, tool-result UUID repair, failed-write recovery, local recovery backups, and conflict handling."
+                    "summary": "Understand workspace synchronization, owned retry probes, same-page snapshot recovery, immutable outbox intent, quarantine, content-aware retry budgets, bounded independent observers, and retention safety."
                 },
                 {
                     "name": "storage-layer.md",

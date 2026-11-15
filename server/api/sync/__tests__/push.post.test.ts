@@ -411,6 +411,23 @@ describe('POST /api/sync/push', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 500 });
     });
 
+    it.each([false, true])('rejects duplicate UUIDs before dispatch (changed=%s)', async changed => {
+        const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
+        const body = makeBaseBody();
+        body.ops.push({ ...body.ops[0]!, ...(changed ? { pk: 'different' } : {}) });
+        readBodyMock.mockResolvedValue(body);
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
+        expect(pushMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps an exact operation unchanged across separate lost-ACK requests', async () => {
+        const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
+        readBodyMock.mockResolvedValue(makeBaseBody());
+        const first = await handler(makeEvent());
+        expect(await handler(makeEvent())).toEqual(first);
+        expect(pushMock.mock.calls[1]?.[1]).toEqual(pushMock.mock.calls[0]?.[1]);
+    });
+
     it('passes adapter result through and records request', async () => {
         const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
         const body = makeBaseBody();

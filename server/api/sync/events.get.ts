@@ -38,6 +38,11 @@ export default defineEventHandler(async event => {
     let stop: (() => void) | undefined;
     let heartbeat: ReturnType<typeof setInterval> | undefined;
     let lifetime: ReturnType<typeof setTimeout> | undefined;
+    const releaseWatcher = () => {
+        const dispose = stop;
+        stop = undefined;
+        try { dispose?.(); } catch { console.warn('[sync-events] Provider unsubscribe failed'); }
+    };
     const cleanup = () => {
         if (closed) return;
         closed = true;
@@ -45,9 +50,15 @@ export default defineEventHandler(async event => {
         if (remaining > 0) connections.set(userId, remaining); else connections.delete(userId);
         if (heartbeat) clearInterval(heartbeat);
         if (lifetime) clearTimeout(lifetime);
-        stop?.();
+        releaseWatcher();
     };
-    const close = () => { cleanup(); void stream.close().catch(() => {}); };
+    const close = () => {
+        try { cleanup(); }
+        finally {
+            // Promise.resolve also contains synchronous provider/stream throws.
+            void Promise.resolve().then(() => stream.close()).catch(() => {});
+        }
+    };
     stream.onClosed(cleanup);
     const drain = async () => {
         if (draining || closed) return;
@@ -69,7 +80,7 @@ export default defineEventHandler(async event => {
         // or permission lookup must still release its backend subscription.
         lifetime = setTimeout(() => {
             if (!closed && Date.now() < expiresAt) {
-                void stream.push(JSON.stringify({ refresh: true })).catch(() => {});
+                void Promise.resolve().then(() => stream.push(JSON.stringify({ refresh: true }))).catch(() => {});
             }
             close();
         }, Math.max(0, Math.min(startedAt + 60_000, expiresAt) - Date.now()));
@@ -80,7 +91,7 @@ export default defineEventHandler(async event => {
             void drain();
         }, close);
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- The watch can close before it resolves.
-        if (closed) { stop(); return await stream.send(); }
+        if (closed) { releaseWatcher(); return await stream.send(); }
         // Keep proxies alive and revoke idle listeners without per-pull reads.
         // Do not queue heartbeats behind a slow client or an in-flight check.
         heartbeat = setInterval(() => {

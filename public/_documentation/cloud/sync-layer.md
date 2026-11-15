@@ -34,7 +34,10 @@ pages were fetched. Cross-provider coverage verifies deterministic rows,
 tombstones, intervening writes, duplicate boundaries, and fresh-device recovery
 after the original log entries have been pruned. Change-log and tombstone
 retention is enabled for adapters that declare the `snapshot-v1` retention
-contract; adapters that do not fail closed with `503`.
+contract; adapters that do not fail closed with `503`. Automatic maintenance
+uses the same capability gate, isolates workspace failures, and reports a partial
+pass as failed while continuing other workspaces. SSE disposal failures cannot
+retain connection slots or prevent the remaining cleanup.
 
 When an existing device's cursor expires, snapshot-capable providers use the
 same canonical replacement path instead of attempting cursor-zero replay.
@@ -632,6 +635,39 @@ Run `bun run test:e2e:sync:cloud --development-providers` for disposable Basic A
 
 ## Structured recovery failures
 
-Sync providers must return `errorCode` for failed push results: `VALIDATION_ERROR`, `OVERSIZED`, or `UNAUTHORIZED` mark an operation permanent; `RATE_LIMITED` defers it. Transport failures should expose HTTP `status`/`statusCode` and `retryAfterMs` when available. Whole-request 400, 413, and 422 failures are split into individual operations; a single operation rejected with 400, 413, or 422 is retained as permanent. Unstructured failed results remain retryable; message text never controls recovery.
+Sync providers must return `errorCode` for failed push results: `VALIDATION_ERROR`, `OVERSIZED`, or `UNAUTHORIZED` mark an operation permanent; `RATE_LIMITED` defers it. Transport failures should expose HTTP `status`/`statusCode` and `retryAfterMs` when available. Whole-request 400, 413, and 422 failures are split into individual operations; a single operation rejected with 400, 413, or 422 is retained as permanent. Unstructured failed results remain retryable. The narrowly recognized SQLite
+`CONFLICT` reason for reuse of an already processed `op_id` is held for recovery;
+other conflict text does not make an operation terminal. Generic `CONFLICT` and `NOT_FOUND` results keep retrying without charging the shared outage breaker. Per-operation `RATE_LIMITED` results also leave the breaker healthy and defer without incrementing attempts; transport and server failures still count toward the outage budget.
 
 Background history adapters should throw errors with `status` or `statusCode`, a structured code (`VALIDATION_ERROR`, `OVERSIZED`, `UNAUTHORIZED`, `FORBIDDEN`, `CONFLICT`, `SUPERSEDED`, or `UNSUPPORTED`), or explicit `retryable: false` for a permanent history failure. HTTP 408, 429, and 5xx are transient. Unknown or legacy unstructured errors remain pending for retry, even if their wording resembles a permanent failure. Providers that only throw strings or plain errors must add metadata to retain permanent-block behavior.
+
+A shared workspace/provider circuit breaker limits retries. Half-open probes have
+owned, expiring leases: stopping or cancelling an attempt releases its lease,
+and late results from that attempt cannot settle a replacement probe.
+
+Outgoing operations freeze their sanitized wire payload durably before the first
+send, preserving UUID intent through retries and lost acknowledgements. Existing
+complete legacy payloads keep their previous normalization. Previously attempted
+legacy threads whose send-time timestamps cannot be recovered are held in the
+existing sync quarantine for export and explicit recovery. An explicit processed
+UUID identity-reuse rejection or malformed server winner also holds only that
+operation, preserving local content and winner evidence; healthy siblings settle.
+These content failures do not consume the provider outage budget. Other provider
+conflicts retain their existing retry behavior.
+
+Snapshot downloads retain their staged prefix while retrying the same page/token
+on HTTP 429, temporary service/network errors, or request timeouts. Backoff is
+cancellable and capped at 30 seconds, with Retry-After as a minimum and the
+one-hour snapshot lifetime as the total bound. Invalid/expired identities (410)
+escape to a new recovery attempt. Non-transient chain, authorization or storage
+failures pause recovery for a deliberate retry. Staging still installs only as
+one complete atomic chain.
+
+Independent sync observations (push before/after, queue/retry, pull received/error,
+and subscription status/retry diagnostics) wait at most 250 ms. One unresolved
+dispatch per action/engine is retained; further observations on that action are
+coalesced away until it settles. Observers must capture scope before awaiting;
+a timeout does not cancel their side effects. Protocol persistence, page receipts,
+pending-op capture and filters retain their existing backpressure. Phase events,
+applied-data invalidation and notification delivery retain their existing awaited
+semantics until per-listener delivery can preserve those side effects.
