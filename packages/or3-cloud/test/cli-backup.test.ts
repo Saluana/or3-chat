@@ -1376,17 +1376,19 @@ test('internal S3 restore requires remote objects before and after startup', asy
   const target = { ...source, OR3_STORAGE_S3_ENDPOINT: 'https://target.example.invalid', OR3_STORAGE_S3_BUCKET: 'target-bucket' };
   await writeFile(join(fixture.directory, '.env'), serializeEnv(source), { mode: 0o600 });
   await inProcess(fixture, async () => {
+    const { markPending, updatePending } = await import('../src/deployment/state-store');
+    await markPending(fixture.directory, fixture.state, { id: 'test-history-restore', operation: 'restore', phase: 'target-mutating', startedAt: new Date().toISOString() });
     const captured = await captureBackup(fixture.directory, fixture.state, source);
     await writeFile(join(fixture.directory, '.env'), serializeEnv(target), { mode: 0o600 });
     await fixture.reset();
     await fixture.configure({ s3Check: { checked: 1, missing: ['prefix/workspace/hash'], mismatched: [] } });
-    await expect(restoreBackupData(fixture.directory, fixture.state, target, captured.backupDir, { beforeStart: async () => {} })).rejects.toThrow(/missing|mismatch/i);
+    await expect(restoreBackupData(fixture.directory, fixture.state, target, captured.backupDir, { beforeStart: () => updatePending(fixture.directory, fixture.state, { phase: 'starting-target' }) })).rejects.toThrow(/missing|mismatch/i);
     expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
     expect(parseEnv(await fixture.readEnvText()).OR3_STORAGE_S3_BUCKET).toBe('target-bucket');
     await fixture.reset();
     await fixture.configure({ s3Check: { checked: 1, missing: [], mismatched: [] } });
     let beforeStart = false;
-    await restoreBackupData(fixture.directory, fixture.state, target, captured.backupDir, { beforeStart: async () => { beforeStart = true; } });
+    await restoreBackupData(fixture.directory, fixture.state, target, captured.backupDir, { beforeStart: async () => { beforeStart = true; await updatePending(fixture.directory, fixture.state, { phase: 'starting-target' }); } });
     const trace = await fixture.traceText();
     const checks = trace.split('\n').filter(line => line.includes('remote-objects.mjs check-copy'));
     expect(checks).toHaveLength(2);
@@ -1401,7 +1403,7 @@ test('internal S3 restore requires remote objects before and after startup', asy
     let startupJournaled = false;
     await expect(restoreBackupData(fixture.directory, fixture.state, target, captured.backupDir, {
       beforeStart: async () => {
-        startupJournaled = true;
+        startupJournaled = true; await updatePending(fixture.directory, fixture.state, { phase: 'starting-target' });
         await fixture.configure({ s3Check: { checked: 1, missing: [], mismatched: ['prefix/workspace/hash'] } });
       },
     })).rejects.toThrow(/after startup/i);
@@ -1421,10 +1423,12 @@ test('internal S3 reference restore checks original bucket and distinguishes saf
   const env = { ...fixture.env, AUTH_PROVIDER: 'clerk', OR3_AUTH_PROVIDER: 'clerk', NUXT_PUBLIC_STORAGE_PROVIDER: 's3', OR3_STORAGE_S3_ENDPOINT: 'https://source.example.invalid', OR3_STORAGE_S3_REGION: 'us-east-1', OR3_STORAGE_S3_BUCKET: 'source-bucket', OR3_STORAGE_S3_KEY_PREFIX: 'prefix/', OR3_STORAGE_S3_ACCESS_KEY_ID: 'fixture-id', OR3_STORAGE_S3_SECRET_ACCESS_KEY: 'fixture-secret' };
   await writeFile(join(fixture.directory, '.env'), serializeEnv(env), { mode: 0o600 });
   await inProcess(fixture, async () => {
+    const { markPending, updatePending } = await import('../src/deployment/state-store');
+    await markPending(fixture.directory, fixture.state, { id: 'test-history-restore', operation: 'restore', phase: 'target-mutating', startedAt: new Date().toISOString() });
     const captured = await captureBackup(fixture.directory, fixture.state, env, { safetySnapshot: true });
     await fixture.reset();
     await fixture.configure({ s3Check: { checked: 1, missing: ['prefix/workspace/hash'], mismatched: [] } });
-    await expect(restoreBackupData(fixture.directory, fixture.state, env, captured.backupDir, { previousSafetySnapshot: true, beforeStart: async () => {} })).rejects.toThrow(/missing|mismatch/i);
+    await expect(restoreBackupData(fixture.directory, fixture.state, env, captured.backupDir, { previousSafetySnapshot: true, beforeStart: () => updatePending(fixture.directory, fixture.state, { phase: 'starting-target' }) })).rejects.toThrow(/missing|mismatch/i);
     expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
     await fixture.reset();
     await expect(restoreBackupData(fixture.directory, fixture.state, { ...env, OR3_STORAGE_S3_BUCKET: 'foreign-bucket' }, captured.backupDir, { previousSafetySnapshot: true, remoteReferencePolicy: 'warn' })).rejects.toThrow(/source|target/i);
@@ -1443,7 +1447,7 @@ test('internal S3 reference restore checks original bucket and distinguishes saf
     expect(trace).not.toContain('fixture-secret');
     await fixture.reset();
     await fixture.configure({ s3Check: { checked: 1, missing: [], mismatched: [] } });
-    await restoreBackupData(fixture.directory, fixture.state, env, captured.backupDir, { previousSafetySnapshot: true, beforeStart: async () => {} });
+    await restoreBackupData(fixture.directory, fixture.state, env, captured.backupDir, { previousSafetySnapshot: true, beforeStart: () => updatePending(fixture.directory, fixture.state, { phase: 'starting-target' }) });
     const complete = await fixture.traceText();
     const checks = complete.split('\n').filter(line => line.includes('remote-objects.mjs check'));
     expect(checks).toHaveLength(2);
@@ -1461,7 +1465,7 @@ test('internal S3 reference restore checks original bucket and distinguishes saf
     console.warn = (...values) => warnings.push(values.join(' '));
     try { await restorePreMutationSnapshot(fixture.directory, recoveryState, env); }
     finally { console.warn = originalWarn; }
-    expect((await fixture.readState()).incompleteOperation?.phase).toBe('restoring-previous');
+    expect((await fixture.readState()).incompleteOperation?.phase).toBe('starting-previous');
     expect(warnings.join('\n')).toMatch(/missing/i);
   });
 });
@@ -1616,7 +1620,7 @@ test('staged S3 update restores its safety snapshot with a warning after a pre-s
     expect(stderr).toContain('failed and was restored');
     expect(stderr).toMatch(/missing.*S3 objects/i);
     expect(stdout + stderr).not.toContain('fixture-secret');
-    expect((await fixture.readState()).incompleteOperation?.phase).toBe('restoring-previous');
+    expect((await fixture.readState()).incompleteOperation?.phase).toBe('starting-previous');
     const trace = await fixture.traceText();
     expect(trace).toContain('remote-objects.mjs verify-inventory');
     expect(trace).toContain('remote-objects.mjs check');

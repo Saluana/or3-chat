@@ -442,7 +442,7 @@ test('a failure while replacing the target restores the verified snapshot and ke
   // Characterizes current behavior: the outer failure handler re-persists the
   // in-memory journal after the restoration commit, so the operator confirms
   // with an explicit (idempotent) restore rather than finding silent success.
-  expect(state.incompleteOperation).toMatchObject({ operation: 'update', phase: 'restoring-previous', backupId: snapshot });
+  expect(state.incompleteOperation).toMatchObject({ operation: 'update', phase: 'starting-previous', backupId: snapshot });
   expect(JSON.parse((await fixture.cli(['recover', '--dry-run', '--json'])).stdout)).toMatchObject({ decision: { action: 'require-explicit-restore', snapshotId: snapshot } });
   const confirmed = await fixture.cli(['recover', '--restore', '--yes']);
   expect(confirmed.exitCode, confirmed.output).toBe(0);

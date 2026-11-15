@@ -1,3 +1,4 @@
+import { supportsHistoryReset, requireHistoryResetTarget, prepareHistoryReset, commitHistoryReset } from './history-incarnation';
 import { join } from 'node:path';
 import { assertExistingVaultCustody } from './vault';
 import { readAuthenticatedBackupConfig } from './config';
@@ -155,6 +156,10 @@ export async function restoreBackupData(
   options: { recreateDataVolume?: boolean; beforeStart?: () => Promise<void>; previousSafetySnapshot?: boolean; remoteReferencePolicy?: 'warn' } = {},
 ) {
   const manifest = await readManifest(backupPath, directory);
+  const safety = options.previousSafetySnapshot === true && !options.beforeStart;
+  const capable = await supportsHistoryReset(directory, imageAtDigest(manifest.image, manifest.imageDigest));
+  if (!capable && !safety) await requireHistoryResetTarget(directory, imageAtDigest(manifest.image, manifest.imageDigest));
+  if (!state.incompleteOperation) throw new Error('History replacement requires an external operation journal');
   assertRestorableManagedAssets(manifest);
   const backupConfig = await readAuthenticatedBackupConfig(backupPath, manifest);
   const backupEnv = parseEnv(backupConfig);
@@ -213,8 +218,10 @@ export async function restoreBackupData(
         OR3_IMAGE: imageAtDigest(manifest.image, manifest.imageDigest),
       });
 
+  // Fence all writers before journaling and before volume recreation/extraction.
+  await stopProject(directory, state.mode);
+  await prepareHistoryReset(directory, state, manifest, safety);
   if (options.recreateDataVolume) await removeManagedDataVolumeForRecreation(directory, state);
-  else await stopProject(directory, state.mode);
   if (
     dashboardUpdatesEnabled(directory)
     && restoredEnv.OR3_DASHBOARD_UPDATES_ENABLED !== 'true'
@@ -246,6 +253,12 @@ export async function restoreBackupData(
   if (!snapshotCheck.ok) {
     throw new Error(`Restored snapshot integrity verification failed. ${redact(snapshotCheck.stderr, secretValues(restoredEnv))}`);
   }
+  if (!capable) {
+    state.syncHistory = { certification: 'history-reset-required' };
+    await updatePending(directory, state, { phase: 'history-reset-required' });
+    throw new Error('DEGRADED byte-preservation recovery is stopped/isolated: target lacks incarnation runtime; history-reset-required');
+  }
+  await commitHistoryReset(directory, state, manifest, restoredEnv.OR3_SQLITE_DB_PATH!, options.previousSafetySnapshot === true);
   if (manifest.schemaVersion === 1) await restoreGenerationIdentities(directory, state, restoredEnv, backupPath, { previousSafetySnapshot: options.previousSafetySnapshot });
   if (!options.previousSafetySnapshot) {
     // This restore path has no isolated target-migration entrypoint. Certify the
@@ -262,11 +275,13 @@ export async function restoreBackupData(
       'or3-sync-inspection', '/app/scripts/docker/backup-inspect.mjs', 'sync', restoredEnv.OR3_SQLITE_DB_PATH!,
     ], directory);
     if (!semanticCheck.ok) throw new Error(`Restored candidate sync semantic certification failed or is unsupported. ${redact(semanticCheck.stderr, secretValues(restoredEnv))}`);
-    assertSyncSemanticCertification(semanticCheck.stdout);
+    assertSyncSemanticCertification(semanticCheck.stdout, state.syncHistory!.historyIncarnation);
+    state.syncHistory!.certification = 'certified';
   }
   // The caller journals the point at which application writes become possible
-  // before requesting startup. Recovery snapshots keep their existing phase.
-  await options.beforeStart?.();
+  // before requesting startup. Internal safety startup has its own boundary.
+  if (options.beforeStart) await options.beforeStart();
+  else await updatePending(directory, state, { phase: 'starting-previous' });
   await startProject(directory, state.mode, restoredEnv);
   if (manifest.schemaVersion === 2 && manifest.remote.kind === 's3-copy-v1') {
     const result = await checkRemoteCopyTarget(directory, manifest, restoredEnv, backupPath, manifest.remote);

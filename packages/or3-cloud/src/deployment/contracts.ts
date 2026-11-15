@@ -59,7 +59,8 @@ export type ManagedState = {
     /** Verified pre-mutation snapshot used to restore a failed restore/rollback. */
     previousBackupId?: string;
     previousBackupPath?: string;
-    phase?: 'prepared' | 'snapshot-created' | 'target-mutating' | 'target-ready' | 'restoring-previous' | 'starting-target' | 'starting-previous';
+    historyReset?: { id: string; historyIncarnation: string; role: 'target' | 'safety'; backupDataSha256: string; targetImageDigest: string; progress: 'prepared' | 'reset-complete' };
+    phase?: 'history-reset-required' | 'prepared' | 'snapshot-created' | 'target-mutating' | 'target-ready' | 'restoring-previous' | 'starting-target' | 'starting-previous';
     /** Durable proof of a completed replacement boundary for schema-2 updates. */
     evidence?: TargetReadyEvidence;
     verifiedSnapshot?: VerifiedSnapshot;
@@ -82,6 +83,9 @@ export type ManagedState = {
       nextEnv: Record<string, string>;
     };
   };
+  syncHistory?: { historyIncarnation?: string; certification: 'pending' | 'certified' | 'degraded' | 'history-reset-required' };
+  /** Safety evidence is retained until deliberate export/resolution. */
+  pinnedHistoryBackups?: string[];
   lastError?: string;
 };
 

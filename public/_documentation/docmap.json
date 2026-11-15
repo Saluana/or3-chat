@@ -719,7 +719,7 @@
                     "category": "Operations",
                     "categoryOrder": 3,
                     "order": 14,
-                    "summary": "Operational runbook for OR3 Cloud SSR deployments, including bounded reader-aligned sync semantic certification before restore startup, incident ID detection, sanitized fault locators, generation-aware inspection, explicitly degraded safety recovery, and supported migration histories."
+                    "summary": "Managed operations with journaled offline history rotation, exact target qualification, semantic certification, protected safety evidence, stopped degraded recovery, and explicit activation boundaries."
                 },
                 {
                     "name": "troubleshooting.md",
@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Understand workspace synchronization, deterministic writer admission, negotiated unavailable records, durable incoming evidence, UTF-8 snapshot ordering, owned retry probes, same-page snapshot recovery with quota pause, immutable outbox intent, quarantine, content-aware retry budgets, independently bounded observers with callback-local event coalescing, and retention safety."
+                    "summary": "Sync history capability fences, atomic held-intent recovery, account-scoped inspection/export, stale-completion protection, the Dexie explicit-reopen activation blocker, and separate provider qualification."
                 },
                 {
                     "name": "storage-layer.md",

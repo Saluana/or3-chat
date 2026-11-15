@@ -246,6 +246,9 @@ async function dismissWelcomeCard(page) {
 }
 
 async function verifyStorageRoundTrip(page, workspaceId) {
+    const discovery = await browserJsonRequest(page, '/api/sync/pull', { body: { scope: { workspaceId }, cursor: 0, historyIncarnation: null, historyIncarnationCapability: 'incarnation-v1' } });
+    const historyIncarnation = discovery.historyIncarnation;
+    if (typeof historyIncarnation !== 'string' || !/^[\x00-\x7f]{1,128}$/.test(historyIncarnation)) throw new Error('Unqualified history incarnation runtime');
     const uploadBytes = browserUploadFixture();
     const hash = `sha256:${createHash('sha256').update(uploadBytes).digest('hex')}`;
     const presign = await browserJsonRequest(page, '/api/storage/presign-upload', {
@@ -289,7 +292,7 @@ async function verifyStorageRoundTrip(page, workspaceId) {
     const opId = randomUUID();
     const pushed = await browserJsonRequest(page, '/api/sync/push', {
         body: {
-            scope: { workspaceId },
+            scope: { workspaceId }, historyIncarnation, historyIncarnationCapability: 'incarnation-v1',
             ops: [{
                 id: `release-smoke-${opId}`,
                 tableName: 'file_meta',

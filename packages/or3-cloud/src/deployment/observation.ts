@@ -191,6 +191,8 @@ export function publicStateProjection(state: ManagedState) {
     deploymentId: state.deploymentId ?? null,
     lastSuccessfulOperation: state.lastSuccessfulOperation,
     updatedAt: state.updatedAt,
+    syncHistory: state.syncHistory ?? null,
+    pinnedHistoryBackups: state.pinnedHistoryBackups ?? [],
     rollback: state.rollback
       ? { appVersion: state.rollback.appVersion, imageDigest: state.rollback.imageDigest, backupId: state.rollback.backupId, createdAt: state.rollback.createdAt }
       : null,
@@ -203,6 +205,7 @@ export function publicStateProjection(state: ManagedState) {
           dashboardJobId: pending.dashboardJobId ?? null,
           targetVersion: pending.targetVersion ?? null,
           targetImageDigest: pending.targetImageDigest ?? null,
+          historyReset: pending.historyReset ?? null,
           remoteReconcile: pending.remoteReconcile ?? null,
           backupProgress: pending.backupProgress ? {
             stage: pending.backupProgress.stage,

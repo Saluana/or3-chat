@@ -371,3 +371,38 @@ SQLite migrations 030–032 resume after interrupted startup by validating alrea
 Managed restore and updates that re-extract the data volume validate generation manifests against the restored SQLite records and verify any remaining payload hashes before updating the recorded directory identities. This runs offline, after backup authentication and extraction, before application startup. Claims, removal fences, accounting and missing payloads are preserved; runtime inode checks remain enforced. A validation failure stops startup. A raw filesystem copy alone is not a supported restore for enrolled immutable generations. Cleanup activation still requires the installed-provider lifecycle qualification.
 
 Backup preflight recognizes `fs-generation-v1` attachment IDs and checks their verified canonical bindings and generation archive paths, alongside legacy filesystem attachments. Ordinary restore requires complete generation payloads and fences. Recovery from the recorded pre-operation safety snapshot instead preserves pre-existing missing files without recreating or rebinding incomplete generations; healthy generations are still verified and rebound. Present corrupt payloads or invalid identities remain errors in either mode.
+
+
+## History incarnation replacement gate
+
+The matched CLI requires the exact target image to qualify offline reset and
+runtime `incarnation-v1` before a normal restore or data-restoring rollback can
+replace live bytes. Today's SQLite 0.0.30 images are unqualified. A new CLI does
+not harden an old image, and the current browser activation blocker described in
+[Sync internals](/documentation/cloud/sync-layer#history-replacement-and-saved-work)
+also prevents release certification.
+
+For a qualified target, all writers stop before the CLI journals a fresh reset
+attempt/token, archive checksum, image digest and target/safety role outside the
+data volume. The target-owned helper verifies the exact schema and rotates the
+singleton in one SQLite transaction while clearing snapshot sessions/items and
+device ACKs. It preserves canonical rows, log/counter/retention state and unresolved
+evidence. H3 semantic certification must identify that same token before normal
+startup. A startup boundary is journaled before writers can run. Re-extraction,
+repeat restore and safety recovery always get fresh tokens; restart and ordinary
+updates preserve identity.
+
+Interrupted gates keep writers stopped. Review `status`, `doctor` and the durable
+operation record before managed recovery. Explicit recovery may re-extract the
+verified safety snapshot with a new attempt; an already-started target is never
+automatically rolled back. An incapable emergency safety target preserves bytes
+but stays stopped/isolated with `history-reset-required`. A capable safety target
+still rotates when semantic certification is bypassed and remains durably degraded.
+Status JSON exposes reset progress and certification; doctor rejects an uncertified
+recorded history. Verified safety/archive evidence is pinned against ordinary
+retention. Keep it until deliberate export/resolution and acceptance.
+
+The host/CLI tests use a provider double and a native SQLite fixture. They do not
+qualify a packed provider/image or Basic/SQLite/filesystem and Clerk/SQLite/S3
+end-to-end restoration. Exact provider pins, historical migration qualification,
+image builds and publication remain a separate activation unit.

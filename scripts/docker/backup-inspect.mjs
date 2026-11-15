@@ -147,7 +147,7 @@ function validSyncPayload(table, value, pk) {
 }
 
 /** Read-only, bounded certification; diagnostics contain sanitized locators only. */
-export function inspectSyncSemantics(Database, databasePath) {
+export function inspectSyncSemantics(Database, databasePath, { requireHistoryIncarnation = false } = {}) {
   const db = openCanonicalDatabase(Database, databasePath);
   const faults = [];
   let inspectedRecords = 0, faultCount = 0, complete = true;
@@ -261,7 +261,13 @@ export function inspectSyncSemantics(Database, databasePath) {
       if (!safe(row.value)) fault('server_version_counter', row, 'invalid_counter');
       if (row.value < row.log_head) fault('server_version_counter', row, 'counter_below_log');
     }, ",(SELECT MAX(CASE WHEN typeof(l.server_version) IN ('integer','real') THEN l.server_version END) FROM change_log l WHERE l.workspace_id=t.workspace_id) AS log_head");
-    return { contract: 1, complete, healthy: complete && faultCount === 0, inspectedRecords, faultCount, faults, diagnosticsTruncated: faultCount > faults.length };
+    let historyIncarnation;
+    if (requireHistoryIncarnation) {
+      const rows = db.prepare("SELECT id, CASE WHEN typeof(incarnation)='text' AND length(CAST(incarnation AS BLOB))<=128 THEN incarnation ELSE NULL END AS incarnation FROM sync_history LIMIT 2").all();
+      if (rows.length !== 1 || rows[0].id !== 1 || typeof rows[0].incarnation !== 'string' || !/^[\x00-\x7f]{1,128}$/.test(rows[0].incarnation)) throw new Error('Invalid sync history singleton');
+      historyIncarnation = rows[0].incarnation;
+    }
+    return { ...(historyIncarnation ? { historyIncarnation } : {}), contract: 1, complete, healthy: complete && faultCount === 0, inspectedRecords, faultCount, faults, diagnosticsTruncated: faultCount > faults.length };
   } finally { db.close(); }
 }
 
@@ -384,7 +390,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     if (process.argv[2] === 'sync') {
       assertArchiveInspectionProfile(profile);
       const Database = createRequire(import.meta.url)('/app/.output/server/node_modules/better-sqlite3');
-      const result = inspectSyncSemantics(Database, process.argv[3] ?? '/scratch/sync.sqlite');
+      const result = inspectSyncSemantics(Database, process.argv[3] ?? '/scratch/sync.sqlite', { requireHistoryIncarnation: profile.historyIncarnation === 'v1' });
       console.log(JSON.stringify(result));
       if (!result.healthy) {
         console.error(`Sync semantic certification failed: ${JSON.stringify(result)}`);

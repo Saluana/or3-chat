@@ -1,3 +1,5 @@
+import { requireHistoryResetTarget } from '../backup/history-incarnation';
+import { imageAtDigest } from '../deployment/identity';
 import { createPreMutationSnapshot } from '../backup/create';
 import { readAuthenticatedBackupConfig } from '../backup/config';
 import { validateVolumeArchive } from '../backup/archive';
@@ -53,6 +55,7 @@ export async function rollbackCommand(directory: string, flags: Flags) {
   const recreateDataVolume = restoreRequiresVolumeRecreation(loaded.env, backupEnv);
   await pullAndRequireImage(point.image, point.imageDigest, 'Rollback');
   await assertSupportedHostArchitecture(point.image);
+  await requireHistoryResetTarget(loaded.directory, imageAtDigest(manifest.image, manifest.imageDigest));
   await assertExistingVaultCustody(loaded.directory, loaded.state, manifest, backupPath, backupConfig);
   await assertRestoreFreeSpace(loaded.directory, loaded.state, loaded.env, manifest, backupPath);
   // Snapshot capture already stops the app. Validate before journaling/capture,
@@ -101,6 +104,8 @@ export async function rollbackCommand(directory: string, flags: Flags) {
     });
     const restoredEnv = parseEnv(await readText(deploymentPaths(loaded.directory).env));
     const nextState = stateFromEnv(loaded.directory, restoredEnv, loaded.state.mode, 'restore', await imageDigest(restoredEnv.OR3_IMAGE));
+    nextState.syncHistory = loaded.state.syncHistory;
+    nextState.pinnedHistoryBackups = loaded.state.pinnedHistoryBackups;
     nextState.rollback = undefined;
     // Terminal state first; the redundant mirror is warning-only housekeeping so
     // its failure cannot send a completed rollback into the destructive handler.
@@ -110,7 +115,12 @@ export async function rollbackCommand(directory: string, flags: Flags) {
   } catch (error) {
     const original = redact(error instanceof Error ? error.message : String(error), secretValues(loaded.env));
     const phase = loaded.state.incompleteOperation?.phase;
-    if (phase === 'starting-target') {
+    if (phase === 'history-reset-required') {
+      loaded.state.lastError = `Byte-preservation recovery remains stopped/isolated and requires a qualified history-reset runtime: ${original}. Review status and managed recovery; do not start this image manually.`;
+      await writeState(loaded.directory, loaded.state);
+      throw new Error(loaded.state.lastError, { cause: error });
+    }
+    if (phase === 'starting-target' || phase === 'starting-previous') {
       loaded.state.lastError = `Rollback to ${point.appVersion} started the target but did not complete: ${original}. Writes may have been accepted, so the deployment was NOT restored automatically. Keep the operation record and run "npx @or3/cloud recover --dry-run", then "npx @or3/cloud recover --restore --yes" only after confirming loss of post-replacement writes.`;
       await writeState(loaded.directory, loaded.state);
       throw new Error(loaded.state.lastError, { cause: error });

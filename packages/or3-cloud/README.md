@@ -327,3 +327,20 @@ to attempt a repair. It never edits an authenticated archive to make it pass.
 Recorded pre-mutation safety recovery preserves prior bytes and explicitly warns
 that sync semantic health is uncertified; physical/deep health alone is not sync
 certification. History incarnation/reset remains a separate runtime contract.
+
+
+### History incarnation recovery boundary
+
+Normal restore/data rollback requires the exact image's qualified
+`sync-history-reset.mjs capability` (`incarnation-v1`). The external managed
+journal records a fresh UUID per extraction; writers stay stopped through offline
+transactional identity/session/ACK reset and matching semantic certification.
+Startup is journaled before accepting writes. Safety recovery also rotates;
+incapable safety targets stay stopped with `history-reset-required`, and semantic
+bypasses remain degraded in `status`/`doctor`. Retention pins recovery evidence.
+
+Current SQLite 0.0.30 image profiles explicitly remain unqualified. Qualification
+must update the packed provider, exact migration allowlists, inspector profile and
+helper together, after resolving the Dexie explicit-reopen activation blocker in
+`public/_documentation/cloud/sync-layer.md`. No versions/pins were advanced by
+this implementation. Native helper/provider-double tests are not image E2E proof.

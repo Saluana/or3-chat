@@ -205,6 +205,8 @@ export async function loadManaged(directory = process.cwd(), options: { writable
 }
 
 export async function commitRecoveredState(directory: string, previous: ManagedState, next: ManagedState) {
+  next.syncHistory ??= previous.syncHistory;
+  next.pinnedHistoryBackups ??= previous.pinnedHistoryBackups;
   // Terminal state is authoritative and must land before the redundant mirror
   // is removed. Mirror cleanup is warning-only: an enclosing catch must not be
   // able to turn a completed commit back into pending state.

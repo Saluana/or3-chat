@@ -149,16 +149,20 @@ async function verifyAdminDashboard() {
     }
 }
 
+let historyIncarnation;
 async function verifySync(cookie, workspaceId) {
     const pull = await jsonRequest('/api/sync/pull', {
         cookie,
         body: {
             scope: { workspaceId },
+            historyIncarnation: null, historyIncarnationCapability: 'incarnation-v1',
             cursor: 0,
             limit: 10,
             tables: ['messages'],
         },
     });
+    historyIncarnation = pull.historyIncarnation;
+    if (typeof historyIncarnation !== 'string' || !/^[\x00-\x7f]{1,128}$/.test(historyIncarnation)) throw new Error('Unqualified history incarnation runtime');
     if (!Array.isArray(pull.changes) || typeof pull.nextCursor !== 'number') {
         throw new Error('SQLite sync pull returned an invalid response.');
     }
@@ -240,7 +244,7 @@ async function writeFixture(cookie, workspaceId) {
     const pushed = await jsonRequest('/api/sync/push', {
         cookie,
         body: {
-            scope: { workspaceId },
+            scope: { workspaceId }, historyIncarnation, historyIncarnationCapability: 'incarnation-v1',
             ops: [{
                 id: `release-smoke-${opId}`,
                 tableName: 'file_meta',

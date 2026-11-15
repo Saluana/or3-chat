@@ -21,4 +21,7 @@ if (selected === 'basic-sqlite-fs') {
   profile = { contract: S3_INSPECTION_PROFILE.contract, sqlite, s3 };
   assertS3InspectionProfile(profile);
 }
+// Current published SQLite is intentionally unqualified. Activate only with the
+// exact packed runtime, migration history, inspector and reset-helper qualification.
+profile.historyIncarnation = 'unqualified';
 writeFileSync('scripts/docker/backup-inspection-profile.json', JSON.stringify(profile) + '\n');

@@ -50,6 +50,7 @@ export type FakeDockerConfig = {
   volumeFreeKiB?: number;
   scratchFreeKiB?: number;
   syncAudit?: unknown;
+  historyResetSupported?: boolean;
   s3Verification?: unknown;
   s3InventoryVerification?: unknown;
   s3Check?: unknown;
@@ -129,6 +130,16 @@ const readEnv = (path) => Object.fromEntries(readFileSync(path, 'utf8').split(/\
 const labels = { 'org.opencontainers.image.source': 'https://github.com/Saluana/or3-chat' };
 const volumeLabels = () => config.volumeLabels ?? {};
 
+if (joined.includes('sync-history-reset.mjs capability')) {
+  if (config.historyResetSupported === false) fail('Unsupported history incarnation target');
+  out(JSON.stringify({contract:'incarnation-v1'})); process.exit(0);
+}
+if (joined.includes('sync-history-reset.mjs reset')) {
+  const index = args.indexOf('/app/scripts/docker/sync-history-reset.mjs');
+  const incarnation = args[index + 3];
+  state.historyIncarnation = incarnation; save();
+  out(JSON.stringify({contract:'incarnation-v1',historyIncarnation:incarnation,reset:true})); process.exit(0);
+}
 if (args[0] === 'info') { out(joined.includes('.Architecture') ? 'aarch64' : 'fixture'); process.exit(0); }
 if (args[0] === 'compose' && args[1] === 'version') { out('Docker Compose version v2'); process.exit(0); }
 if (args[0] === 'context') { out('unix:///var/run/docker.sock'); process.exit(0); }
@@ -225,7 +236,7 @@ const containerScript = () => {
   if (joined.includes('df -Pk /scratch')) return out(config.scratchFreeKiB ?? 512 * 1024);
   if (joined.includes('df -Pk')) return out(config.volumeFreeKiB ?? 1000000);
   if (joined.includes('tar czf')) return process.stdout.write(gzipSync(Buffer.from('fixture archive bytes')));
-  if (joined.includes('backup-inspect.mjs sync')) return out(JSON.stringify(config.syncAudit ?? {contract:1,complete:true,healthy:true}));
+  if (joined.includes('backup-inspect.mjs sync')) return out(JSON.stringify({historyIncarnation:state.historyIncarnation,...(config.syncAudit ?? {contract:1,complete:true,healthy:true})}));
   if (joined.includes('quick_check')) return out(JSON.stringify([{ path: 'auth.sqlite', quickCheck: 'ok', tables: 1 }, { path: 'sync.sqlite', quickCheck: 'ok', tables: 1 }]));
   if (joined.includes('accessSync')) {
     if (state.running && config.healthy) return;
@@ -239,7 +250,7 @@ if (args[0] === 'run') { containerScript(); process.exit(0); }
 if (args[0] === 'exec') {
   if (joined.includes('__probe_env__')) out(sha(process.env.OR3_STORAGE_S3_SECRET_ACCESS_KEY ?? ''));
   else if (joined.includes('backup-inspect.mjs inventory')) out(JSON.stringify({selected:['./sync.sqlite'],bytes:1000}));
-  else if (joined.includes('backup-inspect.mjs sync')) out(JSON.stringify(config.syncAudit ?? {contract:1,complete:true,healthy:true}));
+  else if (joined.includes('backup-inspect.mjs sync')) out(JSON.stringify({historyIncarnation:state.historyIncarnation,...(config.syncAudit ?? {contract:1,complete:true,healthy:true})}));
   else if (joined.includes('backup-inspect.mjs references')) out(JSON.stringify({contract:1,complete:true,liveAttachments:0}));
   else if (joined.includes('backup-inspect.mjs s3-summary')) out(JSON.stringify({contract:2,references:1,payloadBytes:23}));
   else if (joined.includes('remote-objects.mjs capture')) process.stdout.write('fixture-remote-archive');

@@ -1,3 +1,4 @@
+import { requireHistoryResetTarget } from '../backup/history-incarnation';
 import { createPreMutationSnapshot } from '../backup/create';
 import { readAuthenticatedBackupConfig } from '../backup/config';
 import { assertBackupSourceProfile, assertSupportedBackupProfile, validateBackupSyncSemantics, validateCanonicalBackupReferences } from '../backup/references';
@@ -51,6 +52,7 @@ export async function restoreCommand(directory: string, flags: Flags, positional
   const recreateDataVolume = restoreRequiresVolumeRecreation(loaded.env, backupEnv);
   if (manifest.imageDigest) await pullAndRequireImage(manifest.image, manifest.imageDigest, `Backup ${manifest.backupId}`);
   await assertSupportedHostArchitecture(manifest.image);
+  await requireHistoryResetTarget(loaded.directory, imageAtDigest(manifest.image, manifest.imageDigest));
   await assertExistingVaultCustody(loaded.directory, loaded.state, manifest, backupPath, backupConfig);
   // Do this before recording a recovery operation: a capacity refusal has not
   // touched the live deployment and should not require an operator recovery.
@@ -100,6 +102,8 @@ export async function restoreCommand(directory: string, flags: Flags, positional
     const restoredEnv = parseEnv(await readText(deploymentPaths(loaded.directory).env));
     const digest = await imageDigest(restoredEnv.OR3_IMAGE);
     const nextState = stateFromEnv(loaded.directory, restoredEnv, loaded.state.mode, 'restore', digest);
+    nextState.syncHistory = loaded.state.syncHistory;
+    nextState.pinnedHistoryBackups = loaded.state.pinnedHistoryBackups;
     nextState.lastError = undefined;
     // Terminal state first; the redundant mirror is warning-only housekeeping so
     // its failure cannot send a completed restore into the destructive handler.
@@ -109,7 +113,12 @@ export async function restoreCommand(directory: string, flags: Flags, positional
   } catch (error) {
     const original = redact(error instanceof Error ? error.message : String(error), secretValues(loaded.env));
     const phase = loaded.state.incompleteOperation?.phase;
-    if (phase === 'starting-target') {
+    if (phase === 'history-reset-required') {
+      loaded.state.lastError = `Byte-preservation recovery remains stopped/isolated and requires a qualified history-reset runtime: ${original}. Review status and managed recovery; do not start this image manually.`;
+      await writeState(loaded.directory, loaded.state);
+      throw new Error(loaded.state.lastError, { cause: error });
+    }
+    if (phase === 'starting-target' || phase === 'starting-previous') {
       loaded.state.lastError = `Restore of ${manifest.backupId} started the target but did not complete: ${original}. Writes may have been accepted, so the deployment was NOT restored automatically. Keep the operation record and run "npx @or3/cloud recover --dry-run", then "npx @or3/cloud recover --restore --yes" only after confirming loss of post-replacement writes.`;
       await writeState(loaded.directory, loaded.state);
       throw new Error(loaded.state.lastError, { cause: error });

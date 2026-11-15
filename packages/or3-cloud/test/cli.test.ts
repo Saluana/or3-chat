@@ -194,6 +194,7 @@ const text = args.join(' ');
 const fixtureEnv = ${JSON.stringify(env)};
 fixtureEnv.OR3_ADMIN_DATA_DIR = '/data/admin'; fixtureEnv.OR3_EXTENSIONS_ROOT = '/data/extensions';
 if (text.includes('tar czf')) { await Bun.stdout.write(gzipSync(Buffer.from('fixture archive bytes'))); }
+else if (text.includes('sync-history-reset.mjs capability')) console.log(JSON.stringify({contract:'incarnation-v1'}));
 else if (text.includes('backup-inspect.mjs inventory')) console.log(JSON.stringify({selected:['./sync.sqlite'],bytes:1000}));
 else if (text.includes('backup-inspect.mjs sync')) console.log(JSON.stringify({contract:1,complete:true,healthy:true}));
 else if (text.includes('backup-inspect.mjs references')) console.log(JSON.stringify({contract:1,complete:true,liveAttachments:0}));
@@ -1545,7 +1546,7 @@ for (const scenario of ['coordinated', 'deferred', 'unexpected-503', 'metadata-f
         if (path === '/api/health') return json({status:'ok',providers:{auth:{provider:'basic-auth'},sync:{provider:'sqlite'},storage:{provider:'fs'}}});
         if (path === '/api/basic-auth/sign-in') return Response.json({}, {headers:{'set-cookie':'session=synthetic; HttpOnly'}});
         if (path === '/api/auth/session') return json({session:{user:{email:'fixture@example.test'},workspace:{id:'synthetic-workspace'}}});
-        if (path === '/api/sync/pull') return json({changes:[],nextCursor:0});
+        if (path === '/api/sync/pull') return json({historyIncarnation:'I',changes:[],nextCursor:0});
         if (path === '/api/storage/presign-upload') return json({storageId:'synthetic-probe',intentId:'synthetic-upload-intent',url:new URL('/upload',request.url).href,method:'PUT'});
         if (path === '/upload') { bytes = new Uint8Array(await request.arrayBuffer()); return json({}); }
         if (path === '/api/storage/commit') {
@@ -1556,10 +1557,10 @@ for (const scenario of ['coordinated', 'deferred', 'unexpected-503', 'metadata-f
           const body = await request.json() as {ops:{operation:string}[]};
           const operation = body.ops[0]!.operation;
           events.push(operation);
-          if (scenario === 'metadata-failure' && operation === 'delete') return json({results:[{success:false}]});
-          if (scenario === 'put-failure' && operation === 'put') return json({results:[{success:false}]});
+          if (scenario === 'metadata-failure' && operation === 'delete') return json({historyIncarnation:'I',results:[{success:false}]});
+          if (scenario === 'put-failure' && operation === 'put') return json({historyIncarnation:'I',results:[{success:false}]});
           live = operation === 'put';
-          return json({results:[{success:true}]});
+          return json({historyIncarnation:'I',results:[{success:true}]});
         }
         if (path === '/api/storage/presign-download') return json({url:new URL('/download',request.url).href,method:'GET'});
         if (path === '/download') return new Response(bytes);

@@ -127,7 +127,7 @@ export function planRetention(
 export type PruneResult = { removed: number; deferred: Diagnostic[] };
 
 export function retentionProtectedIds(state: ManagedState) {
-  const protectedIds = new Set<string>();
+  const protectedIds = new Set<string>(state.pinnedHistoryBackups ?? []);
   if (state.rollback?.backupId) protectedIds.add(state.rollback.backupId);
   const pending = state.incompleteOperation;
   if (pending?.backupId) protectedIds.add(pending.backupId);

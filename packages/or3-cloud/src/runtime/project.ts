@@ -1,3 +1,5 @@
+import { deploymentPaths } from '../deployment/paths';
+import type { ManagedState } from '../deployment/contracts';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Mode } from '../deployment/contracts';
@@ -23,6 +25,14 @@ export async function projectServiceRunning(directory: string, mode: Mode) {
 }
 
 export async function startProject(directory: string, mode: Mode, env: Record<string, string>) {
+  let state: ManagedState | undefined;
+  try { state = JSON.parse(readFileSync(deploymentPaths(directory).state, 'utf8')) as ManagedState; }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+  const pending = state?.incompleteOperation;
+  if (pending?.phase === 'history-reset-required' || pending?.historyReset &&
+      (pending.historyReset.progress !== 'reset-complete' || !['starting-target', 'starting-previous'].includes(pending.phase ?? ''))) {
+    throw new Error('Refusing startup across an unfinished history reset gate; run managed recovery');
+  }
   await assertSafeComposeBinding(directory, mode, env);
   // A dashboard-origin update runs inside the operator service. Recreating the
   // whole project here can kill that process before it commits its terminal

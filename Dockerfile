@@ -190,7 +190,7 @@ COPY --from=build /app/node_modules/@or3/secrets/dist/cli.js /app/vault/cli.js
 COPY scripts/docker/vault-entrypoint.mjs /app/vault/entrypoint.mjs
 COPY --from=build --chown=65532:65532 /app/.output ./.output
 COPY --from=build --chown=65532:65532 /app/scripts/docker/runtime-entrypoint.mjs ./scripts/docker/runtime-entrypoint.mjs
-COPY --from=build --chown=65532:65532 /app/scripts/docker/backup-inspect.mjs /app/scripts/docker/backup-inspection-profile.json ./scripts/docker/
+COPY --from=build --chown=65532:65532 /app/scripts/docker/backup-inspect.mjs /app/scripts/docker/sync-history-reset.mjs /app/scripts/docker/backup-inspection-profile.json ./scripts/docker/
 COPY --from=build --chown=65532:65532 /tmp/or3-recovery-tools/ ./scripts/docker/
 COPY --from=build --chown=65532:65532 /tmp/or3-runtime-data /data
 COPY --from=runtime-tools /bin/ /bin/

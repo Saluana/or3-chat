@@ -57,6 +57,7 @@ export async function statusCommand(directory: string, flags: Flags = {}) {
     console.log(`  last successful operation: ${state.lastSuccessfulOperation} (${state.updatedAt})`);
     if (state.incompleteOperation) console.log(`  incomplete operation: ${state.incompleteOperation.operation} (${state.incompleteOperation.id})`);
     if (state.incompleteOperation?.backupProgress) console.log(`  last backup milestone: ${redact(state.incompleteOperation.backupProgress.message)}`);
+    console.log(`  sync history: ${state.syncHistory?.certification ?? 'unqualified'}${state.syncHistory?.historyIncarnation ? ` (${state.syncHistory.historyIncarnation})` : ''}`);
     if (state.lastError) console.log(`  last error: ${state.lastError}`);
   }
   if (observation.envError) console.log(`  environment: unreadable — ${observation.envError}`);
