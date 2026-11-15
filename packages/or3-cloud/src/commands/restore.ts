@@ -1,6 +1,6 @@
 import { createPreMutationSnapshot } from '../backup/create';
 import { readAuthenticatedBackupConfig } from '../backup/config';
-import { assertBackupSourceProfile, assertSupportedBackupProfile, validateCanonicalBackupReferences } from '../backup/references';
+import { assertBackupSourceProfile, assertSupportedBackupProfile, validateBackupSyncSemantics, validateCanonicalBackupReferences } from '../backup/references';
 import { assertExistingVaultCustody, assertVaultVolumesExist } from '../backup/vault';
 import { preflightRemoteRestore } from '../backup/remote';
 import { validateVolumeArchive } from '../backup/archive';
@@ -58,6 +58,7 @@ export async function restoreCommand(directory: string, flags: Flags, positional
   // Snapshot capture already stops the app. Refuse invalid archive inventories
   // before journaling or creating that snapshot; retain the later recheck too.
   await validateVolumeArchive(loaded.directory, loaded.state.mode, loaded.env, backupPath, backupEnv.OR3_STORAGE_FS_ROOT);
+  await validateBackupSyncSemantics(loaded.directory, { ...backupEnv, OR3_IMAGE: imageAtDigest(manifest.image, manifest.imageDigest) }, backupPath);
   const remotePreflight = manifest.schemaVersion === 2 ? await preflightRemoteRestore(loaded.directory, manifest, loaded.env, backupPath) : undefined;
   if (manifest.schemaVersion === 1) await validateCanonicalBackupReferences(loaded.directory, { ...backupEnv, OR3_IMAGE: imageAtDigest(manifest.image, manifest.imageDigest) }, backupPath);
   const remoteReconcile = remotePreflight && 'uploaded' in remotePreflight ? remotePreflight : undefined;

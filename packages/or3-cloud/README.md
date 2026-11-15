@@ -313,3 +313,14 @@ npx @or3/cloud --help
 
 For VPS requirements, firewall guidance, updates, restores, and migration,
 read the [installation guide](https://github.com/Saluana/or3-chat/blob/main/docs/installation.md).
+
+Ordinary restore requires qualified offline sync semantic certification of the
+archive and the extracted candidate before public startup. Invalid stamps,
+JSON/payloads, tombstones, snapshots or version counters refuse startup; incomplete
+or unsupported audits also refuse. Reports contain sanitized numeric locators
+(or snapshot-item primary-key hashes/ordinals), never payload contents. This
+restore flow has no isolated migration stage and does not start public writers
+to attempt a repair. It never edits an authenticated archive to make it pass.
+Recorded pre-mutation safety recovery preserves prior bytes and explicitly warns
+that sync semantic health is uncertified; physical/deep health alone is not sync
+certification. History incarnation/reset remains a separate runtime contract.

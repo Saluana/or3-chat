@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { assertExistingVaultCustody } from './vault';
 import { readAuthenticatedBackupConfig } from './config';
-import { assertSupportedBackupProfile, validateCanonicalBackupReferences } from './references';
+import { assertSupportedBackupProfile, assertSyncSemanticCertification, validateBackupSyncSemantics, validateCanonicalBackupReferences } from './references';
 import {
   assertRestorableManagedAssets,
   MANAGED_ASSET_INVENTORY_VERSION,
@@ -188,6 +188,11 @@ export async function restoreBackupData(
     // that state and make otherwise usable older-image snapshots unrecoverable.
     console.warn('Restoring the recorded byte-preservation safety snapshot; canonical attachment completeness is not certified. Verify previously uploaded files.');
   }
+  if (!options.previousSafetySnapshot) {
+    await validateBackupSyncSemantics(directory, { ...backupEnv, OR3_IMAGE: imageAtDigest(manifest.image, manifest.imageDigest) }, backupPath);
+  } else {
+    console.warn('DEGRADED byte-preservation recovery: sync semantic health is not certified. Verify or explicitly repair the restored sync state before treating it as healthy.');
+  }
   await ensureManagedDataVolume(directory, state.mode, state, env);
   // Preflight the filesystem Docker will actually extract into. A compressed
   // tarball's byte size and the backup directory's filesystem cannot prove
@@ -242,6 +247,23 @@ export async function restoreBackupData(
     throw new Error(`Restored snapshot integrity verification failed. ${redact(snapshotCheck.stderr, secretValues(restoredEnv))}`);
   }
   if (manifest.schemaVersion === 1) await restoreGenerationIdentities(directory, state, restoredEnv, backupPath, { previousSafetySnapshot: options.previousSafetySnapshot });
+  if (!options.previousSafetySnapshot) {
+    // This restore path has no isolated target-migration entrypoint. Certify the
+    // extracted candidate before public startup; never start an old/incapable
+    // image just to try a migration. A separately qualified repair can prepare
+    // a new backup without changing this authenticated source archive.
+    const semanticCheck = await run('docker', [
+      'run', '--rm', '--network', 'none', '--read-only',
+      '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL',
+      '--memory', '256m', '--cpus', '0.5', '--pids-limit', '32',
+      '-v', `${state.volumeName}:/data:ro`,
+      '--entrypoint', 'sh', restoredEnv.OR3_IMAGE,
+      '-c', 'if [ -x /nodejs/bin/node ]; then exec /nodejs/bin/node "$@"; else exec node "$@"; fi',
+      'or3-sync-inspection', '/app/scripts/docker/backup-inspect.mjs', 'sync', restoredEnv.OR3_SQLITE_DB_PATH!,
+    ], directory);
+    if (!semanticCheck.ok) throw new Error(`Restored candidate sync semantic certification failed or is unsupported. ${redact(semanticCheck.stderr, secretValues(restoredEnv))}`);
+    assertSyncSemanticCertification(semanticCheck.stdout);
+  }
   // The caller journals the point at which application writes become possible
   // before requesting startup. Recovery snapshots keep their existing phase.
   await options.beforeStart?.();
