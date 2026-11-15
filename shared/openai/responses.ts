@@ -24,6 +24,10 @@ type ResponsesStreamEvent = {
 
 /** Project the admitted chat history onto Responses items without storing it at OpenAI. */
 export function encodeOpenAiResponseRequest(body: Record<string, unknown>): Record<string, unknown> {
+    const model = openAiApiModel(String(body.model));
+    const version = /^gpt-(\d+)(?:\.(\d+))?(?:-|$)/.exec(model);
+    const cacheBreakpoints = Boolean(version && (Number(version[1]) > 5
+        || Number(version[1]) === 5 && Number(version[2]) >= 6));
     const messages = Array.isArray(body.messages) ? body.messages as Record<string, unknown>[] : [];
     const input: Record<string, unknown>[] = [];
     for (const message of messages) {
@@ -34,13 +38,23 @@ export function encodeOpenAiResponseRequest(body: Record<string, unknown>): Reco
             continue;
         }
         if (Array.isArray(message._openai_reasoning)) input.push(...message._openai_reasoning as Record<string, unknown>[]);
-        const content = typeof message.content === 'string' ? message.content : Array.isArray(message.content)
+        let content = typeof message.content === 'string' ? message.content : Array.isArray(message.content)
             ? message.content.flatMap<Record<string, unknown>>(part => {
                 if (part.type === 'text') return [{ type: message.role === 'assistant' ? 'output_text' : 'input_text', text: part.text }];
                 if (part.type === 'image_url') return [{ type: 'input_image', image_url: typeof part.image_url === 'string' ? part.image_url : part.image_url?.url, detail: part.image_url?.detail ?? 'auto' }];
                 if (part.type === 'file') return [{ type: 'input_file', filename: part.file?.filename, file_data: part.file?.file_data }];
                 throw new Error('Unsupported content type in OpenAI request');
             }) : '';
+        if (cacheBreakpoints && content.length && ['user', 'system', 'developer'].includes(String(message.role))) {
+            // Project context belongs only to the current turn. Its removal on
+            // replay invalidates the implicit latest-user write. An empty input
+            // block marks the prefix BEFORE that context without changing text
+            // or roles. Retain it on historical user turns for cache lookup.
+            if (typeof content === 'string') content = [{ type: 'input_text', text: content }];
+            const breakpoint = { mode: 'explicit' };
+            if (message.role === 'user') content.unshift({ type: 'input_text', text: '', prompt_cache_breakpoint: breakpoint });
+            else content[content.length - 1]!.prompt_cache_breakpoint = breakpoint;
+        }
         if (content.length) input.push({ role: message.role, content });
         if (Array.isArray(message.tool_calls)) for (const call of message.tool_calls) {
             if (call?.type === 'function') input.push({ type: 'function_call', call_id: call.id, name: call.function?.name, arguments: call.function?.arguments });
@@ -56,7 +70,6 @@ export function encodeOpenAiResponseRequest(body: Record<string, unknown>): Reco
         ? { type: 'json_schema', ...format.json_schema }
         : format?.type === 'json_object' || format?.type === 'text' ? { type: format.type } : undefined;
     const choice = body.tool_choice as string | { type?: string; function?: { name?: string } } | undefined;
-    const model = openAiApiModel(String(body.model));
     return { model, input, stream: body.stream === true, store: false,
         // Only reasoning models produce encrypted reasoning to carry between tool rounds.
         ...(openAiReasoningEfforts(model) ? { include: ['reasoning.encrypted_content'] } : {}),
