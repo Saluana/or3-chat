@@ -258,6 +258,7 @@ describe('ChatContainer', () => {
                     ClientOnly: { template: '<div><slot /></div>' },
                     UButton: {
                         name: 'UButton',
+                        emits: ['click'],
                         template:
                             '<button class="u-button" @click="$emit(\'click\')"></button>',
                     },
@@ -544,35 +545,14 @@ describe('ChatContainer', () => {
         expect(buttonContainer.attributes('style')).toContain('opacity: 0.5');
     });
 
-    it('calls scrollToBottom when button is clicked', async () => {
-        const scrollToMock = vi.fn();
-        Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
-            configurable: true,
-            writable: true,
-            value: scrollToMock,
-        });
+    it('requests smooth bottom navigation when the button is clicked', async () => {
+        const wrapper = mountChatInstance(makeChatInstance());
+        const scroller = wrapper.findComponent({ name: 'Or3Scroll' });
+        const exposed = scroller.vm.$.exposed as {
+            scrollToBottom: (options?: { smooth?: boolean }) => void;
+        };
+        const scroll = vi.spyOn(exposed, 'scrollToBottom');
         try {
-            const wrapper = mount(ChatContainer, {
-                props: defaultProps,
-                global: {
-                    mocks: {
-                        $theme: createThemeMock(),
-                    },
-                    stubs: {
-                        LazyChatMessage,
-                        LazyChatInputDropper,
-                        ClientOnly: { template: '<div><slot /></div>' },
-                        UButton: {
-                            name: 'UButton',
-                            template:
-                                '<button class="u-button" @click="$emit(\'click\')"></button>',
-                        },
-                    },
-                },
-            });
-
-            // Simulate scroll up to show button
-            const scroller = wrapper.findComponent({ name: 'Or3Scroll' });
             scroller.vm.$emit('scroll', {
                 scrollTop: 500,
                 scrollHeight: 1800,
@@ -580,15 +560,13 @@ describe('ChatContainer', () => {
                 isAtBottom: false,
             });
             await nextTick();
+            scroll.mockClear();
 
-            const button = wrapper.findComponent({ name: 'UButton' });
-            await button.trigger('click');
+            await wrapper.findComponent({ name: 'UButton' }).trigger('click');
 
-            expect(scrollToMock).toHaveBeenCalledWith(
-                expect.objectContaining({ behavior: 'smooth' })
-            );
+            expect(scroll).toHaveBeenCalledExactlyOnceWith({ smooth: true });
         } finally {
-            delete (HTMLElement.prototype as { scrollTo?: unknown }).scrollTo;
+            scroll.mockRestore();
         }
     });
 
