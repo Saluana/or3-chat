@@ -906,7 +906,10 @@ export class OutboxManager {
                 if (!winner.revision || !Number.isSafeInteger(winner.revision.clock) || winner.revision.clock < 0 ||
                     typeof winner.revision.hlc !== 'string' || typeof winner.revision.opId !== 'string' ||
                     (winner.kind !== 'put' && winner.kind !== 'delete') ||
-                    (winner.kind === 'put' && !normalizeSyncPayload(op.tableName, op.pk, winner.payload, winner.revision).isValid)) {
+                    (winner.kind === 'delete' && winner.serverDeletedAt !== undefined &&
+                        (typeof winner.serverDeletedAt !== 'number' || !Number.isFinite(winner.serverDeletedAt) || winner.serverDeletedAt < 0)) ||
+                    (winner.kind === 'put' && (!winner.payload || typeof winner.payload !== 'object' || Array.isArray(winner.payload) ||
+                        !normalizeSyncPayload(op.tableName, op.pk, winner.payload, winner.revision).isValid))) {
                     throw new InvalidServerWinnerError('Invalid server winner');
                 }
                 await this.applyRemoteWinner(op, winner);

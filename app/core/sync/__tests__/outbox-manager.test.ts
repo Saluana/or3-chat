@@ -1829,6 +1829,36 @@ describe('OutboxManager quarantine (real Dexie)', () => {
         expect(breaker.getFailureCount()).toBe(0);
     });
 
+    it.each([
+        ['string payload', { kind: 'put', payload: 'corrupt' }],
+        ['null payload', { kind: 'put', payload: null }],
+        ['array payload', { kind: 'put', payload: [] }],
+        ['invalid deletion time', { kind: 'delete', serverDeletedAt: 'corrupt' }],
+    ])('holds a malformed winner (%s) without losing intent or blocking siblings', async (_label, fields) => {
+        const db = await freshDb();
+        const original = corruptPut('messages', 'bad-shape', { payload: message('bad-shape', 'unsent edit') });
+        const healthy = corruptPut('messages', 'sibling', { payload: message('sibling', 'healthy') });
+        await db.messages.put(message('bad-shape', 'unsent edit'));
+        await db.pending_ops.bulkPut([original, healthy]);
+        const winner = { ...fields, revision: { clock: 10, hlc: '10:0:remote', opId: testUuid('shape-remote') } };
+        const provider = new SpyProvider();
+        provider.push.mockResolvedValue({ results: [
+            { opId: original.stamp.opId, success: true, applied: false, winner: winner as never },
+            { opId: healthy.stamp.opId, success: true, serverVersion: 11 },
+        ], serverVersion: 11 });
+
+        await manager(db, provider).flush();
+
+        expect(await db.pending_ops.count()).toBe(0);
+        expect(await db.sync_quarantine.get(original.id)).toMatchObject({
+            status: 'quarantined', op: { stamp: original.stamp, payload: { data: { content: 'unsent edit' } } },
+            localRow: { data: { content: 'unsent edit' } }, serverWinner: winner,
+        });
+        expect(await db.messages.get(original.pk)).toMatchObject({ data: { content: 'unsent edit' } });
+        expect(await db.tombstones.get(`messages:${original.pk}`)).toBeUndefined();
+        expect(getSyncCircuitBreaker(`${scope.workspaceId}:${provider.id}`).getFailureCount()).toBe(0);
+    });
+
     it('preserves corrupt operations, rebuilds them from local rows and pushes the recovered content', async () => {
         const db = await freshDb();
         await db.messages.put(message('m1', 'my unsent reply'));
