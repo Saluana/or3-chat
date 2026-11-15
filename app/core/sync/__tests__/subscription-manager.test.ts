@@ -1089,11 +1089,11 @@ describe('SubscriptionManager', () => {
         await manager.stop();
     });
 
-    it.each(['staging', 'install'] as const)('pauses on %s quota and resumes the retained snapshot without downloading again', async phase => {
-        (cursorManagerModule as unknown as { __cursorState: { cursor: number } }).__cursorState.cursor = 0;
+    it.each([{ phase: 'staging', rescan: false }, { phase: 'install', rescan: false }, { phase: 'install', rescan: true }])('pauses on $phase quota (rescan=$rescan) and resumes the retained snapshot without downloading again', async ({ phase, rescan }) => {
+        (cursorManagerModule as unknown as { __cursorState: { cursor: number } }).__cursorState.cursor = rescan ? 10 : 0;
         const db = new Or3DB(`quota-${crypto.randomUUID()}`); await db.open();
         const cursor = cursorManagerModule.getCursorManager(db, { workspaceId: 'ws-1' });
-        vi.mocked(cursor.isBootstrapNeeded).mockResolvedValue(true);
+        vi.mocked(cursor.isBootstrapNeeded).mockResolvedValue(!rescan);
         await db.kv.put({ id: 'old', name: 'old', value: 'last good', deleted: false, created_at: 1, updated_at: 1, clock: 1 });
         let quota = true;
         if (phase === 'staging') db.snapshot_staging.hook('creating', (_key, row) => {
@@ -1103,14 +1103,16 @@ describe('SubscriptionManager', () => {
         const snapshot = vi.fn(async () => ({ workspaceId: 'ws-1', snapshotId: 'quota-snapshot', highWatermark: 40,
             items: [{ kind: 'row' as const, tableName: 'kv', pk: 'new', payload: { id: 'new', name: 'new', value: 'canonical', created_at: 1, updated_at: 1, clock: 1 },
                 revision: { clock: 1, hlc: 'h', opId: 'legacy-snapshot' } }], nextPageToken: null }));
-        const provider: SyncProvider = { id: `quota-${phase}`, mode: 'direct', snapshot,
-            pull: vi.fn(async request => ({ changes: [], nextCursor: request.cursor, hasMore: false, ...FULL_HISTORY_PULL_RETENTION })),
+        const provider: SyncProvider = { id: `quota-${phase}-${rescan}`, mode: 'direct', snapshot,
+            pull: vi.fn(async request => ({ changes: [], nextCursor: request.cursor, hasMore: false, ...FULL_HISTORY_PULL_RETENTION,
+                requiresSnapshot: rescan && request.cursor === 10 })),
             subscribe: vi.fn(async () => () => undefined), updateCursor: vi.fn(async () => undefined),
             push: vi.fn(async () => { throw new Error('unused'); }), dispose: vi.fn(async () => undefined) };
         const manager = new SubscriptionManager(db, provider, { workspaceId: 'ws-1' }, { tables: ['kv'] });
         try {
             await manager.start();
             expect(manager.getStatus()).toBe('error');
+            expect(provider.subscribe).not.toHaveBeenCalled();
             expect(await db.kv.get('old')).toMatchObject({ value: 'last good' });
             expect(await db.kv.get('new')).toBeUndefined();
             expect(await db.sync_state.count()).toBe(0);
@@ -1121,6 +1123,7 @@ describe('SubscriptionManager', () => {
             expect(manager.getStatus()).toBe('connected');
             expect(snapshot).toHaveBeenCalledTimes(1);
             expect(await db.kv.get('new')).toMatchObject({ value: 'canonical' });
+            if (rescan) expect(await db.kv.get('old')).toBeUndefined();
             expect(await db.snapshot_staging.count()).toBe(0);
         } finally { vi.mocked(cursor.isBootstrapNeeded).mockResolvedValue(false); await manager.stop(); await db.delete(); }
     });

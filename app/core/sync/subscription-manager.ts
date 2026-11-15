@@ -549,22 +549,23 @@ export class SubscriptionManager {
             }
             return true;
         }
+        let probe: PullResponse;
         try {
-            const probe = await this.pull({
+            probe = await this.pull({
                 scope: this.scope,
                 cursor,
                 limit: 1,
                 tables: this.config.tables,
             });
-            if (!this.isCurrentGeneration(generation)) return true;
-            if (typeof probe.requiresSnapshot !== 'boolean') return false;
-            if (probe.requiresSnapshot) {
-                await this.recoverFromExpiredCursor(generation);
-            }
-            return true;
         } catch {
             return false;
         }
+        if (!this.isCurrentGeneration(generation)) return true;
+        if (typeof probe.requiresSnapshot !== 'boolean') return false;
+        // An authoritative reset is no longer an optional capability probe.
+        // In particular, quota must reach start's storage-pause handling.
+        if (probe.requiresSnapshot) await this.recoverFromExpiredCursor(generation);
+        return true;
     }
 
     private async recoverFromExpiredCursor(generation: number): Promise<void> {
