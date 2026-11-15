@@ -159,6 +159,10 @@ const provider = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request
         return Response.json({ error: { message: 'Search provider projection was not preserved.' } }, { status: 400 });
     }
     const toolResults = body.messages.filter(message => message.role === 'tool').length;
+    if (mode === 'duplicate' && body.messages.filter(message => message.role === 'tool').some(message => {
+        const content = typeof message.content === 'string' ? message.content : message.content.map(part => part.text ?? '').join('');
+        try { return JSON.parse(content).count !== 1; } catch { return true; }
+    })) return Response.json({ error: { message: 'Tool replay did not preserve the full original output.' } }, { status: 400 });
     captured.push({ mode: mode!, toolResults });
     const needsReplay = (mode === 'duplicate' || mode === 'conflict') && toolResults === 1;
     const data = toolResults === 0 || needsReplay

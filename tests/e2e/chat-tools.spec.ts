@@ -93,7 +93,11 @@ for (const fixture of priorityCases) test(fixture.name, async ({ page }) => {
     }
     if (fixture.name.startsWith('3 ')) expect(stored.calls[0]?.outcome).toBe('timed_out');
     if (fixture.name.startsWith('8 ') || fixture.name.startsWith('9 ')) {
-        expect(stored.results.find(result => result.callId === 'first')).toMatchObject({ status: 'complete', content: '{"value":"echo"}' });
+        expect(stored.results.find(result => result.callId === 'first')).toMatchObject({ status: 'complete',
+            content: expect.stringMatching(/^or3-tool-result:v1\//), resolvedLength: '{"value":"echo"}'.length });
+        const messages = requests.get(page)!.at(-1)!.messages as { tool_call_id?: string; content: unknown }[];
+        const replay = messages.find(message => message.tool_call_id === 'first')!;
+        expect(replay.content).toEqual([{ type: 'text', text: '{"value":"echo"}' }]);
     }
     if (fixture.name.startsWith('10 ') || fixture.name.startsWith('11 '))
         expect(stored.executions.filter(call => call.tool === 'test_write_once')).toHaveLength(1);
@@ -125,7 +129,7 @@ test('a nonshipping router reaches the shared text and tool consumer with opaque
     expect(result.loop.toolExecutions).toBe(1);
     expect(result.loop.receiptBeforeExecution).toBe('running');
     expect(result.loop.assistantText).toBe('Fixture final answer');
-    expect(result.loop.toolResult).toContain('fixture result');
+    expect(JSON.parse(result.loop.toolResult).content).toMatch(/^or3-tool-result:v1\//);
     expect(result.loop.followup).toContain('fixture result');
     expect(result.loop.savedToolState).toBe('settled');
     await info.attach('adapter-foreground-loop', { contentType: 'application/json', body: JSON.stringify(result.loop) });
@@ -330,6 +334,7 @@ test('nine ordinary reads survive reload and replay without spending the answer 
     expect((await snapshot(page)).results.every(result => result.content.startsWith('or3-tool-result:v1/'))).toBe(true);
     expect(JSON.stringify(requests.get(page)!.at(-1))).toContain('x'.repeat(12 * 1024));
     await page.reload();
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
     await expect.poll(async () => (await snapshot(page)).results.filter(result => result.resolvedLength === 12 * 1024).length).toBe(9);
     expect((await snapshot(page)).executions).toHaveLength(9);
     await recovered(page);
