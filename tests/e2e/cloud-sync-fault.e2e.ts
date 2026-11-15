@@ -264,6 +264,7 @@ test('real sync fault qualification', async ({ browser }, info) => {
                         e.clients.push({ workspaceId: c.workspaceId, local, traffic: c.traffic });
                     }
                 }
+                if (e.workspaceId && db.open) e.serverFinal = serverState(db, e.workspaceId);
                 e.finished = new Date().toISOString(); results.push(e);
                 writeFileSync(join(output, `${name}.json`), JSON.stringify(e, null, 2));
                 console.log(`${name}: ${e.status}${e.failure ? ` — ${e.failure.split('\n')[0]}` : ''}`);
@@ -330,6 +331,9 @@ test('real sync fault qualification', async ({ browser }, info) => {
             await engine(warm, 'stop'); e.warmBefore = await state(warm);
             db.prepare("UPDATE s_kv SET data_json='{' WHERE workspace_id=? AND id='kv:a-row'").run(warm.workspaceId);
             db.prepare("UPDATE tombstones SET clock=-1 WHERE workspace_id=? AND pk='kv:z-deleted'").run(warm.workspaceId);
+            // Deleted materialized state supplies the snapshot's canonical
+            // deletion revision; poison that metadata as well as its tombstone.
+            db.prepare("UPDATE s_kv SET clock=-1 WHERE workspace_id=? AND id='kv:z-deleted'").run(warm.workspaceId);
             // Force same-history expiration with a newer canonical healthy row.
             await push(warm, db, 'a-healthy', 'snapshot-healthy');
             db.prepare('DELETE FROM change_log WHERE workspace_id=?').run(warm.workspaceId);
