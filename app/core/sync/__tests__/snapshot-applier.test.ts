@@ -1,7 +1,8 @@
 import Dexie from 'dexie';
 import { getWriteTxTableNames } from '~/db/util';
 import { ConflictResolver } from '../conflict-resolver';
-import { exportQuarantined, recoverHistoryPut } from '../sync-quarantine';
+import { discardQuarantined, exportQuarantined, listQuarantined, recoverHistoryPut } from '../sync-quarantine';
+import { getSyncStateId } from '../cursor-manager';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Or3DB } from '~/db/client';
 import type { SnapshotResponse, SyncProvider } from '~~/shared/sync/types';
@@ -778,13 +779,13 @@ describe('snapshot recovery of unsynced local content', () => {
 });
 
 describe('P0-5 history replacement', () => {
-    it('holds every old row and original intent without replay, includes edits during staging, and installs a lower cursor atomically', async () => {
+    it.each([0, 99, 100, 120].flatMap(cursor => [80, 105].map(watermark => [cursor, watermark] as const)))('holds old intent at I/%i and installs J/%i regardless of numeric comparison', async (cursor, watermark) => {
         const db = createDb(); await db.open();
         await db.sync_state.put({ id: 'sync_history', historyIncarnation: 'I', phase: 'resetting', resetTarget: 'J', cursor: 0, lastSyncAt: 0, deviceId: '' });
-        await db.sync_state.put({ id: 'sync_state:workspace-1:default', historyIncarnation: 'I', cursor: 100, lastSyncAt: 1, deviceId: 'd' });
+        await db.sync_state.put({ id: 'sync_state:workspace-1:default', historyIncarnation: 'I', cursor, lastSyncAt: 1, deviceId: 'd' });
         await db.kv.put({ id: 'acknowledged', name: 'acknowledged', value: 'old', deleted: false, created_at: 1, updated_at: 1, clock: 1 });
         const stager = new SnapshotStager(db, { workspaceId: 'workspace-1' }); await stager.start();
-        await stager.appendPage({ historyIncarnation: 'J', workspaceId: 'workspace-1', snapshotId: 'j', highWatermark: 80, items: [], nextPageToken: null });
+        await stager.appendPage({ historyIncarnation: 'J', workspaceId: 'workspace-1', snapshotId: 'j', highWatermark: watermark, items: [], nextPageToken: null });
         const original = { id: 'lost-ack', tableName: 'messages', pk: 'orphan', operation: 'delete', stamp: { opId: testUuid('lost-ack'), deviceId: 'd', clock: 2, hlc: '2:d' }, createdAt: 1, attempts: 1, status: 'in_flight', claimId: 'claim' } as PendingOp;
         await db.pending_ops.put(original);
         await stager.apply('d', () => true, ['kv', 'messages']);
@@ -795,7 +796,69 @@ describe('P0-5 history replacement', () => {
             expect.objectContaining({ variant: 'history_reset', sourceIncarnation: 'I', localRow: expect.objectContaining({ value: 'old' }) }),
         ]));
         expect(await db.sync_state.get('sync_history')).toMatchObject({ historyIncarnation: 'J', phase: 'ready' });
-        expect(await db.sync_state.get('sync_state:workspace-1:default')).toMatchObject({ historyIncarnation: 'J', cursor: 80 });
+        expect(await db.sync_state.get('sync_state:workspace-1:default')).toMatchObject({ historyIncarnation: 'J', cursor: watermark });
+    });
+    it.each(['I', null])('holds the full durable set from %s, clears other scope coverage, and keeps principal evidence private', async incarnation => {
+        const db = createDb(); await db.open();
+        const scope = { workspaceId: 'workspace-1', principalId: 'owner' };
+        const other = { ...scope, principalId: 'other' };
+        await db.sync_state.bulkPut([
+            { id: 'sync_history', historyIncarnation: incarnation, phase: 'resetting', resetTarget: 'J', cursor: 0, lastSyncAt: 0, deviceId: 'd' },
+            { id: getSyncStateId(other), historyIncarnation: incarnation, cursor: 120, lastSyncAt: 1, deviceId: 'd' },
+        ]);
+        const originals: PendingOp[] = ['pending', 'in_flight', 'retry_wait', 'failed_retryable', 'failed_permanent'].map((status, i) => ({
+            id: `original-${i}`, tableName: 'messages', pk: `orphan-${i}`, operation: i === 2 ? 'delete' : 'put',
+            payload: i === 2 ? undefined : { id: `orphan-${i}`, thread_id: 'parent-only-in-discarded-history', content: 'original' },
+            stamp: { opId: testUuid(`original-${i}`), deviceId: 'd', clock: i + 1, hlc: `${i + 1}:d` },
+            createdAt: 1, attempts: i, status: status as PendingOp['status'], claimId: status === 'in_flight' ? 'lost-ack' : undefined,
+            nextAttemptAt: 99, lastError: 'original failure',
+        }));
+        await db.pending_ops.bulkPut(originals);
+        await db.table('messages').bulkPut([
+            { id: 'acknowledged', thread_id: 'old-parent', data: { content: 'saved acknowledged content' }, pending: false },
+            { id: 'streaming', thread_id: 'old-parent', data: { content: 'saved partial generation' }, pending: true },
+        ]);
+        await db.table('tombstones').put({ id: 'messages:deleted', tableName: 'messages', pk: 'deleted', clock: 3 });
+        await db.table('file_transfers').put({ id: 'upload', hash: 'attachment', state: 'uploading' });
+        await db.table('notifications').put({ id: 'private-other', user_id: 'other', content: 'other account' });
+        const existing = { id: 'previous-hold', variant: 'history_reset' as const, sourceIncarnation: 'earlier', tableName: 'kv', pk: 'old', accountId: 'owner',
+            source: 'snapshot_apply' as const, status: 'quarantined' as const, op: { original: true }, diagnostics: [], quarantinedAt: 1 };
+        await db.sync_quarantine.put(existing);
+        const stager = new SnapshotStager(db, scope); await stager.start();
+        await stager.appendPage({ historyIncarnation: 'J', workspaceId: scope.workspaceId, snapshotId: 'j', highWatermark: 105, items: [], nextPageToken: null });
+        await stager.apply('d');
+        const held = await db.sync_quarantine.toArray();
+        for (const original of originals) expect(held).toEqual(expect.arrayContaining([
+            expect.objectContaining({ sourceIncarnation: incarnation ?? 'unknown', op: original }),
+        ]));
+        for (const pk of ['acknowledged', 'streaming', 'deleted', 'upload']) expect(held.some(entry => entry.pk === pk)).toBe(true);
+        expect(await db.sync_quarantine.get(existing.id)).toEqual(existing);
+        expect(await db.pending_ops.count()).toBe(0); expect(await db.file_transfers.count()).toBe(0);
+        expect(await db.sync_state.get(getSyncStateId(other))).toBeUndefined();
+        expect(await db.sync_state.get(getSyncStateId(scope))).toMatchObject({ historyIncarnation: 'J', cursor: 105 });
+        const privateEntry = held.find(entry => entry.pk === 'private-other')!;
+        expect(await listQuarantined(db, 'owner')).not.toContainEqual(privateEntry);
+        expect(await listQuarantined(db, 'other')).toContainEqual(privateEntry);
+        expect(await discardQuarantined(db, privateEntry.id, 'owner')).toBe(false);
+        expect(await recoverHistoryPut(db, { pull: async () => ({ historyIncarnation: 'J', changes: [], nextCursor: 105, hasMore: false }) } as unknown as SyncProvider,
+            scope, privateEntry.id, 'J')).toBe(false);
+        expect(JSON.parse(await exportQuarantined(db, 'owner')).entries).toEqual(await listQuarantined(db, 'owner'));
+    });
+    it('lets only the latest competing installer commit and retains its held evidence after stale disposal', async () => {
+        const db = createDb(); await db.open();
+        await db.sync_state.put({ id: 'sync_history', historyIncarnation: 'I', phase: 'resetting', resetTarget: 'J', cursor: 0, lastSyncAt: 0, deviceId: 'd' });
+        await db.kv.put({ id: 'original', name: 'original', value: 'saved', deleted: false, created_at: 1, updated_at: 1, clock: 1 });
+        const first = new SnapshotStager(db, { workspaceId: 'workspace-1', principalId: 'owner' }); await first.start();
+        const page = { historyIncarnation: 'J', workspaceId: 'workspace-1', snapshotId: 'j', highWatermark: 80, items: [], nextPageToken: null };
+        await first.appendPage(page);
+        const winner = new SnapshotStager(db, { workspaceId: 'workspace-1', principalId: 'other' }); await winner.start(); await winner.appendPage(page);
+        await expect(first.apply('old')).rejects.toMatchObject({ name: 'AbortError' });
+        await winner.apply('winner'); const evidence = await db.sync_quarantine.toArray();
+        await first.dispose(); await expect(first.apply('old')).rejects.toMatchObject({ name: 'AbortError' });
+        expect(await db.sync_quarantine.toArray()).toEqual(evidence);
+        expect(evidence).toEqual(expect.arrayContaining([expect.objectContaining({ localRow: expect.objectContaining({ value: 'saved' }) })]));
+        expect(await db.sync_state.get('sync_history')).toMatchObject({ historyIncarnation: 'J', phase: 'ready' });
+        expect(await db.sync_state.get(getSyncStateId({ workspaceId: 'workspace-1', principalId: 'other' }))).toMatchObject({ cursor: 80, deviceId: 'winner' });
     });
     it('rejects a chain that changes incarnation even with identical snapshot ID and watermark', async () => {
         const db = createDb(); await db.open();
