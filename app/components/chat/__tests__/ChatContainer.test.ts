@@ -454,6 +454,7 @@ describe('ChatContainer', () => {
         }));
         const wrapper = mount(ChatContainer, {
             props: defaultProps,
+            attachTo: document.body,
             global: {
                 mocks: {
                     $theme: createThemeMock(),

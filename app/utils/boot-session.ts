@@ -4,9 +4,6 @@ import type { SessionPayload } from '~/composables/auth/useSessionContext';
 const BOOT_SESSION_MAX_AGE_MS = 10_000;
 
 type BootSession = { at: number; response: Promise<SessionPayload | null> };
-declare global {
-    interface Window { __or3BootSession?: BootSession }
-}
 
 /**
  * Inline head script for the workspace page. It starts the session check while
@@ -21,10 +18,11 @@ export const BOOT_SESSION_SCRIPT =
  * checks always fetch again. Null when there is none, it failed or is stale.
  */
 export async function takeBootSession(): Promise<SessionPayload | null> {
-    if (typeof window === 'undefined') return null;
-    const boot = window.__or3BootSession;
+    const browser = (globalThis as typeof globalThis & { window?: { __or3BootSession?: BootSession } }).window;
+    if (!browser) return null;
+    const boot = browser.__or3BootSession;
     if (!boot) return null;
-    delete window.__or3BootSession;
+    delete browser.__or3BootSession;
     if (Date.now() - boot.at > BOOT_SESSION_MAX_AGE_MS) return null;
     return await boot.response;
 }
