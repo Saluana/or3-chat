@@ -42,6 +42,7 @@ try {
         '--trace=retain-on-failure', '--retries=0', `--output=${outputRoot}/browser`, ...args.filter(value => !['--development-providers', '--sync-recovery', '--sync-fault', '--s3'].includes(value))], {
         stdout: syncFault ? 'pipe' : 'inherit', stderr: syncFault ? 'pipe' : 'inherit', env: { ...process.env,
             CI: 'true', TEST: 'true',
+            ...(syncFault ? { DISABLE_RATE_LIMIT: '1' } : {}),
             ...((syncRecovery || syncFault) ? { PLAYWRIGHT_JSON_OUTPUT_NAME: join(process.cwd(), outputRoot, 'playwright.json') } : {}),
             DOTENV_CONFIG_PATH: envFile,
             SSR_AUTH_ENABLED: 'true', AUTH_PROVIDER: 'basic-auth', OR3_AUTH_PROVIDER: 'basic-auth',
@@ -62,7 +63,7 @@ try {
             OR3_ADMIN_DATA_DIR: join(directory, 'admin'), OR3_ADMIN_USERNAME: 'backup-audit', OR3_ADMIN_PASSWORD: 'DisposableAdminSuite!123',
             OR3_ADMIN_ALLOW_RESTART: 'true', OR3_DEV_RESTART_STATE_DIR: join(directory, 'lifecycle'),
             OR3_FILE_BACKUP_E2E_DIR: directory,
-            PW_PORT: String(port), PW_SKIP_WEB_SERVER: 'false',
+            PW_PORT: String(port), PW_SKIP_WEB_SERVER: syncFault ? 'true' : 'false',
         },
     });
     const copy = async (stream: ReadableStream<Uint8Array>, target: NodeJS.WriteStream) => {
@@ -83,6 +84,9 @@ try {
         largeFixture: process.env.OR3_BACKUP_LARGE_E2E === 'true',
         command: syncFault ? 'bun run test:e2e:sync:fault' : syncRecovery ? 'bun run test:e2e:sync:cloud' : s3 ? 'bun run test:e2e:file-backup:s3' : 'bun run test:e2e:file-backup:cloud', timestamp: new Date().toISOString(), arguments: process.argv.slice(2),
         providerTarball, providerTarballSha256,
+        harnessSha256: syncFault ? createHash('sha256').update(await Bun.file('tests/e2e/cloud-sync-fault.e2e.ts').text()).digest('hex') : undefined,
+        providerSourceSha: process.env.OR3_E2E_PROVIDER_SOURCE_SHA,
+        comparison: process.env.OR3_E2E_COMPARISON,
         sqliteProviderVersion: syncFault ? JSON.parse(await Bun.file('node_modules/or3-provider-sqlite/package.json').text()).version : undefined,
         providerResolution: development ? 'OR3_LOCAL_PROVIDERS=true (development wrapper resolves available sibling provider sources)' : 'installed node_modules/or3-provider-sqlite',
         profile: `Disposable Basic Auth + ${development ? 'development' : 'installed'} providers + SQLite + ${storageProvider} storage`, s3Prefix: bucket?.prefix, exitCode, temporaryDataRemoved: true, s3CleanupComplete,
@@ -92,5 +96,6 @@ try {
         const destination = join('/Users/brendon/Documents/or3/.worktrees/sync-hardening/findings/e2e-artifacts', stamp);
         await mkdir(destination, { recursive: true });
         await cp(outputRoot, destination, { recursive: true });
+        console.log(`Sync fault artifacts: ${destination}`);
     }
 }
