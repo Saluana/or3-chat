@@ -230,10 +230,11 @@ export function inspectSyncSemantics(Database, databasePath) {
     });
     scan('sync_snapshots', ['workspace_id', 'id', 'high_watermark', 'tables_json', 'created_at', 'expires_at'], row => {
       if (!safe(row.high_watermark) || !safe(row.created_at) || !safe(row.expires_at) || row.expires_at < row.created_at) fault('sync_snapshots', row, 'invalid_snapshot_metadata');
+      if (row.high_watermark > (row.counter ?? 0)) fault('sync_snapshots', row, 'snapshot_above_counter');
       let tables;
       try { tables = JSON.parse(row.tables_json); } catch { fault('sync_snapshots', row, 'invalid_json'); return; }
       if (!Array.isArray(tables) || tables.some(name => !SYNC_TABLES.includes(name)) || new Set(tables).size !== tables.length) fault('sync_snapshots', row, 'invalid_table');
-    });
+    }, ",(SELECT CASE WHEN typeof(c.value) IN ('integer','real') THEN c.value END FROM server_version_counter c WHERE c.workspace_id=t.workspace_id) AS counter");
     let previousSnapshotKey;
     scan('sync_snapshot_items', ['snapshot_id', 'table_name', 'pk', 'kind', 'payload_json', 'clock', 'hlc', 'op_id', 'server_deleted_at'], row => {
       // Primary-key order makes contradictory kinds adjacent. Keep only one

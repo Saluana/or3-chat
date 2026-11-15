@@ -71,6 +71,7 @@ test.each([
   ['orphan snapshot item', 'DELETE FROM sync_snapshots', 'sync_snapshot_items', 'missing_snapshot'],
   ['contradictory snapshot item', "INSERT INTO sync_snapshot_items SELECT snapshot_id,table_name,pk,'tombstone',NULL,clock,hlc,op_id,1 FROM sync_snapshot_items", 'sync_snapshot_items', 'duplicate_snapshot_key'],
   ['snapshot beyond watermark', 'UPDATE sync_snapshots SET high_watermark=0', 'sync_snapshot_items', 'snapshot_after_watermark'],
+  ['snapshot ahead of counter', 'UPDATE sync_snapshots SET high_watermark=2', 'sync_snapshots', 'snapshot_above_counter'],
   ['inconsistent counter', 'UPDATE server_version_counter SET value=0', 'server_version_counter', 'counter_below_log'],
   ['materialized poison', "UPDATE s_kv SET data_json='{PRIVATE-CONTENT'", 's_kv', 'invalid_json'],
   ['oversized payload', "UPDATE change_log SET payload_json=hex(zeroblob(524289))", 'change_log', 'row_too_large'],
@@ -92,7 +93,7 @@ test('clean backup and legitimate historical snapshot revisions pass; audit neve
   expect(await readFile(f.path)).toEqual(before);
   const db = new Database(f.path);
   // Snapshot items are immutable historical captures, not today's winner.
-  db.exec("UPDATE s_kv SET clock=2; UPDATE sync_snapshot_items SET op_id='legacy:kv:private-key:1',hlc='legacy:0'; DELETE FROM kysely_migration WHERE name='033_tool_result_operation_ids'");
+  db.exec("UPDATE s_kv SET clock=2; UPDATE server_version_counter SET value=2; UPDATE sync_snapshot_items SET op_id='legacy:kv:private-key:1',hlc='legacy:0'; DELETE FROM kysely_migration WHERE name='033_tool_result_operation_ids'");
   db.close();
   expect(f.audit()).toMatchObject({ healthy: true, complete: true, faults: [] });
 });
