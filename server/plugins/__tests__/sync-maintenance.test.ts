@@ -29,6 +29,7 @@ function createConfig(overrides?: { enabled?: boolean; provider?: string }) {
 
 function createAdapter() {
     return {
+        capabilities: { snapshotBootstrap: 'snapshot-v1', historyRetention: 'snapshot-v1' },
         listWorkspaceIds: vi.fn().mockResolvedValue(['ws-1', 'ws-2']),
         gcChangeLog: vi.fn().mockResolvedValue(undefined),
         gcTombstones: vi.fn().mockResolvedValue(undefined),
@@ -120,8 +121,44 @@ describe('sync-maintenance scheduler plugin', () => {
 
         await runSyncMaintenance();
 
-        expect(adapter.failMaintenanceRun).toHaveBeenCalledWith('db locked');
+        expect(adapter.failMaintenanceRun).toHaveBeenCalledWith(expect.stringContaining('2 workspace(s) failed'));
         expect(adapter.completeMaintenanceRun).not.toHaveBeenCalled();
+    });
+
+    it('isolates workspace failure and reports partial failure', async () => {
+        const adapter = createAdapter();
+        adapter.gcChangeLog.mockRejectedValueOnce(new Error('db locked'));
+        getSyncGatewayAdapterMock.mockReturnValue(adapter);
+        const { runSyncMaintenance } = await import('../sync-maintenance');
+        await expect(runSyncMaintenance()).resolves.toBeUndefined();
+        expect(adapter.gcChangeLog).toHaveBeenCalledTimes(2);
+        expect(adapter.gcTombstones).toHaveBeenCalledTimes(1);
+        expect(adapter.failMaintenanceRun).toHaveBeenCalledWith(expect.stringContaining('1 workspace(s) failed'));
+        expect(adapter.completeMaintenanceRun).not.toHaveBeenCalled();
+    });
+
+    it.each(['lookup', 'begin', 'fail'])('contains %s exceptions and releases the pass lock', async fault => {
+        const adapter = createAdapter();
+        if (fault === 'lookup') getSyncGatewayAdapterMock.mockImplementationOnce(() => { throw new Error('lookup'); });
+        else getSyncGatewayAdapterMock.mockReturnValue(adapter);
+        if (fault === 'begin') adapter.beginMaintenanceRun.mockImplementationOnce(() => { throw new Error('begin'); });
+        if (fault === 'fail') {
+            adapter.gcChangeLog.mockRejectedValueOnce(new Error('gc'));
+            adapter.failMaintenanceRun.mockImplementationOnce(() => { throw new Error('fail'); });
+        }
+        const { runSyncMaintenance } = await import('../sync-maintenance');
+        await expect(runSyncMaintenance()).resolves.toBeUndefined();
+        getSyncGatewayAdapterMock.mockReturnValue(createAdapter());
+        await expect(runSyncMaintenance()).resolves.toBeUndefined();
+    });
+
+    it('does no automatic GC without verified retention capabilities', async () => {
+        const adapter = { ...createAdapter(), capabilities: undefined };
+        getSyncGatewayAdapterMock.mockReturnValue(adapter);
+        const { runSyncMaintenance } = await import('../sync-maintenance');
+        await runSyncMaintenance();
+        expect(adapter.gcChangeLog).not.toHaveBeenCalled();
+        expect(adapter.gcTombstones).not.toHaveBeenCalled();
     });
 
     it('is inert when the gateway is not registered', async () => {

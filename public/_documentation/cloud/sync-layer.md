@@ -34,7 +34,10 @@ pages were fetched. Cross-provider coverage verifies deterministic rows,
 tombstones, intervening writes, duplicate boundaries, and fresh-device recovery
 after the original log entries have been pruned. Change-log and tombstone
 retention is enabled for adapters that declare the `snapshot-v1` retention
-contract; adapters that do not fail closed with `503`.
+contract; adapters that do not fail closed with `503`. Automatic maintenance
+uses the same capability gate, isolates workspace failures, and reports a partial
+pass as failed while continuing other workspaces. SSE disposal failures cannot
+retain connection slots or prevent the remaining cleanup.
 
 When an existing device's cursor expires, snapshot-capable providers use the
 same canonical replacement path instead of attempting cursor-zero replay.

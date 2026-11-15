@@ -110,3 +110,15 @@ it('delivers real SSE frames and closes the H3 stream when membership is revoked
         expect(state.stop).toHaveBeenCalledTimes(1);
     } finally { await reader.cancel(); }
 });
+
+it.each(['unsubscribe', 'close'])('contains throwing %s and frees connection slots at expiry', async fault => {
+    const route = (await import('../events.get')).default as any;
+    if (fault === 'unsubscribe') state.stop.mockImplementationOnce(() => { throw new Error('unsubscribe'); });
+    else state.close.mockImplementationOnce(() => { throw new Error('close'); });
+    await route({ context: {} });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(state.stop).toHaveBeenCalledTimes(1);
+    expect(state.close).toHaveBeenCalledTimes(1);
+    for (let index = 0; index < 8; index++) await route({ context: {} });
+    expect(state.watch).toHaveBeenCalledTimes(9);
+});
