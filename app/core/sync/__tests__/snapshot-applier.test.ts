@@ -131,6 +131,27 @@ describe('applySnapshotChain', () => {
         expect(await db.snapshot_staging.count()).toBe(0);
     });
 
+    it.each(['edit', 'delete'] as const)('preserves current local state when reinstalling the same unavailable snapshot after an %s', async change => {
+        const db = createDb(); await db.open();
+        const original = { id: 'affected', name: 'affected', value: 'first copy', created_at: 1, updated_at: 1, clock: 1 };
+        await db.kv.put(original);
+        const page: SnapshotResponse = { workspaceId: 'workspace-1', snapshotId: 'reused', highWatermark: 12,
+            items: [], nextPageToken: null, unavailable: [{ tableName: 'kv', pk: original.id, originalKind: 'row',
+                snapshotId: 'reused', highWatermark: 12, evidenceRef: 'e1', reason: 'invalid_payload' }] };
+        const install = () => applySnapshotChain(db, [page], { workspaceId: 'workspace-1' }, 'device', () => true, ['kv']);
+        await install();
+        const current = change === 'edit' ? { ...original, value: 'new local edit', clock: 2 } : undefined;
+        const tombstone = { id: 'kv:affected', tableName: 'kv', pk: original.id, clock: 3, hlc: 'h', opId: testUuid('deleted'), deletedAt: 2 };
+        if (current) await db.kv.put(current);
+        else await db.kv.delete(original.id);
+        await db.tombstones.put(tombstone);
+        await install();
+        expect(await db.kv.get(original.id)).toEqual(current);
+        expect(await db.tombstones.get(tombstone.id)).toEqual(tombstone);
+        expect(await db.sync_quarantine.count()).toBe(1);
+        expect((await db.sync_quarantine.toArray())[0]!.localRow).toEqual(original);
+    });
+
     it.each(['absent', 'older', 'expired lease'] as const)('preserves unqueued foreground progress through replacement (%s) and can finalize it', async canonical => {
         setHookEngine(createTypedHookEngine(createHookEngine()));
         const db = createDb(); await db.open();

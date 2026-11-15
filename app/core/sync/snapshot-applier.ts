@@ -245,10 +245,13 @@ export class SnapshotStager {
                     evidenceSequence = row.sequence + 1;
                     const item = row.item;
                     if (item?.kind !== 'unavailable') continue;
-                    const evidence = await retainIncomingEvidenceInTx(tx, { ...item, source: 'incoming_snapshot',
+                    await retainIncomingEvidenceInTx(tx, { ...item, source: 'incoming_snapshot',
                         reference: item.snapshotId, record: item.record ?? item });
+                    // Evidence is deduplicated across retries. Its archived local
+                    // copy may predate edits/deletes made before this installation.
                     if (isSyncTable(item.tableName)) preserved.push({ tableName: item.tableName, pk: item.pk,
-                        row: evidence.localRow, tombstone: evidence.localTombstone });
+                        row: await tx.table(item.tableName).get(item.pk),
+                        tombstone: await tx.table('tombstones').get(`${item.tableName}:${item.pk}`) });
                 }
             }
 
