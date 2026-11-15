@@ -11,6 +11,34 @@ The existing request controller, canonical persistence, background tracker and
 tool loop remain authoritative; these modules do not add parallel lifecycle
 state. Hook payloads and version-1 recovery checkpoints retain their format.
 
+## Direct OpenAI prompt caching
+
+The OpenAI Responses adapter adds explicit cache breakpoints before user content
+and at instruction message endings on GPT-5.6 and later. Project memories and Knowledge
+extracts are selected for the current turn and removed from older user messages
+when history is replayed. A cache write ending at that changing user message
+cannot be reused, so the adapter also writes reusable history prefixes before it.
+An empty `input_text` block marks each user-message start, before the changing
+context. It remains on historical user turns so the earlier prefix can still
+match after context is removed. Earlier markers remain for cache lookup; OpenAI
+selects the latest three explicit writes alongside its default implicit write.
+Message roles and text are preserved. Older models retain implicit caching.
+Cache lifetime stays at the provider default; actual hits still depend on an
+unchanged prefix, model/settings, and provider cache availability. See
+[OpenAI prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching).
+
+To qualify the adapter against the real API, run
+`OR3_OPENAI_E2E_KEY_FILE=/absolute/path/to/.env bun run test:e2e:openai-cache`.
+The file must contain `OR3_OPENAI_API_KEY`. This makes eight paid GPT-6 Astra
+requests using synthetic history, nine rotating memories, and two Knowledge
+extracts. Four control turns omit explicit markers; four use the adapter's
+breakpoints. Each warm patched turn must exceed 75% cached input, with a weighted
+improvement of at least 50 percentage points over the control. Results, token
+counts and provider request IDs go to `output/openai-cache-e2e/receipt.json`;
+credentials and prompt text are excluded. Set `OR3_OPENAI_E2E_OUTPUT_DIR` to
+override that directory. This qualifies the adapter/provider boundary; it does
+not modify an existing chat or deploy the change.
+
 ## Admission, durability, and completion
 
 A send moves through admission, durable user-message persistence, response streaming, and a terminal result. Admission is single-flight for the controller; a busy request can be rejected before a message exists. An admitted request retains its originating workspace database and cancellation identity.

@@ -58,6 +58,46 @@ describe('OpenAI Responses stream contract', () => {
 // Contracts: endpoint capabilities and limits must prevent rejected requests;
 // selected identity must permit reuse of the provider's measured prefix.
 describe('OpenAI endpoint contracts', () => {
+    it.each(['@openai/gpt-6-astra', '@openai/gpt-6.1-sol', '@openai/gpt-5.6-terra'])(
+        'keeps reusable history boundaries when project context moves on %s', model => {
+            const history = [{ role: 'system', content: 'Stable instructions' },
+                ...Array.from({ length: 6 }, (_, index) => [
+                    { role: 'user', content: `Question ${index}` },
+                    { role: 'assistant', content: index % 2 ? [{ type: 'text', text: `Answer ${index}` }] : `Answer ${index}` },
+                ]).flat()];
+            const encode = (messages: unknown[]) => encodeOpenAiResponseRequest(encodeOpenAiRequest({ model, messages })).input as
+                { role: string; content: string | Record<string, unknown>[] }[];
+            const first = encode([...history, { role: 'user', content: [
+                { type: 'text', text: 'Retrieved memories and document A' }, { type: 'text', text: 'Next question' },
+            ] }]);
+            const next = encode([...history, { role: 'user', content: 'Next question' },
+                { role: 'assistant', content: 'Next answer' }, { role: 'user', content: [
+                    { type: 'text', text: 'Different memories and document B' }, { type: 'text', text: 'Follow-up question' },
+                ] }]);
+
+            // Old writes must still be eligible for lookup, including boundaries
+            // older than the provider's three explicit write slots per request.
+            expect(next.slice(0, history.length)).toEqual(first.slice(0, history.length));
+            for (const message of first.filter(item => item.role === 'user')) {
+                expect(message.content[0]).toEqual({ type: 'input_text', text: '', prompt_cache_breakpoint: { mode: 'explicit' } });
+            }
+            // The boundary immediately before changing context must survive
+            // when that user turn becomes plain canonical history.
+            expect(next[history.length]!.content[0]).toEqual(first[history.length]!.content[0]);
+            expect(first[0]!.content).toEqual([{ type: 'input_text', text: 'Stable instructions', prompt_cache_breakpoint: { mode: 'explicit' } }]);
+            expect(first[2]).toEqual({ role: 'assistant', content: 'Answer 0' });
+            expect(history[0]!.content).toBe('Stable instructions');
+        });
+    it.each(['@openai/gpt-4.1', '@openai/gpt-5.4-mini', '@openai/o3'])(
+        'retains the legacy Responses content contract on %s', model => {
+            const wire = encodeOpenAiResponseRequest(encodeOpenAiRequest({ model, messages: [
+                { role: 'user', content: 'Question' },
+                { role: 'assistant', content: [{ type: 'text', text: 'Answer' }] },
+            ] }));
+            expect(wire.input).toEqual([{ role: 'user', content: 'Question' },
+                { role: 'assistant', content: [{ type: 'output_text', text: 'Answer' }] }]);
+            expect(wire).not.toHaveProperty('prompt_cache_options');
+        });
     it('retains structured output, sampling, and explicitly strict tool contracts', () => {
         const schema = { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'], additionalProperties: false };
         const wire = encodeOpenAiResponseRequest(encodeOpenAiRequest({ model: '@openai/gpt-4.1', messages: [], stream: true,
