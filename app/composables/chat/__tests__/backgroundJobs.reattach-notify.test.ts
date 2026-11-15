@@ -114,10 +114,16 @@ vi.mock('~/db', () => ({
     },
 }));
 
-vi.mock('~/db/client', () => ({
-    getDb: () => activeDbMock,
-    getActiveWorkspaceId: () => 'workspace-1',
-}));
+vi.mock('~/db/client', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('~/db/client')>();
+    return {
+        ...actual,
+        // Real DB imports can reach this mock before the client finishes loading.
+        logicalStoreName: (name: string) => actual.logicalStoreName(name),
+        getDb: () => activeDbMock,
+        getActiveWorkspaceId: () => 'workspace-1',
+    };
+});
 
 vi.mock('~/core/notifications/notification-service', () => ({
     NotificationService: class NotificationServiceMock {
