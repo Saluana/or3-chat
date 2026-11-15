@@ -27,6 +27,10 @@ unchanged. SnapshotRevisionSchema still accepts nonempty legacy op IDs; new
 write ChangeStampSchema requires UUIDs. Sinks prepare after adding metadata and
 before allocating/writing row, log, receipt or counter, within their transaction.
 Early background admission also prepares before durable job acceptance.
+The background envelope parser validates without rewriting its records: existing
+admission/finalization receipts hash that envelope. New-job preparation normalizes
+before sanitization; provider replay checks must precede transformations of an
+already persisted envelope or write intent.
 
 ## Durable unavailable records
 

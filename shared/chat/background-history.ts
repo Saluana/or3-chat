@@ -152,18 +152,15 @@ export function parseChatGenerationAdmissionEnvelope(
     ) {
         throw new Error('Continuation background history must advance the assistant clock');
     }
-    // Normalize once before sanitization/job persistence; camel-case legacy
-    // timestamps must not fall through to the sanitizer's wall-clock defaults.
+    // Validate without changing the identity of persisted admission envelopes:
+    // providers hash these records before recognizing an existing receipt.
     const prepare = (tableName: 'threads' | 'messages', row: CanonicalHistoryRecord): CanonicalHistoryRecord => {
         nextSyncClock(row.clock);
         const opId = '00000000-0000-4000-8000-000000000000';
-        const payload = prepareSyncWrite({ tableName, pk: row.id, operation: 'put', payload: { ...row, op_id: opId },
+        prepareSyncWrite({ tableName, pk: row.id, operation: 'put', payload: { ...row, op_id: opId },
             stamp: { deviceId: backgroundHistoryDeviceId(candidate.generationId as string),
-                opId, hlc: typeof row.hlc === 'string' ? row.hlc : 'background', clock: row.clock } }).payload as CanonicalHistoryRecord;
-        // The provider assigns its real op ID in the final writer transaction.
-        delete payload.op_id;
-        if (row.op_id !== undefined) payload.op_id = row.op_id;
-        return payload;
+                opId, hlc: typeof row.hlc === 'string' ? row.hlc : 'background', clock: row.clock } });
+        return row;
     };
     return {
         version: BACKGROUND_HISTORY_CONTRACT_VERSION,

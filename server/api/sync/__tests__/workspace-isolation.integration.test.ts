@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp, createRouter, toNodeListener, type H3Event } from 'h3';
 import { createServer, type Server } from 'node:http';
 import { once } from 'node:events';
+import { createHash } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ChatGenerationAdmissionEnvelope, CanonicalGenerationSnapshot } from '~~/shared/chat/background-history';
@@ -11,6 +12,7 @@ import { runMigrations } from '~~/node_modules/or3-provider-sqlite/dist/runtime/
 import { SqliteAuthWorkspaceStore } from '~~/node_modules/or3-provider-sqlite/dist/runtime/server/auth/sqlite-auth-workspace-store.js';
 import { createSqliteWorkspaceAccessStore } from '~~/node_modules/or3-provider-sqlite/dist/runtime/server/admin/stores/sqlite-store.js';
 import { SqliteSyncGatewayAdapter } from '~~/node_modules/or3-provider-sqlite/dist/runtime/server/sync/sqlite-sync-gateway-adapter.js';
+import { stableJson } from '~~/node_modules/or3-provider-sqlite/dist/runtime/server/sync/background-history-fingerprint.js';
 
 const fixture = vi.hoisted(() => ({
     auth: null as SqliteAuthWorkspaceStore | null,
@@ -164,6 +166,18 @@ describe('document sync HTTP isolation with the real SQLite harness', () => {
         expect(entries.map((entry: { pk: string }) => entry.pk).sort()).toEqual(['shared-assistant', 'shared-user']);
         expect(entries.every((entry: { payload: object }) => !Object.hasOwn(entry.payload, 'order_key'))).toBe(true);
         expect(page.unavailable ?? []).toEqual([]);
+    });
+
+    it('replays a legacy background admission without normalizing its receipt identity', async () => {
+        const input = { ...admission(workspaceA), expectedAssistant: undefined };
+        input.assistantMessage.modelId = 'legacy-extension';
+        const actor = { userId: alice, workspaceId: workspaceA };
+        const committed = await fixture.adapter!.admitChatGeneration(actor, input);
+        // Before H2, the envelope parser returned the original record objects.
+        // Seed that exact receipt using the provider's actual fingerprint encoder.
+        getRawDb().prepare("UPDATE background_generation_receipts SET fingerprint = ? WHERE workspace_id = ? AND generation_id = ? AND stage = 'admission'")
+            .run(createHash('sha256').update(stableJson(input)).digest('hex'), workspaceA, input.generationId);
+        await expect(fixture.adapter!.admitChatGeneration(actor, input)).resolves.toEqual({ ...committed, replayed: true });
     });
 
     it('replays a deletion committed with the old wire payload without fingerprint drift', async () => {

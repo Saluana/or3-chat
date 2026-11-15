@@ -109,6 +109,8 @@ validates lossless identifiers, stamps and final live payloads, and enforces the
 requiring a live row and retain their exact payload metadata so lost-ACK retries
 still match older receipts. `nextSyncClock` rejects unsafe increments. Existing
 nonempty legacy snapshot revision IDs remain supported.
+Reparsing stored background admissions preserves their record fields so existing
+admission and finalization receipts continue to match after an upgrade.
 
 ## Pull retention and snapshot recovery
 

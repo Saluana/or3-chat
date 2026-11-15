@@ -1,5 +1,6 @@
 import { parseChatGenerationAdmissionEnvelope, type CanonicalHistoryRecord } from '~~/shared/chat/background-history';
 import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
+import { normalizeWirePayloadForTable } from '~~/shared/sync/schemas';
 
 /** Validate and sanitize a canonical admission against its server-owned scope. */
 export function prepareBackgroundHistory(value: unknown, scope: {
@@ -7,7 +8,9 @@ export function prepareBackgroundHistory(value: unknown, scope: {
 }) {
     const parsed = parseChatGenerationAdmissionEnvelope(value);
     const sanitize = (table: 'threads' | 'messages', row: CanonicalHistoryRecord): CanonicalHistoryRecord => {
-        const clean = sanitizePayloadForSync(table, row, 'put');
+        // New jobs normalize before sanitizer defaults, while parsing existing
+        // durable envelopes leaves their receipt fingerprint unchanged.
+        const clean = sanitizePayloadForSync(table, normalizeWirePayloadForTable(table, row), 'put');
         if (!clean) throw new Error('Invalid background history payload');
         return { ...clean, id: row.id, clock: row.clock, ...(row.hlc ? { hlc: row.hlc } : {}) };
     };
