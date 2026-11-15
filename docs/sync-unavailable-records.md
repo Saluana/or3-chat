@@ -80,12 +80,11 @@ Gate changed-order snapshots when the provider advertises this contract;
 healthy old-provider pages remain usable. Direct backends require separate
 matching deployment qualification.
 
-Clients classify defects before constructing Dexie scopes. Incoming evidence
-classification accepts legacy messages without `order_key` when the existing
+Clients classify defects before constructing Dexie scopes. Classification
+accepts legacy messages without `order_key` when the existing
 client can derive it from the revision HLC. Validate this derived view without
 rewriting the original payload, stored history or replay fingerprints.
-Incoming evidence
-uses a distinct quarantine variant, never outbox reconstruction. Pull commits
+Incoming evidence uses a distinct quarantine variant, never outbox reconstruction. Pull commits
 evidence before advancing/ACKing, even on all-invalid pages. Snapshot stages
 markers, then in the existing single atomic install preserves affected local
 rows, tombstones and pending intent, records unavailable state/evidence and

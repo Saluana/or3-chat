@@ -131,9 +131,9 @@ describe('applySnapshotChain', () => {
         expect(await db.snapshot_staging.count()).toBe(0);
     });
 
-    it.each(['edit', 'delete'] as const)('preserves current local state when reinstalling the same unavailable snapshot after an %s', async change => {
+    it.each(['edit', 'delete'] as const)('preserves current local state when reinstalling the same unavailable snapshot after a local %s', async change => {
         const db = createDb(); await db.open();
-        const original = { id: 'affected', name: 'affected', value: 'first copy', created_at: 1, updated_at: 1, clock: 1 };
+        const original = { id: 'affected', name: 'affected', value: 'first copy', deleted: false, created_at: 1, updated_at: 1, clock: 1 };
         await db.kv.put(original);
         const page: SnapshotResponse = { workspaceId: 'workspace-1', snapshotId: 'reused', highWatermark: 12,
             items: [], nextPageToken: null, unavailable: [{ tableName: 'kv', pk: original.id, originalKind: 'row',
