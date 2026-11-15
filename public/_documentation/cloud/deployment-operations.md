@@ -340,7 +340,10 @@ canonical attachment existed before the update. Ordinary requested restores
 require the qualified target image's sync semantic inspector before live data
 replacement and again on the extracted candidate before public startup. The
 bounded audit checks log stamps/JSON/payloads, materialized rows, tombstones,
-snapshot consistency and version counters. A physical SQLite integrity check or
+snapshot consistency and version counters. Payload checks include the reader's
+optional fields and nullable values. Legacy snapshot revision IDs remain valid;
+the known `background-tool:<64 hex>` incident ID is rejected in stored revisions
+and embedded payload `op_id`. A physical SQLite integrity check or
 archive checksum alone does not certify sync health. Diagnostics contain table
 and rowid/server-version locators, or a primary-key-order ordinal and SHA-256 of
 `JSON([snapshot_id, table_name, pk, kind])` for WITHOUT ROWID snapshot items;

@@ -318,8 +318,11 @@ Ordinary restore requires qualified offline sync semantic certification of the
 archive and the extracted candidate before public startup. Invalid stamps,
 JSON/payloads, tombstones, snapshots or version counters refuse startup; incomplete
 or unsupported audits also refuse. Reports contain sanitized numeric locators
-(or snapshot-item primary-key hashes/ordinals), never payload contents. This
-restore flow has no isolated migration stage and does not start public writers
+(or snapshot-item primary-key hashes/ordinals), never payload contents.
+The audit follows the reader's required and optional payload fields, preserves
+legacy snapshot revision IDs, and rejects the known `background-tool:<64 hex>`
+incident ID in stored revisions and embedded payload `op_id`.
+This restore flow has no isolated migration stage and does not start public writers
 to attempt a repair. It never edits an authenticated archive to make it pass.
 Recorded pre-mutation safety recovery preserves prior bytes and explicitly warns
 that sync semantic health is uncertified; physical/deep health alone is not sync

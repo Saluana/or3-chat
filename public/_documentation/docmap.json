@@ -719,7 +719,7 @@
                     "category": "Operations",
                     "categoryOrder": 3,
                     "order": 14,
-                    "summary": "Operational runbook for OR3 Cloud SSR deployments, including bounded sync semantic certification before restore startup, sanitized fault locators, generation-aware inspection, explicitly degraded safety recovery, and supported migration histories."
+                    "summary": "Operational runbook for OR3 Cloud SSR deployments, including bounded reader-aligned sync semantic certification before restore startup, incident ID detection, sanitized fault locators, generation-aware inspection, explicitly degraded safety recovery, and supported migration histories."
                 },
                 {
                     "name": "troubleshooting.md",

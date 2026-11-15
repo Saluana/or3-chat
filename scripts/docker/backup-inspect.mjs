@@ -98,7 +98,7 @@ function openCanonicalDatabase(Database, databasePath) {
 }
 
 // The offline image runs plain Node without host TypeScript aliases. Keep these
-// minimum checks aligned with shared/sync/schemas.ts: incremental stamps require
+// payload checks aligned with shared/sync/schemas.ts: incremental stamps require
 // UUIDs and 1..512 HLC characters; snapshot revisions deliberately allow legacy
 // nonempty IDs/HLCs. No stricter HLC grammar is implied by the reader contract.
 const SYNC_TABLES = ['threads', 'messages', 'projects', 'posts', 'file_meta', 'kv', 'notifications'];
@@ -125,9 +125,23 @@ function validSyncPayload(table, value, pk) {
   if (!strings || strings.some(key => typeof payload[key] !== 'string')) return false;
   if (payload[table === 'file_meta' ? 'hash' : 'id'] !== pk) return false;
   if (['created_at', 'updated_at', 'clock', ...(table === 'messages' ? ['index'] : [])].some(key => typeof payload[key] !== 'number' || !Number.isFinite(payload[key]))) return false;
-  if (!safe(payload.clock)) return false;
+  // Payload clocks are plain finite numbers in the reader; the separate
+  // revision clock is the nonnegative safe integer used by sync ordering.
   if (table !== 'kv' && typeof payload.deleted !== 'boolean') return false;
   if (table === 'threads' && typeof payload.pinned !== 'boolean') return false;
+  const optionalStrings = {
+    messages: ['hlc'], file_meta: ['kind', 'mime_type'],
+    notifications: ['thread_id', 'document_id', 'body'],
+  }[table] ?? [];
+  if (optionalStrings.some(key => payload[key] !== undefined && typeof payload[key] !== 'string')) return false;
+  const optionalNumbers = { file_meta: ['size_bytes'], notifications: ['read_at', 'deleted_at'] }[table] ?? [];
+  if (optionalNumbers.some(key => payload[key] !== undefined && (typeof payload[key] !== 'number' || !Number.isFinite(payload[key])))) return false;
+  if ((table === 'threads' || table === 'posts') && payload.title_source !== undefined && !['temporary', 'generating', 'generated', 'heading', 'manual', 'failed'].includes(payload.title_source)) return false;
+  if (table === 'threads') {
+    if (['title', 'root_thread_id', 'summary_message_id'].some(key => payload[key] !== undefined && payload[key] !== null && typeof payload[key] !== 'string')) return false;
+    if (payload.branch_mode !== undefined && payload.branch_mode !== null && !['reference', 'copy', 'compacted'].includes(payload.branch_mode)) return false;
+    if (payload.fork_reason !== undefined && !['manual', 'retry', 'compaction'].includes(payload.fork_reason)) return false;
+  }
   if (table === 'notifications' && payload.actions !== undefined && !Array.isArray(payload.actions)) return false;
   return true;
 }

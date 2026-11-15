@@ -5,6 +5,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as inspector from '../../../scripts/docker/backup-inspect.mjs';
+import { TABLE_PAYLOAD_SCHEMAS, ChangeStampSchema, SnapshotRevisionSchema } from '../../../shared/sync/schemas';
 
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(path => rm(path, { recursive: true, force: true }))); });
@@ -102,4 +103,62 @@ test('diagnostic output stays bounded while counting all faults', async () => {
   db.close();
   expect(f.audit()).toMatchObject({ healthy: false, complete: true, faultCount: 149, diagnosticsTruncated: true });
   expect(f.audit().faults.length).toBe(100);
+});
+
+const readerPayload = {
+  id: 'private-key', hash: 'private-key', name: 'private-name', status: 'ready',
+  thread_id: 'thread', user_id: 'user', role: 'assistant', order_key: 'order',
+  title: 'title', content: 'content', post_type: 'document', type: 'info',
+  deleted: false, pinned: false, index: 0, created_at: 1, updated_at: 1, clock: 1,
+};
+test.each([
+  ['threads', 'title_source', 'invalid', false],
+  ['threads', 'title', 3, false],
+  ['threads', 'branch_mode', 'invalid', false],
+  ['threads', 'root_thread_id', 3, false],
+  ['threads', 'summary_message_id', 3, false],
+  ['threads', 'fork_reason', null, false],
+  ['posts', 'title_source', null, false],
+  ['messages', 'hlc', null, false],
+  ['file_meta', 'kind', null, false],
+  ['file_meta', 'mime_type', 3, false],
+  ['file_meta', 'size_bytes', '3', false],
+  ['notifications', 'thread_id', null, false],
+  ['notifications', 'document_id', 3, false],
+  ['notifications', 'body', null, false],
+  ['notifications', 'actions', {}, false],
+  ['notifications', 'read_at', '3', false],
+  ['notifications', 'deleted_at', null, false],
+  ['threads', 'title', null, true],
+  ['threads', 'branch_mode', null, true],
+  ['threads', 'root_thread_id', null, true],
+  ['threads', 'summary_message_id', null, true],
+  ['threads', 'forkReason', 'manual', true],
+  ['posts', 'titleSource', 'generated', true],
+  ['messages', 'hlc', '', true],
+  ['notifications', 'actions', [null, { arbitrary: true }], true],
+  ['kv', 'clock', -1, true],
+  ['kv', 'clock', 0.5, true],
+  ['kv', 'clock', 1e20, true],
+] as const)('offline payload agrees with reader for %s.%s=%j', async (table, field, value, accepted) => {
+  const record = { ...readerPayload, [field]: value };
+  expect(TABLE_PAYLOAD_SCHEMAS[table]!.safeParse(record).success).toBe(accepted);
+  const f = await fixture();
+  const db = new Database(f.path);
+  db.query('UPDATE change_log SET table_name=?,payload_json=?').run(table, JSON.stringify(record));
+  db.close();
+  expect(f.audit()).toMatchObject({ complete: true, healthy: accepted });
+});
+
+test('offline revisions preserve exact incremental and legacy reader rules', async () => {
+  const f = await fixture();
+  const hlc = 'opaque '.repeat(73).slice(0, 512);
+  expect(ChangeStampSchema.safeParse({ deviceId: ' device ', opId, hlc, clock: Number.MAX_SAFE_INTEGER }).success).toBe(true);
+  expect(SnapshotRevisionSchema.safeParse({ opId: 'legacy:kv:key:1', hlc: hlc + 'x', clock: 1 }).success).toBe(true);
+  const db = new Database(f.path);
+  db.query('UPDATE change_log SET hlc=?,clock=?,device_id=?').run(hlc, Number.MAX_SAFE_INTEGER, ' device ');
+  db.query('UPDATE sync_snapshot_items SET hlc=?,op_id=?').run(hlc + 'x', 'legacy:kv:key:1');
+  db.exec("UPDATE s_kv SET hlc='',op_id=''; UPDATE tombstones SET hlc='',op_id=''; DELETE FROM kysely_migration WHERE name='033_tool_result_operation_ids'");
+  db.close();
+  expect(f.audit()).toMatchObject({ healthy: true, complete: true, faults: [] });
 });
