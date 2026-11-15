@@ -34,7 +34,7 @@ describe('palette source adapters', () => {
                             ...table,
                             async query(request) {
                                 const result = await table.query(request);
-                                if (name === 'messages') {
+                                if (name === db.messages.name) {
                                     reads.push(result.result.length);
                                     cancel?.abort();
                                 }
