@@ -11,8 +11,8 @@ function checkpoint() {
                 admission: { body: { model: 'test/model', messages: [{ role: 'user', content: 'Research' }] },
                     history: { version: 1, kind: 'new-turn', admissionId: 'admission', generationId: 'generation',
                         workspaceId: 'workspace', threadId: 'thread', messageId: 'assistant',
-                        thread: { id: 'thread', clock: 1 }, userMessage: { id: 'user', clock: 1, thread_id: 'thread', role: 'user' },
-                        assistantMessage: { id: 'assistant', clock: 1, thread_id: 'thread', role: 'assistant' } } },
+                        thread: { id: 'thread', clock: 1, status: 'ready', pinned: false, deleted: false, created_at: 1, updated_at: 1 }, userMessage: { id: 'user', clock: 1, thread_id: 'thread', role: 'user', index: 0, order_key: 'fixture-0', deleted: false, created_at: 1, updated_at: 1 },
+                        assistantMessage: { id: 'assistant', clock: 1, thread_id: 'thread', role: 'assistant', index: 1, order_key: 'fixture-1', deleted: false, created_at: 1, updated_at: 1 } } },
                 request: { task: 'Research', model: 'test/model', variant: 'nitro' } },
             { kind: 'rejected', index: 1, settlement: { kind: 'unavailable', code: 'unsupported' } },
         ] };
