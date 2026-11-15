@@ -44,7 +44,7 @@ import type {
     SnapshotResponse,
 } from '~~/shared/sync/types';
 import { ConflictResolver } from './conflict-resolver';
-import { getCursorManager, type CursorManager } from './cursor-manager';
+import { getCursorManager, getSyncStateId, type CursorManager } from './cursor-manager';
 import { observeSyncAction } from './sync-observers';
 import { useHooks } from '~/core/hooks/useHooks';
 import { SYNCED_TABLES, getHookBridge } from './hook-bridge';
@@ -189,6 +189,16 @@ export class SubscriptionManager {
             if (this.provider.capabilities?.historyIncarnation === 'v1') {
                 this.history = await readHistory(this.db);
                 this.cursorManager.bindHistory(this.history);
+                // Snapshot installation can reload the document before its ACK.
+                // Reconstruct that obligation from committed, same-history coverage;
+                // the terminal catch-up page sends it through the normal retry path.
+                this.pendingCursorAcknowledgement = null;
+                if (this.history.phase === 'ready') {
+                    const state = await this.db.sync_state.get(getSyncStateId(this.scope));
+                    if (state?.historyIncarnation === this.history.historyIncarnation && state.cursor > 0) {
+                        this.pendingCursorAcknowledgement = state.cursor;
+                    }
+                }
                 // Only the subscription owner starts this manager. A follower's
                 // durable CAS wakes that owner without bypassing its Web Lock.
                 const watch = liveQuery(() => readHistory(this.db)).subscribe(guard => {

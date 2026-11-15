@@ -1316,6 +1316,71 @@ describe('SubscriptionManager', () => {
         }
     });
 
+    it('recovers an interrupted snapshot ACK from durable coverage after owner restart', async () => {
+        vi.useRealTimers();
+        vi.spyOn(cursorManagerModule, 'getCursorManager').mockImplementation((db, scope) =>
+            new cursorManagerModule.CursorManager(db, scope));
+        const db = new Or3DB(`snapshot-ack-${crypto.randomUUID()}`);
+        await db.open();
+        const scope = { workspaceId: 'ws-1', principalId: 'owner' };
+        const guard = { historyIncarnation: 'I', phase: 'ready' as const, resetTarget: null };
+        const updateCursor = vi.fn(async () => undefined);
+        let manager: SubscriptionManager;
+        let interrupt = true;
+        const provider: SyncProvider = { id: db.name, mode: 'gateway',
+            capabilities: { historyIncarnation: 'v1', subscriptionPages: 'v1' },
+            snapshot: vi.fn(async () => ({ ...guard, workspaceId: scope.workspaceId,
+                snapshotId: 'installed', highWatermark: 4, nextPageToken: null,
+                items: [{ kind: 'row' as const, tableName: 'kv', pk: 'covered',
+                    payload: { id: 'covered', name: 'covered', value: 'durable', created_at: 1, updated_at: 1, clock: 1 },
+                    revision: { clock: 1, hlc: '1:0:test', opId: testUuid('covered') } }] })),
+            pull: vi.fn(async request => {
+                if (interrupt) { interrupt = false; await manager.stop(); }
+                return { historyIncarnation: 'I', ...FULL_HISTORY_PULL_RETENTION,
+                    changes: [], nextCursor: request.cursor, hasMore: false };
+            }),
+            push: vi.fn(), subscribe: vi.fn(async () => () => undefined), updateCursor, dispose: vi.fn(),
+        };
+        manager = new SubscriptionManager(db, provider, scope);
+        try {
+            await manager.start();
+            expect(await db.kv.get('covered')).toMatchObject({ value: 'durable' });
+            expect(await db.sync_state.get(cursorManagerModule.getSyncStateId(scope))).toMatchObject({ historyIncarnation: 'I', cursor: 4 });
+            expect(updateCursor).not.toHaveBeenCalled();
+
+            manager = new SubscriptionManager(db, provider, scope);
+            await manager.start();
+            expect(manager.getStatus()).toBe('connected');
+            expect(updateCursor).toHaveBeenCalledWith(scope, expect.any(String), 4,
+                expect.objectContaining({ historyIncarnation: 'I' }));
+            await manager.stop();
+
+            // A failed ACK leaves persisted coverage usable by the next owner.
+            updateCursor.mockClear();
+            updateCursor.mockRejectedValueOnce(new Error('ACK response lost'));
+            manager = new SubscriptionManager(db, provider, scope);
+            await manager.start();
+            expect(updateCursor).toHaveBeenCalledTimes(1);
+            await manager.stop();
+            manager = new SubscriptionManager(db, provider, scope);
+            await manager.start();
+            expect(updateCursor).toHaveBeenCalledTimes(2);
+            await manager.stop();
+
+            // A different incarnation cannot borrow I's numeric coverage.
+            updateCursor.mockClear();
+            await db.sync_state.put({ id: 'sync_history', ...guard, historyIncarnation: 'J',
+                cursor: 0, deviceId: '', lastSyncAt: 0 });
+            vi.mocked(provider.pull).mockImplementation(async request => ({
+                historyIncarnation: 'J', ...FULL_HISTORY_PULL_RETENTION,
+                changes: [], nextCursor: request.cursor, hasMore: false,
+            }));
+            manager = new SubscriptionManager(db, provider, scope);
+            await manager.start();
+            expect(updateCursor).not.toHaveBeenCalled();
+        } finally { await manager.stop(); await db.delete(); }
+    });
+
     it('pauses immediately at an incapable snapshot provider instead of retrying its 503', async () => {
         const db = new Or3DB(`incapable-${crypto.randomUUID()}`); await db.open();
         await db.sync_state.put({ id: 'sync_history', historyIncarnation: null, phase: 'unbound', resetTarget: null, cursor: 0, deviceId: '', lastSyncAt: 0 });

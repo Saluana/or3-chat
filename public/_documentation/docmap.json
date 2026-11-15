@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Sync history capability fences, atomic held-intent recovery, account-scoped inspection/export, stale-completion protection, atomic no-copy physical store isolation, stable old/new Dexie coexistence, visible upgrade progress and per-workspace nondestructive retry, and separate provider qualification."
+                    "summary": "Sync history capability fences, durable cursor ACK recovery after reload, atomic held-intent recovery, account-scoped inspection/export, stale-completion protection, atomic no-copy physical store isolation, stable old/new Dexie coexistence, visible upgrade progress and per-workspace nondestructive retry, and separate provider qualification."
                 },
                 {
                     "name": "storage-layer.md",

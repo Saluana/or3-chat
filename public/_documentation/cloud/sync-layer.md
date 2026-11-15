@@ -28,6 +28,11 @@ owner resumes checked snapshot recovery. The atomic install saves original
 outbox entries, acknowledged local content, tombstones, streaming work and
 transfer references in the existing quarantine, replaces authorized canonical
 state, invalidates other scopes and installs the exact token/cursor pair.
+On subscription startup, committed coverage for the current ready history
+restores the pending cursor acknowledgement. The terminal catch-up page retries
+that ACK even when no new rows arrive, so a reload after snapshot installation
+cannot leave a fresh device absent from server retention accounting. Coverage
+from a different history never supplies this acknowledgement.
 Edits committed while downloading are included. Quota failure preserves the old
 state and leaves pushes closed. Same-history expiry keeps ordinary pending replay.
 
