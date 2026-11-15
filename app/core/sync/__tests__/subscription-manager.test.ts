@@ -40,7 +40,8 @@ vi.mock('~/core/sync/hook-bridge', () => ({
     getLocalOnlyKvNames: () => new Set(['openrouter_api_key', 'MODELS_CATALOG', 'workspace.manager.cache']),
 }));
 
-vi.mock('~/core/sync/cursor-manager', () => {
+vi.mock('~/core/sync/cursor-manager', async original => {
+    const actual = await original<typeof import('~/core/sync/cursor-manager')>();
     const state = { cursor: 100 };
     const api = {
         getCursor: vi.fn(async () => state.cursor),
@@ -54,6 +55,7 @@ vi.mock('~/core/sync/cursor-manager', () => {
         getDeviceId: vi.fn(() => 'device-1'),
     };
     return {
+        ...actual,
         getCursorManager: () => api,
         __cursorState: state,
     };
@@ -1109,6 +1111,72 @@ describe('SubscriptionManager', () => {
         expect(provider.subscribe).toHaveBeenCalledTimes(2);
         expect(manager.getStatus()).toBe('connected');
         await manager.stop();
+    });
+
+    it.each(['recover', 'cancel', 'expired', 'fatal'] as const)('retains a 120-page snapshot prefix through gateway backoff (%s)', async outcome => {
+        const db = new Or3DB(`subscription-retry-${crypto.randomUUID()}`);
+        await db.open();
+        const cursorApi = cursorManagerModule.getCursorManager(db, { workspaceId: 'ws-1' });
+        vi.mocked(cursorApi.isBootstrapNeeded).mockResolvedValue(true);
+        const tokens: Array<string | undefined> = [];
+        let throttled = false;
+        let timeout = false;
+        vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit) => {
+            const body = JSON.parse(init.body as string);
+            if (path.endsWith('/snapshot')) {
+                tokens.push(body.pageToken);
+                const sequence = body.pageToken ? Number(body.pageToken) : 0;
+                if (sequence === 120 && !throttled) {
+                    throttled = true;
+                    return new Response('try later', { status: outcome === 'expired' ? 410 : outcome === 'fatal' ? 422 : 429, headers: { 'Retry-After': '4' } });
+                }
+                if (sequence === 120 && !timeout) {
+                    timeout = true;
+                    throw new DOMException('request timeout', 'TimeoutError');
+                }
+                return new Response(JSON.stringify({ workspaceId: 'ws-1', snapshotId: 'snap-retry', highWatermark: 40,
+                    items: [{ kind: 'row', tableName: 'kv', pk: `retry-${String(sequence).padStart(3, '0')}`, payload: { id: `retry-${String(sequence).padStart(3, '0')}`, name: `retry-${sequence}`, value: sequence, created_at: 1, updated_at: 1, clock: 1 }, revision: { clock: 1, hlc: '1:0:test', opId: testUuid(`retry-${sequence}`) } }], nextPageToken: sequence < 121 ? String(sequence + 1) : null }));
+            }
+            if (path.endsWith('/pull')) return new Response(JSON.stringify({ changes: [], nextCursor: body.cursor, hasMore: false, ...FULL_HISTORY_PULL_RETENTION }));
+            return new Response('{}');
+        }));
+        const provider = createGatewaySyncProvider();
+        const manager = new SubscriptionManager(db, provider, { workspaceId: 'ws-1' }, { reconnectDelays: [60_000] });
+        try {
+            const starting = manager.start();
+            for (let i = 0; i < 300 && tokens.length < 121; i++) await vi.advanceTimersByTimeAsync(0);
+            expect(tokens).toHaveLength(121);
+            if (outcome === 'expired' || outcome === 'fatal') {
+                await starting;
+                expect(manager.getStatus()).toBe(outcome === 'expired' ? 'reconnecting' : 'error');
+                return;
+            }
+            expect(await db.snapshot_staging.count()).toBe(121);
+            await vi.advanceTimersByTimeAsync(3999);
+            expect(tokens).toHaveLength(121);
+            if (outcome === 'cancel') {
+                await manager.stop();
+                await starting;
+                await vi.advanceTimersByTimeAsync(5000);
+                expect(tokens).toHaveLength(121);
+                expect(manager.getStatus()).toBe('disconnected');
+            } else {
+                await vi.advanceTimersByTimeAsync(1);
+                for (let i = 0; i < 50 && tokens.length < 122; i++) await vi.advanceTimersByTimeAsync(0);
+                await vi.advanceTimersByTimeAsync(2000);
+                await starting;
+                expect(tokens.slice(120)).toEqual(['120', '120', '120', '121']);
+                expect(tokens.filter(token => token === undefined)).toHaveLength(1);
+                expect(manager.getStatus()).toBe('connected');
+                expect(await db.snapshot_staging.count()).toBe(0);
+                expect(await db.kv.count()).toBe(122);
+            }
+        } finally {
+            await manager.stop();
+            await provider.dispose();
+            await db.delete();
+            vi.mocked(cursorApi.isBootstrapNeeded).mockResolvedValue(false);
+        }
     });
 
     it('rescans from a snapshot when pull reports requiresSnapshot', async () => {

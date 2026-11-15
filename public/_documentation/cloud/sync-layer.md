@@ -652,3 +652,11 @@ UUID identity-reuse rejection or malformed server winner also holds only that
 operation, preserving local content and winner evidence; healthy siblings settle.
 These content failures do not consume the provider outage budget. Other provider
 conflicts retain their existing retry behavior.
+
+Snapshot downloads retain their staged prefix while retrying the same page/token
+on HTTP 429, temporary service/network errors, or request timeouts. Backoff is
+cancellable and capped at 30 seconds, with Retry-After as a minimum and the
+one-hour snapshot lifetime as the total bound. Invalid/expired identities (410)
+escape to a new recovery attempt. Non-transient chain, authorization or storage
+failures pause recovery for a deliberate retry. Staging still installs only as
+one complete atomic chain.
