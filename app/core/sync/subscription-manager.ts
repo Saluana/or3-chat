@@ -195,7 +195,7 @@ export class SubscriptionManager {
                 this.pendingCursorAcknowledgement = null;
                 if (this.history.phase === 'ready') {
                     const state = await this.db.sync_state.get(getSyncStateId(this.scope));
-                    if (state?.historyIncarnation === this.history.historyIncarnation && state.cursor > 0) {
+                    if (state && state.historyIncarnation === this.history.historyIncarnation && state.cursor > 0) {
                         this.pendingCursorAcknowledgement = state.cursor;
                     }
                 }
