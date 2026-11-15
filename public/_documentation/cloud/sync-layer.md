@@ -731,11 +731,13 @@ escape to a new recovery attempt. Non-transient chain, authorization or storage
 failures pause recovery for a deliberate retry. Staging still installs only as
 one complete atomic chain.
 
-Independent sync observations (push before/after, queue/retry, pull received/error,
-and subscription status/retry diagnostics) wait at most 250 ms. One unresolved
-dispatch per action/engine is retained; further observations on that action are
-coalesced away until it settles. Observers must capture scope before awaiting;
-a timeout does not cancel their side effects. Protocol persistence, page receipts,
-pending-op capture and filters retain their existing backpressure. Phase events,
-applied-data invalidation and notification delivery retain their existing awaited
-semantics until per-listener delivery can preserve those side effects.
+Sync observations (bootstrap/rescan phases, push before/after, queue/retry, pull
+received/applied/error, conflicts, permanent-error notifications and subscription
+diagnostics) wait at most 250 ms: observer completion does not gate sync. Listeners
+are invoked in priority/registration order without awaiting earlier completions.
+One unresolved batch per action/engine is retained; ordinary repeats coalesce
+without a backlog. Reviewed synchronous host suppression/invalidation callbacks
+still run on every event, so start precedes complete and cache/search invalidation
+follows the data commit even behind a hung observer. Observers must capture and
+guard scope before awaiting; a timeout cannot cancel their side effects. Protocol
+persistence, page receipts, pending-op capture and filters remain awaited.

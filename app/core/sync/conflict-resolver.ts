@@ -31,6 +31,7 @@ import type { ChangeStamp, SyncChange, Tombstone, PullUnavailableRecord } from '
 import type { Transaction } from 'dexie';
 import { compareSyncRevision } from '~~/shared/sync/revision';
 import { getHookBridge, getLocalOnlyKvNames } from './hook-bridge';
+import { observeSyncAction } from './sync-observers';
 import { useHooks } from '~/core/hooks/useHooks';
 import { nowSec } from '~/db/util';
 import { isLocalOnlyKvChange } from '~~/shared/sync/local-only-kv';
@@ -200,7 +201,7 @@ export class ConflictResolver {
 
         // Emit conflict hooks AFTER transaction completes
         for (const conflict of conflicts) {
-            await useHooks().doAction('sync.conflict:action:detected', conflict);
+            await observeSyncAction(useHooks(), 'sync.conflict:action:detected', conflict);
         }
 
         return result;

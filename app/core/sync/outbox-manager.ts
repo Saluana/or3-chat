@@ -1074,7 +1074,7 @@ export class OutboxManager {
                 }
             );
             
-            await hooks.doAction('sync.error:action', { op: updatedOp, error: details ?? error, permanent: isPermanent });
+            await observeSyncAction(hooks, 'sync.error:action', { op: updatedOp, error: details ?? error, permanent: isPermanent });
         } else {
             // Schedule retry
             const delay = this.config.retryDelays[Math.min(attempts - 1, this.config.retryDelays.length - 1)]

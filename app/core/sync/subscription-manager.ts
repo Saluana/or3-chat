@@ -306,7 +306,7 @@ export class SubscriptionManager {
             let hasMore = true;
             let totalPulled = 0;
 
-            await useHooks().doAction('sync.bootstrap:action:start', {
+            await observeSyncAction(useHooks(), 'sync.bootstrap:action:start', {
                 scope: this.scope,
             });
             if (!this.isCurrentGeneration(generation)) return;
@@ -346,7 +346,7 @@ export class SubscriptionManager {
                         cursor,
                         nextCursor: response.nextCursor,
                     });
-                    await useHooks().doAction('sync.bootstrap:action:error', {
+                    await observeSyncAction(useHooks(), 'sync.bootstrap:action:error', {
                         scope: this.scope,
                         error: 'Infinite loop detected: cursor not advancing',
                     });
@@ -381,7 +381,7 @@ export class SubscriptionManager {
                 cursor = response.nextCursor;
                 hasMore = response.hasMore;
 
-                await useHooks().doAction('sync.bootstrap:action:progress', {
+                await observeSyncAction(useHooks(), 'sync.bootstrap:action:progress', {
                     scope: this.scope,
                     cursor,
                     pulledCount: totalPulled,
@@ -414,7 +414,7 @@ export class SubscriptionManager {
             });
 
             const elapsedMs = Date.now() - startTime;
-            await useHooks().doAction('sync.bootstrap:action:complete', {
+            await observeSyncAction(useHooks(), 'sync.bootstrap:action:complete', {
                 scope: this.scope,
                 cursor,
                 totalPulled,
@@ -518,7 +518,7 @@ export class SubscriptionManager {
                 state.pendingPage = undefined;
                 state.totalPulled += page.items.length + (page.unavailable?.length ?? 0);
                 if (emitBootstrapEvents) {
-                    await useHooks().doAction('sync.bootstrap:action:progress', {
+                    await observeSyncAction(useHooks(), 'sync.bootstrap:action:progress', {
                         scope: this.scope,
                         cursor: page.highWatermark,
                         pulledCount: state.totalPulled,
@@ -584,7 +584,7 @@ export class SubscriptionManager {
 
         const elapsedMs = Date.now() - startTime;
         if (emitBootstrapEvents) {
-            await useHooks().doAction('sync.bootstrap:action:complete', {
+            await observeSyncAction(useHooks(), 'sync.bootstrap:action:complete', {
                 scope: this.scope,
                 cursor: replay.cursor,
                 totalPulled,
@@ -672,7 +672,7 @@ export class SubscriptionManager {
         this.isBootstrapping = true;
 
         try {
-            await useHooks().doAction('sync.rescan:action:starting', {
+            await observeSyncAction(useHooks(), 'sync.rescan:action:starting', {
                 scope: this.scope,
             });
             if (!this.isCurrentGeneration(generation)) return;
@@ -685,7 +685,7 @@ export class SubscriptionManager {
                     false
                 );
                 if (!this.isCurrentGeneration(generation)) return;
-                await useHooks().doAction('sync.rescan:action:completed', {
+                await observeSyncAction(useHooks(), 'sync.rescan:action:completed', {
                     scope: this.scope,
                 });
                 return;
@@ -763,7 +763,7 @@ export class SubscriptionManager {
             await this.reapplyPendingOps();
             if (!this.isCurrentGeneration(generation)) return;
 
-            await useHooks().doAction('sync.rescan:action:completed', {
+            await observeSyncAction(useHooks(), 'sync.rescan:action:completed', {
                 scope: this.scope,
             });
         } finally {
@@ -876,7 +876,7 @@ export class SubscriptionManager {
             this.pendingCursorAcknowledgement = null;
         }
         if (changes.length) {
-            await useHooks().doAction('sync.pull:action:applied', {
+            await observeSyncAction(useHooks(), 'sync.pull:action:applied', {
                 scope: this.scope, applied: result.applied, skipped: result.skipped, conflicts: result.conflicts,
             });
         }
@@ -977,7 +977,7 @@ export class SubscriptionManager {
             await this.subscribe(generation);
             if (!this.isCurrentGeneration(generation)) return;
 
-            await useHooks().doAction('sync.pull:action:applied', {
+            await observeSyncAction(useHooks(), 'sync.pull:action:applied', {
                 scope: this.scope,
                 applied: result.applied + drainResult.applied,
                 skipped: result.skipped + drainResult.skipped,

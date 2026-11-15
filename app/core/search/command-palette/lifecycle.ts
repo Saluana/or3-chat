@@ -1,3 +1,5 @@
+import { synchronousSyncObserver } from '~/core/sync/sync-observers';
+import { getWorkspaceGeneration } from '~/db/client';
 import { useHooks } from '~/core/hooks/useHooks';
 import type { PaletteCoordinator } from './coordinator';
 import { listPaletteSources } from './registry';
@@ -36,6 +38,7 @@ export function bindPaletteLifecycle(
             }
         }
         if (timer) clearTimeout(timer);
+        const generation = getWorkspaceGeneration();
         timer = setTimeout(() => {
             timer = null;
             const ids = fullReconcilePending
@@ -47,10 +50,11 @@ export function bindPaletteLifecycle(
                 ? new Map([['chat', [...pendingChatIds]]]) : undefined;
             pendingChatIds.clear();
             fullChatPending = false;
+            if (generation !== getWorkspaceGeneration()) return;
             void (records ? coordinator.refreshSources(ids, records) : coordinator.refreshSources(ids));
         }, RECONCILE_DEBOUNCE_MS);
     };
-    const scheduleFullReconcile = () => scheduleReconcile();
+    const scheduleFullReconcile = synchronousSyncObserver(() => scheduleReconcile());
 
     const syncEvents = [
         'sync.bootstrap:action:complete',

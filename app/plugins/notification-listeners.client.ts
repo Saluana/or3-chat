@@ -11,6 +11,7 @@ import { presentError } from '~~/shared/errors';
 
 import { defineNuxtPlugin } from '#app';
 import { useRuntimeConfig } from '#imports';
+import { synchronousSyncObserver } from '~/core/sync/sync-observers';
 import { useHooks } from '~/core/hooks/useHooks';
 import { NotificationService } from '~/core/notifications/notification-service';
 import { resolveNotificationUserId } from '~/core/notifications/notification-user';
@@ -92,21 +93,21 @@ export default defineNuxtPlugin(() => {
     let isInitialSyncing = false;
 
     // Listen for bootstrap/rescan start/complete to suppress notifications
-    hooks.addAction('sync.bootstrap:action:start', () => {
+    hooks.addAction('sync.bootstrap:action:start', synchronousSyncObserver(() => {
         isInitialSyncing = true;
-    });
+    }));
 
-    hooks.addAction('sync.bootstrap:action:complete', () => {
+    hooks.addAction('sync.bootstrap:action:complete', synchronousSyncObserver(() => {
         isInitialSyncing = false;
-    });
+    }));
 
-    hooks.addAction('sync.rescan:action:starting', () => {
+    hooks.addAction('sync.rescan:action:starting', synchronousSyncObserver(() => {
         isInitialSyncing = true;
-    });
+    }));
 
-    hooks.addAction('sync.rescan:action:completed', () => {
+    hooks.addAction('sync.rescan:action:completed', synchronousSyncObserver(() => {
         isInitialSyncing = false;
-    });
+    }));
 
     function isThreadOpen(threadId?: string): boolean {
         if (!threadId) return false;
