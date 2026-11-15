@@ -51,7 +51,7 @@ export async function classifyPullPage(event: H3Event, adapter: SyncGatewayAdapt
         if (!marker.success) coverageFailure();
         requireUnavailableCapability(request.unavailableRecordCapability);
         if (adapter.capabilities?.unavailableRecords !== 'v1' || !adapter.retainUnavailableRecord) coverageFailure();
-        const evidence = await adapter.retainUnavailableRecord(event, { scope: request.scope, source: 'pull', record: entry, marker: marker.data });
+        const evidence = await adapter.retainUnavailableRecord(event, { scope: request.scope, historyIncarnation: page.historyIncarnation, source: 'pull', record: entry, marker: marker.data });
         unavailable.push({ ...marker.data, evidenceRef: evidence.evidenceRef });
     }
     if (unavailable.length) {
@@ -84,7 +84,7 @@ export async function classifySnapshotPage(event: H3Event, adapter: SyncGatewayA
         if (!marker.success) coverageFailure();
         requireUnavailableCapability(request.unavailableRecordCapability);
         if (adapter.capabilities?.unavailableRecords !== 'v1' || !adapter.retainUnavailableRecord) coverageFailure();
-        const evidence = await adapter.retainUnavailableRecord(event, { scope: request.scope, source: 'snapshot', record: entry, marker: marker.data });
+        const evidence = await adapter.retainUnavailableRecord(event, { scope: request.scope, historyIncarnation: page.historyIncarnation, source: 'snapshot', record: entry, marker: marker.data });
         unavailable.push({ ...marker.data, evidenceRef: evidence.evidenceRef });
     }
     if (unavailable.length) {

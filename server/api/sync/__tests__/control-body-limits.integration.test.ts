@@ -1,3 +1,5 @@
+// Incarnation negotiation has its own route-boundary suite; retain these tests' original focus.
+vi.mock('../../../utils/sync/history-incarnation', () => ({ requireHistoryCapability: () => {}, checkHistory: async () => undefined, assertHistoryResponse: () => {} }));
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp, createRouter, toNodeListener } from 'h3';
 import { createServer, request, type Server } from 'node:http';

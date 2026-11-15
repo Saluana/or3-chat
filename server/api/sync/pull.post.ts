@@ -1,3 +1,4 @@
+import { requireHistoryCapability, checkHistory, assertHistoryResponse } from '../../utils/sync/history-incarnation';
 import { classifyPullPage } from '../../utils/sync/unavailable-records';
 import { observeSyncRequest } from '../../sync/observations';
 import { hasWorkspaceItemSemantics } from "~~/shared/posts/workspace-item-capability";
@@ -71,6 +72,7 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Invalid pull request' });
     }
 
+    requireHistoryCapability(body);
     const session = await resolveSessionContext(event);
     if (!session.authenticated || !session.user || !session.workspace) {
         throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
@@ -99,8 +101,11 @@ export default defineEventHandler(async (event) => {
             throw createError({ statusCode: 500, statusMessage: 'Sync adapter not configured' });
         }
 
+        const history = await checkHistory(event, adapter, parsed.data, true);
+        const page = await adapter.pull(event, parsed.data);
+        assertHistoryResponse(page.historyIncarnation, history);
         const result = PullResponseSchema.safeParse(
-            await classifyPullPage(event, adapter, parsed.data, await adapter.pull(event, parsed.data))
+            await classifyPullPage(event, adapter, parsed.data, page)
         );
         if (!result.success) {
             throw createError({

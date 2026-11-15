@@ -136,3 +136,31 @@ decoder must change together.
   decoder. Qualify CJK, supplementary, prefix/NUL and 1,024-unit keys.
 - Test against this host contract before activation; Convex needs its own
   generated-backend compatibility qualification.
+
+## Provider checklist (incarnation)
+
+S3 must implement `SyncGatewayAdapter.capabilities.historyIncarnation: 'v1'` only
+for the qualified native SQLite lane. Add `getHistoryIncarnation(event, scope)`;
+read a valid singleton, never mint identity on ordinary reads/startup. Requests
+carry `historyIncarnation` at envelope level (outside operation fingerprints).
+Push and `updateCursor` recheck it inside their mutation transaction **before**
+receipt replay, allocation, writes or ACK timestamp refresh. Return structured
+409 `OR3_SYNC_HISTORY_CHANGED` with current token and `requiresSnapshot:true`.
+Pull null/mismatch returns an empty recovery envelope with retention metadata
+before payload decoding. Every successful pull/snapshot/push carries its bound
+`historyIncarnation`; watcher callbacks carry `{historyIncarnation, version}`.
+Snapshot continuation tokens bind incarnation and reject pre-reset tokens even
+when presented with the new token. `retainUnavailableRecord` receives the bound
+history; namespace evidence revisions by history and fence explicit repairs.
+
+Migration 036 (or next unallocated) initializes `sync_history` once, invalidates
+old device/snapshot state, and preserves unavailable evidence. Managed offline
+reset uses `/app/scripts/docker/sync-history-reset.mjs`: one transaction rotates
+the existing singleton and deletes all device cursors/snapshot headers/items.
+The helper's image profile **must remain unqualified** until the packed provider,
+matching host, native driver and exact migration history pass the real lifecycle
+suite. At that point qualify `backup-inspection-profile.json` with
+`historyIncarnation:'v1'` and exact `historyMigrations`, reconcile published pins
+and accepted inspector histories together. Current 0.0.30 and S2 advertise no
+capability and fail closed with `OR3_SYNC_HISTORY_UNSUPPORTED`. D1 and direct
+Convex remain separate qualification lanes. No publication is performed here.

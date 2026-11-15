@@ -312,7 +312,15 @@ export const TABLE_PAYLOAD_SCHEMAS: Record<string, z.ZodSchema> = {
 // REQUEST/RESPONSE SCHEMAS
 // ============================================================
 
+export const HISTORY_INCARNATION_CAPABILITY = 'incarnation-v1' as const;
+export const HistoryIncarnationSchema = z.string().min(1).max(128).regex(/^[\x21-\x7e]+$/);
+export const HistoryRequestFields = {
+    historyIncarnation: HistoryIncarnationSchema.nullable().optional(),
+    historyIncarnationCapability: z.literal(HISTORY_INCARNATION_CAPABILITY).optional(),
+};
+
 export const PullRequestSchema = z.object({
+    ...HistoryRequestFields,
     scope: SyncScopeSchema,
     cursor: z.number().int().nonnegative(),
     limit: z.number().int().positive().max(1000),
@@ -327,6 +335,7 @@ export const PullRequestSchema = z.object({
 
 export const PullResponseSchema = z
     .object({
+        historyIncarnation: HistoryIncarnationSchema.optional(),
         changes: SyncChangesSchema.max(1000),
         unavailable: z.array(PullUnavailableRecordSchema).max(1000).optional(),
         nextCursor: z.number().int().nonnegative(),
@@ -377,6 +386,7 @@ export const PullResponseSchema = z
     });
 
 export const SnapshotRequestSchema = z.object({
+    ...HistoryRequestFields,
     scope: SyncScopeSchema,
     pageSize: z.number().int().positive().max(1000),
     pageToken: z.string().min(1).max(MAX_SYNC_SNAPSHOT_TOKEN_LENGTH).optional(),
@@ -414,6 +424,7 @@ export const SnapshotItemSchema = z.discriminatedUnion('kind', [
 
 export const SnapshotResponseSchema = z
     .object({
+        historyIncarnation: HistoryIncarnationSchema.optional(),
         workspaceId: z.string().min(1),
         snapshotId: z.string().min(1),
         highWatermark: z.number().int().nonnegative(),
@@ -466,6 +477,7 @@ export const SnapshotResponseSchema = z
 
 export const PushBatchSchema = z
     .object({
+        ...HistoryRequestFields,
         scope: SyncScopeSchema,
         ops: z.array(PendingOpSchema).max(MAX_SYNC_PUSH_BATCH_OPS),
         fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
@@ -549,6 +561,7 @@ export const PushResultItemSchema = z.object({
 
 export const PushResultSchema = z
     .object({
+        historyIncarnation: HistoryIncarnationSchema.optional(),
         results: z.array(PushResultItemSchema).max(MAX_SYNC_PUSH_BATCH_OPS),
         serverVersion: z.number().int().nonnegative(),
     })

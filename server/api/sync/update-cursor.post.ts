@@ -1,3 +1,4 @@
+import { requireHistoryCapability, checkHistory } from '../../utils/sync/history-incarnation';
 import { observeSyncRequest } from '../../sync/observations';
 /**
  * @module server/api/sync/update-cursor.post
@@ -9,7 +10,7 @@ import { observeSyncRequest } from '../../sync/observations';
 import { requireCloudMutation } from '../../utils/security/cloud-mutation';
 import { defineEventHandler, createError, setResponseHeader } from 'h3';
 import { z } from 'zod';
-import { SyncScopeSchema } from '~~/shared/sync/schemas';
+import { HistoryRequestFields, SyncScopeSchema } from '~~/shared/sync/schemas';
 import { resolveSessionContext } from '../../auth/session';
 import { readLimitedJsonBody } from '../../utils/security/limited-json-body';
 import { requireCan } from '../../auth/can';
@@ -24,9 +25,10 @@ import {
 import { enforceRateLimit } from '../../utils/rate-limit/enforce';
 
 const UpdateCursorSchema = z.object({
+    ...HistoryRequestFields,
     scope: SyncScopeSchema,
     deviceId: z.string().trim().min(1).max(256),
-    version: z.number().int().nonnegative(),
+    version: z.number().int().nonnegative().safe(),
 });
 
 /**
@@ -52,6 +54,7 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Invalid cursor request' });
     }
 
+    requireHistoryCapability(body);
     const session = await resolveSessionContext(event);
     if (!session.authenticated || !session.user || !session.workspace) {
         throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
@@ -81,11 +84,12 @@ export default defineEventHandler(async (event) => {
             throw createError({ statusCode: 500, statusMessage: 'Sync adapter not configured' });
         }
 
+        const history = await checkHistory(event, adapter, parsed.data);
         recordSyncRequest(userId, 'sync:cursor');
 
         // Dispatch to adapter
         await adapter.updateCursor(event, parsed.data);
 
-        return { ok: true };
+        return { ok: true, historyIncarnation: history };
     });
 });

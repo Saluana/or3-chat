@@ -107,6 +107,9 @@ export interface SyncChange {
  * Request to pull changes from server
  */
 export interface PullRequest {
+    /** Batch identity, independent of operation fingerprints. Required by incarnation-v1. */
+    historyIncarnation?: string | null;
+    historyIncarnationCapability?: 'incarnation-v1';
     scope: SyncScope;
     cursor: number; // Server version cursor
     limit: number;
@@ -121,6 +124,7 @@ export interface PullRequest {
  * Response from pull request
  */
 export interface PullResponse {
+    historyIncarnation?: string;
     changes: SyncChange[];
     unavailable?: PullUnavailableRecord[];
     nextCursor: number;
@@ -145,6 +149,9 @@ export const FULL_HISTORY_PULL_RETENTION = {
 
 /** Request a bounded page from one consistent materialized snapshot. */
 export interface SnapshotRequest {
+    /** Batch identity, independent of operation fingerprints. Required by incarnation-v1. */
+    historyIncarnation?: string | null;
+    historyIncarnationCapability?: 'incarnation-v1';
     scope: SyncScope;
     pageSize: number;
     /** Opaque provider token; callers return it unchanged. */
@@ -184,6 +191,7 @@ export type SnapshotItem =
  * Incremental replay starts strictly after the watermark after final apply.
  */
 export interface SnapshotResponse {
+    historyIncarnation?: string;
     workspaceId: string;
     snapshotId: string;
     highWatermark: number;
@@ -196,6 +204,9 @@ export interface SnapshotResponse {
  * Batch of operations to push to server
  */
 export interface PushBatch {
+    /** Batch identity, independent of operation fingerprints. Required by incarnation-v1. */
+    historyIncarnation?: string | null;
+    historyIncarnationCapability?: 'incarnation-v1';
     scope: SyncScope;
     ops: PendingOp[];
     /** Writer capability required before generic file metadata is accepted. */
@@ -226,6 +237,7 @@ export type PushWinner =
  * Result of a push operation
  */
 export interface PushResult {
+    historyIncarnation?: string;
     results: Array<{
         opId: string;
         success: boolean;
@@ -268,6 +280,7 @@ export interface SyncProviderAuth {
  * Subscribe options for real-time providers
  */
 export interface SyncSubscribeOptions {
+    historyIncarnation?: string | null;
     cursor?: number;
     limit?: number;
     /** Supported only with capabilities.subscriptionPages v1. The provider
@@ -281,6 +294,7 @@ export interface SyncSubscribeOptions {
  * Request lifetime owned by the calling sync lifecycle.
  */
 export interface SyncRequestOptions {
+    historyIncarnation?: string | null;
     /** Cancels this caller’s wait and transport where supported. */
     signal?: AbortSignal;
 }
@@ -292,6 +306,7 @@ export interface SyncProvider {
     auth?: SyncProviderAuth;
     /** Explicit protocol contracts implemented by this provider. Missing is fail-closed. */
     capabilities?: {
+        historyIncarnation?: 'v1';
         snapshotBootstrap?: 'snapshot-v1';
         historyRetention?: 'snapshot-v1';
         /** Cursor-complete pages with acknowledged, provider-owned pagination. */
@@ -371,6 +386,9 @@ export interface Tombstone {
  * Sync state - persisted sync metadata
  */
 export interface SyncState {
+    historyIncarnation?: string | null;
+    phase?: 'unbound' | 'ready' | 'resetting';
+    resetTarget?: string | null;
     id: string; // 'default' for main state
     cursor: number;
     lastSyncAt: number;

@@ -1,3 +1,4 @@
+import { requireHistoryCapability, checkHistory, assertHistoryResponse } from '../../utils/sync/history-incarnation';
 import { classifySnapshotPage } from '../../utils/sync/unavailable-records';
 import { observeSyncRequest } from '../../sync/observations';
 import { hasWorkspaceItemSemantics } from "~~/shared/posts/workspace-item-capability";
@@ -40,11 +41,13 @@ export default defineEventHandler(async (event) => {
     }
 
     setNoCacheHeaders(event);
-    const request = SnapshotRequestSchema.safeParse(await readLimitedJsonBody(event, MAX_SYNC_SNAPSHOT_REQUEST_BYTES));
+    const body = await readLimitedJsonBody(event, MAX_SYNC_SNAPSHOT_REQUEST_BYTES);
+    const request = SnapshotRequestSchema.safeParse(body);
     if (!request.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid snapshot request' });
     }
 
+    requireHistoryCapability(body);
     const session = await resolveSessionContext(event);
     if (!session.authenticated || !session.user || !session.workspace) {
         throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
@@ -75,8 +78,11 @@ export default defineEventHandler(async (event) => {
 
         recordSyncRequest(userId, 'sync:snapshot');
 
+        const history = await checkHistory(event, adapter, request.data, request.data.historyIncarnation === null && !request.data.pageToken);
+        const page = await adapter.snapshot(event, request.data);
+        assertHistoryResponse(page.historyIncarnation, history);
         const response = SnapshotResponseSchema.safeParse(
-            await classifySnapshotPage(event, adapter, request.data, await adapter.snapshot(event, request.data))
+            await classifySnapshotPage(event, adapter, request.data, page)
         );
         if (!response.success) {
             throw createError({ statusCode: 502, statusMessage: 'Invalid snapshot response' });

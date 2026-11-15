@@ -1,3 +1,5 @@
+import { HistoryRequestFields } from '~~/shared/sync/schemas';
+import { requireHistoryCapability, checkHistory, assertHistoryResponse } from '../../utils/sync/history-incarnation';
 import { prepareSyncWrite, SyncWriteError } from '~~/shared/sync/prepare-sync-write';
 import { observeSyncRequest } from '../../sync/observations';
 import { WORKSPACE_ITEM_CAPABILITY } from "~~/shared/posts/workspace-item-capability";
@@ -50,6 +52,7 @@ type PendingOp = z.infer<typeof PendingOpSchema>;
 type PushResultItem = z.infer<typeof PushResultSchema>['results'][number];
 
 const PushEnvelopeSchema = z.object({
+    ...HistoryRequestFields,
     scope: SyncScopeSchema,
     ops: z.array(z.unknown()).max(MAX_SYNC_PUSH_BATCH_OPS),
     fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
@@ -132,6 +135,7 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Invalid push request' });
     }
 
+    requireHistoryCapability(body);
     const session = await resolveSessionContext(event);
     if (!session.authenticated || !session.user || !session.workspace) {
         throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
@@ -154,6 +158,9 @@ export default defineEventHandler(async (event) => {
         }
 
         recordSyncRequest(userId, 'sync:push');
+
+        const adapter = getActiveSyncGatewayAdapter();
+        const history = await checkHistory(event, adapter, envelope.data);
 
         // A UUID denotes one immutable intent. Reject aliases before validating
         // or dispatching any op; correspondence cannot represent duplicates.
@@ -184,6 +191,7 @@ export default defineEventHandler(async (event) => {
 
         if (validOps.length === 0) {
             return {
+                historyIncarnation: history,
                 results: merged,
                 serverVersion: 0,
             };
@@ -199,7 +207,6 @@ export default defineEventHandler(async (event) => {
         if (validOps.some(op => hasWorkspaceItemSemantics(op.tableName, op.payload))) {
             requireWorkspaceItemCapability(envelope.data.workspaceItemCapability);
         }
-        const adapter = getActiveSyncGatewayAdapter();
         if (!adapter) {
             throw createError({ statusCode: 500, statusMessage: 'Sync adapter not configured' });
         }
@@ -208,6 +215,8 @@ export default defineEventHandler(async (event) => {
         }
 
         const normalizedBatch = {
+            historyIncarnation: history,
+            historyIncarnationCapability: 'incarnation-v1' as const,
             scope: envelope.data.scope,
             ops: validOps,
             ...(envelope.data.workspaceItemCapability ? { workspaceItemCapability: envelope.data.workspaceItemCapability } : {}),
@@ -226,6 +235,7 @@ export default defineEventHandler(async (event) => {
             });
         }
 
+        assertHistoryResponse(adapterResult.data.historyIncarnation, history);
         const adapterByOpId = new Map(
             adapterResult.data.results.map((item) => [item.opId, item])
         );
@@ -237,6 +247,7 @@ export default defineEventHandler(async (event) => {
         }
 
         return {
+            historyIncarnation: history,
             results: merged,
             serverVersion: adapterResult.data.serverVersion,
         };
