@@ -333,3 +333,10 @@
 .or3-prose :deep([data-streamdown='pre']) {
     padding-left: 0;
 }
+
+/* KaTeX loads the first time math appears. Keep the TeX source invisible
+   briefly so a quick load swaps straight to rendered math; a slow or failed
+   load still shows the source. */
+.or3-prose :deep([data-streamdown='math-pending']) {
+    animation: or3-loading-reveal 160ms ease-out 400ms backwards;
+}
