@@ -1,8 +1,22 @@
 import { mkdtemp, mkdir, rm, writeFile, cp } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { prepareS3TestBucket } from './s3-test-bucket';
+
+const args = process.argv.slice(2);
+const tarballIndex = args.indexOf('--provider-tarball');
+const providerTarball = tarballIndex < 0 ? undefined : resolve(args[tarballIndex + 1] || '');
+if (tarballIndex >= 0 && !args[tarballIndex + 1]) throw new Error('--provider-tarball requires a path');
+if (providerTarball) {
+    const target = 'node_modules/or3-provider-sqlite';
+    await rm(target, { recursive: true, force: true });
+    await mkdir(target, { recursive: true });
+    execFileSync('tar', ['-xzf', providerTarball, '-C', target, '--strip-components=1']);
+    args.splice(tarballIndex, 2);
+}
+const providerTarballSha256 = providerTarball ? createHash('sha256').update(new Uint8Array(await Bun.file(providerTarball).arrayBuffer())).digest('hex') : undefined;
 
 const directory = await mkdtemp('/tmp/or3-file-backup-cloud-');
 const s3 = process.argv.includes('--s3');
@@ -25,7 +39,7 @@ try {
     await mkdir(outputRoot, { recursive: true });
     const log = syncFault ? createWriteStream(join(outputRoot, 'server-and-runner.log')) : undefined;
     const child = Bun.spawn(['bunx', 'playwright', 'test', syncFault ? 'tests/e2e/cloud-sync-fault.e2e.ts' : syncRecovery ? 'tests/e2e/cloud-offline-recovery.e2e.ts' : 'tests/e2e/cloud-file-backup.spec.ts', '--workers=1', (syncRecovery || syncFault) ? '--reporter=line,json' : '--reporter=line',
-        '--trace=retain-on-failure', '--retries=0', `--output=${outputRoot}/browser`, ...process.argv.slice(2).filter(value => !['--development-providers', '--sync-recovery', '--sync-fault', '--s3'].includes(value))], {
+        '--trace=retain-on-failure', '--retries=0', `--output=${outputRoot}/browser`, ...args.filter(value => !['--development-providers', '--sync-recovery', '--sync-fault', '--s3'].includes(value))], {
         stdout: syncFault ? 'pipe' : 'inherit', stderr: syncFault ? 'pipe' : 'inherit', env: { ...process.env,
             CI: 'true', TEST: 'true',
             ...((syncRecovery || syncFault) ? { PLAYWRIGHT_JSON_OUTPUT_NAME: join(process.cwd(), outputRoot, 'playwright.json') } : {}),
@@ -68,6 +82,7 @@ try {
         dirty: execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim().length > 0,
         largeFixture: process.env.OR3_BACKUP_LARGE_E2E === 'true',
         command: syncFault ? 'bun run test:e2e:sync:fault' : syncRecovery ? 'bun run test:e2e:sync:cloud' : s3 ? 'bun run test:e2e:file-backup:s3' : 'bun run test:e2e:file-backup:cloud', timestamp: new Date().toISOString(), arguments: process.argv.slice(2),
+        providerTarball, providerTarballSha256,
         sqliteProviderVersion: syncFault ? JSON.parse(await Bun.file('node_modules/or3-provider-sqlite/package.json').text()).version : undefined,
         providerResolution: development ? 'OR3_LOCAL_PROVIDERS=true (development wrapper resolves available sibling provider sources)' : 'installed node_modules/or3-provider-sqlite',
         profile: `Disposable Basic Auth + ${development ? 'development' : 'installed'} providers + SQLite + ${storageProvider} storage`, s3Prefix: bucket?.prefix, exitCode, temporaryDataRemoved: true, s3CleanupComplete,

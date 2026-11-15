@@ -13,6 +13,7 @@ const faults: Record<string, Record<string, string>> = {
     'invalid payload': { payload_json: '{}' },
     'unknown table': { table_name: 'not_a_sync_table' },
     'invalid HLC': { hlc: 'invalid' },
+    'oversized row': { payload_json: JSON.stringify({ value: 'x'.repeat(300_000) }) },
 };
 
 test.describe('incremental poison transport', () => {
@@ -30,16 +31,19 @@ test.describe('incremental poison transport', () => {
             expect((await page.request.post('/api/workspaces/active', { headers, data: { id: workspaceId } })).ok()).toBeTruthy();
             const urls: string[] = [];
             let initialPull = false;
+            let bootstrapFailure = '';
             page.on('request', request => urls.push(request.url()));
             page.on('response', response => {
                 if (response.ok() && response.url().includes('/api/sync/pull')) initialPull = true;
+                if (response.status() === 503 && response.url().includes('/api/sync/snapshot')) bootstrapFailure = 'snapshot returned 503: history incarnation qualification required';
             });
             await page.goto('/');
             await expect.poll(() => urls.find(url => /\/db\/client\.ts(?:\?|$)/.test(url)), { timeout: 30_000 }).toBeTruthy();
             const clientUrl = urls.find(url => /\/db\/client\.ts(?:\?|$)/.test(url))!;
             await expect.poll(() => page.evaluate(async url => (await import(url)).getActiveWorkspaceId(), clientUrl), { timeout: 30_000 }).toBe(workspaceId);
             // Wait for capture installation as indicated by the first pull.
-            await expect.poll(() => initialPull, { timeout: 30_000 }).toBe(true);
+            await expect.poll(() => initialPull || !!bootstrapFailure, { timeout: 30_000 }).toBe(true);
+            if (bootstrapFailure) throw new Error(bootstrapFailure);
             await page.evaluate(async url => (await import(new URL('./kv.ts', url).href)).setKvByName('fault-before', 'before'), clientUrl);
             db = new Database(join(process.env.OR3_FILE_BACKUP_E2E_DIR!, 'sync.sqlite'));
             db.pragma('busy_timeout = 5000');
@@ -55,19 +59,28 @@ test.describe('incremental poison transport', () => {
             await page.evaluate(async url => (await import(new URL('./kv.ts', url).href)).setKvByName('fault-after', 'after'), clientUrl);
             await expect.poll(() => (db!.prepare('SELECT value FROM server_version_counter WHERE workspace_id=?').get(workspaceId) as any).value, { timeout: 30_000 }).toBeGreaterThan(before.value + 1);
             const head = (db.prepare('SELECT value FROM server_version_counter WHERE workspace_id=?').get(workspaceId) as any).value;
-            const pull = await page.evaluate(async ({ workspaceId }) => {
-                const response = await fetch('/api/sync/pull', { method: 'POST', headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' }, body: JSON.stringify({ scope: { workspaceId }, cursor: 0, limit: 1000, workspaceItemCapability: 'v1', fileKindCapability: 'v1' }) });
-                return { status: response.status, body: await response.text() };
-            }, { workspaceId });
+            const historyIncarnation = (db.prepare('SELECT incarnation FROM sync_history WHERE id=1').get() as { incarnation: string }).incarnation;
+            const pull = await page.evaluate(async ({ workspaceId, historyIncarnation }) => {
+                const request = { scope: { workspaceId }, cursor: 0, limit: 1000, workspaceItemCapability: 'v1', fileKindCapability: 'v1' };
+                const send = (body: object) => fetch('/api/sync/pull', { method: 'POST', headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' }, body: JSON.stringify(body) });
+                const old = await send(request);
+                const oldClient = { status: old.status, body: await old.text() };
+                const response = await send({ ...request, historyIncarnation, historyIncarnationCapability: 'incarnation-v1', unavailableRecordCapability: 'unavailable-v1' });
+                return { status: response.status, body: await response.text(), oldClient };
+            }, { workspaceId, historyIncarnation });
             const local = await page.evaluate(async url => { const db = (await import(url)).getDb(); return { cursor: await db.sync_state.toArray(), rows: await db.kv.toArray() }; }, clientUrl);
             const health = await page.request.get('/api/health');
             Object.assign(evidence, { workspaceId, serverHeadBefore: before.value, serverHeadAfter: head, pull, local, ack: db.prepare('SELECT * FROM device_cursors WHERE workspace_id=?').all(workspaceId), health: health.status(), status: 'observed' });
             expect(pull.status, `poison blocked pull: ${pull.body}`).toBe(200);
-            const changes = JSON.parse(pull.body).changes;
+            expect(pull.oldClient.status).toBe(426);
+            const parsed = JSON.parse(pull.body);
+            expect(parsed.nextCursor).toBeGreaterThanOrEqual(before.value + 1);
+            expect(parsed.unavailable?.some((v: any) => v.serverVersion === before.value + 1 && v.evidenceRef)).toBe(true);
+            const changes = parsed.changes;
             expect(changes.some((v: any) => v.payload?.name === 'fault-after')).toBe(true);
             // This checks transport only. End-to-end acceptance additionally needs
             // fresh-client installation, cursor, ACK, and unavailable evidence.
-            evidence.status = 'transport passed; client acceptance not checked';
+            evidence.status = 'transport and evidence passed; client acceptance not checked';
         } catch (error) {
             evidence.failure = error instanceof Error ? error.message : String(error);
             throw error;
