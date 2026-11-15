@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 export const INSPECTION_PROFILE = Object.freeze({ contract: 1, sqlite: '0.0.30', filesystem: '0.0.18' });
 export const S3_INSPECTION_PROFILE = Object.freeze({ contract: 2, sqlite: '0.0.30', s3: '0.0.15' });
 export const QUALIFIED_MIGRATIONS = ['001_init', '002_sync_tables', '003_sync_hardening', '004_auth_invites', '005_admin_stores', '006_sync_snapshots', '007_device_cursor_ownership', '008_upload_intents', '009_or3_connect', '010_connect_user_code_hmac', '011_connect_environment_scope_indexes', '012_connect_credential_redelivery', '013_connect_environment_lifecycle', '014_connect_retention_activation', '015_rate_limits', '016_connect_runtime_binding', '017_background_jobs', '018_background_admission_cancels', '019_background_generation_history', '020_background_generation_receipts', '021_background_request_usage', '022_canonical_chat_reader', '023_legacy_chat_seek_index', '024_signup_invites', '025_background_shutdown_accounting', '026_retained_storage_usage', '027_verified_storage_usage', '028_user_scoped_device_cursors', '029_delegation_wait', '030_storage_generations', '031_storage_generation_uploads', '032_sync_observations', '033_tool_result_operation_ids'];
+// Explicitly retain complete published histories when a future migration is added.
+const QUALIFIED_MIGRATION_COUNTS = [24, 26, 28, 29, 31, 32, 33];
 const MAX_ENTRIES = 100_000;
 const MAX_DATABASE_BYTES = 192 * 1024 * 1024;
 // One MiB accommodates the admitted 256 KiB payload and persisted fields.
@@ -79,11 +81,11 @@ function openCanonicalDatabase(Database, databasePath) {
     for (const name of ['s_file_meta', 'kysely_migration']) {
       if (db.prepare('SELECT type FROM sqlite_master WHERE name = ?').get(name)?.type !== 'table') throw new Error('Unsupported offline canonical SQLite schema');
     }
-    const migrationNames = db.prepare('SELECT name FROM kysely_migration ORDER BY name LIMIT ?').all(QUALIFIED_MIGRATIONS.length + 1).map(row => row.name);
+    const migrationNames = db.prepare('SELECT substr(name,1,128) AS name FROM kysely_migration ORDER BY name LIMIT ?').all(QUALIFIED_MIGRATIONS.length + 1).map(row => row.name);
     // Accept previously published histories and the current candidate.
     // Interrupted upgrades remain unsupported.
-    const expectedMigrations = [24, 26, 28, 29, 31, 32].includes(migrationNames.length) ? QUALIFIED_MIGRATIONS.slice(0, migrationNames.length) : QUALIFIED_MIGRATIONS;
-    if (JSON.stringify(migrationNames) !== JSON.stringify(expectedMigrations)) throw new Error('Unsupported offline canonical SQLite migration history');
+    const expectedMigrations = QUALIFIED_MIGRATIONS.slice(0, migrationNames.length);
+    if (!QUALIFIED_MIGRATION_COUNTS.includes(migrationNames.length) || JSON.stringify(migrationNames) !== JSON.stringify(expectedMigrations)) throw new Error('Unsupported offline canonical SQLite migration history');
     const columns = db.prepare('PRAGMA table_info(s_file_meta)').all();
     for (const [name, type, pk] of [['workspace_id', 'TEXT', 1], ['id', 'TEXT', 2], ['data_json', 'TEXT', 0], ['deleted', 'INTEGER', 0]]) {
       if (!columns.some(column => column.name === name && column.type === type && column.pk === pk)) throw new Error('Unsupported offline canonical SQLite columns');
@@ -138,7 +140,7 @@ export function inspectSyncSemantics(Database, databasePath) {
     if (faults.length < 100) faults.push({ table, ...(row.locator === undefined
       ? { itemOrdinal: row.itemOrdinal, ...(row.oversized ? {} : { keySha256: createHash('sha256').update(JSON.stringify([row.snapshot_id, row.table_name, row.pk, row.kind])).digest('hex') }) }
       : { rowid: row.locator }),
-      ...(row.version_locator === undefined ? {} : { serverVersion: row.version_locator }), reason });
+      ...(!/^[-]?[0-9]{1,19}$/.test(row.version_locator ?? '') ? {} : { serverVersion: row.version_locator }), reason });
   };
   // Bound every TEXT transfer, not just JSON. A poisoned key/stamp must not
   // force a large allocation before it can be classified. SQL identifiers here
@@ -147,7 +149,7 @@ export function inspectSyncSemantics(Database, databasePath) {
     if (!complete) return;
     const selections = fields.map(name => `CASE WHEN length(CAST(t.${name} AS BLOB)) <= ${MAX_ROW_BYTES} THEN t.${name} ELSE NULL END AS ${name}`);
     const oversized = fields.map(name => `length(CAST(t.${name} AS BLOB)) > ${MAX_ROW_BYTES}`).join(' OR ');
-    const versions = fields.includes('server_version') ? ',CAST(t.server_version AS TEXT) AS version_locator' : '';
+    const versions = fields.includes('server_version') ? ",CASE WHEN typeof(t.server_version) IN ('integer','real') THEN CAST(t.server_version AS TEXT) END AS version_locator" : '';
     const locator = table === 'sync_snapshot_items' ? '' : 'CAST(t.rowid AS TEXT) AS locator,';
     const rows = db.prepare(`SELECT ${locator}${selections.join(',')},(${oversized}) AS oversized${versions}${extra} FROM ${table} t${table === 'sync_snapshot_items' ? ' ORDER BY snapshot_id,table_name,pk,kind' : ''}`).iterate();
     let ordinal = 0;
@@ -228,7 +230,7 @@ export function inspectSyncSemantics(Database, databasePath) {
     scan('server_version_counter', ['workspace_id', 'value'], row => {
       if (!safe(row.value)) fault('server_version_counter', row, 'invalid_counter');
       if (row.value < row.log_head) fault('server_version_counter', row, 'counter_below_log');
-    }, ',(SELECT MAX(l.server_version) FROM change_log l WHERE l.workspace_id=t.workspace_id) AS log_head');
+    }, ",(SELECT MAX(CASE WHEN typeof(l.server_version) IN ('integer','real') THEN l.server_version END) FROM change_log l WHERE l.workspace_id=t.workspace_id) AS log_head");
     return { contract: 1, complete, healthy: complete && faultCount === 0, inspectedRecords, faultCount, faults, diagnosticsTruncated: faultCount > faults.length };
   } finally { db.close(); }
 }
