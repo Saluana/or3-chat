@@ -321,6 +321,21 @@ test('15 reload restores success and failure without executing again', async ({ 
     await recovered(page);
 });
 
+test('nine ordinary reads survive reload and replay without spending the answer budget', async ({ page }) => {
+    const reads = Array.from({ length: 9 }, (_, index) => fixtureCall(`ordinary-${index}`, 'test_large_result', `ordinary-${index}`));
+    await open(page, [reads]);
+    await send(page);
+    await expect(page.locator('[data-msg-id]').filter({ hasText: 'Fixture completed.' })).toBeVisible();
+    await expect.poll(async () => (await snapshot(page)).results.filter(result => result.resolvedLength === 12 * 1024).length).toBe(9);
+    expect((await snapshot(page)).results.every(result => result.content.startsWith('or3-tool-result:v1/'))).toBe(true);
+    expect(JSON.stringify(requests.get(page)!.at(-1))).toContain('x'.repeat(12 * 1024));
+    await page.reload();
+    await expect.poll(async () => (await snapshot(page)).results.filter(result => result.resolvedLength === 12 * 1024).length).toBe(9);
+    expect((await snapshot(page)).executions).toHaveLength(9);
+    await recovered(page);
+    expect((await snapshot(page)).executions).toHaveLength(9);
+});
+
 test('large results respect durable model and rendering limits', async ({ page }) => {
     await open(page, [[fixtureCall('large', 'test_large_result')]]);
     await send(page);

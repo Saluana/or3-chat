@@ -129,7 +129,7 @@ onMounted(async () => {
                     if (context.abortSignal.aborted) stop();
                 });
                 await context.assertToolAuthorized?.();
-                if (name === 'test_large_result') return 'x'.repeat(160 * 1024);
+                if (name === 'test_large_result') return 'x'.repeat(String(args.value).startsWith('ordinary-') ? 12 * 1024 : 160 * 1024);
                 if (name === 'test_write_once') return JSON.stringify({ count: entries.filter(entry => entry.tool === name).length + 1, value: args.value });
                 return JSON.stringify(args);
             } finally {
