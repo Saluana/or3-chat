@@ -103,6 +103,9 @@ function openCanonicalDatabase(Database, databasePath) {
 // nonempty IDs/HLCs. No stricter HLC grammar is implied by the reader contract.
 const SYNC_TABLES = ['threads', 'messages', 'projects', 'posts', 'file_meta', 'kv', 'notifications'];
 const UUID = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$/i;
+// Migration 033 repairs this specific historical writer defect, including its
+// embedded payload copy. It is not one of the legitimate legacy revision IDs.
+const BACKGROUND_TOOL_ID = /^background-tool:[a-f0-9]{64}$/i;
 const safe = value => Number.isSafeInteger(value) && value >= 0;
 const text = value => typeof value === 'string' && value.length > 0;
 
@@ -165,7 +168,7 @@ export function inspectSyncSemantics(Database, databasePath) {
   const revision = (table, row, incremental = false, allowEmpty = false) => {
     if (!safe(row.clock)) fault(table, row, 'invalid_clock');
     if (typeof row.hlc !== 'string' || (!allowEmpty && !text(row.hlc)) || (incremental && row.hlc.length > 512)) fault(table, row, 'invalid_hlc');
-    if (typeof row.op_id !== 'string' || (incremental ? !UUID.test(row.op_id) : !allowEmpty && !text(row.op_id))) fault(table, row, 'invalid_op_id');
+    if (typeof row.op_id !== 'string' || BACKGROUND_TOOL_ID.test(row.op_id) || (incremental ? !UUID.test(row.op_id) : !allowEmpty && !text(row.op_id))) fault(table, row, 'invalid_op_id');
   };
   const identity = (table, row) => {
     if (!SYNC_TABLES.includes(row.table_name)) fault(table, row, 'invalid_table');
@@ -176,6 +179,7 @@ export function inspectSyncSemantics(Database, databasePath) {
     let value;
     try { value = JSON.parse(row[name]); }
     catch { fault(table, row, 'invalid_json'); return; }
+    if (value && typeof value === 'object' && typeof value.op_id === 'string' && BACKGROUND_TOOL_ID.test(value.op_id)) fault(table, row, 'invalid_payload_op_id');
     if (required && !validSyncPayload(row.table_name, value, row.pk)) fault(table, row, 'invalid_payload');
   };
   try {

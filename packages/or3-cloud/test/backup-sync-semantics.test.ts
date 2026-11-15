@@ -54,6 +54,12 @@ async function fixture(sql = '') {
 test.each([
   ['invalid UUID', "UPDATE change_log SET op_id='not-a-uuid'", 'change_log', 'invalid_op_id'],
   ['legacy incident UUID', `UPDATE change_log SET op_id='background-tool:${'a'.repeat(64)}'`, 'change_log', 'invalid_op_id'],
+  ...(['s_kv', 'tombstones', 'sync_snapshot_items'] as const).map(table => [
+    `legacy incident revision in ${table}`, `UPDATE ${table} SET op_id='background-tool:${'a'.repeat(64)}'`, table, 'invalid_op_id',
+  ]),
+  ...([['change_log', 'payload_json'], ['s_kv', 'data_json'], ['sync_snapshot_items', 'payload_json']] as const).map(([table, column]) => [
+    `embedded incident revision in ${table}`, `UPDATE ${table} SET ${column}=json_set(${column},'$.op_id','background-tool:${'a'.repeat(64)}')`, table, 'invalid_payload_op_id',
+  ]),
   ['invalid JSON', "UPDATE change_log SET payload_json='{PRIVATE-CONTENT'", 'change_log', 'invalid_json'],
   ['invalid payload', "UPDATE change_log SET payload_json='{}'", 'change_log', 'invalid_payload'],
   ['overflow clock', 'UPDATE change_log SET clock=9007199254740992', 'change_log', 'invalid_clock'],
