@@ -127,7 +127,15 @@ try {
     const upgraded = await current.evaluate(async () => { const start = performance.now(); await window.db.open(); return { elapsedMs: performance.now() - start, versions: window.versions }; });
     const elapsedAfterUnblockMs = performance.now() - migrationStart;
     sampling = false; await sampler;
-    const installed = await current.evaluate(async () => ({ blobKeys: await window.db.file_blobs.toCollection().primaryKeys(), counts: { threads: await window.db.threads.count(), messages: await window.db.messages.count(), pending_ops: await window.db.pending_ops.count(), file_blobs: await window.db.file_blobs.count() }, estimate: await navigator.storage.estimate(), stores: [...window.db.backendDB().objectStoreNames] }));
+    const installed = await current.evaluate(async () => {
+        const blobKeys = await window.db.file_blobs.toCollection().primaryKeys();
+        for (const key of blobKeys) {
+            const row = await window.db.file_blobs.get(key);
+            const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', await row.blob.arrayBuffer()))].map(x => x.toString(16).padStart(2, '0')).join('');
+            if (hash !== key) throw Error('Attachment bytes changed during migration');
+        }
+        return { blobKeys, blobBytesVerified: true, counts: { threads: await window.db.threads.count(), messages: await window.db.messages.count(), pending_ops: await window.db.pending_ops.count(), file_blobs: await window.db.file_blobs.count() }, estimate: await navigator.storage.estimate(), stores: [...window.db.backendDB().objectStoreNames] };
+    });
     assert.deepEqual(installed.counts, seeded.counts);
     assert.deepEqual(installed.blobKeys, seeded.blobKeys);
     await current.evaluate(async () => { await window.db.kv.put({ id: 'protected', name: 'protected', value: 'J' }); });
