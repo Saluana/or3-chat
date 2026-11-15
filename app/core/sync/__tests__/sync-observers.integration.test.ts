@@ -27,9 +27,9 @@ function within<T>(work: Promise<T>): Promise<T> {
     })]).finally(() => clearTimeout(timer));
 }
 
-function change(version: number): SyncChange {
-    return { serverVersion: version, tableName: 'kv', pk: 'remote', op: 'put',
-        payload: { id: 'remote', name: 'remote', value: version, created_at: 1, updated_at: 1, clock: version },
+function change(version: number, pk = 'remote'): SyncChange {
+    return { serverVersion: version, tableName: 'kv', pk, op: 'put',
+        payload: { id: pk, name: pk, value: version, created_at: 1, updated_at: 1, clock: version },
         stamp: { clock: version, hlc: `${version}:0:remote`, deviceId: 'remote', opId: crypto.randomUUID() } };
 }
 
@@ -50,6 +50,67 @@ describe.each(['v1', 'v2'] as const)('sync observer liveness (%s engine)', versi
         _resetCursorManagers(); _resetHookBridge();
         vi.unstubAllGlobals(); vi.restoreAllMocks();
         await db.delete();
+    });
+
+    it('stops later conflict callbacks from an obsolete batch after stop', async () => {
+        const engine = version === 'v1' ? createHookEngine() : createHookEngineV2();
+        setHookEngine(createTypedHookEngine(engine));
+        await db.sync_state.put({ id: `sync_state:${scope.workspaceId}:default`, cursor: 10, lastSyncAt: Date.now(), deviceId: 'device' });
+        const changes = [change(11), change(12, 'other')];
+        for (const incoming of changes) await db.kv.put({ id: incoming.pk, name: incoming.pk, value: 'local', created_at: 1, updated_at: 1, clock: incoming.stamp.clock, hlc: '0:0:local', deleted: false });
+        let onChanges!: (changes: SyncChange[]) => void | Promise<void>;
+        const provider: SyncProvider = {
+            id: `observer-${crypto.randomUUID()}`, mode: 'direct',
+            pull: vi.fn(async request => ({ ...FULL_HISTORY_PULL_RETENTION, changes: [], nextCursor: request.cursor, hasMore: false })),
+            subscribe: vi.fn(async (_scope, _tables, callback) => { onChanges = callback; return () => undefined; }),
+            push: vi.fn(async () => ({ serverVersion: 0, results: [] })),
+            updateCursor: vi.fn(async () => undefined), dispose: vi.fn(async () => undefined),
+        };
+        manager = new SubscriptionManager(db, provider, scope);
+        await manager.start();
+        let stopping: Promise<void> | undefined;
+        engine.addAction('sync.conflict:action:detected', () => {
+            stopping = manager!.stop();
+            return new Promise<void>(resolve => { release = resolve; });
+        }, 0);
+        const seen = vi.fn();
+        engine.addAction('sync.conflict:action:detected', seen, 10);
+        await within(Promise.resolve(onChanges(changes)));
+        await within(stopping!);
+        expect(seen.mock.calls.map(([conflict]) => conflict.pk)).toEqual(['remote']);
+        expect(await db.kv.get('other')).toMatchObject({ value: 12 });
+        expect(provider.updateCursor).not.toHaveBeenCalled();
+    });
+
+    it('stops later outbox error and completion callbacks after stop', async () => {
+        const engine = version === 'v1' ? createHookEngine() : createHookEngineV2();
+        setHookEngine(createTypedHookEngine(engine));
+        for (const id of ['first', 'second']) await db.pending_ops.put({
+            id, tableName: 'kv', pk: id, operation: 'put',
+            payload: { id, name: id, value: 1, created_at: 1, updated_at: 1, clock: 1 },
+            stamp: { clock: 1, hlc: '1:0:device', deviceId: 'device', opId: crypto.randomUUID() },
+            status: 'pending', attempts: 0, createdAt: 1,
+        });
+        const provider: SyncProvider = {
+            id: `observer-${crypto.randomUUID()}`, mode: 'direct',
+            pull: vi.fn(), subscribe: vi.fn(), updateCursor: vi.fn(), dispose: vi.fn(),
+            push: vi.fn(async (batch: PushBatch) => ({ serverVersion: 0, results: batch.ops.map(op => ({
+                opId: op.stamp.opId, success: false, errorCode: 'VALIDATION_ERROR' as const, error: 'invalid',
+            })) })),
+        };
+        const outbox = new OutboxManager(db, provider, scope);
+        engine.addAction('sync.error:action', () => {
+            outbox.stop();
+            return new Promise<void>(resolve => { release = resolve; });
+        }, 0);
+        const errors = vi.fn();
+        const after = vi.fn();
+        engine.addAction('sync.error:action', errors);
+        engine.addAction('sync.push:action:after', after);
+        await within(outbox.flush());
+        expect(errors).toHaveBeenCalledTimes(1);
+        expect(after).not.toHaveBeenCalled();
+        expect(await db.pending_ops.get('second')).toMatchObject({ id: 'second', status: 'retry_wait', attempts: 0 });
     });
 
     it.each(actions.flatMap(action => ['throw', 'hang'].flatMap(fault =>

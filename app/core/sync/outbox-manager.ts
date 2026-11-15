@@ -662,6 +662,9 @@ export class OutboxManager {
         const sanitizedBatch: PendingOp[] = [];
         let localFailCount = 0;
         for (const op of batch) {
+            if (generation !== this.lifecycleGeneration) {
+                return { successCount: 0, failCount: 0, deferred: false };
+            }
             // Old code used the send-time wall clock for missing thread times.
             // An attempted legacy op cannot be safely normalized under its UUID.
             const payload = op.payload as Record<string, unknown> | undefined;
@@ -678,7 +681,7 @@ export class OutboxManager {
                     ...op, payload: sanitizePayloadForSync(op.tableName, op.payload, op.operation), wireNormalized: true,
                 };
             } catch (error) {
-                await this.handleFailedOp(op, error instanceof Error ? error.message : String(error),
+                await this.handleFailedOp(op, generation, error instanceof Error ? error.message : String(error),
                     error instanceof SyncPayloadTooLargeError ? error.code : 'VALIDATION_ERROR',
                     errorDiagnostics(error, { source: 'sync' }));
                 localFailCount++;
@@ -699,6 +702,9 @@ export class OutboxManager {
         if (!batch.length) return { successCount: 0, failCount: localFailCount, deferred: false, serviceFailure: false };
 
         try {
+            if (generation !== this.lifecycleGeneration) {
+                return { successCount: 0, failCount: 0, deferred: false };
+            }
             for (const op of batch) {
                 markRecentOpId(op.stamp.opId);
             }
@@ -725,9 +731,12 @@ export class OutboxManager {
             let serviceFailure = false;
 
             for (const op of batch) {
+                if (generation !== this.lifecycleGeneration) {
+                    return { successCount: 0, failCount: 0, deferred: false };
+                }
                 const res = resultsById.get(op.stamp.opId);
                 if (!res) {
-                    await this.handleFailedOp(op, 'Missing push result', 'UNKNOWN');
+                    await this.handleFailedOp(op, generation, 'Missing push result', 'UNKNOWN');
                     serviceFailure = true;
                     failCount += 1;
                     continue;
@@ -748,6 +757,7 @@ export class OutboxManager {
                     if (!winner) {
                         await this.handleFailedOp(
                             op,
+                            generation,
                             'Missing winner state',
                             'UNKNOWN'
                         );
@@ -777,7 +787,7 @@ export class OutboxManager {
                         res.error === `Conflicting operation reuses processed op_id ${op.stamp.opId}`;
                     if (identityReuse) await this.holdOp(op, 'Server rejected reused operation identity');
                     else {
-                        await this.handleFailedOp(op, res.error, res.errorCode);
+                        await this.handleFailedOp(op, generation, res.error, res.errorCode);
                         // Retryable content conflicts and throttling are not
                         // evidence that the shared sync service is unavailable.
                         if (!this.isPermanentFailure(res.errorCode) &&
@@ -787,6 +797,9 @@ export class OutboxManager {
                 }
             }
 
+            if (generation !== this.lifecycleGeneration) {
+                return { successCount: 0, failCount: 0, deferred: false };
+            }
             await observeSyncAction(hooks, 'sync.push:action:after', {
                 scope: this.scope,
                 successCount,
@@ -813,6 +826,9 @@ export class OutboxManager {
             // budget and op_ids as edits queued before going offline.
             if (status === null && typeof navigator !== 'undefined' && navigator.onLine === false) {
                 await this.releaseBatchForDeferredRetry(batch, 0);
+                if (generation !== this.lifecycleGeneration) {
+                    return { successCount: 0, failCount: 0, deferred: false };
+                }
                 await observeSyncAction(hooks, 'sync.push:action:after', {
                     scope: this.scope,
                     successCount: 0,
@@ -826,6 +842,9 @@ export class OutboxManager {
                     batch,
                     Math.min(MAX_AUTH_RETRY_DELAY_MS, firstDelay * 2 ** this.authFailures++)
                 );
+                if (generation !== this.lifecycleGeneration) {
+                    return { successCount: 0, failCount: 0, deferred: false };
+                }
                 await observeSyncAction(hooks, 'sync.push:action:after', {
                     scope: this.scope,
                     successCount: 0,
@@ -864,6 +883,9 @@ export class OutboxManager {
                     this.providerRateLimitedUntil,
                     Date.now() + deferredRetryDelayMs
                 );
+                if (generation !== this.lifecycleGeneration) {
+                    return { successCount: 0, failCount: 0, deferred: false };
+                }
                 await observeSyncAction(hooks, 'sync.push:action:after', {
                     scope: this.scope,
                     successCount: 0,
@@ -882,8 +904,14 @@ export class OutboxManager {
             const message = error instanceof Error ? error.message : String(error);
             let failCount = localFailCount;
             for (const op of batch) {
-                await this.handleFailedOp(op, message, undefined, errorDiagnostics(error, { source: 'sync' }));
+                if (generation !== this.lifecycleGeneration) {
+                    return { successCount: 0, failCount: 0, deferred: false };
+                }
+                await this.handleFailedOp(op, generation, message, undefined, errorDiagnostics(error, { source: 'sync' }));
                 failCount += 1;
+            }
+            if (generation !== this.lifecycleGeneration) {
+                return { successCount: 0, failCount: 0, deferred: false };
             }
             await observeSyncAction(hooks, 'sync.push:action:after', {
                 scope: this.scope,
@@ -1018,6 +1046,7 @@ export class OutboxManager {
      */
     private async handleFailedOp(
         op: PendingOp,
+        generation: number,
         error?: string,
         errorCode?: string,
         details?: ErrorMetadata
@@ -1037,6 +1066,7 @@ export class OutboxManager {
                 nextAttemptAt,
             };
             if (!await this.updateClaimedOp(op, updatedOp)) return;
+            if (generation !== this.lifecycleGeneration) return;
             await observeSyncAction(hooks, 'sync.retry:action', { op: updatedOp, attempt: op.attempts });
             return;
         }
@@ -1059,6 +1089,7 @@ export class OutboxManager {
                 failedAt: Date.now(),
             };
             if (!await this.updateClaimedOp(op, updatedOp)) return;
+            if (generation !== this.lifecycleGeneration) return;
             
             // Log detailed info for debugging
             const payloadSize = op.payload ? syncJsonByteLength(op.payload) : 0;
@@ -1089,6 +1120,7 @@ export class OutboxManager {
                 nextAttemptAt: Date.now() + delay,
             };
             if (!await this.updateClaimedOp(op, updatedOp)) return;
+            if (generation !== this.lifecycleGeneration) return;
             console.warn('[OutboxManager] Op will retry:', op.stamp.opId, 'attempt', attempts);
             await observeSyncAction(hooks, 'sync.retry:action', { op: updatedOp, attempt: attempts });
         }

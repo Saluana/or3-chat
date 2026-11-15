@@ -719,7 +719,7 @@ export class SubscriptionManager {
                 if (response.changes.length) {
                     const filtered = this.filterRecentOps(response.changes);
                     if (filtered.length) {
-                        await this.conflictResolver.applyChanges(filtered);
+                        await this.applyChanges(filtered);
                         if (!this.isCurrentGeneration(generation)) return;
                     }
                 }
@@ -1000,7 +1000,7 @@ export class SubscriptionManager {
      * Apply changes via ConflictResolver
      */
     private async applyChanges(changes: SyncChange[]) {
-        return this.conflictResolver.applyChanges(changes);
+        return this.conflictResolver.applyChanges(changes, [], this.requestController.signal);
     }
 
     private filterRecentOps(changes: SyncChange[]): SyncChange[] {

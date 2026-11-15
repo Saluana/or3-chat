@@ -740,5 +740,6 @@ callback drops overlapping events until it settles, without queued replay. Other
 ready callbacks, including async listeners, receive each event. Synchronous
 suppression/invalidation callbacks run on every event, so start precedes complete
 and cache/search invalidation follows the data commit even behind a hung observer. Observers must capture and
-guard scope before awaiting; a timeout cannot cancel their side effects. Protocol
+guard scope before awaiting; a timeout cannot cancel their side effects. Cancelled
+subscription/outbox batches do not initiate further observations. Protocol
 persistence, page receipts, pending-op capture and filters remain awaited.

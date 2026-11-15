@@ -89,7 +89,7 @@ export class ConflictResolver {
     /**
      * Apply a batch of remote changes
      */
-    async applyChanges(changes: SyncChange[], unavailable: PullUnavailableRecord[] = []): Promise<ApplyResult> {
+    async applyChanges(changes: SyncChange[], unavailable: PullUnavailableRecord[] = [], signal?: AbortSignal): Promise<ApplyResult> {
         const result: ApplyResult = {
             applied: 0,
             skipped: 0,
@@ -201,6 +201,7 @@ export class ConflictResolver {
 
         // Emit conflict hooks AFTER transaction completes
         for (const conflict of conflicts) {
+            if (signal?.aborted) break;
             await observeSyncAction(useHooks(), 'sync.conflict:action:detected', conflict);
         }
 
