@@ -17,7 +17,11 @@ request negotiates `historyIncarnationCapability: 'incarnation-v1'`. Legacy
 requests receive HTTP 426. An adapter must advertise `historyIncarnation: 'v1'`
 and return a bound token; the gateway transport alone does not qualify a server.
 Published SQLite 0.0.30, the current prefix-GC branch, Convex/direct mode and D1
-are **unqualified** for this contract. They encounter an explicit sync boundary;
+are **unqualified** for this contract. Direct Convex sync is unsupported in this
+hardened host until its backend and client transport are separately qualified.
+Startup refuses an unqualified direct provider before subscribing or starting
+the outbox; the token broker alone does not establish incarnation support.
+Gateway providers also require server qualification. They encounter an explicit sync boundary;
 this host change is not a release or a claim of restore safety.
 
 An unbound browser or a different token requires a complete materialized

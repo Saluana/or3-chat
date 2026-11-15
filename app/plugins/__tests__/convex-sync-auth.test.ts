@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick, reactive } from 'vue';
-import type { SyncScope } from '~~/shared/sync/types';
+import type { SyncScope, SyncState } from '~~/shared/sync/types';
 
 type SessionRecord = {
     session: null | {
@@ -14,6 +14,7 @@ type MockProvider = {
     id: string;
     mode: 'gateway' | 'direct';
     auth?: { providerId: string; template?: string };
+    capabilities?: { historyIncarnation: 'v1' };
     subscribe: ReturnType<typeof vi.fn>;
     pull: ReturnType<typeof vi.fn>;
     push: ReturnType<typeof vi.fn>;
@@ -45,6 +46,8 @@ function createProvider(id = 'convex', mode: 'gateway' | 'direct' = 'gateway'): 
     return {
         id,
         mode,
+        // Qualified transport double, not the shipped Convex backend.
+        capabilities: { historyIncarnation: 'v1' },
         auth: mode === 'direct'
             ? {
                 providerId: id,
@@ -132,7 +135,28 @@ const subscriptionInstances: SubscriptionInstance[] = [];
 const gcInstances: GcInstance[] = [];
 
 const setActiveWorkspaceDb = vi.fn();
-const createWorkspaceDb = vi.fn((workspaceId: string) => ({ name: `or3-db-${workspaceId}` }));
+const workspaceDatabases = new Map<string, {
+    name: string;
+    syncHistoryAtOpen?: string | null;
+    sync_state: { get: (id: string) => Promise<SyncState | undefined>; put: (row: SyncState) => Promise<string> };
+    transaction: (_mode: string, _tables: string[], work: () => Promise<void>) => Promise<void>;
+}>();
+const createWorkspaceDb = vi.fn((workspaceId: string) => {
+    let db = workspaceDatabases.get(workspaceId);
+    if (!db) {
+        const rows = new Map<string, SyncState>();
+        db = {
+            name: `or3-db-${workspaceId}`,
+            sync_state: {
+                get: async id => rows.get(id),
+                put: async row => { rows.set(row.id, row); return row.id; },
+            },
+            transaction: async (_mode, _tables, work) => work(),
+        };
+        workspaceDatabases.set(workspaceId, db);
+    }
+    return db;
+});
 const authTokenBrokerMock = {
     getProviderToken: vi.fn(async (): Promise<string | null> => 'token'),
 };
@@ -289,6 +313,7 @@ describe('sync engine plugin', () => {
 
         setActiveWorkspaceDb.mockClear();
         createWorkspaceDb.mockClear();
+        workspaceDatabases.clear();
         authTokenBrokerMock.getProviderToken.mockClear();
 
         const globals = globalThis as NuxtTestGlobals;
@@ -499,7 +524,7 @@ describe('sync engine plugin', () => {
         expect(outboxInstances[0]?.start).toHaveBeenCalledTimes(1);
     });
 
-    it('starts the engine for a non-SSR direct provider without registering gateway', async () => {
+    it('starts a qualified non-SSR direct provider without registering gateway', async () => {
         pluginControl.runtime.ssrAuthEnabled = false;
         providerRegistryState.active = createProvider('convex', 'direct');
 
@@ -509,6 +534,26 @@ describe('sync engine plugin', () => {
         expect(createGatewaySyncProvider).not.toHaveBeenCalled();
         expect(outboxInstances).toHaveLength(1);
         expect(subscriptionInstances).toHaveLength(1);
+    });
+
+    it('explicitly refuses an unqualified direct provider before starting transport', async () => {
+        pluginControl.runtime.ssrAuthEnabled = false;
+        const provider = createProvider('convex', 'direct');
+        delete provider.capabilities;
+        providerRegistryState.active = provider;
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            await (await import('~/plugins/convex-sync.client')).default;
+            await flushPluginAsyncWork();
+            const engine = nuxtAppMock.provide.mock.calls.find(([key]) => key === 'syncEngine')?.[1] as
+                { start(workspaceId: string): Promise<void>; isRunning(): boolean };
+            await expect(engine.start('ws-1')).rejects.toThrow('Selected sync mode requires separate history incarnation qualification');
+            expect(engine.isRunning()).toBe(false);
+            expect(outboxInstances).toHaveLength(0);
+            expect(subscriptionInstances).toHaveLength(0);
+            expect(provider.push).not.toHaveBeenCalled();
+            expect(createGatewaySyncProvider).not.toHaveBeenCalled();
+        } finally { error.mockRestore(); }
     });
 
     it('does not start when SSR is off and no direct provider is registered', async () => {

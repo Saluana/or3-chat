@@ -656,7 +656,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 7,
-                    "summary": "This guide covers how OR3 discovers provider packages, how to install them, and how the Clerk to Convex token bridge works."
+                    "summary": "This guide covers how OR3 discovers provider packages, how to install them, and how the Clerk to Convex token bridge works. Direct Convex sync requires separate history-incarnation qualification."
                 },
                 {
                     "name": "provider-basic-auth.md",
@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Sync history capability fences, durable cursor ACK recovery after reload, atomic held-intent recovery, account-scoped inspection/export, stale-completion protection, atomic no-copy physical store isolation, stable old/new Dexie coexistence, visible upgrade progress and per-workspace nondestructive retry, and separate provider qualification."
+                    "summary": "Sync history capability fences, durable cursor ACK recovery after reload, atomic held-intent recovery, account-scoped inspection/export, stale-completion protection, atomic no-copy physical store isolation, stable old/new Dexie coexistence, visible upgrade progress and per-workspace nondestructive retry, and separate provider qualification. Unqualified direct Convex startup is explicitly unsupported."
                 },
                 {
                     "name": "storage-layer.md",
