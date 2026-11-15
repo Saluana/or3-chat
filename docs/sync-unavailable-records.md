@@ -98,12 +98,12 @@ NUL/colon concatenation. SQLite BINARY matches for lossless scalar strings.
 New admission does not rename historical identifiers.
 
 For admitted PKs, JSON escaping costs at most 6 bytes per UTF-16 code unit:
-6,144 bytes. Snapshot owner IDs allow 256 code units (1,536 escaped bytes),
+6,144 bytes. Workspace and snapshot-owner IDs allow 256 code units each (3,072 escaped bytes),
 table/kind and token envelope have a conservative 2,048-byte reserve. Native
-base64 JSON therefore needs at most ceil((6144+1536+2048)/3)*4 = 12,972
+base64 JSON therefore needs at most ceil((6144+3072+2048)/3)*4 = 15,020
 characters. Percent-escaped JSON then base64 (Convex) is bounded by three times
-that: 38,916. Shared MAX_SYNC_SNAPSHOT_TOKEN_LENGTH is 65,536; the snapshot
-request body ceiling is 96 KiB, covering this ASCII token, two 256-unit scope
+that: 45,060. Shared MAX_SYNC_SNAPSHOT_TOKEN_LENGTH is 65,536; the snapshot
+request body ceiling is 128 KiB, covering even a maximum-length 65,536-character ASCII token, two 256-unit scope
 IDs, 50 table filters of 128 units and capability/envelope overhead. Readers do
 not shorten legitimate existing keys. Provider token decoders (native/D1 and
 Convex) must use the same bound. Truly larger legacy identities require explicit
