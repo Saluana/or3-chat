@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Understand workspace synchronization, deterministic writer admission, negotiated unavailable records, durable incoming evidence, UTF-8 snapshot ordering, quota pause/retry, failed-write recovery, and conflict handling."
+                    "summary": "Understand workspace synchronization, deterministic writer admission, legacy message ordering, negotiated unavailable records, durable incoming evidence, UTF-8 snapshot ordering, quota pause/retry, failed-write recovery, and conflict handling."
                 },
                 {
                     "name": "storage-layer.md",

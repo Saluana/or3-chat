@@ -64,6 +64,8 @@ partial page. The new snapshot ordering contract uses the same gate. Existing
 healthy pages from older adapters remain usable; upgrading the host alone does
 not add server evidence storage or repair to an older provider. Convex direct
 mode requires a separately qualified matching backend deployment.
+Legacy messages without `order_key` remain readable: the client derives their
+ordering from the revision HLC without changing stored history.
 
 The browser classifies incoming defects before opening table transactions.
 Remote evidence uses `variant: 'incoming'` in the existing `sync_quarantine`

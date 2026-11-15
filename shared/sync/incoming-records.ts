@@ -1,4 +1,4 @@
-import { SnapshotItemSchema, SyncChangeSchema, TABLE_PAYLOAD_SCHEMAS, SyncRecordIdentifierSchema, syncJsonByteLength } from './schemas';
+import { SnapshotItemSchema, SyncChangeSchema, TABLE_PAYLOAD_SCHEMAS, SyncRecordIdentifierSchema, syncJsonByteLength, normalizeWirePayloadForTable } from './schemas';
 import { MAX_SYNC_PAYLOAD_BYTES } from './sanitize';
 import { getPkField } from './table-metadata';
 
@@ -22,7 +22,14 @@ export function incomingRecordDefect(source: 'pull' | 'snapshot', record: unknow
     if (live) {
         const payload = 'payload' in entry ? entry.payload : undefined;
         if (syncJsonByteLength(payload) > MAX_SYNC_PAYLOAD_BYTES) return 'oversized_payload';
-        const result = TABLE_PAYLOAD_SCHEMAS[entry.tableName]!.safeParse(payload);
+        const normalized = normalizeWirePayloadForTable(entry.tableName, payload);
+        const revision = 'stamp' in entry ? entry.stamp : entry.revision;
+        // Existing clients derive missing message ordering from HLC. Validate
+        // that usable legacy shape without rewriting stored history or the wire.
+        const validationPayload = entry.tableName === 'messages' && normalized && typeof normalized === 'object' && !Array.isArray(normalized)
+            ? { ...normalized, order_key: (normalized as Record<string, unknown>).order_key || revision.hlc }
+            : normalized;
+        const result = TABLE_PAYLOAD_SCHEMAS[entry.tableName]!.safeParse(validationPayload);
         if (!result.success) return 'invalid_payload';
         if ((result.data as Record<string, unknown>)[getPkField(entry.tableName)] !== entry.pk) return 'payload_identity_mismatch';
     }

@@ -146,6 +146,26 @@ describe('document sync HTTP isolation with the real SQLite harness', () => {
         }
     });
 
+    it.each(['pull', 'snapshot'] as const)('reads legacy HLC-ordered messages through %s with the old provider', async route => {
+        select(alice, workspaceA);
+        await fixture.adapter!.admitChatGeneration({ userId: alice, workspaceId: workspaceA }, admission(workspaceA));
+        // 0.0.29/0.0.30 background writers accepted messages without order_key;
+        // the client derives it from the revision HLC without changing history.
+        getRawDb().prepare("UPDATE s_messages SET data_json = json_remove(data_json, '$.order_key') WHERE workspace_id = ?").run(workspaceA);
+        getRawDb().prepare("UPDATE change_log SET payload_json = json_remove(payload_json, '$.order_key') WHERE workspace_id = ? AND table_name = 'messages'").run(workspaceA);
+        const response = await fetch(`${baseUrl}/${route}`, {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ scope: { workspaceId: workspaceA }, tables: ['messages'],
+                ...(route === 'pull' ? { cursor: 0, limit: 50 } : { pageSize: 50 }) }),
+        });
+        expect(response.status).toBe(200);
+        const page = await response.json();
+        const entries = route === 'pull' ? page.changes : page.items;
+        expect(entries.map((entry: { pk: string }) => entry.pk).sort()).toEqual(['shared-assistant', 'shared-user']);
+        expect(entries.every((entry: { payload: object }) => !Object.hasOwn(entry.payload, 'order_key'))).toBe(true);
+        expect(page.unavailable ?? []).toEqual([]);
+    });
+
     it.each(['pull', 'snapshot', 'push'] as const)('refuses a foreign scope through %s even when the user belongs to it', async (route) => {
         select(bob, workspaceB);
         expect((await call(route, workspaceA)).status).toBe(403);
