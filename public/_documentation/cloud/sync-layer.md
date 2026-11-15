@@ -637,7 +637,7 @@ Run `bun run test:e2e:sync:cloud --development-providers` for disposable Basic A
 
 Sync providers must return `errorCode` for failed push results: `VALIDATION_ERROR`, `OVERSIZED`, or `UNAUTHORIZED` mark an operation permanent; `RATE_LIMITED` defers it. Transport failures should expose HTTP `status`/`statusCode` and `retryAfterMs` when available. Whole-request 400, 413, and 422 failures are split into individual operations; a single operation rejected with 400, 413, or 422 is retained as permanent. Unstructured failed results remain retryable. The narrowly recognized SQLite
 `CONFLICT` reason for reuse of an already processed `op_id` is held for recovery;
-other conflict text does not make an operation terminal.
+other conflict text does not make an operation terminal. Generic `CONFLICT` and `NOT_FOUND` results keep retrying without charging the shared outage breaker. Per-operation `RATE_LIMITED` results also leave the breaker healthy and defer without incrementing attempts; transport and server failures still count toward the outage budget.
 
 Background history adapters should throw errors with `status` or `statusCode`, a structured code (`VALIDATION_ERROR`, `OVERSIZED`, `UNAUTHORIZED`, `FORBIDDEN`, `CONFLICT`, `SUPERSEDED`, or `UNSUPPORTED`), or explicit `retryable: false` for a permanent history failure. HTTP 408, 429, and 5xx are transient. Unknown or legacy unstructured errors remain pending for retry, even if their wording resembles a permanent failure. Providers that only throw strings or plain errors must add metadata to retain permanent-block behavior.
 

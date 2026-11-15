@@ -1859,6 +1859,29 @@ describe('OutboxManager quarantine (real Dexie)', () => {
         expect(getSyncCircuitBreaker(`${scope.workspaceId}:${provider.id}`).getFailureCount()).toBe(0);
     });
 
+    it.each(['CONFLICT', 'NOT_FOUND', 'RATE_LIMITED', 'SERVER_ERROR'] as const)(
+        'keeps %s retry policy separate from service availability', async errorCode => {
+            const db = await freshDb();
+            const op = corruptPut('messages', 'retry-policy', { payload: message('retry-policy', 'keep me') });
+            await db.pending_ops.put(op);
+            const provider = new SpyProvider();
+            provider.push.mockResolvedValue({ results: [{ opId: op.stamp.opId, success: false, errorCode }], serverVersion: 1 });
+            const outbox = manager(db, provider);
+            const breaker = getSyncCircuitBreaker(`${scope.workspaceId}:${provider.id}`);
+            for (let i = 0; i < 5; i++) {
+                await db.pending_ops.update(op.id, { nextAttemptAt: 0 });
+                // Recreate the manager to clear only its rate-limit cooldown.
+                await manager(db, provider).flush();
+            }
+            expect(await db.pending_ops.get(op.id)).toMatchObject({
+                status: 'retry_wait', attempts: errorCode === 'RATE_LIMITED' ? 0 : 5,
+            });
+            expect(await outbox.getQuarantined()).toHaveLength(0);
+            expect(breaker.getFailureCount()).toBe(errorCode === 'SERVER_ERROR' ? 5 : 0);
+            expect(breaker.getState()).toBe(errorCode === 'SERVER_ERROR' ? 'open' : 'closed');
+        }
+    );
+
     it('preserves corrupt operations, rebuilds them from local rows and pushes the recovered content', async () => {
         const db = await freshDb();
         await db.messages.put(message('m1', 'my unsent reply'));

@@ -778,7 +778,10 @@ export class OutboxManager {
                     if (identityReuse) await this.holdOp(op, 'Server rejected reused operation identity');
                     else {
                         await this.handleFailedOp(op, res.error, res.errorCode);
-                        if (!this.isPermanentFailure(res.errorCode)) serviceFailure = true;
+                        // Retryable content conflicts and throttling are not
+                        // evidence that the shared sync service is unavailable.
+                        if (!this.isPermanentFailure(res.errorCode) &&
+                            !['CONFLICT', 'NOT_FOUND', 'RATE_LIMITED'].includes(res.errorCode ?? '')) serviceFailure = true;
                     }
                     failCount++;
                 }
