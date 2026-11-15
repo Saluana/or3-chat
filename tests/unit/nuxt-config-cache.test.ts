@@ -37,17 +37,8 @@ describe('Nuxt config cache headers', () => {
         const expectedCacheControl =
             'public,max-age=604800,stale-while-revalidate=86400';
 
-        expect(routeRules?.['/**/*.webp']?.headers?.['cache-control']).toBe(
-            expectedCacheControl
-        );
-        expect(routeRules?.['/**/*.png']?.headers?.['cache-control']).toBe(
-            expectedCacheControl
-        );
-        expect(routeRules?.['/**/*.svg']?.headers?.['cache-control']).toBe(
-            expectedCacheControl
-        );
-        expect(routeRules?.['/**/*.woff2']?.headers?.['cache-control']).toBe(
-            expectedCacheControl
-        );
+        for (const path of ['/logos/**', '/chat-artwork/**', '/lock-page/**', '/screenshots/**', '/favicon.ico', '/bird-on-cloud.webp']) {
+            expect(routeRules?.[path]?.headers?.['cache-control'], path).toBe(expectedCacheControl);
+        }
     });
 });
