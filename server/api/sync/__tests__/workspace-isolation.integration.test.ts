@@ -168,9 +168,13 @@ describe('document sync HTTP isolation with the real SQLite harness', () => {
         expect(page.unavailable ?? []).toEqual([]);
     });
 
-    it('replays a legacy background admission without normalizing its receipt identity', async () => {
+    it.each([true, false])('replays a legacy background admission without normalizing its receipt identity (order_key=%s)', async hasOrderKey => {
         const input = { ...admission(workspaceA), expectedAssistant: undefined };
         input.assistantMessage.modelId = 'legacy-extension';
+        if (!hasOrderKey) {
+            delete input.assistantMessage.order_key;
+            delete input.userMessage!.order_key;
+        }
         const actor = { userId: alice, workspaceId: workspaceA };
         const committed = await fixture.adapter!.admitChatGeneration(actor, input);
         // Before H2, the envelope parser returned the original record objects.

@@ -157,7 +157,11 @@ export function parseChatGenerationAdmissionEnvelope(
     const prepare = (tableName: 'threads' | 'messages', row: CanonicalHistoryRecord): CanonicalHistoryRecord => {
         nextSyncClock(row.clock);
         const opId = '00000000-0000-4000-8000-000000000000';
-        prepareSyncWrite({ tableName, pk: row.id, operation: 'put', payload: { ...row, op_id: opId },
+        // Legacy admissions omitted message ordering; clients derive it from
+        // the final HLC. This is a validation-only view, never receipt content.
+        const payload = { ...row, ...(tableName === 'messages' && !row.order_key
+            ? { order_key: row.hlc ?? 'background' } : {}), op_id: opId };
+        prepareSyncWrite({ tableName, pk: row.id, operation: 'put', payload,
             stamp: { deviceId: backgroundHistoryDeviceId(candidate.generationId as string),
                 opId, hlc: typeof row.hlc === 'string' ? row.hlc : 'background', clock: row.clock } });
         return row;

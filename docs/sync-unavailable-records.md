@@ -30,7 +30,9 @@ Early background admission also prepares before durable job acceptance.
 The background envelope parser validates without rewriting its records: existing
 admission/finalization receipts hash that envelope. New-job preparation normalizes
 before sanitization; provider replay checks must precede transformations of an
-already persisted envelope or write intent.
+already persisted envelope or write intent. Legacy admission messages without
+`order_key` remain parseable using a validation-only derived ordering value;
+do not add that value to their stored envelope or receipt hash.
 
 ## Durable unavailable records
 
