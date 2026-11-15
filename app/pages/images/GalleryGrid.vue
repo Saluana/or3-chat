@@ -42,9 +42,11 @@ const emit = defineEmits<{
 type State = {
     urlByHash: Record<string, string | undefined>;
     errorByHash: Record<string, boolean | undefined>;
+    /** The preview image has decoded; it fades in over the placeholder. */
+    loadedByHash: Record<string, boolean | undefined>;
 };
 
-const state = reactive<State>({ urlByHash: {}, errorByHash: {} });
+const state = reactive<State>({ urlByHash: {}, errorByHash: {}, loadedByHash: {} });
 const container = ref<HTMLElement | null>(null);
 let io: IntersectionObserver | null = null;
 const cache = useSharedPreviewCache();
@@ -121,6 +123,7 @@ function isSelected(hash: string): boolean {
 function clearUrlState(hash: string) {
     delete state.urlByHash[hash];
     delete state.errorByHash[hash];
+    delete state.loadedByHash[hash];
 }
 
 function dropHash(hash: string) {
@@ -492,12 +495,13 @@ defineExpose({ ensureUrl });
                             !state.errorByHash[m.hash]
                         "
                         type="button"
-                        class="block w-full cursor-pointer focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-(--md-primary)"
+                        class="block w-full cursor-pointer bg-(--md-surface-container) focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-(--md-primary)"
                         :aria-label="`View ${m.name}`"
                         @click="view(m)"
                     >
                         <img
-                            class="w-full h-auto transition-transform duration-200 group-hover:scale-[1.02] group-focus-within:scale-[1.02]"
+                            class="w-full h-auto [transition:opacity_300ms_ease-out,filter_400ms_ease-out,transform_200ms_ease] motion-reduce:transition-none group-hover:scale-[1.02] group-focus-within:scale-[1.02]"
+                            :class="state.loadedByHash[m.hash] ? 'opacity-100 blur-none' : 'opacity-0 blur-md'"
                             :src="state.urlByHash[m.hash]"
                             :alt="m.name"
                             :width="imageRatio(m) ? m.width : undefined"
@@ -505,20 +509,26 @@ defineExpose({ ensureUrl });
                             :style="{ aspectRatio: imageRatio(m) ? `auto ${imageRatio(m)}` : undefined }"
                             decoding="async"
                             loading="lazy"
+                            @load="state.loadedByHash[m.hash] = true"
                         />
                     </button>
                     <button
                         v-else
                         type="button"
-                        class="flex min-h-40 w-full items-center justify-center bg-(--md-surface-container) text-xs opacity-80 focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-(--md-primary)"
+                        class="relative flex min-h-40 w-full items-center justify-center bg-(--md-surface-container) text-xs focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-(--md-primary)"
                         :style="{ aspectRatio: imageRatio(m) }"
                         :aria-label="`View ${m.name}`"
                         @click="view(m)"
                     >
-                        <span v-if="state.errorByHash[m.hash]"
+                        <span v-if="state.errorByHash[m.hash]" class="opacity-80"
                             >Preview unavailable</span
                         >
-                        <span v-else class="or3-loading-delay">Loading preview…</span>
+                        <template v-else>
+                            <span class="sr-only">Loading preview…</span>
+                            <span class="or3-loading-delay absolute inset-0" aria-hidden="true">
+                                <span class="block size-full animate-pulse bg-(--md-surface-container-high) motion-reduce:animate-none" />
+                            </span>
+                        </template>
                     </button>
 
                     <div

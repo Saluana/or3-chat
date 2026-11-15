@@ -324,11 +324,6 @@
     background: var(--md-surface-container-high);
 }
 
-/* A trailing newline in the source renders as an empty, numbered last line. */
-.or3-prose :deep([data-streamdown='code'] .line:last-child:has(> [data-streamdown='code-line-number']:only-child)) {
-    display: none;
-}
-
 .or3-prose :deep([data-streamdown='code-line-number']) {
     margin-right: 0.75rem;
     padding: 0;

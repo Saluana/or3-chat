@@ -355,7 +355,8 @@ classes. For example:
 ```
 
 Run `bun run theme:build-css` from the host checkout when using style selectors.
-The host loads `/themes/<name>.css`. Runtime class sessions observe newly added
+The host loads `/themes/<name>.css?v=<build id>`; production serves `/themes/**`
+as immutable, so the build ID query is what refreshes it after a deploy. Runtime class sessions observe newly added
 nodes and remove their owned classes on theme changes. They do not promise to
 re-evaluate every attribute change on existing nodes. Do not call the obsolete
 `useThemeClasses()` helper or add a global force-render mechanism.

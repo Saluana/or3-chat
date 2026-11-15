@@ -1,6 +1,8 @@
 import { computed, onScopeDispose, readonly, ref, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue';
+import { useEventListener } from '@vueuse/core';
 import type { Editor } from '@tiptap/vue-3';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import type { Transaction } from '@tiptap/pm/state';
 
 export interface DocumentOutlineItem {
     id: string;
@@ -33,7 +35,14 @@ function countWords(text: string): number {
     return normalized.split(/\s+/u).length;
 }
 
-export function useDocumentInsights(editor: Ref<Editor | null>, enabled: MaybeRefOrGetter<boolean> = true) {
+/** Headings at or above this offset from the viewport top count as the section being read. */
+const READING_LINE_PX = 96;
+
+export function useDocumentInsights(
+    editor: Ref<Editor | null>,
+    enabled: MaybeRefOrGetter<boolean> = true,
+    viewport?: MaybeRefOrGetter<HTMLElement | null | undefined>,
+) {
     const outline = ref<DocumentOutlineItem[]>([]);
     const activeOutlineId = ref<string>();
     const words = ref(0);
@@ -41,6 +50,9 @@ export function useDocumentInsights(editor: Ref<Editor | null>, enabled: MaybeRe
     const blocks = ref(0);
     const serializedBytes = ref(0);
     let frame = 0;
+    let scrollFrame = 0;
+    // Scrolling follows the reading position until the caret moves again.
+    let followScroll = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let pendingSince = 0;
     let attachedEditor: Editor | null = null;
@@ -79,6 +91,10 @@ export function useDocumentInsights(editor: Ref<Editor | null>, enabled: MaybeRe
 
     function updateActiveHeading() {
         frame = 0;
+        if (followScroll) {
+            updateActiveHeadingFromScroll();
+            return;
+        }
         const current = editor.value;
         if (!current) return;
         const selectionPosition = current.state.selection.from;
@@ -88,6 +104,34 @@ export function useDocumentInsights(editor: Ref<Editor | null>, enabled: MaybeRe
             nextActiveId = item.id;
         }
         activeOutlineId.value = nextActiveId;
+    }
+
+    // While reading, follow the heading at the top of the viewport rather than
+    // the caret, which stays wherever the reader last clicked.
+    function updateActiveHeadingFromScroll() {
+        scrollFrame = 0;
+        const current = editor.value;
+        const element = toValue(viewport);
+        if (!current || !element || !outline.value.length) return;
+        const bounds = element.getBoundingClientRect();
+        // At the end, the last sections may be too short to reach the reading
+        // line; count every heading already on screen.
+        const atEnd = element.scrollTop + element.clientHeight >= element.scrollHeight - 2;
+        const line = atEnd ? bounds.bottom : bounds.top + element.clientTop + READING_LINE_PX;
+        let nextActiveId: string | undefined;
+        for (const item of outline.value) {
+            const heading = current.view.nodeDOM(item.position);
+            if (!(heading instanceof HTMLElement)) continue;
+            if (heading.getBoundingClientRect().top > line) break;
+            nextActiveId = item.id;
+        }
+        activeOutlineId.value = nextActiveId;
+    }
+
+    function onViewportScroll() {
+        if (!toValue(enabled) || scrollFrame) return;
+        followScroll = true;
+        scrollFrame = requestAnimationFrame(updateActiveHeadingFromScroll);
     }
 
     function recompute() {
@@ -107,8 +151,9 @@ export function useDocumentInsights(editor: Ref<Editor | null>, enabled: MaybeRe
         updateActiveHeading();
     }
 
-    function schedule() {
+    function schedule(event?: { transaction?: Transaction }) {
         if (!toValue(enabled)) return;
+        if (event?.transaction?.selectionSet) followScroll = false;
         const doc = editor.value?.state.doc ?? null;
         if (doc !== scheduledDocument) {
             const initial = scheduledDocument === null;
@@ -135,7 +180,11 @@ export function useDocumentInsights(editor: Ref<Editor | null>, enabled: MaybeRe
         pendingSince = 0;
         if (frame) cancelAnimationFrame(frame);
         frame = 0;
+        if (scrollFrame) cancelAnimationFrame(scrollFrame);
+        scrollFrame = 0;
     }
+
+    if (viewport) useEventListener(viewport, 'scroll', onViewportScroll, { passive: true });
 
     const stop = watch([editor, () => toValue(enabled)], ([nextEditor, active]) => {
         detach();

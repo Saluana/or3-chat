@@ -30,6 +30,15 @@ export interface ThemeHeadInput {
 }
 
 /**
+ * URL of a theme's generated selector stylesheet. The build ID versions the
+ * unhashed file so it can be cached immutably and still change per deploy.
+ */
+export function themeCssHref(themeName: string, buildId?: string): string {
+    const href = `/themes/${themeName}.css`;
+    return buildId ? `${href}?v=${encodeURIComponent(buildId)}` : href;
+}
+
+/**
  * Build the complete request-scoped head contribution for an SSR theme.
  *
  * This helper deliberately contains no Vue or Nuxt composable calls. Theme
@@ -39,7 +48,8 @@ export interface ThemeHeadInput {
 export function buildThemeHead(
     themeName: string,
     theme: CompiledTheme,
-    stylesheets: readonly ResolvedThemeStylesheet[] = []
+    stylesheets: readonly ResolvedThemeStylesheet[] = [],
+    buildId?: string
 ): ThemeHeadInput {
     const style: ThemeHeadStyle[] = [];
     const link: ThemeHeadLink[] = [];
@@ -57,7 +67,7 @@ export function buildThemeHead(
         link.push({
             key: `or3-theme-css-${themeName}`,
             rel: 'stylesheet',
-            href: `/themes/${themeName}.css`,
+            href: themeCssHref(themeName, buildId),
             tagPriority: 'critical',
             'data-theme-css': themeName,
         });

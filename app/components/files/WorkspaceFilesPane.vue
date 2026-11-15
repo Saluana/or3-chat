@@ -623,10 +623,32 @@ function resetScope() {
 }
 watch(() => [sessionData.value?.session?.user?.id, sessionData.value?.session?.role,
     sessionData.value?.session?.authorizationRevision, sessionData.value?.session?.authenticated], resetScope);
+// The container query widths in the styles below (page and list).
+const LAYOUT_BREAKPOINTS = [600, 800, 1050];
+const layoutTier = (width: number) => LAYOUT_BREAKPOINTS.filter(breakpoint => width > breakpoint).length;
+let pageTier: number | undefined;
+let listTier: number | undefined;
+// Opening or closing a split crosses breakpoints in one frame (table ↔ cards).
+// Fade the content in its new layout instead of cutting to it.
+function softenLayoutChange(page: HTMLElement) {
+    const list = page.querySelector<HTMLElement>('.files-list');
+    const nextPageTier = layoutTier(page.clientWidth);
+    const nextListTier = list ? layoutTier(list.clientWidth) : undefined;
+    const changed = (pageTier !== undefined && nextPageTier !== pageTier)
+        || (listTier !== undefined && nextListTier !== undefined && nextListTier !== listTier);
+    pageTier = nextPageTier;
+    listTier = nextListTier;
+    if (changed && !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+        page.querySelector('.files-content')?.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
+}
 onMounted(async () => {
     if (pageElement.value) {
+        const page = pageElement.value;
         // Match DocumentEditorRoot.css: full-pane inspector below 720px.
-        resizeObserver = new ResizeObserver(entries => { widePreview.value = (entries[0]?.contentRect.width ?? 0) >= 720; });
+        resizeObserver = new ResizeObserver(entries => {
+            widePreview.value = (entries[0]?.contentRect.width ?? 0) >= 720;
+            softenLayoutChange(page);
+        });
         resizeObserver.observe(pageElement.value);
     }
     stop = subscribeActiveWorkspaceDb(resetScope);

@@ -23,7 +23,7 @@ Source: the cloud.or3.chat audit of 2026-11-13 (signed-in Brave session, warm ca
 - **Keep open tabs alive (top-five item 1).** Not done. Every pane view identifies itself by `paneId`, and pane-scoped hooks, listeners and editor sessions assume one mounted view per pane. A cached hidden view would share its pane's id with the visible one. Doing this safely needs a per-tab view identity first; see "Next five".
 - **Inline the session in the server-rendered page (item 18).** Not done. `00-workspace-db.client.ts` deliberately re-validates the session before boot, and the service worker keeps a `pages-cache`, so a session embedded in cached HTML could be stale or belong to a previous user. Revisit only together with the precache work (item 26).
 - **Rail plugin pages and footer actions** (Files, Connections, Account) still appear after hydration. They no longer move anything above them.
-- **Code blocks shift 20px when highlighting lands** (part of item 5). Cause not yet isolated.
+- ~~**Code blocks shift 20px when highlighting lands** (part of item 5).~~ Done in the sixth pass.
 - **Chat switch still blocks ~180ms** while the message list is rebuilt. Fixing this depends on the per-tab view identity work.
 - **Documents list skeleton flash** in the sidebar (6–29ms) is a `ClientOnly` fallback and was left as is.
 
@@ -36,21 +36,21 @@ Source: the cloud.or3.chat audit of 2026-11-13 (signed-in Brave session, warm ca
 - ~~10. Settings header jump.~~ Done in the third pass.
 - ~~11. Sidebar collapse/expand reflows every frame.~~ Done in the second pass.
 - ~~12. Tab width churn.~~ Done in the third pass.
-- 13. Split view snaps the Files pane between table and card layout with no transition; the click takes 88–112ms.
-- 14. Gallery tiles: replace the text placeholder with a blur placeholder and fade.
+- ~~13. Split view Files layout snap.~~ Done in the sixth pass (the ~100ms click cost remains; see notes).
+- ~~14. Gallery tiles: blur placeholder and fade.~~ Done in the sixth pass.
 - ~~15. Connections popover late fill.~~ Done in the third pass.
-- 16. Boot placeholder is inconsistent (sidebar skeleton rows on one reload, "Loading page…" on another).
+- ~~16. Boot placeholder is inconsistent.~~ Done in the fifth pass.
 
 ### Network
 
-- 18. Boot waterfall: six requests wait on `/api/auth/session` (see the note above before inlining it).
+- ~~18. Boot waterfall.~~ Done in the fifth pass (session request starts from the HTML; see notes).
 - 19. Every API call has a ~65ms floor even for tiny responses; likely edge-to-origin distance.
 - ~~22. Settings refetches.~~ Done in the fourth pass (see notes).
-- 23. 145–151 requests per load: 115 script files, 42 preloads, 77 chunks right after load, several under 700 bytes. Set a minimum chunk size.
+- 23. 145–151 requests per load: 115 script files, 42 preloads, 77 chunks right after load, several under 700 bytes. Not done (see sixth pass notes): Rolldown 1.2 has no safe global minimum chunk size.
 - ~~24. First-use chunk downloads.~~ Done in the fourth pass.
-- 25. Seven render-blocking stylesheets, including a 1-byte and a 194-byte file and a duplicate request; 388 KB main stylesheet plus 60 KB inline styles.
-- 26. The service worker precaches 501 files (5 MB+) on first visit, including 414 JS chunks. Precache the shell only.
-- 27. Unhashed assets (theme CSS, favicon, touch icon) get a 4-hour cache; the web manifest has none; every HTML response sets a theme cookie.
+- 25. ~~Duplicate theme stylesheet download and the 1-byte stylesheet.~~ Done in the fifth pass. The 400 KB main stylesheet and three `chat-shell` CSS files were investigated in the sixth pass and left as they are (see notes).
+- ~~26. Service worker precache.~~ Done in the sixth pass (shell only).
+- ~~27. Caching headers.~~ Done in the fifth pass.
 - 28. The logo SVG is 50 KB for a 120×25 mark.
 - 29. Hero images are marked both `loading="lazy"` and `fetchpriority="high"`.
 - 30. `x-powered-by: Nuxt` is exposed, HSTS lacks `includeSubDomains`, and the CSP allows inline scripts.
@@ -61,10 +61,10 @@ Source: the cloud.or3.chat audit of 2026-11-13 (signed-in Brave session, warm ca
 - ~~32. Browser Back/Forward do nothing in-app.~~ Done in the third pass.
 - ~~33. The URL does not follow the Files tab.~~ Done in the second pass.
 - ~~34. Raw markdown in search snippets.~~ Done in the fourth pass.
-- 35. Model names are truncated in the chat settings picker.
+- ~~35. Truncated model names.~~ Done in the fifth pass.
 - ~~36. Split close leaves an empty tab.~~ Done in the fourth pass.
 - 37. Marketplace library is listed in Settings even when it is unavailable on the server.
-- 38. The document outline does not highlight the current section while scrolling, and the floating composer overlaps text with no fade.
+- ~~38. Document outline highlight and composer fade.~~ Done in the fifth pass.
 - ~~39. Dark mode `color-scheme` and wordmark.~~ Done in the fourth pass.
 - 40. Document URLs are `/docs/message-doc-` plus 64 hex characters.
 - 41. Old notifications never expire.
@@ -94,6 +94,31 @@ Not done: 23 (tiny chunks). 97 of 411 scripts are under 700 B gzip, but merging 
 | 10. Settings header | The back-button row is reserved on every page, so the header and content stay put between top-level and sub-pages (103 px header either way at 1280 px). |
 | 15. Connections | The OpenAI status check starts on pointer or focus over the button; the popover shows the final state on open without a second request. |
 
+## Sixth pass (done)
+
+| Item | What changed |
+| --- | --- |
+| 26. Precache | Only the startup shell (entry and workspace page with their static imports, plus stylesheets) is precached: 470 files / 3.65 MB gzip → 102 files / 1.26 MB. Other chunks are cached on first use by a `CacheFirst` `nuxt-chunks` rule (hashed names; `/_nuxt/builds/` excluded so update checks stay live). Verified in a production build: the app reloads offline with no failed script requests. A feature never opened online is not available offline. |
+| 5. Code block shift | A CSS rule meant to hide the empty, numbered line left by a fence's trailing newline also hid the real last line of unhighlighted code (CSS cannot see text nodes), so the block grew by one line (21 px) when highlighting landed, and the last line was invisible while streaming. The code block now drops one trailing newline and the rule is gone; plain and highlighted blocks measure the same height. |
+| 13. Files split snap | When the Files pane crosses a layout breakpoint (a split opening or closing), its content fades in its new layout over 220 ms instead of cutting; skipped with reduced motion. The ~100 ms click cost (mounting the new pane) is unchanged. |
+| 14. Gallery tiles | Tiles show a plain surface (pulsing after 180 ms, text kept for screen readers) and the image fades and sharpens in once it decodes. |
+
+Not done:
+- **23. Chunk floor.** Rolldown 1.2 has no global minimum chunk size; the only option remains the experimental common-chunk inlining rejected in the second pass. The precache change removes most first-visit script downloads.
+- **25. Main stylesheet.** Of 340 KB of utilities, ~205 KB are the app's own classes and ~140 KB are Nuxt UI color × variant combinations. All seven colors are used, and themes and plugins choose colors at runtime, so limiting them would break styling. The three `chat-shell` stylesheets belong to separately split chunks; merging them in the manifest would make the client load the originals again on navigation.
+- `tests/e2e/network-assets.offline.spec.ts` still expects the Cyberpunk background images (49–201 KB) to be precached, but the second pass stopped precaching images over 32 KB. It has failed since then; the test or the image rule needs a decision.
+
+## Fifth pass (done)
+
+| Item | What changed |
+| --- | --- |
+| 18. Boot waterfall | The workspace page's HTML starts `/api/auth/session` (fresh, `no-store`) while the scripts download; the app's first session check reuses that response once, within 10 s, and falls back to a normal request on any failure. The six dependent requests (sync, storage policy, plugin access/manifest, models, credentials) genuinely need the session, so they now start as soon as the app runs instead of one round trip later. The session is still validated before boot and nothing is embedded in cached HTML. |
+| 16. Boot placeholder | The server-rendered sidebar placeholder, the sidebar page loading fallback (was "Loading page…") and the home list loading overlay are one shared skeleton (`SidebarListSkeleton.vue`). |
+| 25. Stylesheets | The theme stylesheet was preloaded with `crossorigin` and linked without it, so it downloaded twice, and the other themes' stylesheets were preloaded too; theme stylesheet assets are no longer preloaded. Empty CSS files are dropped from the SSR stylesheet links. |
+| 27. Caching | The production cache rules used extension globs (`/**/*.svg`) that Nitro never matches, so Cloudflare applied its 4-hour default. Images and icons now get 1 week (+ stale-while-revalidate), the manifest 1 day, and theme CSS is versioned by build ID (`?v=`) and immutable. The theme-default cookie is only set when it changes. |
+| 35. Model names | The chat settings model list shows the model name with the platform on a second line, and long names wrap; search still matches the platform. |
+| 38. Outline and composer | The outline follows the heading at the top of the viewport while scrolling (the last heading at the end), and returns to following the caret once it moves. Text fades into the document composer across the full text column instead of showing under and around it. |
+
 ## Fourth pass (done)
 
 | Item | What changed |
@@ -104,7 +129,23 @@ Not done: 23 (tiny chunks). 97 of 411 scripts are under 700 B gzip, but merging 
 | 34. Snippets | ⌘K snippets are built from Markdown reduced to visible text (emphasis, headings, lists, quotes, code and link syntax), keeping `snake_case` and arithmetic intact. |
 | 22. Settings refetches | Plugin access is cached for later Settings opens. Protected navigations re-check lock-page access, using the existing short-lived cache for successful checks. |
 
-## Next five (after the fourth pass)
+## Next five (after the sixth pass)
+
+1. **Images (28, 29).** The logo SVG is 50 KB for a 120×25 mark, and hero images are both `loading="lazy"` and `fetchpriority="high"`.
+2. **Security headers (30).** Hide `x-powered-by`, add `includeSubDomains` to HSTS, and tighten the CSP's inline scripts.
+3. **Marketplace in Settings (37).** Hide it when the server has it disabled.
+4. **Old notifications (41).** Expire or cap old notifications.
+5. **Offline images test.** Decide whether the active theme's backgrounds should be precached, then fix the test or the rule.
+
+## Next five (after the fifth pass, done in the sixth pass)
+
+1. **Service-worker precache and chunk floor (23, 26).** 5 MB+ first-visit precache and many sub-kilobyte chunks; the biggest remaining network cost.
+2. **Main stylesheet size (25, remainder).** 400 KB of mostly Tailwind/Nuxt UI utilities blocks first paint; limit the utility sources and merge the three `chat-shell` CSS files.
+3. **Code block 20px shift (5).** Highlighting still shifts code blocks when it lands.
+4. **Split view Files layout snap (13).** Table/card layout switches with no transition and the click takes ~100ms.
+5. **Gallery placeholders (14).** Replace the text placeholder with a blurred preview and fade.
+
+## Next five (after the fourth pass, done in the fifth pass)
 
 1. **Boot waterfall and placeholder (16, 18).** Six requests wait on `/api/auth/session`, and the boot placeholder differs between reloads. Start independent requests in parallel and show one consistent shell skeleton.
 2. **Render-blocking stylesheets (25).** Seven blocking stylesheets including a 1-byte file, a duplicate request and a 388 KB main sheet; merge and trim to speed up first paint.

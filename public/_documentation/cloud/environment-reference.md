@@ -87,6 +87,10 @@ and bake public values in at build time. Server builds precache only a
 client-only offline shell (`/200.html`). The service worker uses it when a
 navigation fails because the network is unavailable, so the installed app still
 opens offline on any route. It is not used while the server answers navigations.
+The precache holds the startup code (the entry and the workspace page with their
+static imports) and stylesheets. Other build chunks, such as the document editor,
+Settings and admin pages, are cached by the service worker the first time they
+load, so a feature works offline once it has been used online.
 
 ## Base application settings
 

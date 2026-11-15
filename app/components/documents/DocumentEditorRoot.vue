@@ -231,6 +231,7 @@
                     </div>
                 </article>
 
+                <div class="ai-composer-fade" aria-hidden="true" />
                 <div class="ai-composer-dock" @focusin="aiComposerFocused = true" @focusout="onAiComposerFocusOut">
                     <Suspense>
                         <DocumentAiPanel
@@ -536,7 +537,7 @@ const pluginButtons = useEditorToolbarButtons(editor);
 const inspectorPanels = useEditorInspectorPanels();
 const documentAiActions = useDocumentAiActions();
 const editorViewActive = useCachedViewActivity();
-const { outline, activeOutlineId, stats, scrollTo, setSerializedSize, refresh, flush: flushInsights } = useDocumentInsights(editor, editorViewActive);
+const { outline, activeOutlineId, stats, scrollTo, setSerializedSize, refresh, flush: flushInsights } = useDocumentInsights(editor, editorViewActive, editorScroll);
 
 function captureContent(id = props.documentId, db = editorDb.value): void {
     // Capture edits made before the item became read-only; storage still refuses

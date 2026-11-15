@@ -10,7 +10,8 @@
 <script setup lang="ts">
 import PageShell from '~/components/PageShell.vue';
 import { computed, defineAsyncComponent } from 'vue';
-import { useRoute, useRuntimeConfig } from '#imports';
+import { useHead, useRoute, useRuntimeConfig } from '#imports';
+import { BOOT_SESSION_SCRIPT } from '~/utils/boot-session';
 
 const PluginDevelopmentController = defineAsyncComponent(() =>
     import('~/components/plugins/PluginDevelopmentController.vue')
@@ -26,5 +27,11 @@ definePageMeta({
 const route = useRoute();
 const isDocs = computed(() => route.path === '/docs' || route.path.startsWith('/docs/'));
 const routeId = computed(() => (typeof route.params.id === 'string' ? route.params.id : '') || undefined);
-const pluginDevelopment = useRuntimeConfig().public.pluginDevelopment === true;
+const runtimeConfig = useRuntimeConfig();
+const pluginDevelopment = runtimeConfig.public.pluginDevelopment === true;
+
+// Start the session check from the HTML; every boot request waits on it.
+if (import.meta.server && runtimeConfig.public.ssrAuthEnabled === true) {
+    useHead({ script: [{ key: 'or3-boot-session', innerHTML: BOOT_SESSION_SCRIPT, tagPriority: 'critical' }] });
+}
 </script>

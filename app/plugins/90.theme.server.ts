@@ -335,12 +335,13 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         }
     }
 
-    // Persist current default into the response cookies for future comparisons.
+    // Persist current default into the response cookies for future comparisons,
+    // only when it changed: an unchanged cookie needs no Set-Cookie on every page.
     // Append: replacing Set-Cookie would drop cookies that server middleware
     // already set on this page response (for example an invite link's token).
     try {
         const event = nuxtApp.ssrContext?.event;
-        if (event) appendResponseHeader(
+        if (event && previousDefault !== DEFAULT_THEME) appendResponseHeader(
             event,
             'set-cookie',
             `${PREVIOUS_DEFAULT_COOKIE}=${encodeURIComponent(
@@ -425,7 +426,8 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             themeHead.value = buildThemeHead(
                 target,
                 compiledTheme,
-                resolvedStylesheets
+                resolvedStylesheets,
+                runtimeConfig.app.buildId
             ) as unknown as NuxtReactiveHead;
         }
 

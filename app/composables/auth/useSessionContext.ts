@@ -9,6 +9,7 @@ import type { ComputedRef, Ref } from 'vue';
 import type { SessionContext } from '~/core/hooks/hook-types';
 import type { CloudAccess } from '~~/shared/cloud/access';
 import { recoverClientSession } from '~/composables/auth/useClientSessionRecovery';
+import { takeBootSession } from '~/utils/boot-session';
 
 export type SessionPayload = {
     session: SessionContext | null;
@@ -94,7 +95,8 @@ export function useSessionContext(
 
         return (async () => {
             try {
-                let res = await fetchSession();
+                // The first check reuses the request the page head started.
+                let res = (await takeBootSession()) ?? await fetchSession();
 
                 // Access may be expired while refresh is still valid. Let the
                 // active provider recover (silent refresh / Clerk session touch)

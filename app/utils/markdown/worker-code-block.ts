@@ -52,6 +52,15 @@ export const WorkerCodeBlock = defineComponent({
                 pending--;
             }
         };
-        return () => h(CodeBlock, { ...props, ...attrs, key: renderKey.value, highlight }, slots);
+        // A fence's closing newline would render as an empty, numbered last
+        // line. Dropping it keeps the plain and highlighted markup the same
+        // height, so nothing shifts when highlighting lands.
+        return () => h(CodeBlock, {
+            ...props,
+            ...attrs,
+            code: props.code.replace(/\r?\n$/, ''),
+            key: renderKey.value,
+            highlight,
+        }, slots);
     },
 });
