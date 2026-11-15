@@ -975,7 +975,8 @@ it('P0-5.9 reopened legacy Dexie cannot mutate, coalesce or launder installed hi
         await db.pending_ops.put({ id: 'current-op', tableName: 'kv', pk: 'current', operation: 'put', payload: row, status: 'pending', attempts: 0, createdAt: 1,
             stamp: { deviceId: 'new', opId: testUuid('J-op'), clock: 1, hlc: '1:0:new' } });
         await db.sync_quarantine.put({ id: 'evidence', tableName: 'kv', pk: 'current', source: 'manual', status: 'quarantined', op: { original: true }, diagnostics: [], quarantinedAt: 1 });
-        const state = () => Promise.all([db.kv.toArray(), db.messages.toArray(), db.pending_ops.toArray(), db.sync_state.toArray(), db.tombstones.toArray(), db.sync_quarantine.toArray()]);
+        await db.file_blobs.put({ hash: 'held-attachment', blob: new Blob(['immutable attachment']) });
+        const state = () => Promise.all([db.kv.toArray(), db.messages.toArray(), db.pending_ops.toArray(), db.sync_state.toArray(), db.tombstones.toArray(), db.sync_quarantine.toArray(), db.file_blobs.toArray()]);
         const before = await state();
         // Dexie 4.4.6 is allowed to reopen without the declared version.
         await old.open();
@@ -991,11 +992,12 @@ it('P0-5.9 reopened legacy Dexie cannot mutate, coalesce or launder installed hi
             }),
             () => old.table('pending_ops').put({ id: 'injected', tableName: 'kv', pk: 'current', status: 'pending' }),
             () => old.table('sync_quarantine').delete('evidence'),
+            () => old.table('file_blobs').delete('held-attachment'),
         ];
         for (const attempt of attempts) {
             // Dexie may recreate isolated legacy stores. Success or rejection is
             // immaterial; no write may reach current state.
-            await attempt().catch(() => undefined);
+            await Promise.resolve(attempt()).catch(() => undefined);
             expect(await state()).toEqual(before);
         }
         expect(await old.table('kv').get('current')).toMatchObject({ value: 'late remote' });
@@ -1058,7 +1060,13 @@ it('namespace upgrade preserves every store/index and rolls back an interrupted 
     expect([...read.objectStoreNames]).toEqual(Object.keys(legacySchema).sort());
     read.close(); await old.open();
     for (const [name, row] of originals) expect(await old.table(name).get('saved')).toEqual(row);
-    old.close(); await db.open();
+    old.close();
+    const adds: string[] = [];
+    const copying = vi.spyOn(IDBObjectStore.prototype, 'add').mockImplementation(function(this: IDBObjectStore, ...args) {
+        adds.push(this.name); return nativeAdd.apply(this, args);
+    });
+    try { await db.open(); } finally { copying.mockRestore(); }
+    expect(adds).not.toContain('current_file_blobs');
     expect(databaseRecovery.value).toBeNull();
     for (const [name, row] of originals) {
         expect(await db.table(name).get('saved')).toEqual(row);
@@ -1066,7 +1074,7 @@ it('namespace upgrade preserves every store/index and rolls back an interrupted 
         expect(db.table(name).schema.indexes.map(index => index.src)).toEqual(expected.indexes.map(index => index.src));
     }
     expect([...db.backendDB().objectStoreNames]).not.toContain('messages');
-    expect(db.file_blobs.name).toBe('file_blobs');
+    expect(db.file_blobs.name).toBe('current_file_blobs');
 });
 
 it('P0-5.3 explicit recovery checks parents, creates a new put and retains linked original evidence', async () => {

@@ -13,7 +13,7 @@
  * - Data validation or business logic for specific entities
  * - Remote sync orchestration
  */
-import Dexie, { type Table } from 'dexie';
+import Dexie, { type Table, type Transaction } from 'dexie';
 import { shallowRef } from 'vue';
 import { installHistoryRevisionTracking } from '~/utils/chat/history-revisions';
 import type { NativeRecoveryCheckpoint } from '~/utils/chat/native-recovery';
@@ -46,11 +46,11 @@ import {
 /** Recoverable open/upgrade state; explicit retry never clears workspace data. */
 export const databaseRecovery = shallowRef<{ db: Or3DB; phase: 'blocked' | 'failed' } | null>(null);
 
-// Fixed once at activation, never per server-history reset. Blob bytes stay put.
+// Fixed once at activation, never per server-history reset. Blob bytes are renamed in place.
 const STORE_PREFIX = 'current_';
 /** Backup/entity names stay logical; only native object-store names change. */
 export const logicalStoreName = (name: string): string => name.startsWith(STORE_PREFIX) ? name.slice(STORE_PREFIX.length) : name;
-const physicalStore = (name: string): string => name === 'file_blobs' || name.startsWith(STORE_PREFIX)
+export const physicalStoreName = (name: string): string => name.startsWith(STORE_PREFIX)
     ? name : `${STORE_PREFIX}${name}`;
 
 /** Maximum number of workspace DBs to keep open (prevents IndexedDB connection exhaustion) */
@@ -471,19 +471,26 @@ export class Or3DB extends Dexie {
         // One atomic namespace break: Dexie 4 may reopen an old bundle at the
         // new version, but its legacy stores cannot reach the new protected namespace.
         // Dexie may recreate them as isolated sinks (schema patch on reopen).
-        const retired = this.tables.filter(table => table.name !== 'file_blobs');
+        const retired = this.tables;
         const stores: Record<string, string | null> = {};
         for (const table of retired) {
             stores[table.name] = null;
-            stores[physicalStore(table.name)] = [table.schema.primKey.src, ...table.schema.indexes.map(index => index.src)].join(',');
+            stores[physicalStoreName(table.name)] = [table.schema.primKey.src, ...table.schema.indexes.map(index => index.src)].join(',');
         }
         this.version(32).stores(stores).upgrade(async tx => {
             for (const table of retired) {
+                if (table.name === 'file_blobs') {
+                    // Rename the existing payload store in place. This copies no
+                    // blob bytes and prevents old sinks from deleting attachments.
+                    tx.idbtrans.db.deleteObjectStore(physicalStoreName(table.name));
+                    tx.idbtrans.objectStore(table.name).name = physicalStoreName(table.name);
+                    continue;
+                }
                 // Native cursor copying preserves exact values (no capture or
                 // derived-index hooks), with only one row held in JS at a time.
                 await new Dexie.Promise<void>((resolve, reject) => {
                     const source = tx.idbtrans.objectStore(table.name);
-                    const target = tx.idbtrans.objectStore(physicalStore(table.name));
+                    const target = tx.idbtrans.objectStore(physicalStoreName(table.name));
                     const cursor = source.openCursor();
                     cursor.onerror = () => reject(cursor.error);
                     cursor.onsuccess = () => {
@@ -504,20 +511,20 @@ export class Or3DB extends Dexie {
         // Keep the existing logical accessors and transaction API. Table objects
         // carry their real physical names, so Dexie scopes/hooks remain native.
         const table = this.table.bind(this);
-        this.table = ((name: string) => table(physicalStore(name))) as typeof this.table;
+        this.table = ((name: string) => table(physicalStoreName(name))) as typeof this.table;
         for (const entry of retired) {
-            Object.defineProperty(this, entry.name, { configurable: true, get: () => this.table(entry.name) });
+            Object.defineProperty(this, entry.name, { configurable: true, value: this.table(entry.name) });
         }
         const transaction = this.transaction.bind(this);
         this.transaction = ((mode: string, ...args: unknown[]) => {
-            const map = (arg: unknown): unknown => typeof arg === 'string' ? physicalStore(arg)
+            const map = (arg: unknown): unknown => typeof arg === 'string' ? physicalStoreName(arg)
                 : Array.isArray(arg) ? arg.map(map) : arg;
             return transaction(mode as 'rw', ...args.map(map) as [Table, () => unknown]);
         }) as typeof this.transaction;
         const txTable = this.Transaction.prototype.table;
-        this.Transaction.prototype.table = function(name: string) {
+        this.Transaction.prototype.table = function(this: Transaction, name: string) {
             // Earlier upgrade steps still address their original schema.
-            return txTable.call(this, this.schema[name] ? name : physicalStore(name));
+            return txTable.call(this, this.idbtrans.objectStoreNames.contains(name) ? name : physicalStoreName(name));
         } as typeof txTable;
 
         const open = this.open.bind(this);

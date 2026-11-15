@@ -13,7 +13,7 @@
  * - Schema migrations or indexing
  */
 import Dexie from 'dexie';
-import { getDb, type Or3DB } from './client';
+import { getDb, logicalStoreName, type Or3DB } from './client';
 import { dbTry, dbRequired } from './dbTry';
 import { useHooks } from '../core/hooks/useHooks';
 import { parseOrThrow, nowSec, nextClock, getWriteTxTableNames } from './util';
@@ -105,7 +105,7 @@ async function readKvRevisionState(
     );
     let clock = row?.clock ?? 0;
     const hasTombstones = (Array.isArray(targetDb.tables) ? targetDb.tables : []).some(
-        (table) => table.name === targetDb.tombstones.name || table.name === 'tombstones'
+        (table) => logicalStoreName(table.name) === 'tombstones'
     );
     if (hasTombstones) {
         const pk = row?.id ?? `kv:${name}`;
@@ -144,7 +144,7 @@ async function readQuotaUsage(
     let keys = 0;
     if (quota.maxRetainedKeys !== undefined) {
         const retained = new Set(rows.map((row) => row.name));
-        if (targetDb.tables.some((table) => table.name === targetDb.tombstones.name || table.name === 'tombstones')) {
+        if (targetDb.tables.some((table) => logicalStoreName(table.name) === 'tombstones')) {
             // Snapshots move deletion history out of kv. Count both forms,
             // deduplicating local soft deletes also captured by sync.
             const tombstones = await targetDb.tombstones.where('id')

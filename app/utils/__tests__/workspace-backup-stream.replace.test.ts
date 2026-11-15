@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { Blob as NodeBlob } from 'node:buffer';
 import Dexie, { type Table } from 'dexie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Or3DB } from '~/db/client';
+import { Or3DB, logicalStoreName } from '~/db/client';
 import {
     importWorkspaceStream,
     streamWorkspaceExport,
@@ -213,7 +213,7 @@ describe('workspace backup export reliability', () => {
                             if (line.type === 'end') sawEnd = true;
                             if (
                                 line.type === 'table-end' &&
-                                line.table === db.tables.at(-1)?.name
+                                line.table === logicalStoreName(db.tables.at(-1)!.name)
                             ) {
                                 await new Promise((resolve) => setTimeout(resolve, 20));
                                 // A sink awaiting a committed writer deadlocks if the
@@ -411,12 +411,12 @@ describe('workspace backup replace safety', () => {
         await db.kv.put({ id: 'sentinel', name: 'Synthetic sentinel', value: 'keep', deleted: false, clock: 1, created_at: 1, updated_at: 1 });
         const lines: unknown[] = [{ type: 'meta', format: WORKSPACE_BACKUP_FORMAT, version: WORKSPACE_BACKUP_VERSION,
             databaseName: db.name, databaseVersion: db.verno, createdAt: new Date(0).toISOString(),
-            tables: db.tables.map(t => ({ name: t.name, rowCount: t.name === 'file_blobs' ? 2 : 0, inbound: true })) }];
+            tables: db.tables.map(t => ({ name: logicalStoreName(t.name), rowCount: logicalStoreName(t.name) === 'file_blobs' ? 2 : 0, inbound: true })) }];
         for (const table of db.tables) {
-            lines.push({ type: 'table-start', table: table.name });
-            if (table.name === 'file_blobs') for (let i = 0; i < 2; i++) lines.push({ type: 'rows', table: table.name,
+            lines.push({ type: 'table-start', table: logicalStoreName(table.name) });
+            if (logicalStoreName(table.name) === 'file_blobs') for (let i = 0; i < 2; i++) lines.push({ type: 'rows', table: logicalStoreName(table.name),
                 rows: [{ hash: 'duplicate-hash', blob: { data: 'QQ==', type: 'text/plain' } }] });
-            lines.push({ type: 'table-end', table: table.name });
+            lines.push({ type: 'table-end', table: logicalStoreName(table.name) });
         }
         lines.push({ type: 'end' });
         await expect(importWorkspaceStream({ db, file: backupBlob(lines), clearTables: true, overwriteValues: true })).rejects.toThrow(/duplicate.*key/i);

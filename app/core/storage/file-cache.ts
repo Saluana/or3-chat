@@ -1,4 +1,4 @@
-import type { FileBlobRow, Or3DB } from '~/db/client';
+import { physicalStoreName, type FileBlobRow, type Or3DB } from '~/db/client';
 import type { ObjectStorageProvider } from './types';
 import type { FilePolicy } from '~~/shared/storage/file-policy';
 import { sha256 } from '@noble/hashes/sha2.js';
@@ -21,9 +21,11 @@ export async function originCacheBytes(): Promise<number> {
             request.onerror = () => reject(request.error);
             request.onsuccess = () => {
                 const db = request.result;
-                if (!db.objectStoreNames.contains('file_blobs')) { db.close(); resolve(0); return; }
-                const tx = db.transaction('file_blobs', 'readonly');
-                const store = tx.objectStore('file_blobs');
+                const current = physicalStoreName('file_blobs');
+                const name = db.version >= 320 ? current : 'file_blobs';
+                if (!db.objectStoreNames.contains(name)) { db.close(); resolve(0); return; }
+                const tx = db.transaction(name, 'readonly');
+                const store = tx.objectStore(name);
                 if (!store.indexNames.contains('cache_accessed_at')) { db.close(); resolve(0); return; }
                 let total = 0;
                 let cacheRows = 0, indexedRows = 0;
