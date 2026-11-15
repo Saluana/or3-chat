@@ -306,8 +306,22 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
     await page.reload();
     await expect(page.getByRole('textbox', { name: 'Document body' })).toContainText('OpenRouter fixture reply', { timeout: 30_000 });
 
-    // Without a personal or instance OpenAI key, the server refuses OpenAI models.
+    // Workspace restoration can update the URL after a dashboard deep link.
+    // An unrelated query change must preserve the OpenAI connection subpage.
     await openAiSettings(page, 'openai');
+    await expect(page.getByText('Your OpenAI key is saved.')).toBeVisible();
+    await page.evaluate(() => {
+        const url = new URL(location.href);
+        url.searchParams.set('navigation-check', 'settings');
+        history.pushState(null, '', url);
+    });
+    await page.goBack();
+    await page.goForward();
+    await page.evaluate(() => new Promise<void>(resolve => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    }));
+    await expect(page.getByText('Your OpenAI key is saved.')).toBeVisible();
+    // Without a personal or instance OpenAI key, the server refuses OpenAI models.
     await page.getByRole('button', { name: 'Remove key' }).click();
     await expect(page.getByText('No OpenAI key saved.')).toBeVisible();
     const refused = await page.request.post('/api/openrouter/stream', { headers: { origin, 'x-or3-cloud-intent': 'mutation' },

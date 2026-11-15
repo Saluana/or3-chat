@@ -17,7 +17,7 @@ function fixture() {
     });
     const finish = (index: number, html: string) => {
         const worker = workers[index]!;
-        const request = worker.postMessage.mock.lastCall![0] as HighlightRequest;
+        const request = worker.postMessage.mock.calls.findLast(([message]) => 'id' in message)![0] as HighlightRequest;
         worker.onmessage?.({ data: { id: request.id, html } } as MessageEvent<HighlightResponse>);
     };
     return { pool, workers, finish };
