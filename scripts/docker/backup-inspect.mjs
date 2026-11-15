@@ -168,7 +168,9 @@ export function inspectSyncSemantics(Database, databasePath) {
     const oversized = fields.map(name => `length(CAST(t.${name} AS BLOB)) > ${MAX_ROW_BYTES}`).join(' OR ');
     const versions = fields.includes('server_version') ? ",CASE WHEN typeof(t.server_version) IN ('integer','real') THEN CAST(t.server_version AS TEXT) END AS version_locator" : '';
     const locator = table === 'sync_snapshot_items' ? '' : 'CAST(t.rowid AS TEXT) AS locator,';
-    const rows = db.prepare(`SELECT ${locator}${selections.join(',')},(${oversized}) AS oversized${versions}${extra} FROM ${table} t${table === 'sync_snapshot_items' ? ' ORDER BY snapshot_id,table_name,pk,kind' : ''}`).iterate();
+    const order = table === 'sync_snapshot_items' ? ' ORDER BY snapshot_id,table_name,pk,kind'
+      : table === 'change_log' ? ' ORDER BY workspace_id,server_version' : '';
+    const rows = db.prepare(`SELECT ${locator}${selections.join(',')},(${oversized}) AS oversized${versions}${extra} FROM ${table} t${order}`).iterate();
     let ordinal = 0;
     for (const row of rows) {
       if (table === 'sync_snapshot_items') row.itemOrdinal = String(++ordinal);
@@ -202,9 +204,12 @@ export function inspectSyncSemantics(Database, databasePath) {
     }
     // One SQLite read transaction keeps the inspected head/captures consistent.
     db.prepare('BEGIN').run();
+    let previousLogVersion;
     scan('change_log', ['workspace_id', 'server_version', 'table_name', 'pk', 'op', 'payload_json', 'clock', 'hlc', 'device_id', 'op_id'], row => {
       identity('change_log', row); revision('change_log', row, true);
       if (!safe(row.server_version) || row.server_version === 0) fault('change_log', row, 'invalid_server_version');
+      if (previousLogVersion?.[0] === row.workspace_id && previousLogVersion[1] === row.server_version) fault('change_log', row, 'duplicate_server_version');
+      previousLogVersion = [row.workspace_id, row.server_version];
       if (typeof row.device_id !== 'string' || !text(row.device_id.trim()) || row.device_id.trim().length > 256) fault('change_log', row, 'invalid_device_id');
       if (!text(row.workspace_id)) fault('change_log', row, 'invalid_workspace');
       if (!['put', 'delete'].includes(row.op)) fault('change_log', row, 'invalid_operation');

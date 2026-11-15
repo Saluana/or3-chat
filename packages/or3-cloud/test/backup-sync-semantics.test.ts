@@ -5,7 +5,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as inspector from '../../../scripts/docker/backup-inspect.mjs';
-import { TABLE_PAYLOAD_SCHEMAS, ChangeStampSchema, SnapshotRevisionSchema } from '../../../shared/sync/schemas';
+import { TABLE_PAYLOAD_SCHEMAS, ChangeStampSchema, SnapshotRevisionSchema, PullResponseSchema } from '../../../shared/sync/schemas';
 
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(path => rm(path, { recursive: true, force: true }))); });
@@ -177,4 +177,17 @@ test.each([
   db.query('UPDATE change_log SET op_id=?').run(opId);
   db.close();
   expect(f.audit()).toMatchObject({ healthy: accepted, complete: true });
+});
+
+test.each([['workspace', false], ['other-workspace', true]] as const)('duplicate versions are scoped to %s', async (workspace, healthy) => {
+  const change = { serverVersion: 1, tableName: 'kv', pk: 'key', op: 'delete', stamp: { deviceId: 'd', opId, hlc: 'h', clock: 1 } };
+  expect(PullResponseSchema.safeParse({ changes: [change, { ...change, stamp: { ...change.stamp, opId: '12345678-1234-4234-8234-123456789abd' } }], nextCursor: 1, hasMore: false, oldestRetainedVersion: 1, requiresSnapshot: false }).success).toBe(false);
+  const f = await fixture();
+  const db = new Database(f.path);
+  db.query('INSERT OR IGNORE INTO server_version_counter VALUES(?,1)').run(workspace);
+  db.query("INSERT INTO change_log(id,workspace_id,server_version,table_name,pk,op,clock,hlc,device_id,op_id) VALUES('duplicate',?,1,'kv','key','delete',1,'h','d','12345678-1234-4234-8234-123456789abd')").run(workspace);
+  db.close();
+  const result = f.audit();
+  expect(result).toMatchObject({ complete: true, healthy });
+  if (!healthy) expect(result.faults).toContainEqual(expect.objectContaining({ table: 'change_log', reason: 'duplicate_server_version' }));
 });
