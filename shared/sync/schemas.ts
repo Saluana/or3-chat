@@ -35,6 +35,38 @@ export function compareSyncTuple(a: readonly string[], b: readonly string[]): nu
 }
 
 
+/** Identifiers must survive a UTF-8 storage round trip without replacement. */
+export function isLosslessSyncIdentifier(value: string): boolean {
+    for (let i = 0; i < value.length; i++) {
+        const code = value.charCodeAt(i);
+        if (code >= 0xd800 && code <= 0xdbff) {
+            const next = value.charCodeAt(++i);
+            if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
+        } else if (code >= 0xdc00 && code <= 0xdfff) return false;
+    }
+    return true;
+}
+
+export const SyncRecordIdentifierSchema = z.string().min(1).refine(isLosslessSyncIdentifier, 'Identifier is not lossless UTF-8');
+export const UNAVAILABLE_RECORD_CAPABILITY = 'unavailable-v1' as const;
+const unavailableIdentity = {
+    tableName: SyncRecordIdentifierSchema,
+    pk: SyncRecordIdentifierSchema,
+    evidenceRef: z.string().min(1).max(512),
+    reason: z.string().min(1).max(256),
+};
+export const PullUnavailableRecordSchema = z.object({
+    ...unavailableIdentity,
+    originalKind: z.enum(['put', 'delete']),
+    serverVersion: z.number().int().positive(),
+});
+export const SnapshotUnavailableRecordSchema = z.object({
+    ...unavailableIdentity,
+    originalKind: z.enum(['row', 'tombstone']),
+    snapshotId: z.string().min(1),
+    highWatermark: z.number().int().nonnegative(),
+});
+
 export function syncJsonByteLength(value: unknown): number {
     try {
         return new TextEncoder().encode(JSON.stringify(value)).length;
@@ -290,17 +322,31 @@ export const PullRequestSchema = z.object({
         .optional(),
     fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
     workspaceItemCapability: z.literal(WORKSPACE_ITEM_CAPABILITY).optional(),
+    unavailableRecordCapability: z.literal(UNAVAILABLE_RECORD_CAPABILITY).optional(),
 });
 
 export const PullResponseSchema = z
     .object({
         changes: SyncChangesSchema.max(1000),
+        unavailable: z.array(PullUnavailableRecordSchema).max(1000).optional(),
         nextCursor: z.number().int().nonnegative(),
         hasMore: z.boolean(),
         oldestRetainedVersion: z.number().int().nonnegative(),
         requiresSnapshot: z.boolean(),
     })
     .superRefine((response, ctx) => {
+        if (response.changes.length + (response.unavailable?.length ?? 0) > 1000 || syncJsonByteLength(response) > MAX_SYNC_RESPONSE_BYTES) {
+            ctx.addIssue({ code: 'custom', message: 'Pull combined page budget exceeded' });
+        }
+        const versions = new Set(response.changes.map(change => change.serverVersion));
+        let previousUnavailableVersion = 0;
+        for (const marker of response.unavailable ?? []) {
+            if (versions.has(marker.serverVersion) || marker.serverVersion <= previousUnavailableVersion || marker.serverVersion > response.nextCursor) {
+                ctx.addIssue({ code: 'custom', message: 'Unavailable pull coverage is invalid' });
+            }
+            versions.add(marker.serverVersion);
+            previousUnavailableVersion = marker.serverVersion;
+        }
         let previousVersion = 0;
         const opIds = new Set<string>();
         for (const [index, change] of response.changes.entries()) {
@@ -340,6 +386,7 @@ export const SnapshotRequestSchema = z.object({
         .optional(),
     fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
     workspaceItemCapability: z.literal(WORKSPACE_ITEM_CAPABILITY).optional(),
+    unavailableRecordCapability: z.literal(UNAVAILABLE_RECORD_CAPABILITY).optional(),
 });
 
 export const SnapshotRevisionSchema = z.object({
@@ -371,11 +418,29 @@ export const SnapshotResponseSchema = z
         snapshotId: z.string().min(1),
         highWatermark: z.number().int().nonnegative(),
         items: z.array(SnapshotItemSchema).max(1000),
+        unavailable: z.array(SnapshotUnavailableRecordSchema).max(1000).optional(),
         nextPageToken: z.string().min(1).max(MAX_SYNC_SNAPSHOT_TOKEN_LENGTH).nullable(),
     })
     .superRefine((response, ctx) => {
+        if (response.items.length + (response.unavailable?.length ?? 0) > 1000 || syncJsonByteLength(response) > MAX_SYNC_RESPONSE_BYTES) {
+            ctx.addIssue({ code: 'custom', message: 'Snapshot combined page budget exceeded' });
+        }
+        let previousMarkerKey: string[] | null = null;
+        for (const marker of response.unavailable ?? []) {
+            const key = [marker.tableName, marker.pk, marker.originalKind];
+            if (marker.snapshotId !== response.snapshotId || marker.highWatermark !== response.highWatermark ||
+                (previousMarkerKey && compareSyncTuple(key, previousMarkerKey) <= 0)) {
+                ctx.addIssue({ code: 'custom', message: 'Unavailable snapshot coverage is invalid' });
+            }
+            previousMarkerKey = key;
+        }
         let previousKey: string[] | null = null;
         const logicalKeys = new Set<string>();
+        for (const marker of response.unavailable ?? []) {
+            const logicalKey = JSON.stringify([marker.tableName, marker.pk]);
+            if (logicalKeys.has(logicalKey)) ctx.addIssue({ code: 'custom', message: 'Duplicate unavailable key' });
+            logicalKeys.add(logicalKey);
+        }
         for (const [index, item] of response.items.entries()) {
             const logicalKey = JSON.stringify([item.tableName, item.pk]);
             const orderedKey = [item.tableName, item.pk, item.kind];
@@ -405,6 +470,7 @@ export const PushBatchSchema = z
         ops: z.array(PendingOpSchema).max(MAX_SYNC_PUSH_BATCH_OPS),
         fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
     workspaceItemCapability: z.literal(WORKSPACE_ITEM_CAPABILITY).optional(),
+    unavailableRecordCapability: z.literal(UNAVAILABLE_RECORD_CAPABILITY).optional(),
     })
     .superRefine((batch, ctx) => {
         if (syncJsonByteLength(batch) > MAX_SYNC_PUSH_BATCH_BYTES) {
@@ -518,6 +584,7 @@ export function getPullResponseContractError(
     if (response.requiresSnapshot) {
         return null;
     }
+    if (response.changes.length + (response.unavailable?.length ?? 0) > request.limit) return 'Pull combined page exceeds requested limit';
     if (response.nextCursor < request.cursor) {
         return 'Pull response cursor regressed';
     }
@@ -525,7 +592,7 @@ export function getPullResponseContractError(
         return 'Pull response hasMore did not advance the cursor';
     }
     if (
-        response.changes.some(
+        [...response.changes, ...(response.unavailable ?? [])].some(
             (change) => change.serverVersion <= request.cursor
         )
     ) {
@@ -541,7 +608,7 @@ export function getSnapshotResponseContractError(
     if (response.workspaceId !== request.scope.workspaceId) {
         return 'Snapshot response workspace does not match the request';
     }
-    if (response.items.length > request.pageSize) {
+    if (response.items.length + (response.unavailable?.length ?? 0) > request.pageSize) {
         return 'Snapshot response exceeds the requested page size';
     }
     return null;

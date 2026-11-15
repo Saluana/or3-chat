@@ -1,21 +1,9 @@
 import { z } from 'zod';
-import { ChangeStampSchema, TABLE_PAYLOAD_SCHEMAS, normalizeWirePayloadForTable, syncJsonByteLength } from './schemas';
+import { ChangeStampSchema, isLosslessSyncIdentifier, TABLE_PAYLOAD_SCHEMAS, normalizeWirePayloadForTable, syncJsonByteLength } from './schemas';
 import { MAX_SYNC_PAYLOAD_BYTES } from './sanitize';
 import { getPkField } from './table-metadata';
 import { isLocalOnlyKvChange } from './local-only-kv';
 import type { ChangeStamp } from './types';
-
-/** Identifiers must survive a UTF-8 storage round trip without replacement. */
-export function isLosslessSyncIdentifier(value: string): boolean {
-    for (let i = 0; i < value.length; i++) {
-        const code = value.charCodeAt(i);
-        if (code >= 0xd800 && code <= 0xdbff) {
-            const next = value.charCodeAt(++i);
-            if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
-        } else if (code >= 0xdc00 && code <= 0xdfff) return false;
-    }
-    return true;
-}
 
 export class SyncWriteError extends Error {
     constructor(message: string, public readonly code: 'VALIDATION_ERROR' | 'OVERSIZED' = 'VALIDATION_ERROR') {
@@ -72,3 +60,5 @@ export function prepareSyncWrite(input: SyncWriteInput): SyncWriteInput {
     if (isLocalOnlyKvChange(tableName, pk, payload)) throw new SyncWriteError('Device-only KV names cannot be synced');
     return { tableName, pk, operation, ...(payload !== undefined ? { payload } : {}), stamp };
 }
+
+export { isLosslessSyncIdentifier } from './schemas';

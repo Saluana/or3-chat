@@ -58,6 +58,17 @@ const response = {
 };
 
 describe('POST /api/sync/snapshot', () => {
+    it('gates unavailable snapshots and passes durable markers through unchanged', async () => {
+        const handler = (await import('../snapshot.post')).default;
+        const unavailable = [{ tableName: 'messages', pk: 'bad', originalKind: 'tombstone',
+            snapshotId: response.snapshotId, highWatermark: 9, evidenceRef: 'e1', reason: 'invalid_revision' }];
+        snapshotMock.mockResolvedValue({ ...response, unavailable });
+        getActiveSyncGatewayAdapterMock.mockReturnValue({ snapshot: snapshotMock, capabilities: { unavailableRecords: 'v1' } });
+        await expect(handler(event())).rejects.toMatchObject({ statusCode: 426 });
+        readBodyMock.mockResolvedValue({ ...request, unavailableRecordCapability: 'unavailable-v1' });
+        await expect(handler(event())).resolves.toMatchObject({ unavailable, nextPageToken: null });
+    });
+
     beforeEach(() => {
         readBodyMock.mockReset().mockResolvedValue(request);
         setResponseHeaderMock.mockReset();

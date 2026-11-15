@@ -1,3 +1,7 @@
+import type { z } from 'zod';
+import type { PullUnavailableRecordSchema, SnapshotUnavailableRecordSchema } from './schemas';
+export type PullUnavailableRecord = z.infer<typeof PullUnavailableRecordSchema>;
+export type SnapshotUnavailableRecord = z.infer<typeof SnapshotUnavailableRecordSchema>;
 import type { ErrorMetadata } from '../errors';
 /**
  * Shared Sync Types
@@ -108,6 +112,7 @@ export interface PullRequest {
     /** Reader capability required before generic file metadata is returned. */
     fileKindCapability?: FileKindCapability;
     workspaceItemCapability?: WorkspaceItemCapability;
+    unavailableRecordCapability?: 'unavailable-v1';
 }
 
 /**
@@ -115,6 +120,7 @@ export interface PullRequest {
  */
 export interface PullResponse {
     changes: SyncChange[];
+    unavailable?: PullUnavailableRecord[];
     nextCursor: number;
     hasMore: boolean;
     /**
@@ -145,6 +151,7 @@ export interface SnapshotRequest {
     /** Reader capability required before generic file metadata is returned. */
     fileKindCapability?: FileKindCapability;
     workspaceItemCapability?: WorkspaceItemCapability;
+    unavailableRecordCapability?: 'unavailable-v1';
 }
 
 export interface SnapshotRevision {
@@ -179,6 +186,7 @@ export interface SnapshotResponse {
     snapshotId: string;
     highWatermark: number;
     items: SnapshotItem[];
+    unavailable?: SnapshotUnavailableRecord[];
     nextPageToken: string | null;
 }
 
@@ -191,6 +199,7 @@ export interface PushBatch {
     /** Writer capability required before generic file metadata is accepted. */
     fileKindCapability?: FileKindCapability;
     workspaceItemCapability?: WorkspaceItemCapability;
+    unavailableRecordCapability?: 'unavailable-v1';
 }
 
 /**

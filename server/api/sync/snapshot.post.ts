@@ -1,3 +1,4 @@
+import { classifySnapshotPage } from '../../utils/sync/unavailable-records';
 import { observeSyncRequest } from '../../sync/observations';
 import { hasWorkspaceItemSemantics } from "~~/shared/posts/workspace-item-capability";
 import { requireWorkspaceItemCapability } from "../../utils/sync/workspace-item-capability";
@@ -75,7 +76,7 @@ export default defineEventHandler(async (event) => {
         recordSyncRequest(userId, 'sync:snapshot');
 
         const response = SnapshotResponseSchema.safeParse(
-            await adapter.snapshot(event, request.data)
+            await classifySnapshotPage(event, adapter, request.data, await adapter.snapshot(event, request.data))
         );
         if (!response.success) {
             throw createError({ statusCode: 502, statusMessage: 'Invalid snapshot response' });
