@@ -65,6 +65,8 @@ Thread selection returns `true` after applying the selection and loaded history,
 or `false` for a veto, stale operation, or missing pane. Tab activation publishes
 only the pending target while filters run. It preserves the outgoing document or
 history until selection succeeds, and rolls back a rejected activation.
+When a first send creates a conversation after its chat view has been hidden,
+the view promotes its originating tab without binding the currently visible pane.
 Pending selection cleanup follows the stable pane ID across split reordering and
 runs on cancellation. An older activation cannot clear a newer activation's intent.
 

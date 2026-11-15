@@ -52,6 +52,7 @@ export async function acceptUserTurn(input: {
     hooks: TypedHookEngine;
     limits: CreateThreadContext['limits'];
     getActivePaneContext: () => PaneContext | null;
+    paneBindingOwnedByView?: boolean;
 }): Promise<{ result: SendResult } | { userDbMsg: Awaited<ReturnType<typeof appendTurnMessagesToDb>>[0]; assistantDbMsg: StoredMessage; requestThreadId: string; stopAcceptanceHeartbeat: () => void }> {
     const { requestScope, content, outgoing, sendMessagesParams, admissionThreadId, newPromptSelection,
         toolDraftId, workspaceGeneration, preparationSignal, persistedUserText, parts, files, file_hashes,
@@ -91,7 +92,7 @@ export async function acceptUserTurn(input: {
         try {
             const mpApi = (globalThis as GlobalWithPaneApi)
                 .__or3MultiPaneApi;
-            if (!requestScope.navigationPendingBeforeSave && mpApi?.panes.value && mpApi.activePaneIndex.value >= 0) {
+            if (!ports.paneBindingOwnedByView && !requestScope.navigationPendingBeforeSave && mpApi?.panes.value && mpApi.activePaneIndex.value >= 0) {
                 const pane = mpApi.panes.value[mpApi.activePaneIndex.value];
                 if (pane && pane.mode === 'chat' && !pane.threadId) {
                     if (typeof mpApi.setPaneThread === 'function') {

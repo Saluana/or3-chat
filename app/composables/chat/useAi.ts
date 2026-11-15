@@ -78,7 +78,7 @@ export function useChat(
     msgs: ChatMessage[] = [],
     initialThreadId?: string,
     pendingPromptId?: string,
-    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[]; toolDraftId?: () => string | undefined } = {}
+    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[]; toolDraftId?: () => string | undefined; paneBindingOwnedByView?: boolean } = {}
 ) {
     // Messages and basic state
     const { messages, rawMessages, tailAssistant, flushTailAssistant, resolveUiMessage,
@@ -883,7 +883,7 @@ export function useChat(
             persistedUserText, parts, files, file_hashes, contextOmission, initialProjectId,
             projectAttachmentScope, projectExtractionScope, resolveChatProject }, {
             view: { messages, rawMessages }, threadIdRef, hooks, limits: runtimeConfig.public.limits,
-            getActivePaneContext,
+            getActivePaneContext, paneBindingOwnedByView: options.paneBindingOwnedByView,
         });
         if ('result' in accepted) return accepted.result;
         const { userDbMsg, assistantDbMsg, requestThreadId, stopAcceptanceHeartbeat } = accepted;

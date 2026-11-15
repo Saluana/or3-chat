@@ -458,7 +458,7 @@ const chat = shallowRef<ChatInstance>(
         props.messageHistory,
         props.threadId,
         pendingPromptId.value || undefined,
-        { historyAlreadyLoaded: true, toolDraftId: () => promptOwnerId.value }
+        { historyAlreadyLoaded: true, toolDraftId: () => promptOwnerId.value, paneBindingOwnedByView: true }
     ) as ChatInstance
 );
 // The child runner owns its foreground stream independently of any pane.
