@@ -44,9 +44,9 @@ Dexie schema 32 atomically moves workspace stores to a fixed `current_` physical
 namespace, retaining exactly `or3-db-${workspaceId}` and unchanged logical/wire
 names. All stores are protected, including file metadata, attachment references,
 transfers, drafts, outbox, guard/cursors and recovery evidence. The large
-content-addressed `file_blobs` store is renamed in place through native IndexedDB;
-its payloads are not copied or doubled. Old sink deletions cannot remove current
-attachment bytes.
+content-addressed `file_blobs` store and every other store are renamed in place
+through native IndexedDB; no user records or blob payloads are copied or doubled.
+Old sink deletions cannot remove current attachment bytes.
 
 Old Dexie 4.4.6 may reopen and recreate retired names through its schema patch
 (`dexie.mjs:4561–4567`, `patchCurrentVersion:3763`). These stores are isolated
@@ -59,8 +59,9 @@ current state/publication isolation and stable coexistence. Packed-provider and
 full deployment lifecycle qualification remain separate activation requirements.
 
 A blocked upgrade waits for other tabs to close without clearing data. An aborted
-or failed migration rolls back all copies/deletions. The storage recovery dialog
-pauses automatic reopen, advises freeing storage, and offers explicit **Retry
+or failed migration rolls back all renames/deletions. An accessible, themed
+updating state appears during migration. Recovery state is retained per workspace
+when several databases open together. The storage recovery dialog pauses automatic reopen, advises freeing storage, and offers explicit **Retry
 upgrade**. Do not clear site data to resolve an upgrade failure.
 
 ## Materialized snapshot bootstrap contract

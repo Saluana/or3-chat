@@ -287,7 +287,7 @@
                     "category": "Internals",
                     "categoryOrder": 3,
                     "order": 0,
-                    "summary": "Active workspace databases, local derived indexes, cache metadata budgeting, and additive migrations."
+                    "summary": "Active workspace databases, local derived indexes, cache metadata budgeting, atomic no-copy store migration, and accessible upgrade recovery."
                 },
                 {
                     "name": "schema.md",
@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Sync history capability fences, atomic held-intent recovery, account-scoped inspection/export, stale-completion protection, atomic physical store isolation, stable old/new Dexie coexistence and nondestructive upgrade retry, and separate provider qualification."
+                    "summary": "Sync history capability fences, atomic held-intent recovery, account-scoped inspection/export, stale-completion protection, atomic no-copy physical store isolation, stable old/new Dexie coexistence, visible upgrade progress and per-workspace nondestructive retry, and separate provider qualification."
                 },
                 {
                     "name": "storage-layer.md",

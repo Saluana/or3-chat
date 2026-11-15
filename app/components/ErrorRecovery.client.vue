@@ -1,10 +1,17 @@
 <template>
     <AppModal :open="Boolean(databaseRecovery)" title="Workspace storage upgrade" :dismissible="false">
-        <p role="status" class="mb-4">
-            {{ databaseRecovery?.phase === 'blocked'
-                ? 'Close other OR3 tabs to finish upgrading this workspace. Your saved data is unchanged.'
-                : 'The storage upgrade could not finish. Your saved data is unchanged. Free some device storage, then retry. Do not clear this site’s data.' }}
-        </p>
+        <div role="status" aria-live="polite" aria-atomic="true" class="space-y-4">
+            <p v-if="databaseRecovery?.phase === 'upgrading'">
+                Updating local data. Keep this tab open until your workspace is ready.
+            </p>
+            <p v-else-if="databaseRecovery?.phase === 'blocked'">
+                Close other OR3 tabs to finish upgrading this workspace. Your saved data is unchanged.
+            </p>
+            <p v-else>
+                The storage upgrade could not finish. Your saved data is unchanged. Free some device storage, then retry. Do not clear this site’s data.
+            </p>
+            <UProgress v-if="databaseRecovery?.phase === 'upgrading'" :model-value="null" aria-label="Updating local data" />
+        </div>
         <template #footer>
             <UButton v-if="databaseRecovery?.phase === 'failed'" :loading="retryingDatabase" @click="retryDatabase">Retry upgrade</UButton>
         </template>

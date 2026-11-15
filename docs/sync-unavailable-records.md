@@ -170,8 +170,8 @@ Convex remain separate qualification lanes. No publication is performed here.
 
 Schema 32 performs a one-time atomic physical-store migration inside the same
 `or3-db-${workspaceId}` database. All stores move to `current_<logical-name>`, preserving exact rows and indexes.
-The large content-addressed `file_blobs` store uses native IDB store renaming
-in place; its payloads are excluded from copying.
+All 19 stores use native IDB store renaming in place, including large
+content-addressed `file_blobs` payloads. No user rows are copied or doubled.
 This protects attachment/transfer metadata, local-only KV, drafts, staging,
 cursors/guard, outbox, tombstones and recovery evidence together. Blob bytes are
 not duplicated. Renaming them also prevents an old deletion from seeing empty
@@ -187,6 +187,8 @@ The P0-5.9 ordinary acceptance test uses frozen actual v31 schema/hooks and
 checks repeated coexistence, current state and provider publication. Failed or
 blocked upgrade preserves every original row. Failed opens pause automatic
 reopen and show explicit retry/storage guidance; blocked upgrades wait for tabs.
+An accessible themed progress state announces active migration. Recovery state
+is retained independently for concurrent workspace upgrades.
 
 Sink detection emits one bounded diagnostic per connection: **Changes from an
 outdated client; origin unknown**. A read-only sink inspection/export and deliberate

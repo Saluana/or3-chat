@@ -1030,7 +1030,36 @@ it('P0-5.9 reopened legacy Dexie cannot mutate, coalesce or launder installed hi
     } finally { spy.mockRestore(); bridge.stop(); old.close(); }
 });
 
-it('namespace upgrade preserves every store/index and rolls back an interrupted copy before explicit retry', async () => {
+it('clears a later open failure on explicit retry after the one-shot ready hook has run', async () => {
+    const db = createDb(); await db.open(); db.close();
+    const unavailable = vi.spyOn(indexedDB, 'open').mockImplementation(() => {
+        throw new DOMException('Storage temporarily unavailable', 'SecurityError');
+    });
+    try { await expect(db.open()).rejects.toBeDefined(); } finally { unavailable.mockRestore(); }
+    expect(databaseRecovery.value?.phase).toBe('failed');
+    await db.open();
+    expect(databaseRecovery.value).toBeNull();
+});
+
+it('keeps a blocked workspace recoverable while another workspace finishes upgrading', async () => {
+    const first = createDb(); const second = createDb();
+    const oldFirst = new Dexie(first.name); oldFirst.version(31).stores(legacySchema);
+    const oldSecond = new Dexie(second.name); oldSecond.version(31).stores(legacySchema);
+    await oldFirst.open(); await oldSecond.open(); oldSecond.close();
+    oldFirst.on('versionchange', () => false);
+    const blocked = new Promise<void>(resolve => { first.on('blocked', () => resolve()); });
+    const opening = first.open();
+    try {
+        await blocked;
+        expect(databaseRecovery.value?.db).toBe(first);
+        await second.open();
+        expect(databaseRecovery.value?.db).toBe(first);
+        expect(databaseRecovery.value?.phase).toBe('blocked');
+    } finally { oldFirst.close(); oldSecond.close(); await opening; }
+    expect(databaseRecovery.value).toBeNull();
+});
+
+it('namespace upgrade preserves every store/index without copying and rolls back interrupted renames before explicit retry', async () => {
     const db = createDb(); const old = new Dexie(db.name); old.version(31).stores(legacySchema);
     await old.open();
     const originals = new Map<string, unknown>();
@@ -1040,19 +1069,19 @@ it('namespace upgrade preserves every store/index and rolls back an interrupted 
         await table.put(row); originals.set(table.name, row);
     }
     old.close();
-    // Abort the actual native upgrade after earlier stores have already copied.
-    const nativeAdd = IDBObjectStore.prototype.add;
-    const fault = vi.spyOn(IDBObjectStore.prototype, 'add').mockImplementation(function(this: IDBObjectStore, ...args) {
-        if (this.name === 'current_pending_ops') {
-            this.transaction.abort();
-            throw new DOMException('Injected copy quota failure', 'QuotaExceededError');
+    // Interrupt the native upgrade after earlier stores (including blobs) moved.
+    const nativeDelete = IDBDatabase.prototype.deleteObjectStore;
+    const fault = vi.spyOn(IDBDatabase.prototype, 'deleteObjectStore').mockImplementation(function(this: IDBDatabase, name: string) {
+        if (name === 'current_pending_ops') {
+            throw new DOMException('Injected rename quota failure', 'QuotaExceededError');
         }
-        return nativeAdd.apply(this, args);
+        return nativeDelete.call(this, name);
     });
     try { await expect(db.open()).rejects.toBeDefined(); } finally { fault.mockRestore(); }
     expect(databaseRecovery.value?.phase).toBe('failed');
     expect(databaseRecovery.value?.db).toBe(db);
-    // A native read proves there was no compensating partial write or lost store.
+    // Implicit reads must not retry a failed upgrade.
+    await expect(db.kv.get('saved')).rejects.toMatchObject({ name: 'DatabaseClosedError' });
     const read = await new Promise<IDBDatabase>((resolve, reject) => {
         const req = indexedDB.open(db.name); req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error);
     });
@@ -1061,16 +1090,25 @@ it('namespace upgrade preserves every store/index and rolls back an interrupted 
     read.close(); await old.open();
     for (const [name, row] of originals) expect(await old.table(name).get('saved')).toEqual(row);
     old.close();
-    const adds: string[] = [];
-    const copying = vi.spyOn(IDBObjectStore.prototype, 'add').mockImplementation(function(this: IDBObjectStore, ...args) {
-        adds.push(this.name); return nativeAdd.apply(this, args);
+    const adding = vi.spyOn(IDBObjectStore.prototype, 'add');
+    const putting = vi.spyOn(IDBObjectStore.prototype, 'put');
+    const phases: Array<string | undefined> = [];
+    const moving = vi.spyOn(IDBDatabase.prototype, 'deleteObjectStore').mockImplementation(function(this: IDBDatabase, name: string) {
+        phases.push(databaseRecovery.value?.phase);
+        return nativeDelete.call(this, name);
     });
-    try { await db.open(); } finally { copying.mockRestore(); }
-    expect(adds).not.toContain('current_file_blobs');
+    try {
+        await db.open();
+        expect(adding).not.toHaveBeenCalled();
+        expect(putting).not.toHaveBeenCalled();
+        expect(phases.length).toBeGreaterThan(0);
+        expect(phases.every(phase => phase === 'upgrading')).toBe(true);
+    } finally { adding.mockRestore(); putting.mockRestore(); moving.mockRestore(); }
     expect(databaseRecovery.value).toBeNull();
     for (const [name, row] of originals) {
         expect(await db.table(name).get('saved')).toEqual(row);
         const expected = old.table(name).schema;
+        expect(db.table(name).schema.primKey.src).toBe(expected.primKey.src);
         expect(db.table(name).schema.indexes.map(index => index.src)).toEqual(expected.indexes.map(index => index.src));
     }
     expect([...db.backendDB().objectStoreNames]).not.toContain('messages');

@@ -44,7 +44,15 @@ import {
 } from './derived-indexes';
 
 /** Recoverable open/upgrade state; explicit retry never clears workspace data. */
-export const databaseRecovery = shallowRef<{ db: Or3DB; phase: 'blocked' | 'failed' } | null>(null);
+type DatabaseRecoveryPhase = 'upgrading' | 'blocked' | 'failed';
+export const databaseRecovery = shallowRef<{ db: Or3DB; phase: DatabaseRecoveryPhase } | null>(null);
+const databaseRecoveries = new Map<Or3DB, DatabaseRecoveryPhase>();
+function updateDatabaseRecovery(db: Or3DB, phase: DatabaseRecoveryPhase | null): void {
+    if (phase) databaseRecoveries.set(db, phase);
+    else databaseRecoveries.delete(db);
+    const next = databaseRecoveries.entries().next().value;
+    databaseRecovery.value = next ? { db: next[0], phase: next[1] } : null;
+}
 
 // Fixed once at activation, never per server-history reset. Blob bytes are renamed in place.
 const STORE_PREFIX = 'current_';
@@ -477,35 +485,17 @@ export class Or3DB extends Dexie {
             stores[table.name] = null;
             stores[physicalStoreName(table.name)] = [table.schema.primKey.src, ...table.schema.indexes.map(index => index.src)].join(',');
         }
-        this.version(32).stores(stores).upgrade(async tx => {
+        this.version(32).stores(stores).upgrade(tx => {
+            updateDatabaseRecovery(this, 'upgrading');
             for (const table of retired) {
-                if (table.name === 'file_blobs') {
-                    // Rename the existing payload store in place. This copies no
-                    // blob bytes and prevents old sinks from deleting attachments.
-                    tx.idbtrans.db.deleteObjectStore(physicalStoreName(table.name));
-                    tx.idbtrans.objectStore(table.name).name = physicalStoreName(table.name);
-                    continue;
-                }
-                // Native cursor copying preserves exact values (no capture or
-                // derived-index hooks), with only one row held in JS at a time.
-                await new Dexie.Promise<void>((resolve, reject) => {
-                    const source = tx.idbtrans.objectStore(table.name);
-                    const target = tx.idbtrans.objectStore(physicalStoreName(table.name));
-                    const cursor = source.openCursor();
-                    cursor.onerror = () => reject(cursor.error);
-                    cursor.onsuccess = () => {
-                        const row = cursor.result;
-                        if (!row) { resolve(); return; }
-                        try {
-                            const copy = target.add(row.value);
-                            copy.onerror = () => reject(copy.error);
-                            copy.onsuccess = () => row.continue();
-                        } catch (error) { reject(error); }
-                    };
-                });
+                // Dexie creates empty destination stores before this callback.
+                // Replace each placeholder with the original native store. This
+                // preserves every value/index in place without doubling storage,
+                // including blobs. Failure rolls back the whole versionchange.
+                const name = physicalStoreName(table.name);
+                tx.idbtrans.db.deleteObjectStore(name);
+                tx.idbtrans.objectStore(table.name).name = name;
             }
-            // Dexie deletes retired stores only after this upgrader completes,
-            // inside the same native versionchange transaction.
         });
 
         // Keep the existing logical accessors and transaction API. Table objects
@@ -528,12 +518,15 @@ export class Or3DB extends Dexie {
         } as typeof txTable;
 
         const open = this.open.bind(this);
-        this.open = (() => open().catch(error => {
+        this.open = (() => open().then(result => {
+            updateDatabaseRecovery(this, null);
+            return result;
+        }).catch(error => {
             this.close(); // Disable implicit auto-open; retry is a user action.
-            databaseRecovery.value = { db: this, phase: 'failed' };
+            updateDatabaseRecovery(this, 'failed');
             throw error;
         })) as typeof this.open;
-        this.on('blocked', () => { databaseRecovery.value = { db: this, phase: 'blocked' }; });
+        this.on('blocked', () => { updateDatabaseRecovery(this, 'blocked'); });
         this.on('versionchange', () => this.close());
         let warnedLegacySink = false;
         this.on('ready', async () => {
@@ -541,7 +534,6 @@ export class Or3DB extends Dexie {
                 warnedLegacySink = true;
                 console.warn('[db] Changes from an outdated client; origin unknown. Isolated legacy stores are retained; current sync never reads or publishes them.');
             }
-            if (databaseRecovery.value?.db === this) databaseRecovery.value = null;
             const guard = await this.sync_state.get('sync_history');
             this.syncHistoryAtOpen = guard ? guard.historyIncarnation ?? null : undefined;
         });
