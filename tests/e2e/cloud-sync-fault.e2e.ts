@@ -513,7 +513,7 @@ test('real sync fault qualification', async ({ browser }, info) => {
             await c.context.unroute('**/api/sync/push');
             await engine(c, 'start');
             await poll('explicit rediscovery clears pause', async () => !(await state(c)).sync.some((row: any) => row.protocolPause));
-            await poll('retained local edit publishes after checked contract', () => (serverState(db, c.workspaceId).rows as any[]).some(row => row.id === 'rollback-local'));
+            await poll('retained local edit publishes after checked contract', () => (serverState(db, c.workspaceId).rows as any[]).some(row => row.id === 'kv:rollback-local'));
             e.after = await state(c); e.refused = refused; e.serverAfter = serverState(db, c.workspaceId);
             e.boundary = 'Real browser transport with old-image refusal response; immutable old image checked separately';
         });

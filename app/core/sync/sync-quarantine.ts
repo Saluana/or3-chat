@@ -495,7 +495,11 @@ function legacyAuthorization(db: Or3DB, scope: import('~~/shared/sync/types').Sy
     assert(); return assert;
 }
 
-function visibleLegacyEvidence(store: string, row: Record<string, unknown>, principalId: string): boolean {
+function visibleLegacyEvidence(store: string, row: Record<string, unknown>, scope: import('~~/shared/sync/types').SyncScope): boolean {
+    const principalId = scope.principalId!;
+    if (typeof row.workspace_id === 'string' && row.workspace_id !== scope.workspaceId) return false;
+    const recordedScope = row.scope as { workspaceId?: string } | undefined;
+    if (recordedScope?.workspaceId && recordedScope.workspaceId !== scope.workspaceId) return false;
     if (typeof row.accountId === 'string' && row.accountId !== principalId) return false;
     if (store === 'workspace_tab_drafts' || store === 'workspace_draft_versions') return row.account_key === principalId;
     if (store === 'sync_quarantine' && row.accountId !== principalId) return false;
@@ -518,7 +522,7 @@ export async function inspectLegacyEvidence(db: Or3DB, scope: import('~~/shared/
     const assert = legacyAuthorization(db, scope);
     const page = await inspectLegacyStore(db, store, { after });
     assert();
-    const rows = page.rows.filter(row => visibleLegacyEvidence(store, row.value, scope.principalId!)).map(row => {
+    const rows = page.rows.filter(row => visibleLegacyEvidence(store, row.value, scope)).map(row => {
         if (store !== 'file_transfers') return row;
         const { lease_token: _lease, last_error: _error, last_error_details: _details, ...value } = row.value;
         return { ...row, value };
@@ -536,7 +540,7 @@ export async function exportLegacyAttachment(db: Or3DB, scope: import('~~/shared
     const source = await inspectLegacyStore(db, store, { key });
     assert();
     const entry = source.rows[0]?.value;
-    if (!entry || !visibleLegacyEvidence(store, entry, scope.principalId!) || !JSON.stringify(entry).includes(hash)) throw new Error('Authorized attachment reference is required.');
+    if (!entry || !visibleLegacyEvidence(store, entry, scope) || !JSON.stringify(entry).includes(hash)) throw new Error('Authorized attachment reference is required.');
     const parsed = parseHash(hash);
     if (!parsed) throw new Error('Invalid attachment hash.');
     const file = await inspectLegacyStore(db, 'file_blobs', { key: hash });

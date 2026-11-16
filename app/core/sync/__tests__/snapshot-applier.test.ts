@@ -1290,11 +1290,11 @@ it('exports only authorized legacy evidence, retains private/unknown rows and ve
     vi.spyOn(auth, 'getCachedSessionContext').mockImplementation(() => session);
     const scope = { workspaceId, principalId: 'owner' };
     try {
-        await old.table('notifications').bulkPut([{ id: 'mine', user_id: 'owner' }, { id: 'private', user_id: 'other' }, { id: 'unknown' }]);
+        await old.table('notifications').bulkPut([{ id: 'mine', user_id: 'owner' }, { id: 'private', user_id: 'other' }, { id: 'unknown' }, { id: 'wrong-workspace', user_id: 'owner', workspace_id: 'other-workspace' }]);
         await old.table('workspace_tab_drafts').bulkPut([{ id: 'mine', account_key: 'owner', draft: { text: 'my draft' } }, { id: 'private', account_key: 'other', draft: { text: 'secret' } }]);
         await old.table('kv').bulkPut([{ id: 'theme', name: 'theme_selection', value: 'dark' }, { id: 'secret', name: 'openrouter_api_key', value: 'secret' }]);
         const notifications = await inspectLegacyEvidence(db, scope, 'notifications');
-        expect(notifications.rows.map(row => row.value.id)).toEqual(['mine']); expect(notifications.excluded).toBe(2);
+        expect(notifications.rows.map(row => row.value.id)).toEqual(['mine']); expect(notifications.excluded).toBe(3);
         expect((await inspectLegacyEvidence(db, scope, 'workspace_tab_drafts')).rows.map(row => row.value.id)).toEqual(['mine']);
         expect((await inspectLegacyEvidence(db, scope, 'kv')).rows.map(row => row.value.id)).toEqual(['theme']);
         const bytes = new Blob(['legacy attachment']);
@@ -1307,6 +1307,6 @@ it('exports only authorized legacy evidence, retains private/unknown rows and ve
         await expect(exportLegacyAttachment(db, scope, 'notifications', 'private', hash)).rejects.toThrow();
         session.user.id = 'other';
         await expect(inspectLegacyEvidence(db, scope, 'messages')).rejects.toThrow(/access/i);
-        expect(await old.table('notifications').count()).toBe(3); expect(await old.table('file_blobs').count()).toBe(1);
+        expect(await old.table('notifications').count()).toBe(4); expect(await old.table('file_blobs').count()).toBe(1);
     } finally { old.close(); vi.restoreAllMocks(); vi.unstubAllGlobals(); }
 });

@@ -262,11 +262,11 @@ async function requestJsonRaw<T>(
         try {
             const refusal = JSON.parse(text) as { statusMessage?: string };
             if (res.status === 403 && refusal.statusMessage === 'Forbidden: Missing mutation intent') error.code = 'OR3_SYNC_OLDER_SERVER';
-            else if (typeof refusal.statusMessage !== 'string' && res.status !== 401 && res.status !== 429) error.code = 'OR3_SYNC_HISTORY_UNSUPPORTED';
+            else if (typeof refusal.statusMessage !== 'string' && res.status !== 429) error.code = 'OR3_SYNC_HISTORY_UNSUPPORTED';
         } catch {
             // An unrecognizable gateway/proxy response proves neither auth loss
             // nor the current contract. Keep rate-limit/auth status semantics.
-            if (res.status !== 401 && res.status !== 429) error.code = 'OR3_SYNC_HISTORY_UNSUPPORTED';
+            if (res.status !== 429) error.code = 'OR3_SYNC_HISTORY_UNSUPPORTED';
         }
         if (!isHistoryProtocolBoundary(error)) notifyInvalidSyncSession(error);
         throw error;

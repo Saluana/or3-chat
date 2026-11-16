@@ -137,8 +137,8 @@
             <h3 id="workspace-sync-legacy" class="dashboard-list-heading">Changes saved by an older tab</h3>
             <p class="dashboard-list-footnote">Separate local stores, origin unknown. Close older tabs before exporting. Each inspection reads at most 100 entries; private and unknown-account entries stay in place. These changes are never merged automatically.</p>
             <div class="flex flex-wrap items-center gap-3">
-                <label for="legacy-evidence-store">Evidence store</label>
-                <USelect id="legacy-evidence-store" v-model="legacyStore" :items="LEGACY_EVIDENCE_STORES" aria-label="Legacy evidence store" @update:model-value="legacyPage = null" />
+                <label for="legacy-evidence-store">Saved content</label>
+                <USelect id="legacy-evidence-store" v-model="legacyStore" :items="legacyStoreOptions" aria-label="Saved content from an older tab" @update:model-value="legacyPage = null" />
                 <UButton v-bind="secondaryButtonProps" :loading="legacyBusy" @click="inspectLegacy(false)">Inspect</UButton>
                 <UButton v-if="legacyPage" v-bind="secondaryButtonProps" @click="saveLegacyPage">Export this batch</UButton>
                 <UButton v-if="legacyPage?.nextAfter != null" v-bind="secondaryButtonProps" :loading="legacyBusy" @click="inspectLegacy(true)">Next batch</UButton>
@@ -300,6 +300,10 @@ async function reconnect() {
     } catch { loadError.value = 'Server check failed. Your local changes are still saved; try again after the server is upgraded.'; }
     finally { reconnecting.value = false; }
 }
+const legacyStoreOptions = LEGACY_EVIDENCE_STORES.map(value => ({ value,
+    label: KIND_LABELS[value] ?? ({ tombstones: 'Saved deletes', pending_ops: 'Queued changes',
+        workspace_tab_drafts: 'Composer drafts', workspace_draft_versions: 'Draft recovery copies',
+        file_transfers: 'File transfers', sync_quarantine: 'Recovery evidence' } as Record<string, string>)[value] ?? value }));
 const legacyStore = ref('threads');
 const legacyPage = shallowRef<Awaited<ReturnType<typeof inspectLegacyEvidence>> | null>(null);
 const legacyBusy = ref(false);
@@ -342,7 +346,7 @@ async function saveLegacyPage() {
         if (!isCurrent(token, current.db)) return;
         legacyPage.value = fresh;
         downloadEvidence(new Blob([legacyJson(fresh)], { type: 'application/json' }), 'or3-legacy-evidence.json');
-    } catch (error) { legacyError.value = error instanceof Error ? error.message : String(error); }
+    } catch (error) { if (isCurrent(token, current.db)) legacyError.value = error instanceof Error ? error.message : String(error); }
 }
 const legacyAfter = shallowRef<IDBValidKey | undefined>();
 async function saveLegacyAttachment() {

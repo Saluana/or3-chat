@@ -106,7 +106,7 @@ function pushBatch() {
 
 describe('legacy server pre-dispatch refusal', () => {
     afterEach(() => vi.unstubAllGlobals());
-    it.each([403, 502])('preserves session and pauses on an unrecognizable intermediary %s', async status => {
+    it.each([401, 403, 502])('preserves session and pauses on an unrecognizable intermediary %s', async status => {
         const dispatch = vi.fn(); vi.stubGlobal('dispatchEvent', dispatch);
         vi.stubGlobal('fetch', vi.fn(async () => makeErrorResponse(status, '<html>proxy refusal</html>')));
         await expect(createGatewaySyncProvider().push(pushBatch())).rejects.toMatchObject({ code: 'OR3_SYNC_HISTORY_UNSUPPORTED' });
