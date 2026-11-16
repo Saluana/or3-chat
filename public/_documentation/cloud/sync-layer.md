@@ -53,7 +53,9 @@ status in the discarded history. Supported recovery puts create a fresh explicit
 action after checking current history, record and parent dependencies; original
 evidence remains. Deletes, files and complex entities require manual recovery.
 Secrets and local-only KV/drafts are excluded from exports; held attachment bytes
-are protected from cleanup until deliberate resolution.
+are protected from cleanup until deliberate resolution. Cache retention pins only
+blobs referenced by held originals or local copies; an unrelated held setting
+such as a pre-bind theme selection does not prevent verified cache eviction.
 
 Dexie schema 32 atomically moves workspace stores to a fixed `current_` physical
 namespace, retaining exactly `or3-db-${workspaceId}` and unchanged logical/wire

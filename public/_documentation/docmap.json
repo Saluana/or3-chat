@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Sync snapshots, history fencing, durable unavailable records and saved-work recovery, including qualified Convex direct/gateway setup, stored-record holds, bounded push deferrals, connection handoff without navigation."
+                    "summary": "Sync snapshots, history fencing, durable unavailable records and saved-work recovery, including qualified Convex direct/gateway setup, stored-record holds, bounded push deferrals, connection handoff without navigation and attachment-scoped held cache protection."
                 },
                 {
                     "name": "storage-layer.md",

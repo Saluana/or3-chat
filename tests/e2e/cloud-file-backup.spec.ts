@@ -113,8 +113,9 @@ test('admin limits, interrupted direct upload, and verified retention preserve o
         const downloaded = await queue.ensureDownloadedBlob(meta.hash);
         const recent = await db.file_blobs.get(meta.hash);
         return { hash: meta.hash, keptPending, evicted, redownload: await downloaded.text(), refreshed: recent.cache_accessed_at > old,
-            bytes: recent.blob.size, originBudget: policy.maxCacheBytes };
+            bytes: recent.blob.size, originBudget: policy.maxCacheBytes, held: await db.sync_quarantine.toArray() };
     }, { url: clientUrl, workspaceId, policy });
+    await writeFile(info.outputPath('retention-before-assertion.json'), JSON.stringify(receipt, null, 2));
     expect(receipt).toMatchObject({ keptPending: true, evicted: true, redownload: 'original bytes for verified retention', refreshed: true });
     const other = await page.context().newPage();
     await other.goto('/');

@@ -103,8 +103,21 @@ async function hasUnfinishedUpload(db: Or3DB, hash: string): Promise<boolean> {
         .filter(row => row.direction === 'upload' && row.state !== 'done').first());
 }
 
+/** Original records can contain nested payloads or JSON-encoded file_hashes. */
+function referencesHash(value: unknown, hash: string, seen = new Set<object>()): boolean {
+    if (typeof value === 'string') return value.includes(hash);
+    if (!value || typeof value !== 'object' || seen.has(value)) return false;
+    seen.add(value);
+    return Object.values(value).some(child => referencesHash(child, hash, seen));
+}
+
+async function hasHeldFileReference(db: Or3DB, hash: string): Promise<boolean> {
+    return Boolean(await db.sync_quarantine.filter(entry => entry.variant === 'history_reset' && entry.status === 'quarantined' &&
+        referencesHash([entry.op, entry.localRow, entry.localTombstone, entry.pendingIntent], hash)).first());
+}
+
 async function eligible(db: Or3DB, row: FileBlobRow, workspaceId: string, providerId: string): Promise<boolean> {
-    if (await db.sync_quarantine.filter(entry => entry.variant === 'history_reset' && entry.status === 'quarantined').first()) return false;
+    if (await hasHeldFileReference(db, row.hash)) return false;
     if (!row.cache_accessed_at || row.cache_workspace_id !== workspaceId || row.cache_provider_id !== providerId) return false;
     const meta = await db.file_meta.get(row.hash);
     if (!meta || meta.deleted || meta.storage_id !== row.cache_storage_id || meta.storage_provider_id !== providerId) return false;
@@ -167,7 +180,6 @@ async function runCleanupFileCache(db: Or3DB, workspaceId: string, provider: Cac
             verified++;
             if (!await verifyRemote(row, workspaceId, provider)) continue;
             await db.transaction('rw', db.file_blobs, db.file_meta, db.file_transfers, db.pending_ops, db.sync_quarantine, async () => {
-                if (await db.sync_quarantine.filter(entry => entry.variant === 'history_reset' && entry.status === 'quarantined').first()) return;
                 const current = await db.file_blobs.get(row.hash);
                 if (!current || current.cache_accessed_at !== row.cache_accessed_at || current.cache_storage_id !== row.cache_storage_id ||
                     !await eligible(db, current, workspaceId, provider.id)) return;

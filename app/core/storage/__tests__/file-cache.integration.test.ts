@@ -145,3 +145,25 @@ it.each([true, false])('uses an exact provider content proof (valid=%s)', async 
     expect(Boolean(await db.file_blobs.get(hash))).toBe(!valid);
     if (valid) expect(fetch).not.toHaveBeenCalled();
 });
+
+// Holds protect their original attachment references, not the whole workspace.
+it.each(['theme', 'metadata', 'transfer', 'message', 'pending', 'resolved', 'racing'] as const)(
+    'scopes history-held blob protection to referenced hashes (%s)', async kind => {
+        const held = { id: 'held', variant: 'history_reset' as const, status: kind === 'resolved' ? 'discarded' as const : 'quarantined' as const,
+            source: 'snapshot_apply' as const, sourceIncarnation: 'unknown', tableName: 'kv', pk: 'theme',
+            op: kind === 'metadata' || kind === 'resolved' ? { hash }
+                : kind === 'transfer' ? { hash, direction: 'upload' }
+                : kind === 'message' ? { payload: { file_hashes: JSON.stringify([hash]) } }
+                : { name: 'theme_selection', value: 'blank' },
+            ...(kind === 'pending' ? { pendingIntent: [{ payload: { file_hashes: JSON.stringify([hash]) } }] as any } : {}),
+            diagnostics: [], quarantinedAt: 1 };
+        if (kind === 'racing') {
+            vi.mocked(fetch).mockImplementation(async () => {
+                await db.sync_quarantine.put({ ...held, localRow: { file_hashes: JSON.stringify([hash]) } });
+                return new Response(bytes);
+            });
+        } else await db.sync_quarantine.put(held);
+        await cleanupFileCache(db, 'workspace', provider as any, DEFAULT_FILE_POLICY);
+        expect(Boolean(await db.file_blobs.get(hash))).toBe(!['theme', 'resolved'].includes(kind));
+        expect(await db.sync_quarantine.get('held')).toBeDefined();
+    });
