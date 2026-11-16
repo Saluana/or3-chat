@@ -205,13 +205,15 @@ export class SubscriptionManager {
                 // durable CAS wakes that owner without bypassing its Web Lock.
                 const watch = liveQuery(async () => ({ guard: await readHistory(this.db),
                     pause: await this.db.sync_state.get(protocolPauseId(this.provider.id, this.scope)) })).subscribe(({ guard, pause }) => {
-                    if (!this.isCurrentGeneration(generation) || this.status !== 'connected') return;
-                    if (pause?.protocolPause) {
+                    if (!this.isCurrentGeneration(generation)) return;
+                    // Rediscovery may release its captured pause, but a newer
+                    // follower refusal fences even an in-flight connection.
+                    if (pause?.protocolPause && (this.status === 'connected' || pause.pauseId !== paused?.pauseId)) {
                         this.lifecycleGeneration++;
                         this.requestController.abort();
                         this.unsubscribe?.(); this.unsubscribe = null;
                         this.clearReconnectTimeout(); this.setStatus('error');
-                    } else if (this.history && !sameHistory(guard, this.history)) this.scheduleReconnect(generation);
+                    } else if (this.status === 'connected' && this.history && !sameHistory(guard, this.history)) this.scheduleReconnect(generation);
                 });
                 this.stopHistoryWatch = () => watch.unsubscribe();
             }

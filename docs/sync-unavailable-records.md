@@ -298,7 +298,8 @@ The protocol pause is durable and shared with same-account workspace followers. 
 not reset cursors, settle operations, spend retries, clear browser data or sign
 out. Local edits, drafts, blobs and held evidence remain saved. “Check server
 again” reconnects through checked discovery; only a valid current contract can
-release the captured pause. A later history J still requires the existing atomic
+release the captured pause. A newer follower refusal also fences an in-flight
+connection before it can report connected. A later history J still requires the existing atomic
 snapshot/hold transition regardless of numeric catch-up. Old responses and
 connection handles stay fenced, including the in-place history rebind.
 

@@ -1407,6 +1407,36 @@ describe('SubscriptionManager', () => {
         } finally { await manager.stop(); await db.delete(); }
     });
 
+    it('fences a newer follower protocol refusal while checked discovery is connecting', async () => {
+        vi.useRealTimers();
+        vi.spyOn(cursorManagerModule, 'getCursorManager').mockImplementation((db, scope) => new cursorManagerModule.CursorManager(db, scope));
+        const { pauseHistoryProtocol, protocolPauseId } = await import('../history-incarnation');
+        const db = new Or3DB(`connecting-pause-${crypto.randomUUID()}`); await db.open();
+        const scope = { workspaceId: 'ws-1', principalId: 'owner' };
+        const guard = { historyIncarnation: 'I', phase: 'ready' as const, resetTarget: null };
+        await db.sync_state.put({ id: 'sync_history', ...guard, cursor: 0, deviceId: '', lastSyncAt: 0 });
+        await db.sync_state.put({ id: cursorManagerModule.getSyncStateId(scope), historyIncarnation: 'I', cursor: 80, deviceId: 'd', lastSyncAt: Date.now() });
+        const unsubscribe = vi.fn();
+        const provider: SyncProvider = { id: db.name, mode: 'gateway', capabilities: { historyIncarnation: 'v1', subscriptionPages: 'v1' },
+            pull: vi.fn(async () => ({ historyIncarnation: 'I', ...FULL_HISTORY_PULL_RETENTION, changes: [], nextCursor: 80, hasMore: false })),
+            subscribe: vi.fn(async () => {
+                await pauseHistoryProtocol(db, db.name, scope, { code: 'OR3_SYNC_OLDER_SERVER' }, guard);
+                await new Promise(resolve => setTimeout(resolve, 20));
+                return unsubscribe;
+            }), push: vi.fn(), updateCursor: vi.fn(), dispose: vi.fn() };
+        const manager = new SubscriptionManager(db, provider, scope);
+        try {
+            await manager.start();
+            expect(manager.getStatus()).toBe('error');
+            expect(unsubscribe).toHaveBeenCalledTimes(1);
+            expect(await db.sync_state.get(protocolPauseId(provider.id, scope))).toMatchObject({ protocolPause: 'older-server' });
+            vi.mocked(provider.subscribe).mockResolvedValue(unsubscribe);
+            await manager.start();
+            expect(manager.getStatus()).toBe('connected');
+            expect(await db.sync_state.get(protocolPauseId(provider.id, scope))).toBeUndefined();
+        } finally { await manager.stop(); await db.delete(); }
+    });
+
     it('pauses immediately at an incapable snapshot provider instead of retrying its 503', async () => {
         const db = new Or3DB(`incapable-${crypto.randomUUID()}`); await db.open();
         await db.sync_state.put({ id: 'sync_history', historyIncarnation: null, phase: 'unbound', resetTarget: null, cursor: 0, deviceId: '', lastSyncAt: 0 });
