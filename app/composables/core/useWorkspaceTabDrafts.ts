@@ -8,7 +8,7 @@ import type {
     UploadedImage,
     WorkspaceDraftComposerSettings,
 } from '~/components/chat/chat-input/types';
-import { getActiveWorkspaceId, getDb, type Or3DB, type WorkspaceDraftVersionRow } from '~/db/client';
+import { getActiveWorkspaceId, getDb, getWorkspaceDb, type Or3DB, type WorkspaceDraftVersionRow } from '~/db/client';
 import { getFileBlob } from '~/db/files';
 import { newId } from '~/db/util';
 import { commitDraftVersion, DraftVersionCapacityError, listDraftVersions, readDraftBaseline, removeDraftVersion, type DraftBaseline } from '~/db/workspace-draft-recovery';
@@ -263,9 +263,11 @@ async function persist(scope: WorkspaceDraftScope, tabId: string): Promise<{ sav
     if (!db) return { saved: true };
     // Eviction or history rebind may close a mounted composer's handle.
     // A restored handle can acknowledge that same account/workspace only.
-    const activeDb = getDb();
-    const restoredDb = activeDb.name === db.name ? activeDb : hydrations.get(scope.key)?.db;
-    if (!db.isOpen() && restoredDb?.isOpen() && restoredDb.name === db.name) db = restoredDb;
+    if (!db.isOpen()) {
+        const restoredDb = db.name.startsWith('or3-db-')
+            ? getWorkspaceDb(db.name.slice('or3-db-'.length)) : hydrations.get(scope.key)?.db;
+        if (restoredDb?.isOpen() && restoredDb.name === db.name) db = restoredDb;
+    }
     const key = memoryKey(scope, tabId);
     const flight = inFlightDrafts.get(key) ?? { scope, tabId, count: 0 };
     flight.count++;

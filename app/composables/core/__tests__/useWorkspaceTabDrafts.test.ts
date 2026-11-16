@@ -586,6 +586,8 @@ describe('durable workspace tab drafts', () => {
                 await old.sync_state.put({ id: 'sync_history', phase: 'ready', historyIncarnation: history,
                     firstBindEligible: false, resetTarget: null, cursor: 0, deviceId: '', lastSyncAt: 0 });
                 const current = await client.rebindWorkspaceDb(workspace, old);
+                const other = client.setActiveWorkspaceDb(`${workspace}-other`);
+                await other.open();
                 await flush();
                 expect(drafts.saveFailed.value).toBe(false);
                 expect((await current.workspace_tab_drafts.toArray())[0]?.draft.text).toBe(`Pending ${history}`);
@@ -593,10 +595,14 @@ describe('durable workspace tab drafts', () => {
                 await flush();
                 expect((await current.workspace_tab_drafts.toArray())[0]?.draft.text).toBe(`Later ${history}`);
                 expect(old.isOpen()).toBe(false);
+                expect(await other.workspace_tab_drafts.count()).toBe(0);
+                client.setActiveWorkspaceDb(workspace);
             }
         } finally {
             drafts.discard('mounted-tab', captured); await flush();
             client.setActiveWorkspaceDb(null); client.evictWorkspaceDb(workspace);
+            const other = client.getWorkspaceDb(`${workspace}-other`);
+            client.evictWorkspaceDb(`${workspace}-other`); await other.delete();
             await original.delete();
         }
     });
