@@ -425,3 +425,8 @@ Activation is still blocked pending the exact hardened provider/image/browser
 qualification; the current registry provider remains 033 and generated metadata
 is deliberately unqualified. A later qualified re-upgrade takes a fresh source
 snapshot and initializes/verifies a fresh 036 history under closed admission.
+
+Candidate qualification uses the exact published SQLite 0.0.31 Basic profile
+for incarnation and legacy rollback capabilities. Runtime capability metadata
+is not a release receipt; native image and browser lifecycle checks remain
+mandatory before promotion. SQLite 0.0.30 remains unqualified.

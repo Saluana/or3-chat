@@ -357,9 +357,12 @@ its exact digest and complete 033 schema. The existing candidate lifecycle job
 checks the old mutation-intent fence, kills the exact validation-only candidate,
 requires automatic authenticated source recovery, tests explicit exposed
 recovery and rollback, then records distinct pre-rollback/re-upgrade tokens and
-a managed restart. Missing qualification capability is release-blocking. Keep
-image metadata unqualified until packed provider, native image and browser
-proofs all pass. A failure after admission may open requires a current-data
+a managed restart. Missing qualification capability is release-blocking.
+The exact published SQLite 0.0.31 Basic profile advertises testable runtime
+capabilities so this workflow can exercise them; its metadata alone does not
+qualify a release. Mandatory native image and browser proofs must all pass
+before promotion. SQLite 0.0.30 continues to refuse incarnation replacement.
+A failure after admission may open requires a current-data
 safety snapshot and explicit destructive recovery; quiet logs/unchanged counters
 never waive consent. Record source/candidate/provider SHAs and exact registry
 integrities, image/operator digests/platforms, tarball hash, DB/sidecar/asset/file

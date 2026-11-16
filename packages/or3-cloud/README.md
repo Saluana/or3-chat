@@ -359,7 +359,9 @@ warning, has no installed incarnation and requires re-upgrade. Use the new exact
 CLI with schema 2, preserve source and abandoned-history pins, and export
 important old-tab work. Vault custody/external services are not rewound.
 
-Activation is still blocked pending the exact hardened provider/image/browser
-qualification; the current registry provider remains 033 and generated metadata
-is deliberately unqualified. A later qualified re-upgrade takes a fresh source
+Publication remains blocked pending exact provider/image/browser qualification.
+The pinned SQLite 0.0.30 profile remains unqualified; the exact published 0.0.31
+Basic profile advertises testable 036 and legacy rollback capabilities. Its
+startup snapshot cleanup is fenced by the checked-in provider patch during
+validation. Capability metadata is not a release receipt. A later qualified re-upgrade takes a fresh source
 snapshot and initializes/verifies a fresh 036 history under closed admission.

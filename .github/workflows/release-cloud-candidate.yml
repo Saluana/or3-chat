@@ -676,7 +676,7 @@ jobs:
           set -euo pipefail
           started=$SECONDS
           (cd "$MANAGED" && timeout --signal=TERM 6m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 rollback --yes)
-          (cd "$MANAGED" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$PREVIOUS_VERSION" verify)
+          (cd "$MANAGED" && timeout --signal=TERM 4m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
           (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
           bash "$RUNNER_TEMP/or3-lifecycle-evidence" assert-baseline
           echo "Rollback and previous-release verification completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"

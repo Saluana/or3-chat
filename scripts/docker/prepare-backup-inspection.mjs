@@ -1,7 +1,7 @@
 import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { INSPECTION_PROFILE, S3_INSPECTION_PROFILE, assertInspectionProfile, assertS3InspectionProfile } from './backup-inspect.mjs';
+import { INSPECTION_PROFILE, S3_INSPECTION_PROFILE, HISTORY_SQLITE_VERSION, HISTORY_MIGRATIONS, assertInspectionProfile, assertS3InspectionProfile } from './backup-inspect.mjs';
 import { dockerProfile } from './prepare-manifest.mjs';
 
 const installed = name => JSON.parse(readFileSync(`node_modules/${name}/package.json`, 'utf8')).version;
@@ -23,11 +23,15 @@ if (selected === 'basic-sqlite-fs') {
   profile = { contract: S3_INSPECTION_PROFILE.contract, sqlite, s3 };
   assertS3InspectionProfile(profile);
 }
-// Current published SQLite is intentionally unqualified. Activate only with the
-// exact packed runtime, migration history, inspector and reset-helper qualification.
-profile.historyIncarnation = 'unqualified';
-// Only the managed Basic profile is in this health-only validation lane.
-// Legacy rollback remains absent until joint published-image/browser proof.
+// Describe the exact testable runtime; mandatory candidate/browser lifecycle
+// qualification still gates publication. A receipt cannot be required to enable
+// the capability that the same candidate workflow must exercise.
+const historyReady = selected === 'basic-sqlite-fs' && profile.sqlite === HISTORY_SQLITE_VERSION;
+profile.historyIncarnation = historyReady ? 'v1' : 'unqualified';
+if (historyReady) {
+  profile.historyMigrations = HISTORY_MIGRATIONS;
+  profile.legacySnapshotRollback = 'legacy-033-rollback-v1';
+}
 profile.healthValidation = selected === 'basic-sqlite-fs' ? 'health-only-v1' : 'unqualified';
 writeFileSync('scripts/docker/backup-inspection-profile.json', JSON.stringify(profile) + '\n');
 
