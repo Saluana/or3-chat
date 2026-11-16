@@ -1,3 +1,4 @@
+import { getShutdownRuntime } from '../utils/shutdown/runtime';
 /**
  * @module server/plugins/sync-maintenance
  *
@@ -39,7 +40,7 @@ let initialPassQueued = false;
  * - Records maintenance state (begin/complete/fail) on the provider.
  */
 export async function runSyncMaintenance(): Promise<void> {
-    if (running) return;
+    if (getShutdownRuntime().controller.validationOnly() || running) return;
     running = true;
     let adapter: ReturnType<typeof getSyncGatewayAdapter> = null;
     try {
@@ -116,6 +117,7 @@ function queueInitialMaintenancePass(): void {
 }
 
 export default defineNitroPlugin((nitroApp: NitroApp) => {
+    if (getShutdownRuntime().controller.validationOnly()) return;
     const config = useRuntimeConfig();
     if (config.sync.enabled !== true || config.sync.provider !== 'sqlite') {
         return;
