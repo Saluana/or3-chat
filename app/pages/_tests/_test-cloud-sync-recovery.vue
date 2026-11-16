@@ -68,6 +68,7 @@ import type { PushBatch, PushResult, SyncProvider } from '~~/shared/sync/types';
 
 /** The test reads and corrupts this database directly, so the name is fixed. */
 const DB_NAME = 'or3-sync-recovery-harness';
+const HISTORY = 'sync-recovery-harness-history';
 const scope = { workspaceId: 'sync-recovery-harness' };
 
 const phase = ref('idle');
@@ -86,9 +87,10 @@ function createProvider(): SyncProvider {
     return {
         id: 'sync-recovery-harness',
         mode: 'direct',
+        capabilities: { historyIncarnation: 'v1' },
         auth: undefined,
         subscribe: async () => () => undefined,
-        pull: async () => ({ changes: [], nextCursor: 0, hasMore: false, ...FULL_HISTORY_PULL_RETENTION }),
+        pull: async () => ({ changes: [], nextCursor: 0, hasMore: false, historyIncarnation: HISTORY, ...FULL_HISTORY_PULL_RETENTION }),
         push: async (batch: PushBatch): Promise<PushResult> => {
             for (const op of batch.ops) {
                 pushed.value.push({
@@ -96,7 +98,7 @@ function createProvider(): SyncProvider {
                 });
             }
             serverVersion += batch.ops.length;
-            return { results: batch.ops.map((op) => ({ opId: op.stamp.opId, success: true })), serverVersion };
+            return { results: batch.ops.map((op) => ({ opId: op.stamp.opId, success: true })), serverVersion, historyIncarnation: HISTORY };
         },
         updateCursor: async () => undefined,
         dispose: async () => undefined,
@@ -146,6 +148,11 @@ async function seed(): Promise<{ queued: number }> {
     exported.value = '';
     db = new Or3DB(DB_NAME);
     await db.open();
+    // These scenarios exercise repair within an already connected history.
+    await db.sync_state.update('sync_history', { historyIncarnation: HISTORY, phase: 'ready', firstBindEligible: false });
+    db.close();
+    db = new Or3DB(DB_NAME);
+    await db.open();
     getHookBridge(db).start();
     const rows = [
         message('m-corrupt', 'corrupt op, local row intact', 0),
@@ -172,7 +179,7 @@ async function recoverFromEmptySnapshot(): Promise<{ cursor: number | undefined 
     await stager.start();
     try {
         await stager.appendPage({
-            workspaceId: scope.workspaceId, snapshotId: 'harness-empty', highWatermark: 42, items: [], nextPageToken: null,
+            historyIncarnation: HISTORY, workspaceId: scope.workspaceId, snapshotId: 'harness-empty', highWatermark: 42, items: [], nextPageToken: null,
         });
         await stager.apply('harness-device', () => true, ['messages', 'posts']);
     } finally {
