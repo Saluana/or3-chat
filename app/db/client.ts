@@ -32,7 +32,7 @@ import type {
 import type { PendingOp, Tombstone, SyncState, SyncRun, SnapshotItem } from '~~/shared/sync/types';
 import type { FileTransfer } from '~~/shared/storage/types';
 import { cleanupCursorManager } from '~/core/sync/cursor-manager';
-import { cleanupHookBridge } from '~/core/sync/hook-bridge';
+import { cleanupHookBridge, getHookBridge } from '~/core/sync/hook-bridge';
 import { cleanupSubscriptionManagersByWorkspace } from '~/core/sync/subscription-registry';
 import { cleanupSyncCircuitBreakers } from '~~/shared/sync/circuit-breaker';
 import {
@@ -818,6 +818,9 @@ export async function rebindWorkspaceDb(workspaceId: string, expected: Or3DB): P
         db = replacement;
     }
     workspaceDbCache.set(workspaceId, replacement);
+    // Cache replacement releases the previous bridge by database name. Attach
+    // the new bridge before listeners can author edits through the new handle.
+    getHookBridge(replacement).start();
     if (active) {
         workspaceGeneration += 1;
         notifyActiveWorkspaceChange(workspaceId, workspaceId);

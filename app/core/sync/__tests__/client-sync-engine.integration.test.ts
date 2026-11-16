@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setHookEngine } from '~/core/hooks/useHooks';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
-import { evictWorkspaceDb, getDb, getWorkspaceDb, setActiveWorkspaceDb } from '~/db/client';
+import { evictWorkspaceDb, getDb, getWorkspaceDb, setActiveWorkspaceDb, subscribeActiveWorkspaceDb } from '~/db/client';
 import { setupSyncEngine } from '../client-sync-engine';
 import { getWriteTxTableNames } from '~/db/util';
 
@@ -95,6 +95,12 @@ describe('sync lifecycle with real local write capture', () => {
             for (const history of ['I', 'J']) {
                 const old = getDb(); const origin = old.syncHistoryAtOpen;
                 // The real snapshot owner commits this guard atomically with its data.
+                let listenerWrite: Promise<unknown> | undefined;
+                const stopListener = subscribeActiveWorkspaceDb(() => {
+                    const replacement = getDb();
+                    listenerWrite = replacement.transaction('rw', getWriteTxTableNames(replacement, 'kv'), () =>
+                        replacement.kv.put({ id: `listener-${history}`, name: `listener-${history}`, value: 'during handoff', clock: 1, deleted: false, created_at: 1, updated_at: 1 }));
+                });
                 await old.sync_state.put({ id: 'sync_history', phase: 'ready', historyIncarnation: history,
                     resetTarget: null, cursor: 0, deviceId: '', lastSyncAt: 0 });
                 await vi.waitFor(() => {
@@ -102,6 +108,9 @@ describe('sync lifecycle with real local write capture', () => {
                     expect(getDb().syncHistoryAtOpen).toBe(history);
                     expect(control.isRunning()).toBe(true);
                 });
+                stopListener();
+                await listenerWrite;
+                expect(await getDb().pending_ops.where('[tableName+pk]').equals(['kv', `listener-${history}`]).count()).toBe(1);
                 expect(old.syncHistoryAtOpen).toBe(origin);
                 await expect(old.transaction('rw', getWriteTxTableNames(old, 'kv'), () =>
                     old.kv.put({ id: 'stale', name: 'stale', value: 'late callback', clock: 1, deleted: false, created_at: 1, updated_at: 1 }))).rejects.toThrow();
