@@ -601,7 +601,8 @@ jobs:
             echo "finish adopted an interrupted target without completion proof" >&2; exit 1; fi
           (cd "$managed" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$version" recover --restore --yes)
           grep -q "^OR3_VERSION='$previous_version'$" "$managed/.env"
-          (cd "$managed" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$previous_version" verify)
+          # Explicit recovery retains the target CLI's managed-state schema.
+          (cd "$managed" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$version" verify)
           (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3019 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
       - name: Preserve published interruption evidence
         if: always()

@@ -3,6 +3,7 @@ import { isAbsolute, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID, createHash } from 'node:crypto';
 import { defaultProjectSettings, PROJECT_POST_TYPES } from '../../shared/projects/workspace';
+import { completeWelcomeOnboarding } from '../../scripts/release/browser-onboarding.mjs';
 
 const adminCredentials = {
     username: process.env.OR3_ADMIN_E2E_USERNAME ?? '',
@@ -123,7 +124,7 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
         });
         expect(registered.ok()).toBe(true);
         await page.goto('/chat');
-        await page.getByRole('button', { name: 'Dismiss welcome' }).click({ timeout: 5_000 }).catch(() => undefined);
+        await completeWelcomeOnboarding(page);
         await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
         await page.locator('#dashboard-sidebar, #dashboard-plugin-grid').getByRole('button', { name: 'Webhooks', exact: true }).click();
         await page.getByRole('dialog').getByRole('button', { name: 'Create webhook' }).click();
@@ -174,7 +175,7 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
             expect(switched.ok(), await switched.text()).toBe(true);
             const viewer = await member.newPage();
             await viewer.goto('/chat');
-            await viewer.getByRole('button', { name: 'Dismiss welcome' }).click({ timeout: 5_000 }).catch(() => undefined);
+            await completeWelcomeOnboarding(viewer);
             await expect(viewer.getByRole('button', { name: 'Create a document', exact: true })).toHaveCount(0);
             await expect(viewer.getByText('This workspace is view-only.', { exact: true })).toBeVisible();
             await viewer.getByRole('button', { name: 'New', exact: true }).click();
@@ -316,6 +317,18 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
         };
         const session = await signIn(page.request);
         const workspaceId = session.workspace.id;
+        const historyCapabilities = { historyIncarnationCapability: 'incarnation-v1', unavailableRecordCapability: 'unavailable-v1' };
+        const discoverHistory = async (request: typeof page.request, target: string) => {
+            const response = await request.post('/api/sync/snapshot', { headers, data: {
+                ...historyCapabilities, historyIncarnation: null, scope: { workspaceId: target },
+                pageSize: 1, fileKindCapability: 'v1', workspaceItemCapability: 'v1',
+            } });
+            expect(response.ok(), await response.text()).toBe(true);
+            const { historyIncarnation } = await response.json();
+            expect(historyIncarnation).toMatch(/^[\x00-\x7f]{1,128}$/);
+            return { ...historyCapabilities, historyIncarnation };
+        };
+        const syncHistory = await discoverHistory(page.request, workspaceId);
         const bytes = Buffer.from('Saffron authenticated cloud catalog evidence.');
         const hash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
         const presignResponse = await page.request.post('/api/storage/presign-upload', { headers,
@@ -340,7 +353,7 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
             // Convex storage emits a server-authored file change at commit,
             // before the browser's metadata push. It must be a complete record.
             const committedPull = await page.request.post('/api/sync/pull', { headers,
-                data: { scope: { workspaceId }, cursor: 0, limit: 100, fileKindCapability: 'v1', workspaceItemCapability: 'v1' } });
+                data: { ...syncHistory, scope: { workspaceId }, cursor: 0, limit: 100, fileKindCapability: 'v1', workspaceItemCapability: 'v1' } });
             expect(committedPull.ok(), await committedPull.text()).toBe(true);
             const committedChanges = (await committedPull.json()).changes as Array<{ tableName: string; pk: string; payload?: Record<string, unknown> }>;
             const uploadedFile = committedChanges.find(change => change.tableName === 'file_meta' && change.pk === hash);
@@ -363,7 +376,7 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
             projectRecord('persistent-cloud-source',PROJECT_POST_TYPES.source,{version:1,item_id:postId,kind:'file',title:'Cloud knowledge',mode:'always',current_revision_id:'r2',
                 revisions:[{id:'r1',original_hash:hash,text_hash:hash,status:'ready',coverage:'full',created_at:1,locations:[]},{id:'r2',original_hash:hash,text_hash:hash,status:'ready',coverage:'full',created_at:2,locations:[]}]},[hash]),
         ];
-        const push = await page.request.post('/api/sync/push', { headers, data: { scope: { workspaceId }, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [
+        const push = await page.request.post('/api/sync/push', { headers, data: { ...syncHistory, scope: { workspaceId }, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [
             op('file_meta', hash, { hash, name: 'cloud-proof.txt', mime_type: 'text/plain', kind: 'file', size_bytes: bytes.length,
                 ref_count: 1, storage_id: storageId, storage_provider_id: storageProvider, deleted: false, created_at: 1, updated_at: 1, clock: 1 }),
             op('posts', postId, catalog),
@@ -375,13 +388,15 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
         // The device loses the first response, then retries the exact operation.
         // A canonical replay must not allocate a second version or duplicate row.
         const retryOp = op('posts', 'cloud-replay-proof', { ...catalog, id: 'cloud-replay-proof', title: 'Replay proof' });
-        const retryBody = { scope: { workspaceId }, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [retryOp] };
+        const retryBody = { ...syncHistory, scope: { workspaceId }, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [retryOp] };
         const firstDelivery = await page.request.post('/api/sync/push', { headers, data: retryBody });
         expect(firstDelivery.ok()).toBe(true);
         const firstReceipt = await firstDelivery.json();
+        expect(firstReceipt.historyIncarnation).toBe(syncHistory.historyIncarnation);
         const replay = await page.request.post('/api/sync/push', { headers, data: retryBody });
         expect(replay.ok()).toBe(true);
         const replayReceipt = await replay.json();
+        expect(replayReceipt.historyIncarnation).toBe(syncHistory.historyIncarnation);
         expect(replayReceipt.serverVersion).toBe(firstReceipt.serverVersion);
         expect(replayReceipt.results).toEqual([expect.objectContaining({
             opId: retryOp.stamp.opId, success: true,
@@ -390,16 +405,28 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
         const oldReader = await page.request.post('/api/sync/pull', { headers,
             data: { scope: { workspaceId }, cursor: 0, limit: 100, fileKindCapability: 'v1' } });
         expect(oldReader.status()).toBe(426);
+        expect((await oldReader.json()).data).toMatchObject({ code: 'OR3_SYNC_UPDATE_REQUIRED', requiredCapability: 'incarnation-v1' });
         const oldWriter = await page.request.post('/api/sync/push', { headers, data: { scope: { workspaceId },
             ops: [op('posts', postId, { ...catalog, post_type: 'doc', meta: '' }, 2)] } });
         expect(oldWriter.status()).toBe(426);
+        expect((await oldWriter.json()).data).toMatchObject({ code: 'OR3_SYNC_UPDATE_REQUIRED', requiredCapability: 'incarnation-v1' });
+        const workspaceUnawareReader = await page.request.post('/api/sync/pull', { headers,
+            data: { ...syncHistory, scope: { workspaceId }, cursor: 0, limit: 100, fileKindCapability: 'v1' } });
+        expect(workspaceUnawareReader.status()).toBe(426);
+        expect((await workspaceUnawareReader.json()).data.code).toBe('OR3_WORKSPACE_ITEM_UPDATE_REQUIRED');
+        const workspaceUnawareWriter = await page.request.post('/api/sync/push', { headers,
+            data: { ...syncHistory, scope: { workspaceId }, ops: [op('posts', postId, { ...catalog, clock: 2 }, 2)] } });
+        expect(workspaceUnawareWriter.status()).toBe(426);
+        expect((await workspaceUnawareWriter.json()).data.code).toBe('OR3_WORKSPACE_ITEM_UPDATE_REQUIRED');
         const second = await browser.newContext({ baseURL: origin });
         try {
             await signIn(second.request);
             const snapshot = await second.request.post('/api/sync/snapshot', { headers,
-                data: { scope: { workspaceId }, pageSize: 100, fileKindCapability: 'v1', workspaceItemCapability: 'v1' } });
+                data: { ...syncHistory, scope: { workspaceId }, pageSize: 100, fileKindCapability: 'v1', workspaceItemCapability: 'v1' } });
             expect(snapshot.ok(), await snapshot.text()).toBe(true);
-            const snapshotItems = (await snapshot.json()).items;
+            const snapshotReceipt = await snapshot.json();
+            expect(snapshotReceipt.historyIncarnation).toBe(syncHistory.historyIncarnation);
+            const snapshotItems = snapshotReceipt.items;
             expect(snapshotItems).toContainEqual(expect.objectContaining({ kind: 'row', pk: postId, payload: expect.objectContaining(catalog) }));
             expect(snapshotItems.filter((item: { pk: string }) => item.pk === 'cloud-replay-proof')).toHaveLength(1);
             for (const record of projectRecords) expect(snapshotItems).toContainEqual(expect.objectContaining({pk:record.id,payload:expect.objectContaining(record)}));
@@ -446,10 +473,11 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
             const switched = await second.request.post('/api/workspaces/active', { headers, data: { id: targetId } });
             expect(switched.ok()).toBe(true);
             const staleScope = await second.request.post('/api/sync/snapshot', { headers,
-                data: { scope: { workspaceId }, pageSize: 100, fileKindCapability: 'v1', workspaceItemCapability: 'v1' } });
+                data: { ...syncHistory, scope: { workspaceId }, pageSize: 100, fileKindCapability: 'v1', workspaceItemCapability: 'v1' } });
             expect(staleScope.status()).toBe(403);
+            const targetHistory = await discoverHistory(second.request, targetId);
             const targetSnapshot = await second.request.post('/api/sync/snapshot', { headers,
-                data: { scope: { workspaceId: targetId }, pageSize: 100, fileKindCapability: 'v1', workspaceItemCapability: 'v1' } });
+                data: { ...targetHistory, scope: { workspaceId: targetId }, pageSize: 100, fileKindCapability: 'v1', workspaceItemCapability: 'v1' } });
             expect(targetSnapshot.ok()).toBe(true);
             expect(await targetSnapshot.text()).not.toContain('Saffron');
             expect((await second.request.post('/api/workspaces/active', { headers, data: { id: workspaceId } })).ok()).toBe(true);
@@ -472,7 +500,7 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
                 expect(admitted.ok(), await admitted.text()).toBe(true);
                 expect((await member.request.post('/api/workspaces/active', { headers, data: { id: workspaceId } })).ok()).toBe(true);
                 const view = await member.request.post('/api/sync/snapshot', { headers,
-                    data: { scope: { workspaceId }, pageSize: 100, fileKindCapability: 'v1', workspaceItemCapability: 'v1' } });
+                    data: { ...syncHistory, scope: { workspaceId }, pageSize: 100, fileKindCapability: 'v1', workspaceItemCapability: 'v1' } });
                 expect(view.ok(), await view.text()).toBe(true);
                 expect(await view.text()).toContain('Saffron');
                 const denied = await member.request.post('/api/sync/push', { headers, data: retryBody });
@@ -481,7 +509,7 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
                     data: { workspaceId, userId: memberSession.session.user.id } });
                 expect(revoked.ok(), await revoked.text()).toBe(true);
                 const revokedRead = await member.request.post('/api/sync/snapshot', { headers,
-                    data: { scope: { workspaceId }, pageSize: 100, fileKindCapability: 'v1', workspaceItemCapability: 'v1' } });
+                    data: { ...syncHistory, scope: { workspaceId }, pageSize: 100, fileKindCapability: 'v1', workspaceItemCapability: 'v1' } });
                 expect(revokedRead.status()).toBe(403);
                 const revokedDownload = await member.request.post('/api/storage/presign-download', { headers,
                     data: { workspace_id: workspaceId, hash, storage_id: storageId, file_kind_capability: 'v1' } });

@@ -1,15 +1,19 @@
-# OR3 Cloud 0.1.124
+# OR3 Cloud 0.1.125
 
 Release preparation; candidate qualification and publication are pending.
 
-Candidates 0.1.117–0.1.123 remained unpublished after qualification exposed legacy
+Candidates 0.1.117–0.1.124 remained unpublished after qualification exposed legacy
 verification, source-ledger, asynchronous browser-onboarding and historical
 upgrade-fixture assumptions. The vault lifecycle now exercises the required
 published 0.1.90 → 0.1.116 bridge before the candidate, retaining direct-update
 refusal and source-health assertions instead of relaxing the schema-2 gate.
 Offline recovery browser probes discover and bind the real history incarnation;
 synthetic validation rejections echo that identity so they exercise permanent
-change recovery rather than malformed-response retries.
+change recovery rather than malformed-response retries. Catalog and original-byte round trips
+discover and bind the authenticated history before push, replay and snapshot;
+legacy-client and workspace/role rejection checks remain explicit. Post-publication
+rollback and interruption checks use the current schema writer to verify the
+restored old application, whose version is asserted separately.
 The extended lifecycle separately asserts closed-validation automatic source
 restoration and explicit recovery of a target that may have admitted writes;
 an expected nonzero validation exit cannot be mistaken for successful update.
