@@ -271,6 +271,8 @@ A closed mobile drawer mounts its page on first opening and retains it afterward
 The first-run welcome starts its key and dismissal reads together, shares an
 in-flight key read with other startup consumers, and remains hidden until mount
 and the existing authentication checks complete. Local credentials stay in Dexie; Cloud credentials use the configured account vault.
+Its teleported dialog follows cached-view activity, so an inactive chat cannot
+leave a welcome backdrop over the active workspace.
 Desktop sidebar width stays bounded during loading; malformed persisted widths
 are ignored in favor of the normal default. The default app shell reads its saved
 width and collapse preference in a small inline head script, reserving the final

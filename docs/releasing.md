@@ -127,7 +127,10 @@ mobile WebKit hydration through the shipped Caddy proxy. It also runs the Basic
 profile's owner sign-in, admin, storage and sign-out/re-login journey on the
 disposable local deployment, binding the observed app, operator and CLI package
 to its browser qualification artifact. Screenshots, traces and JSON results are
-retained. This does not qualify authenticated public ingress or the Clerk/S3
+retained, including the full owner journey on failure. The disconnected owner's
+first-run welcome must appear and dismiss through its public UI before the
+journey continues; account-menu clicks after navigation and re-login verify
+that onboarding does not block account access. This does not qualify authenticated public ingress or the Clerk/S3
 profile. A browser timeout fails qualification; detached browser cleanup relies
 on disposal of the hosted runner. The Basic lifecycle job also retains a
 source, image, operator and package-bound result after the required steps. It
