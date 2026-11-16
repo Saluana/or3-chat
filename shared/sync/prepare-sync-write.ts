@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ChangeStampSchema, isLosslessSyncIdentifier, TABLE_PAYLOAD_SCHEMAS, syncJsonByteLength } from './schemas';
+import { ChangeStampSchema, isLosslessSyncIdentifier, normalizeWirePayloadForTable, TABLE_PAYLOAD_SCHEMAS, syncJsonByteLength } from './schemas';
 import { MAX_SYNC_PAYLOAD_BYTES } from './sanitize';
 import { getPkField } from './table-metadata';
 import { isLocalOnlyKvChange } from './local-only-kv';
@@ -44,6 +44,19 @@ export function prepareSyncWrite(input: Omit<SyncWriteInput, 'operation'> & { op
     // metadata changes the fingerprint of a previously committed lost-ACK op.
     let payload = input.payload;
     if (operation === 'put') {
+        // Background admissions include raw Dexie rows, including legacy rows
+        // predating these client defaults. Normalize the write, not the reader
+        // schema or the original admission (whose bytes identify old receipts).
+        payload = normalizeWirePayloadForTable(tableName, payload);
+        if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+            const row = payload as Record<string, unknown>;
+            if (tableName === 'threads') {
+                if (row.status === undefined) row.status = 'ready';
+                if (row.pinned === undefined) row.pinned = false;
+            }
+            if (tableName === 'messages' && row.order_key === undefined) row.order_key = stamp.hlc;
+            if ((tableName === 'threads' || tableName === 'messages') && row.deleted === undefined) row.deleted = false;
+        }
         const parsed = TABLE_PAYLOAD_SCHEMAS[tableName]!.safeParse(payload);
         if (!parsed.success) throw new SyncWriteError(`Invalid payload for ${tableName}`);
         payload = parsed.data;

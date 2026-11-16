@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref } from 'vue';
-import { useRoute } from '#imports';
+import { useRoute, useNuxtApp } from '#imports';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { setActiveWorkspaceDb } from '~/db/client';
 import { setKvByName } from '~/db/kv';
+import { getWriteTxTableNames } from '~/db/util';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { chatToolPreferenceKey } from '~/utils/chat/tool-preferences';
 import { ensureBackgroundJobTracker, subscribeBackgroundJob, stopBackgroundJobTracking } from '~/utils/chat/useAi-internal/backgroundJobs';
@@ -14,6 +15,7 @@ const threadId = String(query.threadId), messageId = String(query.messageId), mo
 const counterKey = `or3:cloud-tool-fixture:${jobId}`;
 const counter = ref(0), pending = ref('initializing');
 const session = useSessionContext();
+const nuxtApp = useNuxtApp();
 let handle: { dispose(): unknown } | undefined;
 let tracker: ReturnType<typeof ensureBackgroundJobTracker> | undefined;
 let unsubscribe: (() => void) | undefined;
@@ -38,14 +40,19 @@ onMounted(async () => {
     const actor = session.data.value?.session;
     if (!actor?.authenticated || actor.workspace?.id !== workspaceId || !actor.user?.id)
         throw new Error('Cloud fixture requires the exact authenticated workspace');
+    // Initial history binding can replace the workspace handle. Capture it
+    // only after the real sync engine has completed startup.
+    await nuxtApp.$syncEngine.start(workspaceId, actor.user.id, actor.authorizationRevision);
     const db = setActiveWorkspaceDb(workspaceId);
     await db.open();
     const timestamp = Math.floor(Date.now() / 1000);
-    if (!await db.threads.get(threadId)) await db.threads.put({ id: threadId, title: 'Cloud journal fixture', clock: 1,
-        created_at: timestamp, updated_at: timestamp, status: 'ready', deleted: false, pinned: false, forked: false });
-    if (!await db.messages.get(messageId)) await db.messages.put({ id: messageId, thread_id: threadId, role: 'assistant', index: 1,
-        created_at: timestamp, updated_at: timestamp, clock: 1, deleted: false, pending: true,
-        data: { content: '', background_job_id: jobId } });
+    await db.transaction('rw', getWriteTxTableNames(db, ['threads', 'messages']), async () => {
+        if (!await db.threads.get(threadId)) await db.threads.put({ id: threadId, title: 'Cloud journal fixture', clock: 1,
+            created_at: timestamp, updated_at: timestamp, status: 'ready', deleted: false, pinned: false, forked: false });
+        if (!await db.messages.get(messageId)) await db.messages.put({ id: messageId, thread_id: threadId, role: 'assistant', index: 1,
+            created_at: timestamp, updated_at: timestamp, clock: 1, deleted: false, pending: true,
+            data: { content: '', background_job_id: jobId } });
+    });
     await setKvByName(chatToolPreferenceKey(threadId), JSON.stringify({ enabled: true, tools: { test_echo: true } }), db);
     counter.value = Number(localStorage.getItem(counterKey) ?? 0);
     if (mode !== 'delayed') activate();

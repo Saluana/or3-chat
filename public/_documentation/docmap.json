@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Sync snapshots, history fencing, durable unavailable records and saved-work recovery, including qualified Convex direct/gateway setup, stored-record holds, bounded push deferrals, connection handoff without navigation and attachment-scoped held cache protection, birth-proven first-bind local adoption, durable older-server protocol pauses distinct from transient proxy retries, checked reconnect and explicit authorized legacy-store evidence/attachment export. Cache eviction retains held, pending, streaming and draft attachment references; background projections check the installed history."
+                    "summary": "Sync snapshots, history fencing, durable unavailable records and saved-work recovery, including qualified Convex direct/gateway setup, stored-record holds, bounded push deferrals, connection handoff without navigation and attachment-scoped held cache protection, birth-proven first-bind local adoption, durable older-server protocol pauses distinct from transient proxy retries, checked reconnect and explicit authorized legacy-store evidence/attachment export. Cache eviction retains held, pending, streaming and draft attachment references; background projections check the installed history. Writer preparation deterministically fills missing legacy Dexie defaults while keeping reader schemas strict."
                 },
                 {
                     "name": "storage-layer.md",

@@ -170,9 +170,10 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
                 request.onsuccess = () => resolve(request.result);
                 request.onerror = () => reject(request.error);
             });
-            if (!db.objectStoreNames.contains('messages')) { db.close(); continue; }
+            // Read the active namespace, never the isolated legacy stores.
+            if (!db.objectStoreNames.contains('current_messages')) { db.close(); continue; }
             const rows = await new Promise<Array<{ data?: { content?: string; usage?: { model?: string } } }>>((resolve, reject) => {
-                const request = db.transaction('messages').objectStore('messages').getAll();
+                const request = db.transaction('current_messages').objectStore('current_messages').getAll();
                 request.onsuccess = () => resolve(request.result);
                 request.onerror = () => reject(request.error);
             });
@@ -415,8 +416,9 @@ test('administrators can bound chat limits for the instance and workspace', asyn
             const db = await new Promise<IDBDatabase>((resolve, reject) => {
                 const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
             });
+            if (!db.objectStoreNames.contains('current_messages')) { db.close(); continue; }
             const rows = await new Promise<Array<{ role?: string; file_hashes?: string; data?: { content?: string } }>>((resolve, reject) => {
-                const request = db.transaction('messages').objectStore('messages').getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                const request = db.transaction('current_messages').objectStore('current_messages').getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
             });
             db.close();
             const message = rows.find(row => row.role === 'assistant' && row.data?.content?.includes('Images ready'));

@@ -203,7 +203,12 @@ Writer integrations use `prepareSyncWrite` from
 `~~/shared/sync/prepare-sync-write` at HTTP/background admission and provider
 transactional sinks. Preparation is deterministic, allowlists synced tables,
 validates lossless identifiers, stamps and final live payloads, and enforces the
-256 KiB serialized payload ceiling. Deletes validate their envelope without
+256 KiB serialized payload ceiling. Raw legacy Dexie thread puts receive only
+missing client defaults (`status: 'ready'`, `pinned: false`, `deleted: false`);
+message puts default missing `deleted` to `false` and missing `order_key` to the
+write stamp's HLC. Preparation preserves explicit values and content, never
+invents timestamps or message indexes, and leaves input records unchanged.
+Reader schemas remain strict. Deletes validate their envelope without
 requiring a live row and retain their exact payload metadata so lost-ACK retries
 still match older receipts. `nextSyncClock` rejects unsafe increments. Existing
 nonempty legacy snapshot revision IDs remain supported.
