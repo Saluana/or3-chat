@@ -174,7 +174,9 @@ async function runRecovery(
     if (pending.historyReset?.kind === 'legacy-snapshot' && ['starting-target','starting-previous'].includes(pending.phase ?? '')) {
       throw new Error('Legacy startup may have served writes; repeated destructive recovery is unsupported. Preserve the journal and inspect/export current data.');
     }
-    if (!pending.abandonedBackupId) {
+    // Every invocation can follow a restored runtime that admitted newer writes.
+    // An earlier authenticated snapshot cannot preserve those later bytes.
+    {
       const backupId = id('backup-before-recovery');
       await updatePending(loaded.directory, loaded.state, { abandonedBackupId: backupId, abandonedBackupPath: backupDirectory(loaded.directory, backupId) });
       const current = stateFromEnv(loaded.directory, loaded.env, loaded.state.mode, loaded.state.lastSuccessfulOperation, await imageDigest(loaded.env.OR3_IMAGE));

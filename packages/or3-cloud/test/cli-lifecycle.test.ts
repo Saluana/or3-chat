@@ -965,10 +965,18 @@ test('RB-3 exposed update recovery preserves current bytes before source extract
   await fixture.configure({ failures: [] }); await fixture.reset();
   expect((await fixture.cli(['recover'])).exitCode).toBe(1);
   expect(await fixture.traceText()).not.toContain('tar xzf');
+  await fixture.configure({ failures: [{ match: ' up -d', times: 1, message: 'recovery startup interrupted after possible writes' }] });
+  const first = await fixture.cli(['recover', '--restore', '--yes']);
+  expect(first.exitCode, first.output).toBe(1);
+  const firstSafety = (await fixture.readState()).incompleteOperation?.abandonedBackupId;
+  expect(firstSafety).toBeTruthy();
+  expect((await fixture.readState()).incompleteOperation?.phase).toBe('starting-previous');
+  await fixture.configure({ failures: [] }); await fixture.reset();
   const result = await fixture.cli(['recover', '--restore', '--yes']);
   expect(result.exitCode, result.output).toBe(0);
   const trace = await fixture.traceText();
   expect(trace.indexOf('tar czf')).toBeGreaterThan(-1);
+  expect((await fixture.readState()).pinnedHistoryBackups).toContain(firstSafety);
   expect(trace.indexOf('tar czf')).toBeLessThan(trace.indexOf('tar xzf'));
   expect((await fixture.readState()).pinnedHistoryBackups?.length).toBeGreaterThanOrEqual(2);
 });
