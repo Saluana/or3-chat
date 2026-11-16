@@ -29,8 +29,8 @@ test('disconnected welcome keeps editor history and loads settings on first open
     await expect(input).toBeEmpty();
     await input.press('ControlOrMeta+Shift+z');
     await expect(input).toHaveText('Immediate typing stays smooth');
-    expect(catalogRequests).toBe(0);
     await completeWelcomeOnboarding(page);
+    expect(catalogRequests).toBe(0);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Close chat settings', exact: true })).toBeVisible();
     await expect.poll(() => catalogRequests).toBeGreaterThan(0);
@@ -52,11 +52,15 @@ test('release onboarding waits for a late welcome before using the account menu'
             backdrop.style.cssText = 'position:fixed;inset:0;background:white';
             backdrop.innerHTML = `<div data-welcome-card><p>Connect OpenRouter to start chatting.</p>
                 <button>Connect with OpenRouter</button><button aria-label="Dismiss welcome">Close</button></div>`;
-            backdrop.querySelector('[aria-label="Dismiss welcome"]')!.addEventListener('click', () => backdrop.remove());
+            backdrop.querySelector('[aria-label="Dismiss welcome"]')!.addEventListener('click', () => {
+                document.body.dataset.welcomeDismissed = 'true';
+                backdrop.remove();
+            });
             document.body.append(backdrop);
         }, 250);
     });
     await completeWelcomeOnboarding(page);
+    await expect(page.locator('body')).toHaveAttribute('data-welcome-dismissed', 'true');
     await page.getByRole('button', { name: 'Account menu' }).click();
     await expect(page.getByRole('button', { name: 'Account menu' })).toHaveText('Opened');
     await expect(page.locator('[data-welcome-backdrop]')).toHaveCount(0);
