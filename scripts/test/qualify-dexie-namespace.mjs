@@ -18,12 +18,12 @@ const small = process.env.OR3_QUALIFY_SMALL === 'true';
 const output = path.resolve(process.argv[2] ?? 'output/playwright/dexie-namespace');
 await mkdir(output, { recursive: true });
 const profile = await mkdtemp(path.join(os.tmpdir(), `or3-h6-${engine}-`));
-const baseline = '302481d5c6740a435acf0a4ae2f5a64424872182';
+const baseline = execFileSync('git', ['rev-parse', 'v0.1.116'], { encoding: 'utf8' }).trim();
 const source = execFileSync('git', ['show', `${baseline}:app/db/client.ts`], { encoding: 'utf8' });
 const schema = JSON.parse(await readFile('app/core/sync/__tests__/fixtures/legacy-v31-schema.json', 'utf8'));
 async function bundle(legacy) {
     return (await build({
-        stdin: { contents: `import {Or3DB} from '${legacy ? 'legacy-client' : './app/db/client.ts'}'; window.Or3DB = Or3DB;`, resolveDir: root },
+        stdin: { contents: `import * as client from '${legacy ? 'legacy-client' : './app/db/client.ts'}'; window.Or3DB = client.Or3DB; window.inspectLegacyStore = client.inspectLegacyStore;`, resolveDir: root },
         bundle: true, write: false, format: 'iife', platform: 'browser',
         alias: { '~': path.join(root, 'app'), '~~': root },
         define: { 'import.meta.dev': 'false', 'import.meta.server': 'false' },
@@ -79,7 +79,7 @@ try {
             await window.db.file_blobs.put({ hash, blob: new Blob([bytes]) });
         }
         window.db.on('versionchange', () => false);
-        return { blobKeys: await window.db.file_blobs.toCollection().primaryKeys(), counts: { threads: await window.db.threads.count(), messages: await window.db.messages.count(), pending_ops: await window.db.pending_ops.count(), file_blobs: await window.db.file_blobs.count() }, estimate: await navigator.storage.estimate() };
+        return { nativeVersion: window.db.backendDB().version, blobKeys: await window.db.file_blobs.toCollection().primaryKeys(), counts: { threads: await window.db.threads.count(), messages: await window.db.messages.count(), pending_ops: await window.db.pending_ops.count(), file_blobs: await window.db.file_blobs.count() }, estimate: await navigator.storage.estimate() };
     }, { schema, small });
     const upgrade = current.evaluate(async () => {
         window.versions = [];
@@ -113,7 +113,7 @@ try {
         await window.db.open();
         return { messages: await window.db.messages.count(), ops: await window.db.pending_ops.count(), nativeVersion: window.db.backendDB().version };
     });
-    assert.deepEqual(rollback, { messages: small ? 500 : 100000, ops: 2000, nativeVersion: 310 });
+    assert.deepEqual(rollback, { messages: small ? 500 : 100000, ops: 2000, nativeVersion: seeded.nativeVersion });
     await old.evaluate(() => window.db.close());
     let quota;
     if (engine === 'chromium') {
@@ -145,11 +145,18 @@ try {
         await old.evaluate(() => window.db.close());
     }
     await current.evaluate(() => window.db.open());
+    const inspection = await current.evaluate(async () => {
+        const version = window.db.backendDB().version;
+        const page = await window.inspectLegacyStore(window.db, 'pending_ops', { limit: 1 });
+        if (page.rows.length !== 1 || page.rows[0].key !== 'sink' || await window.db.pending_ops.get('sink')) throw Error('Legacy inspection crossed namespaces');
+        if (window.db.backendDB().version !== version) throw Error('Inspection changed schema');
+        return { database: page.database, schemaVersion: page.schemaVersion, store: page.store, keys: page.rows.map(row => row.key), readonly: true };
+    });
     const oldUpgrades = await old.evaluate(() => window.versions);
     const newUpgrades = await current.evaluate(() => window.versions);
-    assert.deepEqual(oldUpgrades, [310, 321]);
+    assert.deepEqual(oldUpgrades, [seeded.nativeVersion, 321]);
     assert.deepEqual(newUpgrades, [320, 320]); // quota-aborted attempt, then one successful upgrade
-    const receipt = { oldBundleSha256: createHash('sha256').update(oldBundle).digest('hex'), newBundleSha256: createHash('sha256').update(newBundle).digest('hex'), baseline, sourceHead: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), browser: context.browser()?.version(), engine, quota, fixture: { threads: small ? 100 : 5000, messages: small ? 500 : 100000, pendingOps: 2000, messageContentBytes: 1024, immutableBlobBytes: (small ? 2 : 64) * 1024 * 1024 }, seeded, fault: 'native versionchange abort with injected QuotaExceededError after partial renames; quota field records Chromium override (not physical disk exhaustion)', quotaFailure, rollback, upgraded, oldUpgrades, newUpgrades, elapsedAfterUnblockMs, beforeAllocatedBytes: beforeBytes, peakAllocatedBytes: peakBytes, afterAllocatedBytes: await allocated(dbDir), installed, preservedWhileBlocked, sinkCycles: 4, currentNativeVersion: await current.evaluate(() => window.db.backendDB().version), oldNativeVersion: await old.evaluate(() => window.db.verno) };
+    const receipt = { inspection, bundleProvenance: 'Published v0.1.116 source compiled with installed dependencies; not extracted shipped assets', oldBundleSha256: createHash('sha256').update(oldBundle).digest('hex'), newBundleSha256: createHash('sha256').update(newBundle).digest('hex'), baseline, sourceHead: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), browser: context.browser()?.version(), engine, quota, fixture: { threads: small ? 100 : 5000, messages: small ? 500 : 100000, pendingOps: 2000, messageContentBytes: 1024, immutableBlobBytes: (small ? 2 : 64) * 1024 * 1024 }, seeded, fault: 'native versionchange abort with injected QuotaExceededError after partial renames; quota field records Chromium override (not physical disk exhaustion)', quotaFailure, rollback, upgraded, oldUpgrades, newUpgrades, elapsedAfterUnblockMs, beforeAllocatedBytes: beforeBytes, peakAllocatedBytes: peakBytes, afterAllocatedBytes: await allocated(dbDir), installed, preservedWhileBlocked, sinkCycles: 4, currentNativeVersion: await current.evaluate(() => window.db.backendDB().version), oldNativeVersion: await old.evaluate(() => window.db.verno) };
     await writeFile(path.join(output, 'receipt.json'), JSON.stringify(receipt, null, 2) + '\n');
     console.log(JSON.stringify({ elapsedAfterUnblockMs, beforeBytes, peakBytes, afterBytes: receipt.afterAllocatedBytes, counts: installed.counts, sinkCycles: 4 }));
 } finally { await context?.close(); await rm(profile, { recursive: true, force: true }); }

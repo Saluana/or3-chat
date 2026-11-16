@@ -69,28 +69,37 @@ const LEGACY_INSPECTION_STORES = new Set(['threads', 'messages', 'projects', 'po
 export async function inspectLegacyStore(db: Or3DB, store: string,
     options: { after?: IDBValidKey; key?: IDBValidKey; limit?: number } = {}) {
     if (!LEGACY_INSPECTION_STORES.has(store)) throw new Error('Unsupported legacy evidence store.');
-    const native = db.backendDB();
-    const rows: { key: IDBValidKey; value: Record<string, unknown> }[] = [];
-    const limit = Math.max(1, Math.min(100, options.limit ?? 100));
-    if (native.objectStoreNames.contains(store)) {
-        await new Promise<void>((resolve, reject) => {
-            const tx = native.transaction([store], 'readonly');
-            tx.oncomplete = () => resolve();
-            tx.onabort = () => reject(tx.error ?? new Error('Legacy evidence read aborted.'));
-            tx.onerror = () => reject(tx.error);
-            const range = options.key !== undefined ? IDBKeyRange.only(options.key)
-                : options.after !== undefined ? IDBKeyRange.lowerBound(options.after, true) : undefined;
-            const request = tx.objectStore(store).openCursor(range);
-            request.onsuccess = () => {
-                const cursor = request.result;
-                if (!cursor) return;
-                rows.push({ key: cursor.primaryKey, value: cursor.value });
-                if (rows.length < limit) cursor.continue();
-            };
-        });
-    }
-    return { database: db.name, schemaVersion: native.version, store, rows,
-        nextAfter: rows.length === limit ? rows[rows.length - 1]!.key : null };
+    // Independent native connection: an old tab may have closed the Dexie handle.
+    // Omitting a version never upgrades; abort creation if the DB disappeared.
+    const native = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open(db.name);
+        request.onupgradeneeded = () => request.transaction?.abort();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+    try {
+        const rows: { key: IDBValidKey; value: Record<string, unknown> }[] = [];
+        const limit = Math.max(1, Math.min(100, options.limit ?? 100));
+        if (native.objectStoreNames.contains(store)) {
+            await new Promise<void>((resolve, reject) => {
+                const tx = native.transaction([store], 'readonly');
+                tx.oncomplete = () => resolve();
+                tx.onabort = () => reject(tx.error ?? new Error('Legacy evidence read aborted.'));
+                tx.onerror = () => reject(tx.error);
+                const range = options.key !== undefined ? IDBKeyRange.only(options.key)
+                    : options.after !== undefined ? IDBKeyRange.lowerBound(options.after, true) : undefined;
+                const request = tx.objectStore(store).openCursor(range);
+                request.onsuccess = () => {
+                    const cursor = request.result;
+                    if (!cursor) return;
+                    rows.push({ key: cursor.primaryKey, value: cursor.value as Record<string, unknown> });
+                    if (rows.length < limit) cursor.continue();
+                };
+            });
+        }
+        return { database: db.name, schemaVersion: native.version, store, rows,
+            nextAfter: rows.length === limit ? rows[rows.length - 1]!.key : null };
+    } finally { native.close(); }
 }
 
 /** Maximum number of workspace DBs to keep open (prevents IndexedDB connection exhaustion) */

@@ -1278,3 +1278,35 @@ it('explicit native legacy inspection is bounded, read-only and separate from cu
         expect(db.table('kv').name).toBe('current_kv');
     } finally { old.close(); }
 });
+
+it('exports only authorized legacy evidence, retains private/unknown rows and verifies requested attachment bytes', async () => {
+    vi.stubGlobal('Blob', (await import('node:buffer')).Blob);
+    const { inspectLegacyEvidence, exportLegacyAttachment } = await import('../sync-quarantine');
+    const auth = await import('~/composables/auth/useSessionContext');
+    const workspaceId = `legacy-export-${crypto.randomUUID()}`;
+    const db = new Or3DB(`or3-db-${workspaceId}`); databases.push(db);
+    const old = new Dexie(db.name); old.version(31).stores(legacySchema); await old.open(); old.close(); await db.open(); await old.open();
+    const session = { authenticated: true, workspace: { id: workspaceId }, user: { id: 'owner' }, role: 'owner' as const, authorizationRevision: 1 };
+    vi.spyOn(auth, 'getCachedSessionContext').mockImplementation(() => session);
+    const scope = { workspaceId, principalId: 'owner' };
+    try {
+        await old.table('notifications').bulkPut([{ id: 'mine', user_id: 'owner' }, { id: 'private', user_id: 'other' }, { id: 'unknown' }]);
+        await old.table('workspace_tab_drafts').bulkPut([{ id: 'mine', account_key: 'owner', draft: { text: 'my draft' } }, { id: 'private', account_key: 'other', draft: { text: 'secret' } }]);
+        await old.table('kv').bulkPut([{ id: 'theme', name: 'theme_selection', value: 'dark' }, { id: 'secret', name: 'openrouter_api_key', value: 'secret' }]);
+        const notifications = await inspectLegacyEvidence(db, scope, 'notifications');
+        expect(notifications.rows.map(row => row.value.id)).toEqual(['mine']); expect(notifications.excluded).toBe(2);
+        expect((await inspectLegacyEvidence(db, scope, 'workspace_tab_drafts')).rows.map(row => row.value.id)).toEqual(['mine']);
+        expect((await inspectLegacyEvidence(db, scope, 'kv')).rows.map(row => row.value.id)).toEqual(['theme']);
+        const bytes = new Blob(['legacy attachment']);
+        const { computeHashHex } = await import('~/utils/hash');
+        const hash = `sha256:${await computeHashHex(bytes, 'sha256')}`;
+        await old.table('messages').put({ id: 'message', file_hashes: JSON.stringify([hash]) });
+        await old.table('file_blobs').put({ hash, blob: bytes });
+        const attachment = await exportLegacyAttachment(db, scope, 'messages', 'message', hash);
+        expect(await attachment.blob.text()).toBe('legacy attachment'); expect(attachment.verified).toBe(true);
+        await expect(exportLegacyAttachment(db, scope, 'notifications', 'private', hash)).rejects.toThrow();
+        session.user.id = 'other';
+        await expect(inspectLegacyEvidence(db, scope, 'messages')).rejects.toThrow(/access/i);
+        expect(await old.table('notifications').count()).toBe(3); expect(await old.table('file_blobs').count()).toBe(1);
+    } finally { old.close(); vi.restoreAllMocks(); vi.unstubAllGlobals(); }
+});

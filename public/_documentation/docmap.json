@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Sync snapshots, history fencing, durable unavailable records and saved-work recovery, including qualified Convex direct/gateway setup, stored-record holds, bounded push deferrals, connection handoff without navigation and attachment-scoped held cache protection, and birth-proven first-bind local adoption. Cache eviction retains held, pending, streaming and draft attachment references; background projections check the installed history."
+                    "summary": "Sync snapshots, history fencing, durable unavailable records and saved-work recovery, including qualified Convex direct/gateway setup, stored-record holds, bounded push deferrals, connection handoff without navigation and attachment-scoped held cache protection, birth-proven first-bind local adoption, durable older-server protocol pauses, checked reconnect and explicit authorized legacy-store evidence/attachment export. Cache eviction retains held, pending, streaming and draft attachment references; background projections check the installed history."
                 },
                 {
                     "name": "storage-layer.md",

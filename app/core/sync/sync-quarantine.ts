@@ -1,3 +1,6 @@
+import { inspectLegacyStore } from '~/db/client';
+import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
+import { parseHash, computeHashHex } from '~/utils/hash';
 /**
  * @module app/core/sync/sync-quarantine
  *
@@ -470,4 +473,77 @@ export async function recoverHistoryPut(db: Or3DB, provider: import('~~/shared/s
             resolvedAt: Date.now(), resolution: `Explicit put reviewed in ${reviewedHistory}` });
         return true;
     });
+}
+
+/** Bounded, explicit evidence only. Never used by capture, replay or snapshot install. */
+export const LEGACY_EVIDENCE_STORES = [...SYNCED_TABLES, 'tombstones', 'pending_ops',
+    'workspace_tab_drafts', 'workspace_draft_versions', 'file_transfers', 'sync_quarantine'];
+
+function legacyAuthorization(db: Or3DB, scope: import('~~/shared/sync/types').SyncScope) {
+    const session = getCachedSessionContext();
+    const role = session?.role;
+    const revision = session?.authorizationRevision;
+    const assert = () => {
+        const current = getCachedSessionContext();
+        if (!scope.principalId || db.name !== `or3-db-${scope.workspaceId}` || !current?.authenticated ||
+            current.user?.id !== scope.principalId || current.workspace?.id !== scope.workspaceId ||
+            !['owner', 'admin', 'editor', 'viewer'].includes(current.role ?? '') || current.role !== role ||
+            current.authorizationRevision !== revision || current.expiresAt && Date.parse(current.expiresAt) <= Date.now()) {
+            throw new Error('Current workspace access is required to inspect legacy evidence.');
+        }
+    };
+    assert(); return assert;
+}
+
+function visibleLegacyEvidence(store: string, row: Record<string, unknown>, principalId: string): boolean {
+    if (typeof row.accountId === 'string' && row.accountId !== principalId) return false;
+    if (store === 'workspace_tab_drafts' || store === 'workspace_draft_versions') return row.account_key === principalId;
+    if (store === 'sync_quarantine' && row.accountId !== principalId) return false;
+    const target = ['pending_ops', 'tombstones', 'sync_quarantine'].includes(store) ? row.tableName : store;
+    if (typeof target !== 'string' || ![...SYNCED_TABLES, 'file_transfers'].includes(target as typeof SYNCED_TABLES[number])) return false;
+    const payload = row.payload && typeof row.payload === 'object' ? row.payload as Record<string, unknown> : row;
+    if (target === 'notifications') return payload.user_id === principalId;
+    if (target === 'kv') {
+        const name = typeof payload.name === 'string' ? payload.name
+            : typeof row.pk === 'string' ? row.pk.replace(/^kv:/, '') : undefined;
+        if (!name || getLocalOnlyKvNames().has(name)) return false;
+    }
+    return true;
+}
+
+/** Each result is a partial live read, not a stable snapshot of an older open tab. */
+export async function inspectLegacyEvidence(db: Or3DB, scope: import('~~/shared/sync/types').SyncScope,
+    store: string, after?: IDBValidKey) {
+    if (!LEGACY_EVIDENCE_STORES.includes(store)) throw new Error('Unsupported legacy evidence store.');
+    const assert = legacyAuthorization(db, scope);
+    const page = await inspectLegacyStore(db, store, { after });
+    assert();
+    const rows = page.rows.filter(row => visibleLegacyEvidence(store, row.value, scope.principalId!)).map(row => {
+        if (store !== 'file_transfers') return row;
+        const { lease_token: _lease, last_error: _error, last_error_details: _details, ...value } = row.value;
+        return { ...row, value };
+    });
+    return { ...page, rows, excluded: page.rows.length - rows.length, origin: 'unknown' as const,
+        workspaceId: scope.workspaceId, accountId: scope.principalId, inspectedAt: Date.now(),
+        limitation: 'Partial live evidence. Close older tabs before exporting. Private or unknown-account entries remain in place; no automatic merge or recovery.' };
+}
+
+/** Attachment evidence requires a fresh authorized source read, never a caller-provided hash list. */
+export async function exportLegacyAttachment(db: Or3DB, scope: import('~~/shared/sync/types').SyncScope,
+    store: string, key: IDBValidKey, hash: string) {
+    if (!LEGACY_EVIDENCE_STORES.includes(store)) throw new Error('Unsupported legacy evidence store.');
+    const assert = legacyAuthorization(db, scope);
+    const source = await inspectLegacyStore(db, store, { key });
+    assert();
+    const entry = source.rows[0]?.value;
+    if (!entry || !visibleLegacyEvidence(store, entry, scope.principalId!) || !JSON.stringify(entry).includes(hash)) throw new Error('Authorized attachment reference is required.');
+    const parsed = parseHash(hash);
+    if (!parsed) throw new Error('Invalid attachment hash.');
+    const file = await inspectLegacyStore(db, 'file_blobs', { key: hash });
+    assert();
+    const blob = file.rows[0]?.value.blob;
+    if (!(blob instanceof Blob)) throw new Error('Attachment bytes are unavailable; evidence remains saved.');
+    if (await computeHashHex(blob, parsed.algorithm) !== parsed.hex) throw new Error('Attachment checksum failed; original bytes remain saved.');
+    assert();
+    return { blob, hash, verified: true, source: { database: source.database, schemaVersion: source.schemaVersion, store, key, origin: 'unknown' } };
 }

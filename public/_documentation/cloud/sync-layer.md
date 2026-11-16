@@ -870,3 +870,44 @@ foreign owners are denied without returning content or evidence references.
 Convex also bounds push point-read/evidence work: remaining operations receive
 retryable `RATE_LIMITED` deferrals when the transaction budget is exhausted.
 These deferrals allocate no versions and do not fabricate unavailable holds.
+
+## Older servers and separate browser stores
+
+This tab sends `x-or3-cloud-intent: mutation-incarnation-v1` on existing Cloud
+mutations. Published 0.1.116 rejects that value before dispatch. The current
+server accepts exactly `mutation` and `mutation-incarnation-v1`, with the same
+origin, JSON and bearer checks. Sync push, pull, snapshot, ACK and events keep
+their independent incarnation checks; there is no retry with a legacy header.
+
+An exact old intent refusal pauses sync before session-invalid cleanup. A
+missing/malformed incarnation or unrecognized intermediary response pauses with
+“The server does not support this tab's sync protocol”; it does not prove rollback.
+The pause is durable and shared with same-account workspace followers. It does
+not reset cursors, settle operations, spend retries, clear browser data or sign
+out. Local edits, drafts, blobs and held evidence remain saved. “Check server
+again” reconnects through checked discovery; only a valid current contract can
+release the captured pause. A later history J still requires the existing atomic
+snapshot/hold transition regardless of numeric catch-up. Old responses and
+connection handles stay fenced, including the in-place history rebind.
+
+When the server is known to be older, the browser says:
+
+> The server is running an older version, so sync in this tab is paused. Your local changes are still saved. The older app uses separate local stores and may not show these changes. Do not clear browser data. Export important work, or review saved changes after the server is upgraded again. Changes saved by an older tab can be inspected separately; they are never merged automatically.
+
+In Workspace → Sync status, “Changes saved by an older tab” explicitly inspects
+and exports up to 100 native legacy entries per batch. The database/store/schema
+identity and unknown origin accompany each export. Close older tabs first:
+these are partial live reads, not a certified complete snapshot. Current
+workspace authorization is checked before and after reads; other-account and
+unknown-account private notifications/drafts, local-only KV and unclassified
+private evidence stay in place. An attachment export revalidates its authorized
+source reference and verifies the bytes against its stored hash. Failed exports
+never remove their source. No legacy store becomes a normal writable accessor,
+and no inspection opens a version upgrade or automatically imports/replays data.
+
+Held inspection/export stays available while paused; retry-all excludes held
+work and paused tabs cannot retry queued changes or recover held puts. After
+checked reconnect, deliberate supported recovery still validates current
+parents, permissions and history and creates a fresh action. Unsupported kinds
+and deletes remain exportable for manual review. Old bundles using their legacy
+stores have legacy behavior during rollback, not incarnation-certified holding.

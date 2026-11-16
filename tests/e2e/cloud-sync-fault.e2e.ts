@@ -492,6 +492,32 @@ test('real sync fault qualification', async ({ browser }, info) => {
             expect(e.sharedOrder).toEqual(e.chains[0].seen);
         });
 
+        await scenario('S-old-intent-refusal', async e => {
+            const c = await open(browser, origin); e.workspaceId = c.workspaceId;
+            e.before = await state(c); e.serverBefore = serverState(db, c.workspaceId);
+            let refused = 0;
+            await c.context.route('**/api/sync/push', async route => {
+                expect(route.request().headers()['x-or3-cloud-intent']).toBe('mutation-incarnation-v1'); refused++;
+                await route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ statusCode: 403, statusMessage: 'Forbidden: Missing mutation intent' }) });
+            });
+            await write(c, 'rollback-local', 'retained');
+            await c.page.evaluate(async () => { const app = (document.querySelector('#__nuxt') as any).__vue_app__.$nuxt; await app.$syncEngine.flush(); });
+            await poll('durable older-server pause', async () => (await state(c)).sync.some((row: any) => row.protocolPause === 'older-server'));
+            e.paused = await state(c);
+            expect(e.paused.rows).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'rollback-local', value: 'retained' })]));
+            expect(e.paused.pending.length).toBeGreaterThan(0);
+            expect(e.paused.pending.every((op: any) => op.attempts === 0)).toBe(true);
+            expect(e.paused.sync.find((row: any) => row.id === 'sync_history')).toEqual(e.before.sync.find((row: any) => row.id === 'sync_history'));
+            expect(serverState(db, c.workspaceId).rows).toEqual(e.serverBefore.rows);
+            expect((await c.context.request.get('/api/auth/session')).ok()).toBe(true);
+            await c.context.unroute('**/api/sync/push');
+            await engine(c, 'start');
+            await poll('explicit rediscovery clears pause', async () => !(await state(c)).sync.some((row: any) => row.protocolPause));
+            await poll('retained local edit publishes after checked contract', () => (serverState(db, c.workspaceId).rows as any[]).some(row => row.id === 'rollback-local'));
+            e.after = await state(c); e.refused = refused; e.serverAfter = serverState(db, c.workspaceId);
+            e.boundary = 'Real browser transport with old-image refusal response; immutable old image checked separately';
+        });
+
         await scenario('S-old-client', async e => {
             const c = await open(browser, origin); e.workspaceId = c.workspaceId;
             await push(c, db, 'healthy', 'healthy');
