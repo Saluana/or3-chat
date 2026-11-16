@@ -1,4 +1,7 @@
 /* @vitest-environment node */
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { useRuntimeConfigMock, getSyncGatewayAdapterMock } = vi.hoisted(() => ({
@@ -12,6 +15,7 @@ vi.mock('#imports', () => ({
 
 vi.mock('../../sync/gateway/registry', () => ({
     getSyncGatewayAdapter: getSyncGatewayAdapterMock,
+    registerSyncGatewayAdapter: vi.fn(),
 }));
 
 vi.mock('nitropack/runtime', () => ({
@@ -58,6 +62,40 @@ describe('sync-maintenance scheduler plugin', () => {
     afterEach(() => {
         vi.useRealTimers();
         vi.restoreAllMocks();
+    });
+
+    it('installed SQLite startup retains expired snapshots during validation and prunes on normal boot', async () => {
+        const root = await mkdtemp(join(tmpdir(), 'or3-provider-validation-'));
+        vi.stubEnv('OR3_SQLITE_DB_PATH', join(root, 'sync.sqlite'));
+        vi.stubEnv('OR3_SQLITE_DRIVER', 'better-sqlite3');
+        vi.stubEnv('OR3_CLOUD_UPDATE_VALIDATION', 'true');
+        useRuntimeConfigMock.mockReturnValue({ auth: { enabled: true }, sync: { enabled: true, provider: 'sqlite' } });
+        const providerRoot = new URL('../../../node_modules/or3-provider-sqlite/dist/runtime/server/', import.meta.url);
+        const dbModule = await import(/* @vite-ignore */ new URL('db/kysely.js', providerRoot).href);
+        const migration = await import(/* @vite-ignore */ new URL('db/migrate.js', providerRoot).href);
+        const close: Array<() => void> = [];
+        try {
+            await migration.runMigrations(await dbModule.initializeSqliteDb());
+            const db = dbModule.getRawDb();
+            db.prepare('INSERT INTO sync_snapshots(id,workspace_id,high_watermark,tables_json,created_at,expires_at) VALUES(?,?,?,?,?,?)').run('expired', 'workspace', 0, '[]', 0, 1);
+            const plugin = (await import(/* @vite-ignore */ new URL('plugins/register.js', providerRoot).href)).default;
+            await plugin({ hooks: { hook: (_name: string, fn: () => void) => close.push(fn) } });
+            await vi.advanceTimersByTimeAsync(120_000);
+            expect(db.prepare('SELECT id FROM sync_snapshots').all()).toEqual([{ id: 'expired' }]);
+            expect(vi.getTimerCount()).toBe(0);
+            // A real process recreates this immutable runtime for normal boot.
+            const registry = globalThis as Record<symbol, unknown>;
+            delete registry[Symbol.for('or3.shutdown.runtime.v1')];
+            vi.stubEnv('OR3_CLOUD_UPDATE_VALIDATION', 'false');
+            await plugin({ hooks: { hook: (_name: string, fn: () => void) => close.push(fn) } });
+            expect(db.prepare('SELECT id FROM sync_snapshots').all()).toEqual([]);
+        } finally {
+            close.forEach(fn => fn());
+            await dbModule.destroySqliteDb();
+            delete (globalThis as Record<symbol, unknown>)[Symbol.for('or3.shutdown.runtime.v1')];
+            vi.unstubAllEnvs();
+            await rm(root, { recursive: true, force: true });
+        }
     });
 
     it('starts the scheduler only when sync is enabled and provider is sqlite', async () => {
