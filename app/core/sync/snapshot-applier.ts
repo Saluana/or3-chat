@@ -254,6 +254,14 @@ export class SnapshotStager {
             if (this.historyIncarnation !== undefined) {
                 if (!this.expectedHistory) abortSnapshotApply();
                 await assertHistory(tx, this.expectedHistory);
+                if (firstBind) {
+                    const incarnation = this.historyIncarnation;
+                    // Proven local-only birth may adopt its first server view.
+                    // Commit first: a failed install must leave local writers unbound.
+                    tx.on('complete', () => {
+                        if (this.db.syncHistoryAtOpen === null) this.db.syncHistoryAtOpen = incarnation;
+                    });
+                }
                 if (this.expectedHistory.resetTarget && this.expectedHistory.resetTarget !== this.historyIncarnation) abortSnapshotApply();
                 if (holdHistory) await holdHistoryInTx(tx, this.scope, this.expectedHistory.historyIncarnation ?? 'unknown');
             }

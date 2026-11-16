@@ -319,7 +319,11 @@ export class HookBridge {
             }
             const origin = this.db.syncHistoryAtOpen;
             transaction.table('sync_state').get('sync_history').then(guard => {
-                if ((guard?.historyIncarnation ?? null) !== origin) transaction.abort();
+                const history: unknown = guard?.historyIncarnation ?? null;
+                // A queued startup write may predate the installer's proven
+                // null -> first-history adoption. Later histories stay fenced.
+                const adoptedFirstBind = origin === null && history === this.db.syncHistoryAtOpen;
+                if (history !== origin && !adoptedFirstBind) transaction.abort();
             }).catch(() => transaction.abort());
         }
         // Safe record access pattern - payload can be undefined for delete operations
