@@ -96,7 +96,7 @@ export function assertVerificationGrant(value: Record<string, unknown>, expected
   }
 }
 
-export async function verifyPublicApplication(baseUrl: URL, credentials: { email: string; password: string }, syncProtocol: 'incarnation-v1' | 'legacy-033' = 'incarnation-v1') {
+export async function verifyPublicApplication(baseUrl: URL, credentials: { email: string; password: string }, syncProtocol: 'incarnation-v1' | 'legacy' = 'incarnation-v1') {
   const root = await verificationFetch(baseUrl);
   if (root.status !== 200) throw new Error(`${baseUrl} returned HTTP ${root.status}; redirects are not accepted during verification.`);
 

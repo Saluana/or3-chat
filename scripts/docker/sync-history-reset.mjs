@@ -36,7 +36,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     try {
         const profile = JSON.parse(readFileSync(new URL('./backup-inspection-profile.json', import.meta.url), 'utf8'));
         assertHistoryResetProfile(profile);
-        if (process.argv[2] === 'capability') console.log(JSON.stringify({ contract: 'incarnation-v1', ...(profile.contract === 1 && profile.healthValidation === 'health-only-v1' ? { validation: 'health-only-v1', profile: 'basic-sqlite-fs' } : {}), ...(profile.legacySnapshotRollback === 'legacy-033-rollback-v1' ? { legacySnapshotRollback: profile.legacySnapshotRollback } : {}) }));
+        if (process.argv[2] === 'capability') console.log(JSON.stringify({ contract: 'incarnation-v1', ...(profile.contract === 1 && profile.healthValidation === 'health-only-v1' ? { validation: 'health-only-v1', profile: 'basic-sqlite-fs' } : {}), ...(profile.legacySnapshotRollback === 'legacy-032-rollback-v1' ? { legacySnapshotRollback: profile.legacySnapshotRollback } : {}) }));
         else if (process.argv[2] === 'reset') {
             const require = createRequire('/app/.output/server/package.json');
             console.log(JSON.stringify(resetHistory(require('better-sqlite3'), process.argv[3], process.argv[4], profile.historyMigrations)));

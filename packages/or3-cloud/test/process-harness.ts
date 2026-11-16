@@ -136,7 +136,7 @@ const volumeLabels = () => config.volumeLabels ?? {};
 
 if (joined.includes('sync-history-reset.mjs capability')) {
   if (config.historyResetSupported === false || config.incapableImage && joined.includes(config.incapableImage)) fail('Unsupported history incarnation target');
-  out(JSON.stringify({contract:'incarnation-v1', ...(config.validationSupported === false ? {} : {validation:'health-only-v1',profile:'basic-sqlite-fs'}), ...(config.legacyQualified ? {legacySnapshotRollback:'legacy-033-rollback-v1'} : {})})); process.exit(0);
+  out(JSON.stringify({contract:'incarnation-v1', ...(config.validationSupported === false ? {} : {validation:'health-only-v1',profile:'basic-sqlite-fs'}), ...(config.legacyQualified ? {legacySnapshotRollback:'legacy-032-rollback-v1'} : {})})); process.exit(0);
 }
 if (joined.includes('sync-history-reset.mjs reset')) {
   const index = args.indexOf('/app/scripts/docker/sync-history-reset.mjs');
@@ -218,7 +218,7 @@ if (args[0] === 'volume') {
   process.exit(0);
 }
 
-const legacy = () => JSON.stringify({policy:'legacy-033-rollback-v1',ledger:'033',complete:true,payloadSha256:{'sync.sqlite':'c'.repeat(64),'auth.sqlite':'d'.repeat(64)}});
+const legacy = () => JSON.stringify({policy:'legacy-032-rollback-v1',ledger:'032',complete:true,payloadSha256:{'sync.sqlite':'c'.repeat(64),'auth.sqlite':'d'.repeat(64)}});
 const containerScript = () => {
   if (joined.includes('backup-inspect.mjs legacy')) return out(legacy());
   if (config.realArchiveValidation && joined.includes('OR3_TAR_RESULT:')) {

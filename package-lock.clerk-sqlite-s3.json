@@ -1,12 +1,12 @@
 {
   "name": "or3-chat",
-  "version": "0.1.118",
+  "version": "0.1.119",
   "lockfileVersion": 3,
   "requires": true,
   "packages": {
     "": {
       "name": "or3-chat",
-      "version": "0.1.118",
+      "version": "0.1.119",
       "hasInstallScript": true,
       "license": "GPL-3.0",
       "dependencies": {

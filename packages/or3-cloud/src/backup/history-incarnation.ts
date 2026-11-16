@@ -59,12 +59,12 @@ export async function qualifyLegacySnapshot(directory: string, state: ManagedSta
     || state.rollback?.backupId === manifest.backupId
     || !backupPath && manifest.imageDigest === state.imageDigest;
   if (!immediate || !isQualifiedLegacyImage(manifest)
-    || manifest.schemaVersion !== 1) throw new Error('Source is not the qualified immediate legacy 033 snapshot');
+    || manifest.schemaVersion !== 1) throw new Error('Source is not the qualified immediate legacy 032 snapshot');
   assertSupportedBackupProfile(env);
   const capability = await historyCommand(directory, inspectorImage, ['capability']);
   let profile: { legacySnapshotRollback?: string } = {};
   try { profile = JSON.parse(capability.stdout) as typeof profile; } catch { /* Refuse below. */ }
-  if (!capability.ok || profile.legacySnapshotRollback !== 'legacy-033-rollback-v1') throw new Error('Legacy snapshot rollback remains unqualified; exact image/browser/lifecycle qualification required');
+  if (!capability.ok || profile.legacySnapshotRollback !== 'legacy-032-rollback-v1') throw new Error('Legacy snapshot rollback remains unqualified; exact image/browser/lifecycle qualification required');
   const inspectArgs = ['sh', '-c', node, 'or3-legacy-inspection', '/app/scripts/docker/backup-inspect.mjs', 'legacy'];
   let output: string;
   if (backupPath) {
@@ -79,10 +79,10 @@ export async function qualifyLegacySnapshot(directory: string, state: ManagedSta
     output = result.stdout;
   }
   const evidence = JSON.parse(output) as { policy?: string; ledger?: string; complete?: boolean; payloadSha256?: Record<string,string|null> };
-  if (evidence.policy !== 'legacy-033-rollback-v1' || evidence.ledger !== '033' || !evidence.complete || !evidence.payloadSha256
+  if (evidence.policy !== 'legacy-032-rollback-v1' || evidence.ledger !== '032' || !evidence.complete || !evidence.payloadSha256
     || !['sync.sqlite','auth.sqlite'].every(key => /^[a-f0-9]{64}$/.test(evidence.payloadSha256?.[key] ?? ''))) throw new Error('Incomplete legacy source inspection');
-  return { kind: 'legacy-snapshot', policy: 'legacy-033-rollback-v1', backupId: manifest.backupId, inspectorImage,
-    ledger: '033', profile: 'basic-sqlite-fs', payloadSha256: evidence.payloadSha256 };
+  return { kind: 'legacy-snapshot', policy: 'legacy-032-rollback-v1', backupId: manifest.backupId, inspectorImage,
+    ledger: '032', profile: 'basic-sqlite-fs', payloadSha256: evidence.payloadSha256 };
 }
 export async function prepareLegacyReplacement(directory: string, state: ManagedState, manifest: BackupManifest, policy: LegacySnapshotPolicy, safety: boolean) {
   const pending = state.incompleteOperation;

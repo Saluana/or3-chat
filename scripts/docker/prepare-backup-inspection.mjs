@@ -36,7 +36,7 @@ const historyReady = selected === 'basic-sqlite-fs';
 profile.historyIncarnation = historyReady ? 'v1' : 'unqualified';
 if (historyReady) {
   profile.historyMigrations = migrations;
-  profile.legacySnapshotRollback = 'legacy-033-rollback-v1';
+  profile.legacySnapshotRollback = 'legacy-032-rollback-v1';
 }
 profile.healthValidation = historyReady ? 'health-only-v1' : 'unqualified';
 writeFileSync('scripts/docker/backup-inspection-profile.json', JSON.stringify(profile) + '\n');

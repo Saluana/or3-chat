@@ -177,7 +177,7 @@ See [Install and manage plugins](../public/_documentation/plugins/install-and-ma
 
 First-incarnation release blockers (existing lifecycle job):
 
-- [ ] Exact 0.1.116 Basic/SQLite/FS source digest, complete 033 schema and authenticated source DB/sidecar/config/asset fidelity.
+- [ ] Exact 0.1.116 Basic/SQLite/FS source digest, complete 032 schema and authenticated source DB/sidecar/config/asset fidelity.
 - [ ] Actual old-image new-intent refusal before dispatch, and complete old/new-browser namespace/held/export tests.
 - [ ] Real candidate validation marker, blocked application requests/background work, failed boot automatic source restoration with nonzero update exit.
 - [ ] Missing proof and post-admission failure never auto-restore; explicit recovery authenticates current-data preservation first.
