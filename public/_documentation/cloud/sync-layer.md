@@ -2,11 +2,12 @@
 
 The OR3 Sync Layer provides offline-first, bidirectional synchronization between a workspace-scoped local Dexie database and the selected sync backend (SQLite or Convex in first-party deployments). It enables users to work offline and have their changes automatically synced when connectivity is restored, with support for multi-device synchronization and conflict resolution.
 
-SQLite provider `0.0.30` stores background tool-result operations with UUIDs.
+SQLite provider `0.0.31` stores background tool-result operations with UUIDs.
 Its startup migration repairs legacy `background-tool:` operation IDs in saved
 rows, change logs, tombstones, and materialized snapshots. The repair preserves
-content, clocks, server versions, and cursors, so existing clients can resume
-sync without resetting their workspace. Offline backup inspection accepts both
+content, clocks and server versions. Migration 036 initializes history identity
+and invalidates old snapshots/device ACKs; matched browsers refresh their snapshot
+and preserve pending work for review. Offline backup inspection accepts both
 the earlier migration history and the repaired history.
 
 ## History replacement and saved work
@@ -16,13 +17,14 @@ opaque token. Every pull, snapshot, push, cursor acknowledgement and events
 request negotiates `historyIncarnationCapability: 'incarnation-v1'`. Legacy
 requests receive HTTP 426. An adapter must advertise `historyIncarnation: 'v1'`
 and return a bound token; the gateway transport alone does not qualify a server.
-The hardened Convex candidate supports this contract in direct and gateway
+Published Convex 0.0.27 supports this contract in direct and gateway
 modes with its matching deployed backend; see [Convex qualification and setup](/documentation/cloud/provider-convex#sync-qualification-and-history-setup).
-Published Convex 0.0.26 lacks these changes. Installing that published package
+Earlier Convex 0.0.26 lacks these changes. Installing that older package
 or obtaining an auth token does not qualify it. Startup refuses an unqualified
 direct provider before subscribing or starting the outbox. Gateway providers
-also require server qualification. Published SQLite 0.0.30, D1 and managed
-replacement image activation retain their separate qualification gates.
+also require server qualification. SQLite 0.0.31 binds the Basic image inspection/reset profile to the complete 036
+ledger. D1 and managed replacement image activation retain their separate
+qualification gates.
 This source qualification does not publish or activate a release.
 
 An unbound browser or a different token requires a complete materialized

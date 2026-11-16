@@ -653,8 +653,8 @@ ledger/schema and original database/sidecar hashes before startup. The old DB
 is neither reset nor migrated. Arbitrary incapable `restore` remains refused.
 
 **Publication remains blocked** until exact provider, native-image, browser
-downgrade-fence and re-upgrade qualification pass together. The pinned SQLite
-0.0.30 profile remains incarnation-unqualified; the exact published 0.0.31
+downgrade-fence and re-upgrade qualification pass together. Earlier SQLite
+0.0.30 profiles remain incarnation-unqualified; the pinned published 0.0.31
 Basic profile advertises testable capabilities for this mandatory workflow. The code
 and a fake-Docker test are not a release receipt. Clerk/S3 is not qualified.
 

@@ -1,5 +1,6 @@
 import { beforeAll, afterEach, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
+import { Migrator } from 'kysely';
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -23,13 +24,21 @@ class OfflineDatabase {
 }
 const opId = '12345678-1234-4234-8234-123456789abc';
 const payload = JSON.stringify({ id: 'private-key', name: 'private-name', value: 'PRIVATE-CONTENT', created_at: 1, updated_at: 1, clock: 1 });
-async function fixture(sql = '') {
+async function fixture(sql = '', through?: number) {
   const root = await mkdtemp(join(tmpdir(), 'or3-sync-audit-')); roots.push(root);
   const path = join(root, 'sync.sqlite');
   const provider = new URL('../../../node_modules/or3-provider-sqlite/dist/runtime/server/db/', import.meta.url);
   const { initializeSqliteDb, destroySqliteDb } = await import(new URL('kysely.js', provider).href);
   const { runMigrations } = await import(new URL('migrate.js', provider).href);
-  try { await runMigrations(await initializeSqliteDb({ path, driver: 'bun' })); }
+  try {
+    const db = await initializeSqliteDb({ path, driver: 'bun' });
+    if (through) {
+      const migrations = Object.fromEntries(await Promise.all(inspector.HISTORY_MIGRATIONS.slice(0, through)
+        .map(async name => [name, await import(new URL(`migrations/${name}.js`, provider).href)])));
+      const { error } = await new Migrator({ db, provider: { getMigrations: async () => migrations } }).migrateToLatest();
+      if (error) throw error;
+    } else await runMigrations(db);
+  }
   finally { await destroySqliteDb(); }
   const db = new Database(path);
   db.query('INSERT INTO server_version_counter(workspace_id,value) VALUES(?,1)').run('workspace');
@@ -83,7 +92,7 @@ test.each([
   ['unknown table', "UPDATE change_log SET table_name='private-table'", 'change_log', 'invalid_table'],
   ['tombstone fault', 'UPDATE tombstones SET deleted_at=-1', 'tombstones', 'invalid_deleted_at'],
   ['orphan snapshot item', 'DELETE FROM sync_snapshots', 'sync_snapshot_items', 'missing_snapshot'],
-  ['contradictory snapshot item', "INSERT INTO sync_snapshot_items SELECT snapshot_id,table_name,pk,'tombstone',NULL,clock,hlc,op_id,1 FROM sync_snapshot_items", 'sync_snapshot_items', 'duplicate_snapshot_key'],
+  ['contradictory snapshot item', "INSERT INTO sync_snapshot_items(snapshot_id,table_name,pk,kind,payload_json,clock,hlc,op_id,server_deleted_at) SELECT snapshot_id,table_name,pk,'tombstone',NULL,clock,hlc,op_id,1 FROM sync_snapshot_items", 'sync_snapshot_items', 'duplicate_snapshot_key'],
   ['snapshot beyond watermark', 'UPDATE sync_snapshots SET high_watermark=0', 'sync_snapshot_items', 'snapshot_after_watermark'],
   ['snapshot ahead of counter', 'UPDATE sync_snapshots SET high_watermark=2', 'sync_snapshots', 'snapshot_above_counter'],
   ['inconsistent counter', 'UPDATE server_version_counter SET value=0', 'server_version_counter', 'counter_below_log'],
@@ -101,13 +110,13 @@ test.each([
 });
 
 test('clean backup and legitimate historical snapshot revisions pass; audit never mutates bytes', async () => {
-  const f = await fixture();
+  const f = await fixture('', 32);
   const before = await readFile(f.path);
   expect(f.audit()).toMatchObject({ healthy: true, complete: true, faults: [] });
   expect(await readFile(f.path)).toEqual(before);
   const db = new Database(f.path);
   // Snapshot items are immutable historical captures, not today's winner.
-  db.exec("UPDATE s_kv SET clock=2; UPDATE server_version_counter SET value=2; UPDATE sync_snapshot_items SET op_id='legacy:kv:private-key:1',hlc='legacy:0'; DELETE FROM kysely_migration WHERE name='033_tool_result_operation_ids'");
+  db.exec("UPDATE s_kv SET clock=2; UPDATE server_version_counter SET value=2; UPDATE sync_snapshot_items SET op_id='legacy:kv:private-key:1',hlc='legacy:0'");
   db.close();
   expect(f.audit()).toMatchObject({ healthy: true, complete: true, faults: [] });
 });
@@ -167,14 +176,14 @@ test.each([
 });
 
 test('offline revisions preserve exact incremental and legacy reader rules', async () => {
-  const f = await fixture();
+  const f = await fixture('', 32);
   const hlc = 'opaque '.repeat(73).slice(0, 512);
   expect(ChangeStampSchema.safeParse({ deviceId: ' device ', opId, hlc, clock: Number.MAX_SAFE_INTEGER }).success).toBe(true);
   expect(SnapshotRevisionSchema.safeParse({ opId: 'legacy:kv:key:1', hlc: hlc + 'x', clock: 1 }).success).toBe(true);
   const db = new Database(f.path);
   db.query('UPDATE change_log SET hlc=?,clock=?,device_id=?').run(hlc, Number.MAX_SAFE_INTEGER, ' device ');
   db.query('UPDATE sync_snapshot_items SET hlc=?,op_id=?').run(hlc + 'x', 'legacy:kv:key:1');
-  db.exec("UPDATE s_kv SET hlc='',op_id=''; UPDATE tombstones SET hlc='',op_id=''; DELETE FROM kysely_migration WHERE name='033_tool_result_operation_ids'");
+  db.exec("UPDATE s_kv SET hlc='',op_id=''; UPDATE tombstones SET hlc='',op_id=''");
   db.close();
   expect(f.audit()).toMatchObject({ healthy: true, complete: true, faults: [] });
 });
@@ -270,6 +279,6 @@ test('exhausted counter blocks allocation rather than certifying healthy or reco
 
 // RB-11: a leftover singleton does not prove that normal 034-036 startup ran.
 test('RB-11 incarnation certification refuses a 033 ledger with a singleton', async () => {
-  const f = await fixture("CREATE TABLE sync_history(id INTEGER PRIMARY KEY, incarnation TEXT); INSERT INTO sync_history VALUES(1,'I');");
+  const f = await fixture("CREATE TABLE sync_history(id INTEGER PRIMARY KEY, incarnation TEXT); INSERT INTO sync_history VALUES(1,'I');", 33);
   expect(() => inspector.inspectSyncSemantics(OfflineDatabase, f.path, { requireHistoryIncarnation:true })).toThrow(/ledger/);
 });

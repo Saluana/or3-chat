@@ -1,9 +1,9 @@
 # Cloud providers
 
 The hardened sync engine requires qualified history-incarnation support.
-The hardened Convex candidate works in direct and gateway modes after deploying
-its matching templates and initializing history. Published Convex 0.0.26 remains
-unsupported by this hardened host; auth tokens alone do not enable startup.
+The host pins SQLite 0.0.31 and Convex 0.0.27. Convex works in direct and gateway
+modes after deploying its matching templates and initializing history. Earlier
+Convex 0.0.26 remains unsupported; auth tokens alone do not enable startup.
 See [Convex qualification and setup](/documentation/cloud/provider-convex#sync-qualification-and-history-setup)
 and [saved-work recovery](/documentation/cloud/sync-layer#history-replacement-and-saved-work).
 

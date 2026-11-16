@@ -180,7 +180,7 @@ Acceptance atomically creates the canonical user, provider mapping, private work
 
 Native SQLite uses one immediate transaction. Cloudflare D1 does not advertise signup-invite support because it cannot provide this transaction; legacy workspace capabilities remain available.
 
-Managed Cloud backup inspection qualifies `or3-provider-sqlite@0.0.30` with filesystem provider `0.0.18` or S3 provider `0.0.15`, including migration `033_tool_result_operation_ids`. Previously published complete histories, including `032_sync_observations` and `029_delegation_wait`, remain accepted; an interrupted upgrade at migration 030 is rejected. History acceptance alone does not certify sync contents: ordinary restore also requires the bounded semantic audit before startup. Recorded safety recovery explicitly leaves sync health uncertified. Unknown migrations remain rejected; provider upgrades must requalify backup inspection before releasing an image. Normal deployment updates follow the [Cloud update guide](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/cloud-updates.md).
+Managed Cloud backup inspection qualifies `or3-provider-sqlite@0.0.31` with filesystem provider `0.0.18` or S3 provider `0.0.15`, through migrations `034_sync_intent_fingerprint`, `035_sync_unavailable_records`, and `036_sync_history_incarnation`. Previously published complete histories, including `032_sync_observations`, `033_tool_result_operation_ids`, and `029_delegation_wait`, remain accepted; an interrupted upgrade at migration 030 is rejected. History acceptance alone does not certify sync contents: ordinary restore also requires the bounded semantic audit before startup. Recorded safety recovery explicitly leaves sync health uncertified. Unknown migrations remain rejected; provider upgrades must requalify backup inspection before releasing an image. Normal deployment updates follow the [Cloud update guide](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/cloud-updates.md).
 
 SQLite provider `0.0.24` reports structured validation, authorization, conflict,
 and supersession errors for background history. Unknown database failures remain
@@ -231,6 +231,8 @@ Matched hardened SQLite builds require host `stored-record-v1` push support to
 isolate corrupt stored receipts/winners without blocking healthy siblings.
 Unsupported clients receive an explicit update-required response. See
 [stored-record push holds](/documentation/cloud/sync-layer#stored-record-push-holds) for the
-capability, bounded evidence contract and manual recovery behavior. The currently
-pinned published 0.0.30 does not advertise the hardened history contract; packed
-qualification is separate from registry version availability.
+capability, bounded evidence contract and manual recovery behavior. The pinned published 0.0.31 supplies the hardened history contract. The generated
+Basic Auth/SQLite/filesystem image binds its reset and health-validation capabilities
+to that exact provider and complete 036 migration set. Candidate native-image,
+browser and managed lifecycle qualification must pass before promotion. Clerk/S3
+managed replacement and D1 service lifecycle remain separate qualification lanes.

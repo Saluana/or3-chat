@@ -339,11 +339,11 @@ Startup is journaled before accepting writes. Safety recovery also rotates;
 incapable safety targets stay stopped with `history-reset-required`, and semantic
 bypasses remain degraded in `status`/`doctor`. Retention pins recovery evidence.
 
-Current SQLite 0.0.30 image profiles explicitly remain unqualified. Qualification
-must update the packed provider, exact migration allowlists, inspector profile and
-helper together, after resolving the Dexie explicit-reopen activation blocker in
-`public/_documentation/cloud/sync-layer.md`. No versions/pins were advanced by
-this implementation. Native helper/provider-double tests are not image E2E proof.
+Pinned SQLite 0.0.31 binds the generated Basic image profile to its exact installed
+001–036 migration list. Historical complete ledgers including 032/033 remain
+inspectable; partial 034/035 upgrades are refused. Candidate native-image, browser
+and managed lifecycle qualification must pass before promotion. Earlier 0.0.30
+images remain incarnation-unqualified. Native helper/provider-double tests are not image E2E proof.
 
 The first-incarnation candidate uses health-only validation before opening user
 admission. Automatic snapshot restoration requires matching immutable container,
@@ -360,8 +360,7 @@ CLI with schema 2, preserve source and abandoned-history pins, and export
 important old-tab work. Vault custody/external services are not rewound.
 
 Publication remains blocked pending exact provider/image/browser qualification.
-The pinned SQLite 0.0.30 profile remains unqualified; the exact published 0.0.31
-Basic profile advertises testable 036 and legacy rollback capabilities. Its
+The pinned published SQLite 0.0.31 Basic profile advertises testable 036 and legacy rollback capabilities. Its
 startup snapshot cleanup is fenced by the checked-in provider patch during
 validation. Capability metadata is not a release receipt. A later qualified re-upgrade takes a fresh source
 snapshot and initializes/verifies a fresh 036 history under closed admission.

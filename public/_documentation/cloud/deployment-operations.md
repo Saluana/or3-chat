@@ -377,7 +377,7 @@ Backup preflight recognizes `fs-generation-v1` attachment IDs and checks their v
 
 The matched CLI requires the exact target image to qualify offline reset and
 runtime `incarnation-v1` before a normal restore or data-restoring rollback can
-replace live bytes. Today's SQLite 0.0.30 images are unqualified. A new CLI does
+replace live bytes. Earlier SQLite 0.0.30 images are unqualified. A new CLI does
 not harden an old image, and the current browser activation blocker described in
 [Sync internals](/documentation/cloud/sync-layer#history-replacement-and-saved-work)
 also prevents release certification.
@@ -422,8 +422,8 @@ CLI with schema 2, preserve source and abandoned-history pins, and export
 important old-tab work. Vault custody/external services are not rewound.
 
 Activation is still blocked pending the exact hardened provider/image/browser
-qualification; the current registry provider remains 033 and generated metadata
-is deliberately unqualified. A later qualified re-upgrade takes a fresh source
+qualification. The pinned SQLite 0.0.31 profile binds generated capabilities to
+its exact installed 036 migration set; registry availability alone is insufficient. A later qualified re-upgrade takes a fresh source
 snapshot and initializes/verifies a fresh 036 history under closed admission.
 
 Candidate qualification uses the exact published SQLite 0.0.31 Basic profile

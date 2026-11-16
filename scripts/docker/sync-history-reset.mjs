@@ -1,4 +1,4 @@
-import { HISTORY_MIGRATIONS } from './backup-inspect.mjs';
+import { HISTORY_MIGRATIONS, HISTORY_SQLITE_VERSION, INSPECTION_PROFILE } from './backup-inspect.mjs';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,7 +6,7 @@ import { createRequire } from 'node:module';
 
 /** Target-owned offline contract. Publication must qualify exact runtime and migration history together. */
 export function assertHistoryResetProfile(profile) {
-    if (profile?.historyIncarnation !== 'v1' || !Array.isArray(profile.historyMigrations) || JSON.stringify(profile.historyMigrations) !== JSON.stringify(HISTORY_MIGRATIONS)) {
+    if (profile?.contract !== INSPECTION_PROFILE.contract || profile.sqlite !== HISTORY_SQLITE_VERSION || profile.filesystem !== INSPECTION_PROFILE.filesystem || profile.historyIncarnation !== 'v1' || !Array.isArray(profile.historyMigrations) || JSON.stringify(profile.historyMigrations) !== JSON.stringify(HISTORY_MIGRATIONS)) {
         throw new Error('Target image is not qualified for history incarnation reset/runtime v1');
     }
 }

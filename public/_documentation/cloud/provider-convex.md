@@ -49,12 +49,10 @@ schema can reject otherwise valid edits.
 
 ## Sync qualification and history setup
 
-The hardened source candidate supports the matched host in **direct and gateway**
+Published `or3-provider-convex@0.0.27` supports the matched host in **direct and gateway**
 modes: incarnation fencing, durable unavailable reads and stored-record push
-holds. Published `or3-provider-convex@0.0.26` does not contain these changes.
-The candidate still carries that development version; it requires a fresh version
-and matched release qualification before publication. Do not infer support from
-the version number or a runtime capability alone.
+holds. Earlier 0.0.26 lacks these changes. The package and deployed backend must
+match; registry availability or a runtime capability alone does not qualify a deployment.
 
 Operational qualification requires the rebuilt provider **and its complete
 updated backend templates** on the selected deployment. Update the scaffold,

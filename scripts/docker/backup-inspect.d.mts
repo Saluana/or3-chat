@@ -1,5 +1,7 @@
 export const INSPECTION_PROFILE: Readonly<{ contract: 1; sqlite: string; filesystem: string }>;
 export const S3_INSPECTION_PROFILE: Readonly<{ contract: 2; sqlite: string; s3: string }>;
+export const HISTORY_SQLITE_VERSION: string;
+export const HISTORY_MIGRATIONS: readonly string[];
 export const QUALIFIED_MIGRATIONS: readonly string[];
 export type BackupInventory = { entries: Map<string, { type: string; size: number; original: string }>; selected: string[]; bytes: number };
 export function assertInspectionProfile(profile: unknown): void;

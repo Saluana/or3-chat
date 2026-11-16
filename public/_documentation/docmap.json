@@ -656,7 +656,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 7,
-                    "summary": "Choose provider combinations and wire auth tokens; hardened Convex requires matching deployed templates and initialized history, while published 0.0.26 remains unsupported."
+                    "summary": "Choose provider combinations and wire auth tokens; pinned SQLite 0.0.31 and Convex 0.0.27 require matched runtime qualification, deployed templates and initialized history."
                 },
                 {
                     "name": "provider-basic-auth.md",
@@ -674,7 +674,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 9,
-                    "summary": "Configure SQLite sync, background history and storage accounting, runtime-reader backup inspection, supported 032/033 histories, and capability-gated stored-record push holds."
+                    "summary": "Configure SQLite sync, background history and storage accounting, runtime-reader backup inspection, the exact 0.0.31/036 image profile and supported 032/033 histories, and capability-gated stored-record push holds."
                 },
                 {
                     "name": "provider-fs.md",
@@ -701,7 +701,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 12,
-                    "summary": "Deploy matching Convex templates, initialize stable history, inspect unavailable evidence and stored-record holds, and understand isolated replacement and qualification limits."
+                    "summary": "Deploy pinned Convex 0.0.27 templates, initialize stable history, inspect unavailable evidence and stored-record holds, and understand isolated replacement and qualification limits."
                 },
                 {
                     "name": "provider-s3.md",

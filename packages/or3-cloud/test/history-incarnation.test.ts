@@ -1,6 +1,6 @@
 import { afterEach, expect, test, setDefaultTimeout } from 'bun:test';
 import { Database } from 'bun:sqlite';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { inspectLegacyHistory } from '../../../scripts/docker/backup-inspect.mjs';
@@ -115,11 +115,12 @@ test('P0-5.7 ordinary update/restart retain identity, and data rollback rotates 
 test('RB-1 legacy offline inspection is read-only and rejects 034-036 residue', async () => {
     const root = await mkdtemp(join(tmpdir(), 'rb-legacy-')); roots.push(root);
     const path = join(root, 'sync.sqlite');
-    const providerRoot = new URL('../../../node_modules/or3-provider-sqlite/dist/runtime/server/db/', import.meta.url);
-    const { initializeSqliteDb, destroySqliteDb } = await import(new URL('kysely.js', providerRoot).href);
-    const { runMigrations } = await import(new URL('migrate.js', providerRoot).href);
-    try { await runMigrations(await initializeSqliteDb({ path, driver:'bun' })); } finally { await destroySqliteDb(); }
+    // The rollback allowlist binds the immutable published .116 schema, not
+    // today's migration implementation (whose historical DDL can evolve).
     const db = new Database(path);
+    db.exec(await readFile(new URL('./fixtures/legacy-033-core.sql', import.meta.url), 'utf8'));
+    db.exec('CREATE TABLE kysely_migration(name TEXT PRIMARY KEY)');
+    for (const name of QUALIFIED_MIGRATIONS) db.query('INSERT INTO kysely_migration VALUES(?)').run(name);
     db.exec("INSERT INTO server_version_counter(workspace_id,value) VALUES('original-workspace',80)");
     expect(inspectLegacyHistory(OfflineDatabase, path)).toMatchObject({ policy: 'legacy-033-rollback-v1', ledger: '033', complete: true });
     expect(db.query('SELECT * FROM server_version_counter').all()).toEqual([{ workspace_id:'original-workspace', value:80 }]);

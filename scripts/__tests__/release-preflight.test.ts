@@ -13,7 +13,7 @@ import {
 } from '../release/release-preflight-core';
 import { buildOr3CloudConfigFromEnv } from '../../server/admin/config/resolve-config';
 import { assertCandidateReceipt, assertTwoProfileCandidateReceipt } from '../release/candidate-receipt-core.mjs';
-import { assertInspectionProfile, assertS3InspectionProfile } from '../docker/backup-inspect.mjs';
+import { HISTORY_MIGRATIONS, assertInspectionProfile, assertS3InspectionProfile } from '../docker/backup-inspect.mjs';
 
 it('qualifies the managed profile independently of conflicting caller settings', () => {
     // Missing SSR auth disables every provider; ambient aliases, test harnesses,
@@ -114,7 +114,7 @@ describe('managed Docker profile projection', () => {
         const { result, manifest } = await project('clerk-sqlite-s3');
         expect(result.status, result.stderr).toBe(0);
         expect(manifest.dependencies).toMatchObject({
-            'or3-provider-clerk': '0.0.12', 'or3-provider-sqlite': '0.0.30', 'or3-provider-s3': '0.0.15',
+            'or3-provider-clerk': '0.0.12', 'or3-provider-sqlite': '0.0.31', 'or3-provider-s3': '0.0.15',
         });
         expect(manifest.dependencies['or3-provider-basic-auth']).toBeUndefined();
         expect(manifest.dependencies['or3-provider-fs']).toBeUndefined();
@@ -151,6 +151,9 @@ describe('managed Docker profile projection', () => {
                 await mkdir(target, { recursive: true });
                 await writeFile(join(target, 'package.json'), JSON.stringify({ version }));
             }
+            const migrations = join(directory, 'node_modules/or3-provider-sqlite/dist/runtime/server/db/migrations');
+            await mkdir(migrations, { recursive: true });
+            for (const name of HISTORY_MIGRATIONS) await writeFile(join(migrations, `${name}.js`), '');
             const scripts = join(directory, 'scripts/docker');
             await mkdir(scripts, { recursive: true });
             for (const name of ['sync-history-reset.mjs', 'backup-inspect.mjs']) {
@@ -165,9 +168,20 @@ describe('managed Docker profile projection', () => {
             const current = capability();
             expect(current.status, current.stderr).toBe(0);
             expect(JSON.parse(current.stdout)).toEqual({ contract: 'incarnation-v1', validation: 'health-only-v1', profile: 'basic-sqlite-fs', legacySnapshotRollback: 'legacy-033-rollback-v1' });
+            const generatedPath = join(scripts, 'backup-inspection-profile.json');
+            const qualified = JSON.parse(await readFile(generatedPath, 'utf8'));
+            for (const invalid of [{ ...qualified, sqlite: '0.0.30' }, { ...qualified, filesystem: '0.0.17' }, { ...qualified, historyMigrations: HISTORY_MIGRATIONS.slice(0, -1) }]) {
+                await writeFile(generatedPath, JSON.stringify(invalid));
+                expect(capability().status).not.toBe(0);
+            }
+            await rm(join(migrations, `${HISTORY_MIGRATIONS.at(-1)}.js`));
+            expect(generate().status).not.toBe(0);
+            await writeFile(join(migrations, `${HISTORY_MIGRATIONS.at(-1)}.js`), '');
+            await writeFile(join(migrations, '037_unqualified.js'), '');
+            expect(generate().status).not.toBe(0);
+            await rm(join(migrations, '037_unqualified.js'));
             await writeFile(join(directory, 'node_modules/or3-provider-sqlite/package.json'), JSON.stringify({ version: '0.0.30' }));
-            expect(generate().status).toBe(0);
-            expect(capability().status).not.toBe(0);
+            expect(generate().status).not.toBe(0);
             await writeFile(join(directory, 'node_modules/or3-provider-sqlite/package.json'), JSON.stringify({ version: '0.0.32' }));
             expect(generate().status).not.toBe(0);
         } finally { await rm(directory, { recursive: true, force: true }); }
@@ -176,11 +190,14 @@ describe('managed Docker profile projection', () => {
     it('builds the exact launch inspection contract without filesystem dependencies', async () => {
         const directory = await mkdtemp(join(tmpdir(), 'or3-inspection-profile-'));
         try {
-            for (const [name, version] of [['or3-provider-sqlite', '0.0.30'], ['or3-provider-s3', '0.0.15']]) {
+            for (const [name, version] of [['or3-provider-sqlite', '0.0.31'], ['or3-provider-s3', '0.0.15']]) {
                 const packageDir = join(directory, 'node_modules', name);
                 await mkdir(packageDir, { recursive: true });
                 await writeFile(join(packageDir, 'package.json'), JSON.stringify({ version }));
             }
+            const migrations = join(directory, 'node_modules/or3-provider-sqlite/dist/runtime/server/db/migrations');
+            await mkdir(migrations, { recursive: true });
+            for (const name of HISTORY_MIGRATIONS) await writeFile(join(migrations, `${name}.js`), '');
             await mkdir(join(directory, 'scripts/docker'), { recursive: true });
             const run = (profile: string) => spawnSync('bun', [join(root, 'scripts/docker/prepare-backup-inspection.mjs')], {
                 cwd: directory, env: { ...process.env, OR3_DOCKER_PROFILE: profile }, encoding: 'utf8', timeout: 10_000,
@@ -190,7 +207,7 @@ describe('managed Docker profile projection', () => {
             const profile = JSON.parse(await readFile(join(directory, 'scripts/docker/backup-inspection-profile.json'), 'utf8'));
             expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
             expect(() => assertS3InspectionProfile(profile)).not.toThrow();
-            expect(profile).toEqual({ contract: 2, sqlite: '0.0.30', s3: '0.0.15', historyIncarnation: 'unqualified', healthValidation: 'unqualified' });
+            expect(profile).toEqual({ contract: 2, sqlite: '0.0.31', s3: '0.0.15', historyIncarnation: 'unqualified', healthValidation: 'unqualified' });
             await writeFile(join(directory, 'node_modules/or3-provider-s3/package.json'), JSON.stringify({ version: '0.0.14' }));
             expect(run('clerk-sqlite-s3').status).not.toBe(0);
             expect(run('unknown').status).not.toBe(0);

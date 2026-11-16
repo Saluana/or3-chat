@@ -1,9 +1,10 @@
 import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { INSPECTION_PROFILE, S3_INSPECTION_PROFILE, HISTORY_SQLITE_VERSION, HISTORY_MIGRATIONS, assertInspectionProfile, assertS3InspectionProfile } from './backup-inspect.mjs';
 import { dockerProfile } from './prepare-manifest.mjs';
 
+const pins = JSON.parse(readFileSync(new URL('../../packages/create-or3-chat/first-party-versions.json', import.meta.url), 'utf8'));
 const installed = name => JSON.parse(readFileSync(`node_modules/${name}/package.json`, 'utf8')).version;
 const selected = dockerProfile();
 let profile;
@@ -12,10 +13,9 @@ if (selected === 'basic-sqlite-fs') {
     sqlite: installed('or3-provider-sqlite'), filesystem: installed('or3-provider-fs') };
   assertInspectionProfile(profile);
 } else {
-  const versions = JSON.parse(readFileSync(new URL('../../packages/create-or3-chat/first-party-versions.json', import.meta.url), 'utf8'));
   const sqlite = installed('or3-provider-sqlite');
   const s3 = installed('or3-provider-s3');
-  if (sqlite !== INSPECTION_PROFILE.sqlite || s3 !== versions['or3-provider-s3']) {
+  if (sqlite !== INSPECTION_PROFILE.sqlite || s3 !== pins['or3-provider-s3']) {
     throw new Error('Unsupported launch backup inspection provider versions');
   }
   // This describes the image's inspection capability; managed S3 operations
@@ -26,13 +26,19 @@ if (selected === 'basic-sqlite-fs') {
 // Describe the exact testable runtime; mandatory candidate/browser lifecycle
 // qualification still gates publication. A receipt cannot be required to enable
 // the capability that the same candidate workflow must exercise.
-const historyReady = selected === 'basic-sqlite-fs' && profile.sqlite === HISTORY_SQLITE_VERSION;
+const migrations = readdirSync('node_modules/or3-provider-sqlite/dist/runtime/server/db/migrations')
+  .filter(name => name.endsWith('.js')).map(name => name.slice(0, -3)).sort();
+if (profile.sqlite !== pins['or3-provider-sqlite'] || profile.sqlite !== HISTORY_SQLITE_VERSION
+  || JSON.stringify(migrations) !== JSON.stringify(HISTORY_MIGRATIONS)) {
+  throw new Error('Unsupported backup inspection runtime/migration binding');
+}
+const historyReady = selected === 'basic-sqlite-fs';
 profile.historyIncarnation = historyReady ? 'v1' : 'unqualified';
 if (historyReady) {
-  profile.historyMigrations = HISTORY_MIGRATIONS;
+  profile.historyMigrations = migrations;
   profile.legacySnapshotRollback = 'legacy-033-rollback-v1';
 }
-profile.healthValidation = selected === 'basic-sqlite-fs' ? 'health-only-v1' : 'unqualified';
+profile.healthValidation = historyReady ? 'health-only-v1' : 'unqualified';
 writeFileSync('scripts/docker/backup-inspection-profile.json', JSON.stringify(profile) + '\n');
 
 // Target-owned plain-Node reader: build from the same schemas/classifier as the

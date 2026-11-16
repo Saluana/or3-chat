@@ -6,9 +6,9 @@ import { readFileSync, lstatSync, openSync, readSync, closeSync } from 'node:fs'
 import { resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const INSPECTION_PROFILE = Object.freeze({ contract: 1, sqlite: '0.0.30', filesystem: '0.0.18' });
+export const INSPECTION_PROFILE = Object.freeze({ contract: 1, sqlite: '0.0.31', filesystem: '0.0.18' });
 export const HISTORY_SQLITE_VERSION = '0.0.31';
-export const S3_INSPECTION_PROFILE = Object.freeze({ contract: 2, sqlite: '0.0.30', s3: '0.0.15' });
+export const S3_INSPECTION_PROFILE = Object.freeze({ contract: 2, sqlite: '0.0.31', s3: '0.0.15' });
 export const QUALIFIED_MIGRATIONS = ['001_init', '002_sync_tables', '003_sync_hardening', '004_auth_invites', '005_admin_stores', '006_sync_snapshots', '007_device_cursor_ownership', '008_upload_intents', '009_or3_connect', '010_connect_user_code_hmac', '011_connect_environment_scope_indexes', '012_connect_credential_redelivery', '013_connect_environment_lifecycle', '014_connect_retention_activation', '015_rate_limits', '016_connect_runtime_binding', '017_background_jobs', '018_background_admission_cancels', '019_background_generation_history', '020_background_generation_receipts', '021_background_request_usage', '022_canonical_chat_reader', '023_legacy_chat_seek_index', '024_signup_invites', '025_background_shutdown_accounting', '026_retained_storage_usage', '027_verified_storage_usage', '028_user_scoped_device_cursors', '029_delegation_wait', '030_storage_generations', '031_storage_generation_uploads', '032_sync_observations', '033_tool_result_operation_ids'];
 export const HISTORY_MIGRATIONS = [...QUALIFIED_MIGRATIONS, '034_sync_intent_fingerprint', '035_sync_unavailable_records', '036_sync_history_incarnation'];
 // Explicitly retain complete published histories when a future migration is added.
@@ -19,8 +19,8 @@ const MAX_DATABASE_BYTES = 192 * 1024 * 1024;
 const MAX_ROW_BYTES = 1024 * 1024;
 
 export function assertInspectionProfile(profile) {
-  if (profile?.contract !== 1 || ![INSPECTION_PROFILE.sqlite, HISTORY_SQLITE_VERSION].includes(profile.sqlite) || profile.filesystem !== INSPECTION_PROFILE.filesystem) {
-    throw new Error(`Unsupported offline backup inspection profile; qualified SQLite ${INSPECTION_PROFILE.sqlite}/${HISTORY_SQLITE_VERSION} and FS ${INSPECTION_PROFILE.filesystem} image required`);
+  if (profile?.contract !== 1 || profile.sqlite !== INSPECTION_PROFILE.sqlite || profile.filesystem !== INSPECTION_PROFILE.filesystem) {
+    throw new Error(`Unsupported offline backup inspection profile; qualified SQLite ${INSPECTION_PROFILE.sqlite} and FS ${INSPECTION_PROFILE.filesystem} image required`);
   }
 }
 

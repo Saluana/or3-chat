@@ -157,13 +157,12 @@ Migration 036 (or next unallocated) initializes `sync_history` once, invalidates
 old device/snapshot state, and preserves unavailable evidence. Managed offline
 reset uses `/app/scripts/docker/sync-history-reset.mjs`: one transaction rotates
 the existing singleton and deletes all device cursors/snapshot headers/items.
-The helper's image profile **must remain unqualified** until the packed provider,
-matching host, native driver and exact migration history pass the real lifecycle
-suite. At that point qualify `backup-inspection-profile.json` with
-`historyIncarnation:'v1'` and exact `historyMigrations`, reconcile published pins
-and accepted inspector histories together. Current 0.0.30 and S2 advertise no
-capability and fail closed with `OR3_SYNC_HISTORY_UNSUPPORTED`. D1 and direct
-Convex remain separate qualification lanes. No publication is performed here.
+The Basic image generator verifies pinned published SQLite 0.0.31 and its complete
+installed migration list before writing `historyIncarnation:'v1'`, exact
+`historyMigrations` and `healthValidation:'health-only-v1'`. This enables mandatory
+candidate qualification; metadata alone does not certify the native image,
+browser or managed lifecycle. Earlier 0.0.30 is incapable. D1 service and Clerk/S3
+managed replacement remain separate qualification lanes.
 
 
 ### Proven first binding
@@ -263,7 +262,7 @@ no automatic recovery put is offered. Retry all affects active outbox work only.
 
 The hardened Convex candidate implements unavailable-v1, incarnation-v1 and
 stored-record-v1 in direct and gateway modes against matching deployed templates.
-Published 0.0.26 remains incapable; a package version/capability alone is not
+Published 0.0.27 contains the matched contract; earlier 0.0.26 remains incapable; a package version/capability alone is not
 backend qualification. Deploy the updated schema/functions, verify the exact
 backend digest and explicitly initialize history once before enabling the host.
 Ordinary deploy/restart/GC preserves identity. Complete replacement requires

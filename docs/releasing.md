@@ -186,8 +186,8 @@ on npm:
 
 ```bash
 npm view or3-provider-basic-auth@0.0.20 version
-npm view or3-provider-sqlite@0.0.28 version
-npm view or3-provider-fs@0.0.17 version
+npm view or3-provider-sqlite@0.0.31 version
+npm view or3-provider-fs@0.0.18 version
 ```
 
 Run the relevant provider qualification in its own repository before tagging.
@@ -367,4 +367,5 @@ safety snapshot and explicit destructive recovery; quiet logs/unchanged counters
 never waive consent. Record source/candidate/provider SHAs and exact registry
 integrities, image/operator digests/platforms, tarball hash, DB/sidecar/asset/file
 hashes, admission transitions, pins and browser evidence in the release receipt.
-The current registry SQLite 0.0.30 does not yet activate this candidate contract.
+The host pins published SQLite 0.0.31. Profile generation verifies its exact
+pinned version and complete installed migration list before advertising this contract.
