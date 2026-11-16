@@ -17,9 +17,13 @@ function rows(page: Page, store: string): Promise<Row[]> {
         open.onerror = () => reject(open.error);
         open.onsuccess = () => {
             const db = open.result;
-            const request = db.transaction(store, 'readonly').objectStore(store).getAll();
-            request.onsuccess = () => { db.close(); resolve(request.result as Row[]); };
-            request.onerror = () => { db.close(); reject(request.error); };
+            try {
+                // Read the protected native store independently of Dexie's logical accessors.
+                const name = `current_${store}`;
+                const request = db.transaction(name, 'readonly').objectStore(name).getAll();
+                request.onsuccess = () => { db.close(); resolve(request.result as Row[]); };
+                request.onerror = () => { db.close(); reject(request.error); };
+            } catch (error) { db.close(); reject(error); }
         };
     }), { name: DB_NAME, store });
 }
@@ -34,8 +38,8 @@ async function injectFaults(page: Page, faults: { corrupt: string[]; loseRow: st
         open.onerror = () => reject(open.error);
         open.onsuccess = () => {
             const db = open.result;
-            const tx = db.transaction(['pending_ops', 'messages'], 'readwrite');
-            const ops = tx.objectStore('pending_ops');
+            const tx = db.transaction(['current_pending_ops', 'current_messages'], 'readwrite');
+            const ops = tx.objectStore('current_pending_ops');
             const request = ops.getAll();
             request.onsuccess = () => {
                 for (const op of request.result as Row[]) {
@@ -46,7 +50,7 @@ async function injectFaults(page: Page, faults: { corrupt: string[]; loseRow: st
                         ops.put({ ...op, status: 'failed_permanent', failureKind: 'permanent', failedAt: Date.now() });
                     }
                 }
-                for (const id of faults.loseRow) tx.objectStore('messages').delete(id);
+                for (const id of faults.loseRow) tx.objectStore('current_messages').delete(id);
             };
             tx.oncomplete = () => { db.close(); resolve(); };
             tx.onerror = () => { db.close(); reject(tx.error); };
@@ -60,6 +64,9 @@ async function seed(page: Page): Promise<void> {
     await page.getByTestId('seed').click();
     await expect(page.getByTestId('phase')).toHaveText('seeded', { timeout: 30_000 });
     expect(await page.getByTestId('error').count()).toBe(0);
+    // Recovery runs within the fixture's already connected history.
+    expect((await rows(page, 'sync_state')).find((row) => row.id === 'sync_history'))
+        .toMatchObject({ phase: 'ready', historyIncarnation: 'sync-recovery-harness-history' });
     // Real capture queued one operation per record, each carrying its content.
     const ops = await rows(page, 'pending_ops');
     expect(ops.map((op) => op.pk).sort()).toEqual(['d-corrupt', 'd-failed', 'm-corrupt', 'm-failed', 'm-intact', 'm-orphan']);
@@ -89,7 +96,7 @@ test.describe('Cloud sync recovery in the browser', () => {
         expect(Object.keys(posts).sort()).toEqual(['d-corrupt', 'd-failed']);
         expect(posts['d-corrupt'].title).toBe('Corrupt op document');
         expect(posts['d-failed'].title).toBe('Failed op document');
-        expect((await rows(page, 'sync_state'))[0]?.cursor).toBe(42);
+        expect((await rows(page, 'sync_state')).find((row) => row.id === 'sync_state:sync-recovery-harness:default')?.cursor).toBe(42);
 
         // Corrupt operations were preserved with diagnostics, not deleted.
         const quarantine = Object.fromEntries((await rows(page, 'sync_quarantine')).map((row) => [row.pk, row]));
