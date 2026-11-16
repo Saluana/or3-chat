@@ -421,6 +421,14 @@ warning, has no installed incarnation and requires re-upgrade. Use the new exact
 CLI with schema 2, preserve source and abandoned-history pins, and export
 important old-tab work. Vault custody/external services are not rewound.
 
+The new CLI's `verify` command supports that exact published 0.1.116 image,
+including after rollback. It checks the running container against the allowlisted
+image before using the legacy sync protocol, completes the same authentication,
+file, database and log probes, and reports `incarnation protection unavailable`.
+This result does not certify legacy history safety. Other image identities remain
+subject to the current history-incarnation checks; a missing or malformed token
+never enables legacy verification.
+
 Activation is still blocked pending the exact hardened provider/image/browser
 qualification. The pinned SQLite 0.0.31 profile binds generated capabilities to
 its exact installed 036 migration set; registry availability alone is insufficient. A later qualified re-upgrade takes a fresh source

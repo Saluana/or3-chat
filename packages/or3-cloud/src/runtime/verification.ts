@@ -96,7 +96,7 @@ export function assertVerificationGrant(value: Record<string, unknown>, expected
   }
 }
 
-export async function verifyPublicApplication(baseUrl: URL, credentials: { email: string; password: string }) {
+export async function verifyPublicApplication(baseUrl: URL, credentials: { email: string; password: string }, syncProtocol: 'incarnation-v1' | 'legacy-033' = 'incarnation-v1') {
   const root = await verificationFetch(baseUrl);
   if (root.status !== 200) throw new Error(`${baseUrl} returned HTTP ${root.status}; redirects are not accepted during verification.`);
 
@@ -121,14 +121,17 @@ export async function verifyPublicApplication(baseUrl: URL, credentials: { email
     const workspaceId = String(session.session.workspace.id);
     const pull = await verificationJson(baseUrl, '/api/sync/pull', {
       cookie,
-      body: { scope: { workspaceId }, historyIncarnation: null, historyIncarnationCapability: 'incarnation-v1', cursor: 0, limit: 1, tables: ['messages'] },
+      body: { scope: { workspaceId }, ...(syncProtocol === 'incarnation-v1' ? { historyIncarnation: null, historyIncarnationCapability: 'incarnation-v1' } : {}), cursor: 0, limit: 1, tables: ['messages'] },
     });
     if (!Array.isArray(pull.changes) || typeof pull.nextCursor !== 'number') {
       throw new Error('Public SQLite sync pull returned an invalid response.');
     }
 
     const historyIncarnation = pull.historyIncarnation;
-    if (typeof historyIncarnation !== 'string' || !/^[\x00-\x7f]{1,128}$/.test(historyIncarnation)) throw new Error('Public sync runtime lacks qualified history incarnation support.');
+    if (syncProtocol === 'incarnation-v1'
+      ? typeof historyIncarnation !== 'string' || !/^[\x00-\x7f]{1,128}$/.test(historyIncarnation)
+      : historyIncarnation !== undefined) throw new Error('Public sync runtime lacks qualified history incarnation support.');
+    const syncIdentity = syncProtocol === 'incarnation-v1' ? { historyIncarnation, historyIncarnationCapability: 'incarnation-v1' } : {};
 
     const probeBytes = Buffer.concat([
       Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489', 'hex'),
@@ -179,7 +182,7 @@ export async function verifyPublicApplication(baseUrl: URL, credentials: { email
       const pushed = await verificationJson(baseUrl, '/api/sync/push', {
         cookie,
         body: {
-          scope: { workspaceId }, historyIncarnation, historyIncarnationCapability: 'incarnation-v1',
+          scope: { workspaceId }, ...syncIdentity,
           ops: [{
             id: `or3-verification-${metadataOpId}`,
             tableName: 'file_meta',
@@ -230,7 +233,7 @@ export async function verifyPublicApplication(baseUrl: URL, credentials: { email
           const deleted = await verificationJson(baseUrl, '/api/sync/push', {
             cookie,
             body: {
-              scope: { workspaceId }, historyIncarnation, historyIncarnationCapability: 'incarnation-v1',
+              scope: { workspaceId }, ...syncIdentity,
               ops: [{
                 id: `or3-verification-${metadataDeleteOpId}`,
                 tableName: 'file_meta',

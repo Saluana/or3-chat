@@ -100,6 +100,12 @@ session hydration, SQLite sync, a disposable filesystem upload/download and
 canonical metadata cleanup cycle, both SQLite databases, volume ownership, proxy runtime settings, and a
 bounded window of serious container logs. On a public VPS, require the real
 HTTPS path (with no redirects) using `npx @or3/cloud verify --public`.
+The new CLI also verifies the exact published 0.1.116 rollback image after
+checking that its running container matches the allowlisted image identity.
+It runs the same authentication, sync, storage and database probes, and reports
+`incarnation protection unavailable`. This does not certify legacy sync history;
+re-upgrade for held-intent protection. Current or unknown images still require
+history-incarnation support; there is no legacy override flag.
 After changing the owner password in the app, pass the current credential only
 through an owner-only file:
 `npx @or3/cloud verify --public --verification-email owner@example.com --verification-password-file /secure/current-owner-password`.
