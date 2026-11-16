@@ -203,9 +203,15 @@ export class SubscriptionManager {
                 }
                 // Only the subscription owner starts this manager. A follower's
                 // durable CAS wakes that owner without bypassing its Web Lock.
-                const watch = liveQuery(() => readHistory(this.db)).subscribe(guard => {
-                    if (this.isCurrentGeneration(generation) && this.status === 'connected' &&
-                        this.history && !sameHistory(guard, this.history)) this.scheduleReconnect(generation);
+                const watch = liveQuery(async () => ({ guard: await readHistory(this.db),
+                    pause: await this.db.sync_state.get(protocolPauseId(this.provider.id, this.scope)) })).subscribe(({ guard, pause }) => {
+                    if (!this.isCurrentGeneration(generation) || this.status !== 'connected') return;
+                    if (pause?.protocolPause) {
+                        this.lifecycleGeneration++;
+                        this.requestController.abort();
+                        this.unsubscribe?.(); this.unsubscribe = null;
+                        this.clearReconnectTimeout(); this.setStatus('error');
+                    } else if (this.history && !sameHistory(guard, this.history)) this.scheduleReconnect(generation);
                 });
                 this.stopHistoryWatch = () => watch.unsubscribe();
             }
@@ -883,8 +889,7 @@ export class SubscriptionManager {
                 historyIncarnation: this.history?.historyIncarnation,
                 onError: async error => {
                     if (!this.isCurrentGeneration(generation)) return;
-                    if (isHistoryProtocolBoundary(error)) await pauseHistoryProtocol(this.db, this.provider.id, this.scope, error, captured);
-                    this.handleError(error, generation);
+                    await this.handleError(error, generation, captured);
                 },
                 cursor, limit: this.config.bootstrapPageSize,
                 ...(this.provider.capabilities?.subscriptionPages === 'v1' ? {
@@ -908,9 +913,9 @@ export class SubscriptionManager {
         });
         // Keep the queue usable after a failure, but reject this page's receipt
         // so the transport cannot advance past an unsuccessful apply.
-        this.changeQueue = apply.catch(error => {
+        this.changeQueue = apply.catch(async error => {
             if (this.isCurrentGeneration(generation) && error instanceof StaleHistoryError) this.scheduleReconnect(generation);
-            else if (this.isCurrentGeneration(generation) && !isAbortLikeError(error)) this.handleError(error, generation);
+            else if (this.isCurrentGeneration(generation) && !isAbortLikeError(error)) await this.handleError(error, generation);
         });
         return apply;
     }
@@ -1075,7 +1080,7 @@ export class SubscriptionManager {
                 scope: this.scope,
                 error: error instanceof Error ? error.message : String(error),
             });
-            this.handleError(error, generation);
+            await this.handleError(error, generation);
         }
     }
 
@@ -1189,11 +1194,12 @@ export class SubscriptionManager {
     /**
      * Handle subscription error
      */
-    private handleError(error: unknown, generation: number): void {
+    private async handleError(error: unknown, generation: number, captured = this.history): Promise<void> {
         if (!this.isCurrentGeneration(generation) || isAbortLikeError(error)) {
             return;
         }
-        if (isHistoryProtocolBoundary(error)) void pauseHistoryProtocol(this.db, this.provider.id, this.scope, error, this.history);
+        if (isHistoryProtocolBoundary(error)) await pauseHistoryProtocol(this.db, this.provider.id, this.scope, error, captured);
+        if (!this.isCurrentGeneration(generation)) return;
         console.error('[SubscriptionManager] Subscription error:', error);
         if (this.unsubscribe) {
             this.unsubscribe();

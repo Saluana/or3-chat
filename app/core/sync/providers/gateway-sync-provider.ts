@@ -97,7 +97,7 @@ export interface GatewaySyncProviderConfig {
 class GatewaySyncRequestError extends Error {
     data?: { code?: string; historyIncarnation?: string; requiresSnapshot?: boolean };
     readonly source = 'sync' as const;
-    code: ErrorCode | 'OR3_SYNC_OLDER_SERVER';
+    code: ErrorCode | 'OR3_SYNC_OLDER_SERVER' | 'OR3_SYNC_HISTORY_UNSUPPORTED';
     retryable: boolean;
     status: number;
     path: string;
@@ -262,7 +262,12 @@ async function requestJsonRaw<T>(
         try {
             const refusal = JSON.parse(text) as { statusMessage?: string };
             if (res.status === 403 && refusal.statusMessage === 'Forbidden: Missing mutation intent') error.code = 'OR3_SYNC_OLDER_SERVER';
-        } catch { /* An intermediary refusal is not evidence of a known older release. */ }
+            else if (typeof refusal.statusMessage !== 'string' && res.status !== 401 && res.status !== 429) error.code = 'OR3_SYNC_HISTORY_UNSUPPORTED';
+        } catch {
+            // An unrecognizable gateway/proxy response proves neither auth loss
+            // nor the current contract. Keep rate-limit/auth status semantics.
+            if (res.status !== 401 && res.status !== 429) error.code = 'OR3_SYNC_HISTORY_UNSUPPORTED';
+        }
         if (!isHistoryProtocolBoundary(error)) notifyInvalidSyncSession(error);
         throw error;
     }
@@ -272,7 +277,7 @@ async function requestJsonRaw<T>(
         if (options.allowEmpty) {
             return undefined as T;
         }
-        throw new Error(`[gateway-sync] ${path} returned empty response`);
+        throw Object.assign(new Error(`[gateway-sync] ${path} returned empty response`), { code: 'OR3_SYNC_HISTORY_UNSUPPORTED' });
     }
 
     let decoded: unknown;
@@ -460,7 +465,7 @@ export function createGatewaySyncProvider(
                         if (!('historyIncarnation' in message) || !HistoryIncarnationSchema.safeParse(message.historyIncarnation).success) {
                             const error = Object.assign(new Error('Invalid sync event history'), { code: 'OR3_SYNC_HISTORY_UNSUPPORTED' });
                             unsubscribe();
-                            void options?.onError?.(error);
+                            void Promise.resolve(options?.onError?.(error)).catch(failure => console.error('[gateway-sync] Failed to retain transport pause', failure));
                             return;
                         }
                         if (message.historyIncarnation !== historyIncarnation) { void run(); return; }

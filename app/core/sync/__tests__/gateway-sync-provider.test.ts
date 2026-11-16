@@ -106,6 +106,12 @@ function pushBatch() {
 
 describe('legacy server pre-dispatch refusal', () => {
     afterEach(() => vi.unstubAllGlobals());
+    it.each([403, 502])('preserves session and pauses on an unrecognizable intermediary %s', async status => {
+        const dispatch = vi.fn(); vi.stubGlobal('dispatchEvent', dispatch);
+        vi.stubGlobal('fetch', vi.fn(async () => makeErrorResponse(status, '<html>proxy refusal</html>')));
+        await expect(createGatewaySyncProvider().push(pushBatch())).rejects.toMatchObject({ code: 'OR3_SYNC_HISTORY_UNSUPPORTED' });
+        expect(dispatch).not.toHaveBeenCalled();
+    });
     it('uses the downgrade fence and refuses before invalid-session cleanup', async () => {
         const dispatch = vi.fn(); vi.stubGlobal('dispatchEvent', dispatch);
         const fetcher = vi.fn(async (_url: unknown, _options?: RequestInit) => makeErrorResponse(403, { statusMessage: 'Forbidden: Missing mutation intent' }));
@@ -286,7 +292,7 @@ describe('GatewaySyncProvider', () => {
     it('backs off repeated outages and keeps the retry deadline across resume', async () => {
         vi.spyOn(Math, 'random').mockReturnValue(0);
         vi.spyOn(console, 'error').mockImplementation(() => undefined);
-        const fetchMock = vi.fn(async () => makeErrorResponse(503, 'Unavailable'));
+        const fetchMock = vi.fn(async () => makeErrorResponse(503, { statusMessage: 'Unavailable' }));
         vi.stubGlobal('fetch', fetchMock);
         const provider = createGatewaySyncProvider({ pollIntervalMs: 100 });
         const unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['messages'], () => undefined);
@@ -762,7 +768,7 @@ describe('GatewaySyncProvider', () => {
         const fetchMock = vi
             .fn()
             .mockResolvedValueOnce(
-                makeErrorResponse(503, 'Convex temporarily unavailable')
+                makeErrorResponse(503, { statusMessage: 'Convex temporarily unavailable' })
             )
             .mockResolvedValueOnce(
                 makeOkResponse({

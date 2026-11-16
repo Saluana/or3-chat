@@ -1,4 +1,4 @@
-import { isHistoryProtocolBoundary } from './history-incarnation';
+import { isHistoryProtocolBoundary, protocolPauseId } from './history-incarnation';
 import { liveQuery } from 'dexie';
 /**
  * Sync Engine Plugin
@@ -196,7 +196,7 @@ function requestEngine(scope: SyncScope | null, force = false, authorizationRevi
     return operation;
 }
 
-function startSyncEngine(
+async function startSyncEngine(
     workspaceId: string,
     principalId = getCachedSessionContext()?.user?.id,
     authorizationRevision = getCachedSessionContext()?.authorizationRevision,
@@ -206,7 +206,8 @@ function startSyncEngine(
     // A healthy same-scope start remains idempotent; auth changes still reconcile.
     if (!reconcilePending && desiredScope?.workspaceId === workspaceId && desiredScope.principalId === principalId &&
         engineState?.scope.workspaceId === workspaceId && engineState.scope.principalId === principalId &&
-        desiredAuthorizationRevision === authorizationRevision && engineState.subscriptionManager.getStatus() === 'error') {
+        desiredAuthorizationRevision === authorizationRevision && (engineState.subscriptionManager.getStatus() === 'error' ||
+            (await engineState.db.sync_state.get(protocolPauseId(engineState.provider.id, engineState.scope)))?.protocolPause)) {
         return requestEngine({ workspaceId, ...(principalId ? { principalId } : {}) }, true, authorizationRevision);
     }
     return requestEngine({ workspaceId, ...(principalId ? { principalId } : {}) }, false, authorizationRevision);
