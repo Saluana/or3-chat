@@ -1297,6 +1297,13 @@ it('exports only authorized legacy evidence, retains private/unknown rows and ve
         expect(notifications.rows.map(row => row.value.id)).toEqual(['mine']); expect(notifications.excluded).toBe(3);
         expect((await inspectLegacyEvidence(db, scope, 'workspace_tab_drafts')).rows.map(row => row.value.id)).toEqual(['mine']);
         expect((await inspectLegacyEvidence(db, scope, 'kv')).rows.map(row => row.value.id)).toEqual(['theme']);
+        await old.table('pending_ops').bulkPut([
+            { id: 'mine', tableName: 'messages', payload: { id: 'mine', workspace_id: workspaceId } },
+            { id: 'foreign-workspace', tableName: 'messages', payload: { id: 'private', workspace_id: 'other-workspace' } },
+            { id: 'foreign-account', tableName: 'messages', payload: { id: 'private', accountId: 'other' } },
+        ]);
+        expect((await inspectLegacyEvidence(db, scope, 'pending_ops')).rows.map(row => row.value.id)).toEqual(['mine']);
+        expect(await old.table('pending_ops').count()).toBe(3);
         const bytes = new Blob(['legacy attachment']);
         const { computeHashHex } = await import('~/utils/hash');
         const hash = `sha256:${await computeHashHex(bytes, 'sha256')}`;

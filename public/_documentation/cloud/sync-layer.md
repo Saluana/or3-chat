@@ -904,7 +904,8 @@ identity and unknown origin accompany each export. Close older tabs first:
 these are partial live reads, not a certified complete snapshot. Current
 workspace authorization is checked before and after reads; other-account and
 unknown-account private notifications/drafts, local-only KV and unclassified
-private evidence stay in place. An attachment export revalidates its authorized
+private evidence stay in place. Queued payloads explicitly naming another
+workspace or account are excluded even when their wrapper is local. An attachment export revalidates its authorized
 source reference and verifies the bytes against its stored hash. Failed exports
 never remove their source. No legacy store becomes a normal writable accessor,
 and no inspection opens a version upgrade or automatically imports/replays data.

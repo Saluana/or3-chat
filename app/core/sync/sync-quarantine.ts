@@ -506,6 +506,13 @@ function visibleLegacyEvidence(store: string, row: Record<string, unknown>, scop
     const target = ['pending_ops', 'tombstones', 'sync_quarantine'].includes(store) ? row.tableName : store;
     if (typeof target !== 'string' || ![...SYNCED_TABLES, 'file_transfers'].includes(target as typeof SYNCED_TABLES[number])) return false;
     const payload = row.payload && typeof row.payload === 'object' ? row.payload as Record<string, unknown> : row;
+    // Queued intent carries its own provenance; a wrapper cannot authorize
+    // explicitly foreign content merely by living in this workspace's store.
+    if (typeof payload.workspace_id === 'string' && payload.workspace_id !== scope.workspaceId) return false;
+    if (typeof payload.accountId === 'string' && payload.accountId !== principalId) return false;
+    const payloadScope = payload.scope as { workspaceId?: string; principalId?: string } | undefined;
+    if (payloadScope?.workspaceId && payloadScope.workspaceId !== scope.workspaceId ||
+        payloadScope?.principalId && payloadScope.principalId !== principalId) return false;
     if (target === 'notifications') return payload.user_id === principalId;
     if (target === 'kv') {
         const name = typeof payload.name === 'string' ? payload.name
