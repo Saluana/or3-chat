@@ -1532,12 +1532,17 @@ test('shared update assessment blocks on a foreign lease but not the caller own 
   }
 });
 
-for (const scenario of ['coordinated', 'deferred', 'unexpected-503', 'metadata-failure', 'put-failure', 'commit-failure'] as const) {
+for (const scenario of ['coordinated', 'deferred', 'unexpected-503', 'metadata-failure', 'put-failure', 'commit-failure',
+  'legacy', 'legacy-wrong-digest', 'legacy-wrong-repository', 'legacy-reference-mismatch', 'legacy-runtime-mismatch',
+  'legacy-malformed-history', 'current-missing-history', 'current-malformed-history', 'current-changed-history'] as const) {
   test(`verify cleans canonical probe metadata before physical deletion (${scenario})`, async () => {
     const directory = await realpath(await mkdtemp(join(tmpdir(), 'or3-verify-retention-')));
     const events: string[] = [];
     let live = false;
     let bytes = new Uint8Array();
+    const legacy = scenario.startsWith('legacy');
+    const historyIncarnation = scenario.endsWith('malformed-history') ? null
+      : legacy || scenario === 'current-missing-history' ? undefined : 'I';
     const server = Bun.serve({
       hostname: '127.0.0.1', port: 0,
       async fetch(request) {
@@ -1547,7 +1552,7 @@ for (const scenario of ['coordinated', 'deferred', 'unexpected-503', 'metadata-f
         if (path === '/api/health') return json({status:'ok',providers:{auth:{provider:'basic-auth'},sync:{provider:'sqlite'},storage:{provider:'fs'}}});
         if (path === '/api/basic-auth/sign-in') return Response.json({}, {headers:{'set-cookie':'session=synthetic; HttpOnly'}});
         if (path === '/api/auth/session') return json({session:{user:{email:'fixture@example.test'},workspace:{id:'synthetic-workspace'}}});
-        if (path === '/api/sync/pull') return json({historyIncarnation:'I',changes:[],nextCursor:0});
+        if (path === '/api/sync/pull') return json({historyIncarnation,changes:[],nextCursor:0});
         if (path === '/api/storage/presign-upload') return json({storageId:'synthetic-probe',intentId:'synthetic-upload-intent',url:new URL('/upload',request.url).href,method:'PUT'});
         if (path === '/upload') { bytes = new Uint8Array(await request.arrayBuffer()); return json({}); }
         if (path === '/api/storage/commit') {
@@ -1561,7 +1566,7 @@ for (const scenario of ['coordinated', 'deferred', 'unexpected-503', 'metadata-f
           if (scenario === 'metadata-failure' && operation === 'delete') return json({historyIncarnation:'I',results:[{success:false}]});
           if (scenario === 'put-failure' && operation === 'put') return json({historyIncarnation:'I',results:[{success:false}]});
           live = operation === 'put';
-          return json({historyIncarnation:'I',results:[{success:true}]});
+          return json({historyIncarnation:scenario === 'current-changed-history' ? 'changed' : historyIncarnation,results:[{success:true}]});
         }
         if (path === '/api/storage/presign-download') return json({url:new URL('/download',request.url).href,method:'GET'});
         if (path === '/download') return new Response(bytes);
@@ -1578,9 +1583,11 @@ for (const scenario of ['coordinated', 'deferred', 'unexpected-503', 'metadata-f
       },
     });
     try {
-      const image = `ghcr.io/saluana/or3-chat@sha256:${'a'.repeat(64)}`;
-      const env = buildEnv({mode:'local',version:'0.1.73',directory,image,email:'fixture@example.test',password:'Synthetic-fixture-password-123!',port:server.port!});
-      const state = stateFromEnv(directory,env,'local','init',`sha256:${'a'.repeat(64)}`);
+      const digest = legacy && scenario !== 'legacy-wrong-digest'
+        ? 'sha256:f7e6c507f2fb944c91f285e976b69b578ff9a24cdb8ceeaf22db7e22c79de692' : `sha256:${'a'.repeat(64)}`;
+      const image = `${scenario === 'legacy-wrong-repository' ? 'example.test/other' : 'ghcr.io/saluana/or3-chat'}@${scenario === 'legacy-reference-mismatch' ? `sha256:${'b'.repeat(64)}` : digest}`;
+      const env = buildEnv({mode:'local',version:legacy ? '0.1.116' : '0.1.73',directory,image,email:'fixture@example.test',password:'Synthetic-fixture-password-123!',port:server.port!});
+      const state = stateFromEnv(directory,env,'local','init',digest);
       await mkdir(join(directory,'.or3-cloud'));
       await writeFile(join(directory,'.env'),serializeEnv(env),{mode:0o600});
       await writeFile(join(directory,'.or3-cloud','state.json'),JSON.stringify(state),{mode:0o600});
@@ -1590,16 +1597,26 @@ for (const scenario of ['coordinated', 'deferred', 'unexpected-503', 'metadata-f
       await writeFile(join(bin,'docker'),`#!/usr/bin/env bun
 const args = process.argv.slice(2); const text = args.join(' ');
 if (args[0] === 'info' || (args[0] === 'compose' && args[1] === 'version')) process.exit(0);
-if (args[0] === 'image' && args[1] === 'inspect' && text.includes('.RepoDigests')) console.log(JSON.stringify([${JSON.stringify(image)}]));
+if (args[0] === 'image' && args[1] === 'inspect' && text.includes('.RepoDigests')) console.log(JSON.stringify([${JSON.stringify(image.split('@')[0] + '@' + digest)}]));
+else if (args[0] === 'image' && args[1] === 'inspect' && text.includes('.Id')) console.log('sha256:fixture-image');
+else if (args[0] === 'inspect' && text.includes('.Image')) console.log(${JSON.stringify(scenario === 'legacy-runtime-mismatch' ? 'sha256:other-image' : 'sha256:fixture-image')});
+else if (args[0] === 'compose' && args.includes('ps')) console.log('fixture-container');
 else if (args[0] === 'compose' && args.includes('exec') && text.includes('quick_check')) console.log(JSON.stringify([{path:'auth.sqlite',quickCheck:'ok',tables:1},{path:'sync.sqlite',quickCheck:'ok',tables:1}]));
 else if (args[0] === 'compose' && (args.includes('exec') || args.includes('logs'))) process.exit(0);
 else { console.error('Fixture refused Docker operation'); process.exit(1); }
 `,{mode:0o755});
       const child = Bun.spawn([process.execPath,join(import.meta.dir,'../src/cli.ts'),'verify'],{cwd:directory,env:{...process.env,PATH:`${bin}:${process.env.PATH}`},stdout:'pipe',stderr:'pipe'});
       const [exitCode,stdout,stderr] = await Promise.all([child.exited,new Response(child.stdout).text(),new Response(child.stderr).text()]);
+      if (scenario.startsWith('legacy-') || scenario === 'current-missing-history' || scenario === 'current-malformed-history') {
+        expect(exitCode,stdout+stderr).toBe(1);
+        expect(events).not.toContain('commit');
+        expect(events).not.toContain('physical-delete');
+        expect(stderr).toContain(scenario === 'legacy-runtime-mismatch' ? 'running container' : 'history incarnation support');
+        return;
+      }
       expect(events,stdout+stderr).toContain('delete');
       expect(events.at(-1)).toBe('sign-out');
-      if (scenario === 'metadata-failure') {
+      if (scenario === 'metadata-failure' || scenario === 'current-changed-history') {
         expect(exitCode).toBe(1);
         expect(events).not.toContain('physical-delete');
         expect(stderr).toContain('metadata cleanup failed');
@@ -1607,6 +1624,7 @@ else { console.error('Fixture refused Docker operation'); process.exit(1); }
         expect(events.indexOf('delete')).toBeLessThan(events.indexOf('physical-delete'));
         expect(live).toBe(false);
         expect(exitCode,stdout+stderr).toBe(scenario === 'unexpected-503' || scenario === 'put-failure' || scenario === 'commit-failure' ? 1 : 0);
+        if (scenario === 'legacy') expect(stdout).toContain('incarnation protection unavailable');
         if (scenario === 'deferred') expect(stdout).toContain('physical cleanup deferred');
         if (scenario === 'unexpected-503') expect(stderr).toContain('Synthetic unexpected failure');
         if (scenario === 'put-failure') expect(stderr).toContain('metadata sync failed');

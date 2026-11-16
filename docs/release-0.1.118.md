@@ -1,6 +1,11 @@
-# OR3 Cloud 0.1.117
+# OR3 Cloud 0.1.118
 
 Release preparation; candidate qualification and publication are pending.
+
+The 0.1.117 candidate remained unpublished after qualification exposed that the
+new CLI could not verify its supported 0.1.116 rollback target. This candidate
+adds exact-image legacy verification with an explicit protection warning;
+current and unknown images retain strict history-incarnation checks.
 
 | Component | Changed? | Notes |
 | --- | --- | --- |

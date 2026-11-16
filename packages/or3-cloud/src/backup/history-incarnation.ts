@@ -6,6 +6,7 @@ import type { BackupManifest, ManagedState, LegacySnapshotPolicy } from '../depl
 import { updatePending, writeState } from '../deployment/state-store';
 import { run } from '../runtime/command-runner';
 import { imageAtDigest } from '../deployment/identity';
+import { isQualifiedLegacyImage } from '../runtime/images';
 
 const helper = '/app/scripts/docker/sync-history-reset.mjs';
 const node = 'if [ -x /nodejs/bin/node ]; then exec /nodejs/bin/node "$@"; else exec node "$@"; fi';
@@ -50,13 +51,6 @@ export async function requireValidationTarget(directory: string, image: string):
     }
 }
 
-// The exact published index and its platform manifests. Identity alone is not
-// qualification: the candidate capability must also opt into this policy.
-const LEGACY_DIGESTS = new Set([
-  'sha256:f7e6c507f2fb944c91f285e976b69b578ff9a24cdb8ceeaf22db7e22c79de692',
-  'sha256:772975a54da5662fd08cf7627b352eea769006d7536123d766643a455b4c2364',
-  'sha256:8dcafc169a27579bb14c41097dc9efdecc2ce08bf7589dd96fbee3ecd222e34b',
-]);
 export async function qualifyLegacySnapshot(directory: string, state: ManagedState, manifest: BackupManifest,
   env: Record<string,string>, inspectorImage: string, backupPath?: string): Promise<LegacySnapshotPolicy> {
   const pending = state.incompleteOperation;
@@ -64,8 +58,7 @@ export async function qualifyLegacySnapshot(directory: string, state: ManagedSta
     || pending?.previousBackupId === manifest.backupId && !pending.admission
     || state.rollback?.backupId === manifest.backupId
     || !backupPath && manifest.imageDigest === state.imageDigest;
-  if (!immediate || manifest.appVersion !== '0.1.116' || !LEGACY_DIGESTS.has(manifest.imageDigest)
-    || !/^ghcr\.io\/saluana\/or3-chat(?::0\.1\.116)?(?:@sha256:[a-f0-9]{64})?$/.test(manifest.image)
+  if (!immediate || !isQualifiedLegacyImage(manifest)
     || manifest.schemaVersion !== 1) throw new Error('Source is not the qualified immediate legacy 033 snapshot');
   assertSupportedBackupProfile(env);
   const capability = await historyCommand(directory, inspectorImage, ['capability']);
