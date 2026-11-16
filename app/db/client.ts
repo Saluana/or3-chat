@@ -535,7 +535,7 @@ export class Or3DB extends Dexie {
                 console.warn('[db] Changes from an outdated client; origin unknown. Isolated legacy stores are retained; current sync never reads or publishes them.');
             }
             const guard = await this.sync_state.get('sync_history');
-            this.syncHistoryAtOpen = guard ? guard.historyIncarnation ?? null : undefined;
+            if (this.syncHistoryAtOpen === undefined) this.syncHistoryAtOpen = guard ? guard.historyIncarnation ?? null : undefined;
         });
 
         // Derived-key maintenance must run on every instance, including
@@ -793,6 +793,30 @@ export function getWorkspaceDb(workspaceId: string): Or3DB {
         console.debug(`[db:client] Created workspace DB: ${workspaceId} (cache: ${workspaceDbCache.size}/${MAX_CACHED_WORKSPACE_DBS})`);
     }
     return created;
+}
+
+/** Replace an obsolete history handle without relabeling callbacks holding it. */
+export async function rebindWorkspaceDb(workspaceId: string, expected: Or3DB): Promise<Or3DB> {
+    if (getWorkspaceDb(workspaceId) !== expected) return getWorkspaceDb(workspaceId);
+    const replacement = new Or3DB(expected.name);
+    await replacement.open();
+    if (getWorkspaceDb(workspaceId) !== expected) {
+        replacement.close();
+        return getWorkspaceDb(workspaceId);
+    }
+    // Cache replacement closes the old connection and releases its capture and
+    // managers. Old handles remain closed with their original history identity.
+    const active = activeWorkspaceId === workspaceId && activeDb === expected;
+    if (active) {
+        activeDb = replacement;
+        db = replacement;
+    }
+    workspaceDbCache.set(workspaceId, replacement);
+    if (active) {
+        workspaceGeneration += 1;
+        notifyActiveWorkspaceChange(workspaceId, workspaceId);
+    }
+    return replacement;
 }
 
 /**

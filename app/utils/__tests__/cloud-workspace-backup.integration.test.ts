@@ -7,7 +7,7 @@ import { restoreCloudWorkspace } from '../cloud-workspace-backup';
 
 const context = vi.hoisted(() => ({
     workspaceId: 'source',
-    db: {},
+    db: { syncHistoryAtOpen: 'history-I', sync_state: { get: async () => ({ phase: 'ready', historyIncarnation: 'history-I' }) } },
     update: vi.fn(),
 }));
 vi.mock('~/db/client', () => ({ getActiveWorkspaceId: () => context.workspaceId, getDb: () => context.db }));

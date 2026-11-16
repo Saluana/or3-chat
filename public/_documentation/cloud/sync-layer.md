@@ -38,6 +38,11 @@ restores the pending cursor acknowledgement. The terminal catch-up page retries
 that ACK even when no new rows arrive, so a reload after snapshot installation
 cannot leave a fresh device absent from server retention accounting. Coverage
 from a different history never supplies this acknowledgement.
+After installation, sync replaces only that workspace's Dexie connection and
+restarts its transport without navigating the page. Old connection handles keep
+their original history and stay closed, so delayed callbacks cannot write into
+the installed history. Cloud restore waits for this initial handoff before
+starting destination uploads.
 Edits committed while downloading are included. Quota failure preserves the old
 state and leaves pushes closed. Same-history expiry keeps ordinary pending replay.
 

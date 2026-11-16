@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setHookEngine } from '~/core/hooks/useHooks';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
-import { evictWorkspaceDb, getWorkspaceDb, setActiveWorkspaceDb } from '~/db/client';
+import { evictWorkspaceDb, getDb, getWorkspaceDb, setActiveWorkspaceDb } from '~/db/client';
 import { setupSyncEngine } from '../client-sync-engine';
 import { getWriteTxTableNames } from '~/db/util';
 
@@ -73,6 +73,51 @@ describe('sync lifecycle with real local write capture', () => {
             expect(state.starts).toEqual([id]);
         } finally {
             scope.stop(); await control?.stop(); setActiveWorkspaceDb(null); evictWorkspaceDb(id); await Dexie.delete(db.name);
+        }
+    });
+
+    it('rebinds installed histories without navigation or relabeling old callbacks', async () => {
+        setHookEngine(createTypedHookEngine(createHookEngine()));
+        const id = crypto.randomUUID(); const unrelatedId = crypto.randomUUID();
+        const original = getWorkspaceDb(id); const unrelated = getWorkspaceDb(unrelatedId);
+        await original.open(); await unrelated.open(); setActiveWorkspaceDb(id);
+        state.session = ref({ session: { authenticated: true, user: { id: 'user-A' } } });
+        state.workspace = ref(id); state.starts = []; state.dispose = async () => {};
+        const reload = vi.fn(); vi.stubGlobal('window', { location: { pathname: '/', reload } });
+        let control!: { stop(): Promise<void>; isRunning(): boolean };
+        vi.stubGlobal('useRuntimeConfig', () => ({ public: { sync: { enabled: true }, ssrAuthEnabled: false } }));
+        vi.stubGlobal('useNuxtApp', () => ({ vueApp: { onUnmount: onScopeDispose }, provide: (_key: string, value: typeof control) => { control = value; } }));
+        vi.stubGlobal('useRouter', () => ({ currentRoute: ref({ path: '/' }) }));
+        const scope = effectScope();
+        try {
+            await scope.run(() => setupSyncEngine());
+            await vi.waitFor(() => expect(control.isRunning()).toBe(true));
+            for (const history of ['I', 'J']) {
+                const old = getDb(); const origin = old.syncHistoryAtOpen;
+                // The real snapshot owner commits this guard atomically with its data.
+                await old.sync_state.put({ id: 'sync_history', phase: 'ready', historyIncarnation: history,
+                    resetTarget: null, cursor: 0, deviceId: '', lastSyncAt: 0 });
+                await vi.waitFor(() => {
+                    expect(getDb()).not.toBe(old);
+                    expect(getDb().syncHistoryAtOpen).toBe(history);
+                    expect(control.isRunning()).toBe(true);
+                });
+                expect(old.syncHistoryAtOpen).toBe(origin);
+                await expect(old.transaction('rw', getWriteTxTableNames(old, 'kv'), () =>
+                    old.kv.put({ id: 'stale', name: 'stale', value: 'late callback', clock: 1, deleted: false, created_at: 1, updated_at: 1 }))).rejects.toThrow();
+                const current = getDb();
+                await current.transaction('rw', getWriteTxTableNames(current, 'kv'), () =>
+                    current.kv.put({ id: history, name: history, value: 'current edit', clock: 1, deleted: false, created_at: 1, updated_at: 1 }));
+                expect(await current.kv.get('stale')).toBeUndefined();
+                expect(await current.pending_ops.where('[tableName+pk]').equals(['kv', history]).count()).toBe(1);
+                expect(unrelated.isOpen()).toBe(true);
+                expect(getWorkspaceDb(unrelatedId)).toBe(unrelated);
+            }
+            expect(reload).not.toHaveBeenCalled();
+            expect(state.starts).toEqual([id, id, id]);
+        } finally {
+            scope.stop(); await control?.stop(); setActiveWorkspaceDb(null);
+            for (const workspace of [id, unrelatedId]) { evictWorkspaceDb(workspace); await Dexie.delete(`or3-db-${workspace}`); }
         }
     });
 

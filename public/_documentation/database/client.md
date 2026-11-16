@@ -143,3 +143,9 @@ new connections tolerate their presence. Blocked/failed upgrades preserve saved
 data; an accessible updating state appears during migration, with explicit
 nondestructive retry after failure. Each workspace retains its own recovery state. See the
 [sync history boundary](/documentation/cloud/sync-layer).
+
+`rebindWorkspaceDb(workspaceId, expected)` replaces a workspace connection after
+an installed sync history changes. It preserves the obsolete handle's origin,
+closes it, and notifies active-workspace listeners with a new generation. Sync
+serializes teardown and restart; callers must capture the current DB again for
+new work. A normal first bind completes before Cloud restore begins uploading.

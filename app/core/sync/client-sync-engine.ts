@@ -16,7 +16,7 @@ import { OutboxManager } from '~/core/sync/outbox-manager';
 import { createSubscriptionManager, cleanupSubscriptionManager, getScopeKey } from '~/core/sync/subscription-manager';
 import { GcManager } from '~/core/sync/gc-manager';
 import { cleanupCursorManager } from '~/core/sync/cursor-manager';
-import { createWorkspaceDb, getActiveWorkspaceId as getActiveDbWorkspaceId, type Or3DB } from '~/db/client';
+import { createWorkspaceDb, rebindWorkspaceDb, getActiveWorkspaceId as getActiveDbWorkspaceId, type Or3DB } from '~/db/client';
 import { getCachedSessionContext, useSessionContext } from '~/composables/auth/useSessionContext';
 import { startCoordinatedSubscription } from './subscription-coordinator';
 import { useAuthTokenBroker, type AuthTokenBroker } from '~/composables/auth/useAuthTokenBroker.client';
@@ -130,17 +130,26 @@ function requestEngine(scope: SyncScope | null, force = false, authorizationRevi
             return;
         }
         if (generation !== lifecycleGeneration) return;
-        const db = createWorkspaceDb(scope.workspaceId);
+        let db = createWorkspaceDb(scope.workspaceId);
         if (provider.capabilities?.historyIncarnation !== 'v1') throw new Error('Selected sync mode requires separate history incarnation qualification');
         await db.transaction('rw', ['sync_state'], async () => {
             if (!await db.sync_state.get('sync_history')) await db.sync_state.put({ id: 'sync_history',
                 historyIncarnation: null, phase: 'unbound', resetTarget: null, cursor: 0, deviceId: '', lastSyncAt: 0 });
         });
         if (db.syncHistoryAtOpen === undefined) db.syncHistoryAtOpen = (await db.sync_state.get('sync_history'))?.historyIncarnation ?? null;
+        const guard = await db.sync_state.get('sync_history');
+        if (guard?.phase === 'ready' && guard.historyIncarnation !== db.syncHistoryAtOpen) {
+            db = await rebindWorkspaceDb(scope.workspaceId, db);
+        }
+        if (generation !== lifecycleGeneration) return;
         const hookBridge = getHookBridge(db);
         hookBridge.start();
         const refreshHistory = liveQuery(() => db.sync_state.get('sync_history')).subscribe(guard => {
-            if (guard?.phase === 'ready' && guard.historyIncarnation !== db.syncHistoryAtOpen) window.location.reload();
+            if (generation !== lifecycleGeneration || guard?.phase !== 'ready' || guard.historyIncarnation === db.syncHistoryAtOpen) return;
+            refreshHistory.unsubscribe();
+            void requestEngine(scope, true, authorizationRevision).catch(error => {
+                console.error('[sync-engine] History rebind failed:', error);
+            });
         });
         const subscriptionManager = createSubscriptionManager(db, provider, scope);
         const cancel = () => subscriptionManager.stop();

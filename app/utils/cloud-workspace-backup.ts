@@ -119,7 +119,18 @@ export async function restoreCloudWorkspace(file: Blob, session: ReturnType<type
         switched = true;
         await session.refresh();
         const deadline = Date.now() + 10_000;
-        while (getActiveWorkspaceId() !== target.id || (originals.length > 0 && getStorageTransferQueue()?.getWorkspaceId() !== target.id)) {
+        for (;;) {
+            const current = getCachedSessionContext();
+            if (!current?.authenticated || current.user?.id !== origin.subject || current.workspace?.id !== target.id) {
+                throw new CloudBackupError('Account or workspace changed during restore.');
+            }
+            if (getActiveWorkspaceId() === target.id && (originals.length === 0 || getStorageTransferQueue()?.getWorkspaceId() === target.id)) {
+                const db = getDb();
+                const guard = await db.sync_state.get('sync_history');
+                // First bootstrap replaces the unbound handle. Capture the
+                // destination only after that handoff, before starting uploads.
+                if (db === getDb() && guard?.phase === 'ready' && guard.historyIncarnation && db.syncHistoryAtOpen === guard.historyIncarnation) break;
+            }
             if (Date.now() >= deadline) throw new CloudBackupError('Restored workspace is not ready.');
             await new Promise(resolve => setTimeout(resolve, 50));
         }
