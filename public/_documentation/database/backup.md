@@ -10,6 +10,8 @@ Cloud exports stream a `.or3cloud` archive directly to disk with bounded buffers
 
 Select a `.or3cloud` file to restore. Validation checks the complete archive before creating anything. Restore uploads originals directly from the selected backup File and writes records through the existing authorized sync API with revisions newer than destination upload commits and new storage identities. Trash metadata is restored before an explicit soft-delete; original bytes stay in storage. Every restore write must be applied before success is reported. The destination is a **new workspace**; the source is never replaced. The new owner’s upload setting is raised if necessary to fit verified originals, within the supported 1 GiB ceiling. Other settings use the destination defaults. Rate limits defer the restore; leave the page open.
 
+Restore binds its destination snapshot pages and writes to one server history incarnation. If server recovery changes that history during restore, the restore fails explicitly; it does not continue writing into the replacement history.
+
 On failure, the backup and source remain intact, and the destination retains an **incomplete** label. Retry into another fresh workspace after fixing the reported problem. Interrupted direct uploads require selecting the saved source again. Local JSON/JSONL imports and in-place replacement are disabled on Cloud because they cannot replace canonical server state safely.
 
 After success, reload and check representative conversations, documents, and attachments. Keep the archive until recovery is verified. Files are unencrypted; protect the archive as private workspace data.

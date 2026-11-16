@@ -27,16 +27,37 @@ async function start(page: Page) {
     const activated = await page.request.post('/api/workspaces/active', { headers, data: { id: target } });
     expect(activated.ok(), await activated.text()).toBe(true);
     const source = await (await page.request.get('/api/auth/session')).json();
+    const discovery = await page.request.post('/api/sync/snapshot', { headers, data: { scope: { workspaceId: target }, pageSize: 1,
+        historyIncarnation: null, historyIncarnationCapability: 'incarnation-v1', unavailableRecordCapability: 'unavailable-v1',
+        fileKindCapability: 'v1', workspaceItemCapability: 'v1' } });
+    expect(discovery.ok(), await discovery.text()).toBe(true);
+    const historyIncarnation = (await discovery.json()).historyIncarnation;
+    expect(historyIncarnation).toMatch(/^[\x00-\x7f]{1,128}$/);
+    const syncHistory = { historyIncarnation, historyIncarnationCapability: 'incarnation-v1',
+        unavailableRecordCapability: 'unavailable-v1', storedRecordCapability: 'stored-record-v1' };
     const requests: string[] = [];
     page.on('request', request => requests.push(request.url()));
     await page.goto('/');
     await expect.poll(() => requests.find(url => /\/db\/client\.ts(?:\?|$)/.test(url)), { timeout: 30_000 }).toBeTruthy();
     const clientUrl = requests.find(url => /\/db\/client\.ts(?:\?|$)/.test(url))!;
-    await expect.poll(() => page.evaluate(async url => (await import(url)).getActiveWorkspaceId(), clientUrl), { timeout: 30_000 }).toBe(source.session.workspace.id);
+    await expect.poll(async () => {
+        try {
+            return await page.evaluate(async ({ url, workspaceId, historyIncarnation }) => {
+                const client = await import(url);
+                if (client.getActiveWorkspaceId() !== workspaceId) return false;
+                const db = client.getDb();
+                const guard = await db.sync_state.get('sync_history');
+                return guard?.phase === 'ready' && guard.historyIncarnation === historyIncarnation && db.syncHistoryAtOpen === historyIncarnation;
+            }, { url: clientUrl, workspaceId: source.session.workspace.id, historyIncarnation });
+        } catch (error) {
+            if (/Execution context was destroyed/.test(String(error))) return false;
+            throw error;
+        }
+    }, { timeout: 30_000 }).toBe(true);
     const admin = await page.request.post('/api/admin/auth/login', { headers: { origin, 'x-or3-admin-intent': 'admin' },
         data: { username: 'backup-audit', password: 'DisposableAdminSuite!123' } });
     expect(admin.ok(), await admin.text()).toBe(true);
-    return { origin, headers, workspaceId: source.session.workspace.id as string, clientUrl };
+    return { origin, headers, workspaceId: source.session.workspace.id as string, clientUrl, syncHistory };
 }
 
 test('admin limits, interrupted direct upload, and verified retention preserve originals', async ({ page }, info) => {
@@ -142,7 +163,7 @@ test('admin limits, interrupted direct upload, and verified retention preserve o
 
 test('complete cloud backup restores independently of browser cache', async ({ page }, info) => {
     test.setTimeout(15 * 60_000);
-    const { workspaceId, clientUrl, origin, headers } = await start(page);
+    const { workspaceId, clientUrl, origin, headers, syncHistory } = await start(page);
     const large = process.env.OR3_BACKUP_LARGE_E2E === 'true';
     const count = large ? 16 : 3;
     const size = large ? 128 * 1024 * 1024 : 2 * 1024 * 1024;
@@ -175,7 +196,7 @@ test('complete cloud backup restores independently of browser cache', async ({ p
         } });
         expect(commit.ok(), await commit.text()).toBe(true);
         const id = randomUUID();
-        const saved = await page.request.post('/api/sync/push', { headers, data: { scope: { workspaceId }, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [{
+        const saved = await page.request.post('/api/sync/push', { headers, data: { scope: { workspaceId }, ...syncHistory, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [{
             id, tableName: 'file_meta', operation: 'put', pk: hash, payload: { hash, name: `original-${index}.txt`, kind: 'file', mime_type: 'text/plain', size_bytes: size,
                 storage_id: grant.storageId, storage_provider_id: storageProvider, ref_count: 0, clock: 1, created_at: 1, updated_at: 1, deleted: false },
             stamp: { deviceId: 'backup-e2e', opId: id, clock: 1, hlc: `${String(Date.now()).padStart(15, '0')}:000000:backup-e2e` }, createdAt: Date.now(), attempts: 0, status: 'pending',
@@ -187,7 +208,7 @@ test('complete cloud backup restores independently of browser cache', async ({ p
         content: JSON.stringify({ type: 'doc', content: [{ type: 'or3Image', attrs: { hash: hashes[0] } }] }),
         file_hashes: JSON.stringify(hashes.slice(0, 2)), clock: 1, created_at: 1, updated_at: 1, deleted: false };
     const referenceId = randomUUID();
-    const referenceSaved = await page.request.post('/api/sync/push', { headers, data: { scope: { workspaceId }, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [{
+    const referenceSaved = await page.request.post('/api/sync/push', { headers, data: { scope: { workspaceId }, ...syncHistory, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [{
         id: referenceId, tableName: 'posts', operation: 'put', pk: referencePost.id, payload: referencePost,
         stamp: { deviceId: 'backup-e2e', opId: referenceId, clock: 1, hlc: `${String(Date.now()).padStart(15, '0')}:000000:backup-e2e` }, createdAt: Date.now(), attempts: 0, status: 'pending',
     }] } });
@@ -195,7 +216,7 @@ test('complete cloud backup restores independently of browser cache', async ({ p
     expect((await referenceSaved.json()).results[0].applied).toBe(true);
     const trashHash = hashes.at(-1)!;
     const trashId = randomUUID();
-    const trashed = await page.request.post('/api/sync/push', { headers, data: { scope: { workspaceId }, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [{
+    const trashed = await page.request.post('/api/sync/push', { headers, data: { scope: { workspaceId }, ...syncHistory, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [{
         id: trashId, tableName: 'file_meta', operation: 'delete', pk: trashHash,
         stamp: { deviceId: 'backup-e2e', opId: trashId, clock: 2, hlc: `${String(Date.now()).padStart(15, '0')}:000001:backup-e2e` }, createdAt: Date.now(), attempts: 0, status: 'pending',
     }] } });
@@ -257,7 +278,7 @@ test('complete cloud backup restores independently of browser cache', async ({ p
     expect(restored.peakHeapBytes).toBeLessThan(384 * 1024 * 1024);
     expect(restored.maxUiGapMs).toBeLessThan(1000);
     const snapshot = await page.request.post('/api/sync/snapshot', { headers, data: { scope: { workspaceId: restored.workspaceId }, pageSize: 200,
-        fileKindCapability: 'v1', workspaceItemCapability: 'v1', tables: ['file_meta'] } });
+        ...syncHistory, fileKindCapability: 'v1', workspaceItemCapability: 'v1', tables: ['file_meta'] } });
     expect(snapshot.ok(), await snapshot.text()).toBe(true);
     const items = (await snapshot.json()).items;
     const rows = items.filter((item: { kind: string }) => item.kind === 'row');

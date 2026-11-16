@@ -195,11 +195,12 @@ const fileBytes = Buffer.from('Synthetic backup document and attachment bytes.\n
 const hash = `sha256:${createHash('sha256').update(fileBytes).digest('hex')}`;
 let storageId: string | undefined;
 let workspaceId: string;
-let replayBody: unknown;
+let replayBody: { scope: { workspaceId: string }; historyIncarnation: string; ops: ReturnType<typeof op>[] };
 let replayReceipt: unknown;
 const concurrentPairs: Array<[string, string]> = [];
 const acceptedPairs = new Set<string>();
-const caps = { fileKindCapability: 'v1', workspaceItemCapability: 'v1' };
+const caps = { fileKindCapability: 'v1', workspaceItemCapability: 'v1', historyIncarnationCapability: 'incarnation-v1',
+  unavailableRecordCapability: 'unavailable-v1', storedRecordCapability: 'stored-record-v1' };
 function op(tableName: string, pk: string, payload: Record<string, unknown>, clock = 1) {
   return { id: randomUUID(), tableName, pk, payload, operation: 'put',
     stamp: { deviceId: 'synthetic-backup-device', opId: randomUUID(), hlc: `${Date.now()}:0:backup`, clock },
@@ -210,7 +211,19 @@ async function authenticated(fixture: Instance) {
   await api('/api/basic-auth/sign-in', { email, password });
   const session = await (await api('/api/auth/session')).json();
   assert.equal(session.session.role, 'owner');
-  return { api, session };
+  const discovery = await (await api('/api/sync/snapshot', { scope: { workspaceId: session.session.workspace.id },
+    pageSize: 1, ...caps, historyIncarnation: null })).json();
+  const historyIncarnation: string = discovery.historyIncarnation;
+  assert.equal(typeof historyIncarnation, 'string');
+  assert.match(historyIncarnation, /^[\x00-\x7f]{1,128}$/);
+  const boundApi: typeof api = async (path, body, options) => {
+    const sync = path.startsWith('/api/sync/') && body && typeof body === 'object';
+    // Explicit identities (including archived replay bodies) must never be relabeled.
+    const response = await api(path, sync ? { historyIncarnation, ...caps, ...body } : body, options);
+    if (sync) assert.equal((await response.clone().json()).historyIncarnation, historyIncarnation);
+    return response;
+  };
+  return { api: boundApi, session, historyIncarnation };
 }
 async function verify(fixture: Instance, includeSecondary = true, expectedAttachmentBytes = fileBytes, expectMissingPrimary = false) {
   const { api, session } = await authenticated(fixture);
@@ -250,12 +263,18 @@ async function verify(fixture: Instance, includeSecondary = true, expectedAttach
     const observed = JSON.parse(await command(composeArgs(fixture.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e', script]), fixture.directory));
     assert.deepEqual(observed, extraFilesystemFiles, 'Native verification must preserve uncommitted/temporary/opaque files without rewriting bytes');
   }
-  const replay = await (await api('/api/sync/push', replayBody)).json();
-  const canonicalReceipt = (result: { opId: string; success: boolean; serverVersion: number; applied?: boolean }) =>
-    ({ opId: result.opId, success: result.success, serverVersion: result.serverVersion, applied: result.applied });
-  assert.deepEqual(replay.results.map(canonicalReceipt), (replayReceipt as { results: Array<Parameters<typeof canonicalReceipt>[0]> }).results.map(canonicalReceipt));
-  assert(replay.results.every((result: { replayed?: boolean }) => result.replayed === true));
-  assert.equal(replay.serverVersion, snapshot.highWatermark, 'Replay must not allocate new workspace versions');
+  if (snapshot.historyIncarnation !== replayBody.historyIncarnation) {
+    await assert.rejects(() => api('/api/sync/push', replayBody), /409.*OR3_SYNC_HISTORY_CHANGED/);
+    const after = await (await api('/api/sync/snapshot', { scope: { workspaceId }, pageSize: 100, ...caps })).json();
+    assert.equal(after.highWatermark, snapshot.highWatermark, 'Stale replay must not allocate new workspace versions');
+  } else {
+    const replay = await (await api('/api/sync/push', replayBody)).json();
+    const canonicalReceipt = (result: { opId: string; success: boolean; serverVersion: number; applied?: boolean }) =>
+      ({ opId: result.opId, success: result.success, serverVersion: result.serverVersion, applied: result.applied });
+    assert.deepEqual(replay.results.map(canonicalReceipt), (replayReceipt as { results: Array<Parameters<typeof canonicalReceipt>[0]> }).results.map(canonicalReceipt));
+    assert(replay.results.every((result: { replayed?: boolean }) => result.replayed === true));
+    assert.equal(replay.serverVersion, snapshot.highWatermark, 'Replay must not allocate new workspace versions');
+  }
   if (secondWorkspace && includeSecondary) {
     await api('/api/workspaces/active', { id: secondWorkspace.id });
     const session = await (await api('/api/auth/session')).json();
@@ -387,7 +406,7 @@ async function verifyBrowser(fixture: Instance) {
 }
 try {
   const source = await instance('source');
-  const { api, session } = await authenticated(source);
+  const { api, session, historyIncarnation } = await authenticated(source);
   workspaceId = session.session.workspace.id;
   const base = { deleted: false, clock: 1, created_at: 1, updated_at: 1 };
   if (!emptyStorageOnly) {
@@ -432,7 +451,7 @@ try {
     const script = `const fs=require('node:fs');const root=${JSON.stringify(`${source.env.OR3_STORAGE_FS_ROOT}/workspaces/${workspaceId}/`)};const files=${JSON.stringify(fixtures.map(item => ({ name: item.name, base64: item.bytes.length === large.length ? undefined : item.bytes.toString('base64'), large: item.bytes.length === large.length })))};for(const item of files){fs.writeFileSync(root+item.name,item.large?Buffer.alloc(150001,0x93):Buffer.from(item.base64,'base64'))}for(const name of files.slice(0,3).map(item=>item.name))fs.writeFileSync(root+name+'.meta.json',JSON.stringify({workspace_id:${JSON.stringify(workspaceId)},hash:name.replace('_',':'),committed_at:new Date().toISOString()}))`;
     await command(composeArgs(source.directory, 'local', ['exec', '-T', 'or3', nodePath, '-e', script]), source.directory);
   }
-  replayBody = { scope: { workspaceId }, ...caps, ops: fixtureRows.map(row => op(row.tableName, row.pk, row.payload)) };
+  replayBody = { scope: { workspaceId }, historyIncarnation, ...caps, ops: fixtureRows.map(row => op(row.tableName, row.pk, row.payload)) };
   replayReceipt = await (await api('/api/sync/push', replayBody)).json();
   assert((replayReceipt as { results: Array<{ success: boolean }> }).results.every(result => result.success));
   if (multiWorkspaceOnly) {

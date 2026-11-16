@@ -3,6 +3,7 @@ import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import type { useSessionContext } from '~/composables/auth/useSessionContext';
 import { createGatewayWorkspaceApi } from '~/core/workspace/gateway-workspace-api';
 import { createGatewaySyncProvider } from '~/core/sync/providers/gateway-sync-provider';
+import { changedHistoryFromError } from '~/core/sync/history-incarnation';
 import { generateHLC, getDeviceId } from '~/core/sync/hlc';
 import { getStorageTransferQueue } from '~/core/storage/transfer-queue';
 import { getActiveStorageProvider } from '~/core/storage/provider-registry';
@@ -15,6 +16,7 @@ import { loadFilePolicy } from '~/core/storage/file-policy';
 import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
 
 type BackupWriter = { write(chunk: Uint8Array<ArrayBuffer>): Promise<unknown>; close(): Promise<unknown>; abort(reason?: unknown): Promise<unknown> };
+const HISTORY_CHANGED = 'Server history changed during restore. Retry with a fresh workspace.';
 
 async function retryRateLimit<T>(operation: () => Promise<T>, assertCurrent: () => void): Promise<T> {
     for (let attempt = 0; ; attempt++) {
@@ -149,11 +151,16 @@ export async function restoreCloudWorkspace(file: Blob, session: ReturnType<type
         // Restore must advance those revisions, never reset their clocks.
         const clocks = new Map<string, number>();
         let pageToken: string | undefined;
+        let historyIncarnation: string | null = null;
         do {
             destination.assertCurrent();
             const page = await retryRateLimit(() => sync.snapshot!({ scope: { workspaceId: target.id },
-                tables: [...ARCHIVE_TABLES], pageSize: 200, pageToken }), destination.assertCurrent);
+                historyIncarnation, tables: [...ARCHIVE_TABLES], pageSize: 200, pageToken }), destination.assertCurrent);
             destination.assertCurrent();
+            if (!page.historyIncarnation || (historyIncarnation !== null && page.historyIncarnation !== historyIncarnation)) {
+                throw new CloudBackupError(HISTORY_CHANGED);
+            }
+            historyIncarnation = page.historyIncarnation;
             for (const item of page.items) clocks.set(`${item.tableName}:${item.pk}`, item.revision.clock + 1);
             pageToken = page.nextPageToken ?? undefined;
         } while (pageToken);
@@ -162,8 +169,9 @@ export async function restoreCloudWorkspace(file: Blob, session: ReturnType<type
         const flush = async () => {
             if (!ops.length) return;
             destination.assertCurrent();
-            const result = await retryRateLimit(() => sync.push({ scope: { workspaceId: target.id }, ops }), destination.assertCurrent);
+            const result = await retryRateLimit(() => sync.push({ scope: { workspaceId: target.id }, historyIncarnation, ops }), destination.assertCurrent);
             destination.assertCurrent();
+            if (result.historyIncarnation !== historyIncarnation) throw new CloudBackupError(HISTORY_CHANGED);
             if (result.results.some(item => !item.success || item.applied !== true)) throw new CloudBackupError('Some restored records were not applied.');
             completed += ops.filter(op => op.operation === 'put').length; ops = []; bytes = 0;
             onProgress(Math.round(completed / (originals.length + rowCount || 1) * 100));
@@ -206,7 +214,7 @@ export async function restoreCloudWorkspace(file: Blob, session: ReturnType<type
         if (switched && current?.user?.id === origin.subject && current.workspace?.id === target.id) {
             await api.setActive({ id: origin.workspaceId }).then(() => session.refresh()).catch(() => {});
         }
-        const reason = error instanceof CloudBackupError ? ` ${error.message}` : '';
+        const reason = changedHistoryFromError(error) ? ` ${HISTORY_CHANGED}` : error instanceof CloudBackupError ? ` ${error.message}` : '';
         throw new CloudBackupError(`Restore did not finish. Your source and backup are safe; workspace "${name} — incomplete" was kept.${reason}`, { cause: error });
     }
 }

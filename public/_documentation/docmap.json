@@ -314,7 +314,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 3,
-                    "summary": "Export Cloud archives or local recovery copies, preserve background-message ordering, understand remote-only file coverage, and restore with captured import options and workspace identity."
+                    "summary": "Export Cloud archives or local recovery copies, preserve background-message ordering, understand remote-only file coverage, and restore with captured workspace identity and server history fencing."
                 }
             ]
         },

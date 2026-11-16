@@ -246,7 +246,7 @@ async function dismissWelcomeCard(page) {
 }
 
 async function verifyStorageRoundTrip(page, workspaceId) {
-    const discovery = await browserJsonRequest(page, '/api/sync/pull', { body: { scope: { workspaceId }, cursor: 0, historyIncarnation: null, historyIncarnationCapability: 'incarnation-v1' } });
+    const discovery = await browserJsonRequest(page, '/api/sync/pull', { body: { scope: { workspaceId }, cursor: 0, limit: 1, historyIncarnation: null, historyIncarnationCapability: 'incarnation-v1' } });
     const historyIncarnation = discovery.historyIncarnation;
     if (typeof historyIncarnation !== 'string' || !/^[\x00-\x7f]{1,128}$/.test(historyIncarnation)) throw new Error('Unqualified history incarnation runtime');
     const uploadBytes = browserUploadFixture();
