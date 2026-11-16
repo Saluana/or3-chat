@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { spawn, execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const phase = process.argv[2];
 if (!['write','verify','legacy-fence','validation-failure'].includes(phase)) {
@@ -41,44 +42,50 @@ async function isPublishedLegacy() {
     return state.appVersion === '0.1.116' && legacyDigests.has(state.imageDigest);
 }
 
-// RB-2: kill only the disposable, exact candidate AFTER observing its real
-// immutable validation process. No synthetic closed-admission journal.
+// Intercept only the completed real CLI validation probe. Polling public health
+// races normal startup and can miss validation or kill an exposed container.
 if (phase === 'validation-failure') {
     const tarball = process.argv[3];
     if (!tarball || !await isPublishedLegacy()) throw new Error('Validation failure needs a pinned published 0.1.116 source and exact CLI tarball');
-    const args = ['compose','--env-file',resolve('.env'),'-f',resolve('compose.yaml')];
-    const docker = argv => execFileSync('docker',argv,{encoding:'utf8',timeout:30000}).trim();
     const initial = JSON.parse(await readFile(resolve('.or3-cloud/state.json'),'utf8'));
-    const child = spawn('npm',['exec','--yes','--package='+resolve(tarball),'--','or3','update','--to',process.env.VERSION],{stdio:['ignore','pipe','pipe'],env:process.env});
+    const realDocker = execFileSync('which', ['docker'], {encoding:'utf8'}).trim();
+    const temporary = await mkdtemp(join(tmpdir(), 'or3-validation-probe-'));
+    const marker = join(temporary, 'injected.json');
+    const wrapper = `#!/usr/bin/env node
+const {spawnSync,execFileSync}=require('node:child_process'),fs=require('node:fs');
+const args=process.argv.slice(2),real=${JSON.stringify(realDocker)};
+const result=spawnSync(real,args,{stdio:'inherit'});
+if(result.status!==0)process.exit(result.status??1);
+if(args[0]==='compose'&&args.includes('exec')&&args.some(a=>a.includes('OR3_VALIDATION_PROBE:'))){
+ const docker=a=>execFileSync(real,a,{encoding:'utf8',timeout:30000}).trim();
+ const id=docker([...args.slice(0,args.indexOf('exec')),'ps','-q','or3']);
+ const c=JSON.parse(docker(['inspect','--format','{{json .}}',id]));
+ const image=JSON.parse(docker(['image','inspect','--format','{{json .}}',${JSON.stringify(process.env.OR3_CLOUD_TEST_IMAGE)}]));
+ if(c.Image!==image.Id||!c.Config.Env.includes('OR3_CLOUD_UPDATE_VALIDATION=true'))throw Error('Validation container binding mismatch');
+ docker(['update','--restart=no',id]);docker(['kill',id]);
+ fs.writeFileSync(${JSON.stringify(marker)},JSON.stringify({containerId:id,imageId:c.Image}),{mode:0o600});
+ process.exit(1);
+}
+`;
+    await writeFile(join(temporary,'docker'),wrapper,{mode:0o700});
+    const child = spawn('npm',['exec','--yes','--package='+resolve(tarball),'--','or3','update','--to',process.env.VERSION],{
+        stdio:['ignore','pipe','pipe'],env:{...process.env,PATH:temporary+':'+process.env.PATH},
+    });
     let log = '', exit;
-    child.stdout.on('data',data=>{log+=data;}); child.stderr.on('data',data=>{log+=data;});
+    child.stdout.on('data',data=>{log=(log+data).slice(-16000);}); child.stderr.on('data',data=>{log=(log+data).slice(-16000);});
     const ended = new Promise((resolveExit,reject)=>{child.once('error',reject);child.once('exit',code=>{exit=code;resolveExit(code);});});
-    let injected = false;
+    let timer;
     try {
-        const deadline = Date.now()+240000;
-        while (exit === undefined && Date.now()<deadline) {
-            const response = await fetch(new URL('/api/health?deep=true',baseUrl),{signal:AbortSignal.timeout(2000)}).catch(()=>null);
-            const health = await response?.json().catch(()=>null);
-            if (health?.validation === 'health-only-v1') {
-                const id = docker([...args,'ps','-q','or3']);
-                const container = JSON.parse(docker(['inspect','--format','{{json .}}',id]));
-                const expected = JSON.parse(docker(['image','inspect','--format','{{json .}}',process.env.OR3_CLOUD_TEST_IMAGE]));
-                if (container.Image !== expected.Id || !container.Config.Env.includes('OR3_CLOUD_UPDATE_VALIDATION=true')) throw new Error('Validation container binding mismatch');
-                for (const [path,method] of [['/','GET'],['/api/basic-auth/sign-in','POST'],['/api/sync/push','POST'],['/api/storage/commit','POST']]) {
-                    const denied = await fetch(new URL(path,baseUrl),{method,redirect:'manual',signal:AbortSignal.timeout(2000)});
-                    if (denied.status!==503 || (await denied.json()).data?.code!=='update_validation') throw new Error('Validation admitted application work');
-                }
-                // Docker keeps the immutable env/image configuration after exit,
-                // allowing the managed CLI to prove this failed boot stayed closed.
-                docker(['update','--restart=no',id]); docker(['kill',id]); injected=true; break;
-            }
-            await new Promise(resolveWait=>setTimeout(resolveWait,100));
-        }
-        const code = await Promise.race([ended,new Promise((_,reject)=>setTimeout(()=>reject(new Error('Validation rollback timed out')),240000).unref())]);
+        const code = await Promise.race([ended,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Validation rollback timed out')),240000);})]);
+        const injected = JSON.parse(await readFile(marker,'utf8'));
         const restored = JSON.parse(await readFile(resolve('.or3-cloud/state.json'),'utf8'));
-        if (!injected || code===0 || restored.incompleteOperation || restored.imageDigest!==initial.imageDigest || !restored.lastReceipt?.checks.some(check=>check.code==='automatic-source-restore'&&check.status==='passed')) throw new Error('Closed validation did not automatically restore the source: '+log.slice(-2000));
+        if (!injected.containerId || code===0 || restored.incompleteOperation || restored.imageDigest!==initial.imageDigest || !restored.lastReceipt?.checks.some(check=>check.code==='automatic-source-restore'&&check.status==='passed')) throw new Error('Closed validation did not automatically restore the source: '+log.slice(-2000));
         console.log('RB-2 real candidate validation failure restored published source; update exited nonzero.');
-    } finally { if (exit===undefined) child.kill('SIGTERM'); }
+    } finally {
+        clearTimeout(timer);
+        if (exit===undefined) { child.kill('SIGTERM'); await ended.catch(()=>undefined); }
+        await rm(temporary,{recursive:true,force:true});
+    }
     process.exit(0);
 }
 

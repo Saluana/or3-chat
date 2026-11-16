@@ -9,6 +9,38 @@ import { join, resolve } from 'node:path';
 // The workflow owns sequence completion; these tests cover identity drift,
 // tampered inputs, and refusal to certify a missing or unhealthy deployment.
 describe('lifecycle evidence boundaries', () => {
+  it('injects failed boot at the real validation probe even without a public polling window', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'or3-validation-fault-'));
+    try {
+      await mkdir(join(root, '.or3-cloud'));
+      const state = { appVersion:'0.1.116', imageDigest:'sha256:f7e6c507f2fb944c91f285e976b69b578ff9a24cdb8ceeaf22db7e22c79de692' };
+      await writeFile(join(root, '.or3-cloud/state.json'), JSON.stringify(state));
+      await writeFile(join(root, 'cloud.tgz'), 'transport fixture');
+      const docker = `#!/usr/bin/env node
+const a=process.argv.slice(2);
+if(a[0]==='inspect') console.log(JSON.stringify({Image:'candidate-id',Config:{Env:['OR3_CLOUD_UPDATE_VALIDATION=true']}}));
+else if(a[0]==='image') console.log(JSON.stringify({Id:'candidate-id'}));
+else if(a.includes('ps')) console.log('validation-container');
+else if(a[0]==='kill') require('node:fs').writeFileSync('killed','yes');
+`;
+      const npm = `#!/usr/bin/env node
+const {spawnSync}=require('node:child_process'),fs=require('node:fs');
+const probe=spawnSync('docker',['compose','exec','-T','or3','node','-e','// OR3_VALIDATION_PROBE: real probe boundary'],{stdio:'inherit'});
+const path='.or3-cloud/state.json',s=JSON.parse(fs.readFileSync(path));
+if(probe.status!==0&&fs.existsSync('killed'))s.lastReceipt={checks:[{code:'automatic-source-restore',status:'passed'}]};
+fs.writeFileSync(path,JSON.stringify(s));process.exit(probe.status===0?0:1);
+`;
+      for (const [name, text] of [['docker',docker],['npm',npm]]) {
+        await writeFile(join(root,name),text); await chmod(join(root,name),0o755);
+      }
+      const result = spawnSync('node', [resolve(import.meta.dirname, '../release/smoke-create-docker.mjs'), 'validation-failure', join(root,'cloud.tgz')], {
+        cwd:root, env:{...process.env,PATH:`${root}:${process.env.PATH}`,VERSION:'0.1.117',OR3_CLOUD_TEST_IMAGE:'candidate',OR3_SMOKE_URL:'http://127.0.0.1:1'}, encoding:'utf8',timeout:10_000,
+      });
+      expect(result.status,result.stderr).toBe(0);
+      expect(await readFile(join(root,'killed'),'utf8')).toBe('yes');
+    } finally { await rm(root,{recursive:true,force:true}); }
+  });
+
   it('binds the baseline and candidate, and refuses changed evidence or identities', async () => {
     const root = await mkdtemp(join(tmpdir(), 'or3-lifecycle-evidence-'));
     try {
