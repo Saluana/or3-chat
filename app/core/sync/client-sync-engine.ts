@@ -202,15 +202,16 @@ async function startSyncEngine(
     authorizationRevision = getCachedSessionContext()?.authorizationRevision,
 ): Promise<void> {
     if (!hasCloudAccess()) return stopSyncEngine();
+    const generation = lifecycleGeneration;
     // Explicit retry of a storage-paused subscription retains its staged chain.
     // A healthy same-scope start remains idempotent; auth changes still reconcile.
-    if (!reconcilePending && desiredScope?.workspaceId === workspaceId && desiredScope.principalId === principalId &&
+    const retry = !reconcilePending && desiredScope?.workspaceId === workspaceId && desiredScope.principalId === principalId &&
         engineState?.scope.workspaceId === workspaceId && engineState.scope.principalId === principalId &&
         desiredAuthorizationRevision === authorizationRevision && (engineState.subscriptionManager.getStatus() === 'error' ||
-            (await engineState.db.sync_state.get(protocolPauseId(engineState.provider.id, engineState.scope)))?.protocolPause)) {
-        return requestEngine({ workspaceId, ...(principalId ? { principalId } : {}) }, true, authorizationRevision);
-    }
-    return requestEngine({ workspaceId, ...(principalId ? { principalId } : {}) }, false, authorizationRevision);
+            !!(await engineState.db.sync_state.get(protocolPauseId(engineState.provider.id, engineState.scope)))?.protocolPause);
+    // A newer workspace/account/stop request owns the lifecycle after this read.
+    if (generation !== lifecycleGeneration) return lifecycleQueue;
+    return requestEngine({ workspaceId, ...(principalId ? { principalId } : {}) }, retry, authorizationRevision);
 }
 
 function stopSyncEngine(): Promise<void> {

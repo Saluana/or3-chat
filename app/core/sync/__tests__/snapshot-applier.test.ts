@@ -1286,7 +1286,7 @@ it('exports only authorized legacy evidence, retains private/unknown rows and ve
     const workspaceId = `legacy-export-${crypto.randomUUID()}`;
     const db = new Or3DB(`or3-db-${workspaceId}`); databases.push(db);
     const old = new Dexie(db.name); old.version(31).stores(legacySchema); await old.open(); old.close(); await db.open(); await old.open();
-    const session = { authenticated: true, workspace: { id: workspaceId }, user: { id: 'owner' }, role: 'owner' as const, authorizationRevision: 1 };
+    const session = { authenticated: true, workspace: { id: workspaceId, name: 'Legacy evidence' }, user: { id: 'owner' }, role: 'owner' as const, authorizationRevision: 1 };
     vi.spyOn(auth, 'getCachedSessionContext').mockImplementation(() => session);
     const scope = { workspaceId, principalId: 'owner' };
     try {

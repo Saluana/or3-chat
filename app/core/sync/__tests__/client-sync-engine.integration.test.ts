@@ -44,6 +44,52 @@ vi.mock('../outbox-manager', () => ({ OutboxManager: class {
 afterEach(() => { vi.unstubAllGlobals(); setHookEngine(null); });
 
 describe('sync lifecycle with real local write capture', () => {
+    it('keeps a newer workspace when an explicit reconnect pause lookup finishes late', async () => {
+        setHookEngine(createTypedHookEngine(createHookEngine()));
+        const a = crypto.randomUUID(); const b = crypto.randomUUID();
+        const db = getWorkspaceDb(a); const other = getWorkspaceDb(b);
+        await db.open(); await other.open(); setActiveWorkspaceDb(a);
+        const workspace = ref(a);
+        state.workspace = workspace;
+        state.session = ref({ session: { authenticated: true, user: { id: 'user-A' } } });
+        state.starts = []; state.dispose = async () => {};
+        let control!: { start(id: string): Promise<void>; stop(): Promise<void>; isRunning(): boolean };
+        vi.stubGlobal('useRuntimeConfig', () => ({ public: { sync: { enabled: true }, ssrAuthEnabled: false } }));
+        vi.stubGlobal('useNuxtApp', () => ({ vueApp: { onUnmount: onScopeDispose }, provide: (_key: string, value: typeof control) => { control = value; } }));
+        vi.stubGlobal('useRouter', () => ({ currentRoute: ref({ path: '/' }) }));
+        const scope = effectScope();
+        let release!: () => void;
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        let lookupStarted = false;
+        let restoreLookup = () => {};
+        try {
+            await scope.run(() => setupSyncEngine());
+            await vi.waitFor(() => expect(control.isRunning()).toBe(true));
+            const get = db.sync_state.get.bind(db.sync_state);
+            const lookup = vi.spyOn(db.sync_state, 'get').mockImplementation(key => {
+                if (typeof key === 'string' && key.startsWith('["sync_protocol"')) {
+                    lookupStarted = true;
+                    return gate.then(() => get(key)) as ReturnType<typeof get>;
+                }
+                return get(key);
+            });
+            restoreLookup = () => { lookup.mockRestore(); };
+            const staleReconnect = control.start(a);
+            await vi.waitFor(() => expect(lookupStarted).toBe(true));
+            workspace.value = b; setActiveWorkspaceDb(b); await nextTick();
+            await vi.waitFor(() => expect(state.starts).toEqual([a, b]));
+            release(); await staleReconnect;
+            expect(state.starts).toEqual([a, b]);
+            expect(getDb()).toBe(other);
+            expect(control.isRunning()).toBe(true);
+        } finally {
+            release(); restoreLookup(); scope.stop(); await control?.stop(); setActiveWorkspaceDb(null);
+            for (const [id, database] of [[a, db], [b, other]] as const) {
+                evictWorkspaceDb(id); await Dexie.delete(database.name);
+            }
+        }
+    });
+
     it('captures Free Local edits after startup, resumes on upgrade, and stops at expiry without another response', async () => {
         setHookEngine(createTypedHookEngine(createHookEngine()));
         const id = crypto.randomUUID(); const db = getWorkspaceDb(id);
