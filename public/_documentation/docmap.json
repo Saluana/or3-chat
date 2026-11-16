@@ -656,7 +656,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 7,
-                    "summary": "This guide covers how OR3 discovers provider packages, how to install them, and how the Clerk to Convex token bridge works. Direct Convex sync requires separate history-incarnation qualification."
+                    "summary": "Choose provider combinations and wire auth tokens; hardened Convex requires matching deployed templates and initialized history, while published 0.0.26 remains unsupported."
                 },
                 {
                     "name": "provider-basic-auth.md",
@@ -701,7 +701,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 12,
-                    "summary": "Set up the Convex provider and understand synchronization and recovery."
+                    "summary": "Deploy matching Convex templates, initialize stable history, inspect unavailable evidence and stored-record holds, and understand isolated replacement and qualification limits."
                 },
                 {
                     "name": "provider-s3.md",
@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Sync history capability fences, durable cursor ACK recovery after reload, atomic held-intent recovery, account-scoped inspection/export, stale-completion protection, atomic no-copy physical store isolation, stable old/new Dexie coexistence, visible upgrade progress and per-workspace nondestructive retry, and separate provider qualification. Unqualified direct Convex startup is explicitly unsupported. Includes capability-gated stored-record push holds and retained recovery evidence."
+                    "summary": "Sync snapshots, history fencing, durable unavailable records and saved-work recovery, including qualified Convex direct/gateway setup, stored-record holds and bounded push deferrals."
                 },
                 {
                     "name": "storage-layer.md",

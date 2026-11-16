@@ -230,7 +230,7 @@ Both native SQLite and D1 check Files/Trash writer capability against canonical 
 Matched hardened SQLite builds require host `stored-record-v1` push support to
 isolate corrupt stored receipts/winners without blocking healthy siblings.
 Unsupported clients receive an explicit update-required response. See
-[stored-record push holds](/cloud/sync-layer#stored-record-push-holds) for the
+[stored-record push holds](/documentation/cloud/sync-layer#stored-record-push-holds) for the
 capability, bounded evidence contract and manual recovery behavior. The currently
 pinned published 0.0.30 does not advertise the hardened history contract; packed
 qualification is separate from registry version availability.

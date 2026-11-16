@@ -229,3 +229,25 @@ and the result does not penalize the service breaker. The existing Saved changes
 section displays these holds for inspect/export and deliberate discard. Stored
 record holds require manual review/repair using the exported server reference;
 no automatic recovery put is offered. Retry all affects active outbox work only.
+
+
+### Convex matched implementation and activation boundary
+
+The hardened Convex candidate implements unavailable-v1, incarnation-v1 and
+stored-record-v1 in direct and gateway modes against matching deployed templates.
+Published 0.0.26 remains incapable; a package version/capability alone is not
+backend qualification. Deploy the updated schema/functions, verify the exact
+backend digest and explicitly initialize history once before enabling the host.
+Ordinary deploy/restart/GC preserves identity. Complete replacement requires
+writer isolation and the external prepare/complete journal; hot or partial
+imports are unsupported. Public operational instructions are in
+`public/_documentation/cloud/provider-convex.md`.
+
+Checked pull is a mutation; version subscriptions carry no record content and
+direct page receipts precede cursor advancement. Stored-hold export retains
+exact intent with an evidence_ref link to original source, independent of GC,
+snapshot expiry and reset. Push reserves bounded source/evidence work and defers
+remaining operations as RATE_LIMITED without fabricating coverage or holds.
+Local backend/lifecycle/HTTP qualification does not certify live Clerk/browser
+flows or hosted/full-storage replacement; whole-ZIP generated-schema import
+remains a separate unresolved backend qualification limit.

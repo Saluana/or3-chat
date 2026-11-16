@@ -16,13 +16,14 @@ opaque token. Every pull, snapshot, push, cursor acknowledgement and events
 request negotiates `historyIncarnationCapability: 'incarnation-v1'`. Legacy
 requests receive HTTP 426. An adapter must advertise `historyIncarnation: 'v1'`
 and return a bound token; the gateway transport alone does not qualify a server.
-Published SQLite 0.0.30, the current prefix-GC branch, Convex/direct mode and D1
-are **unqualified** for this contract. Direct Convex sync is unsupported in this
-hardened host until its backend and client transport are separately qualified.
-Startup refuses an unqualified direct provider before subscribing or starting
-the outbox; the token broker alone does not establish incarnation support.
-Gateway providers also require server qualification. They encounter an explicit sync boundary;
-this host change is not a release or a claim of restore safety.
+The hardened Convex candidate supports this contract in direct and gateway
+modes with its matching deployed backend; see [Convex qualification and setup](/documentation/cloud/provider-convex#sync-qualification-and-history-setup).
+Published Convex 0.0.26 lacks these changes. Installing that published package
+or obtaining an auth token does not qualify it. Startup refuses an unqualified
+direct provider before subscribing or starting the outbox. Gateway providers
+also require server qualification. Published SQLite 0.0.30, D1 and managed
+replacement image activation retain their separate qualification gates.
+This source qualification does not publish or activate a release.
 
 An unbound browser or a different token requires a complete materialized
 snapshot, even when its numeric cursor equals or trails the new head. One
@@ -129,8 +130,11 @@ This requires explicit provider support (`capabilities.unavailableRecords =
 An older browser receives HTTP 426 / `OR3_SYNC_UPDATE_REQUIRED` before any
 partial page. The new snapshot ordering contract uses the same gate. Existing
 healthy pages from older adapters remain usable; upgrading the host alone does
-not add server evidence storage or repair to an older provider. Convex direct
-mode requires a separately qualified matching backend deployment.
+not add server evidence storage or repair to an older provider. The hardened
+Convex candidate commits evidence through `sync.pullChecked` mutations; its
+reactive subscription is only a version wakeup. Direct delivery awaits durable
+page application before advancing. The legacy `sync.pull` query explicitly
+refuses with update-required. Both modes require the matching deployed templates.
 Legacy messages without `order_key` remain readable: the client derives their
 ordering from the revision HLC without changing stored history.
 
@@ -832,3 +836,12 @@ and the result does not penalize the service breaker. The existing Saved changes
 section displays these holds for inspect/export and deliberate discard. Stored
 record holds require manual review/repair using the exported server reference;
 no automatic recovery put is offered. Retry all affects active outbox work only.
+
+For the hardened Convex candidate, export a hold's `evidenceRef` through the
+privileged `sync.unavailable.export` action. The exported intent links to the
+original stored source through `evidence_ref`; both survive GC, snapshot expiry
+and history reset. Unknown-owner notification evidence stays private; known
+foreign owners are denied without returning content or evidence references.
+Convex also bounds push point-read/evidence work: remaining operations receive
+retryable `RATE_LIMITED` deferrals when the transaction budget is exhausted.
+These deferrals allocate no versions and do not fabricate unavailable holds.

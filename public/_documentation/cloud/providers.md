@@ -1,9 +1,11 @@
 # Cloud providers
 
 The hardened sync engine requires qualified history-incarnation support.
-Published Convex direct mode is unsupported with this host until its backend
-and transport implement and qualify that contract; valid auth tokens alone do
-not enable startup. See [the sync qualification boundary](/documentation/cloud/sync-layer#history-replacement-and-saved-work).
+The hardened Convex candidate works in direct and gateway modes after deploying
+its matching templates and initializing history. Published Convex 0.0.26 remains
+unsupported by this hardened host; auth tokens alone do not enable startup.
+See [Convex qualification and setup](/documentation/cloud/provider-convex#sync-qualification-and-history-setup)
+and [saved-work recovery](/documentation/cloud/sync-layer#history-replacement-and-saved-work).
 
 This guide covers how OR3 discovers provider packages, how to install them, and how the Clerk to Convex token bridge works.
 

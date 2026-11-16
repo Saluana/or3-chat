@@ -47,6 +47,81 @@ their optional `title_source` across sync, including manual names and generated
 title states. Update the provider and its backend templates together; an older
 schema can reject otherwise valid edits.
 
+## Sync qualification and history setup
+
+The hardened source candidate supports the matched host in **direct and gateway**
+modes: incarnation fencing, durable unavailable reads and stored-record push
+holds. Published `or3-provider-convex@0.0.26` does not contain these changes.
+The candidate still carries that development version; it requires a fresh version
+and matched release qualification before publication. Do not infer support from
+the version number or a runtime capability alone.
+
+Operational qualification requires the rebuilt provider **and its complete
+updated backend templates** on the selected deployment. Update the scaffold,
+deploy the schema/functions and verify the live `or3Backend:version` digest
+matches the package. Installing a package or restarting Nitro alone cannot
+upgrade backend functions. The normal source updater performs template deploy
+and digest verification; customized scaffolds require a deliberate merge.
+
+Before enabling clients for the first upgrade, use an authenticated admin CLI
+against that exact deployment to call `syncHistory:initialize` with
+`{"incarnation":"<fresh UUID>"}`. Repeat `syncHistory:finishReplacement` with
+`{"attempt_id":"<returned attemptId>"}` until `ready:true`. Keep writers and
+client access closed during initialization. It preserves canonical rows, logs,
+receipts, counters, tombstones and evidence, and clears pre-contract snapshot
+and device ACK state. Repeating initialization preserves the existing token.
+Ordinary deploys, restarts, reads, repair and GC never rotate history.
+
+Pull/snapshot negotiate `unavailable-v1`; incarnation negotiation uses
+`incarnation-v1`. `sync.pullChecked` is a mutation that commits exact native
+source evidence before returning coverage; `watchChanges` is a content-free
+version wakeup. Direct delivery awaits page application before advancing.
+The legacy `sync.pull` query refuses with structured update-required. Incapable
+callers receive 426; old-history push/ACK fails with 409 before mutation.
+Malformed payloads cannot jam healthy siblings; untrustworthy identity, ordering
+or coverage still fails closed. Unknown-owner notifications disclose no marker.
+
+Push separately negotiates `storedRecordCapability: 'stored-record-v1'`.
+Unreadable stored receipts/winners produce per-op `STORED_RECORD_UNAVAILABLE`
+holds only after retaining source and submitted intent. Healthy siblings commit;
+service/evidence failures still fail the mutation. The browser preserves the
+original UUID, attempts, local row/tombstone and server reference for manual
+review, without retries or breaker penalty. Existing Saved changes offers
+inspection/export/discard; Retry all excludes held work. Convex transaction
+backpressure returns retryable `RATE_LIMITED` for deferred operations, without
+allocating versions or inventing holds.
+
+Privileged provider-admin actions `sync.unavailable.inspect`, `.export`,
+`.revalidate` and `.repair` authorize the selected workspace. Export accepts
+`evidenceRef` and integer `chunk`; each chunk is at most 32 KiB of
+`convex-json-utf8`. Join chunks, decode UTF-8, parse JSON and use `jsonToConvex`
+to recover native values. A stored hold's exported `intent` links by
+`evidence_ref` to original source evidence. Evidence survives log GC, snapshot
+expiry and reset. Repair uses a fresh UUID, winning safe clock and new version;
+newer canonical data supersedes obsolete evidence. Invalid/exhausted clocks need
+explicit offline recovery. Old-history evidence cannot authorize current repair.
+
+Database replacement requires an isolated complete application-table restore,
+or complete self-hosted database plus matching storage. Stop/drain application,
+background, maintenance and scheduled writers; close handlers/watchers and
+prevent direct/gateway access. With the exact matching package, use
+`scripts/history.mjs prepare <external-new-journal>` before extraction and
+`complete <same-journal>` afterward. Set the exact target, server-only credential,
+`OR3_CONVEX_BACKUP_SHA256` and `OR3_CONVEX_TEMPLATE_DIGEST`; keep the fsynced
+journal outside replaced data. Interrupted completion reuses its attempt; every
+new extraction, rollback or safety restore needs a fresh journal/token. Preserve
+the checksum-verified safety backup and unresolved evidence. This helper does
+not perform extraction or establish writer isolation. Hot/partial-workspace
+imports are unsupported. Do not reset history as a deployment hook.
+
+Local qualification covers an official disposable backend, lifecycle updates,
+real direct/gateway HTTP, mixed holds, evidence, fencing and repeated table-member
+imports. It does not certify live Clerk sign-in/reconnect, browser Convex holds,
+or hosted/full-storage replacement codecs. The local backend's whole-ZIP
+`generated_schema` import limitation remains unresolved; table-member tests do
+not waive it. See [sync recovery](/documentation/cloud/sync-layer) and the
+provider README for commands and replacement details.
+
 ## Install
 
 From npm:
