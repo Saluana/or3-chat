@@ -1,3 +1,6 @@
+/** Rejected before dispatch by published pre-incarnation Cloud servers. */
+export const CLOUD_MUTATION_INTENT = 'mutation-incarnation-v1';
+
 import type { z } from 'zod';
 import type { PullUnavailableRecordSchema, SnapshotUnavailableRecordSchema } from './schemas';
 export type PullUnavailableRecord = z.infer<typeof PullUnavailableRecordSchema>;

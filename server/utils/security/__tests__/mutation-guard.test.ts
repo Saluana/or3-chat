@@ -149,6 +149,16 @@ describe('cloud mutation guard', () => {
         });
     }
 
+    it.each(['mutation', 'mutation-incarnation-v1'])('admits only intentional Cloud intent %s with unchanged origin/JSON checks', intent => {
+        const headers = { origin: 'https://chat.example.com', 'x-or3-cloud-intent': intent };
+        expect(() => requireCloudMutation(cloudEvent(headers))).not.toThrow();
+        expect(() => requireCloudMutation(cloudEvent({ ...headers, origin: 'https://evil.example.com' }))).toThrow(expect.objectContaining({ statusCode: 403 }));
+        expect(() => requireCloudMutation(cloudEvent({ ...headers, 'content-type': 'text/plain' }))).toThrow(expect.objectContaining({ statusCode: 415 }));
+    });
+    it.each(['mutation-incarnation-v2', 'mutation, mutation-incarnation-v1', ''])('rejects unrecognized intent %s', intent => {
+        expect(() => requireCloudMutation(cloudEvent({ origin: 'https://chat.example.com', 'x-or3-cloud-intent': intent }))).toThrow(expect.objectContaining({ statusCode: 403 }));
+    });
+
     it('allows exact origin and an explicitly configured credentialed client origin', () => {
         expect(() => requireCloudMutation(cloudEvent({ origin: 'https://chat.example.com' }))).not.toThrow();
         expect(() => requireCloudMutation(cloudEvent({ origin: 'https://client.example.com' }))).not.toThrow();
