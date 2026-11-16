@@ -719,7 +719,7 @@
                     "category": "Operations",
                     "categoryOrder": 3,
                     "order": 14,
-                    "summary": "Managed operations with journaled offline history rotation, exact target qualification, runtime-reader parity, healthy/degraded semantic certification, exhausted-counter refusal, protected safety evidence, stopped degraded recovery, and explicit activation boundaries."
+                    "summary": "Managed operations with health-only update admission, explicit destructive recovery, qualified immediate legacy snapshot rollback, persistent compatibility warnings, pinned abandoned histories, fresh re-upgrade identity, and blocked activation until image/browser qualification."
                 },
                 {
                     "name": "troubleshooting.md",

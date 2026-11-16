@@ -494,8 +494,8 @@ inspect what cleanup left behind.
 
 ### Compatibility bridge (managed state schema 1 → 2)
 
-This release is the bridge: it **reads** managed `state.json` schemas 1 and 2
-but **writes schema 1**. A release qualified to write schema 2 sets
+The incarnation candidate **reads** managed `state.json` schemas 1 and 2
+and **writes schema 2**, requiring source 0.1.116 or newer when migrating schema 1. The published 0.1.116 CLI remains the schema-1 compatibility bridge. The writer declares
 `or3Cloud.stateSchema` in its package metadata; only such a release migrates a
 settled schema-1 deployment, and only when the deployment's source is at or
 above the declared `dashboardUpdateMinimumSourceVersion` bridge. Migration and
@@ -526,8 +526,8 @@ npx @or3/cloud recover --restore --yes   # return to the recorded snapshot (disc
   replaced data without completion proof requires the explicit
   `recover --restore --yes` choice, which names the snapshot and its data-loss
   boundary.
-- Once an update has started the target, a failed check is not restored
-  automatically; the journal is preserved for an explicit choice.
+- Updates first start a qualified candidate in immutable health-only validation (`OR3_CLOUD_UPDATE_VALIDATION=true`). Only exact health GET/HEAD routes run; application requests and background delivery are disabled. A failed validation with matching container/image/mode proof automatically restores the authenticated source and returns an update failure. Missing proof leaves explicit recovery.
+- Before removing validation mode, the CLI journals that admission may open and recreates the process. Any later failure preserves the journal and requires explicit recovery. `recover --restore --yes` first captures and authenticates current stopped data, then discards all post-snapshot server changes.
 - While an incomplete operation is recorded, `start` and `restart` refuse and
   direct you to recovery; `stop`, `status`, `logs`, `doctor`, and
   `verify --read-only` remain available. `status --json` emits a public
@@ -640,3 +640,37 @@ The managed `@or3/cloud` profile uses SQLite and has no Convex backend to
 update. Existing source customizations may require one deliberate template
 merge. Keep the source backup and any independent Convex database backup until
 acceptance. A source/app rollback never silently rolls back a remote backend.
+
+### First-incarnation legacy snapshot rollback qualification
+
+The candidate implements policy `legacy-033-rollback-v1` solely for its immediate
+managed Basic Auth + SQLite + filesystem pre-update snapshot of published
+0.1.116 / SQLite 0.0.30 with the complete 033 ledger. The allowlisted published
+image index is `sha256:f7e6c507f2fb944c91f285e976b69b578ff9a24cdb8ceeaf22db7e22c79de692`;
+its amd64/arm64 manifests are checked separately. A version label or missing
+reset helper never grants eligibility. Offline read-only inspection checks the
+ledger/schema and original database/sidecar hashes before startup. The old DB
+is neither reset nor migrated. Arbitrary incapable `restore` remains refused.
+
+**Activation remains blocked:** the installed registry SQLite package has only
+033 and image metadata deliberately remains incarnation-unqualified. The image
+must advertise the legacy policy only after exact provider, native-image,
+browser downgrade-fence and re-upgrade qualification passes together. The code
+and a fake-Docker test are not a release receipt. Clerk/S3 is not qualified.
+
+Once qualified, `rollback --yes` accepts loss of **all server changes** after
+the displayed snapshot timestamp, preserves and pins abandoned current data,
+restores the authenticated source/config/assets and exact old digest, then
+consumes that rollback point at terminal commit. `status` and `doctor` report
+legacy snapshot compatibility as a warning, never incarnation certification.
+Use the new exact CLI for restart/recovery even while the old image is running;
+the old schema-1 writer must refuse mutation of schema 2. Keep both pinned
+histories. If old startup may already have served writes, repeated destructive
+legacy recovery is refused rather than silently rewinding it again.
+
+Re-upgrade takes a fresh snapshot of the restored server, runs normal 034–036
+startup migrations behind validation admission and verifies a fresh incarnation
+before normal startup. Old browser bundles retain legacy limitations; newer
+bundles preserve abandoned history for review and must never replay it into the
+old server. Export important work; never clear site data. Vault key custody is
+preserved, not rewound; external storage/services retain their documented limits.

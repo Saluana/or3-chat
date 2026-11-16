@@ -1620,15 +1620,15 @@ test('staged S3 update restores its safety snapshot with a warning after a pre-s
     expect(stderr).toContain('failed and was restored');
     expect(stderr).toMatch(/missing.*S3 objects/i);
     expect(stdout + stderr).not.toContain('fixture-secret');
-    expect((await fixture.readState()).incompleteOperation?.phase).toBe('starting-previous');
+    expect((await fixture.readState()).incompleteOperation).toBeUndefined();
     const trace = await fixture.traceText();
     expect(trace).toContain('remote-objects.mjs verify-inventory');
     expect(trace).toContain('remote-objects.mjs check');
     expect(trace).not.toContain('remote-objects.mjs reconcile');
     await fixture.configure({ failures: [] });
-    expect((await fixture.cli(['recover', '--restore', '--yes'])).exitCode).not.toBe(0);
-    expect((await stagedS3Recovery(fixture)).exitCode).toBe(0);
-    expect((await fixture.readState()).incompleteOperation).toBeUndefined();
+    const terminal = await fixture.readStateText();
+    expect((await fixture.cli(['recover'])).exitCode).toBe(0);
+    expect(await fixture.readStateText()).toBe(terminal);
   });
 });
 

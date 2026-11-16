@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
     cleanup: vi.fn(async () => {}), history: vi.fn(async () => 0),
     coordinate: vi.fn(async () => 0), recover: vi.fn(async () => 0), provider: vi.fn(),
     phase: 'running' as 'running' | 'preparing',
+    validationOnly: false,
 }));
 vi.mock('nitropack/runtime', () => ({ defineNitroPlugin: (fn: unknown) => fn }));
 vi.mock('../../utils/background-jobs/store', () => ({
@@ -21,9 +22,21 @@ vi.mock('../../utils/background-jobs/history', () => ({ reconcilePendingBackgrou
 vi.mock('../../utils/background-jobs/delegation-coordinator', () => ({ reconcileDueDelegationWaits: state.coordinate }));
 vi.mock('../../utils/background-jobs/stream-handler', () => ({ executeBackgroundJob: vi.fn() }));
 vi.mock('../../utils/shutdown/runtime', () => ({ getShutdownRuntime: () => ({ controller: {
-    phase: () => state.phase, canStartWork: () => state.phase === 'running', track: (work: unknown) => work,
+    phase: () => state.phase, validationOnly: () => state.validationOnly,
+    canStartWork: () => !state.validationOnly && state.phase === 'running', track: (work: unknown) => work,
 } }) }));
-afterEach(() => { state.phase = 'running'; vi.useRealTimers(); vi.clearAllMocks(); });
+afterEach(() => { state.phase = 'running'; state.validationOnly = false; vi.useRealTimers(); vi.clearAllMocks(); });
+it('RB-2 validation starts no background recovery, history delivery, or cleanup', async () => {
+    vi.useFakeTimers();
+    state.validationOnly = true;
+    const plugin = (await import('../25.background-jobs')).default as any;
+    plugin({ hooks: { hook: vi.fn() } });
+    await vi.advanceTimersByTimeAsync(120_000);
+    for (const work of [state.provider, state.cleanup, state.history, state.coordinate, state.recover]) {
+        expect(work).not.toHaveBeenCalled();
+    }
+    expect(vi.getTimerCount()).toBe(0);
+});
 it('backs off empty recovery, bounds cleanup frequency, and stops on close', async () => {
     vi.useFakeTimers();
     state.provider.mockResolvedValue({ cleanupExpired: state.cleanup });

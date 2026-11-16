@@ -329,7 +329,6 @@ Recorded pre-mutation safety recovery preserves prior bytes and explicitly warns
 that sync semantic health is uncertified; physical/deep health alone is not sync
 certification. History incarnation/reset remains a separate runtime contract.
 
-
 ### History incarnation recovery boundary
 
 Normal restore/data rollback requires the exact image's qualified
@@ -345,3 +344,22 @@ must update the packed provider, exact migration allowlists, inspector profile a
 helper together, after resolving the Dexie explicit-reopen activation blocker in
 `public/_documentation/cloud/sync-layer.md`. No versions/pins were advanced by
 this implementation. Native helper/provider-double tests are not image E2E proof.
+
+The first-incarnation candidate uses health-only validation before opening user
+admission. Automatic snapshot restoration requires matching immutable container,
+image and validation-mode proof. After normal startup may occur, use explicit
+`recover --restore --yes` or `rollback --yes`; both preserve current stopped data
+before discarding every server change since the source snapshot.
+
+Legacy snapshot policy `legacy-033-rollback-v1` is limited to the immediate
+published 0.1.116 / SQLite 0.0.30 / complete-033 Basic Auth + filesystem snapshot
+and exact allowlisted digest. It never resets/migrates the old database. Generic
+incapable restores remain refused. Legacy service reports a compatibility
+warning, has no installed incarnation and requires re-upgrade. Use the new exact
+CLI with schema 2, preserve source and abandoned-history pins, and export
+important old-tab work. Vault custody/external services are not rewound.
+
+Activation is still blocked pending the exact hardened provider/image/browser
+qualification; the current registry provider remains 033 and generated metadata
+is deliberately unqualified. A later qualified re-upgrade takes a fresh source
+snapshot and initializes/verifies a fresh 036 history under closed admission.

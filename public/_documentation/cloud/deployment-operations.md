@@ -373,7 +373,6 @@ Managed restore and updates that re-extract the data volume validate generation 
 
 Backup preflight recognizes `fs-generation-v1` attachment IDs and checks their verified canonical bindings and generation archive paths, alongside legacy filesystem attachments. Ordinary restore requires complete generation payloads and fences. Recovery from the recorded pre-operation safety snapshot instead preserves pre-existing missing files without recreating or rebinding incomplete generations; healthy generations are still verified and rebound. Present corrupt payloads or invalid identities remain errors in either mode.
 
-
 ## History incarnation replacement gate
 
 The matched CLI requires the exact target image to qualify offline reset and
@@ -407,3 +406,22 @@ The host/CLI tests use a provider double and a native SQLite fixture. They do no
 qualify a packed provider/image or Basic/SQLite/filesystem and Clerk/SQLite/S3
 end-to-end restoration. Exact provider pins, historical migration qualification,
 image builds and publication remain a separate activation unit.
+
+The first-incarnation candidate uses health-only validation before opening user
+admission. Automatic snapshot restoration requires matching immutable container,
+image and validation-mode proof. After normal startup may occur, use explicit
+`recover --restore --yes` or `rollback --yes`; both preserve current stopped data
+before discarding every server change since the source snapshot.
+
+Legacy snapshot policy `legacy-033-rollback-v1` is limited to the immediate
+published 0.1.116 / SQLite 0.0.30 / complete-033 Basic Auth + filesystem snapshot
+and exact allowlisted digest. It never resets/migrates the old database. Generic
+incapable restores remain refused. Legacy service reports a compatibility
+warning, has no installed incarnation and requires re-upgrade. Use the new exact
+CLI with schema 2, preserve source and abandoned-history pins, and export
+important old-tab work. Vault custody/external services are not rewound.
+
+Activation is still blocked pending the exact hardened provider/image/browser
+qualification; the current registry provider remains 033 and generated metadata
+is deliberately unqualified. A later qualified re-upgrade takes a fresh source
+snapshot and initializes/verifies a fresh 036 history under closed admission.

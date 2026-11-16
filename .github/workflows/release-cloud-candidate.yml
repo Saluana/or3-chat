@@ -491,7 +491,7 @@ jobs:
         run: |
           set -euo pipefail
           started=$SECONDS
-          previous_version="$(npm view @or3/cloud version)"
+          previous_version=0.1.116
           export PREVIOUS_VERSION="$previous_version"
           echo "PREVIOUS_VERSION=$previous_version" >> "$GITHUB_ENV"
           test ! -e "$MANAGED"
@@ -539,12 +539,21 @@ jobs:
           mkdir -p "$MANAGED/.or3-cloud/backups/adopt-source-legacy-fixture"
           printf 'legacy adoption archive\n' > "$MANAGED/.or3-cloud/backups/adopt-source-legacy-fixture/data.tgz"
           echo "Previous-release startup and fixture creation completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Qualify published mutation fence and automatic validation rollback
+        run: |
+          set -euo pipefail
+          (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" legacy-fence)
+          (cd "$MANAGED" && OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE" OR3_CLOUD_TEST_OPERATOR_IMAGE="$CANDIDATE_OPERATOR_IMAGE" OR3_EXPECTED_OPERATOR_IMAGE_DIGEST="$OPERATOR_DIGEST" OR3_SMOKE_URL=http://127.0.0.1:3017 \
+            timeout --signal=TERM 8m node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" validation-failure "$CANDIDATE_TARBALL")
+          bash "$RUNNER_TEMP/or3-lifecycle-evidence" assert-baseline
+          (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
       - name: Update to the exact candidate digest
         run: |
           set -euo pipefail
           started=$SECONDS
           (cd "$MANAGED" && OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE" OR3_CLOUD_TEST_OPERATOR_IMAGE="$CANDIDATE_OPERATOR_IMAGE" OR3_EXPECTED_OPERATOR_IMAGE_DIGEST="$OPERATOR_DIGEST" \
             timeout --signal=TERM 8m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 update --to "$VERSION")
+          bash "$RUNNER_TEMP/or3-lifecycle-evidence" candidate-history
           echo "Candidate update completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Verify proxy hydration and the disposable Basic browser journey
         run: |
@@ -678,9 +687,10 @@ jobs:
           (cd "$MANAGED" && OR3_CLOUD_TEST_IMAGE="$CANDIDATE_IMAGE" OR3_CLOUD_TEST_OPERATOR_IMAGE="$CANDIDATE_OPERATOR_IMAGE" OR3_EXPECTED_OPERATOR_IMAGE_DIGEST="$OPERATOR_DIGEST" \
             timeout --signal=TERM 8m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 update --to "$VERSION")
           (cd "$MANAGED" && timeout --signal=TERM 4m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
-          (cd "$MANAGED" && timeout --signal=TERM 3m docker compose --env-file .env -f compose.yaml restart or3)
+          (cd "$MANAGED" && timeout --signal=TERM 3m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 restart)
           (cd "$MANAGED" && timeout --signal=TERM 4m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
           (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+          bash "$RUNNER_TEMP/or3-lifecycle-evidence" reupgrade-history
           echo "Second update, restart, and persistence verification completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Finish a proven replacement and preserve post-replacement data
         run: |
@@ -749,7 +759,10 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: or3-cloud-lifecycle-qualification-${{ needs.identity.outputs.version }}-${{ needs.identity.outputs.source_sha }}
-          path: ${{ runner.temp }}/or3-lifecycle-qualification.json
+          path: |
+            ${{ runner.temp }}/or3-lifecycle-qualification.json
+            ${{ runner.temp }}/or3-lifecycle-baseline.json
+            ${{ runner.temp }}/or3-lifecycle-inputs.json
           if-no-files-found: error
       - name: Capture lifecycle diagnostics
         if: failure()

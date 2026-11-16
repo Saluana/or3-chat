@@ -13,7 +13,7 @@ for (let i = 0; i < args.length; i += 2) {
   if (!names.has(args[i]) || Object.hasOwn(flags, args[i]) || !args[i + 1] || args[i + 1].startsWith('--')) throw new Error('Invalid lifecycle evidence arguments.');
   flags[args[i]] = args[i + 1];
 }
-if (!['begin', 'baseline', 'assert-baseline', 'finish'].includes(action) || [...names].some((name) => !flags[name])) throw new Error('Incomplete lifecycle evidence arguments.');
+if (!['begin', 'baseline', 'assert-baseline', 'candidate-history', 'reupgrade-history', 'finish'].includes(action) || [...names].some((name) => !flags[name])) throw new Error('Incomplete lifecycle evidence arguments.');
 const sourceSha = flags['--source-sha'], workflowRunId = flags['--run-id'];
 const previousVersion = flags['--previous-version'];
 const candidateDigest = flags['--candidate-digest'], operatorCandidateDigest = flags['--operator-digest'];
@@ -21,7 +21,7 @@ const image = flags['--image'], operator = flags['--operator'], tarball = resolv
 const deployment = resolve(flags['--deployment']), repo = 'ghcr.io/saluana/or3-chat';
 const match = image.match(/^ghcr\.io\/saluana\/or3-chat:candidate-(\d+\.\d+\.\d+)-([0-9a-f]{40})@(sha256:[0-9a-f]{64})$/);
 const version = match?.[1];
-if (!match || match[2] !== sourceSha || match[3] !== candidateDigest || !/^sha256:[0-9a-f]{64}$/.test(operatorCandidateDigest) || operator !== `${repo}:candidate-operator-${version}-${sourceSha}@${operatorCandidateDigest}` || !/^\d+$/.test(workflowRunId) || !/^\d+\.\d+\.\d+$/.test(previousVersion) || previousVersion === version) throw new Error('Invalid lifecycle candidate or baseline identity.');
+if (!match || match[2] !== sourceSha || match[3] !== candidateDigest || !/^sha256:[0-9a-f]{64}$/.test(operatorCandidateDigest) || operator !== `${repo}:candidate-operator-${version}-${sourceSha}@${operatorCandidateDigest}` || !/^\d+$/.test(workflowRunId) || previousVersion !== '0.1.116' || previousVersion === version) throw new Error('Invalid lifecycle candidate or baseline identity.');
 if (process.env.GITHUB_ACTIONS !== 'true' || !process.env.RUNNER_TEMP || await realpath(deployment) !== resolve(await realpath(process.env.RUNNER_TEMP), 'or3-cloud-candidate')) throw new Error('Lifecycle evidence requires the disposable Actions candidate deployment.');
 const command = (exe, argv) => execFileSync(exe, argv, { encoding: 'utf8', timeout: 60_000, killSignal: 'SIGKILL', maxBuffer: 2 * 1024 * 1024 }).trim();
 const sha = async () => createHash('sha256').update(await readFile(tarball)).digest('hex');
@@ -54,7 +54,7 @@ function baselineObservation() {
   };
   const appDigest = pinned(containers[0].Config.Image, previousVersion);
   const operatorDigest = pinned(containers[1].Config.Image, `${previousVersion}-operator`);
-  if (state.appVersion !== previousVersion || !appDigest || !operatorDigest || state.imageDigest !== appDigest || pinned(state.image, previousVersion) !== appDigest) throw new Error('Lifecycle baseline image mismatch.');
+  if (state.appVersion !== previousVersion || !['sha256:f7e6c507f2fb944c91f285e976b69b578ff9a24cdb8ceeaf22db7e22c79de692','sha256:772975a54da5662fd08cf7627b352eea769006d7536123d766643a455b4c2364','sha256:8dcafc169a27579bb14c41097dc9efdecc2ce08bf7589dd96fbee3ecd222e34b'].includes(appDigest) || !appDigest || !operatorDigest || state.imageDigest !== appDigest || pinned(state.image, previousVersion) !== appDigest) throw new Error('Lifecycle baseline image mismatch.');
   for (const container of containers) {
     const inspected = JSON.parse(command('docker', ['image', 'inspect', '--format', '{{json .}}', container.Config.Image]));
     if (inspected.Id !== container.Image) throw new Error('Lifecycle baseline image ID mismatch.');
@@ -67,7 +67,23 @@ if (action === 'baseline') {
 }
 const baseline = JSON.parse(await readFile(baselinePath, 'utf8'));
 if (action === 'assert-baseline') {
-  if (JSON.stringify(baselineObservation()) !== JSON.stringify(baseline)) throw new Error('Lifecycle restored baseline identity mismatch.');
+  if (JSON.stringify(baselineObservation()) !== JSON.stringify(Object.fromEntries(Object.entries(baseline).filter(([key]) => !['candidateHistory','restoredLegacy','reupgradeHistory'].includes(key))))) throw new Error('Lifecycle restored baseline identity mismatch.');
+  if (baseline.candidateHistory) {
+    if (state.syncHistory?.certification !== 'legacy-snapshot' || state.syncHistory.historyIncarnation || state.pinnedHistoryBackups?.length < 2) throw new Error('Legacy rollback status/pins missing');
+    baseline.restoredLegacy = true;
+    await writeFile(baselinePath, JSON.stringify(baseline), {mode:0o600});
+  }
+  process.exit(0);
+}
+if (['candidate-history','reupgrade-history'].includes(action)) {
+  const token = state.syncHistory?.historyIncarnation;
+  if (state.appVersion !== version || state.syncHistory?.certification !== 'certified' || typeof token !== 'string' || !/^[\x00-\x7f]{1,128}$/.test(token)) throw new Error('Candidate history is not certified');
+  if (action === 'candidate-history') baseline.candidateHistory = token;
+  else {
+    if (!baseline.restoredLegacy || !baseline.candidateHistory || token === baseline.candidateHistory) throw new Error('Re-upgrade did not initialize a fresh history');
+    baseline.reupgradeHistory = token;
+  }
+  await writeFile(baselinePath, JSON.stringify(baseline), {mode:0o600});
   process.exit(0);
 }
 if (state.deploymentId !== baseline.deploymentId || state.composeProject !== baseline.composeProject || state.appVersion !== version || state.imageDigest !== candidateDigest || ![`${repo}@${candidateDigest}`, image].includes(state.image)) throw new Error('Lifecycle final deployment mismatch.');
@@ -79,4 +95,5 @@ for (const [index, ref, digest] of [[0, image, candidateDigest], [1, operator, o
 const expected = { schemaVersion: 1, profile: 'basic-sqlite-fs', check: 'browser', result: 'passed', sourceSha, workflowRunId, candidateDigest, operatorCandidateDigest, tarballSha256: inputs.tarballSha256 };
 const browser = JSON.parse(await readFile(resolve(flags['--browser']), 'utf8'));
 if (Object.keys(browser).length !== Object.keys(expected).length || Object.entries(expected).some(([key, value]) => browser[key] !== value)) throw new Error('Lifecycle browser evidence mismatch.');
+if (!baseline.candidateHistory || !baseline.restoredLegacy || !baseline.reupgradeHistory) throw new Error('rollback/re-upgrade history evidence missing');
 await writeFile(resolve(flags['--qualification-out']), `${JSON.stringify({ ...expected, check: 'lifecycle' }, null, 2)}\n`, { flag: 'wx', mode: 0o600 });

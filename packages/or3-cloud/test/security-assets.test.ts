@@ -536,15 +536,18 @@ test('lifecycle identity evidence follows the required recovery sequence', () =>
   const begin = lifecycle.indexOf('bash "$RUNNER_TEMP/or3-lifecycle-evidence" begin');
   const init = lifecycle.indexOf('init "$MANAGED"');
   const baseline = lifecycle.indexOf('bash "$RUNNER_TEMP/or3-lifecycle-evidence" baseline');
+  const validation = lifecycle.indexOf('validation-failure "$CANDIDATE_TARBALL"');
   const restore = lifecycle.indexOf('or3 recover --restore --yes');
   const rollback = lifecycle.indexOf('or3 rollback --yes');
   const checks = [...lifecycle.matchAll(/bash "\$RUNNER_TEMP\/or3-lifecycle-evidence" assert-baseline/g)].map((m) => m.index!);
   const finish = lifecycle.indexOf('bash "$RUNNER_TEMP/or3-lifecycle-evidence" finish');
   expect(begin).toBeGreaterThan(-1); expect(init).toBeGreaterThan(begin); expect(baseline).toBeGreaterThan(init);
-  expect(checks).toHaveLength(2); expect(checks[0]).toBeGreaterThan(restore); expect(checks[0]).toBeLessThan(rollback);
-  expect(checks[1]).toBeGreaterThan(rollback); expect(finish).toBeGreaterThan(checks[1]);
-  expect(lifecycle.indexOf('or3 recover --finish', checks[1])).toBeLessThan(finish);
-  expect(lifecycle).toContain('path: ${{ runner.temp }}/or3-lifecycle-qualification.json');
+  expect(checks).toHaveLength(3); expect(validation).toBeGreaterThan(baseline);
+  expect(checks[0]).toBeGreaterThan(validation); expect(checks[0]).toBeLessThan(restore);
+  expect(checks[1]).toBeGreaterThan(restore); expect(checks[1]).toBeLessThan(rollback);
+  expect(checks[2]).toBeGreaterThan(rollback); expect(finish).toBeGreaterThan(checks[2]);
+  expect(lifecycle.indexOf('or3 recover --finish', checks[2])).toBeLessThan(finish);
+  expect(lifecycle).toContain('${{ runner.temp }}/or3-lifecycle-qualification.json');
 });
 
 test('candidate workflow retains source-bound image and scan qualifications', () => {
