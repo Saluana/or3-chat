@@ -246,6 +246,7 @@ import { useToast, useHooks, useChat, useRuntimeConfig, useRoute, useState } fro
 import { getMaxMessageFileHashes } from '~/db/files-util';
 import { kv } from '~/db';
 import { getDb, getActiveWorkspaceId, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
+import type { SessionPayload } from '~/composables/auth/useSessionContext';
 import { liveQuery, type Subscription } from 'dexie';
 import { useThreadCompaction } from '~/composables/chat/useThreadCompaction';
 import { provideChatBranchAnchors } from '~/composables/projects/useChatBranchAnchors';
@@ -370,6 +371,9 @@ const WELCOME_DISMISS_KV_KEY = 'or3_welcome_card_dismissed';
 // Teleports remain in body when KeepAlive caches their chat view. Presentation
 // must follow the same activity boundary as the view's other UI work.
 const viewActive = useCachedViewActivity();
+const delegatedWorkspaceGeneration = ref(getWorkspaceGeneration());
+const stopDelegatedWorkspace = subscribeActiveWorkspaceDb(event => { delegatedWorkspaceGeneration.value = event.generation; });
+onBeforeUnmount(stopDelegatedWorkspace);
 const runtimeConfig = useRuntimeConfig();
 const route = useRoute();
 const welcomePreviewRequested = computed(() => route.query.welcome === '1');
@@ -378,10 +382,16 @@ const welcomePreviewDismissed = ref(false);
 // showing the OpenRouter first-run card. The shared auth-session state is
 // populated by useSessionContext after sign-in; local/static builds have no
 // auth gate and may show the card immediately.
-const authSessionState = useState<{ session?: { authenticated?: boolean } } | null>(
+const authSessionState = useState<SessionPayload | null>(
     'auth-session',
     () => null,
 );
+const welcomeContextReady = computed(() => {
+    void delegatedWorkspaceGeneration.value;
+    const session = authSessionState.value?.session;
+    return runtimeConfig.public.ssrAuthEnabled !== true || session?.authenticated === true &&
+        session.workspace?.id === getActiveWorkspaceId();
+});
 const { apiKey, connected } = useUserApiKey();
 const keyStateReady = ref(false);
 const welcomeDismissed = ref(true); // default hidden until hydrated
@@ -396,26 +406,28 @@ async function hasOpenAiKey(): Promise<boolean> {
     if (runtimeConfig.public.ssrAuthEnabled !== true && await readLocalOpenAiKey()) return true;
     return (await welcomeModels.loadCachedModels())?.some(entry => isOpenAiModel(entry.id)) ?? false;
 }
-const welcomeStateReady = import.meta.client
-    ? Promise.allSettled([
-        hydrateUserApiKeyFromKv(),
-        kv.get(WELCOME_DISMISS_KV_KEY),
-        hasOpenAiKey(),
-    ])
-    : null;
+const readWelcomeState = () => Promise.allSettled([
+    hydrateUserApiKeyFromKv(),
+    kv.get(WELCOME_DISMISS_KV_KEY),
+    hasOpenAiKey(),
+]);
+const welcomeStateReady = import.meta.client ? readWelcomeState() : null;
 const openAiUsable = ref(false);
 const dashboardModalOpen = inject<Ref<boolean>>('or3:dashboard-modal-open', ref(false));
 const openRouterAvailability = computed(() =>
     resolveOpenRouterKeyAvailability(runtimeConfig.public?.openRouter)
 );
 
+let welcomeReadyGeneration: number | undefined;
+// A dismissal remains optimistic in its owning view while KV persistence finishes.
+let welcomeDismissedGeneration: number | undefined;
 const showWelcomeCard = computed(
     () =>
         runtimeConfig.public.pluginDevelopment !== true &&
         viewActive.value &&
         keyStateReady.value &&
-        (runtimeConfig.public?.ssrAuthEnabled !== true ||
-            authSessionState.value?.session?.authenticated === true) &&
+        welcomeContextReady.value &&
+        welcomeReadyGeneration === delegatedWorkspaceGeneration.value &&
         !dashboardModalOpen.value &&
         (welcomePreviewRequested.value
             ? !welcomePreviewDismissed.value
@@ -426,23 +438,44 @@ const showWelcomeCard = computed(
 );
 
 function onWelcomeDismiss(): void {
+    if (!viewActive.value || !welcomeContextReady.value || welcomeReadyGeneration !== getWorkspaceGeneration()) return;
     if (welcomePreviewRequested.value) {
         welcomePreviewDismissed.value = true;
         return;
     }
+    welcomeDismissedGeneration = welcomeReadyGeneration;
     welcomeDismissed.value = true;
     kv.set(WELCOME_DISMISS_KV_KEY, 'true').catch(() => {
         // Persistence failure is non-critical; card just reappears next load.
     });
 }
 
-onMounted(async () => {
-    const results = await welcomeStateReady;
-    if (welcomeWorkspaceGeneration !== getWorkspaceGeneration()) return;
-    const dismissal = results?.[1];
-    welcomeDismissed.value = dismissal?.status === 'fulfilled' && dismissal.value?.value === 'true';
-    openAiUsable.value = results?.[2]?.status === 'fulfilled' && results[2].value === true;
+let welcomeMounted = false;
+let welcomeHydrationRevision = 0;
+async function hydrateWelcomeState(pending = readWelcomeState()): Promise<void> {
+    const generation = getWorkspaceGeneration();
+    const revision = ++welcomeHydrationRevision;
+    keyStateReady.value = false;
+    welcomeDismissed.value = true;
+    const results = await pending;
+    if (!welcomeMounted || !viewActive.value || !welcomeContextReady.value ||
+        revision !== welcomeHydrationRevision || generation !== getWorkspaceGeneration()) return;
+    const dismissal = results[1];
+    welcomeDismissed.value = welcomeDismissedGeneration === generation ||
+        dismissal?.status === 'fulfilled' && dismissal.value?.value === 'true';
+    openAiUsable.value = results[2].status === 'fulfilled' && results[2].value === true;
+    welcomeReadyGeneration = generation;
     keyStateReady.value = true;
+}
+onMounted(() => {
+    welcomeMounted = true;
+    if (viewActive.value && welcomeContextReady.value) void hydrateWelcomeState(
+        welcomeWorkspaceGeneration === getWorkspaceGeneration() && welcomeStateReady ? welcomeStateReady : undefined,
+    );
+});
+onBeforeUnmount(() => {
+    welcomeMounted = false;
+    welcomeHydrationRevision++;
 });
 
 // Register pane-close cleanup after Nuxt app context is available.
@@ -467,9 +500,16 @@ const chat = shallowRef<ChatInstance>(
 );
 // The child runner owns its foreground stream independently of any pane.
 // A pane viewing that thread projects the runner until its terminal DB write.
-const delegatedWorkspaceGeneration = ref(getWorkspaceGeneration());
-const stopDelegatedWorkspace = subscribeActiveWorkspaceDb(event => { delegatedWorkspaceGeneration.value = event.generation; });
-onBeforeUnmount(stopDelegatedWorkspace);
+// Auth bootstrap can select a workspace after setup; cached chats also need
+// the latest dismissal when reactivated. Keep stale reads from either path out.
+watch([delegatedWorkspaceGeneration, viewActive, welcomeContextReady], () => {
+    if (!welcomeMounted) return;
+    if (viewActive.value && welcomeContextReady.value) void hydrateWelcomeState();
+    else {
+        welcomeHydrationRevision++;
+        keyStateReady.value = false;
+    }
+});
 const visibleChat = computed(() => {
     void delegatedWorkspaceGeneration.value;
     return delegatedChatController(props.threadId) ?? chat.value;

@@ -272,9 +272,18 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
             data: { email: process.env.OR3_BASIC_AUTH_BOOTSTRAP_EMAIL, password: process.env.OR3_BASIC_AUTH_BOOTSTRAP_PASSWORD },
         });
         expect(login.ok(), await login.text()).toBe(true);
+        const created = await page.request.post('/api/workspaces', {
+            headers: { origin, 'x-or3-cloud-intent': 'mutation' },
+            data: { name: `Queued files ${randomUUID()}` },
+        });
+        expect(created.ok(), await created.text()).toBe(true);
+        const workspaceId = (await created.json()).id;
+        const active = await page.request.post('/api/workspaces/active', {
+            headers: { origin, 'x-or3-cloud-intent': 'mutation' }, data: { id: workspaceId },
+        });
+        expect(active.ok(), await active.text()).toBe(true);
         await page.goto('/');
-        const welcome = page.getByRole('button', { name: 'Dismiss welcome', exact: true });
-        await welcome.click({ timeout: 30_000 });
+        await completeWelcomeOnboarding(page);
         await page.getByRole('button', { name: 'Files', exact: true }).click();
         await expect(page.getByRole('region', { name: 'Workspace Files', exact: true })).toBeVisible();
         // Warm production intake and preview chunks before cutting the network.

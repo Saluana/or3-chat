@@ -1,8 +1,8 @@
-# OR3 Cloud 0.1.126
+# OR3 Cloud 0.1.127
 
 Release preparation; candidate qualification and publication are pending.
 
-Candidates 0.1.117–0.1.125 remained unpublished after qualification exposed legacy
+Candidates 0.1.117–0.1.126 remained unpublished after qualification exposed legacy
 verification, source-ledger, asynchronous browser-onboarding and historical
 upgrade-fixture assumptions. The vault lifecycle now exercises the required
 published 0.1.90 → 0.1.116 bridge before the candidate, retaining direct-update
@@ -27,7 +27,11 @@ retry and safe error display.
 The disconnected owner's welcome is now qualified through its public dismissal
 control before account access, with a retained full owner-journey trace. Cached
 chat views release their teleported welcome while inactive, preventing duplicate
-dialogs during workspace/tab transitions.
+dialogs during workspace/tab transitions. Welcome hydration restarts for the
+current workspace after authentication selects it, rejecting delayed results from
+the previous workspace. Reactivating a cached chat refreshes its saved dismissal
+before showing onboarding again. The modal waits for the authenticated workspace
+binding and preserves an optimistic dismissal while its preference write finishes.
 This candidate verifies
 the exact published 0.1.116 rollback image, whose migration history ends at 032,
 with an explicit protection warning. Current and unknown images retain strict
