@@ -347,6 +347,7 @@ and embedded payload `op_id`. A physical SQLite integrity check or
 archive checksum alone does not certify sync health. Diagnostics contain table
 and rowid/server-version locators, or a primary-key-order ordinal and SHA-256 of
 `JSON([snapshot_id, table_name, pk, kind])` for WITHOUT ROWID snapshot items;
+The offline target bundles the runtime read classifier and schemas, including legacy message order derived from HLC and the 256 KiB payload ceiling. Complete audits containing only recoverable record faults report `degraded:true`, `healthy:false`; they return diagnostics without treating the database as fatal corruption. Ordinary restore still requires a healthy certificate. Structural faults and a counter at `Number.MAX_SAFE_INTEGER` (no version can be allocated) block certification and are not recoverable content degradation.
 they never include record contents. An incomplete/resource-limited audit or an
 older image without this contract refuses ordinary restore. This flow has no
 isolated migration stage: it does not start public writers to attempt repairs.

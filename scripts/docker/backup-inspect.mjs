@@ -97,63 +97,24 @@ function openCanonicalDatabase(Database, databasePath) {
   }
 }
 
-// The offline image runs plain Node without host TypeScript aliases. Keep these
-// payload checks aligned with shared/sync/schemas.ts: incremental stamps require
-// UUIDs and 1..512 HLC characters; snapshot revisions deliberately allow legacy
-// nonempty IDs/HLCs. No stricter HLC grammar is implied by the reader contract.
+// Loaded only for semantic inspection; profile preparation and inventory checks
+// do not depend on a generated artifact already existing.
+const loadReader = () => createRequire(import.meta.url)('./backup-read-classifier.cjs');
 const SYNC_TABLES = ['threads', 'messages', 'projects', 'posts', 'file_meta', 'kv', 'notifications'];
-const UUID = /^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$/;
-// Migration 033 repairs this specific historical writer defect, including its
-// embedded payload copy. It is not one of the legitimate legacy revision IDs.
 const BACKGROUND_TOOL_ID = /^background-tool:[a-f0-9]{64}$/i;
 const safe = value => Number.isSafeInteger(value) && value >= 0;
 const text = value => typeof value === 'string' && value.length > 0;
 
-function validSyncPayload(table, value, pk) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  // Readers normalize legacy camelCase wire fields before schema validation.
-  const payload = { ...value };
-  for (const [key, item] of Object.entries(value)) {
-    const snake = key.replace(/[A-Z]/g, char => `_${char.toLowerCase()}`);
-    if (!(snake in payload)) payload[snake] = item;
-  }
-  const strings = {
-    threads: ['id', 'status'], messages: ['id', 'thread_id', 'role', 'order_key'],
-    projects: ['id', 'name'], posts: ['id', 'title', 'content', 'post_type'],
-    file_meta: ['hash'], kv: ['id', 'name'], notifications: ['id', 'user_id', 'type', 'title'],
-  }[table];
-  if (!strings || strings.some(key => typeof payload[key] !== 'string')) return false;
-  if (payload[table === 'file_meta' ? 'hash' : 'id'] !== pk) return false;
-  if (['created_at', 'updated_at', 'clock', ...(table === 'messages' ? ['index'] : [])].some(key => typeof payload[key] !== 'number' || !Number.isFinite(payload[key]))) return false;
-  // Payload clocks are plain finite numbers in the reader; the separate
-  // revision clock is the nonnegative safe integer used by sync ordering.
-  if (table !== 'kv' && typeof payload.deleted !== 'boolean') return false;
-  if (table === 'threads' && typeof payload.pinned !== 'boolean') return false;
-  const optionalStrings = {
-    messages: ['hlc'], file_meta: ['kind', 'mime_type'],
-    notifications: ['thread_id', 'document_id', 'body'],
-  }[table] ?? [];
-  if (optionalStrings.some(key => payload[key] !== undefined && typeof payload[key] !== 'string')) return false;
-  const optionalNumbers = { file_meta: ['size_bytes'], notifications: ['read_at', 'deleted_at'] }[table] ?? [];
-  if (optionalNumbers.some(key => payload[key] !== undefined && (typeof payload[key] !== 'number' || !Number.isFinite(payload[key])))) return false;
-  if ((table === 'threads' || table === 'posts') && payload.title_source !== undefined && !['temporary', 'generating', 'generated', 'heading', 'manual', 'failed'].includes(payload.title_source)) return false;
-  if (table === 'threads') {
-    if (['title', 'root_thread_id', 'summary_message_id'].some(key => payload[key] !== undefined && payload[key] !== null && typeof payload[key] !== 'string')) return false;
-    if (payload.branch_mode !== undefined && payload.branch_mode !== null && !['reference', 'copy', 'compacted'].includes(payload.branch_mode)) return false;
-    if (payload.fork_reason !== undefined && !['manual', 'retry', 'compaction'].includes(payload.fork_reason)) return false;
-  }
-  if (table === 'notifications' && payload.actions !== undefined && !Array.isArray(payload.actions)) return false;
-  return true;
-}
-
 /** Read-only, bounded certification; diagnostics contain sanitized locators only. */
 export function inspectSyncSemantics(Database, databasePath, { requireHistoryIncarnation = false } = {}) {
+  const reader = loadReader();
   const db = openCanonicalDatabase(Database, databasePath);
   const faults = [];
-  let inspectedRecords = 0, faultCount = 0, complete = true;
+  let inspectedRecords = 0, faultCount = 0, blockingFaultCount = 0, complete = true;
   const started = Date.now();
-  const fault = (table, row, reason) => {
+  const fault = (table, row, reason, recoverable = false) => {
     faultCount++;
+    if (!recoverable) blockingFaultCount++;
     if (faults.length < 100) faults.push({ table, ...(row.locator === undefined
       ? { itemOrdinal: row.itemOrdinal, ...(row.oversized ? {} : { keySha256: createHash('sha256').update(JSON.stringify([row.snapshot_id, row.table_name, row.pk, row.kind])).digest('hex') }) }
       : { rowid: row.locator }),
@@ -182,21 +143,33 @@ export function inspectSyncSemantics(Database, databasePath, { requireHistoryInc
     }
   };
   const revision = (table, row, incremental = false, allowEmpty = false) => {
-    if (!safe(row.clock)) fault(table, row, 'invalid_clock');
-    if (typeof row.hlc !== 'string' || (!allowEmpty && !text(row.hlc)) || (incremental && row.hlc.length > 512)) fault(table, row, 'invalid_hlc');
-    if (typeof row.op_id !== 'string' || BACKGROUND_TOOL_ID.test(row.op_id) || (incremental ? !UUID.test(row.op_id) : !allowEmpty && !text(row.op_id))) fault(table, row, 'invalid_op_id');
+    const schema = incremental ? reader.ChangeStampSchema : reader.SnapshotRevisionSchema;
+    if (!schema.shape.clock.safeParse(row.clock).success) fault(table, row, 'invalid_clock', true);
+    if (!(allowEmpty && row.hlc === '') && !schema.shape.hlc.safeParse(row.hlc).success) fault(table, row, 'invalid_hlc', true);
+    if (BACKGROUND_TOOL_ID.test(row.op_id) || (!(allowEmpty && row.op_id === '') && !schema.shape.opId.safeParse(row.op_id).success)) fault(table, row, 'invalid_op_id', true);
   };
   const identity = (table, row) => {
-    if (!SYNC_TABLES.includes(row.table_name)) fault(table, row, 'invalid_table');
-    if (!text(row.pk)) fault(table, row, 'invalid_key');
+    if (!reader.isSyncTable(row.table_name)) fault(table, row, 'invalid_table', true);
+    if (!reader.SyncRecordIdentifierSchema.safeParse(row.pk).success) fault(table, row, 'invalid_key');
   };
   const json = (table, row, name, required) => {
     if (row[name] === null && !required) return;
     let value;
     try { value = JSON.parse(row[name]); }
-    catch { fault(table, row, 'invalid_json'); return; }
-    if (value && typeof value === 'object' && typeof value.op_id === 'string' && BACKGROUND_TOOL_ID.test(value.op_id)) fault(table, row, 'invalid_payload_op_id');
-    if (required && !validSyncPayload(row.table_name, value, row.pk)) fault(table, row, 'invalid_payload');
+    catch { fault(table, row, 'invalid_json', true); return; }
+    if (value && typeof value === 'object' && typeof value.op_id === 'string' && BACKGROUND_TOOL_ID.test(value.op_id)) fault(table, row, 'invalid_payload_op_id', true);
+    if (!required) return;
+    const source = table === 'change_log' ? 'pull' : 'snapshot';
+    // Materialized empty legacy stamps receive these fallbacks in snapshots.
+    const revision = { clock: row.clock, hlc: row.hlc || 'legacy:0', opId: row.op_id || 'legacy:offline' };
+    const record = source === 'pull'
+      ? { tableName: row.table_name, pk: row.pk, op: row.op, payload: value, serverVersion: row.server_version,
+          stamp: { clock: row.clock, hlc: row.hlc, opId: row.op_id, deviceId: row.device_id } }
+      : { tableName: row.table_name, pk: row.pk, kind: 'row', payload: value,
+          revision: table === 'sync_snapshot_items' ? { clock: row.clock, hlc: row.hlc, opId: row.op_id } : revision };
+    const defect = reader.incomingRecordDefect(source, record);
+    // Envelope faults already have precise metadata diagnostics above.
+    if (defect && defect !== 'invalid_record_envelope' && defect !== 'unknown_table') fault(table, row, defect, true);
   };
   try {
     for (const table of ['change_log', 'server_version_counter', 'tombstones', 'sync_snapshots', 'sync_snapshot_items', ...SYNC_TABLES.map(name => `s_${name}`)]) {
@@ -220,7 +193,7 @@ export function inspectSyncSemantics(Database, databasePath, { requireHistoryInc
       const table = `s_${name}`;
       scan(table, ['workspace_id', 'id', 'data_json', 'clock', 'hlc', 'op_id', 'deleted'], row => {
         revision(table, row, false, true);
-        if (!text(row.workspace_id) || !text(row.id)) fault(table, row, 'invalid_key');
+        if (!text(row.workspace_id) || !reader.SyncRecordIdentifierSchema.safeParse(row.id).success) fault(table, row, 'invalid_key');
         if (row.deleted !== 0 && row.deleted !== 1) fault(table, row, 'invalid_deleted');
         // Delete-before-put placeholders do not have a live payload schema.
         json(table, { ...row, table_name: name, pk: row.id }, 'data_json', row.deleted === 0);
@@ -259,6 +232,7 @@ export function inspectSyncSemantics(Database, databasePath, { requireHistoryInc
       EXISTS(SELECT 1 FROM sync_snapshots s JOIN change_log l ON l.workspace_id=s.workspace_id AND l.op_id=t.op_id WHERE s.id=t.snapshot_id AND l.server_version>s.high_watermark) AS after_watermark`);
     scan('server_version_counter', ['workspace_id', 'value'], row => {
       if (!safe(row.value)) fault('server_version_counter', row, 'invalid_counter');
+      else if (row.value === Number.MAX_SAFE_INTEGER) fault('server_version_counter', row, 'exhausted_counter');
       if (row.value < row.log_head) fault('server_version_counter', row, 'counter_below_log');
     }, ",(SELECT MAX(CASE WHEN typeof(l.server_version) IN ('integer','real') THEN l.server_version END) FROM change_log l WHERE l.workspace_id=t.workspace_id) AS log_head");
     let historyIncarnation;
@@ -267,7 +241,7 @@ export function inspectSyncSemantics(Database, databasePath, { requireHistoryInc
       if (rows.length !== 1 || rows[0].id !== 1 || typeof rows[0].incarnation !== 'string' || !/^[\x00-\x7f]{1,128}$/.test(rows[0].incarnation)) throw new Error('Invalid sync history singleton');
       historyIncarnation = rows[0].incarnation;
     }
-    return { ...(historyIncarnation ? { historyIncarnation } : {}), contract: 1, complete, healthy: complete && faultCount === 0, inspectedRecords, faultCount, faults, diagnosticsTruncated: faultCount > faults.length };
+    return { ...(historyIncarnation ? { historyIncarnation } : {}), contract: 1, complete, healthy: complete && faultCount === 0, degraded: complete && faultCount > 0 && blockingFaultCount === 0, inspectedRecords, faultCount, faults, diagnosticsTruncated: faultCount > faults.length };
   } finally { db.close(); }
 }
 

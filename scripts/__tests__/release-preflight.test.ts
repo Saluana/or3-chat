@@ -160,7 +160,7 @@ describe('managed Docker profile projection', () => {
             const profile = JSON.parse(await readFile(join(directory, 'scripts/docker/backup-inspection-profile.json'), 'utf8'));
             expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
             expect(() => assertS3InspectionProfile(profile)).not.toThrow();
-            expect(profile).toEqual({ contract: 2, sqlite: '0.0.30', s3: '0.0.15' });
+            expect(profile).toEqual({ contract: 2, sqlite: '0.0.30', s3: '0.0.15', historyIncarnation: 'unqualified' });
             await writeFile(join(directory, 'node_modules/or3-provider-s3/package.json'), JSON.stringify({ version: '0.0.14' }));
             expect(run('clerk-sqlite-s3').status).not.toBe(0);
             expect(run('unknown').status).not.toBe(0);

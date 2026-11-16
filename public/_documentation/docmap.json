@@ -719,7 +719,7 @@
                     "category": "Operations",
                     "categoryOrder": 3,
                     "order": 14,
-                    "summary": "Managed operations with journaled offline history rotation, exact target qualification, semantic certification, protected safety evidence, stopped degraded recovery, and explicit activation boundaries."
+                    "summary": "Managed operations with journaled offline history rotation, exact target qualification, runtime-reader parity, healthy/degraded semantic certification, exhausted-counter refusal, protected safety evidence, stopped degraded recovery, and explicit activation boundaries."
                 },
                 {
                     "name": "troubleshooting.md",

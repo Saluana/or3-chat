@@ -1,12 +1,17 @@
-import { afterEach, expect, test } from 'bun:test';
+import { beforeAll, afterEach, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as inspector from '../../../scripts/docker/backup-inspect.mjs';
+import { incomingRecordDefect } from '../../../shared/sync/incoming-records';
 import { TABLE_PAYLOAD_SCHEMAS, ChangeStampSchema, SnapshotRevisionSchema, PullResponseSchema } from '../../../shared/sync/schemas';
 
+beforeAll(() => {
+  const prepared = Bun.spawnSync(['node', 'scripts/docker/prepare-backup-inspection.mjs'], { cwd: new URL('../../../', import.meta.url).pathname });
+  expect(prepared.exitCode).toBe(0);
+});
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(path => rm(path, { recursive: true, force: true }))); });
 class OfflineDatabase {
@@ -49,7 +54,16 @@ async function fixture(sql = '') {
   const checksum = hash(await readFile(archive));
   await writeFile(join(root, 'data.sha256'), checksum);
   expect(hash(await readFile(archive))).toBe(await readFile(join(root, 'data.sha256'), 'utf8'));
-  return { path, archive, checksum, audit: () => inspector.inspectSyncSemantics(OfflineDatabase, path) };
+  return { path, archive, checksum, audit: () => inspector.inspectSyncSemantics(OfflineDatabase, path), nodeAudit: () => {
+    const result = Bun.spawnSync(['node', '--input-type=module', '-e', `
+      import Database from 'better-sqlite3';
+      import { inspectSyncSemantics } from './scripts/docker/backup-inspect.mjs';
+      console.log(JSON.stringify(inspectSyncSemantics(Database, process.argv[1])));
+    `, path], { cwd: new URL('../../../', import.meta.url).pathname });
+    expect(result.exitCode).toBe(0);
+    return JSON.parse(result.stdout.toString());
+  } };
+
 }
 
 test.each([
@@ -211,4 +225,45 @@ test('numeric-affinity text and binary stamps are diagnosed without exposing the
   expect(result.faults).toContainEqual({ table: 'change_log', rowid: '1', reason: 'invalid_device_id' });
   expect(result.faults).toContainEqual({ table: 'server_version_counter', rowid: '1', reason: 'invalid_counter' });
   expect(JSON.stringify(result)).not.toContain('PRIVATE');
+});
+
+// Same records cross the deployed Node bundle and the live reader boundary.
+test.each(['change_log', 's_messages', 'sync_snapshot_items'] as const)('legacy message without ordering remains healthy in %s', async table => {
+  const { order_key: _order, ...record } = readerPayload;
+  const f = await fixture();
+  const db = new Database(f.path);
+  if (table === 'change_log') db.query('UPDATE change_log SET table_name=?,payload_json=?').run('messages', JSON.stringify(record));
+  else if (table === 'sync_snapshot_items') {
+    db.exec(`UPDATE sync_snapshots SET tables_json='["messages"]'`);
+    db.query('UPDATE sync_snapshot_items SET table_name=?,payload_json=?').run('messages', JSON.stringify(record));
+  } else db.query('INSERT INTO s_messages(id,workspace_id,data_json,clock,hlc,device_id,op_id) VALUES(?,?,?,1,?,?,?)').run(record.id, 'workspace', JSON.stringify(record), 'legacy:0', 'device', opId);
+  db.close();
+  expect(incomingRecordDefect('pull', { serverVersion: 1, tableName: 'messages', pk: record.id, op: 'put', payload: record, stamp: { clock: 1, hlc: 'legacy:0', deviceId: 'device', opId } })).toBeNull();
+  const before = await readFile(f.path);
+  expect(f.audit()).toMatchObject({ complete: true, healthy: true, degraded: false });
+  expect(f.nodeAudit()).toEqual(f.audit());
+  expect(await readFile(f.path)).toEqual(before);
+});
+
+test.each(['change_log', 's_kv', 'sync_snapshot_items'] as const)('runtime oversized payload is degraded in %s', async table => {
+  const record = { id: 'private-key', name: 'k', value: '', created_at: 1, updated_at: 1, clock: 1 };
+  record.value = 'x'.repeat(300072 - Buffer.byteLength(JSON.stringify(record)));
+  expect(Buffer.byteLength(JSON.stringify(record))).toBe(300072);
+  expect(incomingRecordDefect('pull', { serverVersion: 1, tableName: 'kv', pk: record.id, op: 'put', payload: record, stamp: { clock: 1, hlc: 'legacy:0', deviceId: 'device', opId } })).toBe('oversized_payload');
+  const column = table === 's_kv' ? 'data_json' : 'payload_json';
+  const f = await fixture();
+  const db = new Database(f.path);
+  db.query(`UPDATE ${table} SET ${column}=?`).run(JSON.stringify(record));
+  db.close();
+  const before = await readFile(f.path);
+  expect(f.audit()).toMatchObject({ complete: true, healthy: false, degraded: true, faults: [expect.objectContaining({ table, reason: 'oversized_payload' })] });
+  expect(f.nodeAudit()).toEqual(f.audit());
+  expect(await readFile(f.path)).toEqual(before);
+  expect(createHash('sha256').update(await readFile(f.archive)).digest('hex')).toBe(f.checksum);
+});
+
+test('exhausted counter blocks allocation rather than certifying healthy or recoverable content', async () => {
+  const f = await fixture('UPDATE server_version_counter SET value=9007199254740991');
+  expect(f.audit()).toMatchObject({ complete: true, healthy: false, degraded: false,
+    faults: [expect.objectContaining({ table: 'server_version_counter', reason: 'exhausted_counter' })] });
 });

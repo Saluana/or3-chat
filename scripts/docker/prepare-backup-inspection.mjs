@@ -1,3 +1,5 @@
+import { build } from 'esbuild';
+import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { INSPECTION_PROFILE, S3_INSPECTION_PROFILE, assertInspectionProfile, assertS3InspectionProfile } from './backup-inspect.mjs';
 import { dockerProfile } from './prepare-manifest.mjs';
@@ -25,3 +27,17 @@ if (selected === 'basic-sqlite-fs') {
 // exact packed runtime, migration history, inspector and reset-helper qualification.
 profile.historyIncarnation = 'unqualified';
 writeFileSync('scripts/docker/backup-inspection-profile.json', JSON.stringify(profile) + '\n');
+
+// Target-owned plain-Node reader: build from the same schemas/classifier as the
+// runtime, including legacy normalization and its payload ceiling. No TS loader
+// or developer aliases are needed in the offline image.
+await build({
+  stdin: {
+    contents: `export { incomingRecordDefect, isSyncTable } from './shared/sync/incoming-records';
+      export { ChangeStampSchema, SnapshotRevisionSchema, SyncRecordIdentifierSchema } from './shared/sync/schemas';`,
+    resolveDir: fileURLToPath(new URL('../../', import.meta.url)),
+    sourcefile: 'backup-read-classifier.ts', loader: 'ts',
+  },
+  bundle: true, platform: 'node', target: 'node24', format: 'cjs',
+  outfile: 'scripts/docker/backup-read-classifier.cjs',
+});

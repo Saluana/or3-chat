@@ -322,6 +322,7 @@ or unsupported audits also refuse. Reports contain sanitized numeric locators
 The audit follows the reader's required and optional payload fields, preserves
 legacy snapshot revision IDs, and rejects the known `background-tool:<64 hex>`
 incident ID in stored revisions and embedded payload `op_id`.
+The offline target bundles the runtime read classifier and schemas, including legacy message order derived from HLC and the 256 KiB payload ceiling. Complete audits containing only recoverable record faults report `degraded:true`, `healthy:false`; they return diagnostics without treating the database as fatal corruption. Ordinary restore still requires a healthy certificate. Structural faults and a counter at `Number.MAX_SAFE_INTEGER` (no version can be allocated) block certification and are not recoverable content degradation.
 This restore flow has no isolated migration stage and does not start public writers
 to attempt a repair. It never edits an authenticated archive to make it pass.
 Recorded pre-mutation safety recovery preserves prior bytes and explicitly warns
