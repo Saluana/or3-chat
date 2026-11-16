@@ -136,6 +136,9 @@ export function dashboardOperatorHandoffArgs(
     '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL',
     '--mount', `type=bind,src=${env.OR3_DOCKER_SOCKET},dst=/var/run/docker.sock`,
     '--mount', `type=bind,src=${directory},dst=${directory},readonly`,
+    // The helper acknowledges the handoff under the deployment lease. Keep
+    // configuration/assets read-only and grant writes only to managed state.
+    '--mount', `type=bind,src=${join(directory, '.or3-cloud')},dst=${join(directory, '.or3-cloud')}`,
     '--workdir', directory, '--tmpfs', '/tmp:rw,noexec,nosuid,size=16m',
     '--entrypoint', '/usr/local/bin/node', env.OR3_OPERATOR_IMAGE,
     join(directory, 'dashboard-operator.mjs'), '--complete-handoff', jobId, project,

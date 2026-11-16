@@ -164,6 +164,17 @@ destructive restore that discards later writes. Plain `recover` never silently
 falls back to a restore; a deployment that may have replaced data without
 completion proof requires the explicit choice.
 
+For a completed update whose only remaining recovery action is
+`reconcile-handoff` with `dataLoss: false`, use the exact corrected CLI
+`npx --yes @or3/cloud@0.1.128 recover --finish`, even while an older image runs.
+This schedules only the recorded operator replacement. Wait until the same
+CLI's `recover --dry-run` reports no pending handoff, then rerun `doctor` before
+a fresh backup or upgrade. A running successor and succeeded job do not by
+themselves prove that the durable receipt is verified. The helper writes its
+lease and receipt under `.or3-cloud`; configuration and assets remain read-only.
+Application data and the existing rollback point are preserved. Keep recovery
+material if it remains pending; do not edit receipts or restore data to clear it.
+
 `backup list` classifies every backup-store entry (`verified`,
 `legacy-unsigned`, `legacy-adoption`, `unsupported`, `invalid`, `unreadable`)
 instead of aborting or silently skipping. A `verified` classification means its

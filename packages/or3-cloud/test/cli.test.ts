@@ -449,6 +449,8 @@ test('dashboard handoff runs in a separate least-privilege helper container', ()
   expect(args).toContain('none');
   expect(args).toContain('no-new-privileges:true');
   expect(args).toContain('ALL');
+  expect(args).toContain(`type=bind,src=${directory},dst=${directory},readonly`);
+  expect(args).toContain(`type=bind,src=${join(directory, '.or3-cloud')},dst=${join(directory, '.or3-cloud')}`);
   expect(args).toContain('/usr/local/bin/node');
   expect(args).toContain(join(directory, 'dashboard-operator.mjs'));
   expect(args.slice(-3)).toEqual(['--complete-handoff', jobId, 'or3-cloud']);

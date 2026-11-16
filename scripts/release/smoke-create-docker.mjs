@@ -6,8 +6,8 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const phase = process.argv[2];
-if (!['write','verify','legacy-fence','validation-failure'].includes(phase)) {
-    throw new Error('Usage: smoke-create-docker.mjs write|verify|legacy-fence|validation-failure <cli-tarball>');
+if (!['write','verify','legacy-fence','validation-failure','operator-handoff'].includes(phase)) {
+    throw new Error('Usage: smoke-create-docker.mjs write|verify|legacy-fence|validation-failure|operator-handoff <cli-tarball>');
 }
 
 const baseUrl = process.env.OR3_SMOKE_URL ?? 'http://127.0.0.1:3000';
@@ -40,6 +40,77 @@ const legacyDigests = new Set([
 async function isPublishedLegacy() {
     const state = JSON.parse(await readFile(resolve('.or3-cloud/state.json'), 'utf8'));
     return state.appVersion === '0.1.116' && legacyDigests.has(state.imageDigest);
+}
+
+// Failures: a running successor without its durable handoff acknowledgement,
+// a receipt for another job, changed application/configuration/rollback state,
+// or an idempotent retry that recreates the successor again. Exercise the real
+// published legacy operator and exact CLI in the disposable lifecycle fixture.
+if (phase === 'operator-handoff') {
+    const tarball = process.argv[3];
+    const origin = new URL(baseUrl);
+    if (!tarball || !['127.0.0.1', 'localhost'].includes(origin.hostname) || !await isPublishedLegacy()) {
+        throw new Error('Handoff smoke requires a loopback published 0.1.116 fixture and exact CLI tarball');
+    }
+    await readFile(statePath); // The earlier write phase must own this fixture.
+    const cloud = resolve('.or3-cloud');
+    const managedPath = join(cloud, 'state.json');
+    const initial = JSON.parse(await readFile(managedPath, 'utf8'));
+    const envBytes = await readFile(resolve('.env'));
+    if (parseEnv(envBytes.toString()).OR3_DASHBOARD_UPDATES_ENABLED !== 'true' || initial.incompleteOperation) {
+        throw new Error('Handoff smoke requires an enabled, settled dashboard deployment');
+    }
+    const compose = ['compose', '--project-directory', process.cwd(), '--env-file', resolve('.env'), '-f', resolve('compose.yaml')];
+    const docker = args => execFileSync('docker', args, { encoding: 'utf8', timeout: 30_000 }).trim();
+    const appId = docker([...compose, 'ps', '-q', 'or3']);
+    const operatorId = docker(['ps', '-q', '--filter', `label=com.docker.compose.project=${initial.composeProject}`, '--filter', 'label=com.docker.compose.service=or3-operator']);
+    if (!appId || !operatorId) throw new Error('Expected both legacy application and operator containers');
+    const jobId = randomUUID();
+    const at = new Date().toISOString();
+    const identity = { appVersion: initial.appVersion, image: initial.image, imageDigest: initial.imageDigest };
+    const receipt = {
+        schemaVersion: 1, operationId: `update-handoff-fixture-${jobId}`, dashboardJobId: jobId,
+        cliVersion: '0.1.116', source: identity, target: identity, observed: identity,
+        completedAt: at, rollbackBackupId: initial.rollback?.backupId ?? '', checks: [], warnings: [],
+        phaseDurationsMs: {}, operatorHandoff: 'pending',
+    };
+    // Only the missing acknowledgement is seeded; the real helper must replace
+    // the operator and write verified through Docker's actual mount boundary.
+    await writeFile(managedPath, JSON.stringify({ ...initial, lastReceipt: receipt }), { mode: 0o600 });
+    await writeFile(join(cloud, 'last-operation.json'), JSON.stringify(receipt), { mode: 0o600 });
+    await writeFile(join(cloud, 'dashboard-update.json'), JSON.stringify({ id: jobId, targetVersion: '0.1.116', phase: 'succeeded', startedAt: at, completedAt: at }), { mode: 0o600 });
+    const cli = args => execFileSync('npm', ['exec', '--yes', '--package=' + resolve(tarball), '--', 'or3', ...args], { encoding: 'utf8', timeout: 60_000 });
+    const preview = JSON.parse(cli(['recover', '--dry-run', '--json']));
+    if (preview.decision.action !== 'reconcile-handoff' || preview.dataLoss) throw new Error('Expected non-destructive handoff recovery');
+    cli(['recover', '--finish']);
+    let state;
+    const deadline = Date.now() + 30_000;
+    do {
+        state = JSON.parse(await readFile(managedPath, 'utf8'));
+        if (state.lastReceipt?.operatorHandoff === 'verified') break;
+        await new Promise(resolveDelay => setTimeout(resolveDelay, 250));
+    } while (Date.now() < deadline);
+    const successor = docker(['ps', '-q', '--filter', `label=com.docker.compose.project=${initial.composeProject}`, '--filter', 'label=com.docker.compose.service=or3-operator']);
+    const result = {
+        appVersion: state.appVersion, jobId, operatorReplaced: Boolean(successor && successor !== operatorId),
+        handoff: state.lastReceipt?.operatorHandoff,
+        applicationUnchanged: docker([...compose, 'ps', '-q', 'or3']) === appId && state.imageDigest === initial.imageDigest,
+        configurationUnchanged: envBytes.equals(await readFile(resolve('.env'))),
+        rollbackUnchanged: JSON.stringify(state.rollback) === JSON.stringify(initial.rollback),
+        receiptMatchesJob: state.lastReceipt?.dashboardJobId === jobId && state.lastReceipt?.operationId === receipt.operationId,
+        noIncompleteOperation: !state.incompleteOperation,
+    };
+    await writeFile(resolve('.or3-smoke-handoff.json'), JSON.stringify(result, null, 2));
+    if (result.handoff !== 'verified' || Object.entries(result).some(([key, value]) => !['appVersion', 'jobId', 'handoff'].includes(key) && value !== true)) {
+        throw new Error('Operator handoff did not durably complete without changing the application: ' + JSON.stringify(result));
+    }
+    cli(['recover', '--finish']);
+    const settled = JSON.parse(cli(['recover', '--dry-run', '--json']));
+    if (settled.decision.action !== 'none' || docker(['ps', '-q', '--filter', `label=com.docker.compose.project=${initial.composeProject}`, '--filter', 'label=com.docker.compose.service=or3-operator']) !== successor) {
+        throw new Error('Completed handoff retry was not a no-op');
+    }
+    console.log('PASS published legacy operator handoff: verified receipt, preserved application/configuration/rollback and idempotent retry.');
+    process.exit(0);
 }
 
 // Intercept only the completed real CLI validation probe. Polling public health
