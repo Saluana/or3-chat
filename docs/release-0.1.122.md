@@ -1,8 +1,8 @@
-# OR3 Cloud 0.1.121
+# OR3 Cloud 0.1.122
 
 Release preparation; candidate qualification and publication are pending.
 
-Candidates 0.1.117–0.1.120 remained unpublished after qualification exposed legacy
+Candidates 0.1.117–0.1.121 remained unpublished after qualification exposed legacy
 verification, source-ledger, asynchronous browser-onboarding and historical
 upgrade-fixture assumptions. The vault lifecycle now exercises the required
 published 0.1.90 → 0.1.116 bridge before the candidate, retaining direct-update
@@ -10,6 +10,9 @@ refusal and source-health assertions instead of relaxing the schema-2 gate.
 Offline recovery browser probes discover and bind the real history incarnation;
 synthetic validation rejections echo that identity so they exercise permanent
 change recovery rather than malformed-response retries.
+The extended lifecycle separately asserts closed-validation automatic source
+restoration and explicit recovery of a target that may have admitted writes;
+an expected nonzero validation exit cannot be mistaken for successful update.
 The disconnected owner's welcome is now qualified through its public dismissal
 control before account access, with a retained full owner-journey trace. Cached
 chat views release their teleported welcome while inactive, preventing duplicate
