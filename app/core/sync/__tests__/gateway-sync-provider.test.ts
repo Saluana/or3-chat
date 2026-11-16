@@ -3,6 +3,7 @@ import type { PullResponse, SnapshotResponse, SyncChange, SyncScope } from '~~/s
 import { FULL_HISTORY_PULL_RETENTION } from '~~/shared/sync/types';
 import { createGatewaySyncProvider } from '../providers/gateway-sync-provider';
 import { OutboxManager } from '../outbox-manager';
+import { isHistoryProtocolBoundary } from '../history-incarnation';
 import { createMockDb, createPendingOpsTable } from './sync-test-utils';
 import { Blob as NodeBlob } from 'node:buffer';
 import { gunzipSync } from 'node:zlib';
@@ -106,11 +107,20 @@ function pushBatch() {
 
 describe('legacy server pre-dispatch refusal', () => {
     afterEach(() => vi.unstubAllGlobals());
-    it.each([401, 403, 502])('preserves session and pauses on an unrecognizable intermediary %s', async status => {
+    it.each([401, 403, 502, 503])('preserves session without a durable pause on an unrecognizable intermediary %s', async status => {
         const dispatch = vi.fn(); vi.stubGlobal('dispatchEvent', dispatch);
         vi.stubGlobal('fetch', vi.fn(async () => makeErrorResponse(status, '<html>proxy refusal</html>')));
-        await expect(createGatewaySyncProvider().push(pushBatch())).rejects.toMatchObject({ code: 'OR3_SYNC_HISTORY_UNSUPPORTED' });
+        const error = await createGatewaySyncProvider().push(pushBatch()).catch(error => error);
+        expect(isHistoryProtocolBoundary(error)).toBe(false);
+        expect(error).toMatchObject({ status, retryable: true });
         expect(dispatch).not.toHaveBeenCalled();
+    });
+    it('keeps ordinary JSON permission failures in the auth path', async () => {
+        const dispatch = vi.fn(); vi.stubGlobal('dispatchEvent', dispatch);
+        vi.stubGlobal('fetch', vi.fn(async () => makeErrorResponse(403, { statusMessage: 'Forbidden' })));
+        const error = await createGatewaySyncProvider().push(pushBatch()).catch(error => error);
+        expect(isHistoryProtocolBoundary(error)).toBe(false);
+        expect(dispatch).toHaveBeenCalledTimes(1);
     });
     it('uses the downgrade fence and refuses before invalid-session cleanup', async () => {
         const dispatch = vi.fn(); vi.stubGlobal('dispatchEvent', dispatch);
@@ -593,6 +603,28 @@ describe('GatewaySyncProvider', () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
 
         unsubscribe();
+    });
+
+    it.each([401, 403, 502])('resumes polling after an opaque intermediary %s without logout or protocol pause', async status => {
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        const fetcher = vi.fn().mockResolvedValueOnce(makeErrorResponse(status, '<html>proxy unavailable</html>'))
+            .mockResolvedValue(makeOkResponse({ changes: [], nextCursor: 0, hasMore: false }));
+        vi.stubGlobal('fetch', fetcher);
+        const dispatch = vi.fn(); vi.stubGlobal('dispatchEvent', dispatch);
+        const onError = vi.fn();
+        const provider = createGatewaySyncProvider({ pollIntervalMs: 100 });
+        const unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['messages'], () => undefined,
+            { cursor: 0, historyIncarnation: 'I', onError });
+        try {
+            await vi.advanceTimersByTimeAsync(100);
+            expect(fetcher).toHaveBeenCalledTimes(1);
+            await vi.advanceTimersByTimeAsync(99);
+            expect(fetcher).toHaveBeenCalledTimes(1);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(fetcher).toHaveBeenCalledTimes(2);
+            expect(onError).not.toHaveBeenCalled();
+            expect(dispatch).not.toHaveBeenCalled();
+        } finally { unsubscribe(); await provider.dispose(); }
     });
 
     it('stops polling and emits sync-session-invalid event on auth/permission failures', async () => {

@@ -880,9 +880,12 @@ origin, JSON and bearer checks. Sync push, pull, snapshot, ACK and events keep
 their independent incarnation checks; there is no retry with a legacy header.
 
 An exact old intent refusal pauses sync before session-invalid cleanup. A
-missing/malformed incarnation or unrecognized intermediary response pauses with
+successful response with a missing/malformed incarnation pauses with
 “The server does not support this tab's sync protocol”; it does not prove rollback.
-The pause is durable and shared with same-account workspace followers. It does
+Network failures and intermediary HTTP errors use bounded transport retries;
+an unrecognized proxy 401/403 preserves the session without a durable protocol
+pause. Recognized application authentication refusals retain normal auth handling.
+The protocol pause is durable and shared with same-account workspace followers. It does
 not reset cursors, settle operations, spend retries, clear browser data or sign
 out. Local edits, drafts, blobs and held evidence remain saved. “Check server
 again” reconnects through checked discovery; only a valid current contract can

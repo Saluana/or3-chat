@@ -253,22 +253,21 @@ async function requestJsonRaw<T>(
             sanitized,
             retryAfterMs
         );
+        let statusMessage: unknown;
         try {
-            const decoded = JSON.parse(text) as { data?: GatewaySyncRequestError['data'] };
-            error.data = decoded.data;
-        } catch { /* Text errors retain their status without inventing protocol data. */ }
-        // The immutable old server rejects this exact intent before route dispatch.
-        // Classify it before the general 403 session-invalid event can log out.
-        try {
-            const refusal = JSON.parse(text) as { statusMessage?: string };
-            if (res.status === 403 && refusal.statusMessage === 'Forbidden: Missing mutation intent') error.code = 'OR3_SYNC_OLDER_SERVER';
-            else if (typeof refusal.statusMessage !== 'string' && res.status !== 429) error.code = 'OR3_SYNC_HISTORY_UNSUPPORTED';
-        } catch {
-            // An unrecognizable gateway/proxy response proves neither auth loss
-            // nor the current contract. Keep rate-limit/auth status semantics.
-            if (res.status !== 429) error.code = 'OR3_SYNC_HISTORY_UNSUPPORTED';
+            const decoded = JSON.parse(text) as { statusMessage?: unknown; data?: GatewaySyncRequestError['data'] } | null;
+            error.data = decoded?.data;
+            statusMessage = decoded?.statusMessage;
+        } catch { /* Opaque intermediary errors prove neither auth loss nor protocol incompatibility. */ }
+        if (res.status === 403 && statusMessage === 'Forbidden: Missing mutation intent') {
+            error.code = 'OR3_SYNC_OLDER_SERVER';
+        } else if ((res.status === 401 || res.status === 403) && typeof statusMessage !== 'string') {
+            // Preserve the session on an unrecognized proxy refusal and use the
+            // existing bounded transport retry, without a durable protocol pause.
+            error.code = 'ERR_NETWORK';
+            error.retryable = true;
         }
-        if (!isHistoryProtocolBoundary(error)) notifyInvalidSyncSession(error);
+        if (!isHistoryProtocolBoundary(error) && error.code !== 'ERR_NETWORK') notifyInvalidSyncSession(error);
         throw error;
     }
 
@@ -368,7 +367,7 @@ export function createGatewaySyncProvider(
         }
     };
     const subscriptions = new Set<() => void>();
-    const pullRetries = new Map<string, { failures: number; notBefore: number; status: number }>();
+    const pullRetries = new Map<string, { failures: number; notBefore: number; status: number; transport?: boolean }>();
     const retryFor = (scope: SyncScope) => {
         const key = JSON.stringify([scope.workspaceId, scope.projectId ?? null, scope.principalId ?? null]);
         let state = pullRetries.get(key);
@@ -384,7 +383,9 @@ export function createGatewaySyncProvider(
         // Ownership changes recreate subscriptions and probe history. Neither
         // may bypass a previous server deferral or transport outage cooldown.
         if (retry.notBefore > Date.now()) {
-            throw new GatewaySyncRequestError('/api/sync/pull', retry.status, 'Pull deferred', retry.notBefore - Date.now());
+            const error = new GatewaySyncRequestError('/api/sync/pull', retry.status, 'Pull deferred', retry.notBefore - Date.now());
+            if (retry.transport) { error.code = 'ERR_NETWORK'; error.retryable = true; }
+            throw error;
         }
         try {
             const response = await requestJson<PullResponse>(
@@ -398,6 +399,7 @@ export function createGatewaySyncProvider(
             if (error instanceof GatewaySyncRequestError && error.retryAfterMs !== undefined) {
                 retry.notBefore = Date.now() + Math.min(Math.max(error.retryAfterMs, pollIntervalMs), maxRetryAfterMs);
                 retry.status = error.status;
+                retry.transport = error.code === 'ERR_NETWORK';
             }
             throw error;
         }
@@ -570,7 +572,7 @@ export function createGatewaySyncProvider(
                         await options?.onError?.(error);
                     } else if (
                         error instanceof GatewaySyncRequestError &&
-                        (error.status === 401 || error.status === 403)
+                        (error.status === 401 || error.status === 403) && !error.retryable
                     ) {
                         unsubscribe();
                     } else if (
@@ -578,12 +580,14 @@ export function createGatewaySyncProvider(
                         error.retryAfterMs !== undefined
                     ) {
                         retry.status = error.status;
+                        retry.transport = error.code === 'ERR_NETWORK';
                         retry.notBefore = Date.now() + Math.min(
                             Math.max(error.retryAfterMs, pollIntervalMs),
                             maxRetryAfterMs
                         );
                     } else {
                         retry.status = error instanceof GatewaySyncRequestError ? error.status : 503;
+                        retry.transport = error instanceof GatewaySyncRequestError && error.code === 'ERR_NETWORK';
                         retry.failures = Math.min(retry.failures + 1, 16);
                         retry.notBefore = Date.now() + Math.min(
                             pollIntervalMs * 2 ** (retry.failures - 1),
