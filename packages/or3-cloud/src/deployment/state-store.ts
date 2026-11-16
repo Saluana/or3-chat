@@ -33,9 +33,19 @@ export async function readState(directory: string): Promise<ManagedState> {
 
 export async function writeState(directory: string, state: ManagedState) {
   assertStateSchemaWritable(state);
-  await lifecycleFaults.beforeStateWrite?.(state);
-  await writeSecure(deploymentPaths(directory).state, `${JSON.stringify(state, null, 2)}\n`);
-  await lifecycleFaults.afterStateWrite?.(state);
+  const path = deploymentPaths(directory).state;
+  const payload = `${JSON.stringify(state, null, 2)}\n`;
+  try {
+    await lifecycleFaults.beforeStateWrite?.(state);
+    await writeSecure(path, payload);
+    await lifecycleFaults.afterStateWrite?.(state);
+  } catch (error) {
+    // Rename may have committed before its fsync/acknowledgement failed. Never
+    // let a caller's stale pending object overwrite an observed terminal commit.
+    // Pending transitions and uncommitted terminal writes still fail closed.
+    if (state.incompleteOperation || await readText(path).catch(() => undefined) !== payload) throw error;
+    console.warn(`Terminal state is installed, but its write acknowledgement failed: ${redact(error instanceof Error ? error.message : String(error))}. Recheck status/doctor before further mutation.`);
+  }
 }
 
 /**

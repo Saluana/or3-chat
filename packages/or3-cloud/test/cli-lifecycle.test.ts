@@ -781,7 +781,7 @@ for (const operation of ['restore', 'rollback'] as const) {
       expect((await fixture.traceEntries()).filter(entry => entry.args.join(' ').includes('tar xzf'))).toHaveLength(2);
     });
   }
-  test(`${operation} preserves the target when terminal state recording fails`, async () => {
+  test.each(['beforeStateWrite', 'afterStateWrite'] as const)(`${operation} preserves the target when terminal state recording fails at %s`, async (fault) => {
     const fixture = await sandbox();
     expect((await fixture.cli(['backup'])).exitCode).toBe(0);
     const [target] = await fixture.backupIds();
@@ -796,22 +796,25 @@ for (const operation of ['restore', 'rollback'] as const) {
     lifecycleFaults.beforeCommand = (_command, args) => {
       if (args[0] === 'inspect' && args.includes('{{.Image}}')) started = true;
     };
-    lifecycleFaults.beforeStateWrite = () => {
+    lifecycleFaults[fault] = () => {
       if (started && !failed) { failed = true; throw new Error('fixture terminal commit failure'); }
     };
     const previousPath = process.env.PATH;
     process.env.PATH = `${join(fixture.root, 'bin')}:${previousPath}`;
     try {
-      await expect(operation === 'restore'
+      const action = operation === 'restore'
         ? restoreCommand(fixture.directory, { yes: true }, [target])
-        : rollbackCommand(fixture.directory, { yes: true })).rejects.toThrow('NOT restored automatically');
+        : rollbackCommand(fixture.directory, { yes: true });
+      if (fault === 'beforeStateWrite') await expect(action).rejects.toThrow('NOT restored automatically');
+      else await action;
     } finally {
       process.env.PATH = previousPath;
       delete lifecycleFaults.beforeCommand;
-      delete lifecycleFaults.beforeStateWrite;
+      delete lifecycleFaults[fault];
     }
     expect(failed).toBe(true);
-    expect((await fixture.readState()).incompleteOperation).toMatchObject({ operation, phase: 'starting-target' });
+    if (fault === 'beforeStateWrite') expect((await fixture.readState()).incompleteOperation).toMatchObject({ operation, phase: 'starting-target' });
+    else expect((await fixture.readState()).incompleteOperation).toBeUndefined();
     expect((await fixture.traceEntries()).filter(entry => entry.args.join(' ').includes('tar xzf'))).toHaveLength(1);
     expect((await fixture.cli(['recover', '--restore', '--yes'])).exitCode).toBe(0);
     expect((await fixture.readState()).incompleteOperation).toBeUndefined();
