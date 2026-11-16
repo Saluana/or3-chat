@@ -88,7 +88,8 @@ const head = (db: Database.Database, id: string) => (db.prepare('SELECT value FR
 // Playwright's waitForFunction predicate is synchronous. Sample IndexedDB
 // asynchronously, then let the synchronous predicate observe the completed
 // sample. A real page reload discards the sample and naturally waits for the
-// replacement document; no failed action is replayed.
+// replacement document. In-place handoffs discard only obsolete read samples;
+// no failed action is replayed.
 async function sample(c: Client, mode: 'state' | 'open' | 'installed' | 'restore' = 'state',
     options: { keys?: string[]; version?: number; badKeys?: string[]; incarnation?: string; originalId?: string } = {}) {
     const handle = await c.page.waitForFunction(({ url, workspaceId, mode, options, nonce }) => {
@@ -103,9 +104,19 @@ async function sample(c: Client, mode: 'state' | 'open' | 'installed' | 'restore
                 const db = mod.getDb();
                 const app = (document.querySelector('#__nuxt') as any)?.__vue_app__?.$nuxt;
                 if (!app || app.isHydrating) return undefined;
-                return { rows: await db.kv.toArray(), tombstones: await db.tombstones.toArray(),
-                    pending: await db.pending_ops.toArray(), quarantine: await db.sync_quarantine.toArray(),
-                    sync: await db.sync_state.toArray(), atOpen: db.syncHistoryAtOpen, running: app.$syncEngine?.isRunning() };
+                try {
+                    const value = await db.transaction('r', [db.kv, db.tombstones, db.pending_ops, db.sync_quarantine, db.sync_state], async () => ({
+                        rows: await db.kv.toArray(), tombstones: await db.tombstones.toArray(),
+                        pending: await db.pending_ops.toArray(), quarantine: await db.sync_quarantine.toArray(),
+                        sync: await db.sync_state.toArray(), atOpen: db.syncHistoryAtOpen, running: app.$syncEngine?.isRunning(),
+                    }));
+                    return mod.getDb() === db ? value : undefined;
+                } catch (error) {
+                    // Retry only a read interrupted by an observed handle handoff.
+                    // Errors on the current connection remain qualification failures.
+                    if (mod.getDb() !== db && (error as { name?: string }).name === 'DatabaseClosedError') return undefined;
+                    throw error;
+                }
             }).then(value => { probe.value = value; probe.pending = false; }, error => { probe.error = String(error); });
         }
         const value = probe.value;
