@@ -564,24 +564,35 @@ jobs:
           OR3_DASHBOARD_STATE_PATH="$managed/.or3-cloud/state.json" node scripts/release/smoke-dashboard-update.mjs "$managed/.or3-cloud/operator-ipc/operator.sock" "$version" > "$RUNNER_TEMP/dashboard-interrupted.log" 2>&1 &
           driver_pid=$!
           trap 'kill "$driver_pid" 2>/dev/null || true; wait "$driver_pid" 2>/dev/null || true' EXIT
-          observed_mutation=false
-          for attempt in $(seq 1 600); do
-            phase="$(node -e 'try{process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).incompleteOperation?.phase||"")}catch{}' "$managed/.or3-cloud/state.json" || true)"
-            # target-mutating can be shorter than one polling interval. Both
-            # phases precede completion proof and require explicit recovery.
-            if [ "$phase" = target-mutating ] || [ "$phase" = starting-target ]; then
-              observed_mutation=true
-              break
+          args=(--project-directory "$managed" --env-file "$managed/.env" -f "$managed/compose.yaml" -f "$managed/compose.operator.yaml")
+          observed_exposure=false
+          # The driver retains its existing eight-minute deadline. Preparation
+          # and health-only validation are not the exposed-target boundary.
+          while kill -0 "$driver_pid" 2>/dev/null; do
+            target_image="$(node -e '
+              try {
+                const pending = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")).incompleteOperation;
+                if (pending?.phase === "starting-target" && pending.admission?.state === "may-be-open" && pending.targetVersion === process.argv[2]) process.stdout.write(pending.targetImage || "");
+              } catch {}
+            ' "$managed/.or3-cloud/state.json" "$version")"
+            if [ -n "$target_image" ]; then
+              app_id="$(docker compose "${args[@]}" ps -q or3)"
+              expected_image_id="$(docker image inspect --format '{{.Id}}' "$target_image")"
+              # Require the actual target image with normal admission. A
+              # stopped source or health-only container cannot stand in for it.
+              if [ -n "$app_id" ] && [ "$(docker inspect --format '{{.Image}}{{range .Config.Env}}{{if eq . "OR3_CLOUD_UPDATE_VALIDATION=true"}} validation{{end}}{{end}}' "$app_id")" = "$expected_image_id" ]; then
+                observed_exposure=true
+                echo "Interrupting exposed target $version, container $app_id, image $expected_image_id."
+                break
+              fi
             fi
-            kill -0 "$driver_pid" 2>/dev/null || break
             sleep 0.1
           done
-          if [ "$observed_mutation" != true ]; then
+          if [ "$observed_exposure" != true ]; then
             cat "$RUNNER_TEMP/dashboard-interrupted.log"
-            echo "Dashboard update never reached target mutation/start within 60s."
+            echo "Dashboard update ended before an exposed target could be interrupted."
             exit 1
           fi
-          args=(--project-directory "$managed" --env-file "$managed/.env" -f "$managed/compose.yaml" -f "$managed/compose.operator.yaml")
           operator_id="$(docker compose "${args[@]}" ps -q or3-operator)"
           test -n "$operator_id"
           docker kill "$operator_id"
