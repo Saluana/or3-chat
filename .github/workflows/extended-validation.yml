@@ -270,8 +270,8 @@ jobs:
       - name: Verify vault upgrade from the published Cloud release
         run: |
           version="$(node -p "require('./package.json').version")"
-          # The unversioned source still identifies as 0.1.90: preserve its
-          # candidate image before pulling the distinct published baseline.
+          # Preserve the candidate while the vault fixture pulls its published
+          # pre-vault baseline and the required 0.1.116 compatibility bridge.
           docker tag "ghcr.io/saluana/or3-chat:$version" or3-cloud-credentials-qualification:local
           docker pull ghcr.io/saluana/or3-chat:0.1.90
           bun scripts/test/run-cloud-vault-lifecycle-e2e.ts
