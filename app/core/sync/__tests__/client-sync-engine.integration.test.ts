@@ -66,10 +66,13 @@ describe('sync lifecycle with real local write capture', () => {
             await scope.run(() => setupSyncEngine());
             await vi.waitFor(() => expect(control.isRunning()).toBe(true));
             const get = db.sync_state.get.bind(db.sync_state);
-            const lookup = vi.spyOn(db.sync_state, 'get').mockImplementation(key => {
-                if (typeof key === 'string' && key.startsWith('["sync_protocol"')) {
-                    lookupStarted = true;
-                    return gate.then(() => get(key)) as ReturnType<typeof get>;
+            const lookup = vi.spyOn(db.sync_state, 'get').mockImplementation((key: string | Parameters<typeof get>[0]) => {
+                if (typeof key === 'string') {
+                    if (key.startsWith('["sync_protocol"')) {
+                        lookupStarted = true;
+                        return gate.then(() => get(key)) as ReturnType<typeof get>;
+                    }
+                    return get(key);
                 }
                 return get(key);
             });
