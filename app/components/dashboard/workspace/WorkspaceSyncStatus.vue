@@ -584,10 +584,15 @@ async function saveCopy() {
 
 bind();
 const stopWorkspace = subscribeActiveWorkspaceDb(bind);
-// An account change can keep the workspace id but not its authority.
-watch(() => session.data.value?.session?.user?.id, (next, previous) => {
-    if (next !== previous) bind();
-});
+// Clear displayed evidence and fence pending UI reads when authority changes,
+// including permission revisions that retain the same account/workspace.
+watch([
+    () => session.data.value?.session?.authenticated,
+    () => session.data.value?.session?.user?.id,
+    () => session.data.value?.session?.workspace?.id,
+    () => session.data.value?.session?.role,
+    () => session.data.value?.session?.authorizationRevision,
+], bind, { flush: 'sync' });
 
 onBeforeUnmount(() => {
     revision += 1;
