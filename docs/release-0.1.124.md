@@ -1,8 +1,8 @@
-# OR3 Cloud 0.1.123
+# OR3 Cloud 0.1.124
 
 Release preparation; candidate qualification and publication are pending.
 
-Candidates 0.1.117–0.1.122 remained unpublished after qualification exposed legacy
+Candidates 0.1.117–0.1.123 remained unpublished after qualification exposed legacy
 verification, source-ledger, asynchronous browser-onboarding and historical
 upgrade-fixture assumptions. The vault lifecycle now exercises the required
 published 0.1.90 → 0.1.116 bridge before the candidate, retaining direct-update
@@ -13,6 +13,9 @@ change recovery rather than malformed-response retries.
 The extended lifecycle separately asserts closed-validation automatic source
 restoration and explicit recovery of a target that may have admitted writes;
 an expected nonzero validation exit cannot be mistaken for successful update.
+New and reloaded browser tabs wait for the authenticated workspace before inspecting
+its rows or injecting a first-bind transaction fault; persisted-content and recovery
+assertions remain unchanged.
 Storage quota, abort and deletion-failure probes target the protected native
 stores and assert that fault injection actually fired before checking rollback,
 retry and safe error display.
