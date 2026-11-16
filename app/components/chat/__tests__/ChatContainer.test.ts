@@ -3,7 +3,7 @@ import { flushPromises, mount as mountComponent } from '@vue/test-utils';
 import * as nuxtImports from '#imports';
 import { kv } from '~/db';
 import { getWorkspaceGeneration } from '~/db/client';
-import { defineAsyncComponent, defineComponent, nextTick, reactive, ref, toRaw, type Component } from 'vue';
+import { defineAsyncComponent, defineComponent, h, KeepAlive, nextTick, reactive, ref, toRaw, type Component } from 'vue';
 import ChatContainer from '../ChatContainer.vue';
 import type { ChatRequestState, SendResult } from '~/utils/chat/types';
 
@@ -243,7 +243,11 @@ describe('ChatContainer', () => {
         messageRenderer: Component = LazyChatMessage
     ) {
         useChatMock.mockImplementationOnce(() => instance);
-        return mount(ChatContainer, {
+        return mount(ChatContainer, chatMountOptions(props, messageRenderer));
+    }
+
+    function chatMountOptions(props: Record<string, unknown> = {}, messageRenderer: Component = LazyChatMessage) {
+        return {
             props: { ...defaultProps, ...props },
             global: {
                 mocks: { $theme: createThemeMock(messageRenderer) },
@@ -264,7 +268,7 @@ describe('ChatContainer', () => {
                     },
                 },
             },
-        });
+        };
     }
 
     it.each(['persisted', 'streaming'] as const)('accepts the matching turn once it is %s without waiting for the provider', async phase => {
@@ -419,6 +423,38 @@ describe('ChatContainer', () => {
         try {
             await flushPromises();
             expect(wrapper.find('[data-test="welcome-preview"]').exists()).toBe(false);
+        } finally {
+            wrapper.unmount();
+            route.mockRestore();
+            config.mockRestore();
+        }
+    });
+
+    it('removes the teleported welcome while its chat view is cached', async () => {
+        const runtimeConfig = nuxtImports.useRuntimeConfig();
+        const config = vi.spyOn(nuxtImports, 'useRuntimeConfig').mockReturnValue({
+            ...runtimeConfig, public: { ...runtimeConfig.public, ssrAuthEnabled: false },
+        });
+        const route = vi.spyOn(nuxtImports, 'useRoute').mockReturnValue({ ...nuxtImports.useRoute(), query: { welcome: '1' } });
+        const shown = ref(true);
+        const options = chatMountOptions();
+        const wrapper = mount(defineComponent({
+            setup: () => () => h(KeepAlive, () => shown.value ? h(ChatContainer, defaultProps) : h('div')),
+        }), {
+            attachTo: document.body,
+            global: { ...options.global, stubs: { ...options.global.stubs, Teleport: false } },
+        });
+        try {
+            await flushPromises();
+            await vi.waitFor(() => expect(document.querySelectorAll('[data-welcome-backdrop]')).toHaveLength(1));
+            shown.value = false;
+            await nextTick();
+            await flushPromises();
+            expect(document.querySelectorAll('[data-welcome-backdrop]')).toHaveLength(0);
+            shown.value = true;
+            await nextTick();
+            await flushPromises();
+            expect(document.querySelectorAll('[data-welcome-backdrop]')).toHaveLength(1);
         } finally {
             wrapper.unmount();
             route.mockRestore();

@@ -367,6 +367,9 @@ const emit = defineEmits<{
 // Shown only when the chat is empty AND the user has no usable OpenRouter
 // key. Disappears automatically once a key exists; dismissal is persisted.
 const WELCOME_DISMISS_KV_KEY = 'or3_welcome_card_dismissed';
+// Teleports remain in body when KeepAlive caches their chat view. Presentation
+// must follow the same activity boundary as the view's other UI work.
+const viewActive = useCachedViewActivity();
 const runtimeConfig = useRuntimeConfig();
 const route = useRoute();
 const welcomePreviewRequested = computed(() => route.query.welcome === '1');
@@ -409,6 +412,7 @@ const openRouterAvailability = computed(() =>
 const showWelcomeCard = computed(
     () =>
         runtimeConfig.public.pluginDevelopment !== true &&
+        viewActive.value &&
         keyStateReady.value &&
         (runtimeConfig.public?.ssrAuthEnabled !== true ||
             authSessionState.value?.session?.authenticated === true) &&
@@ -966,8 +970,7 @@ type ScrollApi = {
     refreshMeasurements?: () => void;
 };
 const scroller = ref<ScrollApi | null>(null);
-// Descendants created by a continuing stream also inherit the hidden state.
-const viewActive = useCachedViewActivity();
+// Descendants created by a continuing stream also inherit viewActive's hidden state.
 const compactionNavigation = shallowRef<{ threadId: string; messageId: string; generation: number; origin: string | undefined }>();
 function onViewRelatedThread(message: UiChatMessage, target: { threadId: string; originThreadId: string; anchorMessageId: string; generation: number }) {
     if (currentThreadId.value !== target.originThreadId || props.threadId !== target.originThreadId

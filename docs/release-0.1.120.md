@@ -5,7 +5,9 @@ Release preparation; candidate qualification and publication are pending.
 Candidates 0.1.117–0.1.119 remained unpublished after qualification exposed legacy
 verification, source-ledger and asynchronous browser-onboarding assumptions.
 The disconnected owner's welcome is now qualified through its public dismissal
-control before account access, with a retained full owner-journey trace.
+control before account access, with a retained full owner-journey trace. Cached
+chat views release their teleported welcome while inactive, preventing duplicate
+dialogs during workspace/tab transitions.
 This candidate verifies
 the exact published 0.1.116 rollback image, whose migration history ends at 032,
 with an explicit protection warning. Current and unknown images retain strict
