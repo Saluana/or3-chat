@@ -61,6 +61,10 @@ describe('lifecycle evidence boundaries', () => {
       expect(run('finish', 'candidate').stderr).toContain('rollback/re-upgrade history evidence missing');
       await writeFile(statePath, JSON.stringify({ ...state('0.1.117', digest), syncHistory: { certification:'certified', historyIncarnation:'I' } }));
       expect(run('candidate-history', 'candidate').status).toBe(0);
+      for (const pins of [undefined, ['source','source']]) {
+        await writeFile(statePath, JSON.stringify({ ...state('0.1.116', oldDigest), syncHistory:{ certification:'legacy-snapshot', historyReplaced:true }, pinnedHistoryBackups:pins }));
+        expect(run('assert-baseline', 'baseline').stderr).toContain('Legacy rollback status/pins missing');
+      }
       await writeFile(statePath, JSON.stringify({ ...state('0.1.116', oldDigest), syncHistory:{ certification:'legacy-snapshot', historyReplaced:true }, pinnedHistoryBackups:['source','abandoned'] }));
       expect(run('assert-baseline', 'baseline').status).toBe(0);
       await writeFile(statePath, JSON.stringify({ ...state('0.1.117', digest), syncHistory:{ certification:'certified', historyIncarnation:'I' } }));

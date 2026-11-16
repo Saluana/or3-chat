@@ -69,7 +69,7 @@ const baseline = JSON.parse(await readFile(baselinePath, 'utf8'));
 if (action === 'assert-baseline') {
   if (JSON.stringify(baselineObservation()) !== JSON.stringify(Object.fromEntries(Object.entries(baseline).filter(([key]) => !['candidateHistory','restoredLegacy','reupgradeHistory'].includes(key))))) throw new Error('Lifecycle restored baseline identity mismatch.');
   if (baseline.candidateHistory) {
-    if (state.syncHistory?.certification !== 'legacy-snapshot' || state.syncHistory.historyIncarnation || state.pinnedHistoryBackups?.length < 2) throw new Error('Legacy rollback status/pins missing');
+    if (state.syncHistory?.certification !== 'legacy-snapshot' || state.syncHistory.historyIncarnation || !Array.isArray(state.pinnedHistoryBackups) || new Set(state.pinnedHistoryBackups).size < 2) throw new Error('Legacy rollback status/pins missing');
     baseline.restoredLegacy = true;
     await writeFile(baselinePath, JSON.stringify(baseline), {mode:0o600});
   }
