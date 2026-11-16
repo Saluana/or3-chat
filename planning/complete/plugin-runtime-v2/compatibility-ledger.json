@@ -2836,7 +2836,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "2bb23e47b115cdaabc77330b9526abe39be668000298322150f0453798097b55",
+      "apiSha256": "8fe83e32a553d39fbfeb8bb0fff18fbf63929c026a36d657dccac9511b576194",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -4101,7 +4101,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 46,
+              "line": 48,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ImportMetadata {\n    databaseName: string;\n    databaseVersion: number;\n    tables: Array<{ name: string; rowCount: number }>;\n}"
             }
@@ -7807,7 +7807,7 @@
               "resolvedReturnType": "WorkspaceBackupApi",
               "declaration": {
                 "source": "app/composables/core/useWorkspaceBackup.ts",
-                "line": 186,
+                "line": 188,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useWorkspaceBackup(): WorkspaceBackupApi;"
               }
@@ -7816,7 +7816,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 186,
+              "line": 188,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useWorkspaceBackup(): WorkspaceBackupApi;"
             }
@@ -7882,7 +7882,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 52,
+              "line": 54,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface WorkspaceBackupApi {\n    state: WorkspaceBackupState;\n    exportWorkspace(options?: { localOnly?: boolean }): Promise<void>;\n    peekBackup(file: Blob): Promise<void>;\n    importWorkspace(file: Blob): Promise<void>;\n    reset(): void;\n}"
             }
@@ -7896,7 +7896,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 26,
+              "line": 28,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface WorkspaceBackupState {\n    isExporting: Ref<boolean>;\n    isImporting: Ref<boolean>;\n    progress: Ref<number>; // 0-100\n    currentStep: Ref<\n        | 'idle'\n        | 'peeking'\n        | 'confirm'\n        | 'importing'\n        | 'exporting'\n        | 'done'\n        | 'error'\n    >;\n    importMode: Ref<WorkspaceImportMode>;\n    overwriteValues: Ref<boolean>;\n    backupMeta: Ref<ImportMetadata | null>;\n    backupFormat: Ref<'stream' | 'dexie' | 'cloud' | null>;\n    error: Ref<AppError | null>;\n}"
             }
@@ -7910,7 +7910,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 24,
+              "line": 26,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type WorkspaceImportMode = 'replace' | 'append';"
             }
