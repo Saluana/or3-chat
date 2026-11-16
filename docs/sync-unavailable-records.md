@@ -315,7 +315,8 @@ workspace authorization is checked before and after reads; other-account and
 unknown-account private notifications/drafts, local-only KV and unclassified
 private evidence stay in place. Queued payloads explicitly naming another
 workspace or account are excluded even when their wrapper is local. An attachment export revalidates its authorized
-source reference and verifies the bytes against its stored hash. Failed exports
+structured attachment reference and verifies the bytes against its stored hash.
+A hash quoted in ordinary text does not authorize attachment bytes. Failed exports
 never remove their source. No legacy store becomes a normal writable accessor,
 and no inspection opens a version upgrade or automatically imports/replays data.
 

@@ -539,6 +539,30 @@ export async function inspectLegacyEvidence(db: Or3DB, scope: import('~~/shared/
         limitation: 'Partial live evidence. Close older tabs before exporting. Private or unknown-account entries remain in place; no automatic merge or recovery.' };
 }
 
+/** Only attachment fields grant byte access; quoting a hash in text does not. */
+function hasLegacyAttachmentReference(store: string, row: Record<string, unknown>, hash: string,
+    scope: import('~~/shared/sync/types').SyncScope): boolean {
+    if (store === 'workspace_tab_drafts' || store === 'workspace_draft_versions') {
+        const attachments = isRecord(row.draft) ? row.draft.attachments : undefined;
+        return Array.isArray(attachments) && attachments.some(file => isRecord(file) && file.hash === hash);
+    }
+    const target = store === 'pending_ops' || store === 'sync_quarantine' ? row.tableName : store;
+    if (typeof target !== 'string') return false;
+    const op = isRecord(row.op) ? row.op : undefined;
+    const records = store === 'pending_ops' ? [row.payload] : store === 'sync_quarantine'
+        ? [row.localRow, op?.payload, op, ...(Array.isArray(row.pendingIntent) ? row.pendingIntent.map(intent => isRecord(intent) ? intent.payload : undefined) : [])]
+        : [row];
+    return records.some(record => {
+        if (!isRecord(record) || !visibleLegacyEvidence(target, record, scope)) return false;
+        if (target === 'file_meta' || target === 'file_transfers') return record.hash === hash;
+        if (!['messages', 'posts'].includes(target) || typeof record.file_hashes !== 'string') return false;
+        try {
+            const hashes: unknown = JSON.parse(record.file_hashes);
+            return Array.isArray(hashes) && hashes.includes(hash);
+        } catch { return false; }
+    });
+}
+
 /** Attachment evidence requires a fresh authorized source read, never a caller-provided hash list. */
 export async function exportLegacyAttachment(db: Or3DB, scope: import('~~/shared/sync/types').SyncScope,
     store: string, key: IDBValidKey, hash: string) {
@@ -547,7 +571,7 @@ export async function exportLegacyAttachment(db: Or3DB, scope: import('~~/shared
     const source = await inspectLegacyStore(db, store, { key });
     assert();
     const entry = source.rows[0]?.value;
-    if (!entry || !visibleLegacyEvidence(store, entry, scope) || !JSON.stringify(entry).includes(hash)) throw new Error('Authorized attachment reference is required.');
+    if (!entry || !visibleLegacyEvidence(store, entry, scope) || !hasLegacyAttachmentReference(store, entry, hash, scope)) throw new Error('Authorized attachment reference is required.');
     const parsed = parseHash(hash);
     if (!parsed) throw new Error('Invalid attachment hash.');
     const file = await inspectLegacyStore(db, 'file_blobs', { key: hash });

@@ -1311,6 +1311,16 @@ it('exports only authorized legacy evidence, retains private/unknown rows and ve
         await old.table('file_blobs').put({ hash, blob: bytes });
         const attachment = await exportLegacyAttachment(db, scope, 'messages', 'message', hash);
         expect(await attachment.blob.text()).toBe('legacy attachment'); expect(attachment.verified).toBe(true);
+        await old.table('messages').put({ id: 'text-only', content: `Someone mentioned ${hash}` });
+        await expect(exportLegacyAttachment(db, scope, 'messages', 'text-only', hash)).rejects.toThrow(/reference/i);
+        await old.table('messages').put({ id: 'partial-hash', file_hashes: JSON.stringify([hash + 'extra']) });
+        await expect(exportLegacyAttachment(db, scope, 'messages', 'partial-hash', hash)).rejects.toThrow(/reference/i);
+        await old.table('workspace_tab_drafts').put({ id: 'draft-file', account_key: 'owner', draft: { attachments: [{ hash }] } });
+        expect((await exportLegacyAttachment(db, scope, 'workspace_tab_drafts', 'draft-file', hash)).verified).toBe(true);
+        await old.table('file_meta').put({ hash, name: 'attachment' });
+        expect((await exportLegacyAttachment(db, scope, 'file_meta', hash, hash)).verified).toBe(true);
+        await old.table('pending_ops').put({ id: 'queued-file', tableName: 'messages', operation: 'put', payload: { file_hashes: JSON.stringify([hash]) } });
+        expect((await exportLegacyAttachment(db, scope, 'pending_ops', 'queued-file', hash)).verified).toBe(true);
         await expect(exportLegacyAttachment(db, scope, 'notifications', 'private', hash)).rejects.toThrow();
         session.user.id = 'other';
         await expect(inspectLegacyEvidence(db, scope, 'messages')).rejects.toThrow(/access/i);
