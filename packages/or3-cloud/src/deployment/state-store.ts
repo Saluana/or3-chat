@@ -18,7 +18,7 @@ import { parseEnv } from './env';
 import { assertDeploymentDirectoryIdentity, assertDeploymentIdentity } from './identity';
 import { deploymentPaths } from './paths';
 
-/** Schema this bridge release writes by default; schema 2 is opt-in metadata. */
+/** Older packages without writer metadata remain bridge writers. */
 const LEGACY_STATE_SCHEMA_VERSION = 1;
 
 export async function readState(directory: string): Promise<ManagedState> {
@@ -32,16 +32,17 @@ export async function readState(directory: string): Promise<ManagedState> {
 }
 
 export async function writeState(directory: string, state: ManagedState) {
-  await lifecycleFaults.beforeStateWrite?.();
+  assertStateSchemaWritable(state);
+  await lifecycleFaults.beforeStateWrite?.(state);
   await writeSecure(deploymentPaths(directory).state, `${JSON.stringify(state, null, 2)}\n`);
-  await lifecycleFaults.afterStateWrite?.();
+  await lifecycleFaults.afterStateWrite?.(state);
 }
 
 /**
  * Persisted state schema this CLI is qualified to write. A release that only
  * reads schema 2 keeps writing schema 1 (the compatibility bridge); a release
  * explicitly qualified to write the new recovery journal sets
- * `or3Cloud.stateSchema` to 2. Migration to schema 2 is refused below.
+ * `or3Cloud.stateSchema` to 2. Update migrates atomically with its pending record.
  */
 export function writeStateSchema(): StateSchemaVersion {
   const value = packagedOr3CloudMetadata().stateSchema;

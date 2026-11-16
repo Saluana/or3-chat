@@ -267,3 +267,9 @@ test('exhausted counter blocks allocation rather than certifying healthy or reco
   expect(f.audit()).toMatchObject({ complete: true, healthy: false, degraded: false,
     faults: [expect.objectContaining({ table: 'server_version_counter', reason: 'exhausted_counter' })] });
 });
+
+// RB-11: a leftover singleton does not prove that normal 034-036 startup ran.
+test('RB-11 incarnation certification refuses a 033 ledger with a singleton', async () => {
+  const f = await fixture("CREATE TABLE sync_history(id INTEGER PRIMARY KEY, incarnation TEXT); INSERT INTO sync_history VALUES(1,'I');");
+  expect(() => inspector.inspectSyncSemantics(OfflineDatabase, f.path, { requireHistoryIncarnation:true })).toThrow(/ledger/);
+});

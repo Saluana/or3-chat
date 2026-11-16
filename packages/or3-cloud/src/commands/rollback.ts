@@ -1,4 +1,4 @@
-import { requireHistoryResetTarget } from '../backup/history-incarnation';
+import { requireHistoryResetTarget, supportsHistoryReset, qualifyLegacySnapshot } from '../backup/history-incarnation';
 import { imageAtDigest } from '../deployment/identity';
 import { createPreMutationSnapshot } from '../backup/create';
 import { readAuthenticatedBackupConfig } from '../backup/config';
@@ -55,7 +55,10 @@ export async function rollbackCommand(directory: string, flags: Flags) {
   const recreateDataVolume = restoreRequiresVolumeRecreation(loaded.env, backupEnv);
   await pullAndRequireImage(point.image, point.imageDigest, 'Rollback');
   await assertSupportedHostArchitecture(point.image);
-  await requireHistoryResetTarget(loaded.directory, imageAtDigest(manifest.image, manifest.imageDigest));
+  const capable = await supportsHistoryReset(loaded.directory, imageAtDigest(manifest.image, manifest.imageDigest));
+  const replacement = capable ? undefined : await qualifyLegacySnapshot(loaded.directory, loaded.state, manifest, backupEnv, imageAtDigest(loaded.state.image, loaded.state.imageDigest), backupPath);
+  if (capable) await requireHistoryResetTarget(loaded.directory, imageAtDigest(manifest.image, manifest.imageDigest));
+  console.warn(`Rollback discards ALL server changes after ${manifest.createdAt}; target ${point.appVersion} (${point.imageDigest}); abandoned incarnation ${loaded.state.syncHistory?.historyIncarnation ?? 'unknown'}. Current data will be preserved before extraction.`);
   await assertExistingVaultCustody(loaded.directory, loaded.state, manifest, backupPath, backupConfig);
   await assertRestoreFreeSpace(loaded.directory, loaded.state, loaded.env, manifest, backupPath);
   // Snapshot capture already stops the app. Validate before journaling/capture,
@@ -82,6 +85,7 @@ export async function rollbackCommand(directory: string, flags: Flags) {
     recreateDataVolume,
     remoteReconcile,
     phase: 'prepared',
+    explicitLossConsent: true,
   };
   await markPending(loaded.directory, loaded.state, pending);
   try {
@@ -96,10 +100,12 @@ export async function rollbackCommand(directory: string, flags: Flags) {
       previousBackupPath: previous.backupDir,
       phase: 'snapshot-created',
     });
+    loaded.state.pinnedHistoryBackups = [...new Set([...(loaded.state.pinnedHistoryBackups ?? []), point.backupId, previous.backupId])];
     await updatePending(loaded.directory, loaded.state, { phase: 'target-mutating' });
     await restoreBackupData(loaded.directory, loaded.state, loaded.env, backupPath, {
       recreateDataVolume,
       previousSafetySnapshot: true,
+      replacement,
       beforeStart: () => updatePending(loaded.directory, loaded.state, { phase: 'starting-target' }),
     });
     const restoredEnv = parseEnv(await readText(deploymentPaths(loaded.directory).env));
@@ -111,6 +117,7 @@ export async function rollbackCommand(directory: string, flags: Flags) {
     // its failure cannot send a completed rollback into the destructive handler.
     await writeState(loaded.directory, nextState);
     await removeOperationRecordSafely(loaded.directory, pending.id);
+    if (nextState.syncHistory?.certification === 'legacy-snapshot') console.warn('Legacy snapshot restored: incarnation protection unavailable; use this exact CLI for restart and re-upgrade. Source and abandoned data remain pinned.');
     console.log(`Rolled back to OR3 ${nextState.appVersion}. Verify sign-in, chat, and file access.`);
   } catch (error) {
     const original = redact(error instanceof Error ? error.message : String(error), secretValues(loaded.env));

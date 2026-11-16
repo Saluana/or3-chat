@@ -26,6 +26,9 @@ if (selected === 'basic-sqlite-fs') {
 // Current published SQLite is intentionally unqualified. Activate only with the
 // exact packed runtime, migration history, inspector and reset-helper qualification.
 profile.historyIncarnation = 'unqualified';
+// Only the managed Basic profile is in this health-only validation lane.
+// Legacy rollback remains absent until joint published-image/browser proof.
+profile.healthValidation = selected === 'basic-sqlite-fs' ? 'health-only-v1' : 'unqualified';
 writeFileSync('scripts/docker/backup-inspection-profile.json', JSON.stringify(profile) + '\n');
 
 // Target-owned plain-Node reader: build from the same schemas/classifier as the

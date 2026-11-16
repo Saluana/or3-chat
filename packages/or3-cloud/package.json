@@ -17,8 +17,8 @@
   },
   "or3Cloud": {
     "dashboardUpdateProtocol": 1,
-    "dashboardUpdateMinimumSourceVersion": "0.1.40",
-    "stateSchema": 1
+    "dashboardUpdateMinimumSourceVersion": "0.1.116",
+    "stateSchema": 2
   },
   "files": [
     "dist",
