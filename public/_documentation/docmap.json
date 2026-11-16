@@ -92,7 +92,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Learn how actions and filters connect features, and choose the right hook integration."
+                    "summary": "Learn how actions and filters connect features, including bounded sync observations whose completion does not gate sync."
                 },
                 {
                     "name": "first-hook.md",
@@ -119,7 +119,7 @@
                     "category": "Reference",
                     "categoryOrder": 2,
                     "order": 3,
-                    "summary": "Host hook types, filter ownership, pure native preparation and acknowledged delegated commit; SDK permissions and runtime limits remain separate."
+                    "summary": "Host hook types, bounded sync observation ordering and coalescing, filter ownership, pure native preparation and acknowledged delegated commit; SDK permissions and runtime limits remain separate."
                 },
                 {
                     "name": "hook-catalog.md",
@@ -128,7 +128,7 @@
                     "category": "Reference",
                     "categoryOrder": 2,
                     "order": 4,
-                    "summary": "Typed client and server hooks, including global plugin rollback and uninstall payloads."
+                    "summary": "Typed client and server hooks, bounded sync observer completion, and global plugin rollback and uninstall payloads."
                 }
             ]
         },
@@ -161,7 +161,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 2,
-                    "summary": "Workspace-safe writes, atomic sync and tombstone scopes, hooks outside transactions, retained tool chunks across message transfers, explicit database failure policies, safe UI errors, deletion, and upgrades."
+                    "summary": "Workspace-safe writes, atomic sync and tombstone scopes, hooks outside transactions, retained tool chunks across message transfers, explicit database failure policies, safe UI errors, deletion, atomic store migration, and nondestructive upgrade retry. Include the shared history guard in write transactions."
                 },
                 {
                     "name": "threads.md",
@@ -287,7 +287,7 @@
                     "category": "Internals",
                     "categoryOrder": 3,
                     "order": 0,
-                    "summary": "Active workspace databases, local derived indexes, cache metadata budgeting, and additive migrations."
+                    "summary": "Active workspace databases, local derived indexes, cache metadata budgeting, atomic no-copy store migration, and accessible upgrade recovery. Connection handoff preserves atomic capture and mounted composer drafts."
                 },
                 {
                     "name": "schema.md",
@@ -305,7 +305,7 @@
                     "category": "Internals",
                     "categoryOrder": 3,
                     "order": 2,
-                    "summary": "Zod helpers, IDs, clocks, transaction scopes, and required versus best-effort database error contracts."
+                    "summary": "Zod helpers, IDs, clocks, transaction scopes, and required versus best-effort database error contracts. Write scopes include sync history fencing."
                 },
                 {
                     "name": "backup.md",
@@ -314,7 +314,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 3,
-                    "summary": "Export Cloud archives or local recovery copies, preserve background-message ordering, understand remote-only file coverage, and restore with captured import options and workspace identity."
+                    "summary": "Export Cloud archives or local recovery copies, preserve background-message ordering, understand remote-only file coverage, and restore with captured workspace identity and server history fencing."
                 }
             ]
         },
@@ -656,7 +656,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 7,
-                    "summary": "This guide covers how OR3 discovers provider packages, how to install them, and how the Clerk to Convex token bridge works."
+                    "summary": "Choose provider combinations and wire auth tokens; pinned SQLite 0.0.31 and Convex 0.0.27 require matched runtime qualification, deployed templates and initialized history."
                 },
                 {
                     "name": "provider-basic-auth.md",
@@ -674,7 +674,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 9,
-                    "summary": "Set up and operate the SQLite provider for authentication and synchronization."
+                    "summary": "Configure SQLite sync, background history and storage accounting, runtime-reader backup inspection, the exact 0.0.31/036 image profile and supported 032/033 histories, and capability-gated stored-record push holds."
                 },
                 {
                     "name": "provider-fs.md",
@@ -701,7 +701,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 12,
-                    "summary": "Set up the Convex provider and understand synchronization and recovery."
+                    "summary": "Deploy pinned Convex 0.0.27 templates, initialize stable history, inspect unavailable evidence and stored-record holds, and understand isolated replacement and qualification limits."
                 },
                 {
                     "name": "provider-s3.md",
@@ -719,7 +719,7 @@
                     "category": "Operations",
                     "categoryOrder": 3,
                     "order": 14,
-                    "summary": "Operational runbook for OR3 Cloud SSR deployments, including generation-aware backup inspection, authenticated offline restore and safety-snapshot recovery, resumable SQLite migrations 030–032, and incomplete-upgrade refusal."
+                    "summary": "Managed operations with health-only update admission, explicit destructive recovery, qualified immediate legacy snapshot rollback, persistent compatibility warnings, pinned abandoned histories, fresh re-upgrade identity, and exact SQLite 0.0.31 candidate capability with mandatory image/browser qualification before promotion."
                 },
                 {
                     "name": "troubleshooting.md",
@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Understand workspace synchronization, request compression, tool-result UUID repair, failed-write recovery, local recovery backups, and conflict handling."
+                    "summary": "Sync snapshots, history fencing, durable unavailable records and saved-work recovery, including qualified Convex direct/gateway setup, stored-record holds, bounded push deferrals, connection handoff without navigation and attachment-scoped held cache protection, birth-proven first-bind local adoption, durable older-server protocol pauses distinct from transient proxy retries, checked reconnect and explicit authorized legacy-store evidence/attachment export. Cache eviction retains held, pending, streaming and draft attachment references; background projections check the installed history. Writer preparation deterministically fills missing legacy Dexie defaults while keeping reader schemas strict."
                 },
                 {
                     "name": "storage-layer.md",

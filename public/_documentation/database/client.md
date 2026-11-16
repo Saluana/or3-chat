@@ -129,5 +129,34 @@ The raw query above includes soft-deleted rows; use entity query helpers or appl
 ## Versioning tips
 
 -   Add new schema changes with `this.version(<next>).stores({...})` and a transactional upgrade when stored rows need repair.
--   Older clients cannot open a database created by a newer schema. Restore backups only into the same or a newer application version.
+-   Old Dexie clients may reopen a newer database and recreate isolated legacy stores; they cannot access current protected tables. Restore backups only into the same or a newer application version.
 -   Workspace database instances are held in a bounded LRU cache. The active workspace is kept hot while inactive connections are evicted, and closed cached instances can reopen if browser storage is cleared.
+
+## Physical namespace boundary (version 32)
+
+Logical table accessors and backup/wire names stay unchanged. All native stores move once to `current_<name>` in one atomic upgrade.
+Every store is renamed in place with its indexes and values, including large
+`file_blobs` payloads; activation does not duplicate user records. Use `db.table(logicalName)` and normal transaction scopes;
+`Table.name` and native `objectStoreNames` identify physical names. Never open a
+retired store directly or replay it. Old Dexie can recreate isolated legacy sinks;
+new connections tolerate their presence. Blocked/failed upgrades preserve saved
+data; an accessible updating state appears during migration, with explicit
+nondestructive retry after failure. Each workspace retains its own recovery state. See the
+[sync history boundary](/documentation/cloud/sync-layer).
+
+`rebindWorkspaceDb(workspaceId, expected)` replaces a workspace connection after
+an installed sync history changes. It preserves the obsolete handle's origin,
+closes it, attaches atomic write capture, and then notifies active-workspace
+listeners with a new generation. Mounted composers keep saving their local-only
+drafts through the replacement handle in the same database/account partition. Sync
+serializes teardown and restart; callers must capture the current DB again for
+new work. A normal first bind completes before Cloud restore begins uploading.
+
+New databases receive `sync_history.firstBindEligible` only in the creation
+transaction. Upgrades/reopens never infer it. Sync consumes this proof during
+the first atomic snapshot; unknown-origin imports and server-state exposure
+invalidate it. This permits local startup/offline work to join its first server
+history without weakening later incarnation replacement fences.
+
+A protected connection with no history guard still captures a fixed null origin;
+missing history does not let a delayed editor callback adopt a later install.

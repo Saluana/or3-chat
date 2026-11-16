@@ -13,7 +13,8 @@
  * - Data validation or business logic for specific entities
  * - Remote sync orchestration
  */
-import Dexie, { type Table } from 'dexie';
+import Dexie, { type Table, type Transaction } from 'dexie';
+import { shallowRef } from 'vue';
 import { installHistoryRevisionTracking } from '~/utils/chat/history-revisions';
 import type { NativeRecoveryCheckpoint } from '~/utils/chat/native-recovery';
 import type { PersistedWorkspaceTabDraft } from '~/components/chat/chat-input/types';
@@ -31,7 +32,7 @@ import type {
 import type { PendingOp, Tombstone, SyncState, SyncRun, SnapshotItem } from '~~/shared/sync/types';
 import type { FileTransfer } from '~~/shared/storage/types';
 import { cleanupCursorManager } from '~/core/sync/cursor-manager';
-import { cleanupHookBridge } from '~/core/sync/hook-bridge';
+import { cleanupHookBridge, getHookBridge } from '~/core/sync/hook-bridge';
 import { cleanupSubscriptionManagersByWorkspace } from '~/core/sync/subscription-registry';
 import { cleanupSyncCircuitBreakers } from '~~/shared/sync/circuit-breaker';
 import {
@@ -41,6 +42,65 @@ import {
     computeProjectChatIds,
     installDerivedIndexHooks,
 } from './derived-indexes';
+
+/** Recoverable open/upgrade state; explicit retry never clears workspace data. */
+type DatabaseRecoveryPhase = 'upgrading' | 'blocked' | 'failed';
+export const databaseRecovery = shallowRef<{ db: Or3DB; phase: DatabaseRecoveryPhase } | null>(null);
+const databaseRecoveries = new Map<Or3DB, DatabaseRecoveryPhase>();
+function updateDatabaseRecovery(db: Or3DB, phase: DatabaseRecoveryPhase | null): void {
+    if (phase) databaseRecoveries.set(db, phase);
+    else databaseRecoveries.delete(db);
+    const next = databaseRecoveries.entries().next().value;
+    databaseRecovery.value = next ? { db: next[0], phase: next[1] } : null;
+}
+
+// Fixed once at activation, never per server-history reset. Blob bytes are renamed in place.
+const STORE_PREFIX = 'current_';
+/** Backup/entity names stay logical; only native object-store names change. */
+export const logicalStoreName = (name: string): string => name.startsWith(STORE_PREFIX) ? name.slice(STORE_PREFIX.length) : name;
+export const physicalStoreName = (name: string): string => name.startsWith(STORE_PREFIX)
+    ? name : `${STORE_PREFIX}${name}`;
+
+/** Explicit recovery only. These stores are never normal Or3DB accessors. */
+const LEGACY_INSPECTION_STORES = new Set(['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta',
+    'notifications', 'pending_ops', 'tombstones', 'file_transfers', 'workspace_tab_drafts', 'workspace_draft_versions', 'sync_quarantine', 'file_blobs']);
+
+/** Reads an existing native store without opening/upgrading or exposing writable aliases. */
+export async function inspectLegacyStore(db: Or3DB, store: string,
+    options: { after?: IDBValidKey; key?: IDBValidKey; limit?: number } = {}) {
+    if (!LEGACY_INSPECTION_STORES.has(store)) throw new Error('Unsupported legacy evidence store.');
+    // Independent native connection: an old tab may have closed the Dexie handle.
+    // Omitting a version never upgrades; abort creation if the DB disappeared.
+    const native = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open(db.name);
+        request.onupgradeneeded = () => request.transaction?.abort();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+    try {
+        const rows: { key: IDBValidKey; value: Record<string, unknown> }[] = [];
+        const limit = Math.max(1, Math.min(100, options.limit ?? 100));
+        if (native.objectStoreNames.contains(store)) {
+            await new Promise<void>((resolve, reject) => {
+                const tx = native.transaction([store], 'readonly');
+                tx.oncomplete = () => resolve();
+                tx.onabort = () => reject(tx.error ?? new Error('Legacy evidence read aborted.'));
+                tx.onerror = () => reject(tx.error);
+                const range = options.key !== undefined ? IDBKeyRange.only(options.key)
+                    : options.after !== undefined ? IDBKeyRange.lowerBound(options.after, true) : undefined;
+                const request = tx.objectStore(store).openCursor(range);
+                request.onsuccess = () => {
+                    const cursor = request.result;
+                    if (!cursor) return;
+                    rows.push({ key: cursor.primaryKey, value: cursor.value as Record<string, unknown> });
+                    if (rows.length < limit) cursor.continue();
+                };
+            });
+        }
+        return { database: db.name, schemaVersion: native.version, store, rows,
+            nextAfter: rows.length === limit ? rows[rows.length - 1]!.key : null };
+    } finally { native.close(); }
+}
 
 /** Maximum number of workspace DBs to keep open (prevents IndexedDB connection exhaustion) */
 const MAX_CACHED_WORKSPACE_DBS = 10;
@@ -71,13 +131,19 @@ export interface FileBlobRow {
     cache_bytes?: number;
 }
 
+/** Incoming snapshot uncertainty, staged with the page chain before replacement. */
+export type StagedUnavailableRecord = import('~~/shared/sync/types').SnapshotUnavailableRecord & {
+    kind: 'unavailable';
+    record?: unknown;
+};
+
 /** Temporary snapshot rows; never part of the synchronized data model. */
 export interface SnapshotStageRow {
     id: string;
     generation: string;
     sequence: number;
     /** Null only for the active-generation sentinel at sequence -1. */
-    item: SnapshotItem | null;
+    item: SnapshotItem | StagedUnavailableRecord | null;
 }
 
 /** Corrupt outbox operation set aside with its diagnostics; local-only, never synchronized. */
@@ -87,10 +153,19 @@ export interface SyncQuarantineRow {
     tableName: string;
     pk: string;
     status: 'quarantined' | 'repaired' | 'discarded';
-    source: 'snapshot_apply' | 'manual';
+    source: 'snapshot_apply' | 'manual' | 'incoming_pull' | 'incoming_snapshot';
+    /** Absent on legacy outgoing entries. Incoming entries never reconstruct ops. */
+    variant?: 'incoming' | 'history_reset' | 'stored_record';
+    sourceIncarnation?: string;
+    scope?: import('~~/shared/sync/types').SyncScope;
+    accountId?: string;
+    evidenceRef?: string;
+    pendingIntent?: PendingOp[];
     /** The operation exactly as found. */
     op: unknown;
     diagnostics: string[];
+    /** Rejected push winner, retained for explicit recovery/export. */
+    serverWinner?: unknown;
     /** Local content captured at quarantine time, so export never depends on the live row. */
     localRow?: unknown;
     localTombstone?: unknown;
@@ -137,6 +212,8 @@ export interface WorkspaceDraftVersionRow {
  * - Does not enforce business rules beyond schema definitions.
  */
 export class Or3DB extends Dexie {
+    /** Connection origin; local callbacks must refresh views after replacement. */
+    syncHistoryAtOpen?: string | null;
     projects!: Table<Project, string>;
     threads!: Table<Thread, string>;
     messages!: Table<Message, string>;
@@ -434,6 +511,80 @@ export class Or3DB extends Dexie {
         // Sparse metadata index: origin-wide budgeting never needs Blob values.
         this.version(30).stores({ file_blobs: 'hash, cache_accessed_at, [cache_accessed_at+cache_bytes+hash]' });
 
+        // v31's control row is retained for upgrades from pre-contract databases.
+        this.version(31).stores({ sync_state: 'id' }).upgrade(async tx => {
+            await tx.table('sync_state').put({ id: 'sync_history', historyIncarnation: null,
+                phase: 'unbound', resetTarget: null, cursor: 0, lastSyncAt: 0, deviceId: '' });
+        });
+
+        // One atomic namespace break: Dexie 4 may reopen an old bundle at the
+        // new version, but its legacy stores cannot reach the new protected namespace.
+        // Dexie may recreate them as isolated sinks (schema patch on reopen).
+        const retired = this.tables;
+        const stores: Record<string, string | null> = {};
+        for (const table of retired) {
+            stores[table.name] = null;
+            stores[physicalStoreName(table.name)] = [table.schema.primKey.src, ...table.schema.indexes.map(index => index.src)].join(',');
+        }
+        this.version(32).stores(stores).upgrade(tx => {
+            updateDatabaseRecovery(this, 'upgrading');
+            for (const table of retired) {
+                // Dexie creates empty destination stores before this callback.
+                // Replace each placeholder with the original native store. This
+                // preserves every value/index in place without doubling storage,
+                // including blobs. Failure rolls back the whole versionchange.
+                const name = physicalStoreName(table.name);
+                tx.idbtrans.db.deleteObjectStore(name);
+                tx.idbtrans.objectStore(table.name).name = name;
+            }
+        });
+
+        // Keep the existing logical accessors and transaction API. Table objects
+        // carry their real physical names, so Dexie scopes/hooks remain native.
+        const table = this.table.bind(this);
+        this.table = ((name: string) => table(physicalStoreName(name))) as typeof this.table;
+        for (const entry of retired) {
+            Object.defineProperty(this, entry.name, { configurable: true, value: this.table(entry.name) });
+        }
+        const transaction = this.transaction.bind(this);
+        this.transaction = ((mode: string, ...args: unknown[]) => {
+            const map = (arg: unknown): unknown => typeof arg === 'string' ? physicalStoreName(arg)
+                : Array.isArray(arg) ? arg.map(map) : arg;
+            return transaction(mode as 'rw', ...args.map(map) as [Table, () => unknown]);
+        }) as typeof this.transaction;
+        const txTable = this.Transaction.prototype.table;
+        this.Transaction.prototype.table = function(this: Transaction, name: string) {
+            // Earlier upgrade steps still address their original schema.
+            return txTable.call(this, this.idbtrans.objectStoreNames.contains(name) ? name : physicalStoreName(name));
+        } as typeof txTable;
+
+        // Only IDB creation, never an upgrade/open, can prove local-only birth.
+        this.on('populate', tx => tx.table('sync_state').put({ id: 'sync_history',
+            historyIncarnation: null, phase: 'unbound', resetTarget: null,
+            firstBindEligible: true, cursor: 0, lastSyncAt: 0, deviceId: '' }));
+
+        const open = this.open.bind(this);
+        this.open = (() => open().then(result => {
+            updateDatabaseRecovery(this, null);
+            return result;
+        }).catch(error => {
+            this.close(); // Disable implicit auto-open; retry is a user action.
+            updateDatabaseRecovery(this, 'failed');
+            throw error;
+        })) as typeof this.open;
+        this.on('blocked', () => { updateDatabaseRecovery(this, 'blocked'); });
+        this.on('versionchange', () => this.close());
+        let warnedLegacySink = false;
+        this.on('ready', async () => {
+            if (!warnedLegacySink && retired.some(table => this.backendDB().objectStoreNames.contains(table.name))) {
+                warnedLegacySink = true;
+                console.warn('[db] Changes from an outdated client; origin unknown. Isolated legacy stores are retained; current sync never reads or publishes them.');
+            }
+            const guard = await this.sync_state.get('sync_history');
+            // Fix unknown origins too, before startup capture can accept a write.
+            if (this.syncHistoryAtOpen === undefined) this.syncHistoryAtOpen = guard?.historyIncarnation ?? null;
+        });
+
         // Derived-key maintenance must run on every instance, including
         // workspace DBs, and independently of sync capture suppression.
         installDerivedIndexHooks(this);
@@ -689,6 +840,33 @@ export function getWorkspaceDb(workspaceId: string): Or3DB {
         console.debug(`[db:client] Created workspace DB: ${workspaceId} (cache: ${workspaceDbCache.size}/${MAX_CACHED_WORKSPACE_DBS})`);
     }
     return created;
+}
+
+/** Replace an obsolete history handle without relabeling callbacks holding it. */
+export async function rebindWorkspaceDb(workspaceId: string, expected: Or3DB): Promise<Or3DB> {
+    if (getWorkspaceDb(workspaceId) !== expected) return getWorkspaceDb(workspaceId);
+    const replacement = new Or3DB(expected.name);
+    await replacement.open();
+    if (getWorkspaceDb(workspaceId) !== expected) {
+        replacement.close();
+        return getWorkspaceDb(workspaceId);
+    }
+    // Cache replacement closes the old connection and releases its capture and
+    // managers. Old handles remain closed with their original history identity.
+    const active = activeWorkspaceId === workspaceId && activeDb === expected;
+    if (active) {
+        activeDb = replacement;
+        db = replacement;
+    }
+    workspaceDbCache.set(workspaceId, replacement);
+    // Cache replacement releases the previous bridge by database name. Attach
+    // the new bridge before listeners can author edits through the new handle.
+    getHookBridge(replacement).start();
+    if (active) {
+        workspaceGeneration += 1;
+        notifyActiveWorkspaceChange(workspaceId, workspaceId);
+    }
+    return replacement;
 }
 
 /**

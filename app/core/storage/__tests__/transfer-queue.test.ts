@@ -112,7 +112,10 @@ class TableStub<T extends Record<string, any>> {
 }
 
 function createDbStub(metaRows: FileMeta[], blobRows: Array<{ hash: string; blob: Blob }>) {
+    const syncState = new TableStub<Record<string, any>>('id');
     return {
+        sync_state: syncState,
+        table: (name: string) => { if (name === 'sync_state') return syncState; throw new Error(`Unexpected table: ${name}`); },
         file_transfers: new TableStub<FileTransfer>('id'),
         file_meta: new TableStub<FileMeta>('hash', metaRows),
         file_blobs: new TableStub<{ hash: string; blob: Blob }>('hash', blobRows),

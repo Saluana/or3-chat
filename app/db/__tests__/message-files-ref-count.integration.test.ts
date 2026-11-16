@@ -221,7 +221,7 @@ describe('message file ref_count integrity', () => {
         const originalPut = IDBObjectStore.prototype.put;
         const tombstonePut = outcome === 'abort'
             ? vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, ...args) {
-                if (this.name === 'tombstones') throw new Error('Synthetic tombstone write failure');
+                if (this.name === db.tombstones.name) throw new Error('Synthetic tombstone write failure');
                 return originalPut.apply(this, args);
             }) : undefined;
         try {

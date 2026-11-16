@@ -180,7 +180,7 @@ Acceptance atomically creates the canonical user, provider mapping, private work
 
 Native SQLite uses one immediate transaction. Cloudflare D1 does not advertise signup-invite support because it cannot provide this transaction; legacy workspace capabilities remain available.
 
-Managed Cloud backup inspection qualifies `or3-provider-sqlite@0.0.28` with filesystem provider `0.0.17` and migration history through `032_sync_observations`. Previously published histories, including `029_delegation_wait`, remain accepted; an interrupted upgrade at migration 030 is rejected. Unknown migrations remain rejected; provider upgrades must requalify backup inspection before releasing an image. Normal deployment updates follow the [Cloud update guide](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/cloud-updates.md).
+Managed Cloud backup inspection qualifies `or3-provider-sqlite@0.0.31` with filesystem provider `0.0.18` or S3 provider `0.0.15`, through migrations `034_sync_intent_fingerprint`, `035_sync_unavailable_records`, and `036_sync_history_incarnation`. Previously published complete histories, including `032_sync_observations`, `033_tool_result_operation_ids`, and `029_delegation_wait`, remain accepted; an interrupted upgrade at migration 030 is rejected. History acceptance alone does not certify sync contents: ordinary restore also requires the bounded semantic audit before startup. Recorded safety recovery explicitly leaves sync health uncertified. Unknown migrations remain rejected; provider upgrades must requalify backup inspection before releasing an image. Normal deployment updates follow the [Cloud update guide](https://github.com/Saluana/or3-chat/blob/or3-cloud/docs/cloud-updates.md).
 
 SQLite provider `0.0.24` reports structured validation, authorization, conflict,
 and supersession errors for background history. Unknown database failures remain
@@ -225,3 +225,14 @@ adapter expects the previous device-cursor unique key.
 Notification deletes retain the authenticated owner in the canonical change payload so peers receive them before their cursor advances. Operation fingerprints exclude this server-authored owner field on notification deletes, preserving exact retry receipts across older payload forms without weakening canonical owner authorization.
 
 Both native SQLite and D1 check Files/Trash writer capability against canonical existing records. D1 performs this check inside the write batch before mutation: an old writer cannot erase file membership or Trash metadata by omitting it from a replacement. HTTP 426 leaves sibling rows, change logs and workspace versions unchanged.
+
+
+Matched hardened SQLite builds require host `stored-record-v1` push support to
+isolate corrupt stored receipts/winners without blocking healthy siblings.
+Unsupported clients receive an explicit update-required response. See
+[stored-record push holds](/documentation/cloud/sync-layer#stored-record-push-holds) for the
+capability, bounded evidence contract and manual recovery behavior. The pinned published 0.0.31 supplies the hardened history contract. The generated
+Basic Auth/SQLite/filesystem image binds its reset and health-validation capabilities
+to that exact provider and complete 036 migration set. Candidate native-image,
+browser and managed lifecycle qualification must pass before promotion. Clerk/S3
+managed replacement and D1 service lifecycle remain separate qualification lanes.

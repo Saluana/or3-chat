@@ -9,11 +9,13 @@ export type ShutdownParticipant = {
 
 type Options = {
     shutdownTimeoutMs: number;
+    validationOnly?: boolean;
     drainPollMs?: number;
     getBackgroundJobCount: () => Promise<number>;
 };
 
 export function createShutdownController(options: Options) {
+    const validationOnly = options.validationOnly === true;
     let phase: 'running' | 'preparing' | 'draining' | 'closed' = 'running';
     let requests = 0;
     const requestPaths = new Map<string, number>();
@@ -64,7 +66,8 @@ export function createShutdownController(options: Options) {
     const controller = {
         phase: () => phase,
         isShuttingDown: () => phase !== 'running',
-        canStartWork: () => phase === 'running',
+        validationOnly: () => validationOnly,
+        canStartWork: () => !validationOnly && phase === 'running',
         getInFlightCount: () => requests,
         workload: () => ({ requests, work, paths: [...requestPaths.entries()].slice(0, 10) }),
         register(participant: ShutdownParticipant): () => void {
@@ -78,6 +81,7 @@ export function createShutdownController(options: Options) {
         },
         beginRequest(url: string, method = 'GET'): boolean {
             const path = url.split('?')[0] ?? '/';
+            if (validationOnly) return (method === 'GET' || method === 'HEAD') && ['/api/health', '/api/healthz', '/api/ready'].includes(path);
             const control = ['/api/health', '/api/healthz', '/api/ready'].includes(path)
                 || (path.startsWith('/api/admin/system/restart') && (method === 'GET' || ['/api/admin/system/restart-cancel', '/api/admin/system/restart-reconcile'].includes(path)));
             if (control) return true; // These requests are deliberately not drain blockers.

@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue';
 import { getWorkspaceDb, type Or3DB } from '~/db/client';
 import { getHookBridge } from '~/core/sync/hook-bridge';
+import { invalidateFirstBindEligibility } from '~/core/sync/history-incarnation';
 
 export type LegacyStats = {
     threads: number;
@@ -58,8 +59,9 @@ export async function copyLegacyWorkspaceData(
 
     await targetDb.transaction(
         'rw',
-        [...targetTables, targetDb.pending_ops, targetDb.tombstones],
+        [...targetTables, targetDb.pending_ops, targetDb.tombstones, targetDb.sync_state],
         async () => {
+            await invalidateFirstBindEligibility(targetDb);
             if (projects.length) await targetDb.projects.bulkPut(projects);
             if (threads.length) await targetDb.threads.bulkPut(threads);
             if (messages.length) await targetDb.messages.bulkPut(messages);

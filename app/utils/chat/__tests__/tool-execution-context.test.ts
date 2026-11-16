@@ -5,6 +5,7 @@ import type { ToolDefinition, ToolExecutionContext } from '../types';
 import { useToolRegistry } from '../tool-registry';
 import { setKvByName } from '~/db/kv';
 import { chatToolPreferenceKey } from '../tool-preferences';
+import { getWriteTxTableNames } from '~/db/util';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine } from '~/core/hooks/useHooks';
@@ -125,7 +126,7 @@ describe('client tool execution context', () => {
         registry.registerTool(definition, async (_args, context) => {
             const db = getDb();
             // Local authorization also reads the chat's KV preference and revision.
-            await db.transaction('rw', [db.threads, db.projects, db.posts, db.file_meta, db.kv, db.tombstones], async () => {
+            await db.transaction('rw', getWriteTxTableNames(db, ['threads', 'projects', 'posts', 'file_meta', 'kv']), async () => {
                 expect(Dexie.currentTransaction).toBeTruthy();
                 await context.assertToolAuthorized?.();
                 await db.threads.update('thread-1', { title: 'Authorized mutation' });

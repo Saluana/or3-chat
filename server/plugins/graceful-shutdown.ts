@@ -28,6 +28,14 @@ export default defineNitroPlugin(nitro => {
     // admission, while a disconnected socket cannot release unfinished writes.
     const handle = nitro.h3App.handler;
     nitro.h3App.handler = async event => {
+        // End the outer handler too: writing a response from a request hook
+        // alone does not guarantee H3 will skip downstream handlers.
+        if (controller.validationOnly() && !controller.beginRequest(event.path || event.node.req.url || '/', event.method)) {
+            event.node.res.statusCode = 503;
+            event.node.res.setHeader('Content-Type', 'application/json');
+            event.node.res.end(JSON.stringify({ statusCode: 503, data: { code: 'update_validation' } }));
+            return;
+        }
         try { return await handle(event); }
         finally {
             const path = admitted.get(event);

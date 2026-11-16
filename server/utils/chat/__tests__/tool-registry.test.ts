@@ -369,8 +369,8 @@ describe('registered canonical history authorization', () => {
         const params = { userId: 'owner', workspaceId: 'workspace', threadId: 'current', messageId: 'new-assistant', apiKey: 'fixture-key', referer: 'http://localhost',
             body: { model: 'model', messages: [{ role: 'user', content: 'Read history' }], tools: historyToolDefinitions,
                 _history: { version: 1, kind: 'new-turn', admissionId: 'new-assistant', generationId: 'new-generation', workspaceId: 'workspace', threadId: 'current', messageId: 'new-assistant',
-                    thread: { id: 'current', clock: 1 }, userMessage: { id: 'new-user', clock: 1, thread_id: 'current', role: 'user', data: { content: 'Read history' } },
-                    assistantMessage: { id: 'new-assistant', clock: 1, thread_id: 'current', role: 'assistant', data: { content: '' } } } } };
+                    thread: { id: 'current', clock: 1, status: 'ready', pinned: false, deleted: false, created_at: 1, updated_at: 1 }, userMessage: { id: 'new-user', clock: 1, thread_id: 'current', role: 'user', index: 0, order_key: 'fixture-0', deleted: false, created_at: 1, updated_at: 1, data: { content: 'Read history' } },
+                    assistantMessage: { id: 'new-assistant', clock: 1, thread_id: 'current', role: 'assistant', index: 1, order_key: 'fixture-1', deleted: false, created_at: 1, updated_at: 1, data: { content: '' } } } } };
         let create = vi.spyOn(memoryJobProvider, 'createJob');
         await expect(startBackgroundStream(params)).rejects.toThrow(); expect(create).not.toHaveBeenCalled(); expect(getJobCount()).toBe(1);
         adapter.capabilities.canonicalChatHistory = 'v1';
@@ -416,8 +416,8 @@ describe('registered canonical history authorization', () => {
         const params = { userId: 'owner', workspaceId: 'workspace', threadId: 'new-chat', messageId: 'new-assistant', apiKey: 'fixture-key', referer: 'http://localhost',
             body: { model: 'model', messages: [{ role: 'user', content: 'First turn' }],
                 _history: { version: 1, kind: 'new-turn', admissionId: 'new-assistant', generationId: 'new-generation', workspaceId: 'workspace', threadId: 'new-chat', messageId: 'new-assistant',
-                    thread: { id: 'new-chat', clock: 1 }, userMessage: { id: 'new-user', clock: 1, thread_id: 'new-chat', role: 'user' },
-                    assistantMessage: { id: 'new-assistant', clock: 1, thread_id: 'new-chat', role: 'assistant', data: { content: '' } } } } };
+                    thread: { id: 'new-chat', clock: 1, status: 'ready', pinned: false, deleted: false, created_at: 1, updated_at: 1 }, userMessage: { id: 'new-user', clock: 1, thread_id: 'new-chat', role: 'user', index: 0, order_key: 'fixture-0', deleted: false, created_at: 1, updated_at: 1 },
+                    assistantMessage: { id: 'new-assistant', clock: 1, thread_id: 'new-chat', role: 'assistant', index: 1, order_key: 'fixture-1', deleted: false, created_at: 1, updated_at: 1, data: { content: '' } } } } };
         if (projectId) {
             await expect(startBackgroundStream(params)).rejects.toThrow(/project/i);
             expect(fetch).not.toHaveBeenCalled();

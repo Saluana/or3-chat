@@ -16,6 +16,8 @@ export interface CircuitBreakerConfig {
     resetTimeoutMs?: number;
     /** Time in ms to wait in open state before allowing retry */
     openDurationMs?: number;
+    /** Maximum ownership lifetime for an abandoned half-open probe. */
+    probeTimeoutMs?: number;
 }
 
 /** Circuit breaker state */
@@ -29,21 +31,31 @@ export type CircuitState = 'closed' | 'open' | 'half-open';
  * - open: Too many failures, retries blocked
  * - half-open: Testing if service recovered, single retry allowed
  */
+export interface SyncProbeLease {
+    success(): void;
+    failure(): void;
+    cancel(): void;
+}
+
 export class SyncCircuitBreaker {
     private failureCount = 0;
     private lastFailureTime = 0;
     private openedAt = 0;
     private state: CircuitState = 'closed';
-    private probeInFlight = false;
+    private probeOwner: symbol | null = null;
+    private probeExpiresAt = 0;
+    private epoch = 0;
 
     private readonly failureThreshold: number;
     private readonly resetTimeoutMs: number;
     private readonly openDurationMs: number;
+    private readonly probeTimeoutMs: number;
 
     constructor(config: CircuitBreakerConfig = {}) {
         this.failureThreshold = config.failureThreshold ?? 5;
         this.resetTimeoutMs = config.resetTimeoutMs ?? 60_000;
         this.openDurationMs = config.openDurationMs ?? 30_000;
+        this.probeTimeoutMs = config.probeTimeoutMs ?? 60_000;
     }
 
     /**
@@ -54,20 +66,36 @@ export class SyncCircuitBreaker {
         this.updateState();
         if (this.state === 'closed') return true;
         if (this.state === 'open') return false;
-        return !this.probeInFlight;
+        return this.probeOwner === null;
     }
 
-    /**
-     * Claim the exclusive half-open probe. In closed state this is a no-op
-     * success. Always pair a true return with `recordSuccess` or `recordFailure`.
-     */
-    beginProbe(): boolean {
-        this.updateState();
-        if (this.state === 'closed') return true;
-        if (this.state === 'open') return false;
-        if (this.probeInFlight) return false;
-        this.probeInFlight = true;
-        return true;
+    /** Each attempt owns its settlement, even if its lifecycle is cancelled. */
+    acquireProbe(): SyncProbeLease | null {
+        if (!this.canRetry()) return null;
+        const owner = Symbol('sync-probe');
+        if (this.state === 'half-open') {
+            this.epoch++;
+            this.probeOwner = owner;
+            this.probeExpiresAt = Date.now() + this.probeTimeoutMs;
+        }
+        const epoch = this.epoch;
+        let settled = false;
+        const settle = (outcome: 'success' | 'failure' | 'cancel') => {
+            this.updateState();
+            if (settled || epoch !== this.epoch) return;
+            settled = true;
+            if (outcome === 'success') this.recordSuccess();
+            else if (outcome === 'failure') this.recordFailure();
+            else if (this.probeOwner === owner) {
+                this.probeOwner = null;
+                this.epoch++;
+            }
+        };
+        return {
+            success: () => settle('success'),
+            failure: () => settle('failure'),
+            cancel: () => settle('cancel'),
+        };
     }
 
     /**
@@ -78,7 +106,8 @@ export class SyncCircuitBreaker {
         this.failureCount = 0;
         this.state = 'closed';
         this.openedAt = 0;
-        this.probeInFlight = false;
+        this.probeOwner = null;
+        this.epoch++;
     }
 
     /**
@@ -88,7 +117,8 @@ export class SyncCircuitBreaker {
     recordFailure(): void {
         this.failureCount++;
         this.lastFailureTime = Date.now();
-        this.probeInFlight = false;
+        this.probeOwner = null;
+        this.epoch++;
 
         if (this.failureCount >= this.failureThreshold) {
             this.state = 'open';
@@ -133,7 +163,8 @@ export class SyncCircuitBreaker {
         this.state = 'closed';
         this.openedAt = 0;
         this.lastFailureTime = 0;
-        this.probeInFlight = false;
+        this.probeOwner = null;
+        this.epoch++;
     }
 
     /**
@@ -141,6 +172,10 @@ export class SyncCircuitBreaker {
      */
     private updateState(): void {
         const now = Date.now();
+        if (this.probeOwner !== null && now >= this.probeExpiresAt) {
+            this.probeOwner = null;
+            this.epoch++;
+        }
 
         // Reset failure count if enough time has passed since last failure
         if (

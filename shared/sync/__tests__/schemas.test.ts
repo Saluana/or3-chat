@@ -13,6 +13,42 @@ import {
     TombstoneSchema,
     MAX_SYNC_PUSH_BATCH_OPS,
 } from '../schemas';
+import { prepareSyncWrite } from '../prepare-sync-write';
+
+describe('legacy sync write preparation', () => {
+    const stamp = { deviceId: 'device', opId: '00000000-0000-4000-8000-000000000001', hlc: 'legacy:001:device', clock: 2 };
+    const base = { id: 'row', clock: 2, created_at: 1, updated_at: 2 };
+    const prepare = (tableName: string, payload: unknown, operation: 'put' | 'delete' = 'put') =>
+        prepareSyncWrite({ tableName, pk: 'row', operation, payload, stamp });
+
+    it.each([
+        ['threads', { ...base, title: 'Preserved', project_id: 'project', parent_thread_id: 'parent' },
+            { status: 'ready', pinned: false, deleted: false }],
+        ['messages', { ...base, thread_id: 'thread', role: 'user', index: 3, data: { content: 'Preserved' } },
+            { order_key: stamp.hlc, deleted: false }],
+    ])('fills only absent client defaults deterministically for %s', (table, input, defaults) => {
+        const original = structuredClone(input);
+        const first = prepare(table, input);
+        expect(first.payload).toEqual({ ...input, ...defaults });
+        expect(prepare(table, structuredClone(input))).toEqual(first);
+        expect(prepare(table, first.payload)).toEqual(first);
+        expect(input).toEqual(original);
+        expect(TABLE_PAYLOAD_SCHEMAS[table]!.safeParse(first.payload).success).toBe(true);
+        expect(prepare(table, input, 'delete').payload).toEqual(original);
+    });
+
+    it('preserves explicit metadata and rejects missing required data or invalid defaults', () => {
+        const thread = { ...base, status: 'archived', pinned: true, deleted: true };
+        expect(prepare('threads', thread).payload).toEqual(thread);
+        const message = { ...base, thread_id: 'thread', role: 'assistant', index: 0, order_key: 'original', deleted: true };
+        expect(prepare('messages', message).payload).toEqual(message);
+        for (const invalid of [{ ...base, pinned: null }, { ...thread, status: 1 }, { ...thread, created_at: undefined },
+            { ...thread, clock: 3 }]) expect(() => prepare('threads', invalid)).toThrow();
+        for (const invalid of [{ ...message, index: undefined }, { ...message, updated_at: undefined },
+            { ...message, order_key: null }]) expect(() => prepare('messages', invalid)).toThrow();
+        expect(ThreadPayloadSchema.safeParse(base).success).toBe(false);
+    });
+});
 
 describe('sync schemas', () => {
     it('validates optional compaction lineage fields while preserving legacy and partial-sync rows', () => {

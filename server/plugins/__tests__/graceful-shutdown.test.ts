@@ -8,6 +8,28 @@ vi.mock('../../utils/shutdown/runtime', () => ({ getShutdownRuntime: () => runti
 vi.mock('#imports', () => ({ useRuntimeConfig: () => ({ auth: { enabled: true } }) }));
 
 describe('graceful shutdown controller', () => {
+    it('RB-2 validation admits exact health GET/HEAD only and cannot be cancelled open', async () => {
+        const controller = createShutdownController({ validationOnly: true, shutdownTimeoutMs: 30, getBackgroundJobCount: async () => 0 });
+        runtime.controller = controller;
+        const hooks = new Map<string, (...args: any[]) => unknown>();
+        let executed = 0;
+        const app = createApp({ onRequest: event => hooks.get('request')?.(event) as void });
+        app.use(eventHandler(() => { executed++; return 'handler'; }));
+        const plugin = (await import('../graceful-shutdown')).default;
+        plugin({ h3App: app, hooks: { hook: (name: string, handler: (...args: any[]) => unknown) => { hooks.set(name, handler); } } } as never);
+        try {
+            for (const path of ['/api/health', '/api/healthz', '/api/ready']) {
+                for (const method of ['GET', 'HEAD']) expect(controller.beginRequest(path + '?deep=true', method)).toBe(true);
+            }
+            for (const [path, method] of [['/api/health', 'POST'], ['/api/health/extra', 'GET'], ['/api/auth/session', 'GET'], ['/api/sync/push', 'POST'], ['/api/admin/system/restart-cancel', 'POST'], ['/', 'GET']]) {
+                expect((await toPlainHandler(app)({ path: path!, method: method! as 'GET', headers: {} })).status).toBe(503);
+            }
+            expect(executed).toBe(0);
+            await controller.prepare('validation'); controller.cancel('validation');
+            expect(controller.canStartWork()).toBe(false);
+            expect(controller.beginRequest('/api/sync/push', 'POST')).toBe(false);
+        } finally { await hooks.get('close')?.(); }
+    });
     it.each(['CI', 'TEST'])('refuses a development controller when %s makes installed Nitro skip awaited worker cleanup', async flag => {
         vi.stubEnv(flag, '1'); vi.stubEnv('OR3_DEV_RESTART_SOCKET', '/tmp/not-a-qualified-development-controller.sock');
         const hooks = new Map<string, (...args: any[]) => unknown>();

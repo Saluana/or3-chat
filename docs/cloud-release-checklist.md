@@ -174,3 +174,13 @@ See [Install and manage plugins](../public/_documentation/plugins/install-and-ma
 - [deployment-operations](../public/_documentation/cloud/deployment-operations.md)
 - [Supported provider combinations](../public/_documentation/cloud/providers.md)
 - [Historical readiness notes](history/cloud-production-readiness.md)
+
+First-incarnation release blockers (existing lifecycle job):
+
+- [ ] Exact 0.1.116 Basic/SQLite/FS source digest, complete 033 schema and authenticated source DB/sidecar/config/asset fidelity.
+- [ ] Actual old-image new-intent refusal before dispatch, and complete old/new-browser namespace/held/export tests.
+- [ ] Real candidate validation marker, blocked application requests/background work, failed boot automatic source restoration with nonzero update exit.
+- [ ] Missing proof and post-admission failure never auto-restore; explicit recovery authenticates current-data preservation first.
+- [ ] Explicit rollback warns about all post-snapshot server loss, pins both histories and consumes the point only at terminal commit.
+- [ ] Re-upgrade preserves intervening legacy writes, verifies fresh 036 incarnation, uses managed restart and repeats login/session/conversation/file checks.
+- [ ] Retain source/provider identities/integrities, exact image/operator digests/platforms, CLI tarball hash, redacted journal/admission proof, archive/extracted/logical hashes, I/J, pin inventory and browser artifacts. Do not advertise the policy while generated metadata remains unqualified.

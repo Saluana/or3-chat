@@ -34,13 +34,13 @@ it.each(['visibility', 'connectivity'] as const)('applies incoming pages immedia
         const request = JSON.parse(init.body as string);
         if (path.endsWith('/update-cursor')) {
             acknowledgements.push(request.version);
-            return new Response('{}');
+            return new Response(JSON.stringify({ ok: true, historyIncarnation: 'I' }));
         }
         pulls.push(request.cursor);
         const remaining = changes.filter(change => change.serverVersion > request.cursor);
         const page = remaining.slice(0, request.limit);
         return new Response(JSON.stringify({
-            ...FULL_HISTORY_PULL_RETENTION, changes: page,
+            historyIncarnation: 'I', ...FULL_HISTORY_PULL_RETENTION, changes: page,
             nextCursor: page.at(-1)?.serverVersion ?? request.cursor,
             hasMore: remaining.length > page.length,
         }));
@@ -48,6 +48,7 @@ it.each(['visibility', 'connectivity'] as const)('applies incoming pages immedia
     setHookEngine(createTypedHookEngine(createHookEngine()));
     try {
         await db.open();
+        await db.sync_state.put({ id: 'sync_history', historyIncarnation: 'I', phase: 'ready', cursor: 0, lastSyncAt: 0, deviceId: '' });
         await db.sync_state.put({ id: `sync_state:${scope.workspaceId}:default`, cursor: 100, lastSyncAt: Date.now(), deviceId: 'device-1' });
         getHookBridge(db).start();
         stop = await startCoordinatedSubscription(db.name, manager);

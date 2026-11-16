@@ -18,7 +18,7 @@ import { parseEnv } from './env';
 import { assertDeploymentDirectoryIdentity, assertDeploymentIdentity } from './identity';
 import { deploymentPaths } from './paths';
 
-/** Schema this bridge release writes by default; schema 2 is opt-in metadata. */
+/** Older packages without writer metadata remain bridge writers. */
 const LEGACY_STATE_SCHEMA_VERSION = 1;
 
 export async function readState(directory: string): Promise<ManagedState> {
@@ -32,16 +32,27 @@ export async function readState(directory: string): Promise<ManagedState> {
 }
 
 export async function writeState(directory: string, state: ManagedState) {
-  await lifecycleFaults.beforeStateWrite?.();
-  await writeSecure(deploymentPaths(directory).state, `${JSON.stringify(state, null, 2)}\n`);
-  await lifecycleFaults.afterStateWrite?.();
+  assertStateSchemaWritable(state);
+  const path = deploymentPaths(directory).state;
+  const payload = `${JSON.stringify(state, null, 2)}\n`;
+  try {
+    await lifecycleFaults.beforeStateWrite?.(state);
+    await writeSecure(path, payload);
+    await lifecycleFaults.afterStateWrite?.(state);
+  } catch (error) {
+    // Rename may have committed before its fsync/acknowledgement failed. Never
+    // let a caller's stale pending object overwrite an observed terminal commit.
+    // Pending transitions and uncommitted terminal writes still fail closed.
+    if (state.incompleteOperation || await readText(path).catch(() => undefined) !== payload) throw error;
+    console.warn(`Terminal state is installed, but its write acknowledgement failed: ${redact(error instanceof Error ? error.message : String(error))}. Recheck status/doctor before further mutation.`);
+  }
 }
 
 /**
  * Persisted state schema this CLI is qualified to write. A release that only
  * reads schema 2 keeps writing schema 1 (the compatibility bridge); a release
  * explicitly qualified to write the new recovery journal sets
- * `or3Cloud.stateSchema` to 2. Migration to schema 2 is refused below.
+ * `or3Cloud.stateSchema` to 2. Update migrates atomically with its pending record.
  */
 export function writeStateSchema(): StateSchemaVersion {
   const value = packagedOr3CloudMetadata().stateSchema;
@@ -205,6 +216,8 @@ export async function loadManaged(directory = process.cwd(), options: { writable
 }
 
 export async function commitRecoveredState(directory: string, previous: ManagedState, next: ManagedState) {
+  next.syncHistory ??= previous.syncHistory;
+  next.pinnedHistoryBackups ??= previous.pinnedHistoryBackups;
   // Terminal state is authoritative and must land before the redundant mirror
   // is removed. Mirror cleanup is warning-only: an enclosing catch must not be
   // able to turn a completed commit back into pending state.

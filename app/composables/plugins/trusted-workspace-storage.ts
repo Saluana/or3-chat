@@ -56,7 +56,7 @@ export function createTrustedWorkspaceStorage(input: {
     const mutateSettings = (key: string, value?: PluginJsonValue) => run(async () => {
         check('settings.write', key);
         // Serialize the read/modify/write with the same workspace transaction.
-        await input.db.transaction('rw', input.db.tables.filter(t => ['kv','pending_ops','tombstones'].includes(t.name)), async () => {
+        await input.db.transaction('rw', [input.db.kv, input.db.pending_ops, input.db.tombstones, input.db.sync_state], async () => {
             const { row } = await read(settingsName);
             const values: Record<string, PluginJsonValue> = Object.assign(Object.create(null) as Record<string, PluginJsonValue>, row && !row.deleted && row.value ? JSON.parse(row.value!) as Record<string, PluginJsonValue> : {});
             if (value === undefined) delete values[key]; else values[key] = value;

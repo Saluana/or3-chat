@@ -12,6 +12,13 @@ describe('recent-op-cache', () => {
         expect(isRecentOpId('op-1')).toBe(true);
     });
 
+    it('does not suppress an authoritative UUID reused in another workspace or history', () => {
+        markRecentOpId('shared-uuid', { dbName: 'workspace-a', historyIncarnation: 'I' });
+        expect(isRecentOpId('shared-uuid', { dbName: 'workspace-a', historyIncarnation: 'I' })).toBe(true);
+        expect(isRecentOpId('shared-uuid', { dbName: 'workspace-a', historyIncarnation: 'J' })).toBe(false);
+        expect(isRecentOpId('shared-uuid', { dbName: 'workspace-b', historyIncarnation: 'I' })).toBe(false);
+    });
+
     it('expires opIds after TTL', () => {
         markRecentOpId('op-2');
         expect(isRecentOpId('op-2')).toBe(true);

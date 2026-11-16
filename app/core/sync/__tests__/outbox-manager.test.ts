@@ -14,7 +14,7 @@ import type {
 } from '~~/shared/sync/types';
 import { FULL_HISTORY_PULL_RETENTION } from '~~/shared/sync/types';
 import { listFailedOps, OutboxManager } from '../outbox-manager';
-import { _resetSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
+import { _resetSyncCircuitBreaker, getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 import { isRecentOpId, markRecentOpId } from '../recent-op-cache';
 import { Or3DB } from '~/db/client';
 import { sanitizePayloadForSync } from '~~/shared/sync/sanitize';
@@ -698,14 +698,14 @@ describe('OutboxManager', () => {
             }],
             serverVersion: 4,
         }));
-        markRecentOpId('op-local');
+        markRecentOpId('op-local', { dbName: db.name });
         const outbox = new OutboxManager(db as any, provider, { workspaceId: 'workspace-1' });
 
         await outbox.flush();
 
         expect(pendingOps.__rows.size).toBe(0);
         expect(messages.__rows.get('m1')).toMatchObject(winner);
-        expect(isRecentOpId('op-local')).toBe(false);
+        expect(isRecentOpId('op-local', { dbName: db.name })).toBe(false);
     });
 
     it('keeps the outbox row when applied: false has no winner payload', async () => {
@@ -1674,6 +1674,8 @@ describe('OutboxManager quarantine (real Dexie)', () => {
     async function freshDb(): Promise<Or3DB> {
         const db = new Or3DB(`or3-test-quarantine-${crypto.randomUUID()}`);
         await db.open();
+        // Model the unmarked legacy DB used by this unfenced-provider suite.
+        await db.sync_state.delete('sync_history');
         databases.push(db);
         return db;
     }
@@ -1704,6 +1706,233 @@ describe('OutboxManager quarantine (real Dexie)', () => {
     function manager(db: Or3DB, provider = new SpyProvider()) {
         return new OutboxManager(db, provider, scope);
     }
+
+    it('bounds a hung push observer without accumulating dispatches or stranding healthy pushes', async () => {
+        const db = await freshDb();
+        const provider = new SpyProvider();
+        provider.push.mockImplementation(async batch => ({ results: batch.ops.map(op => ({ opId: op.stamp.opId, success: true, serverVersion: 1 })), serverVersion: 1 }));
+        let release!: () => void;
+        const hung = new Promise<void>(resolve => { release = resolve; });
+        hookState.doAction.mockImplementation(name => name === 'sync.push:action:before' ? hung : Promise.resolve());
+        let flushing: Promise<boolean> | undefined;
+        try {
+            const outbox = manager(db, provider);
+            for (const id of ['observer-first', 'observer-second']) {
+                await db.pending_ops.put(corruptPut('messages', id, { payload: message(id, id) }));
+                flushing = outbox.flush();
+                let timer!: ReturnType<typeof setTimeout>;
+                try {
+                    await Promise.race([flushing, new Promise((_, reject) => {
+                        timer = setTimeout(() => reject(new Error('Observer stranded flush')), 1000);
+                    })]);
+                } finally { clearTimeout(timer); }
+            }
+            expect(await db.pending_ops.count()).toBe(0);
+            expect(provider.push).toHaveBeenCalledTimes(2);
+            expect(hookState.doAction.mock.calls.filter(([name]) => name === 'sync.push:action:before')).toHaveLength(1);
+        } finally {
+            release();
+            await flushing;
+            hookState.doAction.mockReset();
+        }
+    });
+
+    it('persists legacy timestamp normalization before sending and replays it after a lost ACK', async () => {
+        const db = await freshDb();
+        const original = { ...corruptPut('posts', 'legacy'), tableName: 'threads', payload: { id: 'legacy', title: 'legacy' } };
+        await db.pending_ops.put(original);
+        const provider = new SpyProvider();
+        const wires: PendingOp[] = [];
+        provider.push.mockImplementation(async batch => {
+            const wire = batch.ops[0]!;
+            wires.push(structuredClone(wire));
+            expect((await db.pending_ops.get(original.id))?.payload).toEqual(wire.payload);
+            if (wires.length === 1) throw new Error('lost ACK');
+            return { results: [{ opId: wire.stamp.opId, success: true, serverVersion: 1 }], serverVersion: 1 };
+        });
+        await manager(db, provider).flush();
+        await db.pending_ops.update(original.id, { nextAttemptAt: 0 });
+        await manager(db, provider).flush();
+        expect(wires).toHaveLength(2);
+        expect(wires[1]!.payload).toEqual(wires[0]!.payload);
+        expect(wires[1]!.stamp).toEqual(wires[0]!.stamp);
+        expect(await db.pending_ops.count()).toBe(0);
+    });
+
+    it('preserves frozen wire intent when cancellation releases an older claim copy', async () => {
+        const db = await freshDb();
+        const original = { ...corruptPut('posts', 'cancel-wire'), tableName: 'threads', payload: { id: 'cancel-wire' } };
+        await db.pending_ops.put(original);
+        const provider = new SpyProvider();
+        let sent!: () => void;
+        const sending = new Promise<void>(resolve => { sent = resolve; });
+        let release!: () => void;
+        const lostAck = new Promise<void>(resolve => { release = resolve; });
+        const payloads: unknown[] = [];
+        provider.push.mockImplementation(async batch => {
+            payloads.push(structuredClone(batch.ops[0]!.payload));
+            if (payloads.length === 1) { sent(); await lostAck; }
+            return { results: [{ opId: original.stamp.opId, success: true, serverVersion: 1 }], serverVersion: 1 };
+        });
+        const outbox = manager(db, provider);
+        const flushing = outbox.flush();
+        await sending;
+        outbox.stop();
+        await flushing;
+        expect((await db.pending_ops.get(original.id))?.payload).toEqual(payloads[0]);
+        release();
+        await manager(db, provider).flush();
+        expect(payloads).toHaveLength(2);
+        expect(payloads[1]).toEqual(payloads[0]);
+        expect(await db.pending_ops.count()).toBe(0);
+    });
+
+    it('replays old complete wire intent unchanged and holds uncertain legacy timestamps', async () => {
+        const db = await freshDb();
+        const complete = corruptPut('messages', 'complete', { payload: message('complete', 'old lost ACK'), attempts: 1 });
+        const oldWire = sanitizePayloadForSync('messages', complete.payload, 'put');
+        const uncertain = { ...corruptPut('posts', 'uncertain'), tableName: 'threads', payload: { id: 'uncertain' }, attempts: 1 };
+        await db.pending_ops.bulkPut([complete, uncertain]);
+        const provider = new SpyProvider();
+        provider.push.mockImplementation(async batch => {
+            expect(batch.ops.map(op => op.id)).toEqual([complete.id]);
+            expect(batch.ops[0]!.payload).toEqual(oldWire);
+            return { results: [{ opId: complete.stamp.opId, success: true, serverVersion: 1 }], serverVersion: 1 };
+        });
+        await manager(db, provider).flush();
+        expect(await db.pending_ops.count()).toBe(0);
+        expect(await db.sync_quarantine.get(uncertain.id)).toMatchObject({ status: 'quarantined', op: uncertain });
+    });
+
+    it('holds unavailable stored-record intent and evidence without retries, attempts or breaker penalty', async () => {
+        const db = await freshDb();
+        const original = corruptPut('messages', 'held-server', { payload: message('held-server', 'unsent edit'), attempts: 2, wireNormalized: true });
+        const healthy = corruptPut('messages', 'healthy-server', { payload: message('healthy-server', 'healthy') });
+        await db.messages.put(message('held-server', 'unsent edit'));
+        await db.pending_ops.bulkPut([original, healthy]);
+        const provider = new SpyProvider();
+        provider.push.mockResolvedValue({ results: [
+            { opId: original.stamp.opId, success: false, errorCode: 'STORED_RECORD_UNAVAILABLE', evidenceRef: 'evidence-1', error: 'invalid_json' },
+            { opId: healthy.stamp.opId, success: true, serverVersion: 3 },
+        ], serverVersion: 3 });
+        const outbox = manager(db, provider);
+        await outbox.flush();
+        expect(provider.push.mock.calls[0]![0]).toMatchObject({ storedRecordCapability: 'stored-record-v1' });
+        expect(await db.pending_ops.count()).toBe(0);
+        expect(await outbox.getQuarantined()).toEqual([expect.objectContaining({
+            variant: 'stored_record', status: 'quarantined', evidenceRef: 'evidence-1', diagnostics: ['invalid_json'],
+            op: expect.objectContaining({ payload: original.payload, stamp: original.stamp, attempts: 2 }),
+            localRow: expect.objectContaining({ data: { content: 'unsent edit' } }),
+        })]);
+        expect(JSON.parse(await outbox.exportQuarantined()).entries[0].evidenceRef).toBe('evidence-1');
+        await outbox.flush();
+        await outbox.retryFailed();
+        await outbox.flush();
+        expect(provider.push).toHaveBeenCalledTimes(1);
+        const breaker = getSyncCircuitBreaker(`${scope.workspaceId}:${provider.id}`);
+        expect(breaker.getFailureCount()).toBe(0);
+        expect(breaker.getState()).toBe('closed');
+    });
+
+    it('pauses a malformed direct-provider hold before settling siblings or losing intent', async () => {
+        const db = await freshDb();
+        const original = corruptPut('messages', 'bad-evidence', { payload: message('bad-evidence', 'unsent edit') });
+        const healthy = corruptPut('messages', 'healthy-evidence', { payload: message('healthy-evidence', 'healthy') });
+        await db.pending_ops.bulkPut([original, healthy]);
+        const provider = new SpyProvider();
+        provider.push.mockResolvedValue({ results: [
+            { opId: healthy.stamp.opId, success: true, serverVersion: 3 },
+            { opId: original.stamp.opId, success: false, errorCode: 'STORED_RECORD_UNAVAILABLE', error: 'invalid_json' },
+        ], serverVersion: 3 });
+        const outbox = manager(db, provider);
+        await outbox.flush();
+        expect(await db.pending_ops.count()).toBe(2);
+        expect((await db.pending_ops.toArray()).every(row => row.attempts === 0)).toBe(true);
+        expect(await outbox.getQuarantined()).toHaveLength(0);
+        await outbox.flush();
+        expect(provider.push).toHaveBeenCalledTimes(1);
+        expect(getSyncCircuitBreaker(`${scope.workspaceId}:${provider.id}`).getFailureCount()).toBe(0);
+    });
+
+    it('quarantines only identity reuse and corrupt winners, settles siblings, and leaves the breaker healthy', async () => {
+        const db = await freshDb();
+        const ops = ['identity', 'winner', 'healthy', 'generic'].map(id => corruptPut('messages', id, { payload: message(id, id) }));
+        await db.pending_ops.bulkPut(ops);
+        const badWinner = { kind: 'put' as const, payload: { id: 'winner', role: 42 }, revision: { clock: 10, hlc: '10', opId: testUuid('remote') } };
+        const provider = new SpyProvider();
+        provider.push.mockImplementation(async () => ({ results: [
+            { opId: ops[0]!.stamp.opId, success: false, errorCode: 'CONFLICT', error: `Conflicting operation reuses processed op_id ${ops[0]!.stamp.opId}` },
+            { opId: ops[1]!.stamp.opId, success: true, applied: false, winner: badWinner, serverVersion: 2 },
+            { opId: ops[2]!.stamp.opId, success: true, serverVersion: 3 },
+            { opId: ops[3]!.stamp.opId, success: false, errorCode: 'CONFLICT', error: 'temporary application conflict' },
+        ], serverVersion: 3 }));
+        await manager(db, provider).flush();
+        expect(await db.pending_ops.get(ops[2]!.id)).toBeUndefined();
+        expect(await db.sync_quarantine.get(ops[0]!.id)).toMatchObject({ status: 'quarantined', op: { stamp: ops[0]!.stamp } });
+        expect(await db.sync_quarantine.get(ops[1]!.id)).toMatchObject({ status: 'quarantined', serverWinner: badWinner });
+        expect(await db.pending_ops.get(ops[3]!.id)).toMatchObject({ status: 'retry_wait' });
+        // Generic conflicts retain retries. Test content-only results separately.
+        await db.pending_ops.clear();
+        await db.pending_ops.put(ops[0]!);
+        provider.push.mockResolvedValue({ results: [{ opId: ops[0]!.stamp.opId, success: false, errorCode: 'CONFLICT', error: `Conflicting operation reuses processed op_id ${ops[0]!.stamp.opId}` }], serverVersion: 3 });
+        const breaker = getSyncCircuitBreaker(`${scope.workspaceId}:${provider.id}`);
+        breaker.reset();
+        await manager(db, provider).flush();
+        expect(breaker.getFailureCount()).toBe(0);
+    });
+
+    it.each([
+        ['string payload', { kind: 'put', payload: 'corrupt' }],
+        ['null payload', { kind: 'put', payload: null }],
+        ['array payload', { kind: 'put', payload: [] }],
+        ['invalid deletion time', { kind: 'delete', serverDeletedAt: 'corrupt' }],
+    ])('holds a malformed winner (%s) without losing intent or blocking siblings', async (_label, fields) => {
+        const db = await freshDb();
+        const original = corruptPut('messages', 'bad-shape', { payload: message('bad-shape', 'unsent edit') });
+        const healthy = corruptPut('messages', 'sibling', { payload: message('sibling', 'healthy') });
+        await db.messages.put(message('bad-shape', 'unsent edit'));
+        await db.pending_ops.bulkPut([original, healthy]);
+        const winner = { ...fields, revision: { clock: 10, hlc: '10:0:remote', opId: testUuid('shape-remote') } };
+        const provider = new SpyProvider();
+        provider.push.mockResolvedValue({ results: [
+            { opId: original.stamp.opId, success: true, applied: false, winner: winner as never },
+            { opId: healthy.stamp.opId, success: true, serverVersion: 11 },
+        ], serverVersion: 11 });
+
+        await manager(db, provider).flush();
+
+        expect(await db.pending_ops.count()).toBe(0);
+        expect(await db.sync_quarantine.get(original.id)).toMatchObject({
+            status: 'quarantined', op: { stamp: original.stamp, payload: { data: { content: 'unsent edit' } } },
+            localRow: { data: { content: 'unsent edit' } }, serverWinner: winner,
+        });
+        expect(await db.messages.get(original.pk)).toMatchObject({ data: { content: 'unsent edit' } });
+        expect(await db.tombstones.get(`messages:${original.pk}`)).toBeUndefined();
+        expect(getSyncCircuitBreaker(`${scope.workspaceId}:${provider.id}`).getFailureCount()).toBe(0);
+    });
+
+    it.each(['CONFLICT', 'NOT_FOUND', 'RATE_LIMITED', 'SERVER_ERROR'] as const)(
+        'keeps %s retry policy separate from service availability', async errorCode => {
+            const db = await freshDb();
+            const op = corruptPut('messages', 'retry-policy', { payload: message('retry-policy', 'keep me') });
+            await db.pending_ops.put(op);
+            const provider = new SpyProvider();
+            provider.push.mockResolvedValue({ results: [{ opId: op.stamp.opId, success: false, errorCode }], serverVersion: 1 });
+            const outbox = manager(db, provider);
+            const breaker = getSyncCircuitBreaker(`${scope.workspaceId}:${provider.id}`);
+            for (let i = 0; i < 5; i++) {
+                await db.pending_ops.update(op.id, { nextAttemptAt: 0 });
+                // Recreate the manager to clear only its rate-limit cooldown.
+                await manager(db, provider).flush();
+            }
+            expect(await db.pending_ops.get(op.id)).toMatchObject({
+                status: 'retry_wait', attempts: errorCode === 'RATE_LIMITED' ? 0 : 5,
+            });
+            expect(await outbox.getQuarantined()).toHaveLength(0);
+            expect(breaker.getFailureCount()).toBe(errorCode === 'SERVER_ERROR' ? 5 : 0);
+            expect(breaker.getState()).toBe(errorCode === 'SERVER_ERROR' ? 'open' : 'closed');
+        }
+    );
 
     it('preserves corrupt operations, rebuilds them from local rows and pushes the recovered content', async () => {
         const db = await freshDb();
@@ -1906,5 +2135,60 @@ describe('OutboxManager quarantine (real Dexie)', () => {
         const outbox = manager(db);
         (outbox as unknown as { flushOwner: symbol | null }).flushOwner = Symbol('busy');
         await expect(outbox.quarantineCorruptOps()).rejects.toThrow(/push is running/);
+    });
+});
+
+describe('P0-5 fenced outbox on the shared Dexie database', () => {
+    async function fresh() {
+        const db = new Or3DB(`h5-outbox-${crypto.randomUUID()}`); await db.open();
+        await db.sync_state.put({ id: 'sync_history', historyIncarnation: 'I', phase: 'ready', resetTarget: null, cursor: 0, lastSyncAt: 0, deviceId: '' });
+        const ops = [1, 2].map(clock => createPendingOp({ id: `original-${clock}`, tableName: 'kv', pk: 'edit',
+            payload: { id: 'edit', name: 'edit', value: `original-${clock}`, deleted: false, created_at: 1, updated_at: clock, clock },
+            stamp: { clock, opId: crypto.randomUUID(), hlc: `${String(clock).padStart(13, '0')}:0000:d`, deviceId: 'd' } }));
+        await db.pending_ops.bulkPut(ops);
+        const provider = Object.assign(new SpyProvider(), { capabilities: { historyIncarnation: 'v1' as const } });
+        return { db, ops, provider, manager: new OutboxManager(db, provider, { workspaceId: 'workspace-1' }) };
+    }
+    it('persists an incompatible-server pause across a follower restart without spending attempts or coalescing originals', async () => {
+        const { db, ops, provider, manager } = await fresh();
+        let follower: OutboxManager | undefined;
+        try {
+            provider.push.mockRejectedValue(Object.assign(new Error('legacy refusal'), { code: 'OR3_SYNC_OLDER_SERVER' }));
+            await manager.flush();
+            await manager.stop();
+            follower = new OutboxManager(db, provider, { workspaceId: 'workspace-1' });
+            await follower.flush();
+            expect(provider.push).toHaveBeenCalledTimes(1);
+            expect((await db.pending_ops.toArray()).map(op => ({ id: op.id, attempts: op.attempts, payload: op.payload })))
+                .toEqual(ops.map(op => ({ id: op.id, attempts: op.attempts, payload: op.payload })));
+            expect(await db.sync_state.get('sync_history')).toMatchObject({ historyIncarnation: 'I', phase: 'ready' });
+        } finally { await follower?.stop(); await manager.stop(); db.close(); await Dexie.delete(db.name); }
+    });
+    it('follower mismatch closes the shared guard without coalescing away any original', async () => {
+        const { db, ops, provider, manager } = await fresh();
+        try {
+            provider.push.mockRejectedValue(Object.assign(new Error('replaced'), { status: 409, data: { code: 'OR3_SYNC_HISTORY_CHANGED', historyIncarnation: 'J', requiresSnapshot: true } }));
+            await manager.flush();
+            expect(await db.sync_state.get('sync_history')).toMatchObject({ historyIncarnation: 'I', phase: 'resetting', resetTarget: 'J' });
+            expect((await db.pending_ops.toArray()).map(op => ({ id: op.id, payload: op.payload, stamp: op.stamp }))).toEqual(ops.map(op => ({ id: op.id, payload: op.payload, stamp: op.stamp })));
+            await manager.flush(); expect(provider.push).toHaveBeenCalledTimes(1);
+        } finally { await manager.stop(); db.close(); await Dexie.delete(db.name); }
+    });
+    it('late old successful push cannot delete or apply a winner to new-history work', async () => {
+        const { db, ops, provider, manager } = await fresh();
+        try {
+            let finish!: (result: PushResult) => void;
+            provider.push.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+            const flushing = manager.flush(); await vi.waitFor(() => expect(provider.push).toHaveBeenCalledTimes(1));
+            // Models the single atomic snapshot installer; the row IDs are deliberately reused.
+            await db.transaction('rw', db.sync_state, db.pending_ops, async () => {
+                await db.sync_state.update('sync_history', { historyIncarnation: 'J' });
+                await db.pending_ops.put({ ...ops[1]!, status: 'pending', claimId: undefined, payload: { ...(ops[1]!.payload as Record<string, unknown>), value: 'J edit' } });
+            });
+            finish({ historyIncarnation: 'I', serverVersion: 101, results: [{ opId: ops[1]!.stamp.opId, success: true }] });
+            await flushing;
+            expect((await db.pending_ops.get(ops[1]!.id))?.payload).toMatchObject({ value: 'J edit' });
+            expect(await db.sync_state.get('sync_history')).toMatchObject({ historyIncarnation: 'J', phase: 'ready' });
+        } finally { await manager.stop(); db.close(); await Dexie.delete(db.name); }
     });
 });

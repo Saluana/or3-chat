@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { modelSearchDefinition } from '../../shared/openrouter/delegation-model-catalog';
 import { normalizeError } from '../../shared/errors';
 import { readToolResultStorage } from '../../shared/chat/tool-result-artifact';
-import { PullResponseSchema } from '../../shared/sync/schemas';
+import { PullResponseSchema, ThreadPayloadSchema, MessagePayloadSchema } from '../../shared/sync/schemas';
 import type { SyncChange } from '../../shared/sync/types';
 
 test.setTimeout(90000);
@@ -50,11 +50,21 @@ async function status(request: APIRequestContext, jobId: string) {
 async function pullHistory(request: APIRequestContext, origin: string, workspaceId: string) {
     const changes: SyncChange[] = [];
     let cursor = 0;
+    let historyIncarnation: string | null = null;
     for (;;) {
         const response = await request.post('/api/sync/pull', { headers: { origin, 'x-or3-cloud-intent': 'mutation' },
-            data: { scope: { workspaceId }, cursor, limit: 1000, fileKindCapability: 'v1' } });
+            data: { scope: { workspaceId }, cursor, limit: 1000, fileKindCapability: 'v1',
+                historyIncarnationCapability: 'incarnation-v1', historyIncarnation } });
         expect(response.ok(), await response.text()).toBe(true);
         const page = PullResponseSchema.parse(await response.json());
+        if (historyIncarnation === null) {
+            expect(page.requiresSnapshot).toBe(true);
+            expect(page.changes).toEqual([]);
+            expect(page.historyIncarnation).toEqual(expect.any(String));
+            historyIncarnation = page.historyIncarnation!;
+            continue;
+        }
+        expect(page.historyIncarnation).toBe(historyIncarnation);
         expect(page.requiresSnapshot).toBe(false);
         changes.push(...page.changes);
         if (!page.hasMore) return changes;
@@ -498,7 +508,18 @@ for (const mode of ['normal', 'duplicate', 'conflict', 'failure', 'online']) tes
     expect(call.status).toBe(mode === 'failure' || mode === 'conflict' ? 'error' : 'complete');
     if (mode !== 'failure' && mode !== 'conflict')
         expect(JSON.parse(await syncedToolResult(request, origin, job.workspaceId, call.result)).count).toBe(1);
-    const history = JSON.stringify(await pullHistory(request, origin, job.workspaceId));
+    const changes = await pullHistory(request, origin, job.workspaceId);
+    if (mode === 'normal') {
+        // Raw legacy Dexie rows omit these defaults. Admission must publish
+        // reader-valid rows without losing their content or ordering metadata.
+        const thread = changes.find(change => change.tableName === 'threads' && change.pk === job.threadId)!;
+        expect(ThreadPayloadSchema.parse(thread.payload)).toMatchObject({ id: job.threadId,
+            title: 'Cloud tool fixture', status: 'ready', pinned: false, deleted: false, clock: 1 });
+        const user = changes.find(change => change.tableName === 'messages' && change.pk === `user-${job.callId}`)!;
+        expect(MessagePayloadSchema.parse(user.payload)).toMatchObject({ index: 0, role: 'user',
+            order_key: user.stamp.hlc, data: { content: 'Run tool fixture' } });
+    }
+    const history = JSON.stringify(changes);
     expect(history).toContain(job.messageId);
     expect(history).toContain(job.callId);
     await info.attach('cloud-terminal-receipt', { contentType: 'application/json', body: JSON.stringify({ job, saved }) });

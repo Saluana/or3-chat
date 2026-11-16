@@ -1,3 +1,4 @@
+import { CLOUD_MUTATION_INTENT } from '~~/shared/sync/types';
 /**
  * @module app/composables/library/useLibraryLink
  *
@@ -185,7 +186,7 @@ async function apiPost<T>(url: string, body?: unknown): Promise<T> {
         $fetch as unknown as (input: string, init: Record<string, unknown>) => Promise<unknown>
     )(url, {
         method: 'POST',
-        headers: { 'x-or3-cloud-intent': 'mutation', 'Content-Type': 'application/json' },
+        headers: { 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT, 'Content-Type': 'application/json' },
         body: body ?? {},
     })) as T;
 }

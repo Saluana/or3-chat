@@ -1,3 +1,6 @@
+import { createHookEngine } from '~~/shared/hooks/hook-engine-core';
+import { observeSyncAction } from '~/core/sync/sync-observers';
+import type { TypedHookEngine } from '~/core/hooks/typed-hooks';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 function setClient(value: boolean) {
@@ -8,16 +11,19 @@ function setClient(value: boolean) {
     (globalThis as { __OR3_TEST_CLIENT?: boolean }).__OR3_TEST_CLIENT = value;
 }
 
+let engine = createHookEngine();
 const handlers = new Map<string, (payload: unknown) => Promise<void>>();
 const addActionMock = vi.fn(
     (name: string, handler: (payload: unknown) => Promise<void>) => {
         handlers.set(name, handler);
+        engine.addAction(name, handler as never);
     }
 );
 
 const hooksMock = {
     addAction: addActionMock,
-    doAction: vi.fn(),
+    doAction: vi.fn((name: string, payload: unknown) => engine.doAction(name, payload)),
+    get _engine() { return engine; },
 };
 
 const createMock = vi.fn().mockResolvedValue(null);
@@ -77,10 +83,43 @@ describe('notification listeners plugin', () => {
     beforeEach(() => {
         vi.resetModules();
         handlers.clear();
+        engine = createHookEngine();
         addActionMock.mockClear();
         createMock.mockClear();
         panesRef.value = [];
         runtimeConfigRef.value = { public: { ssrAuthEnabled: false } };
+    });
+
+    it.each([
+        ['sync.bootstrap:action:start', 'sync.bootstrap:action:complete'],
+        ['sync.rescan:action:starting', 'sync.rescan:action:completed'],
+    ] as const)('preserves suppression phases past a hung %s listener', async (start, complete) => {
+        setClient(true);
+        let release!: () => void;
+        const hung = vi.fn(() => new Promise<void>(resolve => { release = resolve; }));
+        engine.addAction(start, hung, 0);
+        await import('~/plugins/notification-listeners.client');
+        const hooks = hooksMock as unknown as TypedHookEngine;
+        const notify = (pk: string) => handlers.get('sync.error:action')?.({
+            op: { tableName: 'messages', pk }, error: 'invalid', permanent: true,
+        });
+        try {
+            await observeSyncAction(hooks, start, { scope: { workspaceId: 'local' } } as never);
+            await notify('during');
+            expect(createMock).not.toHaveBeenCalled();
+            await observeSyncAction(hooks, complete, { scope: { workspaceId: 'local' }, cursor: 1, totalPulled: 1 } as never);
+            release();
+            await new Promise(resolve => setTimeout(resolve, 0));
+            await notify('after');
+            expect(createMock).toHaveBeenCalledTimes(1);
+            // A second lifecycle still toggles suppression while its first start is unresolved.
+            engine.addAction(start, () => new Promise(() => undefined), 0);
+            await observeSyncAction(hooks, start, { scope: { workspaceId: 'local' } } as never);
+            await observeSyncAction(hooks, complete, { scope: { workspaceId: 'local' }, cursor: 2, totalPulled: 1 } as never);
+            await observeSyncAction(hooks, start, { scope: { workspaceId: 'local' } } as never);
+            await notify('during-again');
+            expect(createMock).toHaveBeenCalledTimes(1);
+        } finally { release?.(); }
     });
 
     it('is a no-op outside the client runtime', async () => {

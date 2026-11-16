@@ -1,3 +1,5 @@
+// Incarnation negotiation has its own route-boundary suite; retain these tests' original focus.
+vi.mock('../../../utils/sync/history-incarnation', () => ({ requireHistoryCapability: () => {}, checkHistory: async () => undefined, assertHistoryResponse: () => {} }));
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp, createRouter, toNodeListener } from 'h3';
 import { createServer, request, type Server } from 'node:http';
@@ -18,10 +20,10 @@ import changeLogGc from '../gc-change-log.post';
 import tombstoneGc from '../gc-tombstones.post';
 
 const routes = [
-    { path: '/snapshot', handler: snapshot, body: { scope: { workspaceId: 'ws-1' }, pageSize: 1 } },
-    { path: '/cursor', handler: cursor, body: { scope: { workspaceId: 'ws-1' }, deviceId: 'device-1', version: 1 } },
-    { path: '/gc-change-log', handler: changeLogGc, body: { scope: { workspaceId: 'ws-1' }, retentionSeconds: 604800 } },
-    { path: '/gc-tombstones', handler: tombstoneGc, body: { scope: { workspaceId: 'ws-1' }, retentionSeconds: 604800 } },
+    { path: '/snapshot', limit: 128 * 1024, handler: snapshot, body: { scope: { workspaceId: 'ws-1' }, pageSize: 1, pageToken: 'a'.repeat(65_536) } },
+    { path: '/cursor', limit: 8192, handler: cursor, body: { scope: { workspaceId: 'ws-1' }, deviceId: 'device-1', version: 1 } },
+    { path: '/gc-change-log', limit: 8192, handler: changeLogGc, body: { scope: { workspaceId: 'ws-1' }, retentionSeconds: 604800 } },
+    { path: '/gc-tombstones', limit: 8192, handler: tombstoneGc, body: { scope: { workspaceId: 'ws-1' }, retentionSeconds: 604800 } },
 ];
 
 describe('sync control bodies at the HTTP byte boundary', () => {
@@ -63,8 +65,8 @@ describe('sync control bodies at the HTTP byte boundary', () => {
     // Failure: valid unknown fields bypass schema rejection while H3 buffers
     // an oversized unauthenticated body. Cover both framing modes on each route.
     it.each(routes)('caps $path before authentication for declared and chunked bytes', async route => {
-        const body = Buffer.from(JSON.stringify({ ...route.body, padding: 'é'.repeat(4200) }));
-        expect(body.byteLength).toBeGreaterThan(8192);
+        const body = Buffer.from(JSON.stringify({ ...route.body, padding: 'é'.repeat(route.limit / 2 + 10) }));
+        expect(body.byteLength).toBeGreaterThan(route.limit);
         for (const framing of ['declared', 'chunked'] as const) {
             expect(await send(route.path, body, framing)).toBe(413);
             expect(session).not.toHaveBeenCalled();

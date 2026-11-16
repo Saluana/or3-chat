@@ -1,3 +1,5 @@
+// Incarnation negotiation has its own route-boundary suite; retain these tests' original focus.
+vi.mock('../../../utils/sync/history-incarnation', () => ({ requireHistoryCapability: () => {}, checkHistory: async () => undefined, assertHistoryResponse: () => {} }));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
 import { requireCloudMutation } from '../../../utils/security/cloud-mutation';
@@ -113,6 +115,18 @@ function successfulPushResult(opId: string) {
 }
 
 describe('POST /api/sync/push', () => {
+    it.each(['unknown-table', 'lone-surrogate', 'unsafe-clock'])('rejects %s before adapter dispatch', async fault => {
+        const body = makeBaseBody();
+        if (fault === 'unknown-table') body.ops[0]!.tableName = 'not_a_sync_table';
+        if (fault === 'lone-surrogate') body.ops[0]!.pk = '\uD800';
+        if (fault === 'unsafe-clock') body.ops[0]!.stamp = { ...STAMP_1, clock: Number.MAX_SAFE_INTEGER + 1 };
+        readBodyMock.mockResolvedValue(body);
+        const { default: handler } = await import('../push.post');
+        const result = await handler(makeEvent());
+        expect(result.results[0]).toMatchObject({ success: false, errorCode: 'VALIDATION_ERROR' });
+        expect(pushMock).not.toHaveBeenCalled();
+    });
+
     beforeEach(() => {
         vi.mocked(requireCloudMutation).mockReset();
         readBodyMock.mockReset();
@@ -177,6 +191,41 @@ describe('POST /api/sync/push', () => {
         readBodyMock.mockResolvedValue({ scope: { workspaceId: 'ws-1' }, ops: 'bad' });
 
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
+    });
+
+    it('preserves a mixed stored-record hold and forwards only the advertised capability', async () => {
+        const body = { ...makeBaseBody(), storedRecordCapability: 'stored-record-v1' };
+        const second = { ...body.ops[0]!, id: 'pending-2', stamp: { ...STAMP_1, opId: 'a1b2c3d4-5678-4abc-8def-123456789002' } };
+        body.ops.push(second);
+        readBodyMock.mockResolvedValue(body);
+        const hold = { opId: STAMP_1.opId, success: false, errorCode: 'STORED_RECORD_UNAVAILABLE', evidenceRef: 'evidence-1', error: 'invalid_json' };
+        pushMock.mockResolvedValue({ results: [hold, { opId: second.stamp.opId, success: true, serverVersion: 7 }], serverVersion: 7 });
+        const handler = (await import('../push.post')).default;
+        expect(await handler(makeEvent())).toMatchObject({ results: [hold, { success: true, serverVersion: 7 }] });
+        expect(pushMock.mock.calls[0]![1].storedRecordCapability).toBe('stored-record-v1');
+        readBodyMock.mockResolvedValue(makeBaseBody());
+        pushMock.mockResolvedValue(successfulPushResult(STAMP_1.opId));
+        await handler(makeEvent());
+        expect(pushMock.mock.calls[1]![1].storedRecordCapability).toBeUndefined();
+    });
+
+    it('never sends an unsupported stored-record disposition to an old client', async () => {
+        readBodyMock.mockResolvedValue(makeBaseBody());
+        pushMock.mockResolvedValue({ results: [{ opId: STAMP_1.opId, success: false, errorCode: 'STORED_RECORD_UNAVAILABLE', evidenceRef: 'evidence-1', error: 'invalid_json' }], serverVersion: 7 });
+        const handler = (await import('../push.post')).default;
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 426 });
+        expect(pushMock.mock.calls[0]![1].storedRecordCapability).toBeUndefined();
+    });
+
+    it.each([
+        { evidenceRef: undefined }, { evidenceRef: '' }, { evidenceRef: 'x'.repeat(129) },
+        { error: undefined }, { error: 'x'.repeat(161) }, { success: true }, { replayed: true },
+        { payload: { secret: 'stored bytes' } },
+    ])('rejects malformed stored-record hold %j', async fields => {
+        readBodyMock.mockResolvedValue({ ...makeBaseBody(), storedRecordCapability: 'stored-record-v1' });
+        pushMock.mockResolvedValue({ results: [{ opId: STAMP_1.opId, success: false, errorCode: 'STORED_RECORD_UNAVAILABLE', evidenceRef: 'evidence-1', error: 'invalid_json', ...fields }], serverVersion: 7 });
+        const handler = (await import('../push.post')).default;
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 502 });
     });
 
     it('returns mixed 200 results when put payload fails table schema', async () => {
@@ -411,6 +460,23 @@ describe('POST /api/sync/push', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 500 });
     });
 
+    it.each([false, true])('rejects duplicate UUIDs before dispatch (changed=%s)', async changed => {
+        const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
+        const body = makeBaseBody();
+        body.ops.push({ ...body.ops[0]!, ...(changed ? { pk: 'different' } : {}) });
+        readBodyMock.mockResolvedValue(body);
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
+        expect(pushMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps an exact operation unchanged across separate lost-ACK requests', async () => {
+        const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
+        readBodyMock.mockResolvedValue(makeBaseBody());
+        const first = await handler(makeEvent());
+        expect(await handler(makeEvent())).toEqual(first);
+        expect(pushMock.mock.calls[1]?.[1]).toEqual(pushMock.mock.calls[0]?.[1]);
+    });
+
     it('passes adapter result through and records request', async () => {
         const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
         const body = makeBaseBody();
@@ -420,7 +486,7 @@ describe('POST /api/sync/push', () => {
             successfulPushResult(STAMP_1.opId)
         );
 
-        expect(pushMock).toHaveBeenCalledWith(expect.anything(), body);
+        expect(pushMock).toHaveBeenCalledWith(expect.anything(), { ...body, historyIncarnationCapability: 'incarnation-v1' });
         expect(recordSyncRequestMock).toHaveBeenCalledWith('user-1', 'sync:push');
     });
 

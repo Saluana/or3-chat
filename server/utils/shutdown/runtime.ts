@@ -3,8 +3,10 @@ import { createShutdownController } from './controller';
 
 function createRuntime() {
     const controller = createShutdownController({
+        validationOnly: process.env.OR3_CLOUD_UPDATE_VALIDATION === 'true',
         shutdownTimeoutMs: Math.min(15_000, Math.max(1_000, Number(process.env.OR3_SHUTDOWN_TIMEOUT_MS) || 15_000)),
         async getBackgroundJobCount() {
+            if (controller.validationOnly()) return 0;
             const store = await import('../background-jobs/store');
             if (!store.isBackgroundStreamingEnabled()) return 0;
             const provider = await store.getJobProvider();

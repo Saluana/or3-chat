@@ -1,3 +1,4 @@
+import { CLOUD_MUTATION_INTENT } from '~~/shared/sync/types';
 /**
  * @module app/core/workspace/gateway-workspace-api.ts
  *
@@ -51,7 +52,7 @@ export class GatewayWorkspaceApi implements WorkspaceApi {
     ): Promise<CreateWorkspaceResponse> {
         return await $fetch<CreateWorkspaceResponse>('/api/workspaces', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-or3-cloud-intent': 'mutation' },
+            headers: { 'Content-Type': 'application/json', 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT },
             body: input,
         });
     }
@@ -59,7 +60,7 @@ export class GatewayWorkspaceApi implements WorkspaceApi {
     async update(input: UpdateWorkspaceRequest): Promise<void> {
         await $fetch(`/api/workspaces/${input.id}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', 'x-or3-cloud-intent': 'mutation' },
+            headers: { 'Content-Type': 'application/json', 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT },
             body: {
                 name: input.name,
                 description: input.description,
@@ -70,14 +71,14 @@ export class GatewayWorkspaceApi implements WorkspaceApi {
     async remove(input: RemoveWorkspaceRequest): Promise<void> {
         await $fetch(`/api/workspaces/${input.id}`, {
             method: 'DELETE',
-            headers: { 'Content-Type': 'application/json', 'x-or3-cloud-intent': 'mutation' },
+            headers: { 'Content-Type': 'application/json', 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT },
         });
     }
 
     async setActive(input: SetActiveWorkspaceRequest): Promise<void> {
         await $fetch('/api/workspaces/active', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-or3-cloud-intent': 'mutation' },
+            headers: { 'Content-Type': 'application/json', 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT },
             body: { id: input.id },
         });
     }

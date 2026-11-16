@@ -4528,6 +4528,11 @@ export interface RegisterOptions {
 export interface OnOptions extends RegisterOptions {
     kind?: HookKind;
 }
+/** Internal opt-in delivery used by sync observations, never filters. */
+export interface ActionObserverDispatch {
+    active: WeakMap<HookFn, Set<string>>;
+    pending: Promise<unknown>[];
+}
 export interface HookEngine {
     addFilter: <F extends HookFn>(name: string, fn: F, priority?: number, acceptedArgs?: number) => void;
     removeFilter: <F extends HookFn>(name: string, fn: F, priority?: number) => void;
@@ -4537,6 +4542,8 @@ export interface HookEngine {
     removeAction: <F extends HookFn>(name: string, fn: F, priority?: number) => void;
     doAction: (name: string, ...args: unknown[]) => Promise<void>;
     doActionSync: (name: string, ...args: unknown[]) => void;
+    /** Invoke observers now, in registry order, without serial completion waits. */
+    _dispatchActionObservers: (name: string, args: unknown[]) => Promise<void>;
     hasFilter: (name?: string, fn?: HookFn) => boolean | number;
     /** True only when this callback is the sole matching filter, including wildcards. */
     hasOnlyFilter: (name: string, fn: HookFn) => boolean;

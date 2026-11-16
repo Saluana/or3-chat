@@ -82,7 +82,7 @@ it('keeps a v28 legacy original unclassified and protected after upgrade and reo
 
     db = new Or3DB(name);
     await db.open();
-    expect(db.verno).toBe(30);
+    expect(db.verno).toBe(32);
     expect(await db.file_blobs.get(hash)).toEqual({ hash, blob: expect.any(NodeBlob) });
     // The new sparse index exists, but migrating must not enroll legacy bytes.
     expect(await db.file_blobs.where('cache_accessed_at').aboveOrEqual(1).count()).toBe(0);
@@ -145,3 +145,56 @@ it.each([true, false])('uses an exact provider content proof (valid=%s)', async 
     expect(Boolean(await db.file_blobs.get(hash))).toBe(!valid);
     if (valid) expect(fetch).not.toHaveBeenCalled();
 });
+
+// Holds protect their original attachment references, not the whole workspace.
+it.each(['theme', 'metadata', 'transfer', 'message', 'pending', 'resolved', 'racing'] as const)(
+    'scopes history-held blob protection to referenced hashes (%s)', async kind => {
+        const held = { id: 'held', variant: 'history_reset' as const, status: kind === 'resolved' ? 'discarded' as const : 'quarantined' as const,
+            source: 'snapshot_apply' as const, sourceIncarnation: 'unknown', tableName: 'kv', pk: 'theme',
+            op: kind === 'metadata' || kind === 'resolved' ? { hash }
+                : kind === 'transfer' ? { hash, direction: 'upload' }
+                : kind === 'message' ? { payload: { file_hashes: JSON.stringify([hash]) } }
+                : { name: 'theme_selection', value: 'blank' },
+            ...(kind === 'pending' ? { pendingIntent: [{ payload: { file_hashes: JSON.stringify([hash]) } }] as any } : {}),
+            diagnostics: [], quarantinedAt: 1 };
+        if (kind === 'racing') {
+            vi.mocked(fetch).mockImplementation(async () => {
+                await db.sync_quarantine.put({ ...held, localRow: { file_hashes: JSON.stringify([hash]) } });
+                return new Response(bytes);
+            });
+        } else await db.sync_quarantine.put(held);
+        await cleanupFileCache(db, 'workspace', provider as any, DEFAULT_FILE_POLICY);
+        expect(Boolean(await db.file_blobs.get(hash))).toBe(!['theme', 'resolved'].includes(kind));
+        expect(await db.sync_quarantine.get('held')).toBeDefined();
+    });
+
+// Unpublished local references must remain usable offline, even when a remote
+// copy happens to exist today. Recheck them after asynchronous remote proof.
+it.each(['message-op', 'post-op', 'stream', 'draft', 'version', 'racing-draft', 'unrelated'] as const)(
+    'retains cached bytes required by local intent (%s)', async kind => {
+        const referencedHash = kind === 'unrelated' ? 'sha256:unrelated' : hash;
+        const addReference = async () => {
+            if (kind === 'message-op' || kind === 'post-op') {
+                await db.pending_ops.put({ id: 'local-reference', tableName: kind === 'message-op' ? 'messages' : 'posts',
+                    pk: 'local-row', operation: 'put', payload: { file_hashes: JSON.stringify([referencedHash]) },
+                    status: 'failed_permanent', attempts: 1, createdAt: 1, stamp: { clock: 1, hlc: '1:0:device', opId: crypto.randomUUID(), deviceId: 'device' } });
+            } else if (kind === 'stream') {
+                await db.messages.put({ id: 'stream', thread_id: 'thread', role: 'assistant', index: 0,
+                    pending: true, file_hashes: JSON.stringify([hash]), data: { content: 'still generating' },
+                    created_at: 1, updated_at: 1, clock: 1, deleted: false });
+            } else {
+                const draft = { version: 1 as const, text: 'unsent', attachments: [{ hash: referencedHash, name: 'original.pdf', mime: 'application/pdf', kind: 'pdf' as const }], largeTextBlocks: [], updatedAt: 1 };
+                if (kind === 'version') await db.workspace_draft_versions.put({ id: 'version', kind: 'version', account_key: 'account', tab_id: 'tab', writer_id: 'writer', sequence: 1, draft, updated_at: 1 });
+                else await db.workspace_tab_drafts.put({ id: 'draft', account_key: 'account', tab_id: 'tab', draft, updated_at: 1 });
+            }
+        };
+        if (kind === 'racing-draft') vi.mocked(fetch).mockImplementation(async () => { await addReference(); return new Response(bytes); });
+        else await addReference();
+        await cleanupFileCache(db, 'workspace', provider as any, DEFAULT_FILE_POLICY);
+        expect(Boolean(await db.file_blobs.get(hash))).toBe(kind !== 'unrelated');
+        vi.mocked(fetch).mockImplementation(async () => new Response(bytes));
+        await db.pending_ops.clear(); await db.messages.clear();
+        await db.workspace_tab_drafts.clear(); await db.workspace_draft_versions.clear();
+        await cleanupFileCache(db, 'workspace', provider as any, DEFAULT_FILE_POLICY);
+        expect(await db.file_blobs.get(hash)).toBeUndefined();
+    });

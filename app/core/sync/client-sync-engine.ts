@@ -1,3 +1,5 @@
+import { isHistoryProtocolBoundary, protocolPauseId } from './history-incarnation';
+import { liveQuery } from 'dexie';
 /**
  * Sync Engine Plugin
  *
@@ -15,7 +17,7 @@ import { OutboxManager } from '~/core/sync/outbox-manager';
 import { createSubscriptionManager, cleanupSubscriptionManager, getScopeKey } from '~/core/sync/subscription-manager';
 import { GcManager } from '~/core/sync/gc-manager';
 import { cleanupCursorManager } from '~/core/sync/cursor-manager';
-import { createWorkspaceDb, getActiveWorkspaceId as getActiveDbWorkspaceId, type Or3DB } from '~/db/client';
+import { createWorkspaceDb, rebindWorkspaceDb, getActiveWorkspaceId as getActiveDbWorkspaceId, type Or3DB } from '~/db/client';
 import { getCachedSessionContext, useSessionContext } from '~/composables/auth/useSessionContext';
 import { startCoordinatedSubscription } from './subscription-coordinator';
 import { useAuthTokenBroker, type AuthTokenBroker } from '~/composables/auth/useAuthTokenBroker.client';
@@ -129,9 +131,27 @@ function requestEngine(scope: SyncScope | null, force = false, authorizationRevi
             return;
         }
         if (generation !== lifecycleGeneration) return;
-        const db = createWorkspaceDb(scope.workspaceId);
+        let db = createWorkspaceDb(scope.workspaceId);
+        if (provider.capabilities?.historyIncarnation !== 'v1') throw new Error('Selected sync mode requires separate history incarnation qualification');
+        await db.transaction('rw', ['sync_state'], async () => {
+            if (!await db.sync_state.get('sync_history')) await db.sync_state.put({ id: 'sync_history',
+                historyIncarnation: null, phase: 'unbound', resetTarget: null, cursor: 0, deviceId: '', lastSyncAt: 0 });
+        });
+        if (db.syncHistoryAtOpen === undefined) db.syncHistoryAtOpen = (await db.sync_state.get('sync_history'))?.historyIncarnation ?? null;
+        const guard = await db.sync_state.get('sync_history');
+        if (guard?.phase === 'ready' && guard.historyIncarnation !== db.syncHistoryAtOpen) {
+            db = await rebindWorkspaceDb(scope.workspaceId, db);
+        }
+        if (generation !== lifecycleGeneration) return;
         const hookBridge = getHookBridge(db);
         hookBridge.start();
+        const refreshHistory = liveQuery(() => db.sync_state.get('sync_history')).subscribe(guard => {
+            if (generation !== lifecycleGeneration || guard?.phase !== 'ready' || guard.historyIncarnation === db.syncHistoryAtOpen) return;
+            refreshHistory.unsubscribe();
+            void requestEngine(scope, true, authorizationRevision).catch(error => {
+                console.error('[sync-engine] History rebind failed:', error);
+            });
+        });
         const subscriptionManager = createSubscriptionManager(db, provider, scope);
         const cancel = () => subscriptionManager.stop();
         cancelStartup = cancel;
@@ -144,6 +164,7 @@ function requestEngine(scope: SyncScope | null, force = false, authorizationRevi
                     return () => subscriptionManager.stop();
                 })();
             if (generation !== lifecycleGeneration) {
+                refreshHistory.unsubscribe();
                 await stopSubscription();
                 cleanupSubscriptionManager(getScopeKey(scope));
                 cleanupCursorManager(db.name, scope);
@@ -155,13 +176,14 @@ function requestEngine(scope: SyncScope | null, force = false, authorizationRevi
             const gcManager = new GcManager(db, provider, scope);
             gcManager.start();
             engineState = { db, provider, scope, hookBridge, outboxManager,
-                subscriptionManager, stopSubscription, gcManager };
+                subscriptionManager, stopSubscription: async () => { refreshHistory.unsubscribe(); await stopSubscription!(); }, gcManager };
         } catch (error) {
+            refreshHistory.unsubscribe();
             await (stopSubscription ? stopSubscription() : subscriptionManager.stop());
             cleanupSubscriptionManager(getScopeKey(scope));
             cleanupCursorManager(db.name, scope);
             releaseCapture(db.name, scope);
-            if (generation === lifecycleGeneration) scheduleAuthRetry(scope, generation);
+            if (generation === lifecycleGeneration && !isHistoryProtocolBoundary(error)) scheduleAuthRetry(scope, generation);
             throw error;
         } finally {
             if (cancelStartup === cancel) cancelStartup = null;
@@ -174,13 +196,22 @@ function requestEngine(scope: SyncScope | null, force = false, authorizationRevi
     return operation;
 }
 
-function startSyncEngine(
+async function startSyncEngine(
     workspaceId: string,
     principalId = getCachedSessionContext()?.user?.id,
     authorizationRevision = getCachedSessionContext()?.authorizationRevision,
 ): Promise<void> {
     if (!hasCloudAccess()) return stopSyncEngine();
-    return requestEngine({ workspaceId, ...(principalId ? { principalId } : {}) }, false, authorizationRevision);
+    const generation = lifecycleGeneration;
+    // Explicit retry of a storage-paused subscription retains its staged chain.
+    // A healthy same-scope start remains idempotent; auth changes still reconcile.
+    const retry = !reconcilePending && desiredScope?.workspaceId === workspaceId && desiredScope.principalId === principalId &&
+        engineState?.scope.workspaceId === workspaceId && engineState.scope.principalId === principalId &&
+        desiredAuthorizationRevision === authorizationRevision && (engineState.subscriptionManager.getStatus() === 'error' ||
+            !!(await engineState.db.sync_state.get(protocolPauseId(engineState.provider.id, engineState.scope)))?.protocolPause);
+    // A newer workspace/account/stop request owns the lifecycle after this read.
+    if (generation !== lifecycleGeneration) return lifecycleQueue;
+    return requestEngine({ workspaceId, ...(principalId ? { principalId } : {}) }, retry, authorizationRevision);
 }
 
 function stopSyncEngine(): Promise<void> {

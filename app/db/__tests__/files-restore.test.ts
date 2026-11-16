@@ -85,6 +85,31 @@ describe('restoreMany', () => {
         }
     });
 
+    it.each(['soft', 'batch', 'hard'] as const)('protects held-history attachments from %s deletion until evidence is discarded', async operation => {
+        const db = getDb();
+        const hash = 'held-attachment';
+        const evidenceId = 'held-history-file';
+        await db.file_meta.put({ hash, name: 'held.txt', kind: 'file', mime_type: 'text/plain',
+            size_bytes: 3, deleted: false, ref_count: 0, clock: 1, created_at: 1, updated_at: 1 });
+        await db.file_blobs.put({ hash, blob: new NodeBlob(['old']) as unknown as Blob });
+        await db.sync_quarantine.put({ id: evidenceId, tableName: 'file_meta', pk: hash,
+            variant: 'history_reset', status: 'quarantined', source: 'snapshot_apply',
+            sourceIncarnation: 'I', op: null, diagnostics: [], quarantinedAt: 1 });
+        const remove = () => operation === 'soft' ? softDeleteFile(hash)
+            : operation === 'batch' ? softDeleteMany([hash]) : hardDeleteMany([hash]);
+        try {
+            await expect(remove()).rejects.toThrow('Review saved changes from before server recovery');
+            expect(await db.file_meta.get(hash)).toMatchObject({ deleted: false, clock: 1 });
+            expect(await db.file_blobs.get(hash)).toMatchObject({ blob: { size: 3 } });
+            await db.sync_quarantine.update(evidenceId, { status: 'discarded' });
+            await expect(remove()).resolves.not.toThrow();
+            if (operation === 'hard') {
+                expect(await db.file_meta.get(hash)).toBeUndefined();
+                expect(await db.file_blobs.get(hash)).toBeUndefined();
+            } else expect(await db.file_meta.get(hash)).toMatchObject({ deleted: true });
+        } finally { await db.sync_quarantine.delete(evidenceId); }
+    });
+
     it('protects recovery-only attachment bytes through every deletion API until the exact version is discarded', async () => {
         const db = getDb();
         await db.file_meta.put({ hash: 'recovery-only', name: 'synthetic.png', kind: 'image', mime_type: 'image/png', size_bytes: 3, deleted: false, ref_count: 0, clock: 1, created_at: 1, updated_at: 1 });

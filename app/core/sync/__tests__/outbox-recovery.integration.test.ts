@@ -46,6 +46,8 @@ describe('outbox durable recovery integration', () => {
     beforeEach(async () => {
         db = new Or3DB(`or3-outbox-recovery-${crypto.randomUUID()}`);
         await db.open();
+        // Model the unmarked legacy DB used by this unfenced-provider suite.
+        await db.sync_state.delete('sync_history');
         getHookBridge(db).start();
     });
     afterEach(async () => {

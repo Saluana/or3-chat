@@ -1,5 +1,7 @@
+import { HistoryRequestFields } from '~~/shared/sync/schemas';
+import { requireHistoryCapability, checkHistory, assertHistoryResponse } from '../../utils/sync/history-incarnation';
+import { prepareSyncWrite, SyncWriteError } from '~~/shared/sync/prepare-sync-write';
 import { observeSyncRequest } from '../../sync/observations';
-import { isLocalOnlyKvChange } from '../../../shared/sync/local-only-kv';
 import { WORKSPACE_ITEM_CAPABILITY } from "~~/shared/posts/workspace-item-capability";
 import { hasWorkspaceItemSemantics } from '~~/shared/posts/workspace-item-capability';
 import { requireWorkspaceItemCapability } from '../../utils/sync/workspace-item-capability';
@@ -23,7 +25,6 @@ import {
     PendingOpSchema,
     PushResultSchema,
     SyncScopeSchema,
-    TABLE_PAYLOAD_SCHEMAS,
     MAX_SYNC_PUSH_BATCH_BYTES,
     MAX_SYNC_PUSH_BATCH_OPS,
     getPushResultContractError,
@@ -41,7 +42,6 @@ import {
 import { enforceRateLimit } from '../../utils/rate-limit/enforce';
 import { setNoCacheHeaders } from '../../utils/headers';
 import { readLimitedJsonBody } from '../../utils/security/limited-json-body';
-import { MAX_SYNC_PAYLOAD_BYTES } from '~~/shared/sync/sanitize';
 import {
     isGenericFileMetaPayload,
     requireFileKindCapability,
@@ -52,15 +52,13 @@ type PendingOp = z.infer<typeof PendingOpSchema>;
 type PushResultItem = z.infer<typeof PushResultSchema>['results'][number];
 
 const PushEnvelopeSchema = z.object({
+    ...HistoryRequestFields,
+    storedRecordCapability: z.literal('stored-record-v1').optional(),
     scope: SyncScopeSchema,
     ops: z.array(z.unknown()).max(MAX_SYNC_PUSH_BATCH_OPS),
     fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
     workspaceItemCapability: z.literal(WORKSPACE_ITEM_CAPABILITY).optional(),
 });
-
-function serializedPayloadBytes(payload: unknown): number {
-    return new TextEncoder().encode(JSON.stringify(payload)).byteLength;
-}
 
 function opIdFromUnknown(op: unknown, index: number): string {
     if (
@@ -101,39 +99,12 @@ function validateOneOp(
         };
     }
 
-    const op = { ...parsed.data };
-    if (isLocalOnlyKvChange(op.tableName, op.pk, op.payload)) return { result: validationFailure(op.stamp.opId, 'Device-only KV names cannot be synced') };
-    if (
-        op.payload !== undefined &&
-        serializedPayloadBytes(op.payload) > MAX_SYNC_PAYLOAD_BYTES
-    ) {
-        return {
-            result: {
-                opId: op.stamp.opId,
-                success: false,
-                error: `Payload too large for ${op.tableName}: exceeds ${MAX_SYNC_PAYLOAD_BYTES} bytes`,
-                errorCode: 'OVERSIZED',
-            },
-        };
+    try {
+        return { op: { ...parsed.data, ...prepareSyncWrite(parsed.data) } };
+    } catch (error) {
+        if (!(error instanceof SyncWriteError)) throw error;
+        return { result: { opId: parsed.data.stamp.opId, success: false, error: error.message, errorCode: error.code } };
     }
-
-    if (op.operation === 'put') {
-        const schema = TABLE_PAYLOAD_SCHEMAS[op.tableName];
-        if (schema) {
-            const payload = schema.safeParse(op.payload ?? {});
-            if (!payload.success) {
-                return {
-                    result: validationFailure(
-                        op.stamp.opId,
-                        `Invalid payload for ${op.tableName}: ${payload.error.message}`
-                    ),
-                };
-            }
-            op.payload = payload.data as Record<string, unknown>;
-        }
-    }
-
-    return { op };
 }
 
 /**
@@ -160,6 +131,7 @@ export default defineEventHandler(async (event) => {
         MAX_SYNC_PUSH_BATCH_BYTES,
         { allowGzip: true }
     );
+    requireHistoryCapability(body);
     const envelope = PushEnvelopeSchema.safeParse(body);
     if (!envelope.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid push request' });
@@ -188,6 +160,22 @@ export default defineEventHandler(async (event) => {
 
         recordSyncRequest(userId, 'sync:push');
 
+        const adapter = getActiveSyncGatewayAdapter();
+        const history = await checkHistory(event, adapter, envelope.data);
+
+        // A UUID denotes one immutable intent. Reject aliases before validating
+        // or dispatching any op; correspondence cannot represent duplicates.
+        const seenOpIds = new Set<string>();
+        for (const raw of envelope.data.ops) {
+            if (!raw || typeof raw !== 'object' || !('stamp' in raw)) continue;
+            const stamp = raw.stamp;
+            if (!stamp || typeof stamp !== 'object' || !('opId' in stamp) || typeof stamp.opId !== 'string') continue;
+            if (seenOpIds.has(stamp.opId)) {
+                throw createError({ statusCode: 400, statusMessage: 'Duplicate push operation ID' });
+            }
+            seenOpIds.add(stamp.opId);
+        }
+
         const merged = new Array<PushResultItem>(envelope.data.ops.length);
         const validOps: PendingOp[] = [];
         const validIndexes: number[] = [];
@@ -204,6 +192,7 @@ export default defineEventHandler(async (event) => {
 
         if (validOps.length === 0) {
             return {
+                historyIncarnation: history,
                 results: merged,
                 serverVersion: 0,
             };
@@ -219,7 +208,6 @@ export default defineEventHandler(async (event) => {
         if (validOps.some(op => hasWorkspaceItemSemantics(op.tableName, op.payload))) {
             requireWorkspaceItemCapability(envelope.data.workspaceItemCapability);
         }
-        const adapter = getActiveSyncGatewayAdapter();
         if (!adapter) {
             throw createError({ statusCode: 500, statusMessage: 'Sync adapter not configured' });
         }
@@ -228,8 +216,11 @@ export default defineEventHandler(async (event) => {
         }
 
         const normalizedBatch = {
+            historyIncarnation: history,
+            historyIncarnationCapability: 'incarnation-v1' as const,
             scope: envelope.data.scope,
             ops: validOps,
+            ...(envelope.data.storedRecordCapability ? { storedRecordCapability: envelope.data.storedRecordCapability } : {}),
             ...(envelope.data.workspaceItemCapability ? { workspaceItemCapability: envelope.data.workspaceItemCapability } : {}),
         };
 
@@ -246,6 +237,12 @@ export default defineEventHandler(async (event) => {
             });
         }
 
+        if (envelope.data.storedRecordCapability !== 'stored-record-v1' &&
+            adapterResult.data.results.some(item => item.errorCode === 'STORED_RECORD_UNAVAILABLE')) {
+            throw createError({ statusCode: 426, statusMessage: 'Update OR3 Chat to recover unavailable stored records',
+                data: { code: 'OR3_SYNC_UPDATE_REQUIRED', requiredCapability: 'stored-record-v1' } });
+        }
+        assertHistoryResponse(adapterResult.data.historyIncarnation, history);
         const adapterByOpId = new Map(
             adapterResult.data.results.map((item) => [item.opId, item])
         );
@@ -257,6 +254,7 @@ export default defineEventHandler(async (event) => {
         }
 
         return {
+            historyIncarnation: history,
             results: merged,
             serverVersion: adapterResult.data.serverVersion,
         };

@@ -1,24 +1,6 @@
 import { Blob as NodeBlob } from 'node:buffer';
 import { describe, it, expect, vi } from 'vitest';
 
-vi.mock('dexie', () => ({
-    default: {
-        BulkError: class BulkError extends Error {
-            failures: unknown[] = [];
-        },
-        getByKeyPath: (row: Record<string, any>, keyPath?: string) => {
-            if (!keyPath) return undefined;
-            if (keyPath.includes('.')) {
-                return keyPath.split('.').reduce((value, part) => {
-                    return value?.[part];
-                }, row as any);
-            }
-            return row[keyPath];
-        },
-        waitFor: <T>(promise: Promise<T>) => promise,
-    },
-}));
-
 import {
     importWorkspaceStream,
     streamWorkspaceExportToWritable,

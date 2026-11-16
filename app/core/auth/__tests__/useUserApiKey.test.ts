@@ -14,7 +14,7 @@ describe('useUserApiKey', () => {
         const table = vi.fn();
         const stateRef = ref({ openrouterKey: 'seed' as string | null });
 
-        vi.doMock('~/db/client', () => ({ getWorkspaceGeneration: () => 0,
+        vi.doMock('~/db/client', () => ({ logicalStoreName: (name: string) => name.replace(/^current_/, ''), getWorkspaceGeneration: () => 0,
             getDb: () => ({
                 tables: [{ name: 'messages' }],
                 table,
@@ -42,7 +42,7 @@ describe('useUserApiKey', () => {
         const table = vi.fn().mockReturnValue({ where });
         const stateRef = ref({ openrouterKey: null as string | null });
 
-        vi.doMock('~/db/client', () => ({ getWorkspaceGeneration: () => 0,
+        vi.doMock('~/db/client', () => ({ logicalStoreName: (name: string) => name.replace(/^current_/, ''), getWorkspaceGeneration: () => 0,
             getDb: () => ({
                 tables: [{ name: 'kv' }],
                 table,
@@ -63,7 +63,7 @@ describe('useUserApiKey', () => {
     });
 
     it('validates OpenRouter key format', async () => {
-        vi.doMock('~/db/client', () => ({ getWorkspaceGeneration: () => 0, getDb: () => ({ tables: [] }) }));
+        vi.doMock('~/db/client', () => ({ logicalStoreName: (name: string) => name.replace(/^current_/, ''), getWorkspaceGeneration: () => 0, getDb: () => ({ tables: [] }) }));
         vi.doMock('~/db', () => ({ kv: { set: vi.fn() } }));
         vi.doMock('~/state/global', () => ({
             state: ref({ openrouterKey: null }),
@@ -81,7 +81,7 @@ describe('useUserApiKey', () => {
         const kvSet = vi.fn().mockResolvedValue(undefined);
         const stateRef = ref({ openrouterKey: null as string | null });
 
-        vi.doMock('~/db/client', () => ({ getWorkspaceGeneration: () => 0, getDb: () => ({ tables: [] }) }));
+        vi.doMock('~/db/client', () => ({ logicalStoreName: (name: string) => name.replace(/^current_/, ''), getWorkspaceGeneration: () => 0, getDb: () => ({ tables: [] }) }));
         vi.doMock('~/db', () => ({ kv: { set: kvSet } }));
         vi.doMock('~/state/global', () => ({ state: stateRef }));
 
@@ -95,7 +95,7 @@ describe('useUserApiKey', () => {
 
     it('persistUserApiKey rejects invalid keys without writing', async () => {
         const kvSet = vi.fn();
-        vi.doMock('~/db/client', () => ({ getWorkspaceGeneration: () => 0, getDb: () => ({ tables: [] }) }));
+        vi.doMock('~/db/client', () => ({ logicalStoreName: (name: string) => name.replace(/^current_/, ''), getWorkspaceGeneration: () => 0, getDb: () => ({ tables: [] }) }));
         vi.doMock('~/db', () => ({ kv: { set: kvSet } }));
         vi.doMock('~/state/global', () => ({
             state: ref({ openrouterKey: null }),

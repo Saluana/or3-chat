@@ -337,7 +337,24 @@ including when its previous image predates the offline attachment inspector.
 Archive checks, native SQLite integrity and committed filesystem hashes still
 apply. This preserves the recorded prior state without certifying that every
 canonical attachment existed before the update. Ordinary requested restores
-continue to require the inspector.
+require the qualified target image's sync semantic inspector before live data
+replacement and again on the extracted candidate before public startup. The
+bounded audit checks log stamps/JSON/payloads, materialized rows, tombstones,
+snapshot consistency and version counters. Payload checks include the reader's
+optional fields and nullable values. Legacy snapshot revision IDs remain valid;
+the known `background-tool:<64 hex>` incident ID is rejected in stored revisions
+and embedded payload `op_id`. A physical SQLite integrity check or
+archive checksum alone does not certify sync health. Diagnostics contain table
+and rowid/server-version locators, or a primary-key-order ordinal and SHA-256 of
+`JSON([snapshot_id, table_name, pk, kind])` for WITHOUT ROWID snapshot items;
+The offline target bundles the runtime read classifier and schemas, including legacy message order derived from HLC and the 256 KiB payload ceiling. Complete audits containing only recoverable record faults report `degraded:true`, `healthy:false`; they return diagnostics without treating the database as fatal corruption. Ordinary restore still requires a healthy certificate. Structural faults and a counter at `Number.MAX_SAFE_INTEGER` (no version can be allocated) block certification and are not recoverable content degradation.
+they never include record contents. An incomplete/resource-limited audit or an
+older image without this contract refuses ordinary restore. This flow has no
+isolated migration stage: it does not start public writers to attempt repairs.
+Prepare a separately qualified repaired backup when required; authenticated
+archive bytes are never edited to pass. Recorded safety recovery remains a
+byte-preservation path and explicitly reports sync semantic health as uncertified,
+even when physical checks and process health pass.
 
 ## Contributor release qualification
 
@@ -355,3 +372,61 @@ SQLite migrations 030–032 resume after interrupted startup by validating alrea
 Managed restore and updates that re-extract the data volume validate generation manifests against the restored SQLite records and verify any remaining payload hashes before updating the recorded directory identities. This runs offline, after backup authentication and extraction, before application startup. Claims, removal fences, accounting and missing payloads are preserved; runtime inode checks remain enforced. A validation failure stops startup. A raw filesystem copy alone is not a supported restore for enrolled immutable generations. Cleanup activation still requires the installed-provider lifecycle qualification.
 
 Backup preflight recognizes `fs-generation-v1` attachment IDs and checks their verified canonical bindings and generation archive paths, alongside legacy filesystem attachments. Ordinary restore requires complete generation payloads and fences. Recovery from the recorded pre-operation safety snapshot instead preserves pre-existing missing files without recreating or rebinding incomplete generations; healthy generations are still verified and rebound. Present corrupt payloads or invalid identities remain errors in either mode.
+
+## History incarnation replacement gate
+
+The matched CLI requires the exact target image to qualify offline reset and
+runtime `incarnation-v1` before a normal restore or data-restoring rollback can
+replace live bytes. Earlier SQLite 0.0.30 images are unqualified. A new CLI does
+not harden an old image, and the current browser activation blocker described in
+[Sync internals](/documentation/cloud/sync-layer#history-replacement-and-saved-work)
+also prevents release certification.
+
+For a qualified target, all writers stop before the CLI journals a fresh reset
+attempt/token, archive checksum, image digest and target/safety role outside the
+data volume. The target-owned helper verifies the exact schema and rotates the
+singleton in one SQLite transaction while clearing snapshot sessions/items and
+device ACKs. It preserves canonical rows, log/counter/retention state and unresolved
+evidence. H3 semantic certification must identify that same token before normal
+startup. A startup boundary is journaled before writers can run. Re-extraction,
+repeat restore and safety recovery always get fresh tokens; restart and ordinary
+updates preserve identity.
+
+Interrupted gates keep writers stopped. Review `status`, `doctor` and the durable
+operation record before managed recovery. Explicit recovery may re-extract the
+verified safety snapshot with a new attempt; an already-started target is never
+automatically rolled back. An incapable emergency safety target preserves bytes
+but stays stopped/isolated with `history-reset-required`. A capable safety target
+still rotates when semantic certification is bypassed and remains durably degraded.
+Status JSON exposes reset progress and certification; doctor rejects an uncertified
+recorded history. Verified safety/archive evidence is pinned against ordinary
+retention. Keep it until deliberate export/resolution and acceptance.
+
+The host/CLI tests use a provider double and a native SQLite fixture. They do not
+qualify a packed provider/image or Basic/SQLite/filesystem and Clerk/SQLite/S3
+end-to-end restoration. Exact provider pins, historical migration qualification,
+image builds and publication remain a separate activation unit.
+
+The first-incarnation candidate uses health-only validation before opening user
+admission. Automatic snapshot restoration requires matching immutable container,
+image and validation-mode proof. After normal startup may occur, use explicit
+`recover --restore --yes` or `rollback --yes`; both preserve current stopped data
+before discarding every server change since the source snapshot.
+
+Legacy snapshot policy `legacy-033-rollback-v1` is limited to the immediate
+published 0.1.116 / SQLite 0.0.30 / complete-033 Basic Auth + filesystem snapshot
+and exact allowlisted digest. It never resets/migrates the old database. Generic
+incapable restores remain refused. Legacy service reports a compatibility
+warning, has no installed incarnation and requires re-upgrade. Use the new exact
+CLI with schema 2, preserve source and abandoned-history pins, and export
+important old-tab work. Vault custody/external services are not rewound.
+
+Activation is still blocked pending the exact hardened provider/image/browser
+qualification. The pinned SQLite 0.0.31 profile binds generated capabilities to
+its exact installed 036 migration set; registry availability alone is insufficient. A later qualified re-upgrade takes a fresh source
+snapshot and initializes/verifies a fresh 036 history under closed admission.
+
+Candidate qualification uses the exact published SQLite 0.0.31 Basic profile
+for incarnation and legacy rollback capabilities. Runtime capability metadata
+is not a release receipt; native image and browser lifecycle checks remain
+mandatory before promotion. SQLite 0.0.30 remains unqualified.

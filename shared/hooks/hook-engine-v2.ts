@@ -3,6 +3,7 @@ import type { HookDiagnostics } from './hook-diagnostics';
 import { createV1HookDiagnosticsAdapter } from './hook-diagnostics-compat';
 import { HookRecordStore, type HookRecord } from './hook-record-store';
 import type {
+    ActionObserverDispatch,
     HookEngine,
     HookEngineOptions,
     HookFn,
@@ -605,15 +606,25 @@ export function createHookEngineV2(
         return runAsyncBody(callbacks, name, args, isFilter, initialValue);
     }
 
+    const activeObservers = new WeakMap<HookFn, Set<string>>();
+
     function runSyncBody(
         callbacks: readonly HookRecord[],
         name: string,
         args: unknown[],
         isFilter: boolean,
         initialValue?: unknown,
+        observers?: ActionObserverDispatch,
     ): unknown {
         let value = initialValue;
         for (const { fn, priority, acceptedArgs } of callbacks) {
+            const active = observers && (observers.active.get(fn) ?? new Set<string>());
+            if (active?.has(name)) continue;
+            if (active) {
+                observers!.active.set(fn, active);
+                active.add(name); // Reserve before invocation, including reentrant dispatch.
+            }
+            let asynchronous = false;
             setRunningPriority(priority);
             const start = performance.now();
             try {
@@ -627,17 +638,29 @@ export function createHookEngineV2(
                         value = next;
                     }
                 } else {
-                    const result = (fn as (...a: unknown[]) => unknown)(
-                        ...sliceActionArgs(args, acceptedArgs)
-                    );
+                    const callArgs = sliceActionArgs(args, acceptedArgs);
+                    // Concurrent observer continuations need their own priority
+                    // context; later invocations must not mutate that context.
+                    const result = observers && priorityAls
+                        ? priorityAls.run([...(priorityAls.getStore() ?? []), priority], () => fn(...callArgs))
+                        : fn(...callArgs);
                     if (isThenable(result)) {
-                        reportSyncThenable(result, name, false);
+                        if (observers) {
+                            asynchronous = true;
+                            observers.pending.push(Promise.resolve(result).catch(error => {
+                                recordError(name);
+                                logCallbackError(error, name, false);
+                            }).then(() => { active!.delete(name); }));
+                        } else {
+                            reportSyncThenable(result, name, false);
+                        }
                     }
                 }
             } catch (error) {
                 recordError(name);
                 logCallbackError(error, name, isFilter);
             } finally {
+                if (!asynchronous) active?.delete(name);
                 recordTiming(name, performance.now() - start);
             }
         }
@@ -650,17 +673,18 @@ export function createHookEngineV2(
         args: unknown[],
         isFilter: boolean,
         initialValue?: unknown,
+        observers?: ActionObserverDispatch,
     ): unknown {
         const firstPriority =
             callbacks[0]?.priority ?? DEFAULT_PRIORITY;
         if (priorityAls) {
             return priorityAls.run(alsSeed(firstPriority), () =>
-                runSyncBody(callbacks, name, args, isFilter, initialValue)
+                runSyncBody(callbacks, name, args, isFilter, initialValue, observers)
             );
         }
         currentPriorityStack.push(firstPriority);
         try {
-            return runSyncBody(callbacks, name, args, isFilter, initialValue);
+            return runSyncBody(callbacks, name, args, isFilter, initialValue, observers);
         } finally {
             currentPriorityStack.pop();
         }
@@ -779,6 +803,11 @@ export function createHookEngineV2(
                 return;
             }
             callSync(callbacks, name, args, false);
+        },
+        _dispatchActionObservers(name, args) {
+            const pending: Promise<unknown>[] = [];
+            callSync(records.matching('action', name), name, args, false, undefined, { active: activeObservers, pending });
+            return Promise.all(pending).then(() => undefined);
         },
         hasFilter(name?: string, fn?: HookFn) {
             return records.has('filter', name, fn);

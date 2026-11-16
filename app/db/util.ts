@@ -13,7 +13,7 @@
  */
 import type { ZodTypeAny, infer as ZodInfer } from 'zod';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
-import type { Or3DB } from './client';
+import { logicalStoreName, type Or3DB } from './client';
 
 /**
  * Purpose:
@@ -103,7 +103,7 @@ export function getWriteTxTableNames(
     options: WriteTxTableNamesOptions = {}
 ): string[] {
     const tableList = Array.isArray(db.tables) ? db.tables : [];
-    const existing = new Set(tableList.map((table) => table.name));
+    const existing = new Set(tableList.map((table) => logicalStoreName(table.name)));
     const names = new Set<string>(
         Array.isArray(primary) ? primary : [primary]
     );
@@ -122,5 +122,6 @@ export function getWriteTxTableNames(
         names.add('tombstones');
     }
 
+    if (existing.has('sync_state')) names.add('sync_state');
     return [...names];
 }

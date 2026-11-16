@@ -227,3 +227,21 @@ export async function validateCanonicalBackupReferences(directory: string, env: 
     if (result.contract !== 1 || result.complete !== true || !Number.isSafeInteger(result.liveAttachments) || result.liveAttachments < 0) throw new Error('Offline canonical backup reference inspection did not complete.');
   });
 }
+
+/** An older inspector/partial audit must never be interpreted as certification. */
+export function assertSyncSemanticCertification(output: string, expectedHistoryIncarnation?: string) {
+  let result: { contract?: unknown; complete?: unknown; healthy?: unknown; historyIncarnation?: unknown } | null;
+  try { result = JSON.parse(output) as typeof result; }
+  catch { throw new Error('Sync semantic certification is unavailable or malformed; a qualified target image is required.'); }
+  if (result?.contract !== 1 || result.complete !== true || result.healthy !== true || expectedHistoryIncarnation !== undefined && result.historyIncarnation !== expectedHistoryIncarnation) {
+    throw new Error('Sync semantic certification failed or did not complete; public sync startup is refused.');
+  }
+}
+
+/** Authenticated archive bytes are extracted into scratch and never repaired. */
+export async function validateBackupSyncSemantics(directory: string, env: Record<string, string>, backupPath: string) {
+  await withBackupHelper(directory, env.OR3_IMAGE, env, { network: 'none' }, async helper => {
+    await helper.loadSqlite(join(backupPath, 'data.tgz'));
+    assertSyncSemanticCertification(await helper.exec(['sh', '-c', NODE, 'or3-backup-inspection', INSPECTOR, 'sync']));
+  });
+}

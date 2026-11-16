@@ -1,3 +1,4 @@
+import { CLOUD_MUTATION_INTENT } from '~~/shared/sync/types';
 import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
 import { captureChatMediaScope } from '~/utils/chat/media-scope';
 import { computeHashHex } from '~/utils/hash';
@@ -59,7 +60,7 @@ export async function prepareCloudAttachmentReferences(body: OpenRouterRequestBo
     let eligible: number[] = [];
     try {
         const response = await fetch('/api/storage/chat-attachment-capability', { method: 'POST', credentials: 'include', signal: controller.signal,
-            headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' },
+            headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT },
             body: JSON.stringify({ files: candidates.map(({ hash, storageId, mime, size }) => ({ hash, storageId, mime, size })) }) });
         if (response.ok) {
             const result: unknown = await response.json();

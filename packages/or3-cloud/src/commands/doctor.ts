@@ -54,6 +54,12 @@ export async function doctorCommand(directory: string) {
     }
   }
   if (state) {
+    if (state.syncHistory?.certification === 'legacy-snapshot') {
+      console.log('⚠ Application uses a restored legacy snapshot; incarnation protection unavailable. Re-upgrade with this exact CLI; keep source and abandoned-history backups.');
+    } else if (state.syncHistory && state.syncHistory.certification !== 'certified') {
+      failures.push(`Sync history is ${state.syncHistory.certification}; sync recovery is not certified.`);
+      console.log(`✗ Sync history: ${state.syncHistory.certification}`);
+    }
     try {
       if (
         env.OR3_VERSION !== state.appVersion ||

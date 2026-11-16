@@ -1,9 +1,11 @@
+import { getShutdownRuntime } from '../utils/shutdown/runtime';
 import { defineNitroPlugin } from 'nitropack/runtime';
 import { runAutomaticStorageCleanupBatch } from '../utils/storage/reclamation';
 
 /** Opt-in, bounded maintenance. Canonical claims survive process restart; the
  * scan restarts at its beginning without reopening a deleted generation. */
 export default defineNitroPlugin(nitro => {
+    if (getShutdownRuntime().controller.validationOnly()) return;
     const workspaces = [...new Set((process.env.OR3_STORAGE_RETENTION_WORKSPACES ?? '').split(',').map(value => value.trim()).filter(Boolean))];
     if (!workspaces.length) return;
     if (workspaces.length > 100 || workspaces.some(id => !/^[A-Za-z0-9_-]{1,128}$/.test(id))) throw new Error('Invalid OR3_STORAGE_RETENTION_WORKSPACES (maximum 100 workspace IDs)');

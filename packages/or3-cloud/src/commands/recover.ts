@@ -1,6 +1,6 @@
 import { restoreVolumeArchive } from '../backup/archive';
-import { cleanupJournaledPartialBackup, inspectUnclaimedBackupArtifacts } from '../backup/create';
-import { readManifest, resolveBackup } from '../backup/manifests';
+import { createPreMutationSnapshot, cleanupJournaledPartialBackup, inspectUnclaimedBackupArtifacts } from '../backup/create';
+import { readManifest, resolveBackup, recordedBackupPath } from '../backup/manifests';
 import { restorePreMutationSnapshot } from '../backup/restore';
 import { assertVaultVolumesExist } from '../backup/vault';
 import { boolFlag, type Flags } from '../cli/args';
@@ -8,7 +8,7 @@ import { applyCredentialReset } from '../credentials/reset';
 import { emitOperationResult, type Mode, type OperationOutcome } from '../deployment/contracts';
 import { assertLegacyManagedProfile, parseEnv, secretValues, serializeEnv, withoutProvisioningCredentials } from '../deployment/env';
 import { observationFindings, observeDeployment } from '../deployment/observation';
-import { deploymentPaths } from '../deployment/paths';
+import { backupDirectory, deploymentPaths } from '../deployment/paths';
 import {
   commitPreMutationRecovery,
   decideRecoveryAction,
@@ -30,7 +30,7 @@ import { imageDigest, pullAndRequireImage } from '../runtime/images';
 import { managedVaultEnabled, startProject, stopProject } from '../runtime/project';
 import { provisionManagedCredentials } from '../runtime/verification';
 import { readText, writeSecure } from '../util/fs';
-import { redact } from '../util/primitives';
+import { id, redact } from '../util/primitives';
 
 function assertRecoverFlags(flags: Flags) {
   const dryRun = boolFlag(flags, 'dry-run');
@@ -54,6 +54,8 @@ export async function recoverCommand(directory: string, flags: Flags = {}) {
     const state = observation.state;
     const decision = state ? decideRecoveryAction(state) : { action: 'none' as const, detail: 'Managed state is unreadable; only diagnosis is available.' };
     const pending = state?.incompleteOperation;
+    const snapshot = state && pending && ['update','restore','rollback'].includes(pending.operation)
+      ? await recordedBackupPath(observation.directory, pending).catch(() => undefined) : undefined;
     const payload = {
       schemaVersion: 1,
       kind: 'or3-recover-preview',
@@ -63,6 +65,8 @@ export async function recoverCommand(directory: string, flags: Flags = {}) {
       inProgress: observation.changing,
       source: state ? { appVersion: state.appVersion, image: state.image, imageDigest: state.imageDigest } : null,
       target: pending?.targetVersion ? { appVersion: pending.targetVersion, image: pending.targetImage ?? null, imageDigest: pending.targetImageDigest ?? null } : null,
+      snapshot: snapshot ? { backupId: snapshot.manifest.backupId, createdAt: snapshot.manifest.createdAt, appVersion: snapshot.manifest.appVersion, imageDigest: snapshot.manifest.imageDigest } : null,
+      abandonedIncarnation: state?.syncHistory?.historyIncarnation ?? null,
       phase: pending?.phase ?? null,
       operation: pending?.operation ?? null,
       decision,
@@ -76,6 +80,7 @@ export async function recoverCommand(directory: string, flags: Flags = {}) {
       console.log(`  target: ${payload.target ? `OR3 ${payload.target.appVersion}` : 'none'}`);
       console.log(`  operation: ${payload.operation ?? 'none'}${payload.phase ? ` (${payload.phase})` : ''}`);
       console.log(`  action: ${decision.action} — ${decision.detail}`);
+      if (payload.snapshot) console.log(`  snapshot: ${payload.snapshot.backupId} (${payload.snapshot.createdAt}), OR3 ${payload.snapshot.appVersion} ${payload.snapshot.imageDigest}`);
       if (payload.dataLoss) console.log('  data loss: yes — restoring the recorded snapshot discards writes made after it.');
       for (const finding of payload.findings) console.log(`  [${finding.severity}] ${finding.code}: ${finding.message}`);
       console.log('\nPreview only: nothing was changed.');
@@ -163,6 +168,27 @@ async function runRecovery(
   // target or restart the source, either of which changes a live adoption.
   if (pending.operation === 'adopt' && requiresExplicitRestore && !explicitRestore) {
     throw new Error('The adoption target may contain newer writes. Nothing was changed. Review recover --dry-run; recover --restore --yes explicitly discards target writes after the source backup.');
+  }
+  if (explicitRestore && ['update','restore','rollback'].includes(pending.operation)
+    && !['prepared','snapshot-created'].includes(pending.phase ?? '')) {
+    if (pending.historyReset?.kind === 'legacy-snapshot' && ['starting-target','starting-previous'].includes(pending.phase ?? '')) {
+      throw new Error('Legacy startup may have served writes; repeated destructive recovery is unsupported. Preserve the journal and inspect/export current data.');
+    }
+    // Every invocation can follow a restored runtime that admitted newer writes.
+    // An earlier authenticated snapshot cannot preserve those later bytes.
+    {
+      const backupId = id('backup-before-recovery');
+      await updatePending(loaded.directory, loaded.state, { abandonedBackupId: backupId, abandonedBackupPath: backupDirectory(loaded.directory, backupId) });
+      const current = stateFromEnv(loaded.directory, loaded.env, loaded.state.mode, loaded.state.lastSuccessfulOperation, await imageDigest(loaded.env.OR3_IMAGE));
+      await createPreMutationSnapshot(loaded.directory, current, loaded.env, backupId);
+    }
+    // Re-authenticate a completed safety artifact on every retry. A partial
+    // capture cannot grant permission to overwrite current bytes.
+    await readManifest(pending.abandonedBackupPath!, loaded.directory);
+    loaded.state.pinnedHistoryBackups = [...new Set([...(loaded.state.pinnedHistoryBackups ?? []), pending.abandonedBackupId!, ...(pending.backupId ? [pending.backupId] : []), ...(pending.previousBackupId ? [pending.previousBackupId] : [])])];
+    await updatePending(loaded.directory, loaded.state, { explicitLossConsent: true });
+    const source = await recordedBackupPath(loaded.directory, pending);
+    report(`Destructive recovery discards ALL server changes after ${source.manifest.createdAt}; restores ${source.manifest.appVersion} (${source.manifest.imageDigest}); current bytes preserved as ${pending.abandonedBackupId}.`);
   }
   try {
     if (pending.operation === 'backup') {

@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, openAsBlob } from 'node:fs';
 import { scanCloudBackup } from '../../shared/storage/workspace-archive';
-import { rm, stat, writeFile } from 'node:fs/promises';
+import { readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 
@@ -15,7 +15,12 @@ const storageProvider = process.env.OR3_STORAGE_PROVIDER === 's3' ? 's3' : 'fs';
 test.setTimeout(180_000);
 test.beforeAll(() => expect(process.env.OR3_FILE_BACKUP_E2E_DIR).toMatch(/^\/tmp\/or3-file-backup-cloud-/));
 
-async function start(page: Page) {
+async function start(page: Page, beforeBind?: (context: { clientUrl: string; workspaceId: string; headers: Record<string, string>; syncHistory: Record<string, string>; releaseBind(): void }) => Promise<void>) {
+    let releaseBind!: () => void;
+    if (beforeBind) {
+        const gate = new Promise<void>(resolve => { releaseBind = resolve; });
+        await page.context().route('**/api/sync/snapshot', async route => { await gate; await route.continue().catch(() => {}); });
+    }
     const origin = String(test.info().project.use.baseURL);
     const headers = { origin, 'x-or3-cloud-intent': 'mutation' };
     const response = await page.request.post('/api/basic-auth/sign-in', { headers,
@@ -27,16 +32,45 @@ async function start(page: Page) {
     const activated = await page.request.post('/api/workspaces/active', { headers, data: { id: target } });
     expect(activated.ok(), await activated.text()).toBe(true);
     const source = await (await page.request.get('/api/auth/session')).json();
+    const discovery = await page.request.post('/api/sync/snapshot', { headers, data: { scope: { workspaceId: target }, pageSize: 1,
+        historyIncarnation: null, historyIncarnationCapability: 'incarnation-v1', unavailableRecordCapability: 'unavailable-v1',
+        fileKindCapability: 'v1', workspaceItemCapability: 'v1' } });
+    expect(discovery.ok(), await discovery.text()).toBe(true);
+    const historyIncarnation = (await discovery.json()).historyIncarnation;
+    expect(historyIncarnation).toMatch(/^[\x00-\x7f]{1,128}$/);
+    const syncHistory = { historyIncarnation, historyIncarnationCapability: 'incarnation-v1',
+        unavailableRecordCapability: 'unavailable-v1', storedRecordCapability: 'stored-record-v1' };
     const requests: string[] = [];
     page.on('request', request => requests.push(request.url()));
     await page.goto('/');
     await expect.poll(() => requests.find(url => /\/db\/client\.ts(?:\?|$)/.test(url)), { timeout: 30_000 }).toBeTruthy();
     const clientUrl = requests.find(url => /\/db\/client\.ts(?:\?|$)/.test(url))!;
-    await expect.poll(() => page.evaluate(async url => (await import(url)).getActiveWorkspaceId(), clientUrl), { timeout: 30_000 }).toBe(source.session.workspace.id);
+    if (beforeBind) {
+        await expect.poll(() => page.evaluate(async ({ url, target }) => {
+            const client = await import(url);
+            const { tryGetHooks } = await import(new URL('../core/hooks/useHooks.ts', url).href);
+            return client.getActiveWorkspaceId() === target && Boolean(tryGetHooks());
+        }, { url: clientUrl, target }), { timeout: 30_000 }).toBe(true);
+        try { await beforeBind({ clientUrl, workspaceId: target, headers, syncHistory, releaseBind }); } finally { releaseBind(); }
+    }
+    await expect.poll(async () => {
+        try {
+            return await page.evaluate(async ({ url, workspaceId, historyIncarnation }) => {
+                const client = await import(url);
+                if (client.getActiveWorkspaceId() !== workspaceId) return false;
+                const db = client.getDb();
+                const guard = await db.sync_state.get('sync_history');
+                return guard?.phase === 'ready' && guard.historyIncarnation === historyIncarnation && db.syncHistoryAtOpen === historyIncarnation;
+            }, { url: clientUrl, workspaceId: source.session.workspace.id, historyIncarnation });
+        } catch (error) {
+            if (/Execution context was destroyed/.test(String(error))) return false;
+            throw error;
+        }
+    }, { timeout: 30_000 }).toBe(true);
     const admin = await page.request.post('/api/admin/auth/login', { headers: { origin, 'x-or3-admin-intent': 'admin' },
         data: { username: 'backup-audit', password: 'DisposableAdminSuite!123' } });
     expect(admin.ok(), await admin.text()).toBe(true);
-    return { origin, headers, workspaceId: source.session.workspace.id as string, clientUrl };
+    return { origin, headers, workspaceId: source.session.workspace.id as string, clientUrl, syncHistory };
 }
 
 test('admin limits, interrupted direct upload, and verified retention preserve originals', async ({ page }, info) => {
@@ -92,8 +126,10 @@ test('admin limits, interrupted direct upload, and verified retention preserve o
         const downloaded = await queue.ensureDownloadedBlob(meta.hash);
         const recent = await db.file_blobs.get(meta.hash);
         return { hash: meta.hash, keptPending, evicted, redownload: await downloaded.text(), refreshed: recent.cache_accessed_at > old,
-            bytes: recent.blob.size, originBudget: policy.maxCacheBytes };
+            bytes: recent.blob.size, originBudget: policy.maxCacheBytes, held: await db.sync_quarantine.toArray() };
     }, { url: clientUrl, workspaceId, policy });
+    await writeFile(info.outputPath('retention-before-assertion.json'), JSON.stringify(receipt, null, 2));
+    expect(receipt.held.filter((entry: { variant?: string }) => entry.variant === 'history_reset')).toEqual([]);
     expect(receipt).toMatchObject({ keptPending: true, evicted: true, redownload: 'original bytes for verified retention', refreshed: true });
     const other = await page.context().newPage();
     await other.goto('/');
@@ -140,9 +176,172 @@ test('admin limits, interrupted direct upload, and verified retention preserve o
     expect((await (await page.request.get(`/api/storage/policy?workspaceId=${workspaceId}`)).json()).retentionDays).toBe(22);
 });
 
+test('first binding preserves offline authorship across restart and a second tab without false holds', async ({ page }, info) => {
+    let other: Page | undefined;
+    const before: unknown[] = [];
+    const { clientUrl, workspaceId } = await start(page, async context => {
+        const remoteOpId = randomUUID();
+        const remote = await page.request.post('/api/sync/push', { headers: context.headers, data: { ...context.syncHistory,
+            scope: { workspaceId: context.workspaceId }, ops: [{ id: remoteOpId, tableName: 'kv', pk: 'kv:prebind-conflict', operation: 'put',
+                payload: { id: 'kv:prebind-conflict', name: 'prebind-conflict', value: 'server wins', deleted: false, created_at: 1, updated_at: 1, clock: 100 },
+                stamp: { opId: remoteOpId, deviceId: 'fixture', clock: 100, hlc: '100:0:fixture' }, createdAt: 1, attempts: 0, status: 'pending' }] } });
+        expect(remote.ok(), await remote.text()).toBe(true);
+        before.push(await page.evaluate(async url => {
+            const client = await import(url); const db = client.getDb();
+            const { getWriteTxTableNames } = await import(new URL('./util.ts', url).href);
+            const { setKvByName } = await import(new URL('./kv.ts', url).href);
+            const thread = { id: 'offline-thread', title: 'Offline', status: 'ready', pinned: false, forked: false,
+                deleted: false, created_at: 1, updated_at: 1, clock: 1 };
+            await db.transaction('rw', getWriteTxTableNames(db, ['threads', 'messages']), async () => {
+                await db.threads.put(thread);
+                await db.messages.put({ id: 'offline-message', thread_id: thread.id, role: 'user', index: 0,
+                    data: { content: 'offline conversation' }, clock: 1, deleted: false, created_at: 1, updated_at: 1 });
+                await db.messages.put({ id: 'offline-stream', thread_id: thread.id, role: 'assistant', index: 1, pending: true,
+                    data: { content: 'saved streaming progress', generation_lease_id: 'offline-lease', generation_heartbeat_at: Date.now() },
+                    clock: 1, deleted: false, created_at: 1, updated_at: 1 });
+            });
+            await setKvByName('prebind-conflict', 'local loses', db);
+            await setKvByName('prebind-edit', 'before edit', db); await setKvByName('prebind-edit', 'after edit', db);
+            await setKvByName('prebind-delete', 'local row', db);
+            await db.transaction('rw', getWriteTxTableNames(db, 'kv'), () => db.kv.delete('kv:prebind-delete'));
+            return { guard: await db.sync_state.get('sync_history'), ops: await db.pending_ops.toArray(),
+                stream: await db.messages.get('offline-stream') };
+        }, context.clientUrl));
+        expect((before[0] as any).guard.firstBindEligible).toBe(true);
+        await page.reload();
+        other = await page.context().newPage(); await other.goto('/');
+        await expect.poll(async () => other!.evaluate(async url => {
+            const db = (await import(url)).getDb();
+            return { eligible: (await db.sync_state.get('sync_history'))?.firstBindEligible,
+                content: (await db.messages.get('offline-message'))?.data?.content };
+        }, context.clientUrl)).toEqual({ eligible: true, content: 'offline conversation' });
+        await other.evaluate(async url => {
+            const db = (await import(url)).getDb();
+            await (await import(new URL('./kv.ts', url).href)).setKvByName('during-staging', 'second tab edit', db);
+        }, context.clientUrl);
+        // Abort the actual native install transaction in either possible lock
+        // owner, then restart both documents. Only the injected fault is mocked.
+        for (const target of [page, other]) await target.evaluate(async url => {
+            const db = (await import(url)).getDb();
+            const root = window as any;
+            db.sync_state.hook('creating', (_key: string, row: any) => {
+                if (row.id === 'sync_history' && row.phase === 'ready') {
+                    root.__firstBindQuota = true;
+                    throw new DOMException('Injected install quota', 'QuotaExceededError');
+                }
+            });
+        }, context.clientUrl);
+        context.releaseBind();
+        await expect.poll(async () => (await Promise.all([page, other!].map(target => target.evaluate(() => Boolean((window as any).__firstBindQuota))))).some(Boolean),
+            { timeout: 30_000 }).toBe(true);
+        before.push(await page.evaluate(async url => {
+            const db = (await import(url)).getDb();
+            return { afterAbort: true, guard: await db.sync_state.get('sync_history'),
+                ops: await db.pending_ops.toArray(), stream: await db.messages.get('offline-stream') };
+        }, context.clientUrl));
+        expect((before[1] as any).guard.firstBindEligible).toBe(true);
+        expect((before[1] as any).stream.data.content).toBe('saved streaming progress');
+        await other.close(); other = undefined;
+        await page.reload();
+    });
+    let receipt: unknown;
+    await expect.poll(async () => receipt = await page.evaluate(async url => {
+        const db = (await import(url)).getDb();
+        return { guard: await db.sync_state.get('sync_history'), held: await db.sync_quarantine.toArray(),
+            active: await db.pending_ops.filter((op: { status: string }) => !['applied', 'discarded'].includes(op.status)).count(),
+            conflict: (await db.kv.get('kv:prebind-conflict'))?.value,
+            edit: (await db.kv.get('kv:prebind-edit'))?.value, deleted: await db.kv.get('kv:prebind-delete'),
+            during: (await db.kv.get('kv:during-staging'))?.value, messages: await db.messages.toArray() };
+    }, clientUrl), { timeout: 30_000 }).toMatchObject({ guard: { firstBindEligible: false, phase: 'ready' }, held: [], active: 0,
+        conflict: 'server wins', edit: 'after edit', during: 'second tab edit', deleted: undefined,
+        messages: expect.arrayContaining([expect.objectContaining({ id: 'offline-message' }),
+            expect.objectContaining({ id: 'offline-stream', pending: true, data: expect.objectContaining({ content: 'saved streaming progress' }) })]) });
+    const snapshot = await page.request.post('/api/sync/snapshot', { headers: { origin: String(info.project.use.baseURL), 'x-or3-cloud-intent': 'mutation' }, data: { scope: { workspaceId }, historyIncarnation: null,
+        historyIncarnationCapability: 'incarnation-v1', unavailableRecordCapability: 'unavailable-v1', fileKindCapability: 'v1', workspaceItemCapability: 'v1', pageSize: 200 } });
+    expect(snapshot.ok(), await snapshot.text()).toBe(true);
+    const installed = await snapshot.json();
+    expect(installed.items).toEqual(expect.arrayContaining([expect.objectContaining({ tableName: 'threads', pk: 'offline-thread' }),
+        expect.objectContaining({ tableName: 'messages', pk: 'offline-message' }), expect.objectContaining({ tableName: 'kv', pk: 'kv:theme_selection' }),
+        expect.objectContaining({ tableName: 'kv', pk: 'kv:prebind-delete', kind: 'tombstone' })]));
+    await writeFile(info.outputPath('first-bind-receipt.json'), JSON.stringify({ before, installed, receipt }, null, 2));
+    await other?.close();
+});
+
+test('legacy native migration preserves unknown intent through blocked and aborted upgrades', async ({ page }, info) => {
+    const { clientUrl } = await start(page);
+    const schema = JSON.parse(await readFile('app/core/sync/__tests__/fixtures/legacy-v31-schema.json', 'utf8'));
+    const receipt = await page.evaluate(async ({ url, schema }) => {
+        const { Or3DB } = await import(url);
+        const Dexie = Object.getPrototypeOf(Or3DB);
+        const { HookBridge: LegacyHookBridge } = await import(new URL('../core/sync/__tests__/fixtures/legacy-v31-hook-bridge.ts', url).href);
+        const { SnapshotStager } = await import(new URL('../core/sync/snapshot-applier.ts', url).href);
+        const name = `h14-legacy-${crypto.randomUUID()}`;
+        const old = new Dexie(name); old.version(31).stores(schema);
+        old.on('versionchange', () => false);
+        const bridge = new LegacyHookBridge(old); bridge.start({ coalesceUnsent: true });
+        const current = new Or3DB(name);
+        const bytes = new Blob(['legacy attachment bytes']);
+        const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await bytes.arrayBuffer())), b => b.toString(16).padStart(2, '0')).join('');
+        const row = { id: 'legacy', name: 'legacy', value: 'before upgrade', deleted: false,
+            clock: 1, created_at: 1, updated_at: 1 };
+        const oldWrite = (value: string) => old.transaction('rw', ['kv', 'pending_ops', 'tombstones', 'sync_state'],
+            () => old.table('kv').put({ ...row, value }));
+        const remove = IDBDatabase.prototype.deleteObjectStore;
+        let blocked = false, aborted = false;
+        try {
+            await old.open(); await oldWrite(row.value);
+            await old.table('file_blobs').put({ hash, blob: bytes });
+            old.on('versionchange', () => false);
+            const waiting = new Promise<void>(resolve => current.on('blocked', () => { blocked = true; resolve(); }));
+            IDBDatabase.prototype.deleteObjectStore = function(store: string) {
+                if (store === 'current_pending_ops') throw new DOMException('Injected native rename quota', 'QuotaExceededError');
+                return remove.call(this, store);
+            };
+            const upgrading = current.open().then(() => null, (error: Error) => error.name);
+            await waiting;
+            await oldWrite('written while blocked');
+            const original = { row: await old.table('kv').get('legacy'), ops: await old.table('pending_ops').toArray() };
+            old.close();
+            aborted = (await upgrading) !== null;
+            IDBDatabase.prototype.deleteObjectStore = remove;
+            await old.open();
+            const afterAbort = { row: await old.table('kv').get('legacy'), ops: await old.table('pending_ops').toArray(), version: old.backendDB().version,
+                bytes: await (await old.table('file_blobs').get(hash)).blob.text() };
+            old.close(); await current.open();
+            const migrated = { guard: await current.sync_state.get('sync_history'), ops: await current.pending_ops.toArray() };
+            const stager = new SnapshotStager(current, { workspaceId: name });
+            await stager.start();
+            await stager.appendPage({ historyIncarnation: 'I', workspaceId: name, snapshotId: 'native', highWatermark: 0, items: [], nextPageToken: null });
+            await stager.apply('native');
+            const state = async () => ({ guard: await current.sync_state.get('sync_history'), held: await current.sync_quarantine.toArray(),
+                ops: await current.pending_ops.toArray(), rows: await current.kv.toArray(), bytes: await (await current.file_blobs.get(hash)).blob.text() });
+            const installed = await state();
+            await old.open(); await oldWrite('stale reopened writer');
+            await old.table('sync_state').put({ id: 'sync_history', firstBindEligible: true, cursor: 0 });
+            await current.open();
+            return { blocked, aborted, hash, original, afterAbort, migrated, installed, afterOldWrite: await state() };
+        } finally {
+            IDBDatabase.prototype.deleteObjectStore = remove;
+            bridge.stop(); old.close(); current.close(); await Dexie.delete(name);
+        }
+    }, { url: clientUrl, schema });
+    expect(receipt).toMatchObject({ blocked: true, aborted: true, afterAbort: { version: 310, bytes: 'legacy attachment bytes' } });
+    expect(receipt.afterAbort.row).toEqual(receipt.original.row);
+    expect(receipt.afterAbort.ops).toEqual(receipt.original.ops);
+    expect(receipt.migrated.guard?.firstBindEligible).not.toBe(true);
+    expect(receipt.migrated.ops).toEqual(receipt.original.ops);
+    expect(receipt.installed.guard).toMatchObject({ firstBindEligible: false, phase: 'ready', historyIncarnation: 'I' });
+    expect(receipt.installed.ops).toEqual([]);
+    expect(receipt.installed.held.length).toBeGreaterThan(0);
+    expect(receipt.installed.held).toEqual(expect.arrayContaining(receipt.original.ops.map((op: unknown) => expect.objectContaining({ variant: 'history_reset', op }))));
+    expect(receipt.afterOldWrite).toEqual(receipt.installed);
+    expect(receipt.hash).toBe(createHash('sha256').update('legacy attachment bytes').digest('hex'));
+    await writeFile(info.outputPath('native-migration-receipt.json'), JSON.stringify(receipt, null, 2));
+});
+
 test('complete cloud backup restores independently of browser cache', async ({ page }, info) => {
     test.setTimeout(15 * 60_000);
-    const { workspaceId, clientUrl, origin, headers } = await start(page);
+    const { workspaceId, clientUrl, origin, headers, syncHistory } = await start(page);
     const large = process.env.OR3_BACKUP_LARGE_E2E === 'true';
     const count = large ? 16 : 3;
     const size = large ? 128 * 1024 * 1024 : 2 * 1024 * 1024;
@@ -175,7 +374,7 @@ test('complete cloud backup restores independently of browser cache', async ({ p
         } });
         expect(commit.ok(), await commit.text()).toBe(true);
         const id = randomUUID();
-        const saved = await page.request.post('/api/sync/push', { headers, data: { scope: { workspaceId }, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [{
+        const saved = await page.request.post('/api/sync/push', { headers, data: { scope: { workspaceId }, ...syncHistory, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [{
             id, tableName: 'file_meta', operation: 'put', pk: hash, payload: { hash, name: `original-${index}.txt`, kind: 'file', mime_type: 'text/plain', size_bytes: size,
                 storage_id: grant.storageId, storage_provider_id: storageProvider, ref_count: 0, clock: 1, created_at: 1, updated_at: 1, deleted: false },
             stamp: { deviceId: 'backup-e2e', opId: id, clock: 1, hlc: `${String(Date.now()).padStart(15, '0')}:000000:backup-e2e` }, createdAt: Date.now(), attempts: 0, status: 'pending',
@@ -187,7 +386,7 @@ test('complete cloud backup restores independently of browser cache', async ({ p
         content: JSON.stringify({ type: 'doc', content: [{ type: 'or3Image', attrs: { hash: hashes[0] } }] }),
         file_hashes: JSON.stringify(hashes.slice(0, 2)), clock: 1, created_at: 1, updated_at: 1, deleted: false };
     const referenceId = randomUUID();
-    const referenceSaved = await page.request.post('/api/sync/push', { headers, data: { scope: { workspaceId }, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [{
+    const referenceSaved = await page.request.post('/api/sync/push', { headers, data: { scope: { workspaceId }, ...syncHistory, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [{
         id: referenceId, tableName: 'posts', operation: 'put', pk: referencePost.id, payload: referencePost,
         stamp: { deviceId: 'backup-e2e', opId: referenceId, clock: 1, hlc: `${String(Date.now()).padStart(15, '0')}:000000:backup-e2e` }, createdAt: Date.now(), attempts: 0, status: 'pending',
     }] } });
@@ -195,7 +394,7 @@ test('complete cloud backup restores independently of browser cache', async ({ p
     expect((await referenceSaved.json()).results[0].applied).toBe(true);
     const trashHash = hashes.at(-1)!;
     const trashId = randomUUID();
-    const trashed = await page.request.post('/api/sync/push', { headers, data: { scope: { workspaceId }, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [{
+    const trashed = await page.request.post('/api/sync/push', { headers, data: { scope: { workspaceId }, ...syncHistory, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [{
         id: trashId, tableName: 'file_meta', operation: 'delete', pk: trashHash,
         stamp: { deviceId: 'backup-e2e', opId: trashId, clock: 2, hlc: `${String(Date.now()).padStart(15, '0')}:000001:backup-e2e` }, createdAt: Date.now(), attempts: 0, status: 'pending',
     }] } });
@@ -257,7 +456,7 @@ test('complete cloud backup restores independently of browser cache', async ({ p
     expect(restored.peakHeapBytes).toBeLessThan(384 * 1024 * 1024);
     expect(restored.maxUiGapMs).toBeLessThan(1000);
     const snapshot = await page.request.post('/api/sync/snapshot', { headers, data: { scope: { workspaceId: restored.workspaceId }, pageSize: 200,
-        fileKindCapability: 'v1', workspaceItemCapability: 'v1', tables: ['file_meta'] } });
+        ...syncHistory, fileKindCapability: 'v1', workspaceItemCapability: 'v1', tables: ['file_meta'] } });
     expect(snapshot.ok(), await snapshot.text()).toBe(true);
     const items = (await snapshot.json()).items;
     const rows = items.filter((item: { kind: string }) => item.kind === 'row');

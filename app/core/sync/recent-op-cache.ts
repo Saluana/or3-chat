@@ -26,6 +26,11 @@ const MAX_RECENT_OPS = 2_000;
 
 const recentOps = new Map<string, number>();
 
+type RecentOpContext = { dbName?: string; historyIncarnation?: string | null };
+function key(opId: string, context?: RecentOpContext): string {
+    return JSON.stringify([context?.dbName ?? null, context?.historyIncarnation ?? null, opId]);
+}
+
 function prune(now: number): void {
     for (const [opId, ts] of recentOps) {
         if (now - ts > RECENT_OP_TTL_MS) {
@@ -51,10 +56,10 @@ function prune(now: number): void {
  * - No-op for null/undefined/empty opIds
  * - Cache is in-memory only and resets on reload
  */
-export function markRecentOpId(opId: string | undefined | null): void {
+export function markRecentOpId(opId: string | undefined | null, context?: RecentOpContext): void {
     if (!opId) return;
     const now = Date.now();
-    recentOps.set(opId, now);
+    recentOps.set(key(opId, context), now);
     prune(now);
     if (import.meta.dev) {
         console.debug('[sync] recentOp mark', { opId, size: recentOps.size });
@@ -65,9 +70,9 @@ export function markRecentOpId(opId: string | undefined | null): void {
  * Purpose:
  * Drop an opId from the echo filter so a later remote winner can apply.
  */
-export function unmarkRecentOpId(opId: string | undefined | null): void {
+export function unmarkRecentOpId(opId: string | undefined | null, context?: RecentOpContext): void {
     if (!opId) return;
-    recentOps.delete(opId);
+    recentOps.delete(key(opId, context));
 }
 
 /**
@@ -81,13 +86,13 @@ export function unmarkRecentOpId(opId: string | undefined | null): void {
  * Constraints:
  * - Returns false for null/undefined/empty opIds
  */
-export function isRecentOpId(opId: string | undefined | null): boolean {
+export function isRecentOpId(opId: string | undefined | null, context?: RecentOpContext): boolean {
     if (!opId) return false;
     const now = Date.now();
-    const ts = recentOps.get(opId);
+    const ts = recentOps.get(key(opId, context));
     if (!ts) return false;
     if (now - ts > RECENT_OP_TTL_MS) {
-        recentOps.delete(opId);
+        recentOps.delete(key(opId, context));
         return false;
     }
     if (import.meta.dev) {
@@ -95,3 +100,6 @@ export function isRecentOpId(opId: string | undefined | null): boolean {
     }
     return true;
 }
+
+/** A history switch invalidates every old echo-suppression obligation. */
+export function clearRecentOpIds(): void { recentOps.clear(); }

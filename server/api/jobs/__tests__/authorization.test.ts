@@ -17,12 +17,13 @@ import { runMigrations } from '~~/node_modules/or3-provider-sqlite/dist/runtime/
 import { SqliteBackgroundJobProvider } from '~~/node_modules/or3-provider-sqlite/dist/runtime/server/background-jobs/sqlite-provider.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import * as ts from 'typescript';
+import * as zod from 'zod';
 import * as convexValues from 'convex/values';
 import { internalMutationGeneric, internalQueryGeneric } from 'convex/server';
 import { registerSyncGatewayAdapter } from '../../../sync/gateway/registry';
@@ -1001,18 +1002,17 @@ describe('background job workspace authorization at the HTTP boundary', () => {
         const output = ts.transpileModule(packed.files['backgroundJobs.ts']!, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
         type Handler = { _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<unknown> };
         const loaded = { exports: {} as Record<string, Handler> };
-        const resolveImport = (id: string) => {
+        const resolveImport = (id: string, parent = 'backgroundJobs.ts'): unknown => {
             if (id === 'convex/values') return convexValues;
+            if (id === 'zod') return zod;
             if (id === './_generated/server') return { internalMutation: internalMutationGeneric, internalQuery: internalQueryGeneric };
-            if (id === './requestUsage') {
-                const source = packed.files['requestUsage.ts'];
-                if (!source) throw new Error('Missing published requestUsage helper');
-                const helper = { exports: {} };
-                const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-                new Function('require', 'module', 'exports', compiled)(resolveImport, helper, helper.exports);
-                return helper.exports;
-            }
-            throw new Error(`Unexpected published handler import: ${id}`);
+            const path = posix.normalize(posix.join(posix.dirname(parent), `${id}.ts`));
+            const source = id.startsWith('.') ? packed.files[path] : undefined;
+            if (!source) throw new Error(`Unexpected published handler import: ${id}`);
+            const helper = { exports: {} };
+            const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+            new Function('require', 'module', 'exports', compiled)((child: string) => resolveImport(child, path), helper, helper.exports);
+            return helper.exports;
         };
         new Function('require', 'module', 'exports', output)(resolveImport, loaded, loaded.exports);
         const now = Date.now();

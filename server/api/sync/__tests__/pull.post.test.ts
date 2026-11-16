@@ -1,3 +1,5 @@
+// Incarnation negotiation has its own route-boundary suite; retain these tests' original focus.
+vi.mock('../../../utils/sync/history-incarnation', () => ({ requireHistoryCapability: () => {}, checkHistory: async () => undefined, assertHistoryResponse: () => {} }));
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { H3Event } from 'h3';
 
@@ -76,6 +78,24 @@ function makeValidBody() {
 }
 
 describe('POST /api/sync/pull', () => {
+    it('retains a malformed row before covering an all-invalid window and gates old readers', async () => {
+        const handler = (await import('../pull.post')).default;
+        const original = await pullMock();
+        pullMock.mockResolvedValue({ ...original, changes: original.changes.map((row: object) => ({ ...row, payload: { id: 'm1' } })) });
+        const retain = vi.fn().mockResolvedValue({ evidenceRef: 'evidence-5' });
+        getActiveSyncGatewayAdapterMock.mockReturnValue({ pull: pullMock,
+            capabilities: { unavailableRecords: 'v1' }, retainUnavailableRecord: retain });
+        readBodyMock.mockResolvedValue({ ...makeValidBody(), unavailableRecordCapability: 'unavailable-v1' });
+        const page = await handler(makeEvent());
+        expect(page).toMatchObject({ changes: [], nextCursor: 5,
+            unavailable: [{ pk: 'm1', serverVersion: 5, originalKind: 'put', evidenceRef: 'evidence-5' }] });
+        expect(retain).toHaveBeenCalledOnce();
+        retain.mockRejectedValueOnce(new Error('storage failed'));
+        await expect(handler(makeEvent())).rejects.toThrow('storage failed');
+        readBodyMock.mockResolvedValue(makeValidBody());
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 426 });
+    });
+
     beforeEach(() => {
         readBodyMock.mockReset();
         setResponseHeaderMock.mockReset();
@@ -93,7 +113,7 @@ describe('POST /api/sync/pull', () => {
                     tableName: 'messages',
                     pk: 'm1',
                     op: 'put',
-                    payload: { id: 'm1' },
+                    payload: { id: 'm1', thread_id: 't', role: 'user', index: 0, order_key: '1:0:d', deleted: false, created_at: 1, updated_at: 1, clock: 1 },
                     serverVersion: 5,
                     stamp: {
                         clock: 1,
@@ -198,7 +218,7 @@ describe('POST /api/sync/pull', () => {
                     tableName: 'messages',
                     pk: 'm1',
                     op: 'put',
-                    payload: { id: 'm1' },
+                    payload: { id: 'm1', thread_id: 't', role: 'user', index: 0, order_key: '1:0:d', deleted: false, created_at: 1, updated_at: 1, clock: 1 },
                     serverVersion: 5,
                     stamp: {
                         clock: 1,
@@ -263,7 +283,7 @@ describe('POST /api/sync/pull', () => {
     ])('admits %s workspace semantics only to a current reader', async (tableName, payload) => {
         const handler = (await import('../pull.post')).default as (event: H3Event) => Promise<unknown>;
         const response = {
-            changes: [{ tableName, pk: 'item', op: 'put', payload, serverVersion: 6,
+            changes: [{ tableName, pk: 'item', op: 'put', payload: { deleted: false, created_at: 1, updated_at: 1, clock: 1, ...(tableName === 'posts' ? { title: '', content: '', post_type: 'postType' in payload ? payload.postType : 'doc' } : { name: '' }), ...payload }, serverVersion: 6,
                 stamp: { clock: 1, hlc: '1:1:dev', deviceId: 'dev', opId: 'a1b2c3d4-5678-4abc-8def-123456789010' } }],
             nextCursor: 6, hasMore: false, oldestRetainedVersion: 0, requiresSnapshot: false,
         };

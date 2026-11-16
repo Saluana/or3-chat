@@ -1,3 +1,5 @@
+import { requireHistoryCapability, checkHistory, assertHistoryResponse } from '../../utils/sync/history-incarnation';
+import { classifyPullPage } from '../../utils/sync/unavailable-records';
 import { observeSyncRequest } from '../../sync/observations';
 import { hasWorkspaceItemSemantics } from "~~/shared/posts/workspace-item-capability";
 import { requireWorkspaceItemCapability } from "../../utils/sync/workspace-item-capability";
@@ -65,6 +67,7 @@ export default defineEventHandler(async (event) => {
         event,
         MAX_SYNC_PULL_REQUEST_BYTES
     );
+    requireHistoryCapability(body);
     const parsed = PullRequestSchema.safeParse(body);
     if (!parsed.success) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid pull request' });
@@ -98,8 +101,15 @@ export default defineEventHandler(async (event) => {
             throw createError({ statusCode: 500, statusMessage: 'Sync adapter not configured' });
         }
 
+        const history = await checkHistory(event, adapter, parsed.data, true);
+        const page = await adapter.pull(event, parsed.data);
+        assertHistoryResponse(page.historyIncarnation, history);
+        if (parsed.data.historyIncarnation !== history &&
+            (!page.requiresSnapshot || page.changes.length || page.unavailable?.length || page.hasMore || page.nextCursor !== parsed.data.cursor)) {
+            throw createError({ statusCode: 502, statusMessage: 'Invalid history discovery envelope' });
+        }
         const result = PullResponseSchema.safeParse(
-            await adapter.pull(event, parsed.data)
+            await classifyPullPage(event, adapter, parsed.data, page)
         );
         if (!result.success) {
             throw createError({

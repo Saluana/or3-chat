@@ -22,6 +22,23 @@ export type BackupProgress = {
   downtimeMs?: number;
 };
 
+export type LegacySnapshotPolicy = {
+  kind: 'legacy-snapshot';
+  policy: 'legacy-033-rollback-v1';
+  backupId: string;
+  inspectorImage: string;
+  ledger: '033';
+  profile: 'basic-sqlite-fs';
+  payloadSha256: Record<string, string | null>;
+};
+export type HistoryReplacement = {
+  id: string; role: 'target' | 'safety'; backupDataSha256: string; targetImageDigest: string;
+} & ({ kind?: 'incarnation-reset'; historyIncarnation: string; progress: 'prepared' | 'reset-complete' }
+  | { kind: 'legacy-snapshot'; policy: 'legacy-033-rollback-v1'; backupId: string; backupConfigSha256: string;
+      managedAssetSha256: Record<string, string>; ledger: '033'; profile: 'basic-sqlite-fs';
+      abandonedIncarnation?: string; explicitLossConsent: boolean; safetyBackupId?: string;
+      progress: 'prepared' | 'verified' });
+
 export type ManagedState = {
   schemaVersion: StateSchemaVersion;
   mode: Mode;
@@ -59,7 +76,13 @@ export type ManagedState = {
     /** Verified pre-mutation snapshot used to restore a failed restore/rollback. */
     previousBackupId?: string;
     previousBackupPath?: string;
-    phase?: 'prepared' | 'snapshot-created' | 'target-mutating' | 'target-ready' | 'restoring-previous' | 'starting-target' | 'starting-previous';
+    admission?: { state: 'closed' | 'may-be-open'; targetImage: string; containerId?: string };
+    legacySource?: LegacySnapshotPolicy;
+    explicitLossConsent?: boolean;
+    abandonedBackupId?: string;
+    abandonedBackupPath?: string;
+    historyReset?: HistoryReplacement;
+    phase?: 'validating-target' | 'history-reset-required' | 'prepared' | 'snapshot-created' | 'target-mutating' | 'target-ready' | 'restoring-previous' | 'starting-target' | 'starting-previous';
     /** Durable proof of a completed replacement boundary for schema-2 updates. */
     evidence?: TargetReadyEvidence;
     verifiedSnapshot?: VerifiedSnapshot;
@@ -82,6 +105,9 @@ export type ManagedState = {
       nextEnv: Record<string, string>;
     };
   };
+  syncHistory?: { historyIncarnation?: string; certification: 'pending' | 'certified' | 'degraded' | 'history-reset-required' | 'legacy-snapshot'; historyReplaced?: true; sourceBackupId?: string; abandonedIncarnation?: string; reupgradeRequired?: true };
+  /** Safety evidence is retained until deliberate export/resolution. */
+  pinnedHistoryBackups?: string[];
   lastError?: string;
 };
 

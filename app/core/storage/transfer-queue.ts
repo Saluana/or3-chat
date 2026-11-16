@@ -1,6 +1,7 @@
 import { normalizeError, presentError, parseRetryAfter, errorDiagnostics } from '~~/shared/errors';
 /** Persistent, workspace-scoped upload and download execution queue. */
 import Dexie, { liveQuery } from 'dexie';
+import { invalidateFirstBindEligibility } from '~/core/sync/history-incarnation';
 import { getDb, getWorkspaceDb } from '~/db/client';
 import type { Or3DB } from '~/db/client';
 import { nowSec, nextClock, getWriteTxTableNames } from '~/db/util';
@@ -997,6 +998,9 @@ export class FileTransferQueue {
                 throw createAbortError();
             }
             await this.assertTransferActive(transfer, context.db, signal);
+            // Storage commit authors canonical sync metadata without a history
+            // envelope. A lost response must not preserve local-only provenance.
+            await context.db.transaction('rw', ['sync_state'], () => invalidateFirstBindEligibility(context.db));
             await this.provider.commitUpload({
                 workspaceId: transfer.workspace_id,
                 hash: meta.hash,

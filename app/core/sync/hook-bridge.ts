@@ -13,7 +13,7 @@ import { type Transaction } from 'dexie';
 import { generateHLC, getDeviceId, hlcToOrderKey } from './hlc';
 import { LOCAL_ONLY_KV_NAMES } from '~~/shared/sync/local-only-kv';
 import type { PendingOp, ChangeStamp, Tombstone } from '~~/shared/sync/types';
-import type { Or3DB } from '~/db/client';
+import { logicalStoreName, type Or3DB } from '~/db/client';
 import { useHooks } from '~/core/hooks/useHooks';
 import { nowSec } from '~/db/util';
 import { sanitizePayloadForSync, SyncPayloadTooLargeError } from '~~/shared/sync/sanitize';
@@ -152,7 +152,7 @@ export class HookBridge {
             return;
         }
 
-        const existingTables = new Set(this.db.tables.map((t) => t.name));
+        const existingTables = new Set(this.db.tables.map((t) => logicalStoreName(t.name)));
 
         const tableNames = SYNCED_TABLES as unknown as string[];
         for (const tableName of tableNames) {
@@ -310,6 +310,18 @@ export class HookBridge {
         payload: unknown,
         softDelete = false
     ): Record<string, unknown> | void {
+        // A connection is tied to the view it opened. After atomic replacement,
+        // old editor/generation/transfer callbacks abort until the view reloads.
+        if (this.db.syncHistoryAtOpen !== undefined) {
+            if (!transaction.storeNames.map(logicalStoreName).includes('sync_state')) {
+                transaction.abort();
+                throw new Error('Local sync writes require sync_state in their transaction');
+            }
+            const origin = this.db.syncHistoryAtOpen;
+            transaction.table('sync_state').get('sync_history').then(guard => {
+                if ((guard?.historyIncarnation ?? null) !== origin) transaction.abort();
+            }).catch(() => transaction.abort());
+        }
         // Safe record access pattern - payload can be undefined for delete operations
         const safePayload = (payload && typeof payload === 'object') 
             ? payload as Record<string, unknown> 
@@ -389,7 +401,7 @@ export class HookBridge {
         }
 
         // Mark opId immediately to suppress echo before push completes
-        markRecentOpId(stamp.opId);
+        markRecentOpId(stamp.opId, { dbName: this.db.name, historyIncarnation: this.db.syncHistoryAtOpen });
 
         // Auto-generate order_key for messages if missing
         if (tableName === 'messages' && operation === 'put' && payload) {
@@ -444,14 +456,14 @@ export class HookBridge {
             } : {}),
         };
 
-        const tableNames = transaction.storeNames;
+        const tableNames = transaction.storeNames.map(logicalStoreName);
         const hasPendingOps = tableNames.includes('pending_ops');
         const hasTombstones = tableNames.includes('tombstones');
         const hasPendingOpsTable = this.db.tables.some(
-            (table) => table.name === 'pending_ops'
+            (table) => logicalStoreName(table.name) === 'pending_ops'
         );
         const hasTombstonesTable = this.db.tables.some(
-            (table) => table.name === 'tombstones'
+            (table) => logicalStoreName(table.name) === 'tombstones'
         );
 
         if (!hasPendingOpsTable) {
@@ -462,7 +474,7 @@ export class HookBridge {
         if (hasPendingOps) {
             const request = transaction.table('pending_ops').add(pendingOp);
             void Promise.resolve(request).then(async () => {
-                if (!this.coalesceUnsent || pendingOp.status !== 'pending') return;
+                if (this.db.syncHistoryAtOpen !== undefined || !this.coalesceUnsent || pendingOp.status !== 'pending') return;
                 const table = transaction.table<PendingOp, string>('pending_ops');
                 // Never replace an operation already attempted/claimed by another tab.
                 // Its id must remain available for the server's idempotent replay.

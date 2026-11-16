@@ -31,7 +31,7 @@ export async function waitForToolResultSync(reference: string, db: Or3DB, signal
 }
 
 /** Wait before capturing admission's history fingerprint, then reread that snapshot. */
-export async function waitForTranscriptToolResultSync(messages: readonly Pick<ChatMessage, 'role' | 'content'>[], db: Or3DB, signal?: AbortSignal): Promise<boolean> {
+export async function waitForTranscriptToolResultSync(messages: readonly { role: ChatMessage['role']; content?: ChatMessage['content'] | null }[], db: Or3DB, signal?: AbortSignal): Promise<boolean> {
     const references = new Set(messages.flatMap(message => message.role !== 'tool' ? []
         : typeof message.content === 'string' ? [message.content]
         : (message.content ?? []).flatMap(part => part.type === 'text' ? [part.text] : []))

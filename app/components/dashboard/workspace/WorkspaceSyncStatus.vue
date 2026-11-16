@@ -22,10 +22,11 @@
             <p v-if="loadError" class="dashboard-list-footnote text-error" role="alert">
                 {{ loadError }}
             </p>
-            <p v-else-if="scope && paused" class="dashboard-list-footnote">
+            <p v-else-if="scope && paused && !protocolPause" class="dashboard-list-footnote">
                 Cloud sync is paused for this account. Your changes stay saved in
                 this browser and sync when access returns.
             </p>
+            <UButton v-if="protocolPause" v-bind="secondaryButtonProps" :loading="reconnecting" @click="reconnect">Check server again</UButton>
         </section>
 
         <section
@@ -56,14 +57,14 @@
                                 <UButton
                                     data-sync-cancel
                                     v-bind="secondaryButtonProps"
-                                    :disabled="!!busyId"
+                                    :disabled="!!busyId || !!protocolPause"
                                     @click="confirming = null"
                                 >
                                     Cancel
                                 </UButton>
                                 <UButton
                                     v-bind="discardButtonProps"
-                                    :disabled="!!busyId"
+                                    :disabled="!!busyId || !!protocolPause"
                                     :loading="busyId === item.id"
                                     @click="discard(item)"
                                 >
@@ -73,7 +74,7 @@
                             <template v-else>
                                 <UButton
                                     v-bind="secondaryButtonProps"
-                                    :disabled="!!busyId"
+                                    :disabled="!!busyId || !!protocolPause"
                                     :loading="busyId === item.id"
                                     @click="retry(item)"
                                 >
@@ -83,7 +84,7 @@
                                     color="neutral"
                                     variant="ghost"
                                     size="sm"
-                                    :disabled="!!busyId"
+                                    :disabled="!!busyId || !!protocolPause"
                                     @click="askDiscard(item)"
                                 >
                                     Discard
@@ -106,13 +107,50 @@
                 </span>
                 <UButton
                     v-bind="primaryButtonProps"
-                    :disabled="!!busyId"
+                    :disabled="!!busyId || !!protocolPause"
                     :loading="busyId === 'all'"
                     @click="retry()"
                 >
                     Retry all
                 </UButton>
             </div>
+        </section>
+
+        <section v-if="heldCount" class="dashboard-list-group" aria-labelledby="workspace-history-held">
+            <h3 id="workspace-history-held" class="dashboard-list-heading">Saved changes needing review</h3>
+            <p class="dashboard-list-footnote">{{ protocolPause ? "Sync is paused;" : "Current sync can run while" }} {{ heldCount }} saved items need review. Inspect or export their content and recovery evidence.</p>
+            <div class="dashboard-list">
+                <DashboardListRow v-for="entry in held" :key="entry.id" static
+                    :label="`${KIND_LABELS[entry.tableName] ?? entry.tableName}: ${entry.pk}`" :description="entry.diagnostics.join('; ')">
+                    <template #trailing>
+                        <UButton v-bind="secondaryButtonProps" @click="inspectHeld(entry)">Inspect / export</UButton>
+                        <UButton v-if="entry.variant === 'history_reset'" :disabled="!!protocolPause" v-bind="secondaryButtonProps" @click="reviewHeld(entry)">Recover</UButton>
+                        <UButton v-bind="secondaryButtonProps" @click="discardHeld(entry)">Discard</UButton>
+                    </template>
+                </DashboardListRow>
+            </div>
+            <p v-if="heldReview" class="dashboard-list-footnote" role="status">{{ heldReview }}</p>
+            <p v-if="heldError" class="dashboard-list-footnote text-error" role="alert">{{ heldError }}</p>
+        </section>
+
+        <section v-if="scope" class="dashboard-list-group" aria-labelledby="workspace-sync-legacy">
+            <h3 id="workspace-sync-legacy" class="dashboard-list-heading">Changes saved by an older tab</h3>
+            <p class="dashboard-list-footnote">Separate local stores, origin unknown. Close older tabs before exporting. Each inspection reads at most 100 entries; private and unknown-account entries stay in place. These changes are never merged automatically.</p>
+            <div class="flex flex-wrap items-center gap-3">
+                <label for="legacy-evidence-store">Saved content</label>
+                <USelect id="legacy-evidence-store" v-model="legacyStore" :items="legacyStoreOptions" aria-label="Saved content from an older tab" @update:model-value="legacyPage = null" />
+                <UButton v-bind="secondaryButtonProps" :loading="legacyBusy" @click="inspectLegacy(false)">Inspect</UButton>
+                <UButton v-if="legacyPage" v-bind="secondaryButtonProps" @click="saveLegacyPage">Export this batch</UButton>
+                <UButton v-if="legacyPage?.nextAfter != null" v-bind="secondaryButtonProps" :loading="legacyBusy" @click="inspectLegacy(true)">Next batch</UButton>
+            </div>
+            <p v-if="legacyPage" class="dashboard-list-footnote" role="status">{{ legacyPage.rows.length }} visible entries; {{ legacyPage.excluded }} excluded in this batch. Partial live evidence, not a complete snapshot.</p>
+            <pre v-if="legacyPage" class="max-h-72 overflow-auto whitespace-pre-wrap break-all rounded border border-default bg-muted p-3 text-xs" tabindex="0" aria-label="Legacy evidence preview">{{ legacyJson(legacyPage) }}</pre>
+            <div v-if="legacyPage" class="flex flex-wrap items-end gap-3">
+                <UFormField label="Entry key" name="legacy-entry-key"><UInput v-model="legacyEntryKey" placeholder="Key from this batch" /></UFormField>
+                <UFormField label="Attachment hash" name="legacy-attachment-hash"><UInput v-model="legacyAttachmentHash" placeholder="Hash referenced by the entry" /></UFormField>
+                <UButton v-bind="secondaryButtonProps" :loading="legacyBusy" @click="saveLegacyAttachment">Export attachment</UButton>
+            </div>
+            <p v-if="legacyError" class="dashboard-list-footnote text-error" role="alert">{{ legacyError }}</p>
         </section>
 
         <section
@@ -155,6 +193,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import { liveQuery, type Subscription } from 'dexie';
+import { discardQuarantined, recoverHistoryPut, inspectLegacyEvidence, exportLegacyAttachment, LEGACY_EVIDENCE_STORES } from '~/core/sync/sync-quarantine';
+import { protocolPauseId } from '~/core/sync/history-incarnation';
+import { getActiveSyncProvider } from '~/core/sync/sync-provider-registry';
+import type { SyncQuarantineRow } from '~/db/client';
 import type { PendingOp } from '~~/shared/sync/types';
 import {
     getActiveWorkspaceId,
@@ -202,7 +244,9 @@ const iconWarning = useIcon('ui.warning');
 const iconDownload = useIcon('ui.download');
 const backupEnabled = isFeatureEnabled('backup');
 const cloudAccess = useCloudAccess();
-const paused = computed(() => !cloudAccess.value);
+const protocolPause = ref<'older-server' | 'unsupported' | null>(null);
+const paused = computed(() => !cloudAccess.value || !!protocolPause.value);
+const nuxtApp = useNuxtApp();
 const session = useSessionContext();
 const backup = useWorkspaceBackup();
 
@@ -212,6 +256,109 @@ const statusHeading = ref<HTMLElement | null>(null);
 
 const scope = shallowRef<{ db: Or3DB; generation: number } | null>(null);
 const snapshot = shallowRef<{ ops: PendingOp[]; total: number; waiting: number } | null>(null);
+const held = shallowRef<SyncQuarantineRow[]>([]);
+const heldCount = ref(0);
+const heldReview = ref('');
+const heldError = ref('');
+const reviewed = new Map<string, string>();
+function inspectHeld(entry: SyncQuarantineRow) {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(entry, null, 2)], { type: 'application/json' }));
+    const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'or3-saved-history.json'; anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+async function reviewHeld(entry: SyncQuarantineRow) {
+    if (protocolPause.value) return;
+    const current = scope.value; if (!current) return;
+    heldError.value = '';
+    const history = (await current.db.sync_state.get('sync_history'))?.historyIncarnation;
+    if (!history) return;
+    if (reviewed.get(entry.id) !== history) {
+        reviewed.set(entry.id, history);
+        heldReview.value = `Review the exported content and current ${entry.tableName} record. Select Recover again to create a new put; deletes and unsupported items stay saved.`;
+        return;
+    }
+    try {
+        const provider = getActiveSyncProvider();
+        const sessionContext = session.data.value?.session;
+        if (!provider || !sessionContext?.role || !['owner', 'admin', 'editor'].includes(sessionContext.role)) throw new Error('Current workspace write permission is required.');
+        await recoverHistoryPut(current.db, provider, { workspaceId: getActiveWorkspaceId()!, principalId: sessionContext.user?.id }, entry.id, history);
+        heldReview.value = 'Created a new current-history change. The original evidence remains saved.';
+    } catch (error) { heldError.value = error instanceof Error ? error.message : String(error); }
+}
+async function discardHeld(entry: SyncQuarantineRow) {
+    const current = scope.value; if (!current) return;
+    if (reviewed.get(entry.id) !== 'discard') { reviewed.set(entry.id, 'discard'); heldReview.value = 'Select Discard again to resolve this saved item deliberately.'; return; }
+    await discardQuarantined(current.db, entry.id, session.data.value?.session?.user?.id);
+}
+const reconnecting = ref(false);
+async function reconnect() {
+    const current = scope.value; const context = session.data.value?.session;
+    if (!current || !context?.workspace?.id) return;
+    reconnecting.value = true;
+    try {
+        await (nuxtApp.$syncEngine as { start(workspaceId: string, principalId?: string, revision?: number): Promise<void> } | undefined)?.start(context.workspace.id, context.user?.id, context.authorizationRevision);
+    } catch { loadError.value = 'Server check failed. Your local changes are still saved; try again after the server is upgraded.'; }
+    finally { reconnecting.value = false; }
+}
+const legacyStoreOptions = LEGACY_EVIDENCE_STORES.map(value => ({ value,
+    label: KIND_LABELS[value] ?? ({ tombstones: 'Saved deletes', pending_ops: 'Queued changes',
+        workspace_tab_drafts: 'Composer drafts', workspace_draft_versions: 'Draft recovery copies',
+        file_transfers: 'File transfers', sync_quarantine: 'Recovery evidence' } as Record<string, string>)[value] ?? value }));
+const legacyStore = ref('threads');
+const legacyPage = shallowRef<Awaited<ReturnType<typeof inspectLegacyEvidence>> | null>(null);
+const legacyBusy = ref(false);
+const legacyError = ref('');
+const legacyEntryKey = ref('');
+const legacyAttachmentHash = ref('');
+function legacyScope() {
+    const context = session.data.value?.session;
+    if (!context?.workspace?.id || !context.user?.id) throw new Error('Current workspace access is required.');
+    return { workspaceId: context.workspace.id, principalId: context.user.id };
+}
+async function inspectLegacy(next: boolean) {
+    const current = scope.value; const token = revision;
+    if (!current || legacyBusy.value) return;
+    legacyBusy.value = true; legacyError.value = '';
+    try {
+        const after = next ? legacyPage.value?.nextAfter ?? undefined : undefined;
+        const page = await inspectLegacyEvidence(current.db, legacyScope(), legacyStore.value, after);
+        if (isCurrent(token, current.db)) legacyAfter.value = after;
+        if (isCurrent(token, current.db)) legacyPage.value = page;
+    } catch (error) { if (isCurrent(token, current.db)) legacyError.value = error instanceof Error ? error.message : String(error); }
+    finally { legacyBusy.value = false; }
+}
+function legacyJson(page: NonNullable<typeof legacyPage.value>) {
+    // Pagination may end on an excluded private key; never display/export it.
+    const { nextAfter: _cursor, ...evidence } = page;
+    return JSON.stringify(evidence, null, 2);
+}
+function downloadEvidence(blob: Blob, name: string) {
+    const url = URL.createObjectURL(blob); const anchor = document.createElement('a');
+    anchor.href = url; anchor.download = name; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+async function saveLegacyPage() {
+    // Re-read under current authorization before exporting; displayed rows are not authority.
+    const page = legacyPage.value; const current = scope.value; const token = revision;
+    if (!page || !current) return;
+    legacyError.value = '';
+    try {
+        const fresh = await inspectLegacyEvidence(current.db, legacyScope(), page.store, legacyAfter.value);
+        if (!isCurrent(token, current.db)) return;
+        legacyPage.value = fresh;
+        downloadEvidence(new Blob([legacyJson(fresh)], { type: 'application/json' }), 'or3-legacy-evidence.json');
+    } catch (error) { if (isCurrent(token, current.db)) legacyError.value = error instanceof Error ? error.message : String(error); }
+}
+const legacyAfter = shallowRef<IDBValidKey | undefined>();
+async function saveLegacyAttachment() {
+    const current = scope.value; const token = revision;
+    if (!current || legacyBusy.value) return;
+    legacyBusy.value = true; legacyError.value = '';
+    try {
+        const file = await exportLegacyAttachment(current.db, legacyScope(), legacyStore.value, legacyEntryKey.value, legacyAttachmentHash.value);
+        if (isCurrent(token, current.db)) downloadEvidence(file.blob, 'or3-legacy-attachment');
+    } catch (error) { if (isCurrent(token, current.db)) legacyError.value = error instanceof Error ? error.message : String(error); }
+    finally { legacyBusy.value = false; }
+}
 const loadError = ref('');
 const actionError = ref('');
 const busyId = ref<string | null>(null);
@@ -252,6 +399,7 @@ function plural(count: number, one: string, many: string) {
 
 const statusLabel = computed(() => {
     if (!scope.value) return 'No workspace selected';
+    if (protocolPause.value) return 'Sync paused — server incompatible';
     const current = snapshot.value;
     if (!current) return loadError.value ? 'Sync status unavailable' : 'Checking sync…';
     if (current.total) return plural(current.total, 'change needs attention', 'changes need attention');
@@ -261,6 +409,7 @@ const statusLabel = computed(() => {
 
 const statusDescription = computed(() => {
     const current = snapshot.value;
+    if (protocolPause.value) return `${protocolPause.value === 'older-server' ? 'The server is running an older version, so sync in this tab is paused.' : "The server does not support this tab's sync protocol."} Your local changes are still saved.${protocolPause.value === 'older-server' ? ' The older app uses separate local stores and may not show these changes.' : ''} Do not clear browser data. Export important work, or review saved changes after the server is upgraded again. Changes saved by an older tab can be inspected separately; they are never merged automatically.`;
     if (!scope.value || !current) return '';
     if (current.total) return 'Saved in this browser. Retry them, or discard ones you don’t need on other devices.';
     if (current.waiting) return paused.value
@@ -333,7 +482,8 @@ function bind() {
     revision += 1;
     subscription?.unsubscribe();
     subscription = undefined;
-    snapshot.value = null;
+    protocolPause.value = null; legacyPage.value = null; legacyAfter.value = undefined; legacyError.value = ''; legacyEntryKey.value = ''; legacyAttachmentHash.value = '';
+    snapshot.value = null; held.value = []; heldCount.value = 0; reviewed.clear(); heldReview.value = ''; heldError.value = '';
     loadError.value = '';
     actionError.value = '';
     busyId.value = null;
@@ -349,11 +499,17 @@ function bind() {
     scope.value = { db, generation: getWorkspaceGeneration() };
     subscription = liveQuery(async () => {
         const [failed, waiting] = await Promise.all([listFailedOps(db, LIST_LIMIT), countWaiting(db)]);
-        return { ...failed, waiting };
+        const account = session.data.value?.session?.user?.id;
+        const query = db.sync_quarantine.filter(entry => (entry.variant === 'history_reset' || entry.variant === 'stored_record') && entry.status === 'quarantined' && (!entry.accountId || entry.accountId === account));
+        const savedCount = await query.clone().count();
+        const saved = await query.limit(LIST_LIMIT).toArray();
+        const providerId = getActiveSyncProvider()?.id ?? 'gateway';
+        const pause = await db.sync_state.get(protocolPauseId(providerId, { workspaceId: getActiveWorkspaceId()!, principalId: account }));
+        return { ...failed, waiting, held: saved, heldCount: savedCount, pause: pause?.protocolPause ?? null };
     }).subscribe({
         next: (value) => {
             if (!isCurrent(token, db)) return;
-            snapshot.value = value;
+            protocolPause.value = value.pause; snapshot.value = value; held.value = value.held; heldCount.value = value.heldCount;
             loadError.value = '';
             if (confirming.value && !value.ops.some((op) => op.id === confirming.value)) {
                 confirming.value = null;
@@ -384,6 +540,7 @@ async function run(key: string, action: (db: Or3DB) => Promise<boolean | number>
 }
 
 function retry(item?: FailedItem) {
+    if (protocolPause.value) return;
     confirming.value = null;
     return run(
         item?.id ?? 'all',
@@ -427,10 +584,15 @@ async function saveCopy() {
 
 bind();
 const stopWorkspace = subscribeActiveWorkspaceDb(bind);
-// An account change can keep the workspace id but not its authority.
-watch(() => session.data.value?.session?.user?.id, (next, previous) => {
-    if (next !== previous) bind();
-});
+// Clear displayed evidence and fence pending UI reads when authority changes,
+// including permission revisions that retain the same account/workspace.
+watch([
+    () => session.data.value?.session?.authenticated,
+    () => session.data.value?.session?.user?.id,
+    () => session.data.value?.session?.workspace?.id,
+    () => session.data.value?.session?.role,
+    () => session.data.value?.session?.authorizationRevision,
+], bind, { flush: 'sync' });
 
 onBeforeUnmount(() => {
     revision += 1;

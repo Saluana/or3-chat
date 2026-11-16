@@ -1,3 +1,4 @@
+import { CLOUD_MUTATION_INTENT } from '~~/shared/sync/types';
 /** OpenRouter foreground streaming, with compatibility exports for host jobs. */
 import { useRuntimeConfig } from '#imports';
 import { prepareJsonBody } from '~/utils/compress-json';
@@ -215,7 +216,7 @@ export async function* openRouterStream(params: OpenRouterStreamParams): AsyncGe
             try {
                 const headers: Record<string, string> = {
                     'Content-Type': 'application/json',
-                    'x-or3-cloud-intent': 'mutation',
+                    'x-or3-cloud-intent': CLOUD_MUTATION_INTENT,
                 };
                 if (hasApiKey && !isSsrAuthEnabled) {
                     headers['x-or3-openrouter-key'] = apiKey as string;
