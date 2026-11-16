@@ -26,11 +26,13 @@ function assertOrderedKeys(entries: { tableName: string; pk: string; kind?: stri
 }
 
 /** Classify before final structural parsing; only providers can certify durable evidence. */
-export async function classifyPullPage(event: H3Event, adapter: SyncGatewayAdapter, request: PullRequest, page: PullResponse): Promise<PullResponse> {
+export async function classifyPullPage(event: H3Event, adapter: SyncGatewayAdapter, request: PullRequest, page: PullResponse | null | undefined): Promise<PullResponse> {
     if (!page || !Array.isArray(page.changes)) coverageFailure();
     let previousVersion = request.cursor;
     const seen = new Set<number>();
-    for (const lane of [page.changes, page.unavailable ?? []]) {
+    // Provider interfaces describe valid output, not malformed coverage entries.
+    const lanes: ReadonlyArray<ReadonlyArray<{ serverVersion: number } | null | undefined>> = [page.changes, page.unavailable ?? []];
+    for (const lane of lanes) {
         previousVersion = request.cursor;
         for (const entry of lane) {
             if (!entry || !Number.isSafeInteger(entry.serverVersion) || entry.serverVersion <= previousVersion ||
@@ -64,7 +66,7 @@ export async function classifyPullPage(event: H3Event, adapter: SyncGatewayAdapt
     return { ...page, changes, ...(unavailable.length ? { unavailable } : {}) };
 }
 
-export async function classifySnapshotPage(event: H3Event, adapter: SyncGatewayAdapter, request: SnapshotRequest, page: SnapshotResponse): Promise<SnapshotResponse> {
+export async function classifySnapshotPage(event: H3Event, adapter: SyncGatewayAdapter, request: SnapshotRequest, page: SnapshotResponse | null | undefined): Promise<SnapshotResponse> {
     if (!page || !Array.isArray(page.items)) coverageFailure();
     assertOrderedKeys(page.items);
     assertOrderedKeys(page.unavailable ?? []);

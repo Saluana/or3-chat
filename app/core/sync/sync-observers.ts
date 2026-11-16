@@ -31,7 +31,7 @@ const OBSERVER_WAIT_MS = 250;
  * No background queue or late listener invocation.
  */
 export async function observeSyncAction<K extends SyncObservationAction>(
-    hooks: TypedHookEngine,
+    hooks: Omit<TypedHookEngine, '_engine'> & { readonly _engine?: TypedHookEngine['_engine'] },
     name: K,
     ...args: InferHookParams<K>
 ): Promise<void> {

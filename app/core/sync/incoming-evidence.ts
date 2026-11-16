@@ -14,7 +14,7 @@ export async function retainIncomingEvidenceInTx(tx: Transaction, input: {
     record: unknown;
     historyIncarnation?: string;
 }): Promise<SyncQuarantineRow> {
-    const history = (tx.storeNames?.includes(tx.db.table('sync_state').name) ? await tx.table('sync_state').get('sync_history') : undefined) as SyncState | undefined;
+    const history = (tx.storeNames.includes(tx.db.table('sync_state').name) ? await tx.table('sync_state').get('sync_history') : undefined) as SyncState | undefined;
     const id = JSON.stringify(['incoming', input.historyIncarnation ?? history?.historyIncarnation ?? 'unknown', input.source, input.reference, input.tableName, input.pk]);
     const entries = tx.table('sync_quarantine');
     const existing = await entries.get(id) as SyncQuarantineRow | undefined;

@@ -230,7 +230,7 @@ export async function validateCanonicalBackupReferences(directory: string, env: 
 
 /** An older inspector/partial audit must never be interpreted as certification. */
 export function assertSyncSemanticCertification(output: string, expectedHistoryIncarnation?: string) {
-  let result: { contract?: number; complete?: boolean; healthy?: boolean; historyIncarnation?: string };
+  let result: { contract?: unknown; complete?: unknown; healthy?: unknown; historyIncarnation?: unknown } | null;
   try { result = JSON.parse(output) as typeof result; }
   catch { throw new Error('Sync semantic certification is unavailable or malformed; a qualified target image is required.'); }
   if (result?.contract !== 1 || result.complete !== true || result.healthy !== true || expectedHistoryIncarnation !== undefined && result.historyIncarnation !== expectedHistoryIncarnation) {

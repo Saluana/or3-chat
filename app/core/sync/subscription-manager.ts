@@ -467,8 +467,12 @@ export class SubscriptionManager {
         expiresAt: number
     ): Promise<SnapshotResponse> {
         let attempts = 0;
-        for (;;) {
+        // Read again after provider awaits rather than retaining a stale narrowing.
+        const checkAborted = () => {
             if (signal.aborted) throw new DOMException('Snapshot cancelled', 'AbortError');
+        };
+        for (;;) {
+            checkAborted();
             if (Date.now() >= expiresAt) throw new SnapshotIdentityExpiredError('Snapshot identity expired');
             const captured = this.history;
             try {
@@ -476,7 +480,7 @@ export class SubscriptionManager {
                 if (captured) await assertHistory(this.db, captured);
                 return page;
             } catch (error) {
-                if (signal.aborted) throw new DOMException('Snapshot cancelled', 'AbortError');
+                checkAborted();
                 const fault = error as { status?: number; statusCode?: number; retryAfterMs?: number; retryable?: boolean; name?: string } | null;
                 const status = fault?.status ?? fault?.statusCode;
                 const target = changedHistoryFromError(error);
@@ -1073,7 +1077,8 @@ export class SubscriptionManager {
     }
 
     private filterRecentOps(changes: SyncChange[]): SyncChange[] {
-        const filtered = changes.filter((c) => !isRecentOpId(c.stamp?.opId ?? '', { dbName: this.db.name, historyIncarnation: this.history?.historyIncarnation }));
+        // Subscription callbacks can reach echo filtering before stamp validation.
+        const filtered = changes.filter((c: { stamp?: { opId?: string } | null }) => !isRecentOpId(c.stamp?.opId ?? '', { dbName: this.db.name, historyIncarnation: this.history?.historyIncarnation }));
         if (import.meta.dev) {
             const dropped = changes
                 .filter((c) => !filtered.includes(c))

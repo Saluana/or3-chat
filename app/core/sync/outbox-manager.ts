@@ -322,12 +322,17 @@ export class OutboxManager {
         }, delay);
     }
 
+    // Read ownership afresh after awaits; another flush may have acquired it.
+    private canFlush(generation: number): boolean {
+        return generation === this.lifecycleGeneration && this.flushOwner === null;
+    }
+
     /**
      * Flush pending operations to the server
      * Returns true if operations were processed
      */
     async flush(generation = this.lifecycleGeneration): Promise<boolean> {
-        if (generation !== this.lifecycleGeneration || this.flushOwner) return false;
+        if (!this.canFlush(generation)) return false;
 
         // Offline time must not consume the retry budget of durable local edits.
         // The existing heartbeat sends the retained queue once connectivity returns.
@@ -341,7 +346,7 @@ export class OutboxManager {
         if (this.historyPaused) return false;
         if (this.provider.capabilities?.historyIncarnation === 'v1') {
             const captured = await readHistory(this.db);
-            if (generation !== this.lifecycleGeneration || this.flushOwner) return false;
+            if (!this.canFlush(generation)) return false;
             this.historyGuard = captured;
             if (this.historyGuard.phase !== 'ready' || !this.historyGuard.historyIncarnation) return false;
         }
@@ -983,15 +988,22 @@ export class OutboxManager {
         return this.db.transaction('rw', Array.from(new Set(['pending_ops', 'sync_state', 'tombstones', op.tableName])), async () => {
             if (!await this.ownsClaim(op)) return false;
             if (winner) {
+                // Direct-provider responses are not structurally validated yet.
+                const candidate: {
+                    kind: unknown;
+                    revision?: PushWinner['revision'] | null;
+                    payload?: unknown;
+                    serverDeletedAt?: unknown;
+                } = winner;
                 // Legacy live-winner payloads may omit HLC; keep that existing
                 // comparison domain while rejecting malformed revisions.
-                if (!winner.revision || !Number.isSafeInteger(winner.revision.clock) || winner.revision.clock < 0 ||
-                    typeof winner.revision.hlc !== 'string' || typeof winner.revision.opId !== 'string' ||
-                    (winner.kind !== 'put' && winner.kind !== 'delete') ||
-                    (winner.kind === 'delete' && winner.serverDeletedAt !== undefined &&
-                        (typeof winner.serverDeletedAt !== 'number' || !Number.isFinite(winner.serverDeletedAt) || winner.serverDeletedAt < 0)) ||
-                    (winner.kind === 'put' && (!winner.payload || typeof winner.payload !== 'object' || Array.isArray(winner.payload) ||
-                        !normalizeSyncPayload(op.tableName, op.pk, winner.payload, winner.revision).isValid))) {
+                if (!candidate.revision || !Number.isSafeInteger(candidate.revision.clock) || candidate.revision.clock < 0 ||
+                    typeof candidate.revision.hlc !== 'string' || typeof candidate.revision.opId !== 'string' ||
+                    (candidate.kind !== 'put' && candidate.kind !== 'delete') ||
+                    (candidate.kind === 'delete' && candidate.serverDeletedAt !== undefined &&
+                        (typeof candidate.serverDeletedAt !== 'number' || !Number.isFinite(candidate.serverDeletedAt) || candidate.serverDeletedAt < 0)) ||
+                    (candidate.kind === 'put' && (!candidate.payload || typeof candidate.payload !== 'object' || Array.isArray(candidate.payload) ||
+                        !normalizeSyncPayload(op.tableName, op.pk, candidate.payload, candidate.revision).isValid))) {
                     throw new InvalidServerWinnerError('Invalid server winner');
                 }
                 await this.applyRemoteWinner(op, winner);

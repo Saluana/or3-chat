@@ -18,7 +18,7 @@ export const BOOT_SESSION_SCRIPT =
  * checks always fetch again. Null when there is none, it failed or is stale.
  */
 export async function takeBootSession(): Promise<SessionPayload | null> {
-    const browser = (globalThis as typeof globalThis & { window?: { __or3BootSession?: BootSession } }).window;
+    const browser = (globalThis as { window?: { __or3BootSession?: BootSession } }).window;
     if (!browser) return null;
     const boot = browser.__or3BootSession;
     if (!boot) return null;

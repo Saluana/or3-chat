@@ -28,7 +28,7 @@ export interface SyncWriteInput {
 }
 
 /** Pure preparation shared by admission and final transactional writer sinks. */
-export function prepareSyncWrite(input: SyncWriteInput): SyncWriteInput {
+export function prepareSyncWrite(input: Omit<SyncWriteInput, 'operation'> & { operation: unknown }): SyncWriteInput {
     const { tableName, pk, operation } = input;
     if (!Object.hasOwn(TABLE_PAYLOAD_SCHEMAS, tableName)) throw new SyncWriteError('Unknown sync table');
     if (typeof pk !== 'string' || !pk.length || pk.length > 1024 || !isLosslessSyncIdentifier(pk)) {
