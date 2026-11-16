@@ -1,4 +1,4 @@
-import { assertHistory, type HistoryGuard } from './history-incarnation';
+import { assertHistory, invalidateFirstBindEligibility, type HistoryGuard } from './history-incarnation';
 /**
  * @module app/core/sync/cursor-manager
  *
@@ -149,6 +149,7 @@ export class CursorManager {
                 lastSyncAt: version === undefined ? Date.now() : existing?.lastSyncAt ?? Date.now(),
                 deviceId: this.deviceId,
             };
+            if (state.cursor > 0) await invalidateFirstBindEligibility(this.db);
             await this.db.table('sync_state').put(state);
         });
     }

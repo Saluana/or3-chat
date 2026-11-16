@@ -93,6 +93,7 @@ describe('copyLegacyWorkspaceData', () => {
             postType: 'doc',
         });
 
+        expect(await target.sync_state.get('sync_history')).toMatchObject({ firstBindEligible: false });
         const pending = await target.pending_ops.toArray();
         expect(pending.map((op) => op.tableName).sort()).toEqual([
             'messages',

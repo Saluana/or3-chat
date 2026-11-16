@@ -1,4 +1,4 @@
-import { readHistory, sameHistory, requestHistoryReset, changedHistoryFromError, isHistoryProtocolBoundary, type HistoryGuard } from './history-incarnation';
+import { invalidateFirstBindEligibility, readHistory, sameHistory, requestHistoryReset, changedHistoryFromError, isHistoryProtocolBoundary, type HistoryGuard } from './history-incarnation';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { errorDiagnostics, presentError, type ErrorMetadata } from '~~/shared/errors';
 /**
@@ -741,6 +741,7 @@ export class OutboxManager {
                 markRecentOpId(op.stamp.opId, { dbName: this.db.name, historyIncarnation: this.historyGuard?.historyIncarnation ?? this.db.syncHistoryAtOpen });
             }
 
+            if (!this.historyGuard) await this.db.transaction('rw', ['sync_state'], () => invalidateFirstBindEligibility(this.db));
             const signal = this.pushAbortController?.signal;
             // Race the provider with cancellation as third-party direct providers
             // may not yet honor the optional AbortSignal themselves.
@@ -1027,6 +1028,7 @@ export class OutboxManager {
         await this.db.transaction('rw', tableNames, async (tx) => {
             hookBridge.markSyncTransaction(tx);
             if (!await this.historyMatches()) return;
+            await invalidateFirstBindEligibility(tx);
             const table = tx.table(op.tableName);
             if (winner.kind === 'put') {
                 // Eligibility-first selection can push an older revision while a

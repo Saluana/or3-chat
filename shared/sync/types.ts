@@ -391,6 +391,8 @@ export interface Tombstone {
  * Sync state - persisted sync metadata
  */
 export interface SyncState {
+    /** Birth-only proof of purely local authorship; consumed by first installation. */
+    firstBindEligible?: boolean;
     historyIncarnation?: string | null;
     phase?: 'unbound' | 'ready' | 'resetting';
     resetTarget?: string | null;

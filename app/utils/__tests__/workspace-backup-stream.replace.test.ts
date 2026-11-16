@@ -100,6 +100,19 @@ describe('workspace backup export reliability', () => {
     afterEach(() => {
         vi.unstubAllGlobals();
     });
+    it('invalidates birth proof atomically when importing unclassified history, even an imported proof row', async () => {
+        const db = new Or3DB(`import-proof-${crypto.randomUUID()}`); databases.push(db); await db.open();
+        expect(await db.sync_state.get('sync_history')).toMatchObject({ firstBindEligible: true });
+        const file = backupBlob([
+            header(db as any, [{ name: 'sync_state', rowCount: 1, inbound: true }]),
+            { type: 'table-start', table: 'sync_state' },
+            { type: 'rows', table: 'sync_state', rows: [{ id: 'sync_history', historyIncarnation: null, phase: 'unbound', firstBindEligible: true, cursor: 0, deviceId: '', lastSyncAt: 0 }] },
+            { type: 'table-end', table: 'sync_state' }, { type: 'end' },
+        ]);
+        await importWorkspaceStream({ db, file, clearTables: false, overwriteValues: true });
+        expect(await db.sync_state.get('sync_history')).toMatchObject({ firstBindEligible: false });
+    });
+
     it('restores chat, project, document, and file data into a fresh database', async () => {
         const name = `workspace-backup-snapshot-${crypto.randomUUID()}`;
         const db = new Or3DB(name);
@@ -175,7 +188,8 @@ describe('workspace backup export reliability', () => {
             overwriteValues: true,
         });
         for (const [table, rows] of expected)
-            expect(await restored.table(table).toArray()).toEqual(rows);
+            expect(await restored.table(table).toArray()).toEqual(logicalStoreName(table) === 'sync_state'
+                ? rows.map(row => ({ ...row, firstBindEligible: false })) : rows);
         const blob = await restored.file_blobs.get('file');
         expect(await blob?.blob.text()).toBe('Before');
         expect(blob?.blob.type).toBe('text/plain');

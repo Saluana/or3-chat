@@ -20,6 +20,7 @@
  */
 import { computed, watch } from 'vue';
 import { setActiveWorkspaceDb } from '~/db/client';
+import { getHookBridge } from '~/core/sync/hook-bridge';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { shouldClearWorkspaceForNullSession } from './shouldClearWorkspaceForNullSession';
 
@@ -53,7 +54,8 @@ export function useWorkspaceManager() {
             const token = ++workspaceChangeToken;
 
             if (newId) {
-                setActiveWorkspaceDb(newId);
+                // Capture local startup/offline writes before async sync setup.
+                getHookBridge(setActiveWorkspaceDb(newId)).start();
                 return;
             }
 

@@ -1,4 +1,4 @@
-import { assertHistory, type HistoryGuard } from './history-incarnation';
+import { invalidateFirstBindEligibility, assertHistory, type HistoryGuard } from './history-incarnation';
 import { MAX_SYNC_PAYLOAD_BYTES } from '~~/shared/sync/sanitize';
 import { assertIncomingIdentity, isSyncTable } from '~~/shared/sync/incoming-records';
 import { PullUnavailableRecordSchema, SyncChangeSchema, syncJsonByteLength } from '~~/shared/sync/schemas';
@@ -133,6 +133,7 @@ export class ConflictResolver {
         // Apply in a single transaction for atomicity and performance
         await this.db.transaction('rw', tables, async (tx) => {
             if (history) await assertHistory(tx, history);
+            await invalidateFirstBindEligibility(tx);
             // Mark this specific transaction as a sync transaction
             getHookBridge(this.db).markSyncTransaction(tx);
 

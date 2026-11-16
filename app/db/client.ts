@@ -517,6 +517,11 @@ export class Or3DB extends Dexie {
             return txTable.call(this, this.idbtrans.objectStoreNames.contains(name) ? name : physicalStoreName(name));
         } as typeof txTable;
 
+        // Only IDB creation, never an upgrade/open, can prove local-only birth.
+        this.on('populate', tx => tx.table('sync_state').put({ id: 'sync_history',
+            historyIncarnation: null, phase: 'unbound', resetTarget: null,
+            firstBindEligible: true, cursor: 0, lastSyncAt: 0, deviceId: '' }));
+
         const open = this.open.bind(this);
         this.open = (() => open().then(result => {
             updateDatabaseRecovery(this, null);
@@ -535,7 +540,8 @@ export class Or3DB extends Dexie {
                 console.warn('[db] Changes from an outdated client; origin unknown. Isolated legacy stores are retained; current sync never reads or publishes them.');
             }
             const guard = await this.sync_state.get('sync_history');
-            if (this.syncHistoryAtOpen === undefined) this.syncHistoryAtOpen = guard ? guard.historyIncarnation ?? null : undefined;
+            // Fix unknown origins too, before startup capture can accept a write.
+            if (this.syncHistoryAtOpen === undefined) this.syncHistoryAtOpen = guard?.historyIncarnation ?? null;
         });
 
         // Derived-key maintenance must run on every instance, including

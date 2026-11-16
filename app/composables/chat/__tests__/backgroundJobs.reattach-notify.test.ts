@@ -43,7 +43,8 @@ async function makeClientToolClaim(name = 'client_tool', ttl = 30_000) {
 
 const dbMock = {
     name: 'or3-db-workspace-a',
-    tables: [{ name: 'messages' }],
+    tables: [{ name: 'messages' }, { name: 'sync_state' }],
+    table: vi.fn(() => ({ get: async () => undefined })),
     transaction: vi.fn(
         async (
             _mode: string,

@@ -166,6 +166,34 @@ capability and fail closed with `OR3_SYNC_HISTORY_UNSUPPORTED`. D1 and direct
 Convex remain separate qualification lanes. No publication is performed here.
 
 
+### Proven first binding
+
+Only a workspace DB created under the protected-store contract receives
+`sync_state['sync_history'].firstBindEligible: true`, in its IndexedDB creation
+transaction. Missing/false is ineligible; null identity and cursor zero are not
+proof. Upgrade/open/ready never grant eligibility. Capture starts at app workspace
+activation, before startup preferences or offline edits.
+Discovery and private staging preserve the proof, including across restart and
+reset-target changes. Guard reads, CAS comparisons and rewrites include it.
+
+A complete first snapshot may adopt that proven local authorship with existing
+LWW replay: puts, edits, deletes and offline conversations, with streaming rows,
+drafts and attachment state retained. IDs, revisions and failure statuses remain
+unchanged; permanent failures are not re-enabled. The single install transaction
+consumes the flag even for an empty snapshot at watermark zero. A later I→J
+replacement and every unmarked legacy DB still hold all old/unknown intent;
+previously held evidence is never automatically recovered. Writes during staging
+are included. Abort/quota preserves the proof and original data atomically.
+
+Remote canonical/winner application (including background-job hydration), any scope's nonzero cursor, a snapshot in
+an unsupported identity lane and unclassified imports invalidate eligibility in
+their transaction. Unfenced push and upload commit (which writes canonical sync metadata) invalidate durably before dispatch, including
+lost-response outcomes. Legacy JSON import includes proof consumption, replacement clearing and data in
+one transaction and strips imported eligibility, so imported history cannot grant the birth proof.
+Deleting/resetting cursors or losing the guard never grants it again. Push/ACK
+remain closed until the checked installation is ready. A locally authored DB
+created while I exists can first bind J without resurrecting I-derived state.
+
 ### Browser activation boundary
 
 Schema 32 performs a one-time atomic physical-store migration inside the same

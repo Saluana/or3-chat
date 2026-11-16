@@ -1674,6 +1674,8 @@ describe('OutboxManager quarantine (real Dexie)', () => {
     async function freshDb(): Promise<Or3DB> {
         const db = new Or3DB(`or3-test-quarantine-${crypto.randomUUID()}`);
         await db.open();
+        // Model the unmarked legacy DB used by this unfenced-provider suite.
+        await db.sync_state.delete('sync_history');
         databases.push(db);
         return db;
     }

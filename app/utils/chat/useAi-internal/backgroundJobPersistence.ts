@@ -1,3 +1,4 @@
+import { invalidateFirstBindEligibility } from '~/core/sync/history-incarnation';
 import { presentError } from '~~/shared/errors';
 import { readRequestUsage, type RequestUsage } from '~~/shared/chat/compaction';
 /**
@@ -115,6 +116,7 @@ export async function projectCanonicalBackgroundMessage(
                         data.background_job_id !== expected.jobId))
             )
                 return false;
+            await invalidateFirstBindEligibility(db);
             await db.messages.put({
                 ...existing,
                 ...('pending' in patch ? { pending: patch.pending } : {}),
@@ -468,6 +470,7 @@ export async function persistBackgroundJobUpdate(
                 updated_at: nowSec(),
             };
 
+            await invalidateFirstBindEligibility(currentDb);
             await currentDb.messages.put(updated);
             return {
                 record: updated,

@@ -149,3 +149,12 @@ an installed sync history changes. It preserves the obsolete handle's origin,
 closes it, and notifies active-workspace listeners with a new generation. Sync
 serializes teardown and restart; callers must capture the current DB again for
 new work. A normal first bind completes before Cloud restore begins uploading.
+
+New databases receive `sync_history.firstBindEligible` only in the creation
+transaction. Upgrades/reopens never infer it. Sync consumes this proof during
+the first atomic snapshot; unknown-origin imports and server-state exposure
+invalidate it. This permits local startup/offline work to join its first server
+history without weakening later incarnation replacement fences.
+
+A protected connection with no history guard still captures a fixed null origin;
+missing history does not let a delayed editor callback adopt a later install.

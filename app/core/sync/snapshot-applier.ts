@@ -1,4 +1,4 @@
-import { readHistory, assertHistory, type HistoryGuard } from './history-incarnation';
+import { readHistory, assertHistory, invalidateFirstBindEligibility, type HistoryGuard } from './history-incarnation';
 import { holdHistoryInTx } from './sync-quarantine';
 import { clearRecentOpIds } from './recent-op-cache';
 import { MAX_SYNC_PAYLOAD_BYTES } from '~~/shared/sync/sanitize';
@@ -224,6 +224,8 @@ export class SnapshotStager {
         }
         const crossHistory = this.historyIncarnation !== undefined &&
             (this.expectedHistory?.phase !== 'ready' || this.expectedHistory.historyIncarnation !== this.historyIncarnation);
+        const firstBind = crossHistory && this.expectedHistory?.historyIncarnation === null && this.expectedHistory.firstBindEligible === true;
+        const holdHistory = crossHistory && !firstBind;
         if (crossHistory) replacementTables = [...SYNCED_TABLES];
         replacementTables = replacementTables.filter(isSyncTable);
         const tableNames = [...new Set([
@@ -253,7 +255,7 @@ export class SnapshotStager {
                 if (!this.expectedHistory) abortSnapshotApply();
                 await assertHistory(tx, this.expectedHistory);
                 if (this.expectedHistory.resetTarget && this.expectedHistory.resetTarget !== this.historyIncarnation) abortSnapshotApply();
-                if (crossHistory) await holdHistoryInTx(tx, this.scope, this.expectedHistory.historyIncarnation ?? 'unknown');
+                if (holdHistory) await holdHistoryInTx(tx, this.scope, this.expectedHistory.historyIncarnation ?? 'unknown');
             }
             const preserved: { tableName: string; pk: string; row: unknown; tombstone: unknown }[] = [];
             let evidenceSequence = 0;
@@ -282,7 +284,7 @@ export class SnapshotStager {
             // restored too: replacing the table would otherwise erase the only
             // copy of that content. Corrupt operations are quarantined and
             // rebuilt from the still-present local rows before anything is cleared.
-            const pendingOps = crossHistory ? [] : await collectReplayableOps(
+            const pendingOps = holdHistory ? [] : await collectReplayableOps(
                 tx,
                 (tableName, pk) => tableNames.includes(tableName) && !this.unavailableKeys.has(JSON.stringify([tableName, pk])),
                 deviceId
@@ -290,7 +292,7 @@ export class SnapshotStager {
             // Streaming assistants intentionally have no sync operation. Their
             // local progress and lease must survive the same atomic replacement
             // as the outbox, including expired leases recoverable after reload.
-            const foregroundRows: Message[] = !crossHistory && tableNames.includes('messages')
+            const foregroundRows: Message[] = !holdHistory && tableNames.includes('messages')
                 ? await this.db.messages.filter((row: Message) => {
                     const data = row.data as Record<string, unknown> | null;
                     return row.role === 'assistant' && row.pending === true && !row.deleted
@@ -427,9 +429,10 @@ export class SnapshotStager {
             await tx.table('snapshot_staging').delete('__active__');
             if (crossHistory) await tx.table('sync_state').clear();
             if (this.historyIncarnation !== undefined) await tx.table('sync_state').put({
-                id: 'sync_history', historyIncarnation: this.historyIncarnation, phase: 'ready', resetTarget: null,
+                id: 'sync_history', historyIncarnation: this.historyIncarnation, phase: 'ready', resetTarget: null, firstBindEligible: false,
                 cursor: 0, deviceId, lastSyncAt: Date.now(),
             });
+            await invalidateFirstBindEligibility(tx);
             await tx.table('sync_state').put({
                 historyIncarnation: this.historyIncarnation,
                 id: getSyncStateId(this.scope),

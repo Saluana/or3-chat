@@ -20,6 +20,7 @@
  */
 
 import Dexie from 'dexie';
+import { invalidateFirstBindEligibility } from '~/core/sync/history-incarnation';
 import type { IndexableType } from 'dexie';
 import { logicalStoreName, type Or3DB } from '~/db/client';
 import { STATIC_FILE_CEILING } from '~~/shared/storage/file-policy';
@@ -819,6 +820,7 @@ export async function importWorkspaceStream({
                 throw new Error('Backup contains an unsupported record type.');
             }
 
+            if (db.tables.some(table => logicalStoreName(table.name) === 'sync_state')) await invalidateFirstBindEligibility(db);
             if (!sawEnd) {
                 throw new Error(
                     'Backup is incomplete or truncated: terminal marker missing.'

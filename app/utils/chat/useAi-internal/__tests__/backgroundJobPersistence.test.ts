@@ -4,7 +4,7 @@ import type { BackgroundJobTracker, StoredMessage } from '../types';
 import type { BackgroundJobStatus } from '~/utils/chat/openrouterStream';
 import type { RequestUsage } from '~~/shared/chat/compaction';
 import { projectTranscriptForOpenRouter, storedMessagesToCanonicalTranscript } from '~/utils/chat/transcript';
-import { normalizeTerminalWorkflowState, persistBackgroundJobUpdate, persistBackgroundTrackingInterruption } from '../backgroundJobPersistence';
+import { projectCanonicalBackgroundMessage, normalizeTerminalWorkflowState, persistBackgroundJobUpdate, persistBackgroundTrackingInterruption } from '../backgroundJobPersistence';
 
 const beforePatch = vi.hoisted(() => vi.fn());
 const measurement = (iteration = 1, prompt = 180000): RequestUsage => ({
@@ -51,6 +51,26 @@ describe('background projection ownership across tabs', () => {
         (globalThis as { __OR3_TEST_CLIENT?: boolean }).__OR3_TEST_CLIENT = undefined;
         db.close();
         await db.delete();
+    });
+
+    it.each(['metadata', 'canonical-status', 'legacy-status'] as const)('consumes birth proof atomically with remote background projection (%s)', async boundary => {
+        await db.messages.put({ id: 'assistant', thread_id: 'thread', role: 'assistant', index: 0,
+            created_at: 1, updated_at: 1, clock: 1, pending: true, deleted: false,
+            data: { content: 'local', generation_id: 'generation', background_job_id: 'job' } });
+        const project = () => {
+            if (boundary === 'metadata') return projectCanonicalBackgroundMessage(db, 'assistant', { data: { content: 'remote' } });
+            const tracker = trackerFor(db); tracker.canonicalHistory = boundary === 'canonical-status';
+            return persistBackgroundJobUpdate(tracker, statusFor(undefined, 'complete'), 'remote', true);
+        };
+        const quota = () => { throw new DOMException('quota', 'QuotaExceededError'); };
+        db.messages.hook('updating', quota);
+        await expect(project()).rejects.toMatchObject({ name: 'QuotaExceededError' });
+        db.messages.hook('updating').unsubscribe(quota);
+        expect(await db.sync_state.get('sync_history')).toMatchObject({ firstBindEligible: true });
+        expect((await db.messages.get('assistant'))?.data).toMatchObject({ content: 'local' });
+        await project();
+        expect((await db.messages.get('assistant'))?.data).toMatchObject({ content: 'remote' });
+        expect(await db.sync_state.get('sync_history')).toMatchObject({ firstBindEligible: false });
     });
 
     it.each(['complete', 'error', 'aborted'] as const)('retains the last measured request through a %s actual-DB merge and canonical reload', async (terminal) => {

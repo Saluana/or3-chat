@@ -1207,7 +1207,9 @@ describe('SubscriptionManager', () => {
             expect(provider.subscribe).not.toHaveBeenCalled();
             expect(await db.kv.get('old')).toMatchObject({ value: 'last good' });
             expect(await db.kv.get('new')).toBeUndefined();
-            expect(await db.sync_state.count()).toBe(0);
+            expect(await db.sync_state.toArray()).toEqual([expect.objectContaining({
+                id: 'sync_history', firstBindEligible: true, historyIncarnation: null,
+            })]);
             await vi.advanceTimersByTimeAsync(60_000);
             expect(snapshot).toHaveBeenCalledTimes(1);
             quota = false;

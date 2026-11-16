@@ -4,7 +4,8 @@ import { HookBridge as LegacyHookBridge } from './fixtures/legacy-v31-hook-bridg
 import { getWriteTxTableNames } from '~/db/util';
 import { ConflictResolver } from '../conflict-resolver';
 import { discardQuarantined, exportQuarantined, listQuarantined, recoverHistoryPut } from '../sync-quarantine';
-import { getSyncStateId } from '../cursor-manager';
+import { getSyncStateId, CursorManager } from '../cursor-manager';
+import { readHistory, requestHistoryReset } from '../history-incarnation';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Or3DB, databaseRecovery } from '~/db/client';
 import type { SnapshotResponse, SyncProvider } from '~~/shared/sync/types';
@@ -170,7 +171,7 @@ describe('applySnapshotChain', () => {
             data: { content: 'saved partial', reasoning_text: 'private reasoning',
                 generation_id: 'request', generation_lease_id: 'request',
                 generation_heartbeat_at: canonical === 'expired lease' ? 1 : Date.now() } };
-        await db.messages.put(pending);
+        await db.transaction('rw', getWriteTxTableNames(db, 'messages'), () => db.messages.put(pending));
         expect(await db.pending_ops.count()).toBe(0);
         const items: SnapshotResponse['items'] = [];
         if (canonical === 'older') items.push({ kind: 'row', tableName: 'messages', pk: pending.id,
@@ -913,6 +914,24 @@ describe('P0-5 durable reset failures', () => {
 
 
 describe('P0-5 browser connection boundaries', () => {
+    it('fences an unmarked upgraded connection before engine initialization', async () => {
+        setHookEngine(createTypedHookEngine(createHookEngine()));
+        const db = createDb(); const old = new Dexie(db.name);
+        old.version(31).stores(legacySchema); await old.open();
+        await old.table('kv').put({ id: 'unknown', name: 'unknown', value: 'old view', clock: 1, deleted: false, created_at: 1, updated_at: 1 });
+        old.close(); await db.open(); getHookBridge(db).start();
+        const stager = new SnapshotStager(db, { workspaceId: db.name }); await stager.start();
+        await stager.appendPage({ historyIncarnation: 'I', workspaceId: db.name, snapshotId: 'first', highWatermark: 0, items: [], nextPageToken: null });
+        await stager.apply('local');
+        await expect(db.transaction('rw', getWriteTxTableNames(db, 'kv'), () => db.kv.put({
+            id: 'unknown', name: 'unknown', value: 'stale editor completion', clock: 2, deleted: false, created_at: 1, updated_at: 2,
+        }))).rejects.toMatchObject({ name: 'AbortError' });
+        expect(await db.kv.get('unknown')).toBeUndefined();
+        expect(await db.pending_ops.count()).toBe(0);
+        expect(await db.sync_quarantine.toArray()).toContainEqual(expect.objectContaining({ variant: 'history_reset', pk: 'unknown' }));
+        expect((await readHistory(db)).firstBindEligible).not.toBe(true);
+    });
+
     it('aborts stale local editor and foreground-generation writes after atomic installation', async () => {
         setHookEngine(createTypedHookEngine(createHookEngine()));
         const db = createDb(); await db.open();
@@ -943,6 +962,7 @@ describe('P0-5 browser connection boundaries', () => {
         expect(await old.table('pending_ops').count()).toBe(1);
         old.close(); await upgrade;
         expect(await db.sync_state.get('sync_history')).toMatchObject({ phase: 'unbound', historyIncarnation: null });
+        expect((await readHistory(db)).firstBindEligible).not.toBe(true);
         expect(await db.pending_ops.get('legacy')).toMatchObject({ payload: { original: true } });
         const nativeReopen = new Promise((resolve, reject) => {
             const request = indexedDB.open(db.name, 300);
@@ -969,6 +989,7 @@ it('P0-5.9 reopened legacy Dexie cannot mutate, coalesce or launder installed hi
     });
     try {
         await old.open(); old.close(); await db.open();
+        expect((await readHistory(db)).firstBindEligible).not.toBe(true);
         await db.sync_state.put({ id: 'sync_history', historyIncarnation: 'J', phase: 'ready', resetTarget: null, cursor: 80, deviceId: 'new', lastSyncAt: 1 });
         const row = { id: 'current', name: 'current', value: 'J', deleted: false, clock: 1, hlc: '1:0:new', created_at: 1, updated_at: 1 };
         await db.kv.put(row);
@@ -1134,4 +1155,107 @@ it('P0-5.3 explicit recovery checks parents, creates a new put and retains linke
     expect(action?.stamp.opId).not.toBe(originalId);
     expect(await db.kv.get('saved')).toMatchObject({ value: 'original' });
     expect(await db.sync_quarantine.get('held-put')).toMatchObject({ status: 'repaired', repairedOpId: action?.id, op: { stamp: { opId: originalId } } });
+});
+
+
+describe('proven first binding', () => {
+    const scope = { workspaceId: 'workspace-1' };
+    const local = (id: string, clock = 2) => ({ id, name: id, value: 'local', clock, hlc: `${clock}:0:local`,
+        op_id: testUuid(id), deleted: false, created_at: 1, updated_at: 2 });
+    const op = (row: ReturnType<typeof local>, operation: 'put' | 'delete' = 'put'): PendingOp => ({ id: row.op_id,
+        tableName: 'kv', pk: row.id, operation, payload: operation === 'put' ? row : undefined,
+        stamp: { opId: row.op_id, clock: row.clock, hlc: row.hlc, deviceId: 'local' },
+        createdAt: 1, attempts: 0, status: 'pending' });
+    const page = (historyIncarnation = 'I'): SnapshotResponse => ({ historyIncarnation, workspaceId: scope.workspaceId,
+        snapshotId: historyIncarnation, highWatermark: 0, items: [], nextPageToken: null });
+
+    it('preserves birth proof through reopen and discovery, replays local LWW edits/deletes, and consumes even at zero', async () => {
+        const db = createDb(); await db.open();
+        expect(await db.sync_state.get('sync_history')).toMatchObject({ firstBindEligible: true, historyIncarnation: null });
+        db.close(); await db.open();
+        expect(await requestHistoryReset(db, await readHistory(db), 'I')).toBe(true);
+        expect(await db.sync_state.get('sync_history')).toMatchObject({ firstBindEligible: true });
+        const stager = new SnapshotStager(db, scope); await stager.start();
+        const remote = { ...local('conflict'), value: 'remote', clock: 3, hlc: '3:0:remote' };
+        await stager.appendPage({ ...page(), items: [{ kind: 'row', tableName: 'kv', pk: remote.id, payload: remote,
+            revision: { clock: 3, hlc: remote.hlc, opId: remote.op_id } }] });
+        const originals = [op(local('during-download')), op(local('conflict')), op(local('deleted'), 'delete'),
+            { ...op(local('permanent')), status: 'failed_permanent' as const }];
+        await db.pending_ops.bulkPut(originals);
+        await db.kv.bulkPut([local('during-download'), local('conflict'), local('permanent')]);
+        const quota = () => { throw new DOMException('quota', 'QuotaExceededError'); };
+        db.kv.hook('creating', quota);
+        await expect(stager.apply('local')).rejects.toMatchObject({ name: 'QuotaExceededError' });
+        db.kv.hook('creating').unsubscribe(quota);
+        expect(await db.sync_state.get('sync_history')).toMatchObject({ firstBindEligible: true, historyIncarnation: null });
+        expect(await db.pending_ops.toArray()).toEqual(expect.arrayContaining(originals));
+        await stager.apply('local');
+        expect((await db.kv.get('during-download'))?.value).toBe('local');
+        expect((await db.kv.get('conflict'))?.value).toBe('remote');
+        expect(await db.tombstones.get('kv:deleted')).toMatchObject({ clock: 2 });
+        expect(await db.pending_ops.toArray()).toEqual(expect.arrayContaining(originals));
+        expect(await db.sync_quarantine.count()).toBe(0);
+        expect(await db.sync_state.get('sync_history')).toMatchObject({ firstBindEligible: false, historyIncarnation: 'I' });
+        expect(await db.sync_state.get(getSyncStateId(scope))).toMatchObject({ cursor: 0 });
+        const next = new SnapshotStager(db, scope); await next.start(); await next.appendPage(page('J')); await next.apply('local');
+        expect(await db.pending_ops.count()).toBe(0);
+        expect(await db.sync_quarantine.toArray()).toEqual(expect.arrayContaining(originals.map(original => expect.objectContaining({ variant: 'history_reset', op: original }))));
+    });
+
+    it('retains local-only provenance when I is replaced by J during private staging and lets only one installer bind', async () => {
+        const db = createDb(); await db.open();
+        const original = op(local('offline-before-I'));
+        await db.pending_ops.put(original); await db.kv.put(original.payload as any);
+        const stale = new SnapshotStager(db, scope); await stale.start(); await stale.appendPage(page('I'));
+        await requestHistoryReset(db, await readHistory(db), 'J');
+        const winner = new SnapshotStager(db, scope); await winner.start(); await winner.appendPage(page('J'));
+        await expect(stale.apply('local')).rejects.toMatchObject({ name: 'AbortError' });
+        expect(await db.sync_state.get('sync_history')).toMatchObject({ firstBindEligible: true });
+        await winner.apply('local');
+        expect(await db.pending_ops.get(original.id)).toEqual(original);
+        expect(await db.kv.get(original.pk)).toBeDefined();
+        expect(await db.sync_quarantine.count()).toBe(0);
+        expect(await db.sync_state.get('sync_history')).toMatchObject({ firstBindEligible: false, historyIncarnation: 'J' });
+    });
+
+    it.each(['cursor', 'pulled-zero', 'lost-response', 'unmarked-zero'])('never grants birth proof to an upgraded legacy DB (%s)', async kind => {
+        const db = createDb(); const legacy = new Dexie(db.name);
+        legacy.version(31).stores(legacySchema);
+        await legacy.open();
+        await legacy.table('sync_state').put({ id: getSyncStateId(scope), cursor: kind === 'cursor' ? 12 : 0, lastSyncAt: 0, deviceId: '' });
+        if (kind !== 'unmarked-zero') await legacy.table('kv').put(local(kind));
+        legacy.close(); await db.open();
+        expect((await readHistory(db) as any).firstBindEligible).not.toBe(true);
+        const original = op(local('unknown'));
+        await db.pending_ops.put(original);
+        const stager = new SnapshotStager(db, scope); await stager.start(); await stager.appendPage(page()); await stager.apply('local');
+        expect(await db.pending_ops.count()).toBe(0);
+        expect(await db.sync_quarantine.toArray()).toContainEqual(expect.objectContaining({ variant: 'history_reset', op: original }));
+    });
+
+    it.each(['coverage', 'remote', 'unfenced-push', 'guard-deleted'])('irreversibly invalidates first-bind eligibility at %s', async boundary => {
+        const db = createDb(); await db.open();
+        expect(await db.sync_state.get('sync_history')).toMatchObject({ firstBindEligible: true });
+        setHookEngine(createTypedHookEngine(createHookEngine()));
+        if (boundary === 'coverage') {
+            const cursor = new CursorManager(db, { workspaceId: 'other-scope' });
+            await cursor.setCursor(1); await cursor.reset();
+        } else if (boundary === 'remote') {
+            const row = local('remote');
+            await new ConflictResolver(db).applyChanges([{ tableName: 'kv', pk: row.id, op: 'put', payload: row,
+                stamp: { ...op(row).stamp }, serverVersion: 1 }]);
+        } else if (boundary === 'unfenced-push') {
+            await db.pending_ops.put(op(local('lost-response')));
+            let dispatched = false;
+            const provider = { id: 'unqualified', mode: 'direct', push: async () => {
+                dispatched = true;
+                expect(await db.sync_state.get('sync_history')).toMatchObject({ firstBindEligible: false });
+                throw new Error('committed but response lost');
+            } } as unknown as SyncProvider;
+            const outbox = new OutboxManager(db, provider, scope);
+            try { await outbox.flush(); expect(dispatched).toBe(true); } finally { outbox.stop(); }
+        } else await db.sync_state.delete('sync_history');
+        db.close(); await db.open();
+        expect((await readHistory(db) as any).firstBindEligible).not.toBe(true);
+    });
 });

@@ -43,6 +43,18 @@ restarts its transport without navigating the page. Old connection handles keep
 their original history and stay closed, so delayed callbacks cannot write into
 the installed history. Cloud restore waits for this initial handoff before
 starting destination uploads.
+A newly created protected workspace DB carries a birth-only
+`firstBindEligible: true` proof in the shared guard. Its first atomic snapshot
+adopts purely local startup preferences, edits/deletes and offline conversations
+with ordinary LWW rules, preserving streaming progress, drafts, attachments and
+failure statuses. The proof is consumed with installation, even at cursor zero.
+It survives private staging/restart but is invalidated by remote data, nonzero
+coverage in any scope, imports, or an unfenced push before dispatch. Neither
+cursor zero nor an absent history proves eligibility. Existing/upgraded DBs and
+later history replacements retain the conservative held-work policy; existing
+holds stay held. A fresh default theme therefore does not produce a false
+server-recovery hold. No server/wire or explicit recovery rules change.
+
 Edits committed while downloading are included. Quota failure preserves the old
 state and leaves pushes closed. Same-history expiry keeps ordinary pending replay.
 
