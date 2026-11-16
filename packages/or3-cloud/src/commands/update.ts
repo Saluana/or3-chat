@@ -552,7 +552,7 @@ async function runUpdateCommand(directory: string, flags: Flags, asJson: boolean
       phaseDurationsMs: { 'replace-and-verify': Date.now() - startedAtMs },
       operatorHandoff,
     };
-    state.syncHistory = { historyIncarnation: state.syncHistory?.historyIncarnation, certification: 'certified' };
+    state.syncHistory = { historyIncarnation: (state.syncHistory as { historyIncarnation?: string } | undefined)?.historyIncarnation, certification: 'certified' };
     state.rollback = {
       appVersion: sourceVersion,
       image: sourceImage,
