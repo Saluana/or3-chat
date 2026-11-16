@@ -1,3 +1,4 @@
+import { requireValidationTarget, supportsHistoryReset, qualifyLegacySnapshot } from '../backup/history-incarnation';
 import { readFile, statfs } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { restoreVolumeArchive } from '../backup/archive';
@@ -54,7 +55,7 @@ import {
   scheduleDashboardOperatorHandoff,
 } from '../runtime/dashboard-operator';
 import { ensureDocker } from '../runtime/docker';
-import { waitForDeepHealth } from '../runtime/health';
+import { inspectInstalledHistory, waitForDeepHealth } from '../runtime/health';
 import {
   assertImageReleaseIdentity,
   assertSupportedHostArchitecture,
@@ -62,7 +63,7 @@ import {
   pullImage,
   requireImageDigest,
 } from '../runtime/images';
-import { startProject, stopProject } from '../runtime/project';
+import { startProject, startValidationProject, validationAdmissionProof, stopProject } from '../runtime/project';
 import {
   MANAGED_RUNTIME_GID,
   MANAGED_RUNTIME_UID,
@@ -306,7 +307,16 @@ async function runUpdateCommand(directory: string, flags: Flags, asJson: boolean
   await assertSupportedHostArchitecture(targetImageTag);
   await assertImageReleaseIdentity(targetImageTag, targetVersion);
   const targetImage = imageAtDigest(targetImageTag, targetDigest);
+  await requireValidationTarget(loaded.directory, targetImage);
+  const writeSchema = writeStateSchema();
+  const minimumSource = packagedMinimumSourceVersion();
+  if (state.schemaVersion < 2 && minimumSource && compareReleaseVersions(state.appVersion, minimumSource) < 0) {
+    throw new Error(`State schema 2 requires source compatibility bridge ${minimumSource} or newer; refused before downtime`);
+  }
+  const legacySource = !await supportsHistoryReset(loaded.directory, imageAtDigest(state.image, state.imageDigest));
+  if (legacySource) await qualifyLegacySnapshot(loaded.directory, state, { ...state, backupId: '', createdAt: '', dataSha256: '', schemaVersion: 1 }, env, targetImage);
   const oldEnv = { ...env };
+  delete oldEnv.OR3_CLOUD_UPDATE_VALIDATION;
   const targetDeploymentId = env.OR3_DEPLOYMENT_ID ?? state.deploymentId ?? id('deployment');
   const backupId = id('backup');
   const pending: PendingOperation = {
@@ -322,6 +332,7 @@ async function runUpdateCommand(directory: string, flags: Flags, asJson: boolean
     backupPath: backupDirectory(loaded.directory, backupId),
     phase: 'prepared',
   };
+  state.schemaVersion = writeSchema;
   await markPending(loaded.directory, state, pending);
   const startedAtMs = Date.now();
   try {
@@ -332,18 +343,9 @@ async function runUpdateCommand(directory: string, flags: Flags, asJson: boolean
     // are prepared while the source is still running.
     const operator = await prepareVerifiedDashboardOperator(loaded.directory, targetVersion);
     const backup = await createBackup(loaded.directory, state, env, { restartAfter: false, backupId, safetySnapshot: true });
-    // The bridge release reads schema 2 but keeps writing schema 1. Only a
-    // release explicitly qualified to write schema 2 migrates, and only after
-    // the compatibility bridge is present (declared minimum source). Migration
-    // and the initial pending update share one atomic write, so an empty
-    // new-format state is never published on its own.
-    const writeSchema = writeStateSchema();
-    if (writeSchema >= 2) {
-      const minimumSource = packagedMinimumSourceVersion();
-      if (minimumSource && compareReleaseVersions(state.appVersion, minimumSource) < 0) {
-        throw new Error(`OR3 ${targetVersion} writes managed state schema 2, which requires the compatibility bridge (source ${minimumSource} or newer). Run the host CLI bridge update first, then retry this schema-2 release.`);
-      }
-      state.schemaVersion = writeSchema;
+    if (legacySource) {
+      const policy = await qualifyLegacySnapshot(loaded.directory, state, backup.manifest, oldEnv, targetImage, backup.backupDir);
+      await updatePending(loaded.directory, state, { legacySource: policy });
     }
     await updatePending(loaded.directory, state, {
       backupId: backup.backupId,
@@ -363,7 +365,7 @@ async function runUpdateCommand(directory: string, flags: Flags, asJson: boolean
       await removeDashboardOperator(loaded.directory, state.mode);
     }
     const nextEnv = {
-      ...withoutDashboardOperator(env),
+      ...withoutDashboardOperator(oldEnv),
       OR3_VERSION: targetVersion,
       OR3_IMAGE: targetImage,
       OR3_DEPLOYMENT_ID: targetDeploymentId,
@@ -374,6 +376,7 @@ async function runUpdateCommand(directory: string, flags: Flags, asJson: boolean
     const recreateDataVolume = updateRequiresVolumeRecreation(state, env);
     await updatePending(loaded.directory, state, {
       phase: 'target-mutating',
+      admission: { state: 'closed', targetImage },
       previousRootOwnership,
       recreateDataVolume,
     });
@@ -410,6 +413,7 @@ async function runUpdateCommand(directory: string, flags: Flags, asJson: boolean
         await restoreBackupData(loaded.directory, state, oldEnv, backup.backupDir, {
           recreateDataVolume,
           previousSafetySnapshot: true,
+          replacement: state.incompleteOperation?.legacySource ?? 'safety', replacementRole: 'safety',
           remoteReferencePolicy: 'warn',
         });
       } catch (restoreError) {
@@ -420,11 +424,47 @@ async function runUpdateCommand(directory: string, flags: Flags, asJson: boolean
         state,
         `Update to ${targetVersion} failed and was restored: ${redact(error instanceof Error ? error.message : String(error), secretValues(oldEnv))}`,
       );
+      delete state.incompleteOperation;
+      Object.assign(state, recovered);
       throw new Error(recovered.lastError);
     }
+    const validationEnv = { ...nextEnv, OR3_CLOUD_UPDATE_VALIDATION: 'true' };
+    await updatePending(loaded.directory, state, { phase: 'validating-target', admission: { state: 'closed', targetImage } });
+    await writeSecure(deploymentPaths(loaded.directory).env, serializeEnv(validationEnv));
+    try {
+      await startValidationProject(loaded.directory, state, validationEnv);
+      const history = await inspectInstalledHistory(loaded.directory, state.mode);
+      if (history === state.syncHistory?.abandonedIncarnation) throw new Error('Re-upgrade reused abandoned history incarnation');
+      state.syncHistory = { historyIncarnation: history, certification: 'pending' };
+    } catch (error) {
+      if (!await validationAdmissionProof(loaded.directory, state)) {
+        throw new Error('Candidate validation failed without closed-admission proof; NOT restored automatically. Run recover --dry-run, then recover --restore --yes to preserve current data and restore deliberately.', { cause: error });
+      }
+      const closed = state.incompleteOperation!.admission!;
+      await stopProject(loaded.directory, state.mode);
+      await updatePending(loaded.directory, state, { phase: 'restoring-previous' });
+      await restoreBackupData(loaded.directory, state, oldEnv, backup.backupDir, { recreateDataVolume, previousSafetySnapshot: true, replacement: state.incompleteOperation?.legacySource ?? 'safety', replacementRole: 'safety', remoteReferencePolicy: 'warn' });
+      state.lastReceipt = {
+        schemaVersion: 1, operationId: pending.id, cliVersion: PACKAGE_VERSION,
+        source: { appVersion: state.appVersion, image: state.image, imageDigest: state.imageDigest },
+        target: { appVersion: targetVersion, image: targetImage, imageDigest: targetDigest },
+        observed: { appVersion: state.appVersion, image: state.image, imageDigest: state.imageDigest },
+        completedAt: now(), rollbackBackupId: backup.backupId,
+        checks: [{ code: 'closed-admission', status: 'passed', detail: `Immutable health-only container ${closed.containerId ?? 'inspected after failed boot'}` },
+          { code: 'automatic-source-restore', status: 'passed', detail: 'Authenticated source snapshot restored and deeply healthy' }],
+        warnings: [{ code: 'update-failed-source-restored', severity: 'warning', message: 'Update failed during closed validation; previous deployment restored.' }],
+        phaseDurationsMs: { validationAndRecovery: Date.now() - startedAtMs }, operatorHandoff: 'not-required',
+      };
+      const recovered = await commitPreMutationRecovery(loaded.directory, state, `Update validation failed and source snapshot restored: ${redact(error instanceof Error ? error.message : String(error), secretValues(validationEnv))}`);
+      delete state.incompleteOperation;
+      Object.assign(state, recovered);
+      throw new Error(recovered.lastError);
+    }
+    await stopProject(loaded.directory, state.mode);
     // The target is about to start and may accept writes. Persist this boundary
     // first; a failure from here must never silently discard those writes.
-    await updatePending(loaded.directory, state, { phase: 'starting-target' });
+    await updatePending(loaded.directory, state, { phase: 'starting-target', admission: { state: 'may-be-open', targetImage } });
+    await writeSecure(deploymentPaths(loaded.directory).env, serializeEnv(nextEnv));
     try {
       await startProject(loaded.directory, state.mode, nextEnv);
     } catch (error) {
@@ -512,6 +552,7 @@ async function runUpdateCommand(directory: string, flags: Flags, asJson: boolean
       phaseDurationsMs: { 'replace-and-verify': Date.now() - startedAtMs },
       operatorHandoff,
     };
+    state.syncHistory = { historyIncarnation: state.syncHistory?.historyIncarnation, certification: 'certified' };
     state.rollback = {
       appVersion: sourceVersion,
       image: sourceImage,

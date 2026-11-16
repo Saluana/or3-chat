@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
@@ -143,6 +143,36 @@ describe('managed Docker profile projection', () => {
         } finally { await rm(directory, { recursive: true, force: true }); }
     });
 
+    it('makes the published 036 Basic profile executable without accepting old or future reset runtimes', async () => {
+        const directory = await realpath(await mkdtemp(join(tmpdir(), 'or3-history-profile-')));
+        try {
+            for (const [name, version] of [['or3-provider-sqlite', '0.0.31'], ['or3-provider-fs', '0.0.18']]) {
+                const target = join(directory, 'node_modules', name);
+                await mkdir(target, { recursive: true });
+                await writeFile(join(target, 'package.json'), JSON.stringify({ version }));
+            }
+            const scripts = join(directory, 'scripts/docker');
+            await mkdir(scripts, { recursive: true });
+            for (const name of ['sync-history-reset.mjs', 'backup-inspect.mjs']) {
+                await writeFile(join(scripts, name), await readFile(join(root, 'scripts/docker', name)));
+            }
+            const generate = () => spawnSync('node', [join(root, 'scripts/docker/prepare-backup-inspection.mjs')], {
+                cwd: directory, env: { ...process.env, OR3_DOCKER_PROFILE: 'basic-sqlite-fs' }, encoding: 'utf8', timeout: 10_000,
+            });
+            const capability = () => spawnSync('node', [join(scripts, 'sync-history-reset.mjs'), 'capability'], { encoding: 'utf8', timeout: 10_000 });
+            const ready = generate();
+            expect(ready.status, ready.stderr).toBe(0);
+            const current = capability();
+            expect(current.status, current.stderr).toBe(0);
+            expect(JSON.parse(current.stdout)).toEqual({ contract: 'incarnation-v1', validation: 'health-only-v1', profile: 'basic-sqlite-fs', legacySnapshotRollback: 'legacy-033-rollback-v1' });
+            await writeFile(join(directory, 'node_modules/or3-provider-sqlite/package.json'), JSON.stringify({ version: '0.0.30' }));
+            expect(generate().status).toBe(0);
+            expect(capability().status).not.toBe(0);
+            await writeFile(join(directory, 'node_modules/or3-provider-sqlite/package.json'), JSON.stringify({ version: '0.0.32' }));
+            expect(generate().status).not.toBe(0);
+        } finally { await rm(directory, { recursive: true, force: true }); }
+    });
+
     it('builds the exact launch inspection contract without filesystem dependencies', async () => {
         const directory = await mkdtemp(join(tmpdir(), 'or3-inspection-profile-'));
         try {
@@ -160,7 +190,7 @@ describe('managed Docker profile projection', () => {
             const profile = JSON.parse(await readFile(join(directory, 'scripts/docker/backup-inspection-profile.json'), 'utf8'));
             expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
             expect(() => assertS3InspectionProfile(profile)).not.toThrow();
-            expect(profile).toEqual({ contract: 2, sqlite: '0.0.30', s3: '0.0.15', historyIncarnation: 'unqualified' });
+            expect(profile).toEqual({ contract: 2, sqlite: '0.0.30', s3: '0.0.15', historyIncarnation: 'unqualified', healthValidation: 'unqualified' });
             await writeFile(join(directory, 'node_modules/or3-provider-s3/package.json'), JSON.stringify({ version: '0.0.14' }));
             expect(run('clerk-sqlite-s3').status).not.toBe(0);
             expect(run('unknown').status).not.toBe(0);

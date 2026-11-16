@@ -128,6 +128,8 @@ export type PruneResult = { removed: number; deferred: Diagnostic[] };
 
 export function retentionProtectedIds(state: ManagedState) {
   const protectedIds = new Set<string>(state.pinnedHistoryBackups ?? []);
+  if (state.incompleteOperation?.abandonedBackupId) protectedIds.add(state.incompleteOperation.abandonedBackupId);
+  if (state.syncHistory?.sourceBackupId) protectedIds.add(state.syncHistory.sourceBackupId);
   if (state.rollback?.backupId) protectedIds.add(state.rollback.backupId);
   const pending = state.incompleteOperation;
   if (pending?.backupId) protectedIds.add(pending.backupId);

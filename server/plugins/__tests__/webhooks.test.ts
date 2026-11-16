@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
+    validationOnlyMock,
     useRuntimeConfigMock,
     isWebhooksEnabledMock,
     resolveConfiguredWebhookStoreMock,
@@ -10,6 +11,7 @@ const {
     stopActiveWebhookRuntimeMock,
     setActiveWebhookRuntimeMock,
 } = vi.hoisted(() => ({
+    validationOnlyMock: vi.fn(() => false),
     useRuntimeConfigMock: vi.fn(),
     isWebhooksEnabledMock: vi.fn(),
     resolveConfiguredWebhookStoreMock: vi.fn(),
@@ -18,6 +20,8 @@ const {
     stopActiveWebhookRuntimeMock: vi.fn(),
     setActiveWebhookRuntimeMock: vi.fn(),
 }));
+
+vi.mock('../../utils/shutdown/runtime', () => ({ getShutdownRuntime: () => ({ controller: { validationOnly: validationOnlyMock } }) }));
 
 vi.mock('#imports', () => ({
     useRuntimeConfig: useRuntimeConfigMock,
@@ -86,8 +90,17 @@ function createNitroApp() {
 }
 
 describe('webhook Nitro plugin runtime', () => {
+    it('RB-2 validation never claims or delivers enabled webhook work', async () => {
+        validationOnlyMock.mockReturnValue(true);
+        const plugin = (await import('../20.webhooks')).default;
+        await plugin(createNitroApp());
+        expect(resolveConfiguredWebhookStoreMock).not.toHaveBeenCalled();
+        expect(createWebhookDispatcherMock).not.toHaveBeenCalled();
+        expect(createWebhookEventBridgeMock).not.toHaveBeenCalled();
+    });
     beforeEach(() => {
         vi.useFakeTimers();
+        validationOnlyMock.mockReturnValue(false);
 
         useRuntimeConfigMock.mockReset().mockReturnValue(createRuntimeConfig());
         isWebhooksEnabledMock.mockReset().mockReturnValue(true);

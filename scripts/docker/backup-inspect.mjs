@@ -2,23 +2,25 @@ import { createHash } from 'node:crypto';
 // App-owned offline compatibility contract v1, not a provider runtime export.
 // Only trusted image code runs; archived databases are opened without migration.
 import { createRequire } from 'node:module';
-import { readFileSync, lstatSync } from 'node:fs';
+import { readFileSync, lstatSync, openSync, readSync, closeSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const INSPECTION_PROFILE = Object.freeze({ contract: 1, sqlite: '0.0.30', filesystem: '0.0.18' });
+export const HISTORY_SQLITE_VERSION = '0.0.31';
 export const S3_INSPECTION_PROFILE = Object.freeze({ contract: 2, sqlite: '0.0.30', s3: '0.0.15' });
 export const QUALIFIED_MIGRATIONS = ['001_init', '002_sync_tables', '003_sync_hardening', '004_auth_invites', '005_admin_stores', '006_sync_snapshots', '007_device_cursor_ownership', '008_upload_intents', '009_or3_connect', '010_connect_user_code_hmac', '011_connect_environment_scope_indexes', '012_connect_credential_redelivery', '013_connect_environment_lifecycle', '014_connect_retention_activation', '015_rate_limits', '016_connect_runtime_binding', '017_background_jobs', '018_background_admission_cancels', '019_background_generation_history', '020_background_generation_receipts', '021_background_request_usage', '022_canonical_chat_reader', '023_legacy_chat_seek_index', '024_signup_invites', '025_background_shutdown_accounting', '026_retained_storage_usage', '027_verified_storage_usage', '028_user_scoped_device_cursors', '029_delegation_wait', '030_storage_generations', '031_storage_generation_uploads', '032_sync_observations', '033_tool_result_operation_ids'];
+export const HISTORY_MIGRATIONS = [...QUALIFIED_MIGRATIONS, '034_sync_intent_fingerprint', '035_sync_unavailable_records', '036_sync_history_incarnation'];
 // Explicitly retain complete published histories when a future migration is added.
-const QUALIFIED_MIGRATION_COUNTS = [24, 26, 28, 29, 31, 32, 33];
+const QUALIFIED_MIGRATION_COUNTS = [24, 26, 28, 29, 31, 32, 33, 36];
 const MAX_ENTRIES = 100_000;
 const MAX_DATABASE_BYTES = 192 * 1024 * 1024;
 // One MiB accommodates the admitted 256 KiB payload and persisted fields.
 const MAX_ROW_BYTES = 1024 * 1024;
 
 export function assertInspectionProfile(profile) {
-  if (profile?.contract !== 1 || profile.sqlite !== INSPECTION_PROFILE.sqlite || profile.filesystem !== INSPECTION_PROFILE.filesystem) {
-    throw new Error(`Unsupported offline backup inspection profile; qualified SQLite ${INSPECTION_PROFILE.sqlite} and FS ${INSPECTION_PROFILE.filesystem} image required`);
+  if (profile?.contract !== 1 || ![INSPECTION_PROFILE.sqlite, HISTORY_SQLITE_VERSION].includes(profile.sqlite) || profile.filesystem !== INSPECTION_PROFILE.filesystem) {
+    throw new Error(`Unsupported offline backup inspection profile; qualified SQLite ${INSPECTION_PROFILE.sqlite}/${HISTORY_SQLITE_VERSION} and FS ${INSPECTION_PROFILE.filesystem} image required`);
   }
 }
 
@@ -35,7 +37,7 @@ export function assertArchiveInspectionProfile(profile) {
 
 // The managed image pins BusyBox's verbose tar format. Unsupported/ambiguous
 // inventory formats fail closed rather than guessing file names or link types.
-export function readBackupInventory(text) {
+export function readBackupInventory(text, legacy = false) {
   if (Buffer.byteLength(text) > 8 * 1024 * 1024) throw new Error('Backup inspection inventory resource limit exceeded');
   const entries = new Map();
   for (const line of text.trimEnd().split('\n')) {
@@ -57,9 +59,9 @@ export function readBackupInventory(text) {
   }
   let bytes = 0;
   const selected = [];
-  for (const name of ['sync.sqlite', 'sync.sqlite-wal']) {
+  for (const name of (legacy ? ['sync.sqlite', 'sync.sqlite-wal', 'sync.sqlite-shm', 'auth.sqlite', 'auth.sqlite-wal', 'auth.sqlite-shm'] : ['sync.sqlite', 'sync.sqlite-wal'])) {
     const entry = entries.get(name);
-    if (!entry && name.endsWith('-wal')) continue;
+    if (!entry && /-(wal|shm)$/.test(name)) continue;
     if (!entry || entry.type !== '-') throw new Error('Backup inspection requires regular SQLite database/WAL entries');
     bytes += entry.size;
     selected.push(entry.original);
@@ -81,10 +83,10 @@ function openCanonicalDatabase(Database, databasePath) {
     for (const name of ['s_file_meta', 'kysely_migration']) {
       if (db.prepare('SELECT type FROM sqlite_master WHERE name = ?').get(name)?.type !== 'table') throw new Error('Unsupported offline canonical SQLite schema');
     }
-    const migrationNames = db.prepare('SELECT CASE WHEN length(CAST(name AS BLOB)) <= 128 THEN name ELSE NULL END AS name FROM kysely_migration ORDER BY name LIMIT ?').all(QUALIFIED_MIGRATIONS.length + 1).map(row => row.name);
+    const migrationNames = db.prepare('SELECT CASE WHEN length(CAST(name AS BLOB)) <= 128 THEN name ELSE NULL END AS name FROM kysely_migration ORDER BY name LIMIT ?').all(HISTORY_MIGRATIONS.length + 1).map(row => row.name);
     // Accept previously published histories and the current candidate.
     // Interrupted upgrades remain unsupported.
-    const expectedMigrations = QUALIFIED_MIGRATIONS.slice(0, migrationNames.length);
+    const expectedMigrations = HISTORY_MIGRATIONS.slice(0, migrationNames.length);
     if (!QUALIFIED_MIGRATION_COUNTS.includes(migrationNames.length) || JSON.stringify(migrationNames) !== JSON.stringify(expectedMigrations)) throw new Error('Unsupported offline canonical SQLite migration history');
     const columns = db.prepare('PRAGMA table_info(s_file_meta)').all();
     for (const [name, type, pk] of [['workspace_id', 'TEXT', 1], ['id', 'TEXT', 2], ['data_json', 'TEXT', 0], ['deleted', 'INTEGER', 0]]) {
@@ -95,6 +97,43 @@ function openCanonicalDatabase(Database, databasePath) {
     db.close();
     throw error;
   }
+}
+
+/** Read-only historical policy inspection; never runs provider migrations/reset.
+ * Hash files before opening SQLite, which can create/update SHM even read-only. */
+export function inspectLegacyHistory(Database, databasePath, authPath) {
+  const payloadSha256 = {};
+  for (const path of [databasePath, ...(authPath ? [authPath] : [])]) {
+    for (const suffix of ['', '-wal', '-shm']) {
+      const file = path + suffix;
+      let info;
+      try { info = lstatSync(file); } catch (error) { if (suffix && error.code === 'ENOENT') { payloadSha256[file.split('/').pop()] = null; continue; } throw error; }
+      if (!info.isFile() || info.size > MAX_DATABASE_BYTES) throw new Error('Invalid legacy database payload');
+      const hash = createHash('sha256'), chunk = Buffer.alloc(65536), fd = openSync(file, 'r');
+      try { for (let n; (n = readSync(fd, chunk, 0, chunk.length, null));) hash.update(chunk.subarray(0,n)); }
+      finally { closeSync(fd); }
+      payloadSha256[file.split('/').pop()] = hash.digest('hex');
+    }
+  }
+  const db = openCanonicalDatabase(Database, databasePath);
+  try {
+    const ledger = db.prepare('SELECT name FROM kysely_migration ORDER BY name LIMIT 37').all().map(row => row.name);
+    if (JSON.stringify(ledger) !== JSON.stringify(QUALIFIED_MIGRATIONS.slice(0,33))
+      || db.prepare("SELECT name FROM sqlite_master WHERE name IN ('sync_history','sync_unavailable_records') LIMIT 1").get()
+      || db.prepare('PRAGMA table_info(change_log)').all().some(column => column.name === 'intent_fingerprint')) throw new Error('Unsupported legacy 033 ledger/schema');
+    const core = ['change_log','device_cursors','server_version_counter','sync_snapshots','sync_snapshot_items','tombstones',
+      's_threads','s_messages','s_projects','s_posts','s_file_meta','s_kv','s_notifications'];
+    const schema = db.prepare(`SELECT name,CASE WHEN length(CAST(sql AS BLOB))<=32768 THEN sql ELSE NULL END AS sql FROM sqlite_master WHERE type='table' AND name IN (${core.map(()=>'?').join(',')}) ORDER BY name`).all(...core);
+    // Captured from the exact published 0.1.116 image, not inferred from a
+    // package label or ledger rows that could hide missing/modified tables.
+    if (createHash('sha256').update(JSON.stringify(schema)).digest('hex') !== '2a0086226c035a29be7aa0883b2469ed0c41910ef1ba3008255c350ed9f2dfd5') throw new Error('Unsupported legacy 033 core schema');
+    if (authPath) {
+      const auth = new Database(authPath, { readonly: true, fileMustExist: true });
+      try { if (auth.pragma('quick_check', { simple: true }) !== 'ok') throw new Error('Invalid legacy auth database'); }
+      finally { auth.close(); }
+    }
+    return { policy: 'legacy-033-rollback-v1', ledger: '033', complete: true, payloadSha256 };
+  } finally { db.close(); }
 }
 
 // Loaded only for semantic inspection; profile preparation and inventory checks
@@ -172,6 +211,10 @@ export function inspectSyncSemantics(Database, databasePath, { requireHistoryInc
     if (defect && defect !== 'invalid_record_envelope' && defect !== 'unknown_table') fault(table, row, defect, true);
   };
   try {
+    if (requireHistoryIncarnation) {
+      const ledger = db.prepare('SELECT name FROM kysely_migration ORDER BY name LIMIT 37').all().map(row=>row.name);
+      if (JSON.stringify(ledger) !== JSON.stringify(HISTORY_MIGRATIONS)) throw new Error('Incarnation certification requires the complete current ledger');
+    }
     for (const table of ['change_log', 'server_version_counter', 'tombstones', 'sync_snapshots', 'sync_snapshot_items', ...SYNC_TABLES.map(name => `s_${name}`)]) {
       if (db.prepare('SELECT type FROM sqlite_master WHERE name=?').get(table)?.type !== 'table') throw new Error('Unsupported offline sync SQLite schema');
     }
@@ -361,7 +404,12 @@ export function summarizeS3References(Database, databasePath, options) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const profile = JSON.parse(readFileSync(new URL('./backup-inspection-profile.json', import.meta.url), 'utf8'));
-    if (process.argv[2] === 'sync') {
+    if (process.argv[2] === 'legacy') {
+      assertInspectionProfile(profile);
+      const Database = createRequire(import.meta.url)('/app/.output/server/node_modules/better-sqlite3');
+      const root = process.argv[3] ?? '/scratch';
+      console.log(JSON.stringify(inspectLegacyHistory(Database, root + '/sync.sqlite', root + '/auth.sqlite')));
+    } else if (process.argv[2] === 'sync') {
       assertArchiveInspectionProfile(profile);
       const Database = createRequire(import.meta.url)('/app/.output/server/node_modules/better-sqlite3');
       const result = inspectSyncSemantics(Database, process.argv[3] ?? '/scratch/sync.sqlite', { requireHistoryIncarnation: profile.historyIncarnation === 'v1' });
@@ -377,7 +425,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     } else {
       if (process.argv[2] === 'inventory') assertArchiveInspectionProfile(profile);
       else assertInspectionProfile(profile);
-      const inventory = readBackupInventory(readFileSync('/scratch/inventory', 'utf8'));
+      const inventory = readBackupInventory(readFileSync('/scratch/inventory', 'utf8'), process.argv[3] === 'legacy');
       if (process.argv[2] === 'inventory') {
         console.log(JSON.stringify({ selected: inventory.selected, bytes: inventory.bytes }));
       } else if (process.argv[2] === 'references') {

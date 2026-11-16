@@ -206,6 +206,8 @@ export function publicStateProjection(state: ManagedState) {
           targetVersion: pending.targetVersion ?? null,
           targetImageDigest: pending.targetImageDigest ?? null,
           historyReset: pending.historyReset ?? null,
+          admission: pending.admission ?? null,
+          abandonedBackupId: pending.abandonedBackupId ?? null,
           remoteReconcile: pending.remoteReconcile ?? null,
           backupProgress: pending.backupProgress ? {
             stage: pending.backupProgress.stage,
@@ -235,6 +237,7 @@ export function observationFindings(observation: DeploymentObservation): Diagnos
   if (observation.identityMatches === false) {
     findings.push({ code: 'image-digest-mismatch', severity: 'blocker', resource: observation.state?.image, message: `Recorded digest ${observation.recordedImageDigest} does not match the local image ${observation.actualImageDigest}.` });
   }
+  if (observation.state?.syncHistory?.certification === 'legacy-snapshot') findings.push({ code: 'legacy-snapshot-restored', severity: 'warning', message: 'Application may be healthy, but the restored legacy snapshot has no incarnation protection. Re-upgrade required; preserve pinned histories.' });
   return findings;
 }
 

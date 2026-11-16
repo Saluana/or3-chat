@@ -1,4 +1,4 @@
-import { supportsHistoryReset, requireHistoryResetTarget, prepareHistoryReset, commitHistoryReset } from './history-incarnation';
+import { supportsHistoryReset, requireHistoryResetTarget, prepareHistoryReset, commitHistoryReset, qualifyLegacySnapshot, prepareLegacyReplacement, verifyLegacyReplacement } from './history-incarnation';
 import { join } from 'node:path';
 import { assertExistingVaultCustody } from './vault';
 import { readAuthenticatedBackupConfig } from './config';
@@ -8,7 +8,7 @@ import {
   MANAGED_ASSET_INVENTORY_VERSION,
   restoreManagedAssets,
 } from '../deployment/assets';
-import type { BackupManifest, ManagedState } from '../deployment/contracts';
+import type { BackupManifest, ManagedState, LegacySnapshotPolicy } from '../deployment/contracts';
 import { dashboardUpdatesEnabled, parseEnv, restoreStorageConfiguration, secretValues, serializeEnv, withoutDashboardOperator } from '../deployment/env';
 import { imageAtDigest } from '../deployment/identity';
 import { deploymentPaths } from '../deployment/paths';
@@ -153,12 +153,13 @@ export async function restoreBackupData(
   state: ManagedState,
   env: Record<string, string>,
   backupPath: string,
-  options: { recreateDataVolume?: boolean; beforeStart?: () => Promise<void>; previousSafetySnapshot?: boolean; remoteReferencePolicy?: 'warn' } = {},
+  options: { recreateDataVolume?: boolean; beforeStart?: () => Promise<void>; previousSafetySnapshot?: boolean; remoteReferencePolicy?: 'warn'; replacement?: 'safety' | LegacySnapshotPolicy; replacementRole?: 'safety' } = {},
 ) {
   const manifest = await readManifest(backupPath, directory);
-  const safety = options.previousSafetySnapshot === true && !options.beforeStart;
+  const safety = options.replacement === 'safety' || options.replacementRole === 'safety';
+  const legacy = typeof options.replacement === 'object' ? options.replacement : undefined;
   const capable = await supportsHistoryReset(directory, imageAtDigest(manifest.image, manifest.imageDigest));
-  if (!capable && !safety) await requireHistoryResetTarget(directory, imageAtDigest(manifest.image, manifest.imageDigest));
+  if (!capable && !safety && !legacy) await requireHistoryResetTarget(directory, imageAtDigest(manifest.image, manifest.imageDigest));
   if (!state.incompleteOperation) throw new Error('History replacement requires an external operation journal');
   assertRestorableManagedAssets(manifest);
   const backupConfig = await readAuthenticatedBackupConfig(backupPath, manifest);
@@ -220,7 +221,11 @@ export async function restoreBackupData(
 
   // Fence all writers before journaling and before volume recreation/extraction.
   await stopProject(directory, state.mode);
-  await prepareHistoryReset(directory, state, manifest, safety);
+  if (legacy) {
+    const rechecked = await qualifyLegacySnapshot(directory, state, manifest, backupEnv, legacy.inspectorImage, backupPath);
+    if (JSON.stringify(rechecked) !== JSON.stringify(legacy)) throw new Error('Legacy eligibility changed');
+    await prepareLegacyReplacement(directory, state, manifest, legacy, safety);
+  } else await prepareHistoryReset(directory, state, manifest, safety);
   if (options.recreateDataVolume) await removeManagedDataVolumeForRecreation(directory, state);
   if (
     dashboardUpdatesEnabled(directory)
@@ -235,6 +240,7 @@ export async function restoreBackupData(
   await writeSecure(deploymentPaths(directory).env, serializeEnv(restoredEnv));
   await restoreManagedAssets(directory, backupPath, manifest);
   await restoreVolumeArchive(directory, state.mode, restoredEnv, backupPath);
+  if (legacy) await verifyLegacyReplacement(directory, state, manifest, legacy);
   // Application startup can migrate an empty SQLite payload into a healthy
   // schema. Check the extracted snapshot while no application writes are
   // possible, so an invalid payload still follows safe pre-start recovery.
@@ -253,13 +259,13 @@ export async function restoreBackupData(
   if (!snapshotCheck.ok) {
     throw new Error(`Restored snapshot integrity verification failed. ${redact(snapshotCheck.stderr, secretValues(restoredEnv))}`);
   }
-  if (!capable) {
+  if (!capable && !legacy) {
     state.syncHistory = { certification: 'history-reset-required' };
     await updatePending(directory, state, { phase: 'history-reset-required' });
     throw new Error('DEGRADED byte-preservation recovery is stopped/isolated: target lacks incarnation runtime; history-reset-required');
   }
-  await commitHistoryReset(directory, state, manifest, restoredEnv.OR3_SQLITE_DB_PATH!, options.previousSafetySnapshot === true);
-  if (manifest.schemaVersion === 1) await restoreGenerationIdentities(directory, state, restoredEnv, backupPath, { previousSafetySnapshot: options.previousSafetySnapshot });
+  if (!legacy) await commitHistoryReset(directory, state, manifest, restoredEnv.OR3_SQLITE_DB_PATH!, options.previousSafetySnapshot === true);
+  if (!legacy && manifest.schemaVersion === 1) await restoreGenerationIdentities(directory, state, restoredEnv, backupPath, { previousSafetySnapshot: options.previousSafetySnapshot });
   if (!options.previousSafetySnapshot) {
     // This restore path has no isolated target-migration entrypoint. Certify the
     // extracted candidate before public startup; never start an old/incapable
@@ -306,15 +312,21 @@ export async function restorePreMutationSnapshot(
   const pending = state.incompleteOperation;
   if (!pending) throw new Error('No incomplete operation is available to restore.');
   const previous = await recordedBackupPath(directory, pending);
+  let replacement = pending.legacySource?.backupId === previous.manifest.backupId ? pending.legacySource : undefined;
+  if (!replacement && pending.operation === 'update' && pending.explicitLossConsent && previous.manifest.appVersion === '0.1.116'
+    && !await supportsHistoryReset(directory, imageAtDigest(previous.manifest.image, previous.manifest.imageDigest))) {
+    const config = parseEnv(await readAuthenticatedBackupConfig(previous.path, previous.manifest));
+    replacement = await qualifyLegacySnapshot(directory, state, previous.manifest, config, pending.targetImage ?? env.OR3_IMAGE!, previous.path);
+  }
   await updatePending(directory, state, { phase: 'restoring-previous' });
   if (pending.recreateDataVolume) {
-    await restoreBackupData(directory, state, env, previous.path, { recreateDataVolume: true, previousSafetySnapshot: true, remoteReferencePolicy: 'warn' });
+    await restoreBackupData(directory, state, env, previous.path, { recreateDataVolume: true, previousSafetySnapshot: true, remoteReferencePolicy: 'warn', replacement: replacement ?? 'safety', replacementRole: 'safety' });
     return previous;
   }
   if (pending.previousRootOwnership) {
     await pullAndRequireImage(state.image, state.imageDigest, 'Previous deployment');
     await setManagedVolumeRootOwnership(directory, state, env, state.image, pending.previousRootOwnership);
   }
-  await restoreBackupData(directory, state, env, previous.path, { previousSafetySnapshot: true, remoteReferencePolicy: 'warn' });
+  await restoreBackupData(directory, state, env, previous.path, { previousSafetySnapshot: true, remoteReferencePolicy: 'warn', replacement: replacement ?? 'safety', replacementRole: 'safety' });
   return previous;
 }

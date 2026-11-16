@@ -1384,17 +1384,18 @@ test('fails closed on malformed or empty manifests', () => {
   }
 });
 
-test('this bridge release writes schema 1 while reading both formats', () => {
-  expect(writeStateSchema()).toBe(1);
+test('RB-12 qualified writer writes schema 2 while reading both formats', () => {
+  expect(writeStateSchema()).toBe(2);
   const env = buildEnv({ mode: 'local', version: '0.1.12', directory: '/tmp/or3-schema-bridge', email: 'admin@example.com', password: 'AValidPassword123', port: 3000 });
-  expect(stateFromEnv('/tmp/or3-schema-bridge', env, 'local', 'init', `sha256:${'a'.repeat(64)}`).schemaVersion).toBe(1);
+  expect(stateFromEnv('/tmp/or3-schema-bridge', env, 'local', 'init', `sha256:${'a'.repeat(64)}`).schemaVersion).toBe(2);
 });
 
-test('a bridge writer refuses to mutate newer-schema state', () => {
+test('qualified writer accepts both known schemas and reader refuses future state', () => {
   const env = buildEnv({ mode: 'local', version: '0.1.12', directory: '/tmp/or3-schema-writable', email: 'admin@example.com', password: 'AValidPassword123', port: 3000 });
   const state = stateFromEnv('/tmp/or3-schema-writable', env, 'local', 'init', `sha256:${'a'.repeat(64)}`);
   expect(() => assertStateSchemaWritable(state)).not.toThrow();
-  expect(() => assertStateSchemaWritable({ ...state, schemaVersion: 2 })).toThrow('qualified to write schema 1');
+  expect(() => assertStateSchemaWritable({ ...state, schemaVersion: 2 })).not.toThrow();
+  expect(() => assertKnownStateSchema(3)).toThrow('Unsupported managed state schema');
 });
 
 test('status projection never exposes credential-reset secrets or raw configuration', () => {

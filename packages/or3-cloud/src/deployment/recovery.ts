@@ -54,6 +54,7 @@ export async function commitPreMutationRecovery(
     state.lastSuccessfulOperation,
     await imageDigest(restoredEnv.OR3_IMAGE),
   );
+  recovered.lastReceipt = state.lastReceipt;
   recovered.syncHistory = state.syncHistory;
   recovered.pinnedHistoryBackups = state.pinnedHistoryBackups;
   recovered.rollback = state.rollback;

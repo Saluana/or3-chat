@@ -4,6 +4,7 @@ import { registerRestartAdapter, readRestartStatus, callRestartController, hasRe
 import { getShutdownRuntime } from '../utils/shutdown/runtime';
 
 export default defineNitroPlugin(nitro => {
+    if (getShutdownRuntime().controller.validationOnly()) return;
     if (!useRuntimeConfig().auth.enabled) return;
     // Installed Nitro terminates dev workers without awaiting close in CI/test
     // execution mode. Do not advertise an unqualified development lifecycle.

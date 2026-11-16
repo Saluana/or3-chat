@@ -1,3 +1,4 @@
+import { HISTORY_MIGRATIONS } from './backup-inspect.mjs';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -5,7 +6,7 @@ import { createRequire } from 'node:module';
 
 /** Target-owned offline contract. Publication must qualify exact runtime and migration history together. */
 export function assertHistoryResetProfile(profile) {
-    if (profile?.historyIncarnation !== 'v1' || !Array.isArray(profile.historyMigrations) || !profile.historyMigrations.length) {
+    if (profile?.historyIncarnation !== 'v1' || !Array.isArray(profile.historyMigrations) || JSON.stringify(profile.historyMigrations) !== JSON.stringify(HISTORY_MIGRATIONS)) {
         throw new Error('Target image is not qualified for history incarnation reset/runtime v1');
     }
 }
@@ -35,7 +36,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     try {
         const profile = JSON.parse(readFileSync(new URL('./backup-inspection-profile.json', import.meta.url), 'utf8'));
         assertHistoryResetProfile(profile);
-        if (process.argv[2] === 'capability') console.log(JSON.stringify({ contract: 'incarnation-v1' }));
+        if (process.argv[2] === 'capability') console.log(JSON.stringify({ contract: 'incarnation-v1', ...(profile.contract === 1 && profile.healthValidation === 'health-only-v1' ? { validation: 'health-only-v1', profile: 'basic-sqlite-fs' } : {}), ...(profile.legacySnapshotRollback === 'legacy-033-rollback-v1' ? { legacySnapshotRollback: profile.legacySnapshotRollback } : {}) }));
         else if (process.argv[2] === 'reset') {
             const require = createRequire('/app/.output/server/package.json');
             console.log(JSON.stringify(resetHistory(require('better-sqlite3'), process.argv[3], process.argv[4], profile.historyMigrations)));

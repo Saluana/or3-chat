@@ -1,16 +1,19 @@
 import { afterEach, expect, test, setDefaultTimeout } from 'bun:test';
 import { Database } from 'bun:sqlite';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { inspectLegacyHistory } from '../../../scripts/docker/backup-inspect.mjs';
+import { QUALIFIED_MIGRATIONS } from '../../../scripts/docker/backup-inspect.mjs';
 import { resetHistory, assertHistoryResetProfile } from '../../../scripts/docker/sync-history-reset.mjs';
+import { serializeEnv } from '../src/deployment/env';
 import { createSandbox, type Sandbox } from './process-harness';
 setDefaultTimeout(30_000);
 const roots: string[] = []; const sandboxes: Sandbox[] = [];
 afterEach(async () => { await Promise.all([...roots.splice(0).map(path => rm(path, { recursive: true, force: true })), ...sandboxes.splice(0).map(s => s.cleanup())]); });
 class OfflineDatabase {
     private db: Database;
-    constructor(path: string) { this.db = new Database(path); }
+    constructor(path: string, options?: { readonly?: boolean }) { this.db = new Database(path, options?.readonly ? { readonly: true } : { readwrite: true }); }
     pragma(sql: string, opts?: { simple?: boolean }) { return opts?.simple ? this.db.query(`PRAGMA ${sql}`).values()[0]?.[0] : this.db.exec(`PRAGMA ${sql}`); }
     prepare(sql: string) { return this.db.query(sql); }
     exec(sql: string) { this.db.exec(sql); }
@@ -63,8 +66,12 @@ test('P0-5.9 incapable exact target is rejected before any replacement', async (
 
 test('P0-5.9 incapable safety recovery preserves bytes but stays stopped and durably degraded', async () => {
     const s = await createSandbox(); sandboxes.push(s);
-    await s.configure({ historyResetSupported: false, failures: [{ match: ' stop or3', skip: 1, times: 1, message: 'target stop interrupted' }] });
-    const result = await s.cli(['update']); expect(result.exitCode).toBe(1);
+    expect((await s.cli(['backup'])).exitCode).toBe(0);
+    const [backupId] = await s.backupIds();
+    const source = await s.readState();
+    await s.writeState({ ...source, incompleteOperation: { id: 'interrupted-old-update', operation: 'update', startedAt: source.updatedAt, message: 'legacy ambiguous journal', phase: 'target-mutating', backupId } });
+    await s.configure({ historyResetSupported: false }); await s.reset();
+    const result = await s.cli(['recover', '--restore', '--yes']); expect(result.exitCode).toBe(1);
     const state = await s.readState();
     expect(state.incompleteOperation?.phase).toBe('history-reset-required');
     expect(state.syncHistory?.certification).toBe('history-reset-required');
@@ -102,4 +109,65 @@ test('P0-5.7 ordinary update/restart retain identity, and data rollback rotates 
     expect((await s.cli(['rollback', '--yes'])).exitCode).toBe(0);
     expect((await s.readState()).syncHistory).toMatchObject({ certification: 'degraded' });
     expect((await s.readState()).syncHistory!.historyIncarnation).not.toBe(original);
+});
+
+// RB-1/11: use real SQLite, preserve bytes and refuse disguised upgraded ledgers.
+test('RB-1 legacy offline inspection is read-only and rejects 034-036 residue', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'rb-legacy-')); roots.push(root);
+    const path = join(root, 'sync.sqlite');
+    const providerRoot = new URL('../../../node_modules/or3-provider-sqlite/dist/runtime/server/db/', import.meta.url);
+    const { initializeSqliteDb, destroySqliteDb } = await import(new URL('kysely.js', providerRoot).href);
+    const { runMigrations } = await import(new URL('migrate.js', providerRoot).href);
+    try { await runMigrations(await initializeSqliteDb({ path, driver:'bun' })); } finally { await destroySqliteDb(); }
+    const db = new Database(path);
+    db.exec("INSERT INTO server_version_counter(workspace_id,value) VALUES('original-workspace',80)");
+    expect(inspectLegacyHistory(OfflineDatabase, path)).toMatchObject({ policy: 'legacy-033-rollback-v1', ledger: '033', complete: true });
+    expect(db.query('SELECT * FROM server_version_counter').all()).toEqual([{ workspace_id:'original-workspace', value:80 }]);
+    for (const sql of ['CREATE TABLE sync_history(id INTEGER, incarnation TEXT)', 'CREATE TABLE sync_unavailable_records(id TEXT)', 'ALTER TABLE change_log ADD COLUMN intent_fingerprint TEXT']) {
+        db.exec(sql);
+        expect(() => inspectLegacyHistory(OfflineDatabase, path)).toThrow(/legacy|migration history/);
+        db.exec(sql.startsWith('CREATE TABLE sync_history') ? 'DROP TABLE sync_history' : sql.startsWith('CREATE TABLE sync_unavailable_records') ? 'DROP TABLE sync_unavailable_records' : 'ALTER TABLE change_log DROP COLUMN intent_fingerprint');
+    }
+    db.exec('ALTER TABLE s_messages RENAME TO missing_messages');
+    expect(() => inspectLegacyHistory(OfflineDatabase, path)).toThrow(/legacy/);
+    db.exec('ALTER TABLE missing_messages RENAME TO s_messages');
+    db.query('DELETE FROM kysely_migration WHERE name=?').run(QUALIFIED_MIGRATIONS[10]);
+    expect(() => inspectLegacyHistory(OfflineDatabase, path)).toThrow(/legacy|migration history/);
+    db.close();
+});
+
+// Transport-policy proof only: the native/image/browser lanes own source fidelity.
+test('RB-4 qualified immediate legacy rollback consumes once, warns after restart and pins both histories', async () => {
+    const s = await createSandbox({ version: '0.1.116' }); sandboxes.push(s);
+    const digest = 'sha256:f7e6c507f2fb944c91f285e976b69b578ff9a24cdb8ceeaf22db7e22c79de692';
+    const image = 'ghcr.io/saluana/or3-chat@' + digest;
+    const env = { ...s.env, OR3_IMAGE: image };
+    const state = { ...await s.readState(), image, imageDigest: digest };
+    await writeFile(join(s.directory,'.env'), serializeEnv(env), { mode: 0o600 });
+    await s.writeState(state);
+    await s.configure({ runningImage: image }); await s.reset();
+    expect((await s.cli(['backup'])).exitCode).toBe(0); const [backupId] = await s.backupIds();
+    const currentImage = 'ghcr.io/saluana/or3-chat@sha256:' + 'b'.repeat(64);
+    await writeFile(join(s.directory,'.env'), serializeEnv({ ...env, OR3_IMAGE: currentImage }), { mode: 0o600 });
+    await s.writeState({ ...state, image: currentImage, imageDigest: 'sha256:'+'b'.repeat(64), syncHistory: { historyIncarnation:'abandoned-I', certification:'certified' },
+      rollback: { appVersion:'0.1.116', image, imageDigest:digest, backupId:backupId!, createdAt:state.updatedAt } });
+    await s.configure({ runningImage:currentImage, incapableImage:digest, legacyQualified:true }); await s.reset();
+    expect((await s.cli(['rollback'])).exitCode).toBe(1);
+    expect(await s.traceText()).not.toContain('tar xzf');
+    const rolled = await s.cli(['rollback','--yes']); expect(rolled.exitCode,rolled.output).toBe(0);
+    expect(rolled.output).toContain('ALL server changes');
+    const restored = await s.readState();
+    expect(restored.rollback).toBeUndefined();
+    expect(restored.syncHistory).toMatchObject({ certification:'legacy-snapshot', historyReplaced:true, abandonedIncarnation:'abandoned-I' });
+    expect(restored.syncHistory?.historyIncarnation).toBeUndefined();
+    expect(restored.pinnedHistoryBackups?.length).toBeGreaterThanOrEqual(2);
+    expect(await s.traceText()).not.toContain('sync-history-reset.mjs reset');
+    expect((await s.cli(['restart'])).exitCode).toBe(0);
+    expect((await s.readState()).syncHistory).toEqual(restored.syncHistory);
+    const doctor = await s.cli(['doctor']); expect(doctor.exitCode,doctor.output).toBe(0);
+    expect(doctor.output).toContain('incarnation protection unavailable');
+    expect((await s.cli(['backup','prune','--keep','1','--force','--yes'])).exitCode).toBe(0);
+    for (const pinned of restored.pinnedHistoryBackups!) expect(await s.backupIds()).toContain(pinned);
+    expect((await s.cli(['rollback','--yes'])).exitCode).toBe(1);
+    expect((await s.cli(['restore',backupId!,'--yes'])).exitCode).toBe(1);
 });

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { installedManagedAssetChecksums } from '../src/deployment/assets';
 import { serializeEnv, parseEnv } from '../src/deployment/env';
 import { PACKAGE_VERSION } from '../src/package-info';
+import { updateCommand } from '../src/commands/update';
 import { restoreCommand } from '../src/commands/restore';
 import { rollbackCommand } from '../src/commands/rollback';
 import { lifecycleFaults } from '../src/lifecycle-faults';
@@ -422,7 +423,7 @@ test('recover refuses missing vault custody before replaying credential reset', 
   expect((await fixture.readState()).incompleteOperation?.id).toBe('missing-vault-credential-reset');
 });
 
-test('a failure while replacing the target restores the verified snapshot and keeps the journal for confirmation', async () => {
+test('a failure before target startup restores source and commits a terminal recovery', async () => {
   const fixture = await sandbox();
   // The first stop belongs to the snapshot; the second is the replacement.
   await fixture.configure({ failures: [
@@ -439,14 +440,11 @@ test('a failure while replacing the target restores the verified snapshot and ke
   const [snapshot] = await fixture.backupIds();
   const extracted = (await fixture.traceEntries()).filter((entry) => entry.args.join(' ').includes('tar xzf'));
   expect(extracted.map((entry) => entry.stdinSha)).toEqual([`sha256:${await backupDataSha(fixture, snapshot)}`]);
-  // Characterizes current behavior: the outer failure handler re-persists the
-  // in-memory journal after the restoration commit, so the operator confirms
-  // with an explicit (idempotent) restore rather than finding silent success.
-  expect(state.incompleteOperation).toMatchObject({ operation: 'update', phase: 'starting-previous', backupId: snapshot });
-  expect(JSON.parse((await fixture.cli(['recover', '--dry-run', '--json'])).stdout)).toMatchObject({ decision: { action: 'require-explicit-restore', snapshotId: snapshot } });
-  const confirmed = await fixture.cli(['recover', '--restore', '--yes']);
+  expect(state.incompleteOperation).toBeUndefined();
+  const before = await fixture.readStateText();
+  const confirmed = await fixture.cli(['recover']);
   expect(confirmed.exitCode, confirmed.output).toBe(0);
-  expect((await fixture.readState()).incompleteOperation).toBeUndefined();
+  expect(await fixture.readStateText()).toBe(before);
 });
 
 test('a failed automatic restoration leaves the restoring-previous phase for an explicit restore', async () => {
@@ -493,7 +491,7 @@ test('a failed automatic restoration leaves the restoring-previous phase for an 
 
 test('a target that starts but fails verification is never restored implicitly', async () => {
   const fixture = await sandbox();
-  await fixture.configure({ failures: [{ match: ' up -d', times: 1, message: 'fixture target start failure' }] });
+  await fixture.configure({ failures: [{ match: ' up -d', skip: 1, times: 1, message: 'fixture target start failure' }] });
   const failed = await fixture.cli(['update']);
   expect(failed.exitCode).toBe(1);
   expect(failed.stderr).toContain('Writes may have been accepted, so the deployment was NOT restored automatically');
@@ -783,7 +781,7 @@ for (const operation of ['restore', 'rollback'] as const) {
       expect((await fixture.traceEntries()).filter(entry => entry.args.join(' ').includes('tar xzf'))).toHaveLength(2);
     });
   }
-  test(`${operation} preserves the target when terminal state recording fails`, async () => {
+  test.each(['beforeStateWrite', 'afterStateWrite'] as const)(`${operation} preserves the target when terminal state recording fails at %s`, async (fault) => {
     const fixture = await sandbox();
     expect((await fixture.cli(['backup'])).exitCode).toBe(0);
     const [target] = await fixture.backupIds();
@@ -798,22 +796,25 @@ for (const operation of ['restore', 'rollback'] as const) {
     lifecycleFaults.beforeCommand = (_command, args) => {
       if (args[0] === 'inspect' && args.includes('{{.Image}}')) started = true;
     };
-    lifecycleFaults.beforeStateWrite = () => {
+    lifecycleFaults[fault] = () => {
       if (started && !failed) { failed = true; throw new Error('fixture terminal commit failure'); }
     };
     const previousPath = process.env.PATH;
     process.env.PATH = `${join(fixture.root, 'bin')}:${previousPath}`;
     try {
-      await expect(operation === 'restore'
+      const action = operation === 'restore'
         ? restoreCommand(fixture.directory, { yes: true }, [target])
-        : rollbackCommand(fixture.directory, { yes: true })).rejects.toThrow('NOT restored automatically');
+        : rollbackCommand(fixture.directory, { yes: true });
+      if (fault === 'beforeStateWrite') await expect(action).rejects.toThrow('NOT restored automatically');
+      else await action;
     } finally {
       process.env.PATH = previousPath;
       delete lifecycleFaults.beforeCommand;
-      delete lifecycleFaults.beforeStateWrite;
+      delete lifecycleFaults[fault];
     }
     expect(failed).toBe(true);
-    expect((await fixture.readState()).incompleteOperation).toMatchObject({ operation, phase: 'starting-target' });
+    if (fault === 'beforeStateWrite') expect((await fixture.readState()).incompleteOperation).toMatchObject({ operation, phase: 'starting-target' });
+    else expect((await fixture.readState()).incompleteOperation).toBeUndefined();
     expect((await fixture.traceEntries()).filter(entry => entry.args.join(' ').includes('tar xzf'))).toHaveLength(1);
     expect((await fixture.cli(['recover', '--restore', '--yes'])).exitCode).toBe(0);
     expect((await fixture.readState()).incompleteOperation).toBeUndefined();
@@ -923,4 +924,79 @@ test('native database verification failure during automatic recovery keeps the s
   await fixture.configure({ failures: [] });
   expect((await fixture.cli(['recover', '--restore', '--yes'])).exitCode).toBe(0);
   expect((await fixture.readState()).incompleteOperation).toBeUndefined();
+});
+
+// RB-2/3: helper responses below simulate transport, never actual image proof.
+test('RB-2 refuses a target without health-only capability before stopping source', async () => {
+  const fixture = await sandbox();
+  await fixture.configure({ validationSupported: false });
+  const result = await fixture.cli(['update']);
+  expect(result.exitCode, result.output).toBe(1);
+  expect(result.output).toContain('health-only');
+  expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+});
+
+test('RB-2 proven validation failure restores source and returns update failure', async () => {
+  const fixture = await sandbox();
+  await fixture.configure({ failures: [{ match: 'OR3_VALIDATION_PROBE', times: 1, message: 'candidate health validation failed' }] });
+  const result = await fixture.cli(['update']);
+  expect(result.exitCode, result.output).toBe(1);
+  expect(result.output).toContain('restored');
+  const state = await fixture.readState();
+  expect(state.appVersion).toBe(OLD_VERSION);
+  expect(state.incompleteOperation).toBeUndefined();
+  expect(await fixture.traceText()).toContain('tar xzf');
+});
+
+test('RB-3 unknown validation mode never authorizes automatic data rollback', async () => {
+  const fixture = await sandbox();
+  await fixture.configure({ validationModeMismatch: true });
+  const result = await fixture.cli(['update']);
+  expect(result.exitCode, result.output).toBe(1);
+  expect((await fixture.readState()).incompleteOperation).toBeDefined();
+  const trace = await fixture.traceText();
+  expect(trace).not.toContain('tar xzf');
+  expect((await fixture.cli(['recover'])).exitCode).toBe(1);
+});
+
+test('RB-3 exposed update recovery preserves current bytes before source extraction', async () => {
+  const fixture = await sandbox();
+  await fixture.configure({ failures: [{ match: ' up -d', skip: 1, times: 1, message: 'normal startup interrupted' }] });
+  const update = await fixture.cli(['update']);
+  expect(update.exitCode, update.output).toBe(1);
+  expect((await fixture.readState()).incompleteOperation?.phase).toBe('starting-target');
+  await fixture.configure({ failures: [] }); await fixture.reset();
+  expect((await fixture.cli(['recover'])).exitCode).toBe(1);
+  expect(await fixture.traceText()).not.toContain('tar xzf');
+  await fixture.configure({ failures: [{ match: ' up -d', times: 1, message: 'recovery startup interrupted after possible writes' }] });
+  const first = await fixture.cli(['recover', '--restore', '--yes']);
+  expect(first.exitCode, first.output).toBe(1);
+  const firstSafety = (await fixture.readState()).incompleteOperation?.abandonedBackupId;
+  expect(firstSafety).toBeTruthy();
+  expect((await fixture.readState()).incompleteOperation?.phase).toBe('starting-previous');
+  await fixture.configure({ failures: [] }); await fixture.reset();
+  const result = await fixture.cli(['recover', '--restore', '--yes']);
+  expect(result.exitCode, result.output).toBe(0);
+  const trace = await fixture.traceText();
+  expect(trace.indexOf('tar czf')).toBeGreaterThan(-1);
+  expect((await fixture.readState()).pinnedHistoryBackups).toContain(firstSafety);
+  expect(trace.indexOf('tar czf')).toBeLessThan(trace.indexOf('tar xzf'));
+  expect((await fixture.readState()).pinnedHistoryBackups?.length).toBeGreaterThanOrEqual(2);
+});
+
+test('RB-10 a fault after the exposure journal never starts normally or auto-restores', async () => {
+  const fixture = await sandbox();
+  const previousPath = process.env.PATH;
+  process.env.PATH = `${join(fixture.root,'bin')}:${previousPath}`;
+  let injected = false;
+  lifecycleFaults.afterStateWrite = (state?: ManagedState) => {
+    if (!injected && state?.incompleteOperation?.admission?.state === 'may-be-open') { injected=true; throw new Error('exposure journal crash'); }
+  };
+  try { await expect(updateCommand(fixture.directory,{})).rejects.toThrow('exposure journal crash'); }
+  finally { process.env.PATH=previousPath; delete lifecycleFaults.afterStateWrite; }
+  expect(injected).toBe(true);
+  expect((await fixture.readState()).incompleteOperation).toMatchObject({ phase:'starting-target', admission:{state:'may-be-open'} });
+  expect((await fixture.trace()).filter(args=>args.includes('up'))).toHaveLength(1);
+  expect(await fixture.traceText()).not.toContain('tar xzf');
+  expect((await fixture.cli(['recover'])).exitCode).toBe(1);
 });
