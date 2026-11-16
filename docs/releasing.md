@@ -353,7 +353,7 @@ npm deprecate 'create-or3-chat@<0.1.12' 'Use npx @or3/cloud init; the creator is
 - Release notes include both image digests and the rollback warning.
 
 First-incarnation rollback qualification must pass against published 0.1.116,
-its exact digest and complete 033 schema. The existing candidate lifecycle job
+its exact digest and complete 032 schema. The existing candidate lifecycle job
 checks the old mutation-intent fence, kills the exact validation-only candidate,
 requires automatic authenticated source recovery, tests explicit exposed
 recovery and rollback, then records distinct pre-rollback/re-upgrade tokens and

@@ -1,4 +1,4 @@
--- Core schema captured from published or3-provider-sqlite@0.0.30 (OR3 Cloud 0.1.116).
+-- Core schema captured from published or3-provider-sqlite@0.0.29 (OR3 Cloud 0.1.116).
 -- SHA-256 of sorted [{name,sql}]: 2a0086226c035a29be7aa0883b2469ed0c41910ef1ba3008255c350ed9f2dfd5
 CREATE TABLE "change_log" ("id" text primary key, "workspace_id" text not null, "server_version" integer not null, "table_name" text not null, "pk" text not null, "op" text not null, "payload_json" text, "clock" integer not null, "hlc" text not null, "device_id" text not null, "op_id" text not null, "created_at" integer default (unixepoch()) not null);
 CREATE TABLE "device_cursors" ("id" text primary key, "workspace_id" text not null, "device_id" text not null, "last_seen_version" integer default 0 not null, "updated_at" integer default (unixepoch()) not null, "owner_user_id" text);

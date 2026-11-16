@@ -643,9 +643,9 @@ acceptance. A source/app rollback never silently rolls back a remote backend.
 
 ### First-incarnation legacy snapshot rollback qualification
 
-The candidate implements policy `legacy-033-rollback-v1` solely for its immediate
+The candidate implements policy `legacy-032-rollback-v1` solely for its immediate
 managed Basic Auth + SQLite + filesystem pre-update snapshot of published
-0.1.116 / SQLite 0.0.30 with the complete 033 ledger. The allowlisted published
+0.1.116 / SQLite 0.0.29 with the complete 032 ledger. The allowlisted published
 image index is `sha256:f7e6c507f2fb944c91f285e976b69b578ff9a24cdb8ceeaf22db7e22c79de692`;
 its amd64/arm64 manifests are checked separately. A version label or missing
 reset helper never grants eligibility. Offline read-only inspection checks the
@@ -668,7 +668,7 @@ the old schema-1 writer must refuse mutation of schema 2. Keep both pinned
 histories. If old startup may already have served writes, repeated destructive
 legacy recovery is refused rather than silently rewinding it again.
 
-Re-upgrade takes a fresh snapshot of the restored server, runs normal 034–036
+Re-upgrade takes a fresh snapshot of the restored server, runs normal 033–036
 startup migrations behind validation admission and verifies a fresh incarnation
 before normal startup. Old browser bundles retain legacy limitations; newer
 bundles preserve abandoned history for review and must never replay it into the

@@ -118,21 +118,21 @@ export function inspectLegacyHistory(Database, databasePath, authPath) {
   const db = openCanonicalDatabase(Database, databasePath);
   try {
     const ledger = db.prepare('SELECT name FROM kysely_migration ORDER BY name LIMIT 37').all().map(row => row.name);
-    if (JSON.stringify(ledger) !== JSON.stringify(QUALIFIED_MIGRATIONS.slice(0,33))
+    if (JSON.stringify(ledger) !== JSON.stringify(QUALIFIED_MIGRATIONS.slice(0,32))
       || db.prepare("SELECT name FROM sqlite_master WHERE name IN ('sync_history','sync_unavailable_records') LIMIT 1").get()
-      || db.prepare('PRAGMA table_info(change_log)').all().some(column => column.name === 'intent_fingerprint')) throw new Error('Unsupported legacy 033 ledger/schema');
+      || db.prepare('PRAGMA table_info(change_log)').all().some(column => column.name === 'intent_fingerprint')) throw new Error('Unsupported legacy 032 ledger/schema');
     const core = ['change_log','device_cursors','server_version_counter','sync_snapshots','sync_snapshot_items','tombstones',
       's_threads','s_messages','s_projects','s_posts','s_file_meta','s_kv','s_notifications'];
     const schema = db.prepare(`SELECT name,CASE WHEN length(CAST(sql AS BLOB))<=32768 THEN sql ELSE NULL END AS sql FROM sqlite_master WHERE type='table' AND name IN (${core.map(()=>'?').join(',')}) ORDER BY name`).all(...core);
     // Captured from the exact published 0.1.116 image, not inferred from a
     // package label or ledger rows that could hide missing/modified tables.
-    if (createHash('sha256').update(JSON.stringify(schema)).digest('hex') !== '2a0086226c035a29be7aa0883b2469ed0c41910ef1ba3008255c350ed9f2dfd5') throw new Error('Unsupported legacy 033 core schema');
+    if (createHash('sha256').update(JSON.stringify(schema)).digest('hex') !== '2a0086226c035a29be7aa0883b2469ed0c41910ef1ba3008255c350ed9f2dfd5') throw new Error('Unsupported legacy 032 core schema');
     if (authPath) {
       const auth = new Database(authPath, { readonly: true, fileMustExist: true });
       try { if (auth.pragma('quick_check', { simple: true }) !== 'ok') throw new Error('Invalid legacy auth database'); }
       finally { auth.close(); }
     }
-    return { policy: 'legacy-033-rollback-v1', ledger: '033', complete: true, payloadSha256 };
+    return { policy: 'legacy-032-rollback-v1', ledger: '032', complete: true, payloadSha256 };
   } finally { db.close(); }
 }
 

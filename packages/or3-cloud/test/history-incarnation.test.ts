@@ -118,12 +118,15 @@ test('RB-1 legacy offline inspection is read-only and rejects 034-036 residue', 
     // The rollback allowlist binds the immutable published .116 schema, not
     // today's migration implementation (whose historical DDL can evolve).
     const db = new Database(path);
-    db.exec(await readFile(new URL('./fixtures/legacy-033-core.sql', import.meta.url), 'utf8'));
+    db.exec(await readFile(new URL('./fixtures/legacy-032-core.sql', import.meta.url), 'utf8'));
     db.exec('CREATE TABLE kysely_migration(name TEXT PRIMARY KEY)');
-    for (const name of QUALIFIED_MIGRATIONS) db.query('INSERT INTO kysely_migration VALUES(?)').run(name);
+    for (const name of QUALIFIED_MIGRATIONS.slice(0, 32)) db.query('INSERT INTO kysely_migration VALUES(?)').run(name);
     db.exec("INSERT INTO server_version_counter(workspace_id,value) VALUES('original-workspace',80)");
-    expect(inspectLegacyHistory(OfflineDatabase, path)).toMatchObject({ policy: 'legacy-033-rollback-v1', ledger: '033', complete: true });
+    expect(inspectLegacyHistory(OfflineDatabase, path)).toMatchObject({ policy: 'legacy-032-rollback-v1', ledger: '032', complete: true });
     expect(db.query('SELECT * FROM server_version_counter').all()).toEqual([{ workspace_id:'original-workspace', value:80 }]);
+    db.query('INSERT INTO kysely_migration VALUES(?)').run(QUALIFIED_MIGRATIONS[32]);
+    expect(() => inspectLegacyHistory(OfflineDatabase, path)).toThrow(/legacy/);
+    db.query('DELETE FROM kysely_migration WHERE name=?').run(QUALIFIED_MIGRATIONS[32]);
     for (const sql of ['CREATE TABLE sync_history(id INTEGER, incarnation TEXT)', 'CREATE TABLE sync_unavailable_records(id TEXT)', 'ALTER TABLE change_log ADD COLUMN intent_fingerprint TEXT']) {
         db.exec(sql);
         expect(() => inspectLegacyHistory(OfflineDatabase, path)).toThrow(/legacy|migration history/);

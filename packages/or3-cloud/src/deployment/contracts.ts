@@ -24,18 +24,18 @@ export type BackupProgress = {
 
 export type LegacySnapshotPolicy = {
   kind: 'legacy-snapshot';
-  policy: 'legacy-033-rollback-v1';
+  policy: 'legacy-032-rollback-v1';
   backupId: string;
   inspectorImage: string;
-  ledger: '033';
+  ledger: '032';
   profile: 'basic-sqlite-fs';
   payloadSha256: Record<string, string | null>;
 };
 export type HistoryReplacement = {
   id: string; role: 'target' | 'safety'; backupDataSha256: string; targetImageDigest: string;
 } & ({ kind?: 'incarnation-reset'; historyIncarnation: string; progress: 'prepared' | 'reset-complete' }
-  | { kind: 'legacy-snapshot'; policy: 'legacy-033-rollback-v1'; backupId: string; backupConfigSha256: string;
-      managedAssetSha256: Record<string, string>; ledger: '033'; profile: 'basic-sqlite-fs';
+  | { kind: 'legacy-snapshot'; policy: 'legacy-032-rollback-v1'; backupId: string; backupConfigSha256: string;
+      managedAssetSha256: Record<string, string>; ledger: '032'; profile: 'basic-sqlite-fs';
       abandonedIncarnation?: string; explicitLossConsent: boolean; safetyBackupId?: string;
       progress: 'prepared' | 'verified' });
 

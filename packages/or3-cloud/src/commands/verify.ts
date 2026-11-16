@@ -84,7 +84,7 @@ export async function verifyCommand(directory: string, flags: Flags, positionals
       ? `https://${loaded.state.domain}`
       : `http://127.0.0.1:${loaded.state.port}`,
   );
-  const verification = await verifyPublicApplication(baseUrl, await verificationCredentials(loaded.directory, flags, loaded.env), legacy ? 'legacy-033' : 'incarnation-v1');
+  const verification = await verifyPublicApplication(baseUrl, await verificationCredentials(loaded.directory, flags, loaded.env), legacy ? 'legacy' : 'incarnation-v1');
   const databaseCheck = await run('docker', [
     ...composeArgs(loaded.directory, loaded.state.mode, ['exec', '-T', 'or3', ...containerNodeCommand(VERIFY_DATABASES_SCRIPT)]),
   ], loaded.directory);

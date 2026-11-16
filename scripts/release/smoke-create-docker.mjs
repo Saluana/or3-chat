@@ -77,7 +77,9 @@ if(args[0]==='compose'&&args.includes('exec')&&args.some(a=>a.includes('OR3_VALI
     let timer;
     try {
         const code = await Promise.race([ended,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Validation rollback timed out')),240000);})]);
-        const injected = JSON.parse(await readFile(marker,'utf8'));
+        let injected;
+        try { injected = JSON.parse(await readFile(marker,'utf8')); }
+        catch (error) { throw new Error('Validation failure injection was not reached; CLI exited '+code+': '+log.slice(-4000), { cause: error }); }
         const restored = JSON.parse(await readFile(resolve('.or3-cloud/state.json'),'utf8'));
         if (!injected.containerId || code===0 || restored.incompleteOperation || restored.imageDigest!==initial.imageDigest || !restored.lastReceipt?.checks.some(check=>check.code==='automatic-source-restore'&&check.status==='passed')) throw new Error('Closed validation did not automatically restore the source: '+log.slice(-2000));
         console.log('RB-2 real candidate validation failure restored published source; update exited nonzero.');

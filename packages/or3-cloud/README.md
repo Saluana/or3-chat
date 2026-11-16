@@ -357,8 +357,8 @@ image and validation-mode proof. After normal startup may occur, use explicit
 `recover --restore --yes` or `rollback --yes`; both preserve current stopped data
 before discarding every server change since the source snapshot.
 
-Legacy snapshot policy `legacy-033-rollback-v1` is limited to the immediate
-published 0.1.116 / SQLite 0.0.30 / complete-033 Basic Auth + filesystem snapshot
+Legacy snapshot policy `legacy-032-rollback-v1` is limited to the immediate
+published 0.1.116 / SQLite 0.0.29 / complete-032 Basic Auth + filesystem snapshot
 and exact allowlisted digest. It never resets/migrates the old database. Generic
 incapable restores remain refused. Legacy service reports a compatibility
 warning, has no installed incarnation and requires re-upgrade. Use the new exact

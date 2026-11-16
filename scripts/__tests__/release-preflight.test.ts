@@ -167,7 +167,7 @@ describe('managed Docker profile projection', () => {
             expect(ready.status, ready.stderr).toBe(0);
             const current = capability();
             expect(current.status, current.stderr).toBe(0);
-            expect(JSON.parse(current.stdout)).toEqual({ contract: 'incarnation-v1', validation: 'health-only-v1', profile: 'basic-sqlite-fs', legacySnapshotRollback: 'legacy-033-rollback-v1' });
+            expect(JSON.parse(current.stdout)).toEqual({ contract: 'incarnation-v1', validation: 'health-only-v1', profile: 'basic-sqlite-fs', legacySnapshotRollback: 'legacy-032-rollback-v1' });
             const generatedPath = join(scripts, 'backup-inspection-profile.json');
             const qualified = JSON.parse(await readFile(generatedPath, 'utf8'));
             for (const invalid of [{ ...qualified, sqlite: '0.0.30' }, { ...qualified, filesystem: '0.0.17' }, { ...qualified, historyMigrations: HISTORY_MIGRATIONS.slice(0, -1) }]) {

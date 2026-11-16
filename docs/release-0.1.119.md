@@ -1,11 +1,12 @@
-# OR3 Cloud 0.1.118
+# OR3 Cloud 0.1.119
 
 Release preparation; candidate qualification and publication are pending.
 
-The 0.1.117 candidate remained unpublished after qualification exposed that the
-new CLI could not verify its supported 0.1.116 rollback target. This candidate
-adds exact-image legacy verification with an explicit protection warning;
-current and unknown images retain strict history-incarnation checks.
+Candidates 0.1.117 and 0.1.118 remained unpublished after lifecycle qualification
+exposed legacy verification and source-ledger assumptions. This candidate verifies
+the exact published 0.1.116 rollback image, whose migration history ends at 032,
+with an explicit protection warning. Current and unknown images retain strict
+history-incarnation checks.
 
 | Component | Changed? | Notes |
 | --- | --- | --- |
@@ -33,7 +34,7 @@ server's changes and creates a new history identity; abandoned-history browser
 work remains held for deliberate review.
 
 Qualification is limited to the exact Basic Auth/SQLite/filesystem image and
-allowlisted published 0.1.116 complete-033 source. Native image, browser downgrade
+allowlisted published 0.1.116 complete-032 source. Native image, browser downgrade
 fence, failed validation, exposed recovery, rollback, re-upgrade and restart must
 pass together before promotion. Clerk/SQLite/S3 and D1 service lifecycle are not
 qualified by this release preparation. Vault custody and external storage retain
