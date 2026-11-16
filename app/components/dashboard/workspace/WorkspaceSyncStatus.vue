@@ -116,14 +116,14 @@
         </section>
 
         <section v-if="heldCount" class="dashboard-list-group" aria-labelledby="workspace-history-held">
-            <h3 id="workspace-history-held" class="dashboard-list-heading">Saved changes from before server recovery</h3>
-            <p class="dashboard-list-footnote">Current sync can run while {{ heldCount }} older items need review. Their commit status in the discarded history is unknown.</p>
+            <h3 id="workspace-history-held" class="dashboard-list-heading">Saved changes needing review</h3>
+            <p class="dashboard-list-footnote">Current sync can run while {{ heldCount }} saved items need review. Inspect or export their content and recovery evidence.</p>
             <div class="dashboard-list">
                 <DashboardListRow v-for="entry in held" :key="entry.id" static
                     :label="`${KIND_LABELS[entry.tableName] ?? entry.tableName}: ${entry.pk}`" :description="entry.diagnostics.join('; ')">
                     <template #trailing>
                         <UButton v-bind="secondaryButtonProps" @click="inspectHeld(entry)">Inspect / export</UButton>
-                        <UButton v-bind="secondaryButtonProps" @click="reviewHeld(entry)">Recover</UButton>
+                        <UButton v-if="entry.variant === 'history_reset'" v-bind="secondaryButtonProps" @click="reviewHeld(entry)">Recover</UButton>
                         <UButton v-bind="secondaryButtonProps" @click="discardHeld(entry)">Discard</UButton>
                     </template>
                 </DashboardListRow>
@@ -403,7 +403,7 @@ function bind() {
     subscription = liveQuery(async () => {
         const [failed, waiting] = await Promise.all([listFailedOps(db, LIST_LIMIT), countWaiting(db)]);
         const account = session.data.value?.session?.user?.id;
-        const query = db.sync_quarantine.filter(entry => entry.variant === 'history_reset' && entry.status === 'quarantined' && (!entry.accountId || entry.accountId === account));
+        const query = db.sync_quarantine.filter(entry => (entry.variant === 'history_reset' || entry.variant === 'stored_record') && entry.status === 'quarantined' && (!entry.accountId || entry.accountId === account));
         const savedCount = await query.clone().count();
         const saved = await query.limit(LIST_LIMIT).toArray();
         return { ...failed, waiting, held: saved, heldCount: savedCount };

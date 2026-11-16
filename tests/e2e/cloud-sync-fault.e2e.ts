@@ -13,7 +13,7 @@ test.setTimeout(1_200_000);
 const directory = process.env.OR3_FILE_BACKUP_E2E_DIR!;
 const output = dirname(process.env.PLAYWRIGHT_JSON_OUTPUT_NAME!);
 const databasePath = join(directory, 'sync.sqlite');
-const capabilities = { workspaceItemCapability: 'v1', fileKindCapability: 'v1',
+const capabilities = { storedRecordCapability: 'stored-record-v1', workspaceItemCapability: 'v1', fileKindCapability: 'v1',
     unavailableRecordCapability: 'unavailable-v1', historyIncarnationCapability: 'incarnation-v1' };
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -352,6 +352,66 @@ test('real sync fault qualification', async ({ browser }, info) => {
             const pages = cold.traffic.filter(r => r.path === '/api/sync/snapshot' && r.status === 200);
             expect(pages.at(-1).body).toMatchObject({ nextPageToken: null, highWatermark: watermark });
             expect(pages.at(-1).body.items).toEqual([]); expect(pages.at(-1).body.unavailable.length).toBeGreaterThan(0);
+        });
+
+        // Requires the S4 packed provider. The older terra-pack build predates
+        // this disposition; keep failure explicit until matched integration.
+        await scenario('S-push-stored-poison', async e => {
+            const c = await open(browser, origin); e.workspaceId = c.workspaceId;
+            await write(c, 'push-bad', 'last-good');
+            await poll('seed browser write', () => !!db.prepare("SELECT 1 FROM s_kv WHERE workspace_id=? AND id='kv:push-bad'").get(c.workspaceId));
+            await installed(c, ['kv:push-bad'], head(db, c.workspaceId));
+            await engine(c, 'stop');
+            db.prepare("UPDATE s_kv SET data_json='{',clock=1000000 WHERE workspace_id=? AND id='kv:push-bad'").run(c.workspaceId);
+            const op = (key: string) => {
+                const id = randomUUID();
+                return { id, tableName: 'kv', pk: key, operation: 'put',
+                    payload: { id: key, name: key, value: 'unsent', created_at: 1, updated_at: 1, clock: 2 },
+                    stamp: { deviceId: 'e2e-push-poison', opId: id, hlc: '2:0:e2e', clock: 2 },
+                    createdAt: Date.now(), attempts: 0, status: 'pending' };
+            };
+            const bad = op('kv:push-bad'), good = op('http-healthy');
+            const batch = { ...capabilities, historyIncarnation: history(db), scope: { workspaceId: c.workspaceId }, ops: [good, bad] };
+            const { storedRecordCapability: _unsupported, ...legacy } = batch;
+            const before = head(db, c.workspaceId);
+            e.oldClient = await request(c, '/api/sync/push', legacy);
+            expect(e.oldClient.status).toBe(426);
+            expect(e.oldClient.body.data).toMatchObject({ code: 'OR3_SYNC_UPDATE_REQUIRED', requiredCapability: 'stored-record-v1' });
+            expect(head(db, c.workspaceId)).toBe(before);
+            e.mixed = await request(c, '/api/sync/push', batch);
+            expect(e.mixed.status).toBe(200);
+            expect(e.mixed.body.results[0]).toMatchObject({ opId: good.id, success: true });
+            const held = e.mixed.body.results[1];
+            expect(held).toMatchObject({ opId: bad.id, success: false, errorCode: 'STORED_RECORD_UNAVAILABLE', evidenceRef: expect.any(String) });
+            expect(held.evidenceRef.length).toBeGreaterThan(0); expect(held.evidenceRef.length).toBeLessThanOrEqual(128);
+            expect(held.error.length).toBeLessThanOrEqual(160);
+            expect(held.payload).toBeUndefined(); expect(held.winner).toBeUndefined(); expect(held.replayed).toBeUndefined();
+            expect(head(db, c.workspaceId)).toBe(before + 1);
+            expect(db.prepare('SELECT payload_json FROM sync_unavailable_records WHERE id=?').get(held.evidenceRef)).toMatchObject({ payload_json: '{' });
+            expect(db.prepare("SELECT data_json FROM s_kv WHERE workspace_id=? AND id='kv:push-bad'").get(c.workspaceId)).toEqual({ data_json: '{' });
+            await engine(c, 'start');
+            await sample(c, 'open');
+            await c.context.setOffline(true);
+            await write(c, 'push-bad', 'recoverable browser intent');
+            await write(c, 'push-good', 'healthy sibling');
+            e.pendingBefore = (await state(c)).pending;
+            const original = e.pendingBefore.find((row: any) => row.pk === 'kv:push-bad');
+            expect(original).toBeTruthy();
+            await c.context.setOffline(false);
+            await poll('browser holds stored poison and settles healthy sibling', async () => {
+                const local = await state(c);
+                return local.quarantine.some((row: any) => row.variant === 'stored_record' && row.op?.stamp?.opId === original.stamp.opId) && local.pending.length === 0;
+            });
+            e.local = await state(c);
+            const saved = e.local.quarantine.find((row: any) => row.op?.stamp?.opId === original.stamp.opId);
+            const sent = c.traffic.flatMap(row => row.path === '/api/sync/push' ? row.request?.ops ?? [] : []).find((row: any) => row.stamp.opId === original.stamp.opId);
+            expect(sent).toBeTruthy(); e.originalWire = sent;
+            expect(saved).toMatchObject({ evidenceRef: expect.any(String), status: 'quarantined', op: { payload: sent.payload, stamp: original.stamp, attempts: original.attempts }, localRow: { value: 'recoverable browser intent' } });
+            expect(db.prepare("SELECT data_json FROM s_kv WHERE workspace_id=? AND id='kv:push-good'").get(c.workspaceId)).toBeTruthy();
+            await write(c, 'after-held', 'sync continues');
+            await poll('later healthy browser write', () => !!db.prepare("SELECT 1 FROM s_kv WHERE workspace_id=? AND id='kv:after-held'").get(c.workspaceId));
+            expect(c.traffic.filter(row => row.path === '/api/sync/push' && row.request?.ops?.some((item: any) => item.stamp.opId === original.stamp.opId))).toHaveLength(1);
+            e.server = serverState(db, c.workspaceId);
         });
 
         await scenario('S-repair', async e => {

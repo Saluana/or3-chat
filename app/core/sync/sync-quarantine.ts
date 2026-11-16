@@ -372,7 +372,7 @@ export async function pruneResolvedQuarantineBestEffort(db: Or3DB): Promise<void
 }
 
 export function listQuarantined(db: Or3DB, principalId?: string): Promise<SyncQuarantineRow[]> {
-    return db.sync_quarantine.orderBy('quarantinedAt').filter(entry => entry.variant !== 'history_reset' || !entry.accountId || entry.accountId === principalId).toArray();
+    return db.sync_quarantine.orderBy('quarantinedAt').filter(entry => !['history_reset', 'stored_record'].includes(entry.variant ?? '') || !entry.accountId || entry.accountId === principalId).toArray();
 }
 
 /** Self-contained JSON for support or manual recovery. */
@@ -384,7 +384,7 @@ export async function exportQuarantined(db: Or3DB, principalId?: string): Promis
 export async function discardQuarantined(db: Or3DB, id: string, principalId?: string): Promise<boolean> {
     const discarded = await db.transaction('rw', db.sync_quarantine, async () => {
         const entry = await db.sync_quarantine.get(id);
-        if (entry?.status !== 'quarantined' || entry.variant === 'history_reset' && entry.accountId && entry.accountId !== principalId) return false;
+        if (entry?.status !== 'quarantined' || ['history_reset', 'stored_record'].includes(entry.variant ?? '') && entry.accountId && entry.accountId !== principalId) return false;
         await db.sync_quarantine.put({
             ...entry, status: 'discarded', resolvedAt: Date.now(), resolution: 'discarded by user',
         });

@@ -193,6 +193,41 @@ describe('POST /api/sync/push', () => {
         await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 400 });
     });
 
+    it('preserves a mixed stored-record hold and forwards only the advertised capability', async () => {
+        const body = { ...makeBaseBody(), storedRecordCapability: 'stored-record-v1' };
+        const second = { ...body.ops[0]!, id: 'pending-2', stamp: { ...STAMP_1, opId: 'a1b2c3d4-5678-4abc-8def-123456789002' } };
+        body.ops.push(second);
+        readBodyMock.mockResolvedValue(body);
+        const hold = { opId: STAMP_1.opId, success: false, errorCode: 'STORED_RECORD_UNAVAILABLE', evidenceRef: 'evidence-1', error: 'invalid_json' };
+        pushMock.mockResolvedValue({ results: [hold, { opId: second.stamp.opId, success: true, serverVersion: 7 }], serverVersion: 7 });
+        const handler = (await import('../push.post')).default;
+        expect(await handler(makeEvent())).toMatchObject({ results: [hold, { success: true, serverVersion: 7 }] });
+        expect(pushMock.mock.calls[0]![1].storedRecordCapability).toBe('stored-record-v1');
+        readBodyMock.mockResolvedValue(makeBaseBody());
+        pushMock.mockResolvedValue(successfulPushResult(STAMP_1.opId));
+        await handler(makeEvent());
+        expect(pushMock.mock.calls[1]![1].storedRecordCapability).toBeUndefined();
+    });
+
+    it('never sends an unsupported stored-record disposition to an old client', async () => {
+        readBodyMock.mockResolvedValue(makeBaseBody());
+        pushMock.mockResolvedValue({ results: [{ opId: STAMP_1.opId, success: false, errorCode: 'STORED_RECORD_UNAVAILABLE', evidenceRef: 'evidence-1', error: 'invalid_json' }], serverVersion: 7 });
+        const handler = (await import('../push.post')).default;
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 426 });
+        expect(pushMock.mock.calls[0]![1].storedRecordCapability).toBeUndefined();
+    });
+
+    it.each([
+        { evidenceRef: undefined }, { evidenceRef: '' }, { evidenceRef: 'x'.repeat(129) },
+        { error: undefined }, { error: 'x'.repeat(161) }, { success: true }, { replayed: true },
+        { payload: { secret: 'stored bytes' } },
+    ])('rejects malformed stored-record hold %j', async fields => {
+        readBodyMock.mockResolvedValue({ ...makeBaseBody(), storedRecordCapability: 'stored-record-v1' });
+        pushMock.mockResolvedValue({ results: [{ opId: STAMP_1.opId, success: false, errorCode: 'STORED_RECORD_UNAVAILABLE', evidenceRef: 'evidence-1', error: 'invalid_json', ...fields }], serverVersion: 7 });
+        const handler = (await import('../push.post')).default;
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 502 });
+    });
+
     it('returns mixed 200 results when put payload fails table schema', async () => {
         const handler = (await import('../push.post')).default as (event: H3Event) => Promise<unknown>;
         const body = makeBaseBody() as any;

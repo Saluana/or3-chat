@@ -1802,6 +1802,56 @@ describe('OutboxManager quarantine (real Dexie)', () => {
         expect(await db.sync_quarantine.get(uncertain.id)).toMatchObject({ status: 'quarantined', op: uncertain });
     });
 
+    it('holds unavailable stored-record intent and evidence without retries, attempts or breaker penalty', async () => {
+        const db = await freshDb();
+        const original = corruptPut('messages', 'held-server', { payload: message('held-server', 'unsent edit'), attempts: 2, wireNormalized: true });
+        const healthy = corruptPut('messages', 'healthy-server', { payload: message('healthy-server', 'healthy') });
+        await db.messages.put(message('held-server', 'unsent edit'));
+        await db.pending_ops.bulkPut([original, healthy]);
+        const provider = new SpyProvider();
+        provider.push.mockResolvedValue({ results: [
+            { opId: original.stamp.opId, success: false, errorCode: 'STORED_RECORD_UNAVAILABLE', evidenceRef: 'evidence-1', error: 'invalid_json' },
+            { opId: healthy.stamp.opId, success: true, serverVersion: 3 },
+        ], serverVersion: 3 });
+        const outbox = manager(db, provider);
+        await outbox.flush();
+        expect(provider.push.mock.calls[0]![0]).toMatchObject({ storedRecordCapability: 'stored-record-v1' });
+        expect(await db.pending_ops.count()).toBe(0);
+        expect(await outbox.getQuarantined()).toEqual([expect.objectContaining({
+            variant: 'stored_record', status: 'quarantined', evidenceRef: 'evidence-1', diagnostics: ['invalid_json'],
+            op: expect.objectContaining({ payload: original.payload, stamp: original.stamp, attempts: 2 }),
+            localRow: expect.objectContaining({ data: { content: 'unsent edit' } }),
+        })]);
+        expect(JSON.parse(await outbox.exportQuarantined()).entries[0].evidenceRef).toBe('evidence-1');
+        await outbox.flush();
+        await outbox.retryFailed();
+        await outbox.flush();
+        expect(provider.push).toHaveBeenCalledTimes(1);
+        const breaker = getSyncCircuitBreaker(`${scope.workspaceId}:${provider.id}`);
+        expect(breaker.getFailureCount()).toBe(0);
+        expect(breaker.getState()).toBe('closed');
+    });
+
+    it('pauses a malformed direct-provider hold before settling siblings or losing intent', async () => {
+        const db = await freshDb();
+        const original = corruptPut('messages', 'bad-evidence', { payload: message('bad-evidence', 'unsent edit') });
+        const healthy = corruptPut('messages', 'healthy-evidence', { payload: message('healthy-evidence', 'healthy') });
+        await db.pending_ops.bulkPut([original, healthy]);
+        const provider = new SpyProvider();
+        provider.push.mockResolvedValue({ results: [
+            { opId: healthy.stamp.opId, success: true, serverVersion: 3 },
+            { opId: original.stamp.opId, success: false, errorCode: 'STORED_RECORD_UNAVAILABLE', error: 'invalid_json' },
+        ], serverVersion: 3 });
+        const outbox = manager(db, provider);
+        await outbox.flush();
+        expect(await db.pending_ops.count()).toBe(2);
+        expect((await db.pending_ops.toArray()).every(row => row.attempts === 0)).toBe(true);
+        expect(await outbox.getQuarantined()).toHaveLength(0);
+        await outbox.flush();
+        expect(provider.push).toHaveBeenCalledTimes(1);
+        expect(getSyncCircuitBreaker(`${scope.workspaceId}:${provider.id}`).getFailureCount()).toBe(0);
+    });
+
     it('quarantines only identity reuse and corrupt winners, settles siblings, and leaves the breaker healthy', async () => {
         const db = await freshDb();
         const ops = ['identity', 'winner', 'healthy', 'generic'].map(id => corruptPut('messages', id, { payload: message(id, id) }));

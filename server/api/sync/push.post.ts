@@ -53,6 +53,7 @@ type PushResultItem = z.infer<typeof PushResultSchema>['results'][number];
 
 const PushEnvelopeSchema = z.object({
     ...HistoryRequestFields,
+    storedRecordCapability: z.literal('stored-record-v1').optional(),
     scope: SyncScopeSchema,
     ops: z.array(z.unknown()).max(MAX_SYNC_PUSH_BATCH_OPS),
     fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
@@ -219,6 +220,7 @@ export default defineEventHandler(async (event) => {
             historyIncarnationCapability: 'incarnation-v1' as const,
             scope: envelope.data.scope,
             ops: validOps,
+            ...(envelope.data.storedRecordCapability ? { storedRecordCapability: envelope.data.storedRecordCapability } : {}),
             ...(envelope.data.workspaceItemCapability ? { workspaceItemCapability: envelope.data.workspaceItemCapability } : {}),
         };
 
@@ -235,6 +237,11 @@ export default defineEventHandler(async (event) => {
             });
         }
 
+        if (envelope.data.storedRecordCapability !== 'stored-record-v1' &&
+            adapterResult.data.results.some(item => item.errorCode === 'STORED_RECORD_UNAVAILABLE')) {
+            throw createError({ statusCode: 426, statusMessage: 'Update OR3 Chat to recover unavailable stored records',
+                data: { code: 'OR3_SYNC_UPDATE_REQUIRED', requiredCapability: 'stored-record-v1' } });
+        }
         assertHistoryResponse(adapterResult.data.historyIncarnation, history);
         const adapterByOpId = new Map(
             adapterResult.data.results.map((item) => [item.opId, item])

@@ -674,7 +674,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 9,
-                    "summary": "Configure SQLite sync, background history and storage accounting, qualified 0.0.30 backup inspection, supported 032/033 histories, and pre-start semantic restore certification."
+                    "summary": "Configure SQLite sync, background history and storage accounting, runtime-reader backup inspection, supported 032/033 histories, and capability-gated stored-record push holds."
                 },
                 {
                     "name": "provider-fs.md",
@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Sync history capability fences, durable cursor ACK recovery after reload, atomic held-intent recovery, account-scoped inspection/export, stale-completion protection, atomic no-copy physical store isolation, stable old/new Dexie coexistence, visible upgrade progress and per-workspace nondestructive retry, and separate provider qualification. Unqualified direct Convex startup is explicitly unsupported."
+                    "summary": "Sync history capability fences, durable cursor ACK recovery after reload, atomic held-intent recovery, account-scoped inspection/export, stale-completion protection, atomic no-copy physical store isolation, stable old/new Dexie coexistence, visible upgrade progress and per-workspace nondestructive retry, and separate provider qualification. Unqualified direct Convex startup is explicitly unsupported. Includes capability-gated stored-record push holds and retained recovery evidence."
                 },
                 {
                     "name": "storage-layer.md",

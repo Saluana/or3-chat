@@ -162,6 +162,7 @@ export const PendingOpSchema = z.object({
     ]),
     lastError: z.string().optional(),
     lastErrorCode: z.enum([
+        'STORED_RECORD_UNAVAILABLE',
         'VALIDATION_ERROR',
         'UNAUTHORIZED',
         'CONFLICT',
@@ -478,6 +479,7 @@ export const SnapshotResponseSchema = z
 export const PushBatchSchema = z
     .object({
         ...HistoryRequestFields,
+        storedRecordCapability: z.literal('stored-record-v1').optional(),
         scope: SyncScopeSchema,
         ops: z.array(PendingOpSchema).max(MAX_SYNC_PUSH_BATCH_OPS),
         fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
@@ -522,6 +524,7 @@ export const PushResultItemSchema = z.object({
     success: z.boolean(),
     serverVersion: z.number().int().positive().optional(),
     error: z.string().optional(),
+    evidenceRef: z.string().min(1).max(128).optional(),
     tableName: z.string().optional(),
     operation: z.enum(['put', 'delete']).optional(),
     payload: z.unknown().optional(),
@@ -531,6 +534,7 @@ export const PushResultItemSchema = z.object({
     winner: PushWinnerSchema.optional(),
     errorCode: z
         .enum([
+            'STORED_RECORD_UNAVAILABLE',
             'VALIDATION_ERROR',
             'UNAUTHORIZED',
             'CONFLICT',
@@ -543,6 +547,13 @@ export const PushResultItemSchema = z.object({
         ])
         .optional(),
 }).superRefine((result, ctx) => {
+    if (result.errorCode === 'STORED_RECORD_UNAVAILABLE' &&
+        (result.success || !result.evidenceRef || !result.error || result.error.length > 160 ||
+            result.replayed !== undefined || result.payload !== undefined || result.winner !== undefined ||
+            result.serverVersion !== undefined || result.applied !== undefined)) {
+        ctx.addIssue({ code: 'custom', message: 'Invalid stored-record hold' });
+    }
+
     if (result.replayed && !result.success) {
         ctx.addIssue({
             code: 'custom',

@@ -807,3 +807,28 @@ and cache/search invalidation follows the data commit even behind a hung observe
 guard scope before awaiting; a timeout cannot cancel their side effects. Cancelled
 subscription/outbox batches do not initiate further observations. Protocol
 persistence, page receipts, pending-op capture and filters remain awaited.
+
+
+### Stored-record push holds
+
+Updated clients advertise `storedRecordCapability: 'stored-record-v1'` on push.
+This is distinct from pull/snapshot `unavailable-v1`, which older clients already
+advertise without understanding push holds. A provider encountering unreadable
+stored receipts, winners or ownership returns HTTP 426 `OR3_SYNC_UPDATE_REQUIRED`
+with `requiredCapability: 'stored-record-v1'` to an unsupported client.
+
+Supported mixed batches return an independent result per operation. A held result
+is `{opId, success:false, errorCode:'STORED_RECORD_UNAVAILABLE', evidenceRef, error}`:
+`evidenceRef` is a nonempty opaque server reference of at most 128 characters;
+`error` is a fixed non-secret reason of at most 160 characters. No stored payload,
+winner, replay success or fabricated revision is returned. Healthy siblings commit.
+The provider must preserve both original stored bytes and rejected intent before
+returning the reference; database/storage outages remain service errors.
+
+The outbox atomically moves the original intent, UUID, local row/tombstone, reason
+and server reference into existing local quarantine (`variant:'stored_record'`).
+Attempts do not increase, the operation is not retried or assigned a new identity,
+and the result does not penalize the service breaker. The existing Saved changes
+section displays these holds for inspect/export and deliberate discard. Stored
+record holds require manual review/repair using the exported server reference;
+no automatic recovery put is offered. Retry all affects active outbox work only.

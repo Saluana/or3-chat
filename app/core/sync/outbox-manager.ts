@@ -38,6 +38,7 @@ import { nowSec } from '~/db/util';
 import { sanitizePayloadForSync, SyncPayloadTooLargeError } from '~~/shared/sync/sanitize';
 import {
     MAX_SYNC_PUSH_BATCH_BYTES,
+    PushResultItemSchema,
     syncJsonByteLength,
 } from '~~/shared/sync/schemas';
 import { markRecentOpId, unmarkRecentOpId } from './recent-op-cache';
@@ -486,7 +487,7 @@ export class OutboxManager {
     }
 
     /** Hold uncertain committed intent without reconstruction or automatic re-ID. */
-    private async holdOp(op: PendingOp, reason: string, serverWinner?: PushWinner): Promise<void> {
+    private async holdOp(op: PendingOp, reason: string, serverWinner?: PushWinner, evidenceRef?: string): Promise<void> {
         await this.db.transaction('rw', ['pending_ops', 'sync_quarantine', 'tombstones', 'sync_state', op.tableName], async () => {
             if (!await this.ownsClaim(op)) return;
             await this.db.sync_quarantine.put({
@@ -494,6 +495,7 @@ export class OutboxManager {
                 status: 'quarantined', op, diagnostics: [reason], serverWinner,
                 localRow: await this.db.table(op.tableName).get(op.pk),
                 localTombstone: await this.db.tombstones.get(`${op.tableName}:${op.pk}`),
+                ...(evidenceRef ? { variant: 'stored_record' as const, evidenceRef, accountId: this.scope.principalId, scope: this.scope } : {}),
                 quarantinedAt: Date.now(),
             });
             await this.db.pending_ops.delete(op.id);
@@ -741,7 +743,7 @@ export class OutboxManager {
                 const aborted = () => reject(signal?.reason ?? new Error('Sync push aborted'));
                 if (signal?.aborted) { aborted(); return; }
                 signal?.addEventListener('abort', aborted, { once: true });
-                this.provider.push({ scope: this.scope, ops: sanitizedBatch, ...(this.historyGuard ? { historyIncarnation: this.historyGuard.historyIncarnation, historyIncarnationCapability: 'incarnation-v1' } : {}) }, { signal })
+                this.provider.push({ scope: this.scope, ops: sanitizedBatch, storedRecordCapability: 'stored-record-v1', ...(this.historyGuard ? { historyIncarnation: this.historyGuard.historyIncarnation, historyIncarnationCapability: 'incarnation-v1' } : {}) }, { signal })
                     .then(resolve, reject)
                     .finally(() => signal?.removeEventListener('abort', aborted));
             });
@@ -756,6 +758,11 @@ export class OutboxManager {
             }
             this.authFailures = 0;
 
+            // Direct providers share this boundary with the gateway. An invalid
+            // evidence contract pauses before any sibling is settled.
+            if (result.results.some(res => res.errorCode === 'STORED_RECORD_UNAVAILABLE' && !PushResultItemSchema.safeParse(res).success)) {
+                throw Object.assign(new Error('Invalid stored-record hold response'), { code: 'OR3_SYNC_HISTORY_UNSUPPORTED' });
+            }
             const resultsById = new Map(result.results.map((res) => [res.opId, res]));
             let successCount = 0;
             let failCount = localFailCount;
@@ -816,7 +823,8 @@ export class OutboxManager {
                     // unrelated provider CONFLICT outcomes keep their retry policy.
                     const identityReuse = res.errorCode === 'CONFLICT' &&
                         res.error === `Conflicting operation reuses processed op_id ${op.stamp.opId}`;
-                    if (identityReuse) await this.holdOp(op, 'Server rejected reused operation identity');
+                    if (res.errorCode === 'STORED_RECORD_UNAVAILABLE') await this.holdOp(op, res.error!, undefined, res.evidenceRef);
+                    else if (identityReuse) await this.holdOp(op, 'Server rejected reused operation identity');
                     else {
                         await this.handleFailedOp(op, generation, res.error, res.errorCode);
                         // Retryable content conflicts and throttling are not

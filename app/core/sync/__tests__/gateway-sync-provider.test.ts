@@ -931,6 +931,14 @@ describe('GatewaySyncProvider', () => {
         );
     });
 
+    it('advertises stored-record recovery and preserves bounded evidence in push results', async () => {
+        const hold = { opId: pushBatch().ops[0]!.stamp.opId, success: false, errorCode: 'STORED_RECORD_UNAVAILABLE', evidenceRef: 'evidence-1', error: 'invalid_json' };
+        const fetchMock = vi.fn(async (_input: unknown, _init?: RequestInit) => makeOkResponse({ results: [hold], serverVersion: 1 }));
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+        expect((await createGatewaySyncProvider().push(pushBatch())).results).toEqual([hold]);
+        expect(JSON.parse(fetchMock.mock.calls[0]![1]!.body as string).storedRecordCapability).toBe('stored-record-v1');
+    });
+
     it('pauses without consuming intent or retry budget when a successful gateway push omits its result', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => undefined);
         vi.spyOn(console, 'warn').mockImplementation(() => undefined);

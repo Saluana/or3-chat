@@ -207,6 +207,8 @@ export interface PushBatch {
     /** Batch identity, independent of operation fingerprints. Required by incarnation-v1. */
     historyIncarnation?: string | null;
     historyIncarnationCapability?: 'incarnation-v1';
+    /** Terminal recoverable holds for unreadable server-side records. */
+    storedRecordCapability?: 'stored-record-v1';
     scope: SyncScope;
     ops: PendingOp[];
     /** Writer capability required before generic file metadata is accepted. */
@@ -220,6 +222,7 @@ export interface PushBatch {
 export type SyncErrorCode = 
     | 'VALIDATION_ERROR'      // Schema validation failed
     | 'UNAUTHORIZED'          // Auth/permission denied
+    | 'STORED_RECORD_UNAVAILABLE' // Stored content held for explicit recovery
     | 'CONFLICT'              // Optimistic lock conflict
     | 'NOT_FOUND'             // Resource not found
     | 'RATE_LIMITED'          // Rate limit exceeded
@@ -243,6 +246,8 @@ export interface PushResult {
         success: boolean;
         serverVersion?: number;
         error?: string;
+        /** Durable server evidence reference for a stored-record hold. */
+        evidenceRef?: string;
         errorCode?: SyncErrorCode;
         tableName?: string;
         operation?: 'put' | 'delete';

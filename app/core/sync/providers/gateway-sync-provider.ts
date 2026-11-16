@@ -638,7 +638,7 @@ export function createGatewaySyncProvider(
         async push(batch: PushBatch, options?: SyncRequestOptions): Promise<PushResult> {
             const response = await requestJson<PushResult>(
                 '/api/sync/push',
-                { ...batch, historyIncarnationCapability: 'incarnation-v1', unavailableRecordCapability: 'unavailable-v1', workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
+                { ...batch, storedRecordCapability: 'stored-record-v1', historyIncarnationCapability: 'incarnation-v1', unavailableRecordCapability: 'unavailable-v1', workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, fileKindCapability: FILE_KIND_CAPABILITY },
                 baseUrl,
                 { signal: options?.signal, schema: PushResultSchema }
             );

@@ -114,7 +114,7 @@ export interface SyncQuarantineRow {
     status: 'quarantined' | 'repaired' | 'discarded';
     source: 'snapshot_apply' | 'manual' | 'incoming_pull' | 'incoming_snapshot';
     /** Absent on legacy outgoing entries. Incoming entries never reconstruct ops. */
-    variant?: 'incoming' | 'history_reset';
+    variant?: 'incoming' | 'history_reset' | 'stored_record';
     sourceIncarnation?: string;
     scope?: import('~~/shared/sync/types').SyncScope;
     accountId?: string;
