@@ -360,6 +360,10 @@ certification. History incarnation/reset remains a separate runtime contract.
 
 ### History incarnation recovery boundary
 
+A fresh browser's proven first snapshot adopts its server identity only after
+commit, preserving startup preference and outbox writes. Failed installs stay
+unbound; later history replacements continue to fence stale writers.
+
 Normal restore/data rollback requires the exact image's qualified
 `sync-history-reset.mjs capability` (`incarnation-v1`). The external managed
 journal records a fresh UUID per extraction; writers stay stopped through offline
