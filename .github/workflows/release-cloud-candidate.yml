@@ -576,7 +576,7 @@ jobs:
             sleep 1
           done
           curl --insecure --fail --silent https://localhost:3018/ >/dev/null
-          cp scripts/release/{smoke-browser,verify-browser-qualification,browser-process,browser-upload-fixture}.mjs "$RUNNER_TEMP/or3-browser/"
+          cp scripts/release/{smoke-browser,verify-browser-qualification,browser-process,browser-upload-fixture,browser-onboarding}.mjs "$RUNNER_TEMP/or3-browser/"
           OR3_SMOKE_CADDYFILE="$RUNNER_TEMP/or3-browser/Caddyfile" \
             OR3_SMOKE_ARTIFACT_DIR="$GITHUB_WORKSPACE/output/browser-smoke" \
             node "$RUNNER_TEMP/or3-browser/verify-browser-qualification.mjs" \

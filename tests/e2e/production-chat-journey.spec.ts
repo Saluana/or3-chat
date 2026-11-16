@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
+import { completeWelcomeOnboarding } from '../../scripts/release/browser-onboarding.mjs';
 
 test.skip(
     process.env.OR3_PRODUCTION_JOURNEY_TEST_HARNESS !== 'true',
@@ -28,9 +29,8 @@ test('disconnected welcome keeps editor history and loads settings on first open
     await expect(input).toBeEmpty();
     await input.press('ControlOrMeta+Shift+z');
     await expect(input).toHaveText('Immediate typing stays smooth');
-    await expect(page.getByRole('button', { name: 'Dismiss welcome', exact: true })).toBeVisible();
     expect(catalogRequests).toBe(0);
-    await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click();
+    await completeWelcomeOnboarding(page);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Close chat settings', exact: true })).toBeVisible();
     await expect.poll(() => catalogRequests).toBeGreaterThan(0);
@@ -41,6 +41,35 @@ test('disconnected welcome keeps editor history and loads settings on first open
     await page.getByRole('button', { name: 'Model catalog Browse and compare available models.', exact: true }).click();
     const catalog = page.getByRole('dialog', { name: 'Model catalog', exact: true });
     await expect(catalog.getByRole('listitem').filter({ hasText: 'GPT-4o mini' })).toBeVisible();
+});
+
+test('release onboarding waits for a late welcome before using the account menu', async ({ page }) => {
+    await page.setContent(`<button aria-label="Account menu" onclick="this.textContent='Opened'">Account</button>`);
+    await page.evaluate(() => {
+        setTimeout(() => {
+            const backdrop = document.createElement('div');
+            backdrop.setAttribute('data-welcome-backdrop', '');
+            backdrop.style.cssText = 'position:fixed;inset:0;background:white';
+            backdrop.innerHTML = `<div data-welcome-card><p>Connect OpenRouter to start chatting.</p>
+                <button>Connect with OpenRouter</button><button aria-label="Dismiss welcome">Close</button></div>`;
+            backdrop.querySelector('[aria-label="Dismiss welcome"]')!.addEventListener('click', () => backdrop.remove());
+            document.body.append(backdrop);
+        }, 250);
+    });
+    await completeWelcomeOnboarding(page);
+    await page.getByRole('button', { name: 'Account menu' }).click();
+    await expect(page.getByRole('button', { name: 'Account menu' })).toHaveText('Opened');
+    await expect(page.locator('[data-welcome-backdrop]')).toHaveCount(0);
+});
+
+test('release onboarding fails when the expected welcome never appears or cannot dismiss', async ({ page }) => {
+    await page.setContent('<p>No welcome</p>');
+    await expect(completeWelcomeOnboarding(page, 300)).rejects.toThrow();
+    await page.setContent(`<div data-welcome-backdrop><div data-welcome-card>
+        <p>Connect OpenRouter to start chatting.</p><button>Connect with OpenRouter</button>
+        <button aria-label="Dismiss welcome">Close</button></div></div>`);
+    await expect(completeWelcomeOnboarding(page, 300)).rejects.toThrow();
+    await expect(page.locator('[data-welcome-backdrop]')).toBeVisible();
 });
 const fixturePng = { name: 'composer.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=', 'base64') };
 
