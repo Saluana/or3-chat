@@ -287,7 +287,7 @@
                     "category": "Internals",
                     "categoryOrder": 3,
                     "order": 0,
-                    "summary": "Active workspace databases, local derived indexes, cache metadata budgeting, atomic no-copy store migration, and accessible upgrade recovery."
+                    "summary": "Active workspace databases, local derived indexes, cache metadata budgeting, atomic no-copy store migration, and accessible upgrade recovery. Connection handoff preserves atomic capture and mounted composer drafts."
                 },
                 {
                     "name": "schema.md",
@@ -773,7 +773,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 19,
-                    "summary": "Sync snapshots, history fencing, durable unavailable records and saved-work recovery, including qualified Convex direct/gateway setup, stored-record holds, bounded push deferrals, connection handoff without navigation and attachment-scoped held cache protection, and birth-proven first-bind local adoption."
+                    "summary": "Sync snapshots, history fencing, durable unavailable records and saved-work recovery, including qualified Convex direct/gateway setup, stored-record holds, bounded push deferrals, connection handoff without navigation and attachment-scoped held cache protection, and birth-proven first-bind local adoption. Cache eviction retains held, pending, streaming and draft attachment references."
                 },
                 {
                     "name": "storage-layer.md",
