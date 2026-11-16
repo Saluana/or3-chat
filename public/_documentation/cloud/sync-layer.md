@@ -40,7 +40,7 @@ restores the pending cursor acknowledgement. The terminal catch-up page retries
 that ACK even when no new rows arrive, so a reload after snapshot installation
 cannot leave a fresh device absent from server retention accounting. Coverage
 from a different history never supplies this acknowledgement.
-After installation, sync replaces only that workspace's Dexie connection and
+After history replacement, sync replaces only that workspace's Dexie connection and
 restarts its transport without navigating the page. Old connection handles keep
 their original history and stay closed, so delayed callbacks cannot write into
 the installed history. Cloud restore waits for this initial handoff before
@@ -56,6 +56,12 @@ cursor zero nor an absent history proves eligibility. Existing/upgraded DBs and
 later history replacements retain the conservative held-work policy; existing
 holds stay held. A fresh default theme therefore does not produce a false
 server-recovery hold. No server/wire or explicit recovery rules change.
+
+Only the proven first-binding installer adopts its initial server identity after
+commit, so queued startup writes remain durable instead of aborting during a
+connection handoff. A failed installation keeps the unbound identity. Existing,
+unproven and follower connections retain their normal fencing and rebind; later
+history replacements cannot relabel stale writers.
 
 Edits committed while downloading are included. Quota failure preserves the old
 state and leaves pushes closed. Same-history expiry keeps ordinary pending replay.
