@@ -71,6 +71,9 @@ such as a pre-bind theme selection does not prevent verified cache eviction.
 Pending or failed operations, unfinished streaming messages, unsent drafts and
 saved draft versions also retain their referenced local blobs. Eviction rechecks
 these references in its deletion transaction after verifying the remote copy.
+Background job projections and canonical tool admission also check the durable
+history guard before using a connection whose history has been replaced,
+including the interval before that connection closes.
 
 Dexie schema 32 atomically moves workspace stores to a fixed `current_` physical
 namespace, retaining exactly `or3-db-${workspaceId}` and unchanged logical/wire

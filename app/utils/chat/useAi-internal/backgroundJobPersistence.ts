@@ -1,4 +1,4 @@
-import { invalidateFirstBindEligibility } from '~/core/sync/history-incarnation';
+import { invalidateFirstBindEligibility, readHistory } from '~/core/sync/history-incarnation';
 import { presentError } from '~~/shared/errors';
 import { readRequestUsage, type RequestUsage } from '~~/shared/chat/compaction';
 /**
@@ -15,6 +15,13 @@ import Dexie from 'dexie';
 export const BACKGROUND_JOB_PERSIST_INTERVAL_MS = 500;
 
 type ProjectionDisposition = 'eligible' | 'superseded' | 'stale-attempt' | 'canonical-finalized';
+
+// Sync-marked projections bypass capture hooks. Check their immutable origin
+// against the durable guard in the same transaction as the canonical write.
+async function ownsInstalledHistory(db: Or3DB): Promise<boolean> {
+    return db.syncHistoryAtOpen === undefined ||
+        (await readHistory(db)).historyIncarnation === db.syncHistoryAtOpen;
+}
 
 function classifyProjection(
     existing: StoredMessage | undefined,
@@ -50,9 +57,8 @@ export async function readCanonicalToolProjection(
     if (!tracker.canonicalHistory) return 'eligible';
     try {
         const db = tracker.originDb ?? getDb();
-        const row = (await db.messages.get(tracker.messageId)) as
-            | StoredMessage
-            | undefined;
+        const row = await db.transaction('r', [db.messages, db.sync_state], async () =>
+            await ownsInstalledHistory(db) ? await db.messages.get(tracker.messageId) : undefined);
         if (row && (row.role !== 'assistant' || row.thread_id !== tracker.threadId))
             return 'ended';
         const disposition = classifyProjection(row, tracker, status);
@@ -97,6 +103,7 @@ export async function projectCanonicalBackgroundMessage(
             const tx = Dexie.currentTransaction as typeof Dexie.currentTransaction | undefined;
             if (!tx)
                 throw new Error('Missing background projection transaction');
+            if (!await ownsInstalledHistory(db)) return false;
             getHookBridge(db).markSyncTransaction(tx);
             const existing = (await db.messages.get(messageId)) as
                 | StoredMessage
@@ -356,6 +363,7 @@ export async function persistBackgroundJobUpdate(
     ) {
         if (tracker.canonicalHistory) {
             const db = tracker.originDb ?? getDb();
+            if (!await ownsInstalledHistory(db)) return rejectedProjection('superseded');
             const existing = await db.messages.get(tracker.messageId) as StoredMessage | undefined;
             const disposition = classifyProjection(existing, tracker, status);
             if (disposition !== 'eligible') return rejectedProjection(disposition);
@@ -391,6 +399,10 @@ export async function persistBackgroundJobUpdate(
             usageCleared: boolean;
             usage?: RequestUsage;
         } | null> => {
+            if (!await ownsInstalledHistory(currentDb)) {
+                disposition.value = 'superseded';
+                return null;
+            }
             if (tracker.canonicalHistory) {
                 const tx = Dexie.currentTransaction as typeof Dexie.currentTransaction | undefined;
                 if (!tx)

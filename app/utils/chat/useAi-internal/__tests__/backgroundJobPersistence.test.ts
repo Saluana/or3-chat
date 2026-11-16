@@ -4,7 +4,7 @@ import type { BackgroundJobTracker, StoredMessage } from '../types';
 import type { BackgroundJobStatus } from '~/utils/chat/openrouterStream';
 import type { RequestUsage } from '~~/shared/chat/compaction';
 import { projectTranscriptForOpenRouter, storedMessagesToCanonicalTranscript } from '~/utils/chat/transcript';
-import { projectCanonicalBackgroundMessage, normalizeTerminalWorkflowState, persistBackgroundJobUpdate, persistBackgroundTrackingInterruption } from '../backgroundJobPersistence';
+import { projectCanonicalBackgroundMessage, readCanonicalToolProjection, normalizeTerminalWorkflowState, persistBackgroundJobUpdate, persistBackgroundTrackingInterruption } from '../backgroundJobPersistence';
 
 const beforePatch = vi.hoisted(() => vi.fn());
 const measurement = (iteration = 1, prompt = 180000): RequestUsage => ({
@@ -71,6 +71,29 @@ describe('background projection ownership across tabs', () => {
         await project();
         expect((await db.messages.get('assistant'))?.data).toMatchObject({ content: 'remote' });
         expect(await db.sync_state.get('sync_history')).toMatchObject({ firstBindEligible: false });
+    });
+
+    it.each(['metadata', 'canonical-status', 'legacy-status'] as const)('rejects a stale history projection before its old handle closes (%s)', async boundary => {
+        for (const origin of [null, 'I']) {
+            db.syncHistoryAtOpen = origin;
+            await db.sync_state.put({ id: 'sync_history', phase: 'ready', historyIncarnation: origin === null ? 'I' : 'J',
+                firstBindEligible: false, resetTarget: null, cursor: 0, deviceId: '', lastSyncAt: 0 });
+            const row = { id: 'assistant', thread_id: 'thread', role: 'assistant' as const, index: 0,
+                created_at: 1, updated_at: 1, clock: 1, pending: true, deleted: false,
+                data: { content: 'installed history', generation_id: 'generation', background_job_id: 'job' } };
+            await db.messages.put(row);
+            expect(db.isOpen()).toBe(true);
+            if (boundary === 'metadata') {
+                expect(await projectCanonicalBackgroundMessage(db, 'assistant', { data: { content: 'late discarded output' } })).toBe(false);
+            } else {
+                const tracker = trackerFor(db); tracker.canonicalHistory = boundary === 'canonical-status';
+                if (tracker.canonicalHistory) expect(await readCanonicalToolProjection(tracker, statusFor())).toBe('ended');
+                expect(await persistBackgroundJobUpdate(tracker, statusFor(undefined, 'complete'), 'late discarded output', true))
+                    .toMatchObject({ persisted: false, superseded: true });
+            }
+            expect(await db.messages.get('assistant')).toEqual(row);
+            expect(await db.pending_ops.count()).toBe(0);
+        }
     });
 
     it.each(['complete', 'error', 'aborted'] as const)('retains the last measured request through a %s actual-DB merge and canonical reload', async (terminal) => {
