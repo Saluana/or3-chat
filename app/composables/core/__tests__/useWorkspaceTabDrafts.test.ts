@@ -572,6 +572,35 @@ describe('durable workspace tab drafts', () => {
         await flush();
     });
 
+    it('saves mounted composer drafts through first binding and history replacement without reloading', async () => {
+        const { client, drafts, flush } = await reload();
+        const workspace = `draft-rebind-${crypto.randomUUID()}`;
+        const original = client.setActiveWorkspaceDb(workspace);
+        await original.open();
+        const captured = drafts.scope();
+        await drafts.load('mounted-tab', captured);
+        try {
+            for (const history of ['I', 'J']) {
+                const old = client.getDb();
+                drafts.write('mounted-tab', draft(`Pending ${history}`), captured);
+                await old.sync_state.put({ id: 'sync_history', phase: 'ready', historyIncarnation: history,
+                    firstBindEligible: false, resetTarget: null, cursor: 0, deviceId: '', lastSyncAt: 0 });
+                const current = await client.rebindWorkspaceDb(workspace, old);
+                await flush();
+                expect(drafts.saveFailed.value).toBe(false);
+                expect((await current.workspace_tab_drafts.toArray())[0]?.draft.text).toBe(`Pending ${history}`);
+                drafts.write('mounted-tab', draft(`Later ${history}`), captured);
+                await flush();
+                expect((await current.workspace_tab_drafts.toArray())[0]?.draft.text).toBe(`Later ${history}`);
+                expect(old.isOpen()).toBe(false);
+            }
+        } finally {
+            drafts.discard('mounted-tab', captured); await flush();
+            client.setActiveWorkspaceDb(null); client.evictWorkspaceDb(workspace);
+            await original.delete();
+        }
+    });
+
     it('deletes the saved draft on discard, even before a pending write fires', async () => {
         const { client, drafts, flush } = await reload();
         drafts.write('tab-1', draft('saved'));

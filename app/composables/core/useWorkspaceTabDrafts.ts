@@ -261,9 +261,10 @@ function readJournals(scope: WorkspaceDraftScope, errors: Map<string, unknown>):
 async function persist(scope: WorkspaceDraftScope, tabId: string): Promise<{ saved: boolean; persisted?: PersistedWorkspaceTabDraft | null }> {
     let db = scope.db;
     if (!db) return { saved: true };
-    // LRU eviction may close the captured handle while its buffer is retained.
+    // Eviction or history rebind may close a mounted composer's handle.
     // A restored handle can acknowledge that same account/workspace only.
-    const restoredDb = hydrations.get(scope.key)?.db;
+    const activeDb = getDb();
+    const restoredDb = activeDb.name === db.name ? activeDb : hydrations.get(scope.key)?.db;
     if (!db.isOpen() && restoredDb?.isOpen() && restoredDb.name === db.name) db = restoredDb;
     const key = memoryKey(scope, tabId);
     const flight = inFlightDrafts.get(key) ?? { scope, tabId, count: 0 };

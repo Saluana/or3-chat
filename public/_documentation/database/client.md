@@ -146,7 +146,9 @@ nondestructive retry after failure. Each workspace retains its own recovery stat
 
 `rebindWorkspaceDb(workspaceId, expected)` replaces a workspace connection after
 an installed sync history changes. It preserves the obsolete handle's origin,
-closes it, and notifies active-workspace listeners with a new generation. Sync
+closes it, attaches atomic write capture, and then notifies active-workspace
+listeners with a new generation. Mounted composers keep saving their local-only
+drafts through the replacement handle in the same database/account partition. Sync
 serializes teardown and restart; callers must capture the current DB again for
 new work. A normal first bind completes before Cloud restore begins uploading.
 
