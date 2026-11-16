@@ -61,6 +61,38 @@ export const logicalStoreName = (name: string): string => name.startsWith(STORE_
 export const physicalStoreName = (name: string): string => name.startsWith(STORE_PREFIX)
     ? name : `${STORE_PREFIX}${name}`;
 
+/** Explicit recovery only. These stores are never normal Or3DB accessors. */
+const LEGACY_INSPECTION_STORES = new Set(['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta',
+    'notifications', 'pending_ops', 'tombstones', 'file_transfers', 'workspace_tab_drafts', 'workspace_draft_versions', 'sync_quarantine', 'file_blobs']);
+
+/** Reads an existing native store without opening/upgrading or exposing writable aliases. */
+export async function inspectLegacyStore(db: Or3DB, store: string,
+    options: { after?: IDBValidKey; key?: IDBValidKey; limit?: number } = {}) {
+    if (!LEGACY_INSPECTION_STORES.has(store)) throw new Error('Unsupported legacy evidence store.');
+    const native = db.backendDB();
+    const rows: { key: IDBValidKey; value: Record<string, unknown> }[] = [];
+    const limit = Math.max(1, Math.min(100, options.limit ?? 100));
+    if (native.objectStoreNames.contains(store)) {
+        await new Promise<void>((resolve, reject) => {
+            const tx = native.transaction([store], 'readonly');
+            tx.oncomplete = () => resolve();
+            tx.onabort = () => reject(tx.error ?? new Error('Legacy evidence read aborted.'));
+            tx.onerror = () => reject(tx.error);
+            const range = options.key !== undefined ? IDBKeyRange.only(options.key)
+                : options.after !== undefined ? IDBKeyRange.lowerBound(options.after, true) : undefined;
+            const request = tx.objectStore(store).openCursor(range);
+            request.onsuccess = () => {
+                const cursor = request.result;
+                if (!cursor) return;
+                rows.push({ key: cursor.primaryKey, value: cursor.value });
+                if (rows.length < limit) cursor.continue();
+            };
+        });
+    }
+    return { database: db.name, schemaVersion: native.version, store, rows,
+        nextAfter: rows.length === limit ? rows[rows.length - 1]!.key : null };
+}
+
 /** Maximum number of workspace DBs to keep open (prevents IndexedDB connection exhaustion) */
 const MAX_CACHED_WORKSPACE_DBS = 10;
 /** TTL for inactive workspace DBs in ms (5 minutes) */

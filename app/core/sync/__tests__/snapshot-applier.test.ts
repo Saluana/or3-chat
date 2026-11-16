@@ -1259,3 +1259,22 @@ describe('proven first binding', () => {
         expect((await readHistory(db) as any).firstBindEligible).not.toBe(true);
     });
 });
+
+it('explicit native legacy inspection is bounded, read-only and separate from current accessors', async () => {
+    const { inspectLegacyStore } = await import('~/db/client');
+    const db = createDb(); const old = new Dexie(db.name); old.version(31).stores(legacySchema);
+    await old.open(); old.close(); await db.open(); await old.open();
+    try {
+        await old.table('kv').bulkPut([{ id: 'a', value: 'legacy a' }, { id: 'b', value: 'legacy b' }]);
+        await db.kv.put({ id: 'a', name: 'a', value: 'protected' } as any);
+        const version = db.backendDB().version;
+        const first = await inspectLegacyStore(db, 'kv', { limit: 1 });
+        expect(first.rows.map(row => row.value)).toEqual([{ id: 'a', value: 'legacy a' }]);
+        const second = await inspectLegacyStore(db, 'kv', { after: first.nextAfter!, limit: 1 });
+        expect(second.rows.map(row => row.value)).toEqual([{ id: 'b', value: 'legacy b' }]);
+        expect(await db.kv.get('a')).toMatchObject({ value: 'protected' });
+        expect(await old.table('kv').count()).toBe(2); expect(db.backendDB().version).toBe(version);
+        await expect(inspectLegacyStore(db, 'current_kv')).rejects.toThrow();
+        expect(db.table('kv').name).toBe('current_kv');
+    } finally { old.close(); }
+});
