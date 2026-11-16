@@ -33,8 +33,8 @@ export const WorkerCodeBlock = defineComponent({
             if (!visible) { release(); return; }
             if (disposed || typeof window === 'undefined') return;
             lease = pool.acquire();
-            // CodeBlock watches code/theme, not the highlight callback. Only
-            // remount interrupted/changed blocks; completed HTML stays intact.
+            // Remount interrupted/changed blocks when their lease returns;
+            // completed HTML stays intact.
             if (needsRefresh) {
                 needsRefresh = false;
                 renderKey.value++;

@@ -60,3 +60,17 @@ describe('snapshot bootstrap contract', () => {
         })).toThrow();
     });
 });
+
+it('serves admitted Unicode/prefix keys in component-wise UTF-8 order', () => {
+    for (const keys of [['a', 'a\0b'], ['\uE000', '\u{10000}']]) {
+        expect(SnapshotResponseSchema.safeParse({ workspaceId: 'w', snapshotId: 's', highWatermark: 1,
+            items: keys.map(pk => ({ kind: 'row', tableName: 'kv', pk, payload: {},
+                revision: { clock: 1, hlc: 'h', opId: 'legacy-id' } })), nextPageToken: null }).success).toBe(true);
+    }
+});
+it.each(['中', '\0', ':'])('accepts native and percent-escaped tokens for 1024-unit %s keys', char => {
+    const json = JSON.stringify({ snapshotId: `w:${'x'.repeat(256)}`, tableName: 'kv', pk: char.repeat(1024), kind: 'row' });
+    for (const token of [btoa(unescape(encodeURIComponent(json))), btoa(encodeURIComponent(json))]) {
+        expect(SnapshotRequestSchema.safeParse({ scope: { workspaceId: 'w' }, pageSize: 1, pageToken: token }).success).toBe(true);
+    }
+});

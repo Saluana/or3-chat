@@ -80,3 +80,14 @@ export async function probeDeepHealth(directory: string, mode: Mode) {
   if (ps.ok && ps.stdout.trim()) return 'degraded' as const;
   return 'unreachable' as const;
 }
+
+/** Exact current ledger/singleton inspection through the image's native reader. */
+export async function inspectInstalledHistory(directory: string, mode: Mode): Promise<string> {
+  const result = await run('docker', composeArgs(directory, mode, ['exec','-T','or3','sh','-c',
+    'if [ -x /nodejs/bin/node ]; then exec /nodejs/bin/node "$@"; else exec node "$@"; fi',
+    'or3-installed-history','/app/scripts/docker/backup-inspect.mjs','sync','/data/sync.sqlite']), directory);
+  let value: { healthy?: boolean; complete?: boolean; historyIncarnation?: string } = {};
+  try { value = JSON.parse(result.stdout) as typeof value; } catch { /* Refuse below. */ }
+  if (!result.ok || !value.healthy || !value.complete || typeof value.historyIncarnation !== 'string' || !/^[\x00-\x7f]{1,128}$/.test(value.historyIncarnation)) throw new Error('Installed history ledger/singleton inspection failed; admission remains closed');
+  return value.historyIncarnation;
+}

@@ -8,7 +8,7 @@ import type {
     UploadedImage,
     WorkspaceDraftComposerSettings,
 } from '~/components/chat/chat-input/types';
-import { getActiveWorkspaceId, getDb, type Or3DB, type WorkspaceDraftVersionRow } from '~/db/client';
+import { getActiveWorkspaceId, getDb, getWorkspaceDb, type Or3DB, type WorkspaceDraftVersionRow } from '~/db/client';
 import { getFileBlob } from '~/db/files';
 import { newId } from '~/db/util';
 import { commitDraftVersion, DraftVersionCapacityError, listDraftVersions, readDraftBaseline, removeDraftVersion, type DraftBaseline } from '~/db/workspace-draft-recovery';
@@ -261,10 +261,13 @@ function readJournals(scope: WorkspaceDraftScope, errors: Map<string, unknown>):
 async function persist(scope: WorkspaceDraftScope, tabId: string): Promise<{ saved: boolean; persisted?: PersistedWorkspaceTabDraft | null }> {
     let db = scope.db;
     if (!db) return { saved: true };
-    // LRU eviction may close the captured handle while its buffer is retained.
+    // Eviction or history rebind may close a mounted composer's handle.
     // A restored handle can acknowledge that same account/workspace only.
-    const restoredDb = hydrations.get(scope.key)?.db;
-    if (!db.isOpen() && restoredDb?.isOpen() && restoredDb.name === db.name) db = restoredDb;
+    if (!db.isOpen()) {
+        const restoredDb = db.name.startsWith('or3-db-')
+            ? getWorkspaceDb(db.name.slice('or3-db-'.length)) : hydrations.get(scope.key)?.db;
+        if (restoredDb?.isOpen() && restoredDb.name === db.name) db = restoredDb;
+    }
     const key = memoryKey(scope, tabId);
     const flight = inFlightDrafts.get(key) ?? { scope, tabId, count: 0 };
     flight.count++;

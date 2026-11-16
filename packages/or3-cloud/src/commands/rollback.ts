@@ -1,3 +1,5 @@
+import { requireHistoryResetTarget, supportsHistoryReset, qualifyLegacySnapshot } from '../backup/history-incarnation';
+import { imageAtDigest } from '../deployment/identity';
 import { createPreMutationSnapshot } from '../backup/create';
 import { readAuthenticatedBackupConfig } from '../backup/config';
 import { validateVolumeArchive } from '../backup/archive';
@@ -53,6 +55,10 @@ export async function rollbackCommand(directory: string, flags: Flags) {
   const recreateDataVolume = restoreRequiresVolumeRecreation(loaded.env, backupEnv);
   await pullAndRequireImage(point.image, point.imageDigest, 'Rollback');
   await assertSupportedHostArchitecture(point.image);
+  const capable = await supportsHistoryReset(loaded.directory, imageAtDigest(manifest.image, manifest.imageDigest));
+  const replacement = capable ? undefined : await qualifyLegacySnapshot(loaded.directory, loaded.state, manifest, backupEnv, imageAtDigest(loaded.state.image, loaded.state.imageDigest), backupPath);
+  if (capable) await requireHistoryResetTarget(loaded.directory, imageAtDigest(manifest.image, manifest.imageDigest));
+  console.warn(`Rollback discards ALL server changes after ${manifest.createdAt}; target ${point.appVersion} (${point.imageDigest}); abandoned incarnation ${loaded.state.syncHistory?.historyIncarnation ?? 'unknown'}. Current data will be preserved before extraction.`);
   await assertExistingVaultCustody(loaded.directory, loaded.state, manifest, backupPath, backupConfig);
   await assertRestoreFreeSpace(loaded.directory, loaded.state, loaded.env, manifest, backupPath);
   // Snapshot capture already stops the app. Validate before journaling/capture,
@@ -79,6 +85,7 @@ export async function rollbackCommand(directory: string, flags: Flags) {
     recreateDataVolume,
     remoteReconcile,
     phase: 'prepared',
+    explicitLossConsent: true,
   };
   await markPending(loaded.directory, loaded.state, pending);
   try {
@@ -93,24 +100,34 @@ export async function rollbackCommand(directory: string, flags: Flags) {
       previousBackupPath: previous.backupDir,
       phase: 'snapshot-created',
     });
+    loaded.state.pinnedHistoryBackups = [...new Set([...(loaded.state.pinnedHistoryBackups ?? []), point.backupId, previous.backupId])];
     await updatePending(loaded.directory, loaded.state, { phase: 'target-mutating' });
     await restoreBackupData(loaded.directory, loaded.state, loaded.env, backupPath, {
       recreateDataVolume,
       previousSafetySnapshot: true,
+      replacement,
       beforeStart: () => updatePending(loaded.directory, loaded.state, { phase: 'starting-target' }),
     });
     const restoredEnv = parseEnv(await readText(deploymentPaths(loaded.directory).env));
     const nextState = stateFromEnv(loaded.directory, restoredEnv, loaded.state.mode, 'restore', await imageDigest(restoredEnv.OR3_IMAGE));
+    nextState.syncHistory = loaded.state.syncHistory;
+    nextState.pinnedHistoryBackups = loaded.state.pinnedHistoryBackups;
     nextState.rollback = undefined;
     // Terminal state first; the redundant mirror is warning-only housekeeping so
     // its failure cannot send a completed rollback into the destructive handler.
     await writeState(loaded.directory, nextState);
     await removeOperationRecordSafely(loaded.directory, pending.id);
+    if (nextState.syncHistory?.certification === 'legacy-snapshot') console.warn('Legacy snapshot restored: incarnation protection unavailable; use this exact CLI for restart and re-upgrade. Source and abandoned data remain pinned.');
     console.log(`Rolled back to OR3 ${nextState.appVersion}. Verify sign-in, chat, and file access.`);
   } catch (error) {
     const original = redact(error instanceof Error ? error.message : String(error), secretValues(loaded.env));
     const phase = loaded.state.incompleteOperation?.phase;
-    if (phase === 'starting-target') {
+    if (phase === 'history-reset-required') {
+      loaded.state.lastError = `Byte-preservation recovery remains stopped/isolated and requires a qualified history-reset runtime: ${original}. Review status and managed recovery; do not start this image manually.`;
+      await writeState(loaded.directory, loaded.state);
+      throw new Error(loaded.state.lastError, { cause: error });
+    }
+    if (phase === 'starting-target' || phase === 'starting-previous') {
       loaded.state.lastError = `Rollback to ${point.appVersion} started the target but did not complete: ${original}. Writes may have been accepted, so the deployment was NOT restored automatically. Keep the operation record and run "npx @or3/cloud recover --dry-run", then "npx @or3/cloud recover --restore --yes" only after confirming loss of post-replacement writes.`;
       await writeState(loaded.directory, loaded.state);
       throw new Error(loaded.state.lastError, { cause: error });

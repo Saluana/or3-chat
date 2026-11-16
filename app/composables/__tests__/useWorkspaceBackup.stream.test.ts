@@ -28,9 +28,10 @@ function deferred() {
 
 async function importFixture(format: 'stream' | 'dexie', conflict = false) {
     const db = new Dexie(`backup-import-${crypto.randomUUID()}`);
-    db.version(1).stores({ messages: 'id' });
+    db.version(1).stores({ messages: 'id', sync_state: 'id' });
     importDatabases.push(db);
     await db.table('messages').put({ id: 'existing', text: 'Keep this message' });
+    await db.table('sync_state').put({ id: 'sync_history', firstBindEligible: true });
     backupContext.db = db;
     const rows = [{ id: conflict ? 'existing' : 'imported', text: 'Backup message' }];
     const data = format === 'stream'
@@ -95,9 +96,10 @@ vi.mock('~/utils/workspace-backup-stream', async () => {
     };
 });
 
-vi.mock('~/db/client', () => {
+vi.mock('~/db/client', async importOriginal => {
     const mockDb = { name: 'test-workspace', verno: 1 } as any;
     return {
+        ...(await importOriginal<typeof import('~/db/client')>()),
         db: mockDb,
         getDb: () => backupContext.db ?? mockDb,
     };
@@ -239,6 +241,7 @@ describe('useWorkspaceBackup stream export', () => {
         await importing;
 
         expect(backup.state.currentStep.value).toBe('done');
+        expect(await db.table('sync_state').get('sync_history')).toMatchObject({ firstBindEligible: false });
         expect(await db.table('messages').toArray()).toEqual([
             { id: 'existing', text: 'Keep this message' },
             { id: 'imported', text: 'Backup message' },
@@ -256,6 +259,7 @@ describe('useWorkspaceBackup stream export', () => {
         await backup.importWorkspace(file);
 
         expect(backup.state.currentStep.value).toBe('error');
+        expect(await db.table('sync_state').get('sync_history')).toMatchObject({ firstBindEligible: true });
         expect(await db.table('messages').toArray()).toEqual([
             { id: 'existing', text: 'Keep this message' },
         ]);

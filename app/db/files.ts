@@ -72,6 +72,7 @@ function assertFileUnchanged(current: FileMeta | undefined, expected: FileMeta |
 
 /** Derived counts cannot authorize deletion; live ownership rows are authoritative. */
 async function assertFilesUnreferenced(db: ReturnType<typeof getDb>, hashes: string[]): Promise<void> {
+    if (await db.sync_quarantine.filter(entry => entry.variant === 'history_reset' && entry.status === 'quarantined').first()) throw new Error('Review saved changes from before server recovery before deleting attachment bytes.');
     const targets = new Set(hashes);
     // Ownership includes every persisted hash, even beyond today's message limit.
     const retained = (row: { deleted?: boolean; file_hashes?: string | null }) =>
@@ -318,7 +319,7 @@ export async function createOrRefFile(
         // The supplied bytes have already been hashed. Metadata may have arrived
         // through sync before its original; preserve the original atomically with intake.
         const changed = await db.transaction('rw',
-            getWriteTxTableNames(db, 'file_meta', { include: ['file_blobs', 'file_transfers'] }), async () => {
+            getWriteTxTableNames(db, 'file_meta', { include: ['sync_quarantine', 'file_blobs', 'file_transfers'] }), async () => {
                 assertCurrentDb();
                 if (!direct && !(await db.file_blobs.get(hash))) await db.file_blobs.put({ hash, blob: file });
                 const incremented = await changeFileRefRows(hash, 1, db);
@@ -404,7 +405,7 @@ export async function createOrRefFile(
     assertCurrentDb();
     await db.transaction(
         'rw',
-        getWriteTxTableNames(db, 'file_meta', { include: ['file_blobs', 'file_transfers'] }),
+        getWriteTxTableNames(db, 'file_meta', { include: ['sync_quarantine', 'file_blobs', 'file_transfers'] }),
         async () => {
         // The initial lookup happens before image metadata/filter work. Recheck
         // under the write transaction so concurrent identical files increment
@@ -593,7 +594,7 @@ export async function softDeleteMany(hashes: string[]): Promise<string[]> {
     assertCurrent();
     const removed = metas.map(meta => meta.hash);
     await db.transaction('rw', getWriteTxTableNames(db, 'file_meta', {
-        include: ['posts', 'messages', 'workspace_tab_drafts', 'workspace_draft_versions'], includeTombstones: true,
+        include: ['sync_quarantine', 'posts', 'messages', 'workspace_tab_drafts', 'workspace_draft_versions'], includeTombstones: true,
     }), async () => {
         const current = await db.file_meta.bulkGet(removed);
         assertCurrent();
@@ -689,7 +690,7 @@ export async function hardDeleteMany(hashes: string[]): Promise<string[]> {
     }
     assertCurrent();
     await db.transaction('rw', getWriteTxTableNames(db, 'file_meta', {
-        include: ['file_blobs', 'posts', 'messages', 'workspace_tab_drafts', 'workspace_draft_versions'], includeTombstones: true,
+        include: ['sync_quarantine', 'file_blobs', 'posts', 'messages', 'workspace_tab_drafts', 'workspace_draft_versions'], includeTombstones: true,
     }), async () => {
         const current = await db.file_meta.bulkGet(unique);
         assertCurrent();

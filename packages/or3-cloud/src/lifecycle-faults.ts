@@ -1,3 +1,4 @@
+import type { ManagedState } from './deployment/contracts';
 /**
  * Test-only lifecycle fault seams. Production logic always calls these slots,
  * but a published CLI/flag cannot set them: tests import this module and assign
@@ -5,8 +6,8 @@
  * through the real transition code.
  */
 export const lifecycleFaults: {
-  beforeStateWrite?: () => void | Promise<void>;
-  afterStateWrite?: () => void | Promise<void>;
+  beforeStateWrite?: (state: Readonly<ManagedState>) => void | Promise<void>;
+  afterStateWrite?: (state: Readonly<ManagedState>) => void | Promise<void>;
   beforeMirrorDelete?: () => void | Promise<void>;
   beforeArchiveRead?: () => void | Promise<void>;
   beforeArtifactDelete?: () => void | Promise<void>;

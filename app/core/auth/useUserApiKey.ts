@@ -1,10 +1,11 @@
+import { CLOUD_MUTATION_INTENT } from '~~/shared/sync/types';
 import { err } from '~/utils/errors';
 /** Cloud exposes connection metadata; static deployments retain device-local BYOK. */
 import Dexie from 'dexie';
 import { useRuntimeConfig, useState } from '#imports';
 import type { SessionPayload } from '~/composables/auth/useSessionContext';
 import { computed, ref } from 'vue';
-import { getDb, getWorkspaceGeneration } from '~/db/client';
+import { getDb, getWorkspaceGeneration, logicalStoreName } from '~/db/client';
 import { kv } from '~/db';
 import { state } from '~/state/global';
 
@@ -20,7 +21,7 @@ async function credentialRequest(operation: string, key?: string) {
     const generation = operation === 'status' ? kvHydrationGeneration : ++kvHydrationGeneration;
     const response = await fetch('/api/openrouter/credentials', {
         method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error',
-        headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation', 'x-or3-account': owner },
+        headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT, 'x-or3-account': owner },
         body: JSON.stringify({ operation, ...(key === undefined ? {} : { key }) }),
     });
     if (!response.ok) throw new Error(response.status === 409 ? 'The server connection changed. Refresh and try again.' : 'OpenRouter credential storage is unavailable. Try again or contact the administrator.');
@@ -39,8 +40,9 @@ async function credentialRequest(operation: string, key?: string) {
 /** Read only owner-tagged legacy values; an unowned key can never prove account ownership. */
 async function legacyKey(owner: string): Promise<string | null> {
     const read = async (db: Dexie) => {
-        if (!hasKvTable(db)) return null;
-        const rows = await db.table<KvApiKeyRow, string>('kv').where('name').equals('openrouter_api_key').toArray();
+        const tableName = kvTableName(db);
+        if (!tableName) return null;
+        const rows = await db.table<KvApiKeyRow, string>(tableName).where('name').equals('openrouter_api_key').toArray();
         for (const row of rows) {
             const key = typeof row.value === 'string' ? storedKey(row.value, owner) : null;
             if (key && isValidOpenRouterKeyFormat(key)) return key;
@@ -70,8 +72,9 @@ async function discardLegacyKeys(owner: string): Promise<boolean> {
     const current = () => owner === currentKeyOwner();
     let complete = true;
     const clean = async (db: Dexie) => {
-        if (!hasKvTable(db)) return;
-        const table = db.table<KvApiKeyRow, string>('kv');
+        const tableName = kvTableName(db);
+        if (!tableName) return;
+        const table = db.table<KvApiKeyRow, string>(tableName);
         await db.transaction('rw', table, async () => {
             const rows = await table.where('name').equals('openrouter_api_key').toArray();
             for (const row of rows) if (current() && typeof row.value === 'string' && storedKey(row.value, owner) !== null) await table.delete(row.id);
@@ -215,8 +218,11 @@ type KvApiKeyRow = {
     value?: string | null;
 };
 
-function hasKvTable(db: { tables?: Array<{ name?: string }> }): boolean {
-    return Array.isArray(db.tables) && db.tables.some((t) => t.name === 'kv');
+// Raw Dexie is used to inspect retained databases without forcing upgrades.
+// Upgraded databases may contain isolated legacy KV sinks: never consume them.
+function kvTableName(db: { tables?: Array<{ name?: string }>; verno?: number }): string | undefined {
+    return db.tables?.find(table => logicalStoreName(table.name ?? '') === 'kv' &&
+        ((db.verno ?? 0) < 32 || table.name !== 'kv'))?.name;
 }
 
 export function hydrateUserApiKeyFromKv(): Promise<void> {
@@ -231,7 +237,7 @@ export function hydrateUserApiKeyFromKv(): Promise<void> {
         return Promise.resolve();
     }
 
-    if (!hasKvTable(db)) return Promise.resolve();
+    if (!kvTableName(db)) return Promise.resolve();
     if (
         pendingKvHydration?.generation === hydrationGeneration &&
         pendingKvHydration.workspaceGeneration === workspaceGeneration &&
@@ -289,10 +295,14 @@ export async function clearPersistedUserApiKey(): Promise<void> {
         const retained = new Dexie(name);
         try {
             await retained.open();
-            if (!retained.tables.some(table => table.name === 'kv')) return;
-            await retained.transaction('rw', retained.table('kv'), async () => {
+            // Unupgraded databases still own their original KV. Once fenced,
+            // select only the current store; never read a recreated legacy sink.
+            const tableName = kvTableName(retained);
+            if (!tableName) return;
+            const retainedKv = retained.table(tableName);
+            await retained.transaction('rw', retainedKv, async () => {
                 if (generation !== kvHydrationGeneration) return;
-                await retained.table('kv').where('name').equals('openrouter_api_key').delete();
+                await retainedKv.where('name').equals('openrouter_api_key').delete();
             });
         } finally { retained.close(); }
     }));

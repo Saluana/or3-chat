@@ -27,6 +27,7 @@ import { resolve } from 'node:path';
 import { connect as connectTls } from 'node:tls';
 import { chromium, devices, webkit } from 'playwright';
 import { browserUploadFixture } from './browser-upload-fixture.mjs';
+import { completeWelcomeOnboarding } from './browser-onboarding.mjs';
 
 const baseUrl = (process.env.OR3_SMOKE_URL ?? 'http://127.0.0.1:3017').replace(/\/$/, '');
 const NAV_TIMEOUT = 30_000;
@@ -246,6 +247,9 @@ async function dismissWelcomeCard(page) {
 }
 
 async function verifyStorageRoundTrip(page, workspaceId) {
+    const discovery = await browserJsonRequest(page, '/api/sync/pull', { body: { scope: { workspaceId }, cursor: 0, limit: 1, historyIncarnation: null, historyIncarnationCapability: 'incarnation-v1' } });
+    const historyIncarnation = discovery.historyIncarnation;
+    if (typeof historyIncarnation !== 'string' || !/^[\x00-\x7f]{1,128}$/.test(historyIncarnation)) throw new Error('Unqualified history incarnation runtime');
     const uploadBytes = browserUploadFixture();
     const hash = `sha256:${createHash('sha256').update(uploadBytes).digest('hex')}`;
     const presign = await browserJsonRequest(page, '/api/storage/presign-upload', {
@@ -289,7 +293,7 @@ async function verifyStorageRoundTrip(page, workspaceId) {
     const opId = randomUUID();
     const pushed = await browserJsonRequest(page, '/api/sync/push', {
         body: {
-            scope: { workspaceId },
+            scope: { workspaceId }, historyIncarnation, historyIncarnationCapability: 'incarnation-v1',
             ops: [{
                 id: `release-smoke-${opId}`,
                 tableName: 'file_meta',
@@ -567,7 +571,6 @@ async function verifyOpenRouterConnection(page) {
 }
 
 async function signOutOwner(page) {
-    await dismissWelcomeCard(page);
     const accountMenu = page.getByRole('button', { name: 'Account menu' });
     await waitForVisible(accountMenu, 'account menu control was not visible');
     await accountMenu.click();
@@ -752,8 +755,12 @@ async function main() {
 
     const browser = await chromium.launch({ headless: true, ...chromiumTlsOptions });
     const context = await browser.newContext({ ignoreHTTPSErrors: localTls });
+    await context.tracing.start({ screenshots: true, snapshots: true });
+    const artifactDir = resolve(process.env.OR3_SMOKE_ARTIFACT_DIR ?? 'output/browser-smoke');
+    await mkdir(artifactDir, { recursive: true });
     const page = await context.newPage();
     page.setDefaultTimeout(NAV_TIMEOUT);
+    let passed = false;
 
     try {
         // 1. Anonymous visit: invite-only gate, never an authenticated workspace.
@@ -774,6 +781,11 @@ async function main() {
         // 2. Owner sign-in via the UI.
         const ownerSession = await signInOwner(page, email, password);
         console.log('PASS owner sign-in via the UI');
+
+        // A clean, disconnected owner must see onboarding. The composer alone
+        // does not prove its asynchronous key/dismissal reads have completed.
+        await completeWelcomeOnboarding(page);
+        console.log('PASS disconnected owner welcome appears and dismisses via the UI');
 
         if (process.env.OR3_SMOKE_CONNECTION === '1') {
             await verifyOpenRouterConnection(page);
@@ -810,10 +822,17 @@ async function main() {
 
         // 7. Re-login.
         await signInOwner(page, email, password);
+        await page.getByRole('button', { name: 'Account menu', exact: true }).click();
+        await waitForVisible(page.getByRole('button', { name: /sign out/i }),
+            'account menu did not remain usable after re-login');
         console.log('PASS re-login restores the workspace');
 
+        passed = true;
         console.log('Clean-browser journey smoke passed.');
     } finally {
+        await page.screenshot({ path: resolve(artifactDir, 'owner-journey.png'), fullPage: true });
+        await context.tracing.stop({ path: resolve(artifactDir, 'owner-journey-trace.zip') });
+        await writeFile(resolve(artifactDir, 'owner-journey.json'), JSON.stringify({ baseUrl, passed }, null, 2));
         await context.close();
         await browser.close();
     }

@@ -1,3 +1,4 @@
+import { getShutdownRuntime } from '../utils/shutdown/runtime';
 /**
  * @module server/plugins/sync-maintenance
  *
@@ -19,7 +20,7 @@ import { defineNitroPlugin } from 'nitropack/runtime';
 import type { NitroApp } from 'nitropack';
 import { useRuntimeConfig } from '#imports';
 import { getSyncGatewayAdapter } from '../sync/gateway/registry';
-import { MAX_SYNC_RETENTION_SECONDS } from '~~/shared/sync/history-gc-policy';
+import { canRunSyncHistoryGc, supportsSyncHistoryRetention, MAX_SYNC_RETENTION_SECONDS } from '~~/shared/sync/history-gc-policy';
 import type { H3Event } from 'h3';
 
 const SYNC_MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000;
@@ -39,16 +40,18 @@ let initialPassQueued = false;
  * - Records maintenance state (begin/complete/fail) on the provider.
  */
 export async function runSyncMaintenance(): Promise<void> {
-    if (running) return;
+    if (getShutdownRuntime().controller.validationOnly() || running) return;
     running = true;
+    let adapter: ReturnType<typeof getSyncGatewayAdapter> = null;
     try {
-        const adapter = getSyncGatewayAdapter('sqlite');
-        if (!adapter) return;
+        adapter = getSyncGatewayAdapter('sqlite');
+        if (!adapter || !canRunSyncHistoryGc() || !supportsSyncHistoryRetention(adapter.capabilities)) return;
 
         adapter.beginMaintenanceRun?.();
-        try {
-            const workspaceIds = (await adapter.listWorkspaceIds?.()) ?? [];
-            for (const workspaceId of workspaceIds) {
+        const workspaceIds = (await adapter.listWorkspaceIds?.()) ?? [];
+        let failures = 0;
+        for (const workspaceId of workspaceIds) {
+            try {
                 await adapter.gcChangeLog?.(
                     {} as H3Event,
                     { scope: { workspaceId }, retentionSeconds: MAX_SYNC_RETENTION_SECONDS }
@@ -57,13 +60,20 @@ export async function runSyncMaintenance(): Promise<void> {
                     {} as H3Event,
                     { scope: { workspaceId }, retentionSeconds: MAX_SYNC_RETENTION_SECONDS }
                 );
+            } catch {
+                failures++;
             }
-            adapter.completeMaintenanceRun?.({ lastRun: new Date().toISOString() });
-        } catch (error) {
-            adapter.failMaintenanceRun?.(
-                error instanceof Error ? error.message : String(error)
-            );
         }
+        if (failures) {
+            // Bounded diagnostics; never include workspace data or raw provider errors.
+            adapter.failMaintenanceRun?.(`${failures} workspace(s) failed of ${workspaceIds.length}`);
+        } else {
+            adapter.completeMaintenanceRun?.({ lastRun: new Date().toISOString() });
+        }
+    } catch {
+        try { adapter?.failMaintenanceRun?.('Sync maintenance pass failed'); }
+        catch { console.warn('[sync-maintenance] Failure reporting failed'); }
+        console.warn('[sync-maintenance] Maintenance pass failed');
     } finally {
         running = false;
     }
@@ -83,7 +93,7 @@ export function startSyncMaintenanceScheduler(): { stop: () => void } | null {
         SYNC_MAINTENANCE_INTERVAL_MS
     );
     const handle = setInterval(() => {
-        void runSyncMaintenance();
+        void runSyncMaintenance().catch(() => { console.warn('[sync-maintenance] Scheduled pass failed'); });
     }, intervalMs);
     if (typeof handle.unref === 'function') {
         handle.unref();
@@ -101,21 +111,16 @@ function queueInitialMaintenancePass(): void {
     initialPassQueued = true;
     const timer = setTimeout(() => {
         initialPassQueued = false;
-        void runSyncMaintenance();
+        void runSyncMaintenance().catch(() => { console.warn('[sync-maintenance] Scheduled pass failed'); });
     }, 0);
     if (typeof timer.unref === 'function') timer.unref();
 }
 
 export default defineNitroPlugin((nitroApp: NitroApp) => {
+    if (getShutdownRuntime().controller.validationOnly()) return;
     const config = useRuntimeConfig();
     if (config.sync.enabled !== true || config.sync.provider !== 'sqlite') {
         return;
-    }
-
-    if (!getSyncGatewayAdapter('sqlite')) {
-        console.debug(
-            '[sync-maintenance] SQLite sync gateway not registered; scheduler will retry on each tick'
-        );
     }
 
     const scheduler = startSyncMaintenanceScheduler();

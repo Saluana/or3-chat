@@ -1,3 +1,4 @@
+import { observeSyncAction } from '~/core/sync/sync-observers';
 import 'fake-indexeddb/auto';
 import Dexie from 'dexie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -47,6 +48,29 @@ async function installPlugin() {
 // tombstones enter the prompt, late reads cross workspaces, a no-context send
 // leaks editor state into the next send.
 describe('mention freshness', () => {
+    it.each(['sync.bootstrap:action:complete', 'sync.pull:action:applied', 'sync.rescan:action:completed'] as const)(
+        'invalidates on every committed %s despite a hung earlier observer', async name => {
+            const hooks = useHooks();
+            let release!: () => void;
+            const hung = vi.fn(() => new Promise<void>(resolve => { release = resolve; }));
+            hooks._engine.addAction(name, hung, 0);
+            await installPlugin();
+            await useHooks().doAction('editor:request-extensions');
+            const extensions = await useHooks().applyFilters('ui.chat.editor:filter:extensions', []);
+            const mentionExtension = (extensions as Array<{ name: string; options: { suggestion: { items(input: { query: string }): Promise<Array<{ label: string }>> } } }>).find(extension => extension.name === 'mention')!;
+            const search = (query: string) => mentionExtension.options.suggestion.items({ query });
+            try {
+                expect((await search('Fresh')).map(item => item.label)).toContain('Fresh title');
+                for (const title of ['Renamed once', 'Renamed twice']) {
+                    await getDb().posts.update('doc', { title });
+                    await observeSyncAction(hooks, name, { scope: { workspaceId: workspaces[0]!.id } } as never);
+                    expect((await search('Renamed')).map(item => item.label)).toContain(title);
+                }
+                expect(hung).toHaveBeenCalledTimes(1);
+            } finally { release?.(); }
+        }
+    );
+
     it('uses the editor snapshot belonging to this request instead of another pending composer', async () => {
         await installPlugin();
         await getDb().posts.put({ id: 'other', postType: 'doc', title: 'Other composer secret', content: 'Unrelated evidence',

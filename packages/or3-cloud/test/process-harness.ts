@@ -49,6 +49,12 @@ export type FakeDockerConfig = {
   volumeAllocatedKiB?: number;
   volumeFreeKiB?: number;
   scratchFreeKiB?: number;
+  syncAudit?: unknown;
+  historyResetSupported?: boolean;
+  validationSupported?: boolean;
+  legacyQualified?: boolean;
+  incapableImage?: string;
+  validationModeMismatch?: boolean;
   s3Verification?: unknown;
   s3InventoryVerification?: unknown;
   s3Check?: unknown;
@@ -93,7 +99,7 @@ const config = JSON.parse(readFileSync(root + '/config.json', 'utf8'));
 const stateFile = root + '/state.json';
 const state = existsSync(stateFile)
   ? JSON.parse(readFileSync(stateFile, 'utf8'))
-  : { running: config.running, runningImage: config.runningImage, counters: {}, ids: {} };
+  : { running: config.running, runningImage: config.runningImage, historyIncarnation:'11111111-1111-4111-8111-111111111111', counters: {}, ids: {} };
 const save = () => writeFileSync(stateFile, JSON.stringify(state));
 const sha = (value) => 'sha256:' + createHash('sha256').update(value).digest('hex');
 const stdin = args.includes('-i') ? Buffer.from(await Bun.stdin.bytes()) : null;
@@ -128,6 +134,16 @@ const readEnv = (path) => Object.fromEntries(readFileSync(path, 'utf8').split(/\
 const labels = { 'org.opencontainers.image.source': 'https://github.com/Saluana/or3-chat' };
 const volumeLabels = () => config.volumeLabels ?? {};
 
+if (joined.includes('sync-history-reset.mjs capability')) {
+  if (config.historyResetSupported === false || config.incapableImage && joined.includes(config.incapableImage)) fail('Unsupported history incarnation target');
+  out(JSON.stringify({contract:'incarnation-v1', ...(config.validationSupported === false ? {} : {validation:'health-only-v1',profile:'basic-sqlite-fs'}), ...(config.legacyQualified ? {legacySnapshotRollback:'legacy-032-rollback-v1'} : {})})); process.exit(0);
+}
+if (joined.includes('sync-history-reset.mjs reset')) {
+  const index = args.indexOf('/app/scripts/docker/sync-history-reset.mjs');
+  const incarnation = args[index + 3];
+  state.historyIncarnation = incarnation; save();
+  out(JSON.stringify({contract:'incarnation-v1',historyIncarnation:incarnation,reset:true})); process.exit(0);
+}
 if (args[0] === 'info') { out(joined.includes('.Architecture') ? 'aarch64' : 'fixture'); process.exit(0); }
 if (args[0] === 'compose' && args[1] === 'version') { out('Docker Compose version v2'); process.exit(0); }
 if (args[0] === 'context') { out('unix:///var/run/docker.sock'); process.exit(0); }
@@ -162,7 +178,8 @@ if (args[0] === 'inspect') {
     if (joined.includes('.HostConfig.Tmpfs')) out(JSON.stringify(config.sourceTmpfsOverride ? {'/data/storage':'size=1m'} : {'/tmp':'size=256m'}));
     if (joined.includes('.HostConfig.Mounts')) out(JSON.stringify(config.sourceVolumeSubpath ? [{Type:'volume',Target:'/data',VolumeOptions:{Subpath:'alternate'}}] : []));
   } else if (joined.includes('.Config.Env')) {
-    const env = { ...readEnv(process.cwd() + '/.env') };
+    const env = { ...(state.runningEnv ?? readEnv(process.cwd() + '/.env')) };
+    if (config.validationModeMismatch) delete env.OR3_CLOUD_UPDATE_VALIDATION;
     env.NUXT_SECRETS_PROVIDER ??= 'or3-secrets';
     env.NUXT_SECRETS_SOCKET_PATH = '/run/or3-secrets/api.sock';
     env.NUXT_SECRETS_TOKEN_FILE = '/run/or3-secrets-client/service.token';
@@ -201,7 +218,9 @@ if (args[0] === 'volume') {
   process.exit(0);
 }
 
+const legacy = () => JSON.stringify({policy:'legacy-032-rollback-v1',ledger:'032',complete:true,payloadSha256:{'sync.sqlite':'c'.repeat(64),'auth.sqlite':'d'.repeat(64)}});
 const containerScript = () => {
+  if (joined.includes('backup-inspect.mjs legacy')) return out(legacy());
   if (config.realArchiveValidation && joined.includes('OR3_TAR_RESULT:')) {
     const index = args.indexOf('-c');
     const child = Bun.spawnSync(['sh', '-c', ...args.slice(index + 1)], { stdin, stdout: 'pipe', stderr: 'pipe' });
@@ -224,6 +243,7 @@ const containerScript = () => {
   if (joined.includes('df -Pk /scratch')) return out(config.scratchFreeKiB ?? 512 * 1024);
   if (joined.includes('df -Pk')) return out(config.volumeFreeKiB ?? 1000000);
   if (joined.includes('tar czf')) return process.stdout.write(gzipSync(Buffer.from('fixture archive bytes')));
+  if (joined.includes('backup-inspect.mjs sync')) return out(JSON.stringify({historyIncarnation:state.historyIncarnation,...(config.syncAudit ?? {contract:1,complete:true,healthy:true})}));
   if (joined.includes('quick_check')) return out(JSON.stringify([{ path: 'auth.sqlite', quickCheck: 'ok', tables: 1 }, { path: 'sync.sqlite', quickCheck: 'ok', tables: 1 }]));
   if (joined.includes('accessSync')) {
     if (state.running && config.healthy) return;
@@ -236,7 +256,9 @@ const containerScript = () => {
 if (args[0] === 'run') { containerScript(); process.exit(0); }
 if (args[0] === 'exec') {
   if (joined.includes('__probe_env__')) out(sha(process.env.OR3_STORAGE_S3_SECRET_ACCESS_KEY ?? ''));
+  else if (joined.includes('backup-inspect.mjs legacy')) out(legacy());
   else if (joined.includes('backup-inspect.mjs inventory')) out(JSON.stringify({selected:['./sync.sqlite'],bytes:1000}));
+  else if (joined.includes('backup-inspect.mjs sync')) out(JSON.stringify({historyIncarnation:state.historyIncarnation,...(config.syncAudit ?? {contract:1,complete:true,healthy:true})}));
   else if (joined.includes('backup-inspect.mjs references')) out(JSON.stringify({contract:1,complete:true,liveAttachments:0}));
   else if (joined.includes('backup-inspect.mjs s3-summary')) out(JSON.stringify({contract:2,references:1,payloadBytes:23}));
   else if (joined.includes('remote-objects.mjs capture')) process.stdout.write('fixture-remote-archive');
@@ -267,7 +289,7 @@ if (args[0] === 'compose') {
       },
       volumes: { 'or3-data': { name: env.OR3_VOLUME_NAME, labels: label }, 'or3-vault-data': {name:config.sourceVaultComposeOverride ?? env.OR3_VOLUME_NAME+'-vault-data'}, 'or3-vault-key': {name:env.OR3_VOLUME_NAME+'-vault-key'}, 'or3-vault-run': {name:env.OR3_VOLUME_NAME+'-vault-run'}, 'or3-vault-client': {name:env.OR3_VOLUME_NAME+'-vault-client'} },
     }));
-  } else if (sub === 'up') { state.running = true; state.runningImage = readEnv(envFile).OR3_IMAGE; save(); }
+  } else if (sub === 'up') { state.running = true; state.runningEnv = readEnv(envFile); state.runningImage = state.runningEnv.OR3_IMAGE; save(); }
   else if (sub === 'restart') { state.running = true; save(); }
   else if (sub === 'stop' || sub === 'down') { state.running = false; save(); }
   else if (sub === 'ps') {

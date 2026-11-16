@@ -162,6 +162,10 @@ Notes
 | `sync.stats:action`                      | action | `[{ pendingCount: number; cursor: number; lastSyncAt: number }]` — typed only                                | —       |
 | `sync:action:error`                      | action | `[{ message?: string } & Record<string, unknown>]` — emitted server-side via Nitro webhook events            | —       |
 
+### Sync observation completion
+
+Observer completion does not gate sync. The emitted bootstrap, rescan, pull received/applied/error, push before/after, conflict, permanent-error, queue/retry and subscription diagnostic actions use [bounded observation delivery](/documentation/hooks/reference#execution-and-errors). Invocation preserves priority/registration order and data-commit phases; asynchronous completion may overlap. One unresolved invocation per callback/action/engine is retained. Only the busy callback drops overlapping events until it settles, with no queued replay; ready callbacks receive every event. Synchronous notification suppression and cache/search invalidation therefore receive every event without special registration. Typed-only names above are not new emitters. Persistence, page receipts, pending-op capture and filters retain correctness backpressure.
+
 ---
 
 ## Workspace backup

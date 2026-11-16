@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 const fixture = vi.hoisted(() => ({ config: { public: { ssrAuthEnabled: true } }, owner: 'account-a', status: { connected: false, persisted: false }, requests: [] as any[], rows: [] as any[], retained: [] as any[], fail: false, retainedUnavailable: false }));
 vi.mock('#imports', () => ({ useRuntimeConfig: () => fixture.config, useState: () => ({ value: { session: { authenticated: true, provider: 'basic-auth', user: { id: fixture.owner } } } }) }));
-vi.mock('~/db/client', () => ({ getWorkspaceGeneration: () => 0, getDb: () => {
+vi.mock('~/db/client', () => ({ logicalStoreName: (name: string) => name.replace(/^current_/, ''), getWorkspaceGeneration: () => 0, getDb: () => {
     const table = { where: () => ({ equals: () => ({ first: async () => fixture.rows[0], toArray: async () => fixture.rows }) }), delete: async () => { fixture.rows = []; } };
     return { name: 'or3-db-workspace', tables: [{ name: 'kv' }], table: () => table, transaction: async (_mode: string, _table: unknown, callback: () => unknown) => callback() };
 } }));

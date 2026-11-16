@@ -120,6 +120,9 @@ jobs:
         env:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
+          # Type-aware ESLint over a large changed-file set exceeds the default
+          # V8 heap (exit 134), as the type-check step below also does.
+          NODE_OPTIONS: --max-old-space-size=6144
         run: |
           set -euo pipefail
           base_sha="${PR_BASE_SHA:-${PUSH_BEFORE_SHA:-}}"

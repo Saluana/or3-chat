@@ -2,6 +2,105 @@
 
 The OR3 Sync Layer provides offline-first, bidirectional synchronization between a workspace-scoped local Dexie database and the selected sync backend (SQLite or Convex in first-party deployments). It enables users to work offline and have their changes automatically synced when connectivity is restored, with support for multi-device synchronization and conflict resolution.
 
+SQLite provider `0.0.31` stores background tool-result operations with UUIDs.
+Its startup migration repairs legacy `background-tool:` operation IDs in saved
+rows, change logs, tombstones, and materialized snapshots. The repair preserves
+content, clocks and server versions. Migration 036 initializes history identity
+and invalidates old snapshots/device ACKs; matched browsers refresh their snapshot
+and preserve pending work for review. Offline backup inspection accepts both
+the earlier migration history and the repaired history.
+
+## History replacement and saved work
+
+The matched history-incarnation contract identifies a database history with an
+opaque token. Every pull, snapshot, push, cursor acknowledgement and events
+request negotiates `historyIncarnationCapability: 'incarnation-v1'`. Legacy
+requests receive HTTP 426. An adapter must advertise `historyIncarnation: 'v1'`
+and return a bound token; the gateway transport alone does not qualify a server.
+Published Convex 0.0.27 supports this contract in direct and gateway
+modes with its matching deployed backend; see [Convex qualification and setup](/documentation/cloud/provider-convex#sync-qualification-and-history-setup).
+Earlier Convex 0.0.26 lacks these changes. Installing that older package
+or obtaining an auth token does not qualify it. Startup refuses an unqualified
+direct provider before subscribing or starting the outbox. Gateway providers
+also require server qualification. SQLite 0.0.31 binds the Basic image inspection/reset profile to the complete 036
+ledger. D1 and managed replacement image activation retain their separate
+qualification gates.
+This source qualification does not publish or activate a release.
+
+An unbound browser or a different token requires a complete materialized
+snapshot, even when its numeric cursor equals or trails the new head. One
+workspace-wide `sync_history` control row in Dexie's `sync_state` fences pushes,
+ACKs and stale completions. A follower tab can close this guard; the subscription
+owner resumes checked snapshot recovery. The atomic install saves original
+outbox entries, acknowledged local content, tombstones, streaming work and
+transfer references in the existing quarantine, replaces authorized canonical
+state, invalidates other scopes and installs the exact token/cursor pair.
+On subscription startup, committed coverage for the current ready history
+restores the pending cursor acknowledgement. The terminal catch-up page retries
+that ACK even when no new rows arrive, so a reload after snapshot installation
+cannot leave a fresh device absent from server retention accounting. Coverage
+from a different history never supplies this acknowledgement.
+After installation, sync replaces only that workspace's Dexie connection and
+restarts its transport without navigating the page. Old connection handles keep
+their original history and stay closed, so delayed callbacks cannot write into
+the installed history. Cloud restore waits for this initial handoff before
+starting destination uploads.
+A newly created protected workspace DB carries a birth-only
+`firstBindEligible: true` proof in the shared guard. Its first atomic snapshot
+adopts purely local startup preferences, edits/deletes and offline conversations
+with ordinary LWW rules, preserving streaming progress, drafts, attachments and
+failure statuses. The proof is consumed with installation, even at cursor zero.
+It survives private staging/restart but is invalidated by remote data, nonzero
+coverage in any scope, imports, or an unfenced push before dispatch. Neither
+cursor zero nor an absent history proves eligibility. Existing/upgraded DBs and
+later history replacements retain the conservative held-work policy; existing
+holds stay held. A fresh default theme therefore does not produce a false
+server-recovery hold. No server/wire or explicit recovery rules change.
+
+Edits committed while downloading are included. Quota failure preserves the old
+state and leaves pushes closed. Same-history expiry keeps ordinary pending replay.
+
+Workspace sync status shows **Saved changes from before server recovery** with
+account-scoped inspection/export and deliberate Recover/Discard actions.
+Retry all excludes these entries. Lost acknowledgements have unknown commit
+status in the discarded history. Supported recovery puts create a fresh explicit
+action after checking current history, record and parent dependencies; original
+evidence remains. Deletes, files and complex entities require manual recovery.
+Secrets and local-only KV/drafts are excluded from exports; held attachment bytes
+are protected from cleanup until deliberate resolution. Cache retention pins only
+blobs referenced by held originals or local copies; an unrelated held setting
+such as a pre-bind theme selection does not prevent verified cache eviction.
+Pending or failed operations, unfinished streaming messages, unsent drafts and
+saved draft versions also retain their referenced local blobs. Eviction rechecks
+these references in its deletion transaction after verifying the remote copy.
+Background job projections and canonical tool admission also check the durable
+history guard before using a connection whose history has been replaced,
+including the interval before that connection closes.
+
+Dexie schema 32 atomically moves workspace stores to a fixed `current_` physical
+namespace, retaining exactly `or3-db-${workspaceId}` and unchanged logical/wire
+names. All stores are protected, including file metadata, attachment references,
+transfers, drafts, outbox, guard/cursors and recovery evidence. The large
+content-addressed `file_blobs` store and every other store are renamed in place
+through native IndexedDB; no user records or blob payloads are copied or doubled.
+Old sink deletions cannot remove current attachment bytes.
+
+Old Dexie 4.4.6 may reopen and recreate retired names through its schema patch
+(`dexie.mjs:4561–4567`, `patchCurrentVersion:3763`). These stores are isolated
+sinks: their writes cannot reach current state or be published. New opens tolerate
+extra stores without repeated upgrades and never replay their content. A bounded
+**Changes from an outdated client; origin unknown** diagnostic identifies their
+presence; read-only sink inspection/export and deliberate discard are a follow-up,
+with no automatic recovery. The actual legacy-schema/hooks regression checks
+current state/publication isolation and stable coexistence. Packed-provider and
+full deployment lifecycle qualification remain separate activation requirements.
+
+A blocked upgrade waits for other tabs to close without clearing data. An aborted
+or failed migration rolls back all renames/deletions. An accessible, themed
+updating state appears during migration. Recovery state is retained per workspace
+when several databases open together. The storage recovery dialog pauses automatic reopen, advises freeing storage, and offers explicit **Retry
+upgrade**. Do not clear site data to resolve an upgrade failure.
+
 ## Materialized snapshot bootstrap contract
 
 Cold bootstrap uses a provider-neutral materialized snapshot instead of cursor
@@ -16,18 +115,22 @@ watermark.
 SQLite and Convex implement provider-side materialized snapshot page generators.
 The updated SQLite provider also targets 1 MiB of serialized JSON per pull or
 snapshot page, in addition to its row limit. It keeps records whole, advances
-past filtered changes, and emits one oversized record when necessary to make
-progress. Existing clients continue to follow the same cursors and tokens.
+past filtered changes, and requires durable unavailable handling for records beyond the hard
+single-record ceiling when the matched recovery contract is enabled. Existing clients continue to follow the same cursors and tokens.
 The client stages each validated page in a local IndexedDB table, then installs
 the completed chain and cursor in one transaction before replaying strictly
 after the watermark. Interrupted staging leaves materialized data untouched;
-the next attempt discards the incomplete staging rows. Pending local operations
+ordinary restarted attempts discard incomplete staging rows; a storage pause
+retains the current attempt for explicit retry. Pending local operations
 are read and merged in the install transaction, including writes made while
 pages were fetched. Cross-provider coverage verifies deterministic rows,
 tombstones, intervening writes, duplicate boundaries, and fresh-device recovery
 after the original log entries have been pruned. Change-log and tombstone
 retention is enabled for adapters that declare the `snapshot-v1` retention
-contract; adapters that do not fail closed with `503`.
+contract; adapters that do not fail closed with `503`. Automatic maintenance
+uses the same capability gate, isolates workspace failures, and reports a partial
+pass as failed while continuing other workspaces. SSE disposal failures cannot
+retain connection slots or prevent the remaining cleanup.
 
 When an existing device's cursor expires, snapshot-capable providers use the
 same canonical replacement path instead of attempting cursor-zero replay.
@@ -36,6 +139,81 @@ atomically, except device-local KV keys excluded by the sync capture policy
 (including plugin extensions). Pending local puts and deletes are normalized,
 merged by revision in the same transaction, and then changes after the
 snapshot watermark are replayed before the live subscription resumes.
+
+## Unavailable records and durable recovery
+
+A compatible host/provider pair can contain a malformed stored record while
+continuing healthy records. Pull and snapshot responses carry an optional
+`unavailable` array. Every marker identifies the logical key, original operation
+or snapshot item kind, a bounded reason and a durable server evidence reference.
+Pull markers require the original server version; snapshot markers require the
+matching snapshot ID and high-watermark. Healthy entries and markers share the
+page count and byte budget. An all-unavailable pull window still advances, and
+a final all-unavailable snapshot page completes the chain. Invalid identity,
+ordering or coverage fails the page instead of silently skipping it.
+
+This requires explicit provider support (`capabilities.unavailableRecords =
+'v1'`) and browser negotiation (`unavailableRecordCapability: 'unavailable-v1'`).
+An older browser receives HTTP 426 / `OR3_SYNC_UPDATE_REQUIRED` before any
+partial page. The new snapshot ordering contract uses the same gate. Existing
+healthy pages from older adapters remain usable; upgrading the host alone does
+not add server evidence storage or repair to an older provider. The hardened
+Convex candidate commits evidence through `sync.pullChecked` mutations; its
+reactive subscription is only a version wakeup. Direct delivery awaits durable
+page application before advancing. The legacy `sync.pull` query explicitly
+refuses with update-required. Both modes require the matching deployed templates.
+Legacy messages without `order_key` remain readable: the client derives their
+ordering from the revision HLC without changing stored history.
+
+The browser classifies incoming defects before opening table transactions.
+Remote evidence uses `variant: 'incoming'` in the existing `sync_quarantine`
+store and appears in `$syncEngine.getQuarantined()` and
+`$syncEngine.exportQuarantined()`. It never reconstructs outgoing operations.
+Evidence must commit before the cursor advances. Snapshot markers and
+client-discovered defects preserve affected local rows, deletion tombstones and
+pending intent in the same atomic replacement transaction as the watermark.
+Those preserved copies remain explicitly uncertain through their incoming
+quarantine entry; they are not confirmed server winners or newly queued writes.
+Unresolved evidence is retained until an explicit recovery/discard decision.
+
+Server evidence survives ordinary log garbage collection and snapshot expiry.
+Providers must retain original data before returning a marker and keep
+notification ownership checks fail-closed. A repair must publish a fresh op ID,
+a winning valid revision and a new server version; editing old history behind
+an advanced cursor cannot redeliver it. See `docs/sync-unavailable-records.md`
+in the source repository for the normative provider checklist.
+
+Snapshot ordering compares `(tableName, primaryKey, kind)` component by
+component using UTF-8 byte order with shorter prefixes first. NUL, colons, CJK
+and supplementary Unicode remain valid identifiers; new writes reject lone
+UTF-16 surrogates. The 1,024-code-unit primary-key admission limit is unchanged.
+Continuation tokens allow 65,536 characters and the snapshot request body allows
+128 KiB, including worst-case escaped keys and filters. Provider token decoders
+must use the matching bound.
+
+Staging rows are consumed inside the single atomic install transaction. A local
+storage-quota failure rolls the install back, leaves the previous dataset and
+cursor intact, and pauses automatic reconnection. Free storage, then explicitly
+retry with `$syncEngine.start(workspaceId)` to resume the retained page/staging
+in the current client session.
+This reduces temporary duplication; browsers may still require transaction
+space, so it is not a promise of quota immunity.
+
+Writer integrations use `prepareSyncWrite` from
+`~~/shared/sync/prepare-sync-write` at HTTP/background admission and provider
+transactional sinks. Preparation is deterministic, allowlists synced tables,
+validates lossless identifiers, stamps and final live payloads, and enforces the
+256 KiB serialized payload ceiling. Raw legacy Dexie thread puts receive only
+missing client defaults (`status: 'ready'`, `pinned: false`, `deleted: false`);
+message puts default missing `deleted` to `false` and missing `order_key` to the
+write stamp's HLC. Preparation preserves explicit values and content, never
+invents timestamps or message indexes, and leaves input records unchanged.
+Reader schemas remain strict. Deletes validate their envelope without
+requiring a live row and retain their exact payload metadata so lost-ACK retries
+still match older receipts. `nextSyncClock` rejects unsafe increments. Existing
+nonempty legacy snapshot revision IDs remain supported.
+Reparsing stored background admissions preserves their record fields so existing
+admission and finalization receipts continue to match after an upgrade.
 
 ## Pull retention and snapshot recovery
 
@@ -625,6 +803,124 @@ Run `bun run test:e2e:sync:cloud --development-providers` for disposable Basic A
 
 ## Structured recovery failures
 
-Sync providers must return `errorCode` for failed push results: `VALIDATION_ERROR`, `OVERSIZED`, or `UNAUTHORIZED` mark an operation permanent; `RATE_LIMITED` defers it. Transport failures should expose HTTP `status`/`statusCode` and `retryAfterMs` when available. Whole-request 400, 413, and 422 failures are split into individual operations; a single operation rejected with 400, 413, or 422 is retained as permanent. Unstructured failed results remain retryable; message text never controls recovery.
+Sync providers must return `errorCode` for failed push results: `VALIDATION_ERROR`, `OVERSIZED`, or `UNAUTHORIZED` mark an operation permanent; `RATE_LIMITED` defers it. Transport failures should expose HTTP `status`/`statusCode` and `retryAfterMs` when available. Whole-request 400, 413, and 422 failures are split into individual operations; a single operation rejected with 400, 413, or 422 is retained as permanent. Unstructured failed results remain retryable. The narrowly recognized SQLite
+`CONFLICT` reason for reuse of an already processed `op_id` is held for recovery;
+other conflict text does not make an operation terminal. Generic `CONFLICT` and `NOT_FOUND` results keep retrying without charging the shared outage breaker. Per-operation `RATE_LIMITED` results also leave the breaker healthy and defer without incrementing attempts; transport and server failures still count toward the outage budget.
 
 Background history adapters should throw errors with `status` or `statusCode`, a structured code (`VALIDATION_ERROR`, `OVERSIZED`, `UNAUTHORIZED`, `FORBIDDEN`, `CONFLICT`, `SUPERSEDED`, or `UNSUPPORTED`), or explicit `retryable: false` for a permanent history failure. HTTP 408, 429, and 5xx are transient. Unknown or legacy unstructured errors remain pending for retry, even if their wording resembles a permanent failure. Providers that only throw strings or plain errors must add metadata to retain permanent-block behavior.
+
+A shared workspace/provider circuit breaker limits retries. Half-open probes have
+owned, expiring leases: stopping or cancelling an attempt releases its lease,
+and late results from that attempt cannot settle a replacement probe.
+
+Outgoing operations freeze their sanitized wire payload durably before the first
+send, preserving UUID intent through retries and lost acknowledgements. Existing
+complete legacy payloads keep their previous normalization. Previously attempted
+legacy threads whose send-time timestamps cannot be recovered are held in the
+existing sync quarantine for export and explicit recovery. An explicit processed
+UUID identity-reuse rejection or malformed server winner also holds only that
+operation, preserving local content and winner evidence; healthy siblings settle.
+These content failures do not consume the provider outage budget. Other provider
+conflicts retain their existing retry behavior.
+
+Snapshot downloads retain their staged prefix while retrying the same page/token
+on HTTP 429, temporary service/network errors, or request timeouts. Backoff is
+cancellable and capped at 30 seconds, with Retry-After as a minimum and the
+one-hour snapshot lifetime as the total bound. Invalid/expired identities (410)
+escape to a new recovery attempt. Non-transient chain, authorization or storage
+failures pause recovery for a deliberate retry. Staging still installs only as
+one complete atomic chain.
+
+Sync observations (bootstrap/rescan phases, push before/after, queue/retry, pull
+received/applied/error, conflicts, permanent-error notifications and subscription
+diagnostics) wait at most 250 ms: observer completion does not gate sync. Listeners
+are invoked in priority/registration order without awaiting earlier completions.
+One unresolved invocation per callback/action/engine is retained. Only that busy
+callback drops overlapping events until it settles, without queued replay. Other
+ready callbacks, including async listeners, receive each event. Synchronous
+suppression/invalidation callbacks run on every event, so start precedes complete
+and cache/search invalidation follows the data commit even behind a hung observer. Observers must capture and
+guard scope before awaiting; a timeout cannot cancel their side effects. Cancelled
+subscription/outbox batches do not initiate further observations. Protocol
+persistence, page receipts, pending-op capture and filters remain awaited.
+
+
+### Stored-record push holds
+
+Updated clients advertise `storedRecordCapability: 'stored-record-v1'` on push.
+This is distinct from pull/snapshot `unavailable-v1`, which older clients already
+advertise without understanding push holds. A provider encountering unreadable
+stored receipts, winners or ownership returns HTTP 426 `OR3_SYNC_UPDATE_REQUIRED`
+with `requiredCapability: 'stored-record-v1'` to an unsupported client.
+
+Supported mixed batches return an independent result per operation. A held result
+is `{opId, success:false, errorCode:'STORED_RECORD_UNAVAILABLE', evidenceRef, error}`:
+`evidenceRef` is a nonempty opaque server reference of at most 128 characters;
+`error` is a fixed non-secret reason of at most 160 characters. No stored payload,
+winner, replay success or fabricated revision is returned. Healthy siblings commit.
+The provider must preserve both original stored bytes and rejected intent before
+returning the reference; database/storage outages remain service errors.
+
+The outbox atomically moves the original intent, UUID, local row/tombstone, reason
+and server reference into existing local quarantine (`variant:'stored_record'`).
+Attempts do not increase, the operation is not retried or assigned a new identity,
+and the result does not penalize the service breaker. The existing Saved changes
+section displays these holds for inspect/export and deliberate discard. Stored
+record holds require manual review/repair using the exported server reference;
+no automatic recovery put is offered. Retry all affects active outbox work only.
+
+For the hardened Convex candidate, export a hold's `evidenceRef` through the
+privileged `sync.unavailable.export` action. The exported intent links to the
+original stored source through `evidence_ref`; both survive GC, snapshot expiry
+and history reset. Unknown-owner notification evidence stays private; known
+foreign owners are denied without returning content or evidence references.
+Convex also bounds push point-read/evidence work: remaining operations receive
+retryable `RATE_LIMITED` deferrals when the transaction budget is exhausted.
+These deferrals allocate no versions and do not fabricate unavailable holds.
+
+## Older servers and separate browser stores
+
+This tab sends `x-or3-cloud-intent: mutation-incarnation-v1` on existing Cloud
+mutations. Published 0.1.116 rejects that value before dispatch. The current
+server accepts exactly `mutation` and `mutation-incarnation-v1`, with the same
+origin, JSON and bearer checks. Sync push, pull, snapshot, ACK and events keep
+their independent incarnation checks; there is no retry with a legacy header.
+
+An exact old intent refusal pauses sync before session-invalid cleanup. A
+successful response with a missing/malformed incarnation pauses with
+“The server does not support this tab's sync protocol”; it does not prove rollback.
+Network failures and intermediary HTTP errors use bounded transport retries;
+an unrecognized proxy 401/403 preserves the session without a durable protocol
+pause. Recognized application authentication refusals retain normal auth handling.
+The protocol pause is durable and shared with same-account workspace followers. It does
+not reset cursors, settle operations, spend retries, clear browser data or sign
+out. Local edits, drafts, blobs and held evidence remain saved. “Check server
+again” reconnects through checked discovery; only a valid current contract can
+release the captured pause. A newer follower refusal also fences an in-flight
+connection before it can report connected. A later history J still requires the existing atomic
+snapshot/hold transition regardless of numeric catch-up. Old responses and
+connection handles stay fenced, including the in-place history rebind.
+
+When the server is known to be older, the browser says:
+
+> The server is running an older version, so sync in this tab is paused. Your local changes are still saved. The older app uses separate local stores and may not show these changes. Do not clear browser data. Export important work, or review saved changes after the server is upgraded again. Changes saved by an older tab can be inspected separately; they are never merged automatically.
+
+In Workspace → Sync status, “Changes saved by an older tab” explicitly inspects
+and exports up to 100 native legacy entries per batch. The database/store/schema
+identity and unknown origin accompany each export. Close older tabs first:
+these are partial live reads, not a certified complete snapshot. Current
+workspace authorization is checked before and after reads; other-account and
+unknown-account private notifications/drafts, local-only KV and unclassified
+private evidence stay in place. Queued payloads explicitly naming another
+workspace or account are excluded even when their wrapper is local. An attachment export revalidates its authorized
+structured attachment reference and verifies the bytes against its stored hash.
+A hash quoted in ordinary text does not authorize attachment bytes. Failed exports
+never remove their source. No legacy store becomes a normal writable accessor,
+and no inspection opens a version upgrade or automatically imports/replays data.
+
+Held inspection/export stays available while paused; retry-all excludes held
+work and paused tabs cannot retry queued changes or recover held puts. After
+checked reconnect, deliberate supported recovery still validates current
+parents, permissions and history and creates a fresh action. Unsupported kinds
+and deletes remain exportable for manual review. Old bundles using their legacy
+stores have legacy behavior during rollback, not incarnation-certified holding.

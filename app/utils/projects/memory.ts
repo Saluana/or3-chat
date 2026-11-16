@@ -1,3 +1,4 @@
+import { CLOUD_MUTATION_INTENT } from '~~/shared/sync/types';
 import Dexie from 'dexie';
 import { useRuntimeConfig } from '#imports';
 import { captureProjectOperation } from './operation';
@@ -252,7 +253,7 @@ async function classifySavedMemory(
             credentials: 'same-origin',
             headers: {
                 'Content-Type': 'application/json',
-                'x-or3-cloud-intent': 'mutation',
+                'x-or3-cloud-intent': CLOUD_MUTATION_INTENT,
                 ...(local ? { 'x-or3-openai-key': local.apiKey } : key ? { 'x-or3-openrouter-key': key } : {}),
             },
             body: JSON.stringify({ workspaceId: scope.workspaceId, state, ...(local ? { model: local.fastModel } : {}) }),

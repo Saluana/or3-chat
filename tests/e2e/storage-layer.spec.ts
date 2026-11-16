@@ -97,8 +97,10 @@ test.describe('Storage Layer', () => {
         test.setTimeout(90_000);
         await page.evaluate((fault) => {
             const original = IDBObjectStore.prototype.put;
+            (window as unknown as { blobFaultHits: number }).blobFaultHits = 0;
             IDBObjectStore.prototype.put = function (...args: Parameters<typeof original>) {
-                if (this.name !== 'file_blobs') return original.apply(this, args);
+                if (this.name !== 'current_file_blobs') return original.apply(this, args);
+                (window as unknown as { blobFaultHits: number }).blobFaultHits++;
                 if (fault === 'quota') throw new DOMException('Synthetic blob storage full', 'QuotaExceededError');
                 const request = original.apply(this, args);
                 this.transaction.abort();
@@ -109,6 +111,7 @@ test.describe('Storage Layer', () => {
         const file = { name: 'transaction-recovery.txt', mimeType: 'text/plain', buffer: Buffer.from('Attachment transaction recovery bytes.') };
         await upload(page, file);
         await expect(page.getByTestId('storage-feedback')).toContainText(/abort|Synthetic/i);
+        expect(await page.evaluate(() => (window as unknown as { blobFaultHits: number }).blobFaultHits)).toBeGreaterThan(0);
         await page.getByTestId('storage-refresh').click();
         await expect(page.getByTestId('metadata-count')).toHaveText('0');
         await expect(page.getByTestId('transfer-count')).toHaveText('0');
@@ -119,13 +122,14 @@ test.describe('Storage Layer', () => {
                 open.onerror = () => reject(open.error);
                 open.onsuccess = () => {
                     const db = open.result;
-                    const transaction = db.transaction('file_blobs', 'readonly');
-                    const count = transaction.objectStore('file_blobs').count();
+                    const transaction = db.transaction('current_file_blobs', 'readonly');
+                    const count = transaction.objectStore('current_file_blobs').count();
                     transaction.oncomplete = () => { db.close(); resolve(count.result); };
                     transaction.onabort = () => { db.close(); reject(transaction.error); };
                 };
             })));
         });
+        expect(blobs.length).toBeGreaterThan(0);
         expect(blobs.every(count => count === 0)).toBe(true);
         await page.evaluate(() => (window as unknown as { restoreRecoveryPut: () => void }).restoreRecoveryPut());
         await upload(page, file);
@@ -284,8 +288,12 @@ test.describe('Storage Layer', () => {
             const { HookBridge } = await import(new URL('../core/sync/hook-bridge.ts', clientUrl!).href);
             const bridge = new HookBridge(getDb()); bridge.start();
             const original = IDBObjectStore.prototype.put;
+            (window as unknown as { removeFaultHits: number }).removeFaultHits = 0;
             IDBObjectStore.prototype.put = function (...args: Parameters<typeof original>) {
-                if (this.name === 'posts' && args[0]?.deleted) throw new Error('[HookBridge] Non-atomic tombstone capture: tombstones missing from transaction scope');
+                if (this.name === 'current_posts' && args[0]?.deleted) {
+                    (window as unknown as { removeFaultHits: number }).removeFaultHits++;
+                    throw new Error('[HookBridge] Non-atomic tombstone capture: tombstones missing from transaction scope');
+                }
                 return original.apply(this, args);
             };
             (window as unknown as { finishRemoveFault: () => void }).finishRemoveFault = () => { IDBObjectStore.prototype.put = original; };
@@ -297,6 +305,7 @@ test.describe('Storage Layer', () => {
         const alert = dialog.getByRole('alert');
         await expect(alert).toContainText('Could not remove item');
         await expect(alert).toContainText('The item could not be removed. Try again.');
+        expect(await page.evaluate(() => (window as unknown as { removeFaultHits: number }).removeFaultHits)).toBeGreaterThan(0);
         await expect(dialog).not.toContainText('HookBridge');
         await page.screenshot({ path: info.outputPath('remove-error.png'), animations: 'disabled' });
         await page.evaluate(() => (window as unknown as { finishRemoveFault: () => void }).finishRemoveFault());

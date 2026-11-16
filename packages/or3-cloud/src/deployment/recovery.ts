@@ -54,6 +54,9 @@ export async function commitPreMutationRecovery(
     state.lastSuccessfulOperation,
     await imageDigest(restoredEnv.OR3_IMAGE),
   );
+  recovered.lastReceipt = state.lastReceipt;
+  recovered.syncHistory = state.syncHistory;
+  recovered.pinnedHistoryBackups = state.pinnedHistoryBackups;
   recovered.rollback = state.rollback;
   recovered.lastError = message;
   await commitRecoveredState(directory, state, recovered);
@@ -280,6 +283,8 @@ export async function finishTargetReadyUpdate(
     operatorHandoff: 'not-required',
   };
   const next = stateFromEnv(directory, targetEnv, state.mode, 'update', digest);
+  next.syncHistory = state.syncHistory;
+  next.pinnedHistoryBackups = state.pinnedHistoryBackups;
   next.rollback = {
     appVersion: sourceVersion,
     image: sourceImage,

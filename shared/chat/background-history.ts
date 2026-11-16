@@ -1,3 +1,4 @@
+import { prepareSyncWrite, nextSyncClock, isLosslessSyncIdentifier } from '../sync/prepare-sync-write';
 import type { RequestUsage } from './compaction';
 
 export const BACKGROUND_HISTORY_CONTRACT_VERSION = 1 as const;
@@ -99,7 +100,7 @@ export function parseChatGenerationAdmissionEnvelope(
         throw new Error('Invalid background history kind');
     }
     for (const key of ['admissionId', 'generationId', 'workspaceId', 'threadId', 'messageId'] as const) {
-        if (typeof candidate[key] !== 'string' || !candidate[key]) {
+        if (typeof candidate[key] !== 'string' || !candidate[key] || !isLosslessSyncIdentifier(candidate[key])) {
             throw new Error(`Invalid background history ${key}`);
         }
     }
@@ -151,6 +152,20 @@ export function parseChatGenerationAdmissionEnvelope(
     ) {
         throw new Error('Continuation background history must advance the assistant clock');
     }
+    // Validate without changing the identity of persisted admission envelopes:
+    // providers hash these records before recognizing an existing receipt.
+    const prepare = (tableName: 'threads' | 'messages', row: CanonicalHistoryRecord): CanonicalHistoryRecord => {
+        nextSyncClock(row.clock);
+        const opId = '00000000-0000-4000-8000-000000000000';
+        // Legacy admissions omitted message ordering; clients derive it from
+        // the final HLC. This is a validation-only view, never receipt content.
+        const payload = { ...row, ...(tableName === 'messages' && !row.order_key
+            ? { order_key: row.hlc ?? 'background' } : {}), op_id: opId };
+        prepareSyncWrite({ tableName, pk: row.id, operation: 'put', payload,
+            stamp: { deviceId: backgroundHistoryDeviceId(candidate.generationId as string),
+                opId, hlc: typeof row.hlc === 'string' ? row.hlc : 'background', clock: row.clock } });
+        return row;
+    };
     return {
         version: BACKGROUND_HISTORY_CONTRACT_VERSION,
         kind: candidate.kind,
@@ -159,9 +174,9 @@ export function parseChatGenerationAdmissionEnvelope(
         workspaceId: candidate.workspaceId as string,
         threadId: candidate.threadId as string,
         messageId: candidate.messageId as string,
-        thread,
-        userMessage,
-        assistantMessage,
+        thread: thread ? prepare('threads', thread) : undefined,
+        userMessage: userMessage ? prepare('messages', userMessage) : undefined,
+        assistantMessage: prepare('messages', assistantMessage),
         expectedAssistant,
     };
 }

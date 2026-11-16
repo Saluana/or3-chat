@@ -3,6 +3,7 @@ import type { PullResponse, SnapshotResponse, SyncChange, SyncScope } from '~~/s
 import { FULL_HISTORY_PULL_RETENTION } from '~~/shared/sync/types';
 import { createGatewaySyncProvider } from '../providers/gateway-sync-provider';
 import { OutboxManager } from '../outbox-manager';
+import { isHistoryProtocolBoundary } from '../history-incarnation';
 import { createMockDb, createPendingOpsTable } from './sync-test-utils';
 import { Blob as NodeBlob } from 'node:buffer';
 import { gunzipSync } from 'node:zlib';
@@ -29,7 +30,7 @@ function makeOkResponse(body: unknown) {
     return {
         ok: true,
         status: 200,
-        text: vi.fn(async () => JSON.stringify(payload)),
+        text: vi.fn(async () => JSON.stringify(payload && typeof payload === 'object' ? { historyIncarnation: 'I', ...payload } : payload)),
     } as unknown as Response;
 }
 
@@ -104,6 +105,36 @@ function pushBatch() {
     };
 }
 
+describe('legacy server pre-dispatch refusal', () => {
+    afterEach(() => vi.unstubAllGlobals());
+    it.each([401, 403, 502, 503])('preserves session without a durable pause on an unrecognizable intermediary %s', async status => {
+        const dispatch = vi.fn(); vi.stubGlobal('dispatchEvent', dispatch);
+        vi.stubGlobal('fetch', vi.fn(async () => makeErrorResponse(status, '<html>proxy refusal</html>')));
+        const error = await createGatewaySyncProvider().push(pushBatch()).catch(error => error);
+        expect(isHistoryProtocolBoundary(error)).toBe(false);
+        expect(error).toMatchObject({ status, retryable: true });
+        expect(dispatch).not.toHaveBeenCalled();
+    });
+    it('keeps ordinary JSON permission failures in the auth path', async () => {
+        const dispatch = vi.fn(); vi.stubGlobal('dispatchEvent', dispatch);
+        vi.stubGlobal('fetch', vi.fn(async () => makeErrorResponse(403, { statusMessage: 'Forbidden' })));
+        const error = await createGatewaySyncProvider().push(pushBatch()).catch(error => error);
+        expect(isHistoryProtocolBoundary(error)).toBe(false);
+        expect(dispatch).toHaveBeenCalledTimes(1);
+    });
+    it('uses the downgrade fence and refuses before invalid-session cleanup', async () => {
+        const dispatch = vi.fn(); vi.stubGlobal('dispatchEvent', dispatch);
+        const fetcher = vi.fn(async (_url: unknown, _options?: RequestInit) => makeErrorResponse(403, { statusMessage: 'Forbidden: Missing mutation intent' }));
+        vi.stubGlobal('fetch', fetcher);
+        const provider = createGatewaySyncProvider();
+        await expect(provider.push(pushBatch())).rejects.toMatchObject({ code: 'OR3_SYNC_OLDER_SERVER' });
+        expect(fetcher.mock.calls[0]?.[1]?.headers).toMatchObject({ 'x-or3-cloud-intent': 'mutation-incarnation-v1' });
+        expect(dispatch).not.toHaveBeenCalled();
+        expect(fetcher).toHaveBeenCalledTimes(1);
+        await provider.dispose();
+    });
+});
+
 describe('GatewaySyncProvider', () => {
     let originalFetch: unknown;
 
@@ -132,22 +163,24 @@ describe('GatewaySyncProvider', () => {
             constructor() { source = this; sources += 1; }
         });
         let version = 0;
-        const fetchMock = vi.fn(async () => makeOkResponse({ changes: [change(version, String(version))],
-            nextCursor: version, hasMore: false }));
+        const fetchMock = vi.fn(async (_path: string, init: RequestInit) => {
+            const { cursor } = JSON.parse(init.body as string) as { cursor: number };
+            return makeOkResponse({ changes: version > cursor ? [change(version, String(version))] : [], nextCursor: version, hasMore: false });
+        });
         vi.stubGlobal('fetch', fetchMock);
         const apply = vi.fn(async () => {});
         const provider = createGatewaySyncProvider({ pollIntervalMs: 2000 });
-        const unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['messages'], apply, { cursor: 0 });
+        const unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['messages'], apply, { cursor: 0, historyIncarnation: 'I' });
         try {
             expect(source).toBeDefined();
             source.onopen();
             await vi.advanceTimersByTimeAsync(30_000);
             expect(fetchMock).not.toHaveBeenCalled();
             version = 3;
-            source.onmessage({ data: JSON.stringify({ version }) });
+            source.onmessage({ data: JSON.stringify({ historyIncarnation: 'I', version }) });
             await vi.advanceTimersByTimeAsync(0);
             expect(apply).toHaveBeenCalledTimes(1);
-            source.onmessage({ data: JSON.stringify({ version }) });
+            source.onmessage({ data: JSON.stringify({ historyIncarnation: 'I', version }) });
             await vi.advanceTimersByTimeAsync(0);
             expect(fetchMock).toHaveBeenCalledTimes(1);
             source.onerror();
@@ -175,6 +208,20 @@ describe('GatewaySyncProvider', () => {
         expect(source.close).toHaveBeenCalled();
     });
 
+    it('pauses a missing-incarnation SSE hint without applying or polling and reports it to the owner', async () => {
+        let source: any;
+        vi.stubGlobal('EventSource', class { onmessage?: (event: { data: string }) => void; close = vi.fn(); constructor() { source = this; } });
+        const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
+        const apply = vi.fn(); const onError = vi.fn();
+        const provider = createGatewaySyncProvider({ pollIntervalMs: 100 });
+        const unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['kv'], apply, { cursor: 80, historyIncarnation: 'I', onError });
+        source.onmessage({ data: JSON.stringify({ version: 100 }) });
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: 'OR3_SYNC_HISTORY_UNSUPPORTED' }));
+        expect(source.close).toHaveBeenCalled(); expect(apply).not.toHaveBeenCalled(); expect(fetcher).not.toHaveBeenCalled();
+        unsubscribe(); await provider.dispose();
+    });
+
     it('keeps the safety pull deadline across notification channel refreshes', async () => {
         vi.spyOn(Math, 'random').mockReturnValue(0);
         let source: any;
@@ -187,11 +234,11 @@ describe('GatewaySyncProvider', () => {
         vi.stubGlobal('fetch', fetchMock);
         const apply = vi.fn();
         const provider = createGatewaySyncProvider({ pollIntervalMs: 2000 });
-        const unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['messages'], apply);
+        const unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['messages'], apply, { historyIncarnation: 'I' });
         try {
             source.onopen();
             await vi.advanceTimersByTimeAsync(59_000);
-            source.onmessage({ data: JSON.stringify({ refresh: true }) });
+            source.onmessage({ data: JSON.stringify({ historyIncarnation: 'I', refresh: true }) });
             source.onopen();
             await vi.advanceTimersByTimeAsync(1_000);
             expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -240,7 +287,7 @@ describe('GatewaySyncProvider', () => {
             else window.dispatchEvent(new Event('online'));
             await vi.advanceTimersByTimeAsync(0);
             expect(fetchMock).toHaveBeenCalledTimes(1);
-            expect(JSON.parse(fetchMock.mock.calls[0]![1]!.body as string).cursor).toBe(5);
+            expect(JSON.parse((fetchMock.mock.calls as unknown as [string, RequestInit][])[0]![1].body as string).cursor).toBe(5);
 
             await vi.advanceTimersByTimeAsync(100);
             expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -255,7 +302,7 @@ describe('GatewaySyncProvider', () => {
     it('backs off repeated outages and keeps the retry deadline across resume', async () => {
         vi.spyOn(Math, 'random').mockReturnValue(0);
         vi.spyOn(console, 'error').mockImplementation(() => undefined);
-        const fetchMock = vi.fn(async () => makeErrorResponse(503, 'Unavailable'));
+        const fetchMock = vi.fn(async () => makeErrorResponse(503, { statusMessage: 'Unavailable' }));
         vi.stubGlobal('fetch', fetchMock);
         const provider = createGatewaySyncProvider({ pollIntervalMs: 100 });
         const unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['messages'], () => undefined);
@@ -558,6 +605,28 @@ describe('GatewaySyncProvider', () => {
         unsubscribe();
     });
 
+    it.each([401, 403, 502])('resumes polling after an opaque intermediary %s without logout or protocol pause', async status => {
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        const fetcher = vi.fn().mockResolvedValueOnce(makeErrorResponse(status, '<html>proxy unavailable</html>'))
+            .mockResolvedValue(makeOkResponse({ changes: [], nextCursor: 0, hasMore: false }));
+        vi.stubGlobal('fetch', fetcher);
+        const dispatch = vi.fn(); vi.stubGlobal('dispatchEvent', dispatch);
+        const onError = vi.fn();
+        const provider = createGatewaySyncProvider({ pollIntervalMs: 100 });
+        const unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['messages'], () => undefined,
+            { cursor: 0, historyIncarnation: 'I', onError });
+        try {
+            await vi.advanceTimersByTimeAsync(100);
+            expect(fetcher).toHaveBeenCalledTimes(1);
+            await vi.advanceTimersByTimeAsync(99);
+            expect(fetcher).toHaveBeenCalledTimes(1);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(fetcher).toHaveBeenCalledTimes(2);
+            expect(onError).not.toHaveBeenCalled();
+            expect(dispatch).not.toHaveBeenCalled();
+        } finally { unsubscribe(); await provider.dispose(); }
+    });
+
     it('stops polling and emits sync-session-invalid event on auth/permission failures', async () => {
         vi.spyOn(Math, 'random').mockReturnValue(0);
         const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -670,23 +739,20 @@ describe('GatewaySyncProvider', () => {
             pageSize: 50,
             pageToken: 'opaque-page',
             tables: ['messages'],
-        })).resolves.toEqual(response);
+        })).resolves.toEqual({ historyIncarnation: 'I', ...response });
 
         expect(fetchMock).toHaveBeenCalledWith(
             'https://sync.example.test/api/sync/snapshot',
             expect.objectContaining({
                 method: 'POST',
                 credentials: 'include',
-                body: JSON.stringify({
-                    scope: { workspaceId: 'ws-1' },
-                    pageSize: 50,
-                    pageToken: 'opaque-page',
-                    tables: ['messages'],
-                    workspaceItemCapability: 'v1',
-                    fileKindCapability: 'v1',
-                }),
+
             })
         );
+        expect(JSON.parse((fetchMock.mock.calls as unknown as [string, RequestInit][])[0]![1].body as string)).toEqual({
+            historyIncarnationCapability: 'incarnation-v1', scope: { workspaceId: 'ws-1' }, pageSize: 50, pageToken: 'opaque-page', tables: ['messages'],
+            workspaceItemCapability: 'v1', fileKindCapability: 'v1', unavailableRecordCapability: 'unavailable-v1',
+        });
     });
 
     it.each([false, true])('honors Retry-After seconds across subscription ownership changes (restart: %s)', async restart => {
@@ -734,7 +800,7 @@ describe('GatewaySyncProvider', () => {
         const fetchMock = vi
             .fn()
             .mockResolvedValueOnce(
-                makeErrorResponse(503, 'Convex temporarily unavailable')
+                makeErrorResponse(503, { statusMessage: 'Convex temporarily unavailable' })
             )
             .mockResolvedValueOnce(
                 makeOkResponse({
@@ -932,7 +998,15 @@ describe('GatewaySyncProvider', () => {
         );
     });
 
-    it('keeps an outbox operation pending when a successful gateway push omits its result', async () => {
+    it('advertises stored-record recovery and preserves bounded evidence in push results', async () => {
+        const hold = { opId: pushBatch().ops[0]!.stamp.opId, success: false, errorCode: 'STORED_RECORD_UNAVAILABLE', evidenceRef: 'evidence-1', error: 'invalid_json' };
+        const fetchMock = vi.fn(async (_input: unknown, _init?: RequestInit) => makeOkResponse({ results: [hold], serverVersion: 1 }));
+        (globalThis as unknown as { fetch: unknown }).fetch = fetchMock;
+        expect((await createGatewaySyncProvider().push(pushBatch())).results).toEqual([hold]);
+        expect(JSON.parse(fetchMock.mock.calls[0]![1]!.body as string).storedRecordCapability).toBe('stored-record-v1');
+    });
+
+    it('pauses without consuming intent or retry budget when a successful gateway push omits its result', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => undefined);
         vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         const fetchMock = vi.fn(async () =>
@@ -953,8 +1027,11 @@ describe('GatewaySyncProvider', () => {
         expect(pendingOps.__rows.get(pending.id)).toMatchObject({
             id: pending.id,
             status: 'retry_wait',
-            attempts: 1,
+            attempts: 0,
         });
+        await vi.advanceTimersByTimeAsync(10_000);
+        await outbox.flush();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it.each([

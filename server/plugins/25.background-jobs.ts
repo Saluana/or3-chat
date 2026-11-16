@@ -19,6 +19,7 @@ const CLEANUP_INTERVAL_MS = 60_000;
 let stopActive: (() => void) | undefined;
 
 export default defineNitroPlugin((nitroApp) => {
+    if (getShutdownRuntime().controller.validationOnly()) return;
     stopActive?.();
     let activeInterval: ReturnType<typeof setTimeout> | undefined;
     let activeStartup: ReturnType<typeof setTimeout> | undefined;

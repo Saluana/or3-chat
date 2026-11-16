@@ -3,6 +3,7 @@ import { Blob as NodeBlob } from 'node:buffer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Or3DB, setActiveWorkspaceDb } from '~/db/client';
 import type { FileMeta } from '~/db/schema';
+import { getWriteTxTableNames } from '~/db/util';
 import type { FileTransfer } from '~~/shared/storage/types';
 import { DEFAULT_FILE_POLICY } from '~~/shared/storage/file-policy';
 import { createOrRefFile, softDeleteFile } from '~/db/files';
@@ -56,7 +57,7 @@ async function until(predicate: () => boolean | Promise<boolean>, timeout = 1_50
     }
 }
 async function original(db: Or3DB) {
-    await db.file_meta.put(meta());
+    await db.transaction('rw', getWriteTxTableNames(db, 'file_meta'), () => db.file_meta.put(meta()));
     await db.file_blobs.put({ hash, blob: new NodeBlob(['hello']) as unknown as Blob });
 }
 function job(overrides: Partial<FileTransfer> = {}): FileTransfer {
@@ -81,6 +82,21 @@ afterEach(async () => {
 });
 
 describe('durable storage recovery contracts', () => {
+    it('invalidates first-bind proof before an unfenced upload commit whose response is lost', async () => {
+        const db = await database(); const storage = provider();
+        const executor = queue(db, storage, { concurrency: 0 }); executor.setWorkspaceId('ws');
+        let eligibleAtDispatch: boolean | undefined;
+        storage.commitUpload = async () => {
+            eligibleAtDispatch = (await db.sync_state.get('sync_history'))?.firstBindEligible;
+            throw new Error('commit response lost');
+        };
+        await expect(executor.uploadDirect(meta(), new NodeBlob(['hello']) as unknown as Blob,
+            { db, workspaceId: 'ws' }, () => {})).rejects.toThrow('commit response lost');
+        expect(eligibleAtDispatch).toBe(false);
+        db.close(); await db.open();
+        expect((await db.sync_state.get('sync_history'))?.firstBindEligible).toBe(false);
+    });
+
     it('resumes an interrupted verified download from its last received byte', async () => {
         const db = await database();
         await db.file_meta.put({ ...meta(), storage_id: 'original' });

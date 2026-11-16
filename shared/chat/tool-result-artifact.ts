@@ -1,7 +1,6 @@
-/** Immutable workspace KV chunks for completed tool output that cannot be inline. */
+/** Immutable workspace KV chunks keep tool output out of assistant messages. */
 import { sha256 } from '@noble/hashes/sha2.js';
 
-export const TOOL_RESULT_INLINE_JSON_BYTES = 16 * 1024;
 const PART_JSON_BYTES = 64 * 1024;
 const encoder = new TextEncoder();
 export type ToolResultArtifactRow = {
@@ -36,16 +35,17 @@ export function parseToolResultArtifact(value: string) {
 export function matchesToolResultStorage(reference: string, result: string,
     identity: { threadId: string; parentAssistantId: string; callId: string }): boolean {
     const manifest = parseToolResultArtifact(reference);
-    if (!manifest || encoder.encode(JSON.stringify(result)).length <= TOOL_RESULT_INLINE_JSON_BYTES ||
+    if (!manifest || !result ||
         encoder.encode(result).length > 256 * 1024) return false;
     return manifest.threadId === identity.threadId &&
         manifest.id === digest(JSON.stringify([identity.threadId, identity.parentAssistantId, identity.callId, result])) &&
         manifest.sha256 === digest(result) && manifest.parts === splitResult(result).length;
 }
 export async function prepareToolResultStorage(result: string, identity: { threadId: string; parentAssistantId: string; callId: string }) {
-    // Measure JSON escaping, rather than raw characters. The existing accepted
-    // result cap remains unchanged; every overflow byte is retained below.
-    if (encoder.encode(JSON.stringify(result)).length <= TOOL_RESULT_INLINE_JSON_BYTES)
+    // Even individually small reads accumulate across a turn. Retain every
+    // nonempty result, leaving only its reference in the assistant/transcript.
+    // Empty output needs no chunks; older inline transcript rows remain readable.
+    if (!result)
         return { result, rows: [] as ToolResultArtifactRow[] };
     if (encoder.encode(result).length > 256 * 1024) throw new Error('Tool result exceeds its durable limit');
     const id = digest(JSON.stringify([identity.threadId, identity.parentAssistantId, identity.callId, result]));

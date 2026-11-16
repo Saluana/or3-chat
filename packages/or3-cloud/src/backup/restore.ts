@@ -1,13 +1,14 @@
+import { supportsHistoryReset, requireHistoryResetTarget, prepareHistoryReset, commitHistoryReset, qualifyLegacySnapshot, prepareLegacyReplacement, verifyLegacyReplacement } from './history-incarnation';
 import { join } from 'node:path';
 import { assertExistingVaultCustody } from './vault';
 import { readAuthenticatedBackupConfig } from './config';
-import { assertSupportedBackupProfile, validateCanonicalBackupReferences } from './references';
+import { assertSupportedBackupProfile, assertSyncSemanticCertification, validateBackupSyncSemantics, validateCanonicalBackupReferences } from './references';
 import {
   assertRestorableManagedAssets,
   MANAGED_ASSET_INVENTORY_VERSION,
   restoreManagedAssets,
 } from '../deployment/assets';
-import type { BackupManifest, ManagedState } from '../deployment/contracts';
+import type { BackupManifest, ManagedState, LegacySnapshotPolicy } from '../deployment/contracts';
 import { dashboardUpdatesEnabled, parseEnv, restoreStorageConfiguration, secretValues, serializeEnv, withoutDashboardOperator } from '../deployment/env';
 import { imageAtDigest } from '../deployment/identity';
 import { deploymentPaths } from '../deployment/paths';
@@ -152,9 +153,14 @@ export async function restoreBackupData(
   state: ManagedState,
   env: Record<string, string>,
   backupPath: string,
-  options: { recreateDataVolume?: boolean; beforeStart?: () => Promise<void>; previousSafetySnapshot?: boolean; remoteReferencePolicy?: 'warn' } = {},
+  options: { recreateDataVolume?: boolean; beforeStart?: () => Promise<void>; previousSafetySnapshot?: boolean; remoteReferencePolicy?: 'warn'; replacement?: 'safety' | LegacySnapshotPolicy; replacementRole?: 'safety' } = {},
 ) {
   const manifest = await readManifest(backupPath, directory);
+  const safety = options.replacement === 'safety' || options.replacementRole === 'safety';
+  const legacy = typeof options.replacement === 'object' ? options.replacement : undefined;
+  const capable = await supportsHistoryReset(directory, imageAtDigest(manifest.image, manifest.imageDigest));
+  if (!capable && !safety && !legacy) await requireHistoryResetTarget(directory, imageAtDigest(manifest.image, manifest.imageDigest));
+  if (!state.incompleteOperation) throw new Error('History replacement requires an external operation journal');
   assertRestorableManagedAssets(manifest);
   const backupConfig = await readAuthenticatedBackupConfig(backupPath, manifest);
   const backupEnv = parseEnv(backupConfig);
@@ -188,6 +194,11 @@ export async function restoreBackupData(
     // that state and make otherwise usable older-image snapshots unrecoverable.
     console.warn('Restoring the recorded byte-preservation safety snapshot; canonical attachment completeness is not certified. Verify previously uploaded files.');
   }
+  if (!options.previousSafetySnapshot) {
+    await validateBackupSyncSemantics(directory, { ...backupEnv, OR3_IMAGE: imageAtDigest(manifest.image, manifest.imageDigest) }, backupPath);
+  } else {
+    console.warn('DEGRADED byte-preservation recovery: sync semantic health is not certified. Verify or explicitly repair the restored sync state before treating it as healthy.');
+  }
   await ensureManagedDataVolume(directory, state.mode, state, env);
   // Preflight the filesystem Docker will actually extract into. A compressed
   // tarball's byte size and the backup directory's filesystem cannot prove
@@ -208,8 +219,14 @@ export async function restoreBackupData(
         OR3_IMAGE: imageAtDigest(manifest.image, manifest.imageDigest),
       });
 
+  // Fence all writers before journaling and before volume recreation/extraction.
+  await stopProject(directory, state.mode);
+  if (legacy) {
+    const rechecked = await qualifyLegacySnapshot(directory, state, manifest, backupEnv, legacy.inspectorImage, backupPath);
+    if (JSON.stringify(rechecked) !== JSON.stringify(legacy)) throw new Error('Legacy eligibility changed');
+    await prepareLegacyReplacement(directory, state, manifest, legacy, safety);
+  } else await prepareHistoryReset(directory, state, manifest, safety);
   if (options.recreateDataVolume) await removeManagedDataVolumeForRecreation(directory, state);
-  else await stopProject(directory, state.mode);
   if (
     dashboardUpdatesEnabled(directory)
     && restoredEnv.OR3_DASHBOARD_UPDATES_ENABLED !== 'true'
@@ -223,6 +240,7 @@ export async function restoreBackupData(
   await writeSecure(deploymentPaths(directory).env, serializeEnv(restoredEnv));
   await restoreManagedAssets(directory, backupPath, manifest);
   await restoreVolumeArchive(directory, state.mode, restoredEnv, backupPath);
+  if (legacy) await verifyLegacyReplacement(directory, state, manifest, legacy);
   // Application startup can migrate an empty SQLite payload into a healthy
   // schema. Check the extracted snapshot while no application writes are
   // possible, so an invalid payload still follows safe pre-start recovery.
@@ -241,10 +259,35 @@ export async function restoreBackupData(
   if (!snapshotCheck.ok) {
     throw new Error(`Restored snapshot integrity verification failed. ${redact(snapshotCheck.stderr, secretValues(restoredEnv))}`);
   }
-  if (manifest.schemaVersion === 1) await restoreGenerationIdentities(directory, state, restoredEnv, backupPath, { previousSafetySnapshot: options.previousSafetySnapshot });
+  if (!capable && !legacy) {
+    state.syncHistory = { certification: 'history-reset-required' };
+    await updatePending(directory, state, { phase: 'history-reset-required' });
+    throw new Error('DEGRADED byte-preservation recovery is stopped/isolated: target lacks incarnation runtime; history-reset-required');
+  }
+  if (!legacy) await commitHistoryReset(directory, state, manifest, restoredEnv.OR3_SQLITE_DB_PATH!, options.previousSafetySnapshot === true);
+  if (!legacy && manifest.schemaVersion === 1) await restoreGenerationIdentities(directory, state, restoredEnv, backupPath, { previousSafetySnapshot: options.previousSafetySnapshot });
+  if (!options.previousSafetySnapshot) {
+    // This restore path has no isolated target-migration entrypoint. Certify the
+    // extracted candidate before public startup; never start an old/incapable
+    // image just to try a migration. A separately qualified repair can prepare
+    // a new backup without changing this authenticated source archive.
+    const semanticCheck = await run('docker', [
+      'run', '--rm', '--network', 'none', '--read-only',
+      '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL',
+      '--memory', '256m', '--cpus', '0.5', '--pids-limit', '32',
+      '-v', `${state.volumeName}:/data:ro`,
+      '--entrypoint', 'sh', restoredEnv.OR3_IMAGE,
+      '-c', 'if [ -x /nodejs/bin/node ]; then exec /nodejs/bin/node "$@"; else exec node "$@"; fi',
+      'or3-sync-inspection', '/app/scripts/docker/backup-inspect.mjs', 'sync', restoredEnv.OR3_SQLITE_DB_PATH!,
+    ], directory);
+    if (!semanticCheck.ok) throw new Error(`Restored candidate sync semantic certification failed or is unsupported. ${redact(semanticCheck.stderr, secretValues(restoredEnv))}`);
+    assertSyncSemanticCertification(semanticCheck.stdout, state.syncHistory!.historyIncarnation);
+    state.syncHistory!.certification = 'certified';
+  }
   // The caller journals the point at which application writes become possible
-  // before requesting startup. Recovery snapshots keep their existing phase.
-  await options.beforeStart?.();
+  // before requesting startup. Internal safety startup has its own boundary.
+  if (options.beforeStart) await options.beforeStart();
+  else await updatePending(directory, state, { phase: 'starting-previous' });
   await startProject(directory, state.mode, restoredEnv);
   if (manifest.schemaVersion === 2 && manifest.remote.kind === 's3-copy-v1') {
     const result = await checkRemoteCopyTarget(directory, manifest, restoredEnv, backupPath, manifest.remote);
@@ -269,15 +312,21 @@ export async function restorePreMutationSnapshot(
   const pending = state.incompleteOperation;
   if (!pending) throw new Error('No incomplete operation is available to restore.');
   const previous = await recordedBackupPath(directory, pending);
+  let replacement = pending.legacySource?.backupId === previous.manifest.backupId ? pending.legacySource : undefined;
+  if (!replacement && pending.operation === 'update' && pending.explicitLossConsent && previous.manifest.appVersion === '0.1.116'
+    && !await supportsHistoryReset(directory, imageAtDigest(previous.manifest.image, previous.manifest.imageDigest))) {
+    const config = parseEnv(await readAuthenticatedBackupConfig(previous.path, previous.manifest));
+    replacement = await qualifyLegacySnapshot(directory, state, previous.manifest, config, pending.targetImage ?? env.OR3_IMAGE!, previous.path);
+  }
   await updatePending(directory, state, { phase: 'restoring-previous' });
   if (pending.recreateDataVolume) {
-    await restoreBackupData(directory, state, env, previous.path, { recreateDataVolume: true, previousSafetySnapshot: true, remoteReferencePolicy: 'warn' });
+    await restoreBackupData(directory, state, env, previous.path, { recreateDataVolume: true, previousSafetySnapshot: true, remoteReferencePolicy: 'warn', replacement: replacement ?? 'safety', replacementRole: 'safety' });
     return previous;
   }
   if (pending.previousRootOwnership) {
     await pullAndRequireImage(state.image, state.imageDigest, 'Previous deployment');
     await setManagedVolumeRootOwnership(directory, state, env, state.image, pending.previousRootOwnership);
   }
-  await restoreBackupData(directory, state, env, previous.path, { previousSafetySnapshot: true, remoteReferencePolicy: 'warn' });
+  await restoreBackupData(directory, state, env, previous.path, { previousSafetySnapshot: true, remoteReferencePolicy: 'warn', replacement: replacement ?? 'safety', replacementRole: 'safety' });
   return previous;
 }

@@ -1,3 +1,4 @@
+import Dexie from 'dexie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
     PendingOp,
@@ -13,6 +14,7 @@ import { SubscriptionManager } from '../subscription-manager';
 import { Or3DB } from '~/db/client';
 import { createMemoryTable, createMockDb, createPendingOpsTable, testUuid } from './sync-test-utils';
 import * as cursorManagerModule from '~/core/sync/cursor-manager';
+import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 import { markRecentOpId } from '../recent-op-cache';
 import { createGatewaySyncProvider } from '../providers/gateway-sync-provider';
 
@@ -39,9 +41,11 @@ vi.mock('~/core/sync/hook-bridge', () => ({
     getLocalOnlyKvNames: () => new Set(['openrouter_api_key', 'MODELS_CATALOG', 'workspace.manager.cache']),
 }));
 
-vi.mock('~/core/sync/cursor-manager', () => {
+vi.mock('~/core/sync/cursor-manager', async original => {
+    const actual = await original<typeof import('~/core/sync/cursor-manager')>();
     const state = { cursor: 100 };
     const api = {
+        bindHistory: vi.fn(),
         getCursor: vi.fn(async () => state.cursor),
         setCursor: vi.fn(async (next: number) => {
             state.cursor = next;
@@ -53,6 +57,7 @@ vi.mock('~/core/sync/cursor-manager', () => {
         getDeviceId: vi.fn(() => 'device-1'),
     };
     return {
+        ...actual,
         getCursorManager: () => api,
         __cursorState: state,
     };
@@ -94,7 +99,7 @@ class SubscriptionProvider implements SyncProvider {
                             clock: 1,
                             hlc: '0000000000105:0000:node',
                             deviceId: 'device-2',
-                            opId: 'op-105',
+                            opId: testUuid('op-105'),
                         },
                     },
                 ],
@@ -127,7 +132,7 @@ class SubscriptionProvider implements SyncProvider {
                             clock: 1,
                             hlc: '0000000000110:0000:node',
                             deviceId: 'device-2',
-                            opId: 'op-110',
+                            opId: testUuid('op-110'),
                         },
                     },
                     {
@@ -150,7 +155,7 @@ class SubscriptionProvider implements SyncProvider {
                             clock: 1,
                             hlc: '0000000000120:0000:node',
                             deviceId: 'device-2',
-                            opId: 'op-120',
+                            opId: testUuid('op-120'),
                         },
                     },
                 ],
@@ -202,7 +207,7 @@ function buildChange(version: number): SyncChange {
             clock: 1,
             hlc: `0000000000${version}:0000:node`,
             deviceId: 'device-1',
-            opId: `op-${version}`,
+            opId: testUuid(`op-${version}`),
         },
     };
 }
@@ -225,10 +230,10 @@ describe('SubscriptionManager', () => {
         vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit) => {
             const body = JSON.parse(init.body as string);
             calls.push({ path, cursor: body.cursor, version: body.version });
-            if (path.endsWith('/update-cursor')) return new Response('{}');
+            if (path.endsWith('/update-cursor')) return new Response(JSON.stringify({ historyIncarnation: 'I', ok: true }));
             const item = buildChange(body.cursor === 100 ? 101 : 103);
             item.stamp.opId = testUuid(String(item.serverVersion));
-            return new Response(JSON.stringify({
+            return new Response(JSON.stringify({ historyIncarnation: 'I',
                 ...FULL_HISTORY_PULL_RETENTION,
                 changes: !remoteChangesAvailable || (body.cursor !== 100 && !hasMore) ? [] : [item],
                 nextCursor: !remoteChangesAvailable ? 100 : body.cursor === 100 ? 102 : hasMore ? 103 : 102,
@@ -298,7 +303,7 @@ describe('SubscriptionManager', () => {
         await vi.runAllTimersAsync();
 
         expect(provider.subscribe).toHaveBeenCalledTimes(2);
-        expect(provider.subscribe.mock.calls[1]![3]).toEqual({ cursor: 120, limit: 300 });
+        expect(provider.subscribe.mock.calls[1]![3]).toMatchObject({ cursor: 120, limit: 300 });
     });
 
     it('drains backlog after subscription changes', async () => {
@@ -443,7 +448,7 @@ describe('SubscriptionManager', () => {
 
         const onChanges = (provider.subscribe as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]![2] as (changes: SyncChange[]) => void;
 
-        markRecentOpId('op-echo');
+        markRecentOpId(testUuid('op-echo'), { dbName: db.name });
 
         await onChanges([
             {
@@ -466,7 +471,7 @@ describe('SubscriptionManager', () => {
                     clock: 1,
                     hlc: '0000000000002:0000:node',
                     deviceId: 'device-1',
-                    opId: 'op-echo',
+                    opId: testUuid('op-echo'),
                 },
             },
             {
@@ -489,7 +494,7 @@ describe('SubscriptionManager', () => {
                     clock: 1,
                     hlc: '0000000000003:0000:node',
                     deviceId: 'device-1',
-                    opId: 'op-live',
+                    opId: testUuid('op-live'),
                 },
             },
         ]);
@@ -538,7 +543,7 @@ describe('SubscriptionManager', () => {
 
         const onChanges = (provider.subscribe as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]![2] as (changes: SyncChange[]) => void;
 
-        markRecentOpId('op-only');
+        markRecentOpId(testUuid('op-only'), { dbName: db.name });
 
         await onChanges([
             {
@@ -561,7 +566,7 @@ describe('SubscriptionManager', () => {
                     clock: 1,
                     hlc: '0000000000005:0000:node',
                     deviceId: 'device-1',
-                    opId: 'op-only',
+                    opId: testUuid('op-only'),
                 },
             },
         ]);
@@ -949,6 +954,30 @@ describe('SubscriptionManager', () => {
         cursorApi.isBootstrapNeeded = vi.fn(async () => false) as any;
     });
 
+    it('releases a cancelled half-open pull so healthy pull and push can resume without reload', async () => {
+        const provider = new SubscriptionProvider();
+        provider.id = 'cancelled-probe';
+        let release!: (page: PullResponse) => void;
+        const barrier = new Promise<PullResponse>(resolve => { release = resolve; });
+        const pull = vi.spyOn(provider, 'pull').mockReturnValueOnce(barrier);
+        const breaker = getSyncCircuitBreaker(`ws-1:${provider.id}`);
+        for (let i = 0; i < 5; i++) breaker.recordFailure();
+        await vi.advanceTimersByTimeAsync(30_001);
+        const manager = new SubscriptionManager(createMockDb({ messages: createMemoryTable('id'), tombstones: createMemoryTable('id'), pending_ops: createMemoryTable('id') }) as any, provider, { workspaceId: 'ws-1' });
+        const starting = manager.start();
+        for (let i = 0; i < 30 && !pull.mock.calls.length; i++) await Promise.resolve();
+        expect(breaker.canRetry()).toBe(false);
+        await manager.stop();
+        expect(breaker.canRetry()).toBe(true);
+        await manager.start();
+        expect(manager.getStatus()).toBe('connected');
+        expect(breaker.canRetry()).toBe(true); // same key gates push
+        release({ changes: [], nextCursor: 100, hasMore: false, ...FULL_HISTORY_PULL_RETENTION });
+        await starting;
+        expect(manager.getStatus()).toBe('connected');
+        await manager.stop();
+    });
+
     it('ignores a bootstrap pull that resolves after stop', async () => {
         const cursorApi = (cursorManagerModule as unknown as { getCursorManager: () => { isBootstrapNeeded: ReturnType<typeof vi.fn> } }).getCursorManager();
         cursorApi.isBootstrapNeeded = vi.fn(async () => true) as any;
@@ -1086,6 +1115,113 @@ describe('SubscriptionManager', () => {
         await manager.stop();
     });
 
+    it.each(['recover', 'cancel', 'expired', 'fatal'] as const)('retains a 120-page snapshot prefix through gateway backoff (%s)', async outcome => {
+        const db = new Or3DB(`subscription-retry-${crypto.randomUUID()}`);
+        await db.open();
+        const cursorApi = cursorManagerModule.getCursorManager(db, { workspaceId: 'ws-1' });
+        vi.mocked(cursorApi.isBootstrapNeeded).mockResolvedValue(true);
+        const tokens: Array<string | undefined> = [];
+        let throttled = false;
+        let timeout = false;
+        vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit) => {
+            const body = JSON.parse(init.body as string);
+            if (path.endsWith('/snapshot')) {
+                tokens.push(body.pageToken);
+                const sequence = body.pageToken ? Number(body.pageToken) : 0;
+                if (sequence === 120 && !throttled) {
+                    throttled = true;
+                    return new Response(JSON.stringify({ statusMessage: 'try later' }), { status: outcome === 'expired' ? 410 : outcome === 'fatal' ? 422 : 429, headers: { 'Retry-After': '4' } });
+                }
+                if (sequence === 120 && !timeout) {
+                    timeout = true;
+                    throw new DOMException('request timeout', 'TimeoutError');
+                }
+                return new Response(JSON.stringify({ historyIncarnation: 'I', workspaceId: 'ws-1', snapshotId: 'snap-retry', highWatermark: 40,
+                    items: [{ kind: 'row', tableName: 'kv', pk: `retry-${String(sequence).padStart(3, '0')}`, payload: { id: `retry-${String(sequence).padStart(3, '0')}`, name: `retry-${sequence}`, value: sequence, created_at: 1, updated_at: 1, clock: 1 }, revision: { clock: 1, hlc: '1:0:test', opId: testUuid(`retry-${sequence}`) } }], nextPageToken: sequence < 121 ? String(sequence + 1) : null }));
+            }
+            if (path.endsWith('/pull')) return new Response(JSON.stringify({ historyIncarnation: 'I', changes: [], nextCursor: body.cursor, hasMore: false, ...FULL_HISTORY_PULL_RETENTION }));
+            return new Response(JSON.stringify({ historyIncarnation: 'I', ok: true }));
+        }));
+        const provider = createGatewaySyncProvider();
+        const manager = new SubscriptionManager(db, provider, { workspaceId: 'ws-1' }, { reconnectDelays: [60_000] });
+        try {
+            const starting = manager.start();
+            for (let i = 0; i < 1000 && tokens.length < 121; i++) await vi.advanceTimersByTimeAsync(0);
+            expect(tokens).toHaveLength(121);
+            if (outcome === 'expired' || outcome === 'fatal') {
+                await starting;
+                expect(manager.getStatus()).toBe(outcome === 'expired' ? 'reconnecting' : 'error');
+                return;
+            }
+            expect(await db.snapshot_staging.count()).toBe(121);
+            await vi.advanceTimersByTimeAsync(3999);
+            expect(tokens).toHaveLength(121);
+            if (outcome === 'cancel') {
+                await manager.stop();
+                await starting;
+                await vi.advanceTimersByTimeAsync(5000);
+                expect(tokens).toHaveLength(121);
+                expect(manager.getStatus()).toBe('disconnected');
+            } else {
+                await vi.advanceTimersByTimeAsync(1);
+                for (let i = 0; i < 50 && tokens.length < 122; i++) await vi.advanceTimersByTimeAsync(0);
+                await vi.advanceTimersByTimeAsync(2000);
+                await starting;
+                expect(tokens.slice(120)).toEqual(['120', '120', '120', '121']);
+                expect(tokens.filter(token => token === undefined)).toHaveLength(1);
+                expect(manager.getStatus()).toBe('connected');
+                expect(await db.snapshot_staging.count()).toBe(0);
+                expect(await db.kv.count()).toBe(122);
+            }
+        } finally {
+            await manager.stop();
+            await provider.dispose();
+            await db.delete();
+            vi.mocked(cursorApi.isBootstrapNeeded).mockResolvedValue(false);
+        }
+    });
+
+    it.each([{ phase: 'staging', rescan: false }, { phase: 'install', rescan: false }, { phase: 'install', rescan: true }])('pauses on $phase quota (rescan=$rescan) and resumes the retained snapshot without downloading again', async ({ phase, rescan }) => {
+        (cursorManagerModule as unknown as { __cursorState: { cursor: number } }).__cursorState.cursor = rescan ? 10 : 0;
+        const db = new Or3DB(`quota-${crypto.randomUUID()}`); await db.open();
+        const cursor = cursorManagerModule.getCursorManager(db, { workspaceId: 'ws-1' });
+        vi.mocked(cursor.isBootstrapNeeded).mockResolvedValue(!rescan);
+        await db.kv.put({ id: 'old', name: 'old', value: 'last good', deleted: false, created_at: 1, updated_at: 1, clock: 1 });
+        let quota = true;
+        if (phase === 'staging') db.snapshot_staging.hook('creating', (_key, row) => {
+            if (quota && row.sequence >= 0) throw new Dexie.BulkError('storage full', [new DOMException('storage full', 'QuotaExceededError')]);
+        });
+        else db.kv.hook('creating', () => { if (quota) throw new DOMException('storage full', 'QuotaExceededError'); });
+        const snapshot = vi.fn(async () => ({ workspaceId: 'ws-1', snapshotId: 'quota-snapshot', highWatermark: 40,
+            items: [{ kind: 'row' as const, tableName: 'kv', pk: 'new', payload: { id: 'new', name: 'new', value: 'canonical', created_at: 1, updated_at: 1, clock: 1 },
+                revision: { clock: 1, hlc: 'h', opId: 'legacy-snapshot' } }], nextPageToken: null }));
+        const provider: SyncProvider = { id: `quota-${phase}-${rescan}`, mode: 'direct', snapshot,
+            pull: vi.fn(async request => ({ changes: [], nextCursor: request.cursor, hasMore: false, ...FULL_HISTORY_PULL_RETENTION,
+                requiresSnapshot: rescan && request.cursor === 10 })),
+            subscribe: vi.fn(async () => () => undefined), updateCursor: vi.fn(async () => undefined),
+            push: vi.fn(async () => { throw new Error('unused'); }), dispose: vi.fn(async () => undefined) };
+        const manager = new SubscriptionManager(db, provider, { workspaceId: 'ws-1' }, { tables: ['kv'] });
+        try {
+            await manager.start();
+            expect(manager.getStatus()).toBe('error');
+            expect(provider.subscribe).not.toHaveBeenCalled();
+            expect(await db.kv.get('old')).toMatchObject({ value: 'last good' });
+            expect(await db.kv.get('new')).toBeUndefined();
+            expect(await db.sync_state.toArray()).toEqual([expect.objectContaining({
+                id: 'sync_history', firstBindEligible: true, historyIncarnation: null,
+            })]);
+            await vi.advanceTimersByTimeAsync(60_000);
+            expect(snapshot).toHaveBeenCalledTimes(1);
+            quota = false;
+            await manager.start();
+            expect(manager.getStatus()).toBe('connected');
+            expect(snapshot).toHaveBeenCalledTimes(1);
+            expect(await db.kv.get('new')).toMatchObject({ value: 'canonical' });
+            if (rescan) expect(await db.kv.get('old')).toBeUndefined();
+            expect(await db.snapshot_staging.count()).toBe(0);
+        } finally { vi.mocked(cursor.isBootstrapNeeded).mockResolvedValue(false); await manager.stop(); await db.delete(); }
+    });
+
     it('rescans from a snapshot when pull reports requiresSnapshot', async () => {
         (cursorManagerModule as unknown as { __cursorState: { cursor: number } }).__cursorState.cursor = 10;
         const snapshot = vi.fn(async () => ({
@@ -1180,5 +1316,161 @@ describe('SubscriptionManager', () => {
         } finally {
             await db.delete();
         }
+    });
+
+    it('recovers an interrupted snapshot ACK from durable coverage after owner restart', async () => {
+        vi.useRealTimers();
+        vi.spyOn(cursorManagerModule, 'getCursorManager').mockImplementation((db, scope) =>
+            new cursorManagerModule.CursorManager(db, scope));
+        const db = new Or3DB(`snapshot-ack-${crypto.randomUUID()}`);
+        await db.open();
+        const scope = { workspaceId: 'ws-1', principalId: 'owner' };
+        const guard = { historyIncarnation: 'I', phase: 'ready' as const, resetTarget: null };
+        const updateCursor = vi.fn(async () => undefined);
+        let manager: SubscriptionManager;
+        let interrupt = true;
+        const provider: SyncProvider = { id: db.name, mode: 'gateway',
+            capabilities: { historyIncarnation: 'v1', subscriptionPages: 'v1' },
+            snapshot: vi.fn(async () => ({ ...guard, workspaceId: scope.workspaceId,
+                snapshotId: 'installed', highWatermark: 4, nextPageToken: null,
+                items: [{ kind: 'row' as const, tableName: 'kv', pk: 'covered',
+                    payload: { id: 'covered', name: 'covered', value: 'durable', created_at: 1, updated_at: 1, clock: 1 },
+                    revision: { clock: 1, hlc: '1:0:test', opId: testUuid('covered') } }] })),
+            pull: vi.fn(async request => {
+                if (interrupt) { interrupt = false; await manager.stop(); }
+                return { historyIncarnation: 'I', ...FULL_HISTORY_PULL_RETENTION,
+                    changes: [], nextCursor: request.cursor, hasMore: false };
+            }),
+            push: vi.fn(), subscribe: vi.fn(async () => () => undefined), updateCursor, dispose: vi.fn(),
+        };
+        manager = new SubscriptionManager(db, provider, scope);
+        try {
+            await manager.start();
+            expect(await db.kv.get('covered')).toMatchObject({ value: 'durable' });
+            expect(await db.sync_state.get(cursorManagerModule.getSyncStateId(scope))).toMatchObject({ historyIncarnation: 'I', cursor: 4 });
+            expect(updateCursor).not.toHaveBeenCalled();
+
+            manager = new SubscriptionManager(db, provider, scope);
+            await manager.start();
+            expect(manager.getStatus()).toBe('connected');
+            expect(updateCursor).toHaveBeenCalledWith(scope, expect.any(String), 4,
+                expect.objectContaining({ historyIncarnation: 'I' }));
+            await manager.stop();
+
+            // A failed ACK leaves persisted coverage usable by the next owner.
+            updateCursor.mockClear();
+            updateCursor.mockRejectedValueOnce(new Error('ACK response lost'));
+            manager = new SubscriptionManager(db, provider, scope);
+            await manager.start();
+            expect(updateCursor).toHaveBeenCalledTimes(1);
+            await manager.stop();
+            manager = new SubscriptionManager(db, provider, scope);
+            await manager.start();
+            expect(updateCursor).toHaveBeenCalledTimes(2);
+            await manager.stop();
+
+            // A different incarnation cannot borrow I's numeric coverage.
+            updateCursor.mockClear();
+            await db.sync_state.put({ id: 'sync_history', ...guard, historyIncarnation: 'J',
+                cursor: 0, deviceId: '', lastSyncAt: 0 });
+            vi.mocked(provider.pull).mockImplementation(async request => ({
+                historyIncarnation: 'J', ...FULL_HISTORY_PULL_RETENTION,
+                changes: [], nextCursor: request.cursor, hasMore: false,
+            }));
+            manager = new SubscriptionManager(db, provider, scope);
+            await manager.start();
+            expect(updateCursor).not.toHaveBeenCalled();
+        } finally { await manager.stop(); await db.delete(); }
+    });
+
+    it('retains a durable protocol pause until explicit checked rediscovery succeeds', async () => {
+        vi.useRealTimers();
+        vi.spyOn(cursorManagerModule, 'getCursorManager').mockImplementation((db, scope) => new cursorManagerModule.CursorManager(db, scope));
+        const { protocolPauseId } = await import('../history-incarnation');
+        const db = new Or3DB(`protocol-pause-${crypto.randomUUID()}`); await db.open();
+        const scope = { workspaceId: 'ws-1', principalId: 'owner' };
+        await db.sync_state.put({ id: 'sync_history', historyIncarnation: 'I', phase: 'ready', resetTarget: null, cursor: 0, deviceId: '', lastSyncAt: 0 });
+        await db.sync_state.put({ id: cursorManagerModule.getSyncStateId(scope), historyIncarnation: 'I', cursor: 80, deviceId: 'd', lastSyncAt: Date.now() });
+        const provider: SyncProvider = { id: db.name, mode: 'gateway', capabilities: { historyIncarnation: 'v1', subscriptionPages: 'v1' },
+            pull: vi.fn(async () => { throw Object.assign(new Error('old'), { code: 'OR3_SYNC_OLDER_SERVER' }); }),
+            subscribe: vi.fn(async () => () => undefined), push: vi.fn(), updateCursor: vi.fn(), dispose: vi.fn() };
+        const manager = new SubscriptionManager(db, provider, scope);
+        try {
+            await manager.start();
+            expect(await db.sync_state.get(protocolPauseId(provider.id, scope))).toMatchObject({ protocolPause: 'older-server' });
+            expect(provider.updateCursor).not.toHaveBeenCalled();
+            expect(await db.sync_state.get(cursorManagerModule.getSyncStateId(scope))).toMatchObject({ cursor: 80, historyIncarnation: 'I' });
+            vi.mocked(provider.pull).mockResolvedValue({ historyIncarnation: 'I', ...FULL_HISTORY_PULL_RETENTION, changes: [], nextCursor: 80, hasMore: false });
+            await manager.start();
+            expect(manager.getStatus()).toBe('connected');
+            expect(await db.sync_state.get(protocolPauseId(provider.id, scope))).toBeUndefined();
+        } finally { await manager.stop(); await db.delete(); }
+    });
+
+    it('fences a newer follower protocol refusal while checked discovery is connecting', async () => {
+        vi.useRealTimers();
+        vi.spyOn(cursorManagerModule, 'getCursorManager').mockImplementation((db, scope) => new cursorManagerModule.CursorManager(db, scope));
+        const { pauseHistoryProtocol, protocolPauseId } = await import('../history-incarnation');
+        const db = new Or3DB(`connecting-pause-${crypto.randomUUID()}`); await db.open();
+        const scope = { workspaceId: 'ws-1', principalId: 'owner' };
+        const guard = { historyIncarnation: 'I', phase: 'ready' as const, resetTarget: null };
+        await db.sync_state.put({ id: 'sync_history', ...guard, cursor: 0, deviceId: '', lastSyncAt: 0 });
+        await db.sync_state.put({ id: cursorManagerModule.getSyncStateId(scope), historyIncarnation: 'I', cursor: 80, deviceId: 'd', lastSyncAt: Date.now() });
+        const unsubscribe = vi.fn();
+        const provider: SyncProvider = { id: db.name, mode: 'gateway', capabilities: { historyIncarnation: 'v1', subscriptionPages: 'v1' },
+            pull: vi.fn(async () => ({ historyIncarnation: 'I', ...FULL_HISTORY_PULL_RETENTION, changes: [], nextCursor: 80, hasMore: false })),
+            subscribe: vi.fn(async () => {
+                await pauseHistoryProtocol(db, db.name, scope, { code: 'OR3_SYNC_OLDER_SERVER' }, guard);
+                await new Promise(resolve => setTimeout(resolve, 20));
+                return unsubscribe;
+            }), push: vi.fn(), updateCursor: vi.fn(), dispose: vi.fn() };
+        const manager = new SubscriptionManager(db, provider, scope);
+        try {
+            await manager.start();
+            expect(manager.getStatus()).toBe('error');
+            expect(unsubscribe).toHaveBeenCalledTimes(1);
+            expect(await db.sync_state.get(protocolPauseId(provider.id, scope))).toMatchObject({ protocolPause: 'older-server' });
+            vi.mocked(provider.subscribe).mockResolvedValue(unsubscribe);
+            await manager.start();
+            expect(manager.getStatus()).toBe('connected');
+            expect(await db.sync_state.get(protocolPauseId(provider.id, scope))).toBeUndefined();
+        } finally { await manager.stop(); await db.delete(); }
+    });
+
+    it('pauses immediately at an incapable snapshot provider instead of retrying its 503', async () => {
+        const db = new Or3DB(`incapable-${crypto.randomUUID()}`); await db.open();
+        await db.sync_state.put({ id: 'sync_history', historyIncarnation: null, phase: 'unbound', resetTarget: null, cursor: 0, deviceId: '', lastSyncAt: 0 });
+        const snapshot = vi.fn(async () => { throw Object.assign(new Error('unqualified'), { status: 503, data: { code: 'OR3_SYNC_HISTORY_UNSUPPORTED' } }); });
+        const provider: SyncProvider = { id: db.name, mode: 'gateway', capabilities: { historyIncarnation: 'v1' }, snapshot,
+            pull: vi.fn(), push: vi.fn(), subscribe: vi.fn(), updateCursor: vi.fn(), dispose: vi.fn() };
+        const manager = new SubscriptionManager(db, provider, { workspaceId: 'ws-1' });
+        const starting = manager.start();
+        try {
+            for (let i = 0; i < 30; i++) await vi.advanceTimersByTimeAsync(500);
+            expect(snapshot).toHaveBeenCalledTimes(1);
+            expect(manager.getStatus()).toBe('error');
+            expect(provider.subscribe).not.toHaveBeenCalled();
+        } finally { await manager.stop(); await starting; await db.delete(); }
+    });
+
+    it('wakes the subscription owner when a follower closes the durable reset guard', async () => {
+        const { requestHistoryReset } = await import('../history-incarnation');
+        const db = new Or3DB(`owner-wake-${crypto.randomUUID()}`); await db.open();
+        const guard = { historyIncarnation: 'I', phase: 'ready' as const, resetTarget: null };
+        await db.sync_state.put({ id: 'sync_history', ...guard, cursor: 0, deviceId: '', lastSyncAt: 0 });
+        const cursor = cursorManagerModule.getCursorManager(db, { workspaceId: 'ws-1' });
+        vi.mocked(cursor.isBootstrapNeeded).mockResolvedValue(false); vi.mocked(cursor.isCursorPotentiallyExpired).mockResolvedValue(false);
+        const snapshot = vi.fn(async () => ({ historyIncarnation: 'J', workspaceId: 'ws-1', snapshotId: 'j', highWatermark: 80, items: [], nextPageToken: null }));
+        const provider: SyncProvider = { id: db.name, mode: 'gateway', capabilities: { historyIncarnation: 'v1' }, snapshot,
+            pull: vi.fn(async request => ({ historyIncarnation: request.historyIncarnation!, changes: [], nextCursor: request.cursor, hasMore: false, ...FULL_HISTORY_PULL_RETENTION })),
+            push: vi.fn(), subscribe: vi.fn(async () => () => undefined), updateCursor: vi.fn(), dispose: vi.fn() };
+        const manager = new SubscriptionManager(db, provider, { workspaceId: 'ws-1' });
+        try {
+            await manager.start(); expect(manager.getStatus()).toBe('connected');
+            await requestHistoryReset(db, guard, 'J');
+            for (let i = 0; i < 50; i++) await vi.advanceTimersByTimeAsync(100);
+            expect(snapshot).toHaveBeenCalledTimes(1);
+            expect(await db.sync_state.get('sync_history')).toMatchObject({ historyIncarnation: 'J', phase: 'ready' });
+        } finally { await manager.stop(); await db.delete(); }
     });
 });

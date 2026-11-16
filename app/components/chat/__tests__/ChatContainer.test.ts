@@ -2,10 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { flushPromises, mount as mountComponent } from '@vue/test-utils';
 import * as nuxtImports from '#imports';
 import { kv } from '~/db';
-import { getWorkspaceGeneration } from '~/db/client';
-import { defineAsyncComponent, defineComponent, nextTick, reactive, ref, toRaw, type Component } from 'vue';
+import { evictWorkspaceDb, getActiveWorkspaceId, getWorkspaceGeneration, setActiveWorkspaceDb } from '~/db/client';
+import { createHookEngine } from '~/core/hooks/hooks';
+import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
+import { setHookEngine, tryGetHooks } from '~/core/hooks/useHooks';
+import { defineAsyncComponent, defineComponent, h, KeepAlive, nextTick, reactive, ref, toRaw, type Component } from 'vue';
 import ChatContainer from '../ChatContainer.vue';
 import type { ChatRequestState, SendResult } from '~/utils/chat/types';
+import type { SessionPayload } from '~/composables/auth/useSessionContext';
 
 // ChatContainer rendering coverage uses the real scroller so the revision
 // contract is exercised end to end. `tests/setup.ts` mocks `or3-scroll` for
@@ -243,7 +247,11 @@ describe('ChatContainer', () => {
         messageRenderer: Component = LazyChatMessage
     ) {
         useChatMock.mockImplementationOnce(() => instance);
-        return mount(ChatContainer, {
+        return mount(ChatContainer, chatMountOptions(props, messageRenderer));
+    }
+
+    function chatMountOptions(props: Record<string, unknown> = {}, messageRenderer: Component = LazyChatMessage) {
+        return {
             props: { ...defaultProps, ...props },
             global: {
                 mocks: { $theme: createThemeMock(messageRenderer) },
@@ -258,12 +266,13 @@ describe('ChatContainer', () => {
                     ClientOnly: { template: '<div><slot /></div>' },
                     UButton: {
                         name: 'UButton',
+                        emits: ['click'],
                         template:
                             '<button class="u-button" @click="$emit(\'click\')"></button>',
                     },
                 },
             },
-        });
+        };
     }
 
     it.each(['persisted', 'streaming'] as const)('accepts the matching turn once it is %s without waiting for the provider', async phase => {
@@ -425,6 +434,184 @@ describe('ChatContainer', () => {
         }
     });
 
+    it('removes the teleported welcome while its chat view is cached', async () => {
+        const runtimeConfig = nuxtImports.useRuntimeConfig();
+        const config = vi.spyOn(nuxtImports, 'useRuntimeConfig').mockReturnValue({
+            ...runtimeConfig, public: { ...runtimeConfig.public, ssrAuthEnabled: false },
+        });
+        const route = vi.spyOn(nuxtImports, 'useRoute').mockReturnValue({ ...nuxtImports.useRoute(), query: { welcome: '1' } });
+        const shown = ref(true);
+        const options = chatMountOptions();
+        const wrapper = mount(defineComponent({
+            setup: () => () => h(KeepAlive, () => shown.value ? h(ChatContainer, defaultProps) : h('div')),
+        }), {
+            attachTo: document.body,
+            global: { ...options.global, stubs: { ...options.global.stubs, Teleport: false } },
+        });
+        try {
+            await flushPromises();
+            await vi.waitFor(() => expect(document.querySelectorAll('[data-welcome-backdrop]')).toHaveLength(1));
+            shown.value = false;
+            await nextTick();
+            await flushPromises();
+            expect(document.querySelectorAll('[data-welcome-backdrop]')).toHaveLength(0);
+            shown.value = true;
+            await nextTick();
+            await flushPromises();
+            expect(document.querySelectorAll('[data-welcome-backdrop]')).toHaveLength(1);
+        } finally {
+            wrapper.unmount();
+            route.mockRestore();
+            config.mockRestore();
+        }
+    });
+
+    it('hydrates welcome for the current workspace when the initial read belongs to an old workspace', async () => {
+        const previousHooks = tryGetHooks();
+        setHookEngine(createTypedHookEngine(createHookEngine()));
+        const previous = getActiveWorkspaceId();
+        const ids = [`welcome-old-${crypto.randomUUID()}`, `welcome-new-${crypto.randomUUID()}`];
+        const originalDb = setActiveWorkspaceDb(ids[0]!);
+        await kv.set('or3_welcome_card_dismissed', 'true');
+        const runtimeConfig = nuxtImports.useRuntimeConfig();
+        const config = vi.spyOn(nuxtImports, 'useRuntimeConfig').mockReturnValue({
+            ...runtimeConfig, public: { ...runtimeConfig.public, ssrAuthEnabled: false },
+        });
+        let release!: () => void;
+        const delayed = new Promise<void>(resolve => { release = resolve; });
+        const originalGet = kv.get;
+        let first = true;
+        const get = vi.spyOn(kv, 'get').mockImplementation(async (...args) => {
+            const hold = args[0] === 'or3_welcome_card_dismissed' && first;
+            if (hold) first = false;
+            const row = await originalGet(...args);
+            if (hold) await delayed;
+            return row;
+        });
+        const wrapper = mountChatInstance(makeChatInstance());
+        const currentDb = setActiveWorkspaceDb(ids[1]!);
+        try {
+            await nextTick();
+            release();
+            await flushPromises();
+            await vi.waitFor(() => expect(wrapper.find('[data-test="welcome-preview"]').exists()).toBe(true));
+        } finally {
+            release(); wrapper.unmount(); get.mockRestore(); config.mockRestore();
+            setActiveWorkspaceDb(previous);
+            ids.forEach(evictWorkspaceDb);
+            await Promise.all([originalDb.delete(), currentDb.delete()]);
+            setHookEngine(previousHooks);
+        }
+    });
+
+    it('refreshes persisted welcome dismissal before a cached chat becomes active again', async () => {
+        const previousHooks = tryGetHooks();
+        setHookEngine(createTypedHookEngine(createHookEngine()));
+        const previous = getActiveWorkspaceId();
+        const id = `welcome-cached-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(id);
+        const runtimeConfig = nuxtImports.useRuntimeConfig();
+        const config = vi.spyOn(nuxtImports, 'useRuntimeConfig').mockReturnValue({
+            ...runtimeConfig, public: { ...runtimeConfig.public, ssrAuthEnabled: false },
+        });
+        const shown = ref(true);
+        const options = chatMountOptions();
+        const wrapper = mount(defineComponent({
+            setup: () => () => h(KeepAlive, () => shown.value ? h(ChatContainer, defaultProps) : h('div')),
+        }), {
+            attachTo: document.body,
+            global: { ...options.global, stubs: { ...options.global.stubs, Teleport: false } },
+        });
+        try {
+            await flushPromises();
+            await vi.waitFor(() => expect(document.querySelectorAll('[data-welcome-backdrop]')).toHaveLength(1));
+            shown.value = false; await nextTick();
+            await kv.set('or3_welcome_card_dismissed', 'true');
+            shown.value = true; await nextTick(); await flushPromises();
+            expect(document.querySelectorAll('[data-welcome-backdrop]')).toHaveLength(0);
+        } finally {
+            wrapper.unmount(); config.mockRestore(); setActiveWorkspaceDb(previous);
+            evictWorkspaceDb(id); await db.delete();
+            setHookEngine(previousHooks);
+        }
+    });
+
+    it('keeps welcome hidden until the authenticated workspace is selected', async () => {
+        const previous = getActiveWorkspaceId();
+        const ids = [`welcome-bootstrap-${crypto.randomUUID()}`, `welcome-auth-${crypto.randomUUID()}`];
+        const bootstrapDb = setActiveWorkspaceDb(ids[0]!);
+        await bootstrapDb.open();
+        const auth = ref<SessionPayload>({ appAccessAllowed: true,
+            session: { authenticated: true, workspace: { id: ids[1]!, name: 'Authenticated target' } } });
+        const originalState = nuxtImports.useState;
+        const state = vi.spyOn(nuxtImports, 'useState').mockImplementation((key?: string | (() => unknown), init?: () => unknown) => {
+            if (typeof key === 'string') return key === 'auth-session' ? auth : originalState(key, init);
+            return originalState(key);
+        });
+        const runtimeConfig = nuxtImports.useRuntimeConfig();
+        const config = vi.spyOn(nuxtImports, 'useRuntimeConfig').mockReturnValue({
+            ...runtimeConfig, public: { ...runtimeConfig.public, ssrAuthEnabled: true, openai: { hasInstanceKey: true } },
+        });
+        const route = vi.spyOn(nuxtImports, 'useRoute').mockReturnValue({ ...nuxtImports.useRoute(), query: { welcome: '1' } });
+        const get = vi.spyOn(kv, 'get').mockResolvedValue(undefined);
+        const wrapper = mountChatInstance(makeChatInstance());
+        let targetDb: ReturnType<typeof setActiveWorkspaceDb> | undefined;
+        try {
+            await flushPromises();
+            expect(wrapper.find('[data-test="welcome-preview"]').exists()).toBe(false);
+            targetDb = setActiveWorkspaceDb(ids[1]!);
+            await targetDb.open();
+            await nextTick(); await flushPromises();
+            await vi.waitFor(() => expect(wrapper.find('[data-test="welcome-preview"]').exists()).toBe(true));
+        } finally {
+            wrapper.unmount(); state.mockRestore(); route.mockRestore(); get.mockRestore(); config.mockRestore();
+            setActiveWorkspaceDb(previous); ids.forEach(evictWorkspaceDb);
+            await Promise.all([bootstrapDb.delete(), targetDb?.delete()]);
+        }
+    });
+
+    it('keeps a dismissed cached welcome closed while its preference write is pending', async () => {
+        const previousHooks = tryGetHooks();
+        setHookEngine(createTypedHookEngine(createHookEngine()));
+        const previous = getActiveWorkspaceId();
+        const id = `welcome-pending-${crypto.randomUUID()}`;
+        const db = setActiveWorkspaceDb(id);
+        const runtimeConfig = nuxtImports.useRuntimeConfig();
+        const config = vi.spyOn(nuxtImports, 'useRuntimeConfig').mockReturnValue({
+            ...runtimeConfig, public: { ...runtimeConfig.public, ssrAuthEnabled: false },
+        });
+        let release!: () => void;
+        const pending = new Promise<void>(resolve => { release = resolve; });
+        let write: ReturnType<typeof kv.set> | undefined;
+        const originalSet = kv.set;
+        const save = vi.spyOn(kv, 'set').mockImplementation((...args) => {
+            if (args[0] !== 'or3_welcome_card_dismissed') return originalSet(...args);
+            write = pending.then(() => originalSet(...args));
+            return write;
+        });
+        const shown = ref(true);
+        const options = chatMountOptions();
+        const wrapper = mount(defineComponent({
+            setup: () => () => h(KeepAlive, () => shown.value ? h(ChatContainer, defaultProps) : h('div')),
+        }), {
+            attachTo: document.body,
+            global: { ...options.global, stubs: { ...options.global.stubs, Teleport: false } },
+        });
+        try {
+            await vi.waitFor(() => expect(document.querySelectorAll('[data-welcome-backdrop]')).toHaveLength(1));
+            document.querySelector<HTMLButtonElement>('[data-test="welcome-preview"]')!.click();
+            await nextTick();
+            expect(save).toHaveBeenCalledWith('or3_welcome_card_dismissed', 'true');
+            shown.value = false; await nextTick(); shown.value = true;
+            await nextTick(); await flushPromises();
+            expect(document.querySelectorAll('[data-welcome-backdrop]')).toHaveLength(0);
+        } finally {
+            release(); await write;
+            wrapper.unmount(); save.mockRestore(); config.mockRestore(); setActiveWorkspaceDb(previous);
+            evictWorkspaceDb(id); await db.delete(); setHookEngine(previousHooks);
+        }
+    });
+
     function makeStreamingInstance(): MockChatInstance {
         const instance = makeChatInstance();
         instance.messages.value = [
@@ -544,35 +731,14 @@ describe('ChatContainer', () => {
         expect(buttonContainer.attributes('style')).toContain('opacity: 0.5');
     });
 
-    it('calls scrollToBottom when button is clicked', async () => {
-        const scrollToMock = vi.fn();
-        Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
-            configurable: true,
-            writable: true,
-            value: scrollToMock,
-        });
+    it('requests smooth bottom navigation when the button is clicked', async () => {
+        const wrapper = mountChatInstance(makeChatInstance());
+        const scroller = wrapper.findComponent({ name: 'Or3Scroll' });
+        const exposed = scroller.vm.$.exposed as {
+            scrollToBottom: (options?: { smooth?: boolean }) => void;
+        };
+        const scroll = vi.spyOn(exposed, 'scrollToBottom');
         try {
-            const wrapper = mount(ChatContainer, {
-                props: defaultProps,
-                global: {
-                    mocks: {
-                        $theme: createThemeMock(),
-                    },
-                    stubs: {
-                        LazyChatMessage,
-                        LazyChatInputDropper,
-                        ClientOnly: { template: '<div><slot /></div>' },
-                        UButton: {
-                            name: 'UButton',
-                            template:
-                                '<button class="u-button" @click="$emit(\'click\')"></button>',
-                        },
-                    },
-                },
-            });
-
-            // Simulate scroll up to show button
-            const scroller = wrapper.findComponent({ name: 'Or3Scroll' });
             scroller.vm.$emit('scroll', {
                 scrollTop: 500,
                 scrollHeight: 1800,
@@ -580,15 +746,13 @@ describe('ChatContainer', () => {
                 isAtBottom: false,
             });
             await nextTick();
+            scroll.mockClear();
 
-            const button = wrapper.findComponent({ name: 'UButton' });
-            await button.trigger('click');
+            await wrapper.findComponent({ name: 'UButton' }).trigger('click');
 
-            expect(scrollToMock).toHaveBeenCalledWith(
-                expect.objectContaining({ behavior: 'smooth' })
-            );
+            expect(scroll).toHaveBeenCalledExactlyOnceWith({ smooth: true });
         } finally {
-            delete (HTMLElement.prototype as { scrollTo?: unknown }).scrollTo;
+            scroll.mockRestore();
         }
     });
 

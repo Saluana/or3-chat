@@ -5,6 +5,7 @@ const readBodyMock = vi.fn();
 const getRouterParamMock = vi.fn();
 
 vi.mock('h3', () => ({
+    getRequestHeader: () => undefined,
     defineEventHandler: (handler: unknown) => handler,
     readBody: (...args: unknown[]) => readBodyMock(...args),
     getRouterParam: (...args: unknown[]) => getRouterParamMock(...args),

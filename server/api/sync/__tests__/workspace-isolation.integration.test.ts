@@ -2,15 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp, createRouter, toNodeListener, type H3Event } from 'h3';
 import { createServer, type Server } from 'node:http';
 import { once } from 'node:events';
+import { createHash } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ChatGenerationAdmissionEnvelope, CanonicalGenerationSnapshot } from '~~/shared/chat/background-history';
+import type { SyncGatewayAdapter } from '../../../sync/gateway/types';
 import type { SessionContext } from '~/core/hooks/hook-types';
 import { initializeSqliteDb, destroySqliteDb, _resetForTest, getRawDb } from '~~/node_modules/or3-provider-sqlite/dist/runtime/server/db/kysely.js';
 import { runMigrations } from '~~/node_modules/or3-provider-sqlite/dist/runtime/server/db/migrate.js';
 import { SqliteAuthWorkspaceStore } from '~~/node_modules/or3-provider-sqlite/dist/runtime/server/auth/sqlite-auth-workspace-store.js';
 import { createSqliteWorkspaceAccessStore } from '~~/node_modules/or3-provider-sqlite/dist/runtime/server/admin/stores/sqlite-store.js';
 import { SqliteSyncGatewayAdapter } from '~~/node_modules/or3-provider-sqlite/dist/runtime/server/sync/sqlite-sync-gateway-adapter.js';
+import { stableJson } from '~~/node_modules/or3-provider-sqlite/dist/runtime/server/sync/background-history-fingerprint.js';
 
 const fixture = vi.hoisted(() => ({
     auth: null as SqliteAuthWorkspaceStore | null,
@@ -39,19 +42,24 @@ import pullRoute from '../pull.post';
 import pushRoute from '../push.post';
 import snapshotRoute from '../snapshot.post';
 
+const supportsHistory = (new SqliteSyncGatewayAdapter() as unknown as SyncGatewayAdapter).capabilities?.historyIncarnation === 'v1';
+
 describe('document sync HTTP isolation with the real SQLite harness', () => {
     let root = '';
     let server: Server;
     let baseUrl = '';
+    let history: string | null = null;
+    const historyFields = () => ({ unavailableRecordCapability: 'unavailable-v1', historyIncarnationCapability: 'incarnation-v1', historyIncarnation: history });
+    const qualifiedIt = it.runIf(supportsHistory);
     let access: ReturnType<typeof createSqliteWorkspaceAccessStore>;
     let alice: string, bob: string, workspaceA: string, workspaceB: string;
 
     function admission(workspaceId: string): ChatGenerationAdmissionEnvelope {
         return { version: 1, kind: 'new-turn', admissionId: 'shared-admission', generationId: 'shared-generation',
             workspaceId, threadId: 'shared-thread', messageId: 'shared-assistant',
-            thread: { id: 'shared-thread', clock: 1, title: 'Synthetic thread' },
-            userMessage: { id: 'shared-user', clock: 1, thread_id: 'shared-thread', role: 'user', data: { content: 'Synthetic request' } },
-            assistantMessage: { id: 'shared-assistant', clock: 1, thread_id: 'shared-thread', role: 'assistant', pending: true,
+            thread: { id: 'shared-thread', clock: 1, title: 'Synthetic thread', status: 'ready', pinned: false, deleted: false, created_at: 1, updated_at: 1 },
+            userMessage: { id: 'shared-user', clock: 1, thread_id: 'shared-thread', role: 'user', index: 0, order_key: '1:0:server', deleted: false, created_at: 1, updated_at: 1, data: { content: 'Synthetic request' } },
+            assistantMessage: { id: 'shared-assistant', clock: 1, thread_id: 'shared-thread', role: 'assistant', pending: true, index: 1, order_key: '1:1:server', deleted: false, created_at: 1, updated_at: 1,
                 data: { content: '', generation_id: 'shared-generation' } },
         };
     }
@@ -85,7 +93,7 @@ describe('document sync HTTP isolation with the real SQLite harness', () => {
         return fetch(`${baseUrl}/${route}`, {
             method: 'POST',
             headers: { origin: baseUrl, 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' },
-            body: JSON.stringify({ scope: { workspaceId }, ...body }),
+            body: JSON.stringify({ ...historyFields(), scope: { workspaceId }, ...body }),
         });
     }
 
@@ -110,11 +118,18 @@ describe('document sync HTTP isolation with the real SQLite harness', () => {
         server.listen(0, '127.0.0.1');
         await once(server, 'listening');
         baseUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+        if (!supportsHistory) return;
+        select(alice, workspaceA);
+        history = null;
+        const discovery = await call('snapshot', workspaceA);
+        expect(discovery.status).toBe(200);
+        history = (await discovery.json()).historyIncarnation;
+        expect(typeof history).toBe('string');
         for (const [userId, workspaceId, title] of [[alice, workspaceA, 'A private document'], [bob, workspaceB, 'B private document']]) {
             select(userId!, workspaceId!);
             const response = await fetch(`${baseUrl}/push`, {
                 method: 'POST', headers: { origin: baseUrl, 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' },
-                body: JSON.stringify({ scope: { workspaceId }, ops: [documentOp(title!)] }),
+                body: JSON.stringify({ ...historyFields(), scope: { workspaceId }, ops: [documentOp(title!)] }),
             });
             expect(response.status).toBe(200);
             expect((await response.json()).results[0].success).toBe(true);
@@ -134,7 +149,15 @@ describe('document sync HTTP isolation with the real SQLite harness', () => {
         root = '';
     });
 
-    it.each(['pull', 'snapshot'] as const)('returns only the active owner workspace through %s', async (route) => {
+    it.runIf(!supportsHistory).each(['pull', 'snapshot', 'push'] as const)('refuses unqualified published-provider %s before dispatch', async route => {
+        select(alice, workspaceA);
+        const response = await call(route, workspaceA);
+        expect(response.status).toBe(503);
+        expect((await response.json()).data.code).toBe('OR3_SYNC_HISTORY_UNSUPPORTED');
+        expect(getRawDb().prepare('SELECT COUNT(*) AS count FROM change_log').get()).toEqual({ count: 0 });
+    });
+
+    qualifiedIt.each(['pull', 'snapshot'] as const)('returns only the active owner workspace through %s', async (route) => {
         for (const [userId, workspaceId, own, foreign] of [[alice, workspaceA, 'A private document', 'B private document'], [bob, workspaceB, 'B private document', 'A private document']]) {
             select(userId!, workspaceId!);
             const response = await call(route, workspaceId!);
@@ -146,14 +169,68 @@ describe('document sync HTTP isolation with the real SQLite harness', () => {
         }
     });
 
-    it.each(['pull', 'snapshot', 'push'] as const)('refuses a foreign scope through %s even when the user belongs to it', async (route) => {
+    qualifiedIt.each(['pull', 'snapshot'] as const)('reads legacy HLC-ordered messages through %s without rewriting history', async route => {
+        select(alice, workspaceA);
+        await fixture.adapter!.admitChatGeneration({ userId: alice, workspaceId: workspaceA }, admission(workspaceA));
+        // 0.0.29/0.0.30 background writers accepted messages without order_key;
+        // the client derives it from the revision HLC without changing history.
+        getRawDb().prepare("UPDATE s_messages SET data_json = json_remove(data_json, '$.order_key') WHERE workspace_id = ?").run(workspaceA);
+        getRawDb().prepare("UPDATE change_log SET payload_json = json_remove(payload_json, '$.order_key') WHERE workspace_id = ? AND table_name = 'messages'").run(workspaceA);
+        const response = await fetch(`${baseUrl}/${route}`, {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ ...historyFields(), scope: { workspaceId: workspaceA }, tables: ['messages'],
+                ...(route === 'pull' ? { cursor: 0, limit: 50 } : { pageSize: 50 }) }),
+        });
+        expect(response.status).toBe(200);
+        const page = await response.json();
+        const entries = route === 'pull' ? page.changes : page.items;
+        expect(entries.map((entry: { pk: string }) => entry.pk).sort()).toEqual(['shared-assistant', 'shared-user']);
+        expect(entries.every((entry: { payload: object }) => !Object.hasOwn(entry.payload, 'order_key'))).toBe(true);
+        expect(page.unavailable ?? []).toEqual([]);
+    });
+
+    qualifiedIt.each([true, false])('replays a legacy background admission without normalizing its receipt identity (order_key=%s)', async hasOrderKey => {
+        const input = { ...admission(workspaceA), expectedAssistant: undefined };
+        input.assistantMessage.modelId = 'legacy-extension';
+        if (!hasOrderKey) {
+            delete input.assistantMessage.order_key;
+            delete input.userMessage!.order_key;
+        }
+        const actor = { userId: alice, workspaceId: workspaceA };
+        const committed = await fixture.adapter!.admitChatGeneration(actor, input);
+        // Before H2, the envelope parser returned the original record objects.
+        // Seed that exact receipt using the provider's actual fingerprint encoder.
+        getRawDb().prepare("UPDATE background_generation_receipts SET fingerprint = ? WHERE workspace_id = ? AND generation_id = ? AND stage = 'admission'")
+            .run(createHash('sha256').update(stableJson(input)).digest('hex'), workspaceA, input.generationId);
+        await expect(fixture.adapter!.admitChatGeneration(actor, input)).resolves.toEqual({ ...committed, replayed: true });
+    });
+
+    qualifiedIt('replays a deletion committed with the old wire payload without fingerprint drift', async () => {
+        select(alice, workspaceA);
+        const op = { ...documentOp('unused'), operation: 'delete' as const, status: 'pending' as const,
+            payload: { id: 'copied-document', deletedAt: 123, deleted: true } };
+        const batch = { ...historyFields(), historyIncarnationCapability: 'incarnation-v1' as const, scope: { workspaceId: workspaceA }, ops: [op] };
+        // Old HTTP admission forwarded delete metadata unchanged to this sink.
+        const committed = await fixture.adapter!.push({ context: {} } as H3Event, batch);
+        expect(committed.results[0]).toMatchObject({ success: true });
+        const response = await fetch(`${baseUrl}/push`, {
+            method: 'POST', headers: { origin: baseUrl, 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' },
+            body: JSON.stringify(batch),
+        });
+        expect(response.status).toBe(200);
+        expect((await response.json()).results[0]).toMatchObject({ success: true, replayed: true,
+            serverVersion: committed.results[0]!.serverVersion });
+        expect(getRawDb().prepare('SELECT COUNT(*) AS count FROM change_log WHERE op_id = ?').get(op.stamp.opId)).toEqual({ count: 1 });
+    });
+
+    qualifiedIt.each(['pull', 'snapshot', 'push'] as const)('refuses a foreign scope through %s even when the user belongs to it', async (route) => {
         select(bob, workspaceB);
         expect((await call(route, workspaceA)).status).toBe(403);
         select(alice, workspaceA);
         expect((await call(route, workspaceB)).status).toBe(403);
     });
 
-    it('preserves viewer reads, denies writes after downgrade, and denies removed membership', async () => {
+    qualifiedIt('preserves viewer reads, denies writes after downgrade, and denies removed membership', async () => {
         await access.setMemberRole({ workspaceId: workspaceA, userId: bob, role: 'viewer' });
         select(bob, workspaceA);
         expect((await call('pull', workspaceA)).status).toBe(200);
@@ -168,7 +245,7 @@ describe('document sync HTTP isolation with the real SQLite harness', () => {
         select(bob, workspaceB);
         expect(await (await call('snapshot', workspaceB)).text()).toContain('B private document');
     });
-    it.each(['removed', 'viewer', 'editor'] as const)('rechecks %s membership at finalization while identical identifiers exist elsewhere', async role => {
+    qualifiedIt.each(['removed', 'viewer', 'editor'] as const)('rechecks %s membership at finalization while identical identifiers exist elsewhere', async role => {
         for (const workspaceId of [workspaceA, workspaceB]) await fixture.adapter!.admitChatGeneration({ userId: bob, workspaceId }, admission(workspaceId));
         const snapshot: CanonicalGenerationSnapshot = { status: 'complete', content: 'Synthetic A response', reasoning: '', completedAt: Date.now() };
         const input = { admission: admission(workspaceA), snapshot };
@@ -195,7 +272,7 @@ describe('document sync HTTP isolation with the real SQLite harness', () => {
             expect(message(workspaceB).data.content).toBe('Synthetic B response');
         }
     });
-    it('rejects a direct workspace substitution despite matching thread/message/generation identifiers', async () => {
+    qualifiedIt('rejects a direct workspace substitution despite matching thread/message/generation identifiers', async () => {
         for (const workspaceId of [workspaceA, workspaceB]) await fixture.adapter!.admitChatGeneration({ userId: bob, workspaceId }, admission(workspaceId));
         const beforeA = message(workspaceA), beforeB = message(workspaceB);
         await expect(fixture.adapter!.finalizeChatGeneration({ userId: bob, workspaceId: workspaceB }, {

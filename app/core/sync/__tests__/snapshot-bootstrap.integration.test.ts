@@ -1,3 +1,4 @@
+import { testUuid } from './sync-test-utils';
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Or3DB } from '~/db/client';
@@ -47,13 +48,13 @@ function messageChange(version: number, content: string): SyncChange {
             updated_at: version,
             clock: version,
             hlc: `${version}:0:remote`,
-            op_id: `op-${version}`,
+            op_id: testUuid(`op-${version}`),
         },
         stamp: {
             clock: version,
             hlc: `${version}:0:remote`,
             deviceId: 'remote',
-            opId: `op-${version}`,
+            opId: testUuid(`op-${version}`),
         },
     };
 }
@@ -193,7 +194,7 @@ describe('fresh-client snapshot bootstrap after history retention', () => {
             expect(await db.messages.get('message-retained')).toMatchObject({
                 data: { content: 'during snapshot' },
                 clock: 11,
-                op_id: 'op-11',
+                op_id: testUuid('op-11'),
             });
 
             // Version 12 commits after snapshot completion. Duplicate deliveries at
@@ -207,7 +208,7 @@ describe('fresh-client snapshot bootstrap after history retention', () => {
             expect(await db.messages.get('message-retained')).toMatchObject({
                 data: { content: 'after snapshot' },
                 clock: 12,
-                op_id: 'op-12',
+                op_id: testUuid('op-12'),
             });
             expect(await db.sync_state.get('sync_state:workspace-retained:default'))
                 .toMatchObject({ cursor: 12 });

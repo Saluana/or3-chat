@@ -222,6 +222,8 @@
 </template>
 
 <script setup lang="ts">
+import { CLOUD_MUTATION_INTENT } from '~~/shared/sync/types';
+
 import AppModal from '~/components/ui/AppModal.vue';
 import {
     ADMIN_WEBHOOK_EVENT_DESCRIPTIONS,
@@ -447,7 +449,7 @@ async function submit() {
                 `${basePath}/${props.webhook.id}`,
                 {
                     method: 'PATCH',
-                    headers: { 'x-or3-cloud-intent': 'mutation', 'Content-Type': 'application/json' },
+                    headers: { 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT, 'Content-Type': 'application/json' },
                     body,
                     credentials: 'include',
                 }
@@ -462,7 +464,7 @@ async function submit() {
             signing_secret: string;
         }>(basePath, {
             method: 'POST',
-            headers: { 'x-or3-cloud-intent': 'mutation', 'Content-Type': 'application/json' },
+            headers: { 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT, 'Content-Type': 'application/json' },
             body,
             credentials: 'include',
         });

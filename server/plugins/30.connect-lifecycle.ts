@@ -1,3 +1,4 @@
+import { getShutdownRuntime } from '../utils/shutdown/runtime';
 import { defineNitroPlugin } from 'nitropack/runtime';
 import { useRuntimeConfig } from '#imports';
 import { reconcileDueConnectEnvironments } from '../connect/lifecycle';
@@ -7,6 +8,7 @@ let activeInterval: ReturnType<typeof setInterval> | null = null;
 let activeStartup: ReturnType<typeof setTimeout> | null = null;
 
 export default defineNitroPlugin((nitroApp) => {
+    if (getShutdownRuntime().controller.validationOnly()) return;
     if (activeInterval) clearInterval(activeInterval);
     if (activeStartup) clearTimeout(activeStartup);
     activeInterval = null;

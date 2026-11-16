@@ -337,7 +337,10 @@ jobs:
           set -euo pipefail
           started=$SECONDS
           (cd "$MANAGED" && timeout --signal=TERM 6m npx --yes "@or3/cloud@$VERSION" rollback --yes)
-          (cd "$MANAGED" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$PREVIOUS_VERSION" verify)
+          # Rollback restores the old app, while managed state still belongs to
+          # the new schema writer. The bridge CLI correctly refuses that state.
+          (cd "$MANAGED" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$VERSION" verify)
+          grep -q "^OR3_VERSION='$PREVIOUS_VERSION'$" "$MANAGED/.env"
           (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3018 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
           echo "Rollback verification completed in $((SECONDS - started))s." | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Capture post-publication lifecycle diagnostics

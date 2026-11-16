@@ -5,6 +5,7 @@ import {
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { watch, effectScope } from 'vue';
 import { useCloudAccess } from '~/core/cloud/access';
+import { subscribeActiveWorkspaceDb } from '~/db/client';
 
 export default defineNuxtPlugin(async (nuxtApp) => {
     if (import.meta.server) return;
@@ -69,7 +70,12 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         },
         { immediate: true }
     );
-    const dispose = () => { stop(); accessScope.stop(); queue?.dispose(); };
+    const stopDb = subscribeActiveWorkspaceDb(() => {
+        const session = sessionData.value?.session;
+        queue?.setWorkspaceId(session?.authenticated ? session.workspace?.id ?? null : null,
+            session?.authenticated ? session.user?.id ?? null : null);
+    });
+    const dispose = () => { stop(); stopDb(); accessScope.stop(); queue?.dispose(); };
     nuxtApp.vueApp.onUnmount(dispose);
     import.meta.hot?.dispose(dispose);
 });

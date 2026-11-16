@@ -1,5 +1,5 @@
-// Real published baseline -> candidate assets -> backup -> rollback. Synthetic
-// candidate version exists only in temporary fixtures; no version is published.
+// Published pre-vault baseline -> published compatibility bridge -> candidate
+// assets -> backup -> rollback. Candidate images remain local and unpublished.
 import { mkdtemp, realpath, readFile, writeFile, cp, mkdir, rm, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -13,6 +13,11 @@ const id = `or3-vault-lifecycle-${crypto.randomUUID().slice(0, 8)}`;
 const deployment = join(dir, `${id}-upgrade`);
 const fresh = join(dir, `${id}-fresh`);
 const image = `${id}:local`;
+const legacyVersion = '0.1.90';
+const bridgeVersion = '0.1.116';
+const candidateVersion = JSON.parse(await readFile(join(root, 'packages/or3-cloud/package.json'), 'utf8')).version as string;
+assert.match(candidateVersion, /^\d+\.\d+\.\d+$/);
+assert.notEqual(candidateVersion, bridgeVersion);
 const checks: string[] = [];
 let exitCode = 1;
 let env: Record<string, string> | undefined;
@@ -24,25 +29,23 @@ async function run(command: string[], cwd = dir, extra: Record<string, string> =
 }
 const record = (label: string) => { checks.push(label); console.log(label); };
 try {
-    await run(['npm', 'pack', '@or3/cloud@0.1.90', '--pack-destination', dir]);
-    await run(['tar', '-xzf', join(dir, 'or3-cloud-0.1.90.tgz')]);
+    await run(['npm', 'pack', `@or3/cloud@${legacyVersion}`, '--pack-destination', dir]);
+    await run(['tar', '-xzf', join(dir, `or3-cloud-${legacyVersion}.tgz`)]);
+    const bridge = join(dir, 'bridge');
+    await mkdir(bridge);
+    await run(['npm', 'pack', `@or3/cloud@${bridgeVersion}`, '--pack-destination', dir]);
+    await run(['tar', '-xzf', join(dir, `or3-cloud-${bridgeVersion}.tgz`), '-C', bridge]);
     const candidate = join(dir, 'candidate');
     await cp(join(root, 'packages/or3-cloud'), candidate, { recursive: true, filter: source => !source.includes('/node_modules') });
-    const packagePath = join(candidate, 'package.json');
-    const manifest = JSON.parse(await readFile(packagePath, 'utf8')); manifest.version = '0.1.91'; await writeFile(packagePath, JSON.stringify(manifest));
-    const infoPath = join(candidate, 'src/package-info.ts');
-    const info = await readFile(infoPath, 'utf8');
-    const candidateInfo = info.replace(/PACKAGE_VERSION = '[^']+'/, "PACKAGE_VERSION = '0.1.91'");
-    assert.notEqual(candidateInfo, info, 'Candidate CLI version must be rewritten for the lifecycle fixture');
-    await writeFile(infoPath, candidateInfo);
     for (const relative of ['src/commands/recover-restart.ts', 'src/deployment/lease.ts']) {
         const path = join(candidate, relative);
         await writeFile(path, (await readFile(path, 'utf8')).replace("'../../../../shared/server/restarts/controller'", JSON.stringify(join(root, 'shared/server/restarts/controller.ts'))));
     }
     await run(['bun', 'build', 'src/cli.ts', '--target=node', '--format=esm', '--outfile=dist/cli.mjs'], candidate);
-    await writeFile(join(dir, 'Dockerfile'), `FROM or3-cloud-credentials-qualification:local\nLABEL org.opencontainers.image.source="https://github.com/Saluana/or3-chat" org.opencontainers.image.version="0.1.91" org.opencontainers.image.revision="${execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()}"\n`);
+    await writeFile(join(dir, 'Dockerfile'), `FROM or3-cloud-credentials-qualification:local\nLABEL org.opencontainers.image.source="https://github.com/Saluana/or3-chat" org.opencontainers.image.version="${candidateVersion}" org.opencontainers.image.revision="${execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()}"\n`);
     await run(['docker', 'build', '--network', 'none', '-t', image, dir]);
     const baselineCli = join(dir, 'package/dist/cli.mjs');
+    const bridgeCli = join(bridge, 'package/dist/cli.mjs');
     const candidateCli = join(candidate, 'dist/cli.mjs');
     const probe = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response('probe') });
     const port = probe.port!; await probe.stop(true);
@@ -50,10 +53,19 @@ try {
     await run(['node', baselineCli, 'init', deployment, '--local', '--admin-email', 'lifecycle@example.test', '--admin-password-file', join(dir, 'password'), '--port', String(port)], dir,
         { OR3_CLOUD_SKIP_PULL: 'true' });
     env = parseEnv(await readFile(join(deployment, '.env'), 'utf8'));
-    record('Published 0.1.90 installation and deep health');
+    record(`Published ${legacyVersion} installation and deep health`);
     const cli = (args: string[]) => run(['node', candidateCli, ...args], deployment, { OR3_CLOUD_SKIP_PULL: 'true', OR3_CLOUD_TEST_IMAGE: image });
-    await cli(['update', '--to', '0.1.91']);
-    record('Managed update provisions the default vault from an existing installation');
+    const beforeBridge = await readFile(join(deployment, '.or3-cloud/state.json'), 'utf8');
+    await assert.rejects(cli(['update', '--to', candidateVersion]), /requires source compatibility bridge 0\.1\.116 or newer; refused before downtime/);
+    assert.equal(await readFile(join(deployment, '.or3-cloud/state.json'), 'utf8'), beforeBridge);
+    await run(['node', baselineCli, 'verify'], deployment);
+    record('Direct pre-bridge update refuses without changing managed state or source health');
+    await run(['node', bridgeCli, 'update', '--to', bridgeVersion], deployment);
+    await run(['node', bridgeCli, 'verify'], deployment);
+    env = parseEnv(await readFile(join(deployment, '.env'), 'utf8'));
+    record(`Published ${legacyVersion} -> ${bridgeVersion} bridge provisions the default vault`);
+    await cli(['update', '--to', candidateVersion]);
+    record('Managed candidate update accepts the qualified published compatibility bridge');
     const origin = `http://127.0.0.1:${port}`;
     const credentials = parseEnv(await readFile(join(deployment, '.or3-initial-credentials'), 'utf8'));
     const signedIn = await fetch(`${origin}/api/basic-auth/sign-in`, { method: 'POST', headers: { origin, 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' },
@@ -137,7 +149,7 @@ try {
     await rm(dir, { recursive: true, force: true });
     await mkdir(join(root, 'test-results/cloud-vault-lifecycle'), { recursive: true });
     await writeFile(join(root, 'test-results/cloud-vault-lifecycle/receipt.json'), JSON.stringify({
-        baseline: '@or3/cloud@0.1.90 + published ghcr.io/saluana/or3-chat:0.1.90', candidate: 'temporary local 0.1.91 fixture, unpublished',
+        baseline: `Published @or3/cloud@${legacyVersion} -> @or3/cloud@${bridgeVersion} compatibility bridge`, candidate: `temporary local ${candidateVersion} fixture, unpublished`,
         checks, exitCode, command: 'bun scripts/test/run-cloud-vault-lifecycle-e2e.ts', fixtureDirectoryRemoved: true, resourcesRemoved,
     }, null, 2));
 }

@@ -1,3 +1,4 @@
+import { CLOUD_MUTATION_INTENT } from '~~/shared/sync/types';
 /** Host job admission, status and browser-tool transport. */
 import { shallowRef } from 'vue';
 import { useRuntimeConfig } from '#imports';
@@ -325,7 +326,7 @@ export async function startBackgroundStream(params: {
 
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        'x-or3-cloud-intent': 'mutation',
+        'x-or3-cloud-intent': CLOUD_MUTATION_INTENT,
     };
     if (params.apiKey && useRuntimeConfig().public.ssrAuthEnabled !== true) {
         headers['x-or3-openrouter-key'] = params.apiKey;
@@ -643,7 +644,7 @@ export async function abortBackgroundJob(
 ): Promise<boolean> {
     const resp = await fetch(`/api/jobs/${jobId}/abort`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-or3-cloud-intent': 'mutation' },
+        headers: { 'Content-Type': 'application/json', 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT },
         body: '{}',
     });
 
@@ -765,7 +766,7 @@ export async function abortBackgroundAdmission(
     try {
         resp = await fetch('/api/jobs/admission-abort', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-or3-cloud-intent': 'mutation' },
+            headers: { 'Content-Type': 'application/json', 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT },
             credentials: 'include',
             body: JSON.stringify({ admissionId, workspaceId }),
         });

@@ -1,4 +1,21 @@
 <template>
+    <AppModal :open="Boolean(databaseRecovery)" title="Workspace storage upgrade" :dismissible="false">
+        <div role="status" aria-live="polite" aria-atomic="true" class="space-y-4">
+            <p v-if="databaseRecovery?.phase === 'upgrading'">
+                Updating local data. Keep this tab open until your workspace is ready.
+            </p>
+            <p v-else-if="databaseRecovery?.phase === 'blocked'">
+                Close other OR3 tabs to finish upgrading this workspace. Your saved data is unchanged.
+            </p>
+            <p v-else>
+                The storage upgrade could not finish. Your saved data is unchanged. Free some device storage, then retry. Do not clear this site’s data.
+            </p>
+            <UProgress v-if="databaseRecovery?.phase === 'upgrading'" :model-value="null" aria-label="Updating local data" />
+        </div>
+        <template #footer>
+            <UButton v-if="databaseRecovery?.phase === 'failed'" :loading="retryingDatabase" @click="retryDatabase">Retry upgrade</UButton>
+        </template>
+    </AppModal>
     <OpenRouterKeyModal v-if="keyActivated" v-model:open="keyOpen" />
     <AppModal v-model:open="signInOpen" title="Sign in to OR3">
         <p class="mb-4">Use your OR3 account to continue.</p>
@@ -27,6 +44,7 @@
 </template>
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { databaseRecovery } from '~/db/client';
 import { useRuntimeConfig, navigateTo } from '#imports';
 import { setErrorRecoveryApi } from '~/utils/errors';
 import { resolveAuthUiAdapter } from '~/core/auth-ui/registry';
@@ -37,6 +55,16 @@ import {
 } from '~~/shared/errors';
 import AppModal from '~/components/ui/AppModal.vue';
 import OpenRouterKeyModal from '~/components/chat/OpenRouterKeyModal.vue';
+
+const retryingDatabase = ref(false);
+async function retryDatabase() {
+    const state = databaseRecovery.value;
+    if (!state || retryingDatabase.value) return;
+    retryingDatabase.value = true;
+    try { await state.db.open(); window.location.reload(); }
+    catch { /* The database owner retains the recoverable failure state. */ }
+    finally { retryingDatabase.value = false; }
+}
 
 const config = useRuntimeConfig();
 const keyOpen = ref(false);

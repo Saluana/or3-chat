@@ -1,3 +1,4 @@
+import { CLOUD_MUTATION_INTENT } from '~~/shared/sync/types';
 import { parseModelPrice } from '~~/shared/ai/model-catalog';
 /**
  * @module app/core/auth/models-service
@@ -149,7 +150,7 @@ async function fetchOpenAiModels(): Promise<OpenRouterModel[]> {
         : !deviceKey['x-or3-openai-key'] || !isServerRouteAvailable()) return [];
     const response = await fetch('/api/openai/models', { method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error',
             signal: AbortSignal.timeout(20_000),
-            headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation', ...deviceKey }, body: '{}' });
+            headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT, ...deviceKey }, body: '{}' });
     if (!response.ok) throw new Error('OpenAI models unavailable.');
     return openRouterModelListSchema.parse(await response.json());
 }
@@ -183,7 +184,7 @@ async function fetchOpenRouterModelCatalog(opts?: {
             const payload = getCachedSessionPayload();
             if (payload && payload.session?.authenticated !== true)
                 return { ...(loadCache() ?? { data: [], fetchedAt: null }), source: 'openrouter-cache' };
-            const response = await fetch('/api/openrouter/models', { signal: AbortSignal.timeout(20_000), method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error', headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation' }, body: '{}' });
+            const response = await fetch('/api/openrouter/models', { signal: AbortSignal.timeout(20_000), method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error', headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT }, body: '{}' });
             if (!response.ok) throw new Error('OpenRouter model catalog unavailable.');
             const data = openRouterModelListSchema.parse(await response.json());
             const fetchedAt = Date.now(); saveCache(data, fetchedAt);

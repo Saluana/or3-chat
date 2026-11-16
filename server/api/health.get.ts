@@ -1,3 +1,4 @@
+import { getShutdownRuntime } from '../utils/shutdown/runtime';
 /**
  * @module server/api/health.get
  *
@@ -16,6 +17,7 @@ import { getProviderAdminAdapter } from '../admin/providers/registry';
 import { createStubProviderAdapter } from '../admin/providers/adapters/stub';
 
 export interface HealthResponse {
+    validation?: 'health-only-v1';
     status: 'ok' | 'degraded';
     timestamp: string;
     uptime: number;
@@ -120,6 +122,7 @@ export default defineEventHandler(async (event): Promise<HealthResponse> => {
         status: 'ok',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
+        ...(getShutdownRuntime().controller.validationOnly() ? { validation: 'health-only-v1' as const } : {}),
     };
 
     if (deep) {

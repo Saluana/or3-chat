@@ -21,7 +21,7 @@ type BackupHelper = {
   exec(args: string[]): Promise<string>;
   execFromFile(args: string[], file: string): Promise<void>;
   execToFile(args: string[], file: string): Promise<void>;
-  loadSqlite(dataTgz: string): Promise<void>;
+  loadSqlite(dataTgz: string, legacy?: boolean): Promise<void>;
 };
 
 /** Runs one confined image helper and always attempts to remove it. */
@@ -73,12 +73,12 @@ export async function withBackupHelper<T>(
       exec: args => checked(['exec', name, ...args]),
       execFromFile: async (args, file) => streamFileToCommand('docker', ['exec', '-i', name, ...args], file, directory, secrets, environment, streamTimeout),
       execToFile: async (args, file) => streamCommandToFile('docker', ['exec', name, ...args], file, directory, secrets, environment, streamTimeout),
-      async loadSqlite(dataTgz) {
+      async loadSqlite(dataTgz, legacy = false) {
         await this.execFromFile(['sh', '-c', 'ulimit -f 16384; tar tvzf - > /scratch/inventory'], dataTgz);
-        const inventory = JSON.parse(await this.exec(['sh', '-c', NODE, 'or3-backup-inspection', INSPECTOR, 'inventory'])) as { selected: string[]; bytes: number };
+        const inventory = JSON.parse(await this.exec(['sh', '-c', NODE, 'or3-backup-inspection', INSPECTOR, 'inventory', ...(legacy ? ['legacy'] : [])])) as { selected: string[]; bytes: number };
         if (!Array.isArray(inventory.selected) || !inventory.selected.includes('./sync.sqlite') && !inventory.selected.includes('sync.sqlite')
-          || inventory.selected.some(item => !/^(?:\.\/)?sync[.]sqlite(?:-wal)?$/.test(item))
-          || inventory.selected.length > 2 || !Number.isSafeInteger(inventory.bytes) || inventory.bytes < 0) throw new Error('Invalid offline backup inspection inventory response.');
+          || inventory.selected.some(item => !(legacy ? /^(?:\.\/)?(?:sync|auth)[.]sqlite(?:-(?:wal|shm))?$/ : /^(?:\.\/)?sync[.]sqlite(?:-wal)?$/).test(item))
+          || inventory.selected.length > (legacy ? 6 : 2) || !Number.isSafeInteger(inventory.bytes) || inventory.bytes < 0) throw new Error('Invalid offline backup inspection inventory response.');
         const freeKiB = Number(await this.exec(['sh', '-c', "df -Pk /scratch | awk 'NR == 2 { print $4 }'"]));
         if (!Number.isFinite(freeKiB) || freeKiB < 0) throw new Error('Could not verify offline backup scratch capacity.');
         assertEnoughFreeSpace(freeKiB * 1024, inventory.bytes, 'Offline backup inspection scratch');

@@ -1,6 +1,10 @@
+import { createHookEngine } from '~~/shared/hooks/hook-engine-core';
+import { createTypedHookEngine, type TypedHookEngine } from '~/core/hooks/typed-hooks';
+import { observeSyncAction } from '~/core/sync/sync-observers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PaletteCoordinator } from '../coordinator';
 
+let actualHooks: TypedHookEngine | undefined;
 const actions = new Map<string, (payload?: unknown) => void>();
 const addAction = vi.fn((name: string, fn: (payload?: unknown) => void) => {
     actions.set(name, fn);
@@ -10,7 +14,7 @@ const removeAction = vi.fn((name: string, fn: (payload?: unknown) => void) => {
 });
 
 vi.mock('~/core/hooks/useHooks', () => ({
-    useHooks: () => ({ addAction, removeAction }),
+    useHooks: () => actualHooks ?? ({ addAction, removeAction }),
 }));
 
 vi.mock('../registry', () => ({
@@ -23,6 +27,7 @@ vi.mock('../registry', () => ({
 
 describe('bindPaletteLifecycle', () => {
     beforeEach(() => {
+        actualHooks = undefined;
         actions.clear();
         addAction.mockClear();
         removeAction.mockClear();
@@ -31,6 +36,27 @@ describe('bindPaletteLifecycle', () => {
     afterEach(() => {
         vi.useRealTimers();
     });
+
+    it.each(['sync.bootstrap:action:complete', 'sync.pull:action:applied', 'sync.rescan:action:completed'] as const)(
+        'reconciles each %s after commit despite a hung first observer', async name => {
+            actualHooks = createTypedHookEngine(createHookEngine());
+            let release!: () => void;
+            const hung = vi.fn(() => new Promise<void>(resolve => { release = resolve; }));
+            actualHooks._engine.addAction(name, hung, 0);
+            const refreshSources = vi.fn(async () => undefined);
+            const { bindPaletteLifecycle } = await import('../lifecycle');
+            const dispose = bindPaletteLifecycle({ refreshSources } as unknown as PaletteCoordinator);
+            try {
+                for (let iteration = 0; iteration < 2; iteration++) {
+                    const delivery = observeSyncAction(actualHooks, name, {} as never);
+                    await vi.advanceTimersByTimeAsync(250);
+                    await delivery;
+                    expect(refreshSources).toHaveBeenCalledTimes(iteration + 1);
+                }
+                expect(hung).toHaveBeenCalledTimes(1);
+            } finally { release(); dispose(); }
+        }
+    );
 
     it('coalesces affected conversations and lets unknown mutations or sync require a full refresh', async () => {
         const refreshSources = vi.fn(async () => undefined);

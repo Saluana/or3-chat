@@ -111,13 +111,19 @@ export default defineNuxtPlugin(() => {
                             ? entries
                             : [...entries, { id: doc.id, kind: 'doc', name: doc.title }]
                     );
+                    const { captureProjectOperation } = await import('~/utils/projects/operation');
+                    const { addProjectDocument } = await import('~/utils/projects/source-intake');
+                    assertCurrent();
+                    if (await resolveChatProject(originDb, threadId) !== projectId)
+                        throw new Error('The chat changed projects.');
+                    await addProjectDocument(captureProjectOperation(), projectId, doc.id);
                 }
             } catch (error) {
                 if (getWorkspaceGeneration() !== workspaceGeneration || getDb() !== originDb) return;
                 console.error('Failed to add message document to project:', error);
                 toast.add({
-                    title: 'Document created, but not added to project',
-                    description: 'You can add it to the project from the sidebar.',
+                    title: 'Document created, but project setup failed',
+                    description: 'Add it to the project’s Knowledge from the sidebar.',
                     color: 'warning',
                 });
             }

@@ -1,6 +1,8 @@
 import { ref, type Ref } from 'vue';
+import Dexie from 'dexie';
 import { useRuntimeConfig } from '#imports';
 import { getDb } from '~/db/client';
+import { invalidateFirstBindEligibility } from '~/core/sync/history-incarnation';
 import { getCachedSessionContext, useSessionContext } from '~/composables/auth/useSessionContext';
 import { hasCloudAccess } from '~/core/cloud/access';
 import { isCloudWorkspaceBackupEnabled } from '~/core/storage/file-policy';
@@ -635,7 +637,8 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 const baseOptions = {
                     acceptVersionDiff: true, // The preceding validation permits older compatible backups only.
                     chunkSizeBytes: DEFAULT_KILOBYTES_PER_CHUNK,
-                    filter: (table: string, row: { blob?: Blob }) => {
+                    filter: (table: string, row: { blob?: Blob; firstBindEligible?: boolean }) => {
+                        if (table.replace(/^current_/, '') === 'sync_state') row.firstBindEligible = false;
                         assertImportOrigin();
                         if (table === 'file_blobs' && row.blob && row.blob.size > STATIC_FILE_CEILING) throw new Error('Local restore cannot import files larger than 50 MiB.');
                         return true;
@@ -655,18 +658,18 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                     },
                 };
 
-                if (importMode === 'replace') {
-                    await importInto(importDb, file, {
+                await importDb.transaction('rw', importDb.tables, async () => {
+                    await invalidateFirstBindEligibility(importDb);
+                    // Include header reads and replacement clearing in the same
+                    // transaction as proof consumption and imported data.
+                    await Dexie.waitFor(importInto(importDb, file, {
                         ...baseOptions,
-                        clearTablesBeforeImport: true,
-                    });
-                } else {
-                    await importInto(importDb, file, {
-                        ...baseOptions,
-                        clearTablesBeforeImport: false,
+                        noTransaction: true,
+                        clearTablesBeforeImport: importMode === 'replace',
                         overwriteValues,
-                    });
-                }
+                    }));
+                    await invalidateFirstBindEligibility(importDb);
+                });
             } else {
                 throw err('ERR_VALIDATION', 'Unsupported backup format.', {
                     tags: { domain: 'db', action: 'import' },

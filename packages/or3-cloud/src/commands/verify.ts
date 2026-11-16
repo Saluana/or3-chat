@@ -10,7 +10,7 @@ import { run } from '../runtime/command-runner';
 import { composeArgs } from '../runtime/compose';
 import { ensureDocker } from '../runtime/docker';
 import { containerNodeCommand, VERIFY_DATABASES_SCRIPT, waitForDeepHealth } from '../runtime/health';
-import { imageDigest } from '../runtime/images';
+import { imageDigest, isQualifiedLegacyImage } from '../runtime/images';
 import {
   validateVerificationHealth,
   verificationFetch,
@@ -67,13 +67,24 @@ export async function verifyCommand(directory: string, flags: Flags, positionals
   if (digest !== loaded.state.imageDigest) {
     throw new Error(`Managed image digest differs from state. Expected ${loaded.state.imageDigest}, found ${digest}.`);
   }
+  const legacy = isQualifiedLegacyImage(loaded.state);
+  if (legacy) {
+    const containers = await run('docker', composeArgs(loaded.directory, loaded.state.mode, ['ps', '-q', 'or3']), loaded.directory);
+    const ids = containers.stdout.trim().split(/\s+/).filter(Boolean);
+    if (!containers.ok || ids.length !== 1) throw new Error('Legacy verification requires exactly one running container.');
+    const running = await run('docker', ['inspect', '--format', '{{.Image}}', ids[0]!], loaded.directory);
+    const expected = await run('docker', ['image', 'inspect', '--format', '{{.Id}}', loaded.state.image], loaded.directory);
+    if (!running.ok || !expected.ok || !expected.stdout.trim() || running.stdout.trim() !== expected.stdout.trim()) {
+      throw new Error('Legacy verification requires the running container to match the qualified image.');
+    }
+  }
   await waitForDeepHealth(loaded.directory, loaded.state.mode, secretValues(loaded.env));
   const baseUrl = new URL(
     loaded.state.mode === 'public'
       ? `https://${loaded.state.domain}`
       : `http://127.0.0.1:${loaded.state.port}`,
   );
-  const verification = await verifyPublicApplication(baseUrl, await verificationCredentials(loaded.directory, flags, loaded.env));
+  const verification = await verifyPublicApplication(baseUrl, await verificationCredentials(loaded.directory, flags, loaded.env), legacy ? 'legacy' : 'incarnation-v1');
   const databaseCheck = await run('docker', [
     ...composeArgs(loaded.directory, loaded.state.mode, ['exec', '-T', 'or3', ...containerNodeCommand(VERIFY_DATABASES_SCRIPT)]),
   ], loaded.directory);
@@ -94,6 +105,7 @@ export async function verifyCommand(directory: string, flags: Flags, positionals
   console.log(`✓ OR3 ${loaded.state.appVersion} image digest matches managed state`);
   console.log(`✓ ${baseUrl.origin} root and deep health return HTTP 200 without redirects`);
   console.log('✓ Basic Auth sign-in, session hydration, and SQLite sync pull passed');
+  if (legacy) console.log('⚠ Published legacy sync: incarnation protection unavailable. Re-upgrade for held-intent protection.');
   console.log(verification.physicalCleanupDeferred
     ? '✓ Filesystem storage write/read and canonical metadata cleanup passed; physical cleanup deferred by provider retention policy'
     : '✓ Filesystem storage write/read and canonical/physical cleanup passed');

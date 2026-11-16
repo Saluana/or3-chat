@@ -101,7 +101,10 @@ export default defineNuxtPlugin((nuxtApp) => {
         resetIndex();
         if (!indexRequested) return;
         clearTimeout(refreshTimer);
-        refreshTimer = setTimeout(() => { if (!disposed) void mentionsModule?.initMentionsIndex(); }, 120);
+        const generation = getWorkspaceGeneration();
+        refreshTimer = setTimeout(() => {
+            if (!disposed && generation === getWorkspaceGeneration()) void mentionsModule?.initMentionsIndex();
+        }, 120);
     };
     // Local item writes (document autosaves, chat and file updates) only
     // invalidate. The next search, including an open picker, which subscribes

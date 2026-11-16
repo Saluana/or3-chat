@@ -1,4 +1,4 @@
-import type { FileBlobRow, Or3DB } from '~/db/client';
+import { physicalStoreName, type FileBlobRow, type Or3DB } from '~/db/client';
 import type { ObjectStorageProvider } from './types';
 import type { FilePolicy } from '~~/shared/storage/file-policy';
 import { sha256 } from '@noble/hashes/sha2.js';
@@ -21,9 +21,11 @@ export async function originCacheBytes(): Promise<number> {
             request.onerror = () => reject(request.error);
             request.onsuccess = () => {
                 const db = request.result;
-                if (!db.objectStoreNames.contains('file_blobs')) { db.close(); resolve(0); return; }
-                const tx = db.transaction('file_blobs', 'readonly');
-                const store = tx.objectStore('file_blobs');
+                const current = physicalStoreName('file_blobs');
+                const name = db.version >= 320 ? current : 'file_blobs';
+                if (!db.objectStoreNames.contains(name)) { db.close(); resolve(0); return; }
+                const tx = db.transaction(name, 'readonly');
+                const store = tx.objectStore(name);
                 if (!store.indexNames.contains('cache_accessed_at')) { db.close(); resolve(0); return; }
                 let total = 0;
                 let cacheRows = 0, indexedRows = 0;
@@ -101,13 +103,30 @@ async function hasUnfinishedUpload(db: Or3DB, hash: string): Promise<boolean> {
         .filter(row => row.direction === 'upload' && row.state !== 'done').first());
 }
 
+/** Original records can contain nested payloads or JSON-encoded file_hashes. */
+function referencesHash(value: unknown, hash: string, seen = new Set<object>()): boolean {
+    if (typeof value === 'string') return value.includes(hash);
+    if (!value || typeof value !== 'object' || seen.has(value)) return false;
+    seen.add(value);
+    return Object.values(value).some(child => referencesHash(child, hash, seen));
+}
+
+async function hasHeldFileReference(db: Or3DB, hash: string): Promise<boolean> {
+    return Boolean(await db.sync_quarantine.filter(entry => entry.variant === 'history_reset' && entry.status === 'quarantined' &&
+        referencesHash([entry.op, entry.localRow, entry.localTombstone, entry.pendingIntent], hash)).first());
+}
+
 async function eligible(db: Or3DB, row: FileBlobRow, workspaceId: string, providerId: string): Promise<boolean> {
+    if (await hasHeldFileReference(db, row.hash)) return false;
     if (!row.cache_accessed_at || row.cache_workspace_id !== workspaceId || row.cache_provider_id !== providerId) return false;
     const meta = await db.file_meta.get(row.hash);
     if (!meta || meta.deleted || meta.storage_id !== row.cache_storage_id || meta.storage_provider_id !== providerId) return false;
     if (await hasUnfinishedUpload(db, row.hash)) return false;
-    return !await db.pending_ops.where('[tableName+pk]').equals(['file_meta', row.hash])
-        .filter(op => op.status !== 'applied' && op.status !== 'discarded').first();
+    if (await db.pending_ops.filter(op => op.status !== 'applied' && op.status !== 'discarded' &&
+        ((op.tableName === 'file_meta' && op.pk === row.hash) || referencesHash(op.payload, row.hash))).first()) return false;
+    if (await db.messages.filter(message => message.pending === true && !message.deleted && referencesHash(message, row.hash)).first()) return false;
+    if (await db.workspace_tab_drafts.filter(draft => referencesHash(draft.draft, row.hash)).first()) return false;
+    return !await db.workspace_draft_versions.filter(version => version.kind === 'version' && referencesHash(version.draft, row.hash)).first();
 }
 
 /** Verify actual current remote bytes, never just a metadata pointer or old receipt. */
@@ -163,7 +182,8 @@ async function runCleanupFileCache(db: Or3DB, workspaceId: string, provider: Cac
             if (!await eligible(db, row, workspaceId, provider.id)) continue;
             verified++;
             if (!await verifyRemote(row, workspaceId, provider)) continue;
-            await db.transaction('rw', db.file_blobs, db.file_meta, db.file_transfers, db.pending_ops, async () => {
+            await db.transaction('rw', [db.file_blobs, db.file_meta, db.file_transfers, db.pending_ops, db.sync_quarantine,
+                db.messages, db.workspace_tab_drafts, db.workspace_draft_versions], async () => {
                 const current = await db.file_blobs.get(row.hash);
                 if (!current || current.cache_accessed_at !== row.cache_accessed_at || current.cache_storage_id !== row.cache_storage_id ||
                     !await eligible(db, current, workspaceId, provider.id)) return;

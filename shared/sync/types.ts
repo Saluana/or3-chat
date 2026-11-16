@@ -1,3 +1,10 @@
+/** Rejected before dispatch by published pre-incarnation Cloud servers. */
+export const CLOUD_MUTATION_INTENT = 'mutation-incarnation-v1';
+
+import type { z } from 'zod';
+import type { PullUnavailableRecordSchema, SnapshotUnavailableRecordSchema } from './schemas';
+export type PullUnavailableRecord = z.infer<typeof PullUnavailableRecordSchema>;
+export type SnapshotUnavailableRecord = z.infer<typeof SnapshotUnavailableRecordSchema>;
 import type { ErrorMetadata } from '../errors';
 /**
  * Shared Sync Types
@@ -56,6 +63,8 @@ export interface PendingOp {
     /** Local-only durable push ownership; stripped from provider requests. */
     claimId?: string;
     claimExpiresAt?: number;
+    /** Local-only: payload frozen before first send; false marks an abandoned legacy attempt. */
+    wireNormalized?: boolean;
     status: PendingOpStatus;
     lastError?: string;
     lastErrorDetails?: ErrorMetadata;
@@ -101,6 +110,9 @@ export interface SyncChange {
  * Request to pull changes from server
  */
 export interface PullRequest {
+    /** Batch identity, independent of operation fingerprints. Required by incarnation-v1. */
+    historyIncarnation?: string | null;
+    historyIncarnationCapability?: 'incarnation-v1';
     scope: SyncScope;
     cursor: number; // Server version cursor
     limit: number;
@@ -108,13 +120,16 @@ export interface PullRequest {
     /** Reader capability required before generic file metadata is returned. */
     fileKindCapability?: FileKindCapability;
     workspaceItemCapability?: WorkspaceItemCapability;
+    unavailableRecordCapability?: 'unavailable-v1';
 }
 
 /**
  * Response from pull request
  */
 export interface PullResponse {
+    historyIncarnation?: string;
     changes: SyncChange[];
+    unavailable?: PullUnavailableRecord[];
     nextCursor: number;
     hasMore: boolean;
     /**
@@ -137,6 +152,9 @@ export const FULL_HISTORY_PULL_RETENTION = {
 
 /** Request a bounded page from one consistent materialized snapshot. */
 export interface SnapshotRequest {
+    /** Batch identity, independent of operation fingerprints. Required by incarnation-v1. */
+    historyIncarnation?: string | null;
+    historyIncarnationCapability?: 'incarnation-v1';
     scope: SyncScope;
     pageSize: number;
     /** Opaque provider token; callers return it unchanged. */
@@ -145,6 +163,7 @@ export interface SnapshotRequest {
     /** Reader capability required before generic file metadata is returned. */
     fileKindCapability?: FileKindCapability;
     workspaceItemCapability?: WorkspaceItemCapability;
+    unavailableRecordCapability?: 'unavailable-v1';
 }
 
 export interface SnapshotRevision {
@@ -175,10 +194,12 @@ export type SnapshotItem =
  * Incremental replay starts strictly after the watermark after final apply.
  */
 export interface SnapshotResponse {
+    historyIncarnation?: string;
     workspaceId: string;
     snapshotId: string;
     highWatermark: number;
     items: SnapshotItem[];
+    unavailable?: SnapshotUnavailableRecord[];
     nextPageToken: string | null;
 }
 
@@ -186,6 +207,11 @@ export interface SnapshotResponse {
  * Batch of operations to push to server
  */
 export interface PushBatch {
+    /** Batch identity, independent of operation fingerprints. Required by incarnation-v1. */
+    historyIncarnation?: string | null;
+    historyIncarnationCapability?: 'incarnation-v1';
+    /** Terminal recoverable holds for unreadable server-side records. */
+    storedRecordCapability?: 'stored-record-v1';
     scope: SyncScope;
     ops: PendingOp[];
     /** Writer capability required before generic file metadata is accepted. */
@@ -199,6 +225,7 @@ export interface PushBatch {
 export type SyncErrorCode = 
     | 'VALIDATION_ERROR'      // Schema validation failed
     | 'UNAUTHORIZED'          // Auth/permission denied
+    | 'STORED_RECORD_UNAVAILABLE' // Stored content held for explicit recovery
     | 'CONFLICT'              // Optimistic lock conflict
     | 'NOT_FOUND'             // Resource not found
     | 'RATE_LIMITED'          // Rate limit exceeded
@@ -216,11 +243,14 @@ export type PushWinner =
  * Result of a push operation
  */
 export interface PushResult {
+    historyIncarnation?: string;
     results: Array<{
         opId: string;
         success: boolean;
         serverVersion?: number;
         error?: string;
+        /** Durable server evidence reference for a stored-record hold. */
+        evidenceRef?: string;
         errorCode?: SyncErrorCode;
         tableName?: string;
         operation?: 'put' | 'delete';
@@ -258,6 +288,9 @@ export interface SyncProviderAuth {
  * Subscribe options for real-time providers
  */
 export interface SyncSubscribeOptions {
+    /** Transport boundary errors must reach the lifecycle owner before auth cleanup. */
+    onError?: (error: unknown) => void | Promise<void>;
+    historyIncarnation?: string | null;
     cursor?: number;
     limit?: number;
     /** Supported only with capabilities.subscriptionPages v1. The provider
@@ -271,6 +304,7 @@ export interface SyncSubscribeOptions {
  * Request lifetime owned by the calling sync lifecycle.
  */
 export interface SyncRequestOptions {
+    historyIncarnation?: string | null;
     /** Cancels this caller’s wait and transport where supported. */
     signal?: AbortSignal;
 }
@@ -282,6 +316,7 @@ export interface SyncProvider {
     auth?: SyncProviderAuth;
     /** Explicit protocol contracts implemented by this provider. Missing is fail-closed. */
     capabilities?: {
+        historyIncarnation?: 'v1';
         snapshotBootstrap?: 'snapshot-v1';
         historyRetention?: 'snapshot-v1';
         /** Cursor-complete pages with acknowledged, provider-owned pagination. */
@@ -361,6 +396,14 @@ export interface Tombstone {
  * Sync state - persisted sync metadata
  */
 export interface SyncState {
+    /** Durable transport pause; stored separately from the history guard and coverage. */
+    protocolPause?: 'older-server' | 'unsupported';
+    pauseId?: string;
+    /** Birth-only proof of purely local authorship; consumed by first installation. */
+    firstBindEligible?: boolean;
+    historyIncarnation?: string | null;
+    phase?: 'unbound' | 'ready' | 'resetting';
+    resetTarget?: string | null;
     id: string; // 'default' for main state
     cursor: number;
     lastSyncAt: number;

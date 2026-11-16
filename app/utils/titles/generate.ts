@@ -1,3 +1,4 @@
+import { CLOUD_MUTATION_INTENT } from '~~/shared/sync/types';
 import { useRuntimeConfig } from '#imports';
 import { getActiveWorkspaceId, getDb, type Or3DB } from '~/db/client';
 import { getWriteTxTableNames, nextClock, nowSec } from '~/db/util';
@@ -47,7 +48,7 @@ export async function generateAutomaticTitle(db: Or3DB, target: TitleTarget): Pr
             const response = await fetch('/api/openrouter/title', {
                 method: 'POST', credentials: 'same-origin', redirect: 'error',
                 signal: AbortSignal.timeout(TITLE_TIMEOUT_MS + 2000),
-                headers: { 'Content-Type': 'application/json', 'x-or3-cloud-intent': 'mutation',
+                headers: { 'Content-Type': 'application/json', 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT,
                     ...(!cloud && key ? { 'x-or3-openrouter-key': key } : {}), ...(model ? await openAiKeyHeaders(model) : {}) },
                 body: JSON.stringify({ type: target.type, content: target.content.slice(0, TITLE_CONTENT_CHARS),
                     workspaceId: scope.workspaceId, ...(model ? { model } : {}) }),

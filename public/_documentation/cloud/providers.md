@@ -1,5 +1,12 @@
 # Cloud providers
 
+The hardened sync engine requires qualified history-incarnation support.
+The host pins SQLite 0.0.31 and Convex 0.0.27. Convex works in direct and gateway
+modes after deploying its matching templates and initializing history. Earlier
+Convex 0.0.26 remains unsupported; auth tokens alone do not enable startup.
+See [Convex qualification and setup](/documentation/cloud/provider-convex#sync-qualification-and-history-setup)
+and [saved-work recovery](/documentation/cloud/sync-layer#history-replacement-and-saved-work).
+
 This guide covers how OR3 discovers provider packages, how to install them, and how the Clerk to Convex token bridge works.
 
 Workspace Files/Trash requires matching host and provider admission contracts.

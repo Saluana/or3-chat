@@ -237,7 +237,7 @@ describe('useLibraryLink', () => {
         await library.connect();
         expect(fetchMock).toHaveBeenLastCalledWith('/api/plugins/library/link', {
             method: 'POST',
-            headers: { 'x-or3-cloud-intent': 'mutation', 'Content-Type': 'application/json' },
+            headers: { 'x-or3-cloud-intent': 'mutation-incarnation-v1', 'Content-Type': 'application/json' },
             body: {},
         });
 
@@ -245,7 +245,7 @@ describe('useLibraryLink', () => {
         await library.disconnect();
         expect(fetchMock).toHaveBeenLastCalledWith('/api/plugins/library/link/disconnect', {
             method: 'POST',
-            headers: { 'x-or3-cloud-intent': 'mutation', 'Content-Type': 'application/json' },
+            headers: { 'x-or3-cloud-intent': 'mutation-incarnation-v1', 'Content-Type': 'application/json' },
             body: {},
         });
         expect(library.state.value).toBe('revoked');

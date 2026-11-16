@@ -44,7 +44,7 @@ describe('atomic sync capture integration', () => {
         }
     });
 
-    it('coalesces never-sent local revisions atomically without discarding an attempted operation', async () => {
+    it('retains every protected-store revision, including attempted work, before first binding', async () => {
         const bridge = getHookBridge(db);
         bridge.start({ coalesceUnsent: true });
         const write = (value: string, clock: number) => db.transaction('rw', getWriteTxTableNames(db, 'kv'), () =>
@@ -53,12 +53,12 @@ describe('atomic sync capture integration', () => {
         const attempted = await db.pending_ops.toCollection().first();
         await db.pending_ops.update(attempted!.id, { attempts: 1, status: 'retry_wait' });
         for (let clock = 2; clock <= 20; clock++) await write(`edit-${clock}`, clock);
-        expect(await db.pending_ops.count()).toBe(2);
+        expect(await db.pending_ops.count()).toBe(20);
         expect(await db.pending_ops.get(attempted!.id)).toMatchObject({ attempts: 1 });
-        expect((await db.pending_ops.where('status').equals('pending').first())?.payload).toMatchObject({ value: 'edit-20' });
+        expect((await db.pending_ops.toArray()).some(op => (op.payload as { value?: string })?.value === 'edit-20')).toBe(true);
         await db.transaction('rw', getWriteTxTableNames(db, 'kv'), () => db.kv.delete('kv:local-edit'));
-        expect(await db.pending_ops.count()).toBe(2);
-        expect((await db.pending_ops.where('status').equals('pending').first())?.operation).toBe('delete');
+        expect(await db.pending_ops.count()).toBe(21);
+        expect((await db.pending_ops.toArray()).filter(op => op.operation === 'delete')).toHaveLength(1);
         expect(await db.tombstones.get('kv:kv:local-edit')).toBeDefined();
     });
 
@@ -382,7 +382,7 @@ describe('atomic sync capture integration', () => {
                 clock: 2,
                 hlc: '0000000000002:0000:node',
                 deviceId: 'remote-device',
-                opId: 'remote-op-1',
+                opId: '00000000-0000-4000-8000-000000000001',
             },
         };
 

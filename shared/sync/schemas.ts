@@ -15,6 +15,58 @@ export const MAX_SYNC_PUSH_BATCH_BYTES = 2 * 1024 * 1024;
 const MAX_SYNC_IDENTIFIER_LENGTH = 256;
 const MAX_SYNC_TABLE_FILTERS = 50;
 
+/** Bounds include JSON escaping of every currently admitted 1,024-unit key. */
+export const MAX_SYNC_SNAPSHOT_TOKEN_LENGTH = 65_536;
+export const MAX_SYNC_SNAPSHOT_REQUEST_BYTES = 128 * 1024;
+export const MAX_SYNC_RESPONSE_BYTES = 2 * 1024 * 1024;
+
+/** UTF-8 BINARY ordering, component by component; never flatten with delimiters. */
+export function compareSyncTuple(a: readonly string[], b: readonly string[]): number {
+    const encoder = new TextEncoder();
+    for (let i = 0; i < Math.min(a.length, b.length); i++) {
+        const left = encoder.encode(a[i]!);
+        const right = encoder.encode(b[i]!);
+        for (let j = 0; j < Math.min(left.length, right.length); j++) {
+            if (left[j] !== right[j]) return left[j]! - right[j]!;
+        }
+        if (left.length !== right.length) return left.length - right.length;
+    }
+    return a.length - b.length;
+}
+
+
+/** Identifiers must survive a UTF-8 storage round trip without replacement. */
+export function isLosslessSyncIdentifier(value: string): boolean {
+    for (let i = 0; i < value.length; i++) {
+        const code = value.charCodeAt(i);
+        if (code >= 0xd800 && code <= 0xdbff) {
+            const next = value.charCodeAt(++i);
+            if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
+        } else if (code >= 0xdc00 && code <= 0xdfff) return false;
+    }
+    return true;
+}
+
+export const SyncRecordIdentifierSchema = z.string().min(1).refine(isLosslessSyncIdentifier, 'Identifier is not lossless UTF-8');
+export const UNAVAILABLE_RECORD_CAPABILITY = 'unavailable-v1' as const;
+const unavailableIdentity = {
+    tableName: SyncRecordIdentifierSchema,
+    pk: SyncRecordIdentifierSchema,
+    evidenceRef: z.string().min(1).max(512),
+    reason: z.string().min(1).max(256),
+};
+export const PullUnavailableRecordSchema = z.object({
+    ...unavailableIdentity,
+    originalKind: z.enum(['put', 'delete']),
+    serverVersion: z.number().int().positive(),
+});
+export const SnapshotUnavailableRecordSchema = z.object({
+    ...unavailableIdentity,
+    originalKind: z.enum(['row', 'tombstone']),
+    snapshotId: z.string().min(1),
+    highWatermark: z.number().int().nonnegative(),
+});
+
 export function syncJsonByteLength(value: unknown): number {
     try {
         return new TextEncoder().encode(JSON.stringify(value)).length;
@@ -70,8 +122,8 @@ function createTablePayloadSchema<T extends z.ZodRawShape>(
 // ============================================================
 
 export const SyncScopeSchema = z.object({
-    workspaceId: z.string().trim().min(1).max(MAX_SYNC_IDENTIFIER_LENGTH),
-    projectId: z.string().trim().min(1).max(MAX_SYNC_IDENTIFIER_LENGTH).optional(),
+    workspaceId: z.string().trim().min(1).max(MAX_SYNC_IDENTIFIER_LENGTH).refine(isLosslessSyncIdentifier),
+    projectId: z.string().trim().min(1).max(MAX_SYNC_IDENTIFIER_LENGTH).refine(isLosslessSyncIdentifier).optional(),
 });
 
 export const ChangeStampSchema = z.object({
@@ -110,6 +162,7 @@ export const PendingOpSchema = z.object({
     ]),
     lastError: z.string().optional(),
     lastErrorCode: z.enum([
+        'STORED_RECORD_UNAVAILABLE',
         'VALIDATION_ERROR',
         'UNAUTHORIZED',
         'CONFLICT',
@@ -128,8 +181,8 @@ export const PendingOpSchema = z.object({
 
 export const SyncChangeSchema = z.object({
     serverVersion: z.number().int().positive(),
-    tableName: z.string(),
-    pk: z.string(),
+    tableName: SyncRecordIdentifierSchema,
+    pk: SyncRecordIdentifierSchema,
     op: z.enum(['put', 'delete']),
     payload: z.unknown().optional(),
     stamp: ChangeStampSchema,
@@ -260,7 +313,15 @@ export const TABLE_PAYLOAD_SCHEMAS: Record<string, z.ZodSchema> = {
 // REQUEST/RESPONSE SCHEMAS
 // ============================================================
 
+export const HISTORY_INCARNATION_CAPABILITY = 'incarnation-v1' as const;
+export const HistoryIncarnationSchema = z.string().min(1).max(128).regex(/^[\x00-\x7f]+$/);
+export const HistoryRequestFields = {
+    historyIncarnation: HistoryIncarnationSchema.nullable().optional(),
+    historyIncarnationCapability: z.literal(HISTORY_INCARNATION_CAPABILITY).optional(),
+};
+
 export const PullRequestSchema = z.object({
+    ...HistoryRequestFields,
     scope: SyncScopeSchema,
     cursor: z.number().int().nonnegative(),
     limit: z.number().int().positive().max(1000),
@@ -270,17 +331,32 @@ export const PullRequestSchema = z.object({
         .optional(),
     fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
     workspaceItemCapability: z.literal(WORKSPACE_ITEM_CAPABILITY).optional(),
+    unavailableRecordCapability: z.literal(UNAVAILABLE_RECORD_CAPABILITY).optional(),
 });
 
 export const PullResponseSchema = z
     .object({
+        historyIncarnation: HistoryIncarnationSchema.optional(),
         changes: SyncChangesSchema.max(1000),
+        unavailable: z.array(PullUnavailableRecordSchema).max(1000).optional(),
         nextCursor: z.number().int().nonnegative(),
         hasMore: z.boolean(),
         oldestRetainedVersion: z.number().int().nonnegative(),
         requiresSnapshot: z.boolean(),
     })
     .superRefine((response, ctx) => {
+        if (response.changes.length + (response.unavailable?.length ?? 0) > 1000 || syncJsonByteLength(response) > MAX_SYNC_RESPONSE_BYTES) {
+            ctx.addIssue({ code: 'custom', message: 'Pull combined page budget exceeded' });
+        }
+        const versions = new Set(response.changes.map(change => change.serverVersion));
+        let previousUnavailableVersion = 0;
+        for (const marker of response.unavailable ?? []) {
+            if (versions.has(marker.serverVersion) || marker.serverVersion <= previousUnavailableVersion || marker.serverVersion > response.nextCursor) {
+                ctx.addIssue({ code: 'custom', message: 'Unavailable pull coverage is invalid' });
+            }
+            versions.add(marker.serverVersion);
+            previousUnavailableVersion = marker.serverVersion;
+        }
         let previousVersion = 0;
         const opIds = new Set<string>();
         for (const [index, change] of response.changes.entries()) {
@@ -311,15 +387,17 @@ export const PullResponseSchema = z
     });
 
 export const SnapshotRequestSchema = z.object({
+    ...HistoryRequestFields,
     scope: SyncScopeSchema,
     pageSize: z.number().int().positive().max(1000),
-    pageToken: z.string().min(1).max(4096).optional(),
+    pageToken: z.string().min(1).max(MAX_SYNC_SNAPSHOT_TOKEN_LENGTH).optional(),
     tables: z
         .array(z.string().trim().min(1).max(128))
         .max(MAX_SYNC_TABLE_FILTERS)
         .optional(),
     fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
     workspaceItemCapability: z.literal(WORKSPACE_ITEM_CAPABILITY).optional(),
+    unavailableRecordCapability: z.literal(UNAVAILABLE_RECORD_CAPABILITY).optional(),
 });
 
 export const SnapshotRevisionSchema = z.object({
@@ -331,15 +409,15 @@ export const SnapshotRevisionSchema = z.object({
 export const SnapshotItemSchema = z.discriminatedUnion('kind', [
     z.object({
         kind: z.literal('row'),
-        tableName: z.string().min(1),
-        pk: z.string().min(1),
+        tableName: SyncRecordIdentifierSchema,
+        pk: SyncRecordIdentifierSchema,
         payload: z.unknown(),
         revision: SnapshotRevisionSchema,
     }),
     z.object({
         kind: z.literal('tombstone'),
-        tableName: z.string().min(1),
-        pk: z.string().min(1),
+        tableName: SyncRecordIdentifierSchema,
+        pk: SyncRecordIdentifierSchema,
         revision: SnapshotRevisionSchema,
         serverDeletedAt: z.number().int().nonnegative(),
     }),
@@ -347,19 +425,38 @@ export const SnapshotItemSchema = z.discriminatedUnion('kind', [
 
 export const SnapshotResponseSchema = z
     .object({
+        historyIncarnation: HistoryIncarnationSchema.optional(),
         workspaceId: z.string().min(1),
         snapshotId: z.string().min(1),
         highWatermark: z.number().int().nonnegative(),
         items: z.array(SnapshotItemSchema).max(1000),
-        nextPageToken: z.string().min(1).max(4096).nullable(),
+        unavailable: z.array(SnapshotUnavailableRecordSchema).max(1000).optional(),
+        nextPageToken: z.string().min(1).max(MAX_SYNC_SNAPSHOT_TOKEN_LENGTH).nullable(),
     })
     .superRefine((response, ctx) => {
-        let previousKey: string | null = null;
+        if (response.items.length + (response.unavailable?.length ?? 0) > 1000 || syncJsonByteLength(response) > MAX_SYNC_RESPONSE_BYTES) {
+            ctx.addIssue({ code: 'custom', message: 'Snapshot combined page budget exceeded' });
+        }
+        let previousMarkerKey: string[] | null = null;
+        for (const marker of response.unavailable ?? []) {
+            const key = [marker.tableName, marker.pk, marker.originalKind];
+            if (marker.snapshotId !== response.snapshotId || marker.highWatermark !== response.highWatermark ||
+                (previousMarkerKey && compareSyncTuple(key, previousMarkerKey) <= 0)) {
+                ctx.addIssue({ code: 'custom', message: 'Unavailable snapshot coverage is invalid' });
+            }
+            previousMarkerKey = key;
+        }
+        let previousKey: string[] | null = null;
         const logicalKeys = new Set<string>();
+        for (const marker of response.unavailable ?? []) {
+            const logicalKey = JSON.stringify([marker.tableName, marker.pk]);
+            if (logicalKeys.has(logicalKey)) ctx.addIssue({ code: 'custom', message: 'Duplicate unavailable key' });
+            logicalKeys.add(logicalKey);
+        }
         for (const [index, item] of response.items.entries()) {
-            const logicalKey = `${item.tableName}\0${item.pk}`;
-            const orderedKey = `${logicalKey}\0${item.kind}`;
-            if (previousKey !== null && orderedKey <= previousKey) {
+            const logicalKey = JSON.stringify([item.tableName, item.pk]);
+            const orderedKey = [item.tableName, item.pk, item.kind];
+            if (previousKey !== null && compareSyncTuple(orderedKey, previousKey) <= 0) {
                 ctx.addIssue({
                     code: 'custom',
                     path: ['items', index],
@@ -381,6 +478,8 @@ export const SnapshotResponseSchema = z
 
 export const PushBatchSchema = z
     .object({
+        ...HistoryRequestFields,
+        storedRecordCapability: z.literal('stored-record-v1').optional(),
         scope: SyncScopeSchema,
         ops: z.array(PendingOpSchema).max(MAX_SYNC_PUSH_BATCH_OPS),
         fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
@@ -425,6 +524,7 @@ export const PushResultItemSchema = z.object({
     success: z.boolean(),
     serverVersion: z.number().int().positive().optional(),
     error: z.string().optional(),
+    evidenceRef: z.string().min(1).max(128).optional(),
     tableName: z.string().optional(),
     operation: z.enum(['put', 'delete']).optional(),
     payload: z.unknown().optional(),
@@ -434,6 +534,7 @@ export const PushResultItemSchema = z.object({
     winner: PushWinnerSchema.optional(),
     errorCode: z
         .enum([
+            'STORED_RECORD_UNAVAILABLE',
             'VALIDATION_ERROR',
             'UNAUTHORIZED',
             'CONFLICT',
@@ -446,6 +547,13 @@ export const PushResultItemSchema = z.object({
         ])
         .optional(),
 }).superRefine((result, ctx) => {
+    if (result.errorCode === 'STORED_RECORD_UNAVAILABLE' &&
+        (result.success || !result.evidenceRef || !result.error || result.error.length > 160 ||
+            result.replayed !== undefined || result.payload !== undefined || result.winner !== undefined ||
+            result.serverVersion !== undefined || result.applied !== undefined)) {
+        ctx.addIssue({ code: 'custom', message: 'Invalid stored-record hold' });
+    }
+
     if (result.replayed && !result.success) {
         ctx.addIssue({
             code: 'custom',
@@ -464,6 +572,7 @@ export const PushResultItemSchema = z.object({
 
 export const PushResultSchema = z
     .object({
+        historyIncarnation: HistoryIncarnationSchema.optional(),
         results: z.array(PushResultItemSchema).max(MAX_SYNC_PUSH_BATCH_OPS),
         serverVersion: z.number().int().nonnegative(),
     })
@@ -498,6 +607,7 @@ export function getPullResponseContractError(
     if (response.requiresSnapshot) {
         return null;
     }
+    if (response.changes.length + (response.unavailable?.length ?? 0) > request.limit) return 'Pull combined page exceeds requested limit';
     if (response.nextCursor < request.cursor) {
         return 'Pull response cursor regressed';
     }
@@ -505,7 +615,7 @@ export function getPullResponseContractError(
         return 'Pull response hasMore did not advance the cursor';
     }
     if (
-        response.changes.some(
+        [...response.changes, ...(response.unavailable ?? [])].some(
             (change) => change.serverVersion <= request.cursor
         )
     ) {
@@ -521,7 +631,7 @@ export function getSnapshotResponseContractError(
     if (response.workspaceId !== request.scope.workspaceId) {
         return 'Snapshot response workspace does not match the request';
     }
-    if (response.items.length > request.pageSize) {
+    if (response.items.length + (response.unavailable?.length ?? 0) > request.pageSize) {
         return 'Snapshot response exceeds the requested page size';
     }
     return null;
@@ -550,8 +660,8 @@ export function getPushResultContractError(
 
 export const TombstoneSchema = z.object({
     id: z.string(),
-    tableName: z.string(),
-    pk: z.string(),
+    tableName: SyncRecordIdentifierSchema,
+    pk: SyncRecordIdentifierSchema,
     deletedAt: z.number(),
     clock: z.number().int().nonnegative(),
     hlc: z.string().min(1).optional(),

@@ -1,3 +1,4 @@
+import { CLOUD_MUTATION_INTENT } from '~~/shared/sync/types';
 import Dexie from 'dexie';
 import { sha256Hex } from '~~/shared/runtime-crypto';
 import { useRuntimeConfig } from '#imports';
@@ -345,7 +346,7 @@ export async function captureAutomaticMemories(
                     credentials: 'same-origin',
                     headers: {
                         'Content-Type': 'application/json',
-                        'x-or3-cloud-intent': 'mutation',
+                        'x-or3-cloud-intent': CLOUD_MUTATION_INTENT,
                         ...(local ? { 'x-or3-openai-key': local.apiKey } : key ? { 'x-or3-openrouter-key': key } : {}),
                     },
                     body: JSON.stringify({

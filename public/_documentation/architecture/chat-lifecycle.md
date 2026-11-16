@@ -139,6 +139,9 @@ navigation.
 The default message renderer loads through the theme registry when a message
 row mounts. Empty chats keep Markdown and highlighting out of the initial
 preload graph; theme-provided message components keep their existing selection.
+The default message loader also awaits `preloadMath()` within this lazy boundary,
+so the first message formula mounts with KaTeX. A failed optional load leaves the
+renderer's readable-source fallback and retry path available.
 
 `ChatMessageHost.vue` owns stable edit and navigation handlers for each mounted
 row, so token updates do not repeatedly update the lazy wrappers of settled
@@ -155,11 +158,21 @@ chat keeps the renderer and its styles lazy. Code highlighting runs in one
 browser worker shared by mounted host code blocks. The existing Streamdown
 registry loads local grammars on first use, with aliases and plain-text fallback.
 The renderer retains its toolbar, line numbers, escaping and theme handling;
-an older asynchronous result cannot overwrite newer code.
+the newest completed result can style an unchanged prefix while the latest
+suffix stays visible as escaped text. Results from another source, language,
+theme or provider cannot overwrite current code. Completed lines reuse Shiki
+grammar state, including multiline comments/templates. Existing code DOM and
+text selection survive appends; final HTML serialization still scales with size.
+Completed Markdown blocks reuse their rendered output with host image overrides
+in place. Only the growing tail receives incomplete-Markdown repair, so literal
+unmatched markers in earlier paragraphs remain unchanged when streaming ends.
+The last 32 finished Mermaid diagrams are cached by source across row unmounts;
+each mounted SVG uses separate IDs and internal references for duplicate diagrams.
 
-Each block owns a worker lease. Its queued snapshot is replaced by newer input;
-there is one in-flight job and at most 64 queued jobs. The last unmount and HMR
-release the worker. Worker failure, a 20-second job timeout, queue overflow, or
+Each block owns a worker lease and a tokenizer state released with that lease.
+Its queued snapshot is replaced by newer input; there is one in-flight job and
+at most 64 queued jobs. The last unmount starts a 30-second worker idle window;
+HMR releases it immediately. Worker failure, a 20-second job timeout, queue overflow, or
 a block over 250,000 characters leaves readable plain code. Highlighting never
 changes the source text saved or copied. A failed worker is not repeatedly
 restarted while its existing owners remain mounted.
@@ -202,9 +215,17 @@ the browser applies native scrolling. This prevents an automatic layout-follow
 write from displacing a clamped wheel jump. It does not cancel the default wheel
 action. The owned listener updates with `maintainBottom` and is removed on
 unmount; lists with bottom following disabled retain passive wheel handling.
-Layout following keeps its existing next-tick path and checks active browsing,
-without adding another animation frame. Row-height and anchor formulas are
-unchanged. Wheel input on a following scroller can wait for a busy main thread;
+Newly mounted rows and row-content revisions settle before paint. Observer
+resizes compensate immediately; row recycling normally waits for the next frame.
+A contraction larger than the bottom overscan refills the range before paint
+instead, after restoring the visible anchor. Rows mounted by this refill are
+measured before paint and observed on the following frame to avoid observer
+delivery loops. Unchanged keys skip reconciliation even
+when a parent recreates its key callback. Smooth bottom navigation follows the
+growing destination and yields to native wheel/touch/key input, other navigation,
+reduced motion and teardown. Rows contain margins with `flow-root`; the shared
+track contains horizontal overflow without clipping each row's focus/sticky
+content. Wheel input on a following scroller can wait for a busy main thread;
 reducing that work remains part of performance qualification.
 
 ### Cancellation and terminal writes
@@ -299,6 +320,8 @@ The root, `/chat/:id?` and `/docs/:id?` URLs use distinct route records with one
 page key, so the workspace shell stays mounted across navigation. Moving between
 resources pushes a history entry that records the tab; Back/Forward reactivate
 that tab, or open the resource when the tab has changed or closed.
+Dashboard deep links reopen their page when the dashboard parameters change;
+workspace URL rewrites and unrelated query changes preserve the open settings subpage.
 
 Tab manifests persist to localStorage by workspace and profile. A failed read keeps the original manifest protected even if writes later work: scheduled saves, Retry and unload cannot publish the temporary layout until a successful restore has read that scope. Reload after storage becomes readable restores the original tab IDs and their drafts. Storage failures never break the workspace: blocked storage (even a throwing `window.localStorage` getter), quota errors and failed debounced writes keep the unsaved layout pending, expose `persistenceStatus` (`ok`, `unavailable`, `write_failed`, `corrupt`), and raise one persistent "Tab layout could not be saved" toast per failure episode with Retry. Draft restoration depends on the saved tab IDs: before browser unload, a failed layout is retried synchronously and an unresolved layout or draft save failure requests the browser's unsaved-change confirmation. This is best effort; browsers can suppress confirmations and users can accept them. A saved layout that is invalid JSON or fails the schema is reported as corrupt rather than missing: the original is copied to `<key>:corrupt` (latest only) before a fresh layout can replace it, and is never overwritten while that copy cannot be made. The persistent "Saved tab layout was unreadable" notice offers **Download original** (`or3-tab-layout-backup.txt`) and **Discard original**; each closes the notice, and the copy stays until it is discarded. The buttons act on the layout key the notice was raised for, so switching workspace or profile first cannot make them touch another layout's copy (`getCorruptLayoutBackup(key)` / `discardCorruptLayoutBackup(key)` take that key). No buttons are shown when the copy could not be made. `useWorkspaceTabs` exposes `getCorruptLayoutBackup()` and `discardCorruptLayoutBackup()` for the same purpose. `flushPersistence()` always saves the current layout, which pane swaps rely on; the debounce, `pagehide` and scope switches write only pending changes.
 
@@ -366,6 +389,18 @@ Concurrent draft flushes can finish out of order. A successful write clears only
 An inactive workspace's database handle can close while its unsaved buffer remains in memory. After that workspace/account is restored, retries may use its already-loaded replacement handle only when the database name also matches. A late callback retains its captured destination; the active workspace never becomes an implicit fallback, and the closed handle is not reopened.
 
 ### Tab activation and stored tool results
+
+Every nonempty completed tool result is stored in immutable workspace KV chunks.
+The tool transcript and assistant hold a bounded reference, so multiple ordinary
+source reads do not consume the assistant's response budget. History, tool detail
+views and retries resolve the full result with integrity checks. Chunks and the
+foreground tool transcript commit atomically; background providers retain chunks
+before acknowledging the tool outcome. Empty results and older inline transcripts
+remain readable. If a background stream finishes ahead of sync, request preparation
+waits up to 10 seconds for missing chunks before capturing its history snapshot.
+Cancellation and workspace/account guards remain active during that wait; a failed
+transfer leaves the draft available to retry. Retained results still respect the existing 256 KiB per-result
+limit and model context admission limits.
 
 The pane loader reconciles separate canonical tool-result rows into their assistant calls before seeding a chat controller. Tool evidence remains visible after tab activation or reload, while plugin-owned message metadata and stored rows remain intact. Tool-call presentation metadata is retained by stable call ID; canonical status, result and error override stale embedded execution fields. Consumers should use this loader rather than treating raw assistant rows as a complete tool transcript.
 

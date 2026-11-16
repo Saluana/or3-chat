@@ -100,6 +100,12 @@ session hydration, SQLite sync, a disposable filesystem upload/download and
 canonical metadata cleanup cycle, both SQLite databases, volume ownership, proxy runtime settings, and a
 bounded window of serious container logs. On a public VPS, require the real
 HTTPS path (with no redirects) using `npx @or3/cloud verify --public`.
+The new CLI also verifies the exact published 0.1.116 rollback image after
+checking that its running container matches the allowlisted image identity.
+It runs the same authentication, sync, storage and database probes, and reports
+`incarnation protection unavailable`. This does not certify legacy sync history;
+re-upgrade for held-intent protection. Current or unknown images still require
+history-incarnation support; there is no legacy override flag.
 After changing the owner password in the app, pass the current credential only
 through an owner-only file:
 `npx @or3/cloud verify --public --verification-email owner@example.com --verification-password-file /secure/current-owner-password`.
@@ -313,3 +319,54 @@ npx @or3/cloud --help
 
 For VPS requirements, firewall guidance, updates, restores, and migration,
 read the [installation guide](https://github.com/Saluana/or3-chat/blob/main/docs/installation.md).
+
+Ordinary restore requires qualified offline sync semantic certification of the
+archive and the extracted candidate before public startup. Invalid stamps,
+JSON/payloads, tombstones, snapshots or version counters refuse startup; incomplete
+or unsupported audits also refuse. Reports contain sanitized numeric locators
+(or snapshot-item primary-key hashes/ordinals), never payload contents.
+The audit follows the reader's required and optional payload fields, preserves
+legacy snapshot revision IDs, and rejects the known `background-tool:<64 hex>`
+incident ID in stored revisions and embedded payload `op_id`.
+The offline target bundles the runtime read classifier and schemas, including legacy message order derived from HLC and the 256 KiB payload ceiling. Complete audits containing only recoverable record faults report `degraded:true`, `healthy:false`; they return diagnostics without treating the database as fatal corruption. Ordinary restore still requires a healthy certificate. Structural faults and a counter at `Number.MAX_SAFE_INTEGER` (no version can be allocated) block certification and are not recoverable content degradation.
+This restore flow has no isolated migration stage and does not start public writers
+to attempt a repair. It never edits an authenticated archive to make it pass.
+Recorded pre-mutation safety recovery preserves prior bytes and explicitly warns
+that sync semantic health is uncertified; physical/deep health alone is not sync
+certification. History incarnation/reset remains a separate runtime contract.
+
+### History incarnation recovery boundary
+
+Normal restore/data rollback requires the exact image's qualified
+`sync-history-reset.mjs capability` (`incarnation-v1`). The external managed
+journal records a fresh UUID per extraction; writers stay stopped through offline
+transactional identity/session/ACK reset and matching semantic certification.
+Startup is journaled before accepting writes. Safety recovery also rotates;
+incapable safety targets stay stopped with `history-reset-required`, and semantic
+bypasses remain degraded in `status`/`doctor`. Retention pins recovery evidence.
+
+Pinned SQLite 0.0.31 binds the generated Basic image profile to its exact installed
+001–036 migration list. Historical complete ledgers including 032/033 remain
+inspectable; partial 034/035 upgrades are refused. Candidate native-image, browser
+and managed lifecycle qualification must pass before promotion. Earlier 0.0.30
+images remain incarnation-unqualified. Native helper/provider-double tests are not image E2E proof.
+
+The first-incarnation candidate uses health-only validation before opening user
+admission. Automatic snapshot restoration requires matching immutable container,
+image and validation-mode proof. After normal startup may occur, use explicit
+`recover --restore --yes` or `rollback --yes`; both preserve current stopped data
+before discarding every server change since the source snapshot.
+
+Legacy snapshot policy `legacy-032-rollback-v1` is limited to the immediate
+published 0.1.116 / SQLite 0.0.29 / complete-032 Basic Auth + filesystem snapshot
+and exact allowlisted digest. It never resets/migrates the old database. Generic
+incapable restores remain refused. Legacy service reports a compatibility
+warning, has no installed incarnation and requires re-upgrade. Use the new exact
+CLI with schema 2, preserve source and abandoned-history pins, and export
+important old-tab work. Vault custody/external services are not rewound.
+
+Publication remains blocked pending exact provider/image/browser qualification.
+The pinned published SQLite 0.0.31 Basic profile advertises testable 036 and legacy rollback capabilities. Its
+startup snapshot cleanup is fenced by the checked-in provider patch during
+validation. Capability metadata is not a release receipt. A later qualified re-upgrade takes a fresh source
+snapshot and initializes/verifies a fresh 036 history under closed admission.

@@ -1,6 +1,20 @@
 import { imageRepository } from '../deployment/identity';
 import { packagedSourceRevision } from '../package-info';
 import { run } from './command-runner';
+import type { ManagedState } from '../deployment/contracts';
+
+// Published 0.1.116 index and platform manifests; no other legacy image is qualified.
+const LEGACY_DIGESTS = new Set([
+  'sha256:f7e6c507f2fb944c91f285e976b69b578ff9a24cdb8ceeaf22db7e22c79de692',
+  'sha256:772975a54da5662fd08cf7627b352eea769006d7536123d766643a455b4c2364',
+  'sha256:8dcafc169a27579bb14c41097dc9efdecc2ce08bf7589dd96fbee3ecd222e34b',
+]);
+
+export function isQualifiedLegacyImage(identity: Pick<ManagedState, 'appVersion' | 'image' | 'imageDigest'>): boolean {
+  return identity.appVersion === '0.1.116' && LEGACY_DIGESTS.has(identity.imageDigest)
+    && /^ghcr\.io\/saluana\/or3-chat(?::0\.1\.116)?(?:@sha256:[a-f0-9]{64})?$/.test(identity.image)
+    && (!identity.image.includes('@') || identity.image.endsWith(`@${identity.imageDigest}`));
+}
 
 export async function pullImage(image: string, expectedDigest?: string) {
   const local = await run('docker', ['image', 'inspect', image]);

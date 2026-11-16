@@ -1,6 +1,6 @@
 {
   "name": "@or3/cloud",
-  "version": "0.1.116",
+  "version": "0.1.127",
   "description": "Install and operate the OR3 Cloud container distribution",
   "type": "module",
   "license": "GPL-3.0",
@@ -17,8 +17,8 @@
   },
   "or3Cloud": {
     "dashboardUpdateProtocol": 1,
-    "dashboardUpdateMinimumSourceVersion": "0.1.40",
-    "stateSchema": 1
+    "dashboardUpdateMinimumSourceVersion": "0.1.116",
+    "stateSchema": 2
   },
   "files": [
     "dist",

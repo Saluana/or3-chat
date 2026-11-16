@@ -8,7 +8,7 @@ import { createSandbox, sha256 } from './process-harness';
 import type { Sandbox } from './process-harness';
 import { assertFilesystemPayloadHash } from '../src/backup/restore';
 import { writeBackupAuthentication } from '../src/backup/manifests';
-import { assertInspectionProfile, inspectCanonicalReferences, QUALIFIED_MIGRATIONS, readBackupInventory } from '../../../scripts/docker/backup-inspect.mjs';
+import { assertInspectionProfile, inspectCanonicalReferences, HISTORY_MIGRATIONS, QUALIFIED_MIGRATIONS, readBackupInventory } from '../../../scripts/docker/backup-inspect.mjs';
 
 // Each test drives several real CLI processes.
 setDefaultTimeout(30_000);
@@ -190,11 +190,26 @@ test('offline inspection accepts the installed provider migration history and re
   const db = new Database(path);
   try {
     const installed = JSON.parse(await readFile(new URL('../../../node_modules/or3-provider-sqlite/package.json', import.meta.url), 'utf8')) as { version: string };
-    const migrationCount = installed.version === '0.0.24' ? 28 : installed.version === '0.0.25' ? 29 : ['0.0.26', '0.0.27'].includes(installed.version) ? 31 : installed.version === '0.0.29' ? 32 : 0;
+    const migrationCount = installed.version === '0.0.24' ? 28 : installed.version === '0.0.25' ? 29 : ['0.0.26', '0.0.27'].includes(installed.version) ? 31 : installed.version === '0.0.29' ? 32 : installed.version === '0.0.30' ? 33 : installed.version === '0.0.31' ? 36 : 0;
     expect(migrationCount).toBeGreaterThan(0);
     expect(db.query('SELECT name FROM kysely_migration ORDER BY name').all())
-      .toEqual(QUALIFIED_MIGRATIONS.slice(0, migrationCount).map(name => ({ name })));
-    if (migrationCount === 32) {
+      .toEqual(HISTORY_MIGRATIONS.slice(0, migrationCount).map(name => ({ name })));
+    if (migrationCount === 36) {
+      for (const name of HISTORY_MIGRATIONS.slice(33).reverse()) {
+        db.query('DELETE FROM kysely_migration WHERE name=?').run(name);
+        if (name === HISTORY_MIGRATIONS[33]) {
+          expect(inspectCanonicalReferences(OfflineDatabase, path, inventory, '/data/storage')).toMatchObject({ complete: true });
+        } else {
+          expect(() => inspectCanonicalReferences(OfflineDatabase, path, inventory, '/data/storage')).toThrow('migration history');
+        }
+      }
+    }
+    if (migrationCount >= 33) {
+      // Published 0.0.29 backups remain inspectable after the UUID repair.
+      db.query('DELETE FROM kysely_migration WHERE name=?').run('033_tool_result_operation_ids');
+      expect(inspectCanonicalReferences(OfflineDatabase, path, inventory, '/data/storage')).toMatchObject({ complete: true });
+    }
+    if (migrationCount >= 32) {
       // The previously published 0.0.27 history (through 031) remains valid for upgrade and rollback inspection.
       db.query('DELETE FROM kysely_migration WHERE name=?').run('032_sync_observations');
       expect(inspectCanonicalReferences(OfflineDatabase, path, inventory, '/data/storage')).toMatchObject({ complete: true });
@@ -272,8 +287,8 @@ test('offline inspection validates immutable generation bindings and their archi
 });
 
 test('offline inspection refuses unsupported versions, ambiguous archives and scratch exhaustion', () => {
-  expect(() => assertInspectionProfile({ contract: 1, sqlite: '0.0.29', filesystem: '0.0.18' })).not.toThrow();
-  for (const profile of [{ contract: 2, sqlite: '0.0.29', filesystem: '0.0.18' }, { contract: 1, sqlite: '0.0.27', filesystem: '0.0.18' }, { contract: 1, sqlite: '0.0.29', filesystem: '0.0.16' }]) expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
+  expect(() => assertInspectionProfile({ contract: 1, sqlite: '0.0.31', filesystem: '0.0.18' })).not.toThrow();
+  for (const profile of [{ contract: 2, sqlite: '0.0.31', filesystem: '0.0.18' }, { contract: 1, sqlite: '0.0.27', filesystem: '0.0.18' }, { contract: 1, sqlite: '0.0.31', filesystem: '0.0.16' }]) expect(() => assertInspectionProfile(profile)).toThrow('Unsupported');
   const entry = '-rw------- nonroot/nonroot 4096 2026-10-11 10:16:23 ./sync.sqlite\n';
   expect(() => readBackupInventory(entry + entry)).toThrow('Duplicate');
   expect(() => readBackupInventory(entry.replace('./sync.sqlite', '../sync.sqlite'))).toThrow('Unsafe');
@@ -295,6 +310,47 @@ test('canonical missing-reference refusal precedes journal and live service muta
   expect(trace).not.toMatch(/compose .* (stop|down|restart)\b|compose .* up\b|volume rm|find \/data/);
   expect(trace).toContain('rm --force or3-backup-inspection-');
   expect(trace).toContain('--network none');
+});
+
+test.each([
+  { failures: [{ match: 'backup-inspect.mjs sync', message: 'Sync semantic certification failed: change_log rowid=1 invalid_op_id' }] },
+  { syncAudit: { contract: 1, complete: true, healthy: false } },
+  { syncAudit: { contract: 1, complete: false, healthy: true } },
+  { syncAudit: { complete: true, healthy: true } },
+])('restore refuses poison or unqualified semantic certification before live mutation: %j', async change => {
+  const fixture = await sandbox();
+  const id = await createBackup(fixture);
+  const archive = join(fixture.directory, '.or3-cloud/backups', id, 'data.tgz');
+  const bytes = await readFile(archive);
+  const before = await fixture.readStateText();
+  await fixture.reset(); await fixture.configure(change);
+  const refused = await fixture.cli(['restore', id, '--yes']);
+  expect(refused.exitCode, refused.output).toBe(1);
+  expect(refused.output).toMatch(/semantic|certification/i);
+  expect(await fixture.readStateText()).toBe(before);
+  expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
+  expect(await readFile(archive)).toEqual(bytes);
+});
+
+test('extracted candidate semantic faults prevent target startup and safety recovery reports degradation', async () => {
+  const fixture = await sandbox();
+  const id = await createBackup(fixture);
+  const archive = join(fixture.directory, '.or3-cloud/backups', id, 'data.tgz');
+  const bytes = await readFile(archive);
+  await fixture.reset();
+  await fixture.configure({ failures: [{ match: 'backup-inspect.mjs sync /data/sync.sqlite', message: 'Sync semantic certification failed: tombstones rowid=1 invalid_deleted_at' }] });
+  const refused = await fixture.cli(['restore', id, '--yes']);
+  expect(refused.exitCode, refused.output).toBe(1);
+  expect(refused.output).toContain('pre-restore snapshot');
+  expect(refused.output).toContain('sync semantic health is not certified');
+  const trace = await fixture.traceText();
+  const extracts = [...trace.matchAll(/tar xzf/g)].map(match => match.index!);
+  expect(extracts).toHaveLength(2);
+  // Only recovery may start; the failed target never reaches public startup.
+  expect(trace.slice(extracts[0], extracts[1])).not.toMatch(/compose .* up\b/);
+  expect(trace.slice(extracts[1])).toMatch(/compose .* up\b/);
+  expect((await fixture.readState()).incompleteOperation).toBeUndefined();
+  expect(await readFile(archive)).toEqual(bytes);
 });
 
 test('backup refuses an incomplete canonical archive, restarts the original app and removes only its unverified artifact', async () => {
@@ -1330,17 +1386,19 @@ test('internal S3 restore requires remote objects before and after startup', asy
   const target = { ...source, OR3_STORAGE_S3_ENDPOINT: 'https://target.example.invalid', OR3_STORAGE_S3_BUCKET: 'target-bucket' };
   await writeFile(join(fixture.directory, '.env'), serializeEnv(source), { mode: 0o600 });
   await inProcess(fixture, async () => {
+    const { markPending, updatePending } = await import('../src/deployment/state-store');
+    await markPending(fixture.directory, fixture.state, { id: 'test-history-restore', operation: 'restore', phase: 'target-mutating', startedAt: new Date().toISOString() });
     const captured = await captureBackup(fixture.directory, fixture.state, source);
     await writeFile(join(fixture.directory, '.env'), serializeEnv(target), { mode: 0o600 });
     await fixture.reset();
     await fixture.configure({ s3Check: { checked: 1, missing: ['prefix/workspace/hash'], mismatched: [] } });
-    await expect(restoreBackupData(fixture.directory, fixture.state, target, captured.backupDir, { beforeStart: async () => {} })).rejects.toThrow(/missing|mismatch/i);
+    await expect(restoreBackupData(fixture.directory, fixture.state, target, captured.backupDir, { beforeStart: () => updatePending(fixture.directory, fixture.state, { phase: 'starting-target' }) })).rejects.toThrow(/missing|mismatch/i);
     expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
     expect(parseEnv(await fixture.readEnvText()).OR3_STORAGE_S3_BUCKET).toBe('target-bucket');
     await fixture.reset();
     await fixture.configure({ s3Check: { checked: 1, missing: [], mismatched: [] } });
     let beforeStart = false;
-    await restoreBackupData(fixture.directory, fixture.state, target, captured.backupDir, { beforeStart: async () => { beforeStart = true; } });
+    await restoreBackupData(fixture.directory, fixture.state, target, captured.backupDir, { beforeStart: async () => { beforeStart = true; await updatePending(fixture.directory, fixture.state, { phase: 'starting-target' }); } });
     const trace = await fixture.traceText();
     const checks = trace.split('\n').filter(line => line.includes('remote-objects.mjs check-copy'));
     expect(checks).toHaveLength(2);
@@ -1355,7 +1413,7 @@ test('internal S3 restore requires remote objects before and after startup', asy
     let startupJournaled = false;
     await expect(restoreBackupData(fixture.directory, fixture.state, target, captured.backupDir, {
       beforeStart: async () => {
-        startupJournaled = true;
+        startupJournaled = true; await updatePending(fixture.directory, fixture.state, { phase: 'starting-target' });
         await fixture.configure({ s3Check: { checked: 1, missing: [], mismatched: ['prefix/workspace/hash'] } });
       },
     })).rejects.toThrow(/after startup/i);
@@ -1375,10 +1433,12 @@ test('internal S3 reference restore checks original bucket and distinguishes saf
   const env = { ...fixture.env, AUTH_PROVIDER: 'clerk', OR3_AUTH_PROVIDER: 'clerk', NUXT_PUBLIC_STORAGE_PROVIDER: 's3', OR3_STORAGE_S3_ENDPOINT: 'https://source.example.invalid', OR3_STORAGE_S3_REGION: 'us-east-1', OR3_STORAGE_S3_BUCKET: 'source-bucket', OR3_STORAGE_S3_KEY_PREFIX: 'prefix/', OR3_STORAGE_S3_ACCESS_KEY_ID: 'fixture-id', OR3_STORAGE_S3_SECRET_ACCESS_KEY: 'fixture-secret' };
   await writeFile(join(fixture.directory, '.env'), serializeEnv(env), { mode: 0o600 });
   await inProcess(fixture, async () => {
+    const { markPending, updatePending } = await import('../src/deployment/state-store');
+    await markPending(fixture.directory, fixture.state, { id: 'test-history-restore', operation: 'restore', phase: 'target-mutating', startedAt: new Date().toISOString() });
     const captured = await captureBackup(fixture.directory, fixture.state, env, { safetySnapshot: true });
     await fixture.reset();
     await fixture.configure({ s3Check: { checked: 1, missing: ['prefix/workspace/hash'], mismatched: [] } });
-    await expect(restoreBackupData(fixture.directory, fixture.state, env, captured.backupDir, { previousSafetySnapshot: true, beforeStart: async () => {} })).rejects.toThrow(/missing|mismatch/i);
+    await expect(restoreBackupData(fixture.directory, fixture.state, env, captured.backupDir, { previousSafetySnapshot: true, beforeStart: () => updatePending(fixture.directory, fixture.state, { phase: 'starting-target' }) })).rejects.toThrow(/missing|mismatch/i);
     expect(await fixture.traceText()).not.toMatch(DESTRUCTIVE);
     await fixture.reset();
     await expect(restoreBackupData(fixture.directory, fixture.state, { ...env, OR3_STORAGE_S3_BUCKET: 'foreign-bucket' }, captured.backupDir, { previousSafetySnapshot: true, remoteReferencePolicy: 'warn' })).rejects.toThrow(/source|target/i);
@@ -1397,7 +1457,7 @@ test('internal S3 reference restore checks original bucket and distinguishes saf
     expect(trace).not.toContain('fixture-secret');
     await fixture.reset();
     await fixture.configure({ s3Check: { checked: 1, missing: [], mismatched: [] } });
-    await restoreBackupData(fixture.directory, fixture.state, env, captured.backupDir, { previousSafetySnapshot: true, beforeStart: async () => {} });
+    await restoreBackupData(fixture.directory, fixture.state, env, captured.backupDir, { previousSafetySnapshot: true, beforeStart: () => updatePending(fixture.directory, fixture.state, { phase: 'starting-target' }) });
     const complete = await fixture.traceText();
     const checks = complete.split('\n').filter(line => line.includes('remote-objects.mjs check'));
     expect(checks).toHaveLength(2);
@@ -1415,7 +1475,7 @@ test('internal S3 reference restore checks original bucket and distinguishes saf
     console.warn = (...values) => warnings.push(values.join(' '));
     try { await restorePreMutationSnapshot(fixture.directory, recoveryState, env); }
     finally { console.warn = originalWarn; }
-    expect((await fixture.readState()).incompleteOperation?.phase).toBe('restoring-previous');
+    expect((await fixture.readState()).incompleteOperation?.phase).toBe('starting-previous');
     expect(warnings.join('\n')).toMatch(/missing/i);
   });
 });
@@ -1570,15 +1630,15 @@ test('staged S3 update restores its safety snapshot with a warning after a pre-s
     expect(stderr).toContain('failed and was restored');
     expect(stderr).toMatch(/missing.*S3 objects/i);
     expect(stdout + stderr).not.toContain('fixture-secret');
-    expect((await fixture.readState()).incompleteOperation?.phase).toBe('restoring-previous');
+    expect((await fixture.readState()).incompleteOperation).toBeUndefined();
     const trace = await fixture.traceText();
     expect(trace).toContain('remote-objects.mjs verify-inventory');
     expect(trace).toContain('remote-objects.mjs check');
     expect(trace).not.toContain('remote-objects.mjs reconcile');
     await fixture.configure({ failures: [] });
-    expect((await fixture.cli(['recover', '--restore', '--yes'])).exitCode).not.toBe(0);
-    expect((await stagedS3Recovery(fixture)).exitCode).toBe(0);
-    expect((await fixture.readState()).incompleteOperation).toBeUndefined();
+    const terminal = await fixture.readStateText();
+    expect((await fixture.cli(['recover'])).exitCode).toBe(0);
+    expect(await fixture.readStateText()).toBe(terminal);
   });
 });
 

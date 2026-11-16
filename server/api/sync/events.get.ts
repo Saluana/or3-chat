@@ -1,3 +1,4 @@
+import { requireHistoryCapability, checkHistory } from '../../utils/sync/history-incarnation';
 import { createError, createEventStream, defineEventHandler, getQuery } from 'h3';
 import { resolveSessionContext } from '../../auth/session';
 import { requireStorageWorkspaceAccess } from '../../utils/storage/workspace-access';
@@ -18,7 +19,9 @@ const MAX_CONNECTIONS_PER_USER = 8;
 export default defineEventHandler(async event => {
     if (!isSsrAuthEnabled(event) || !isSyncEnabled(event)) throw createError({ statusCode: 404 });
     setNoCacheHeaders(event);
-    const workspaceId = getQuery(event).workspaceId;
+    const query = getQuery(event);
+    requireHistoryCapability(query);
+    const workspaceId = query.workspaceId;
     if (typeof workspaceId !== 'string' || !workspaceId.trim() || workspaceId.length > 256) throw createError({ statusCode: 400 });
     const session = await resolveSessionContext(event);
     const cloudAccess = await resolveCloudAccess(event, session);
@@ -27,6 +30,7 @@ export default defineEventHandler(async event => {
     const startedAt = Date.now();
     await requireStorageWorkspaceAccess(event, session, workspaceId);
     const adapter = getActiveSyncGatewayAdapter();
+    const history = await checkHistory(event, adapter, { scope: { workspaceId }, historyIncarnation: query.historyIncarnation as string });
     if (!adapter?.watchVersion) throw createError({ statusCode: 404 });
     const userId = session.user!.id;
     const count = connections.get(userId) ?? 0;
@@ -38,6 +42,11 @@ export default defineEventHandler(async event => {
     let stop: (() => void) | undefined;
     let heartbeat: ReturnType<typeof setInterval> | undefined;
     let lifetime: ReturnType<typeof setTimeout> | undefined;
+    const releaseWatcher = () => {
+        const dispose = stop;
+        stop = undefined;
+        try { dispose?.(); } catch { console.warn('[sync-events] Provider unsubscribe failed'); }
+    };
     const cleanup = () => {
         if (closed) return;
         closed = true;
@@ -45,9 +54,15 @@ export default defineEventHandler(async event => {
         if (remaining > 0) connections.set(userId, remaining); else connections.delete(userId);
         if (heartbeat) clearInterval(heartbeat);
         if (lifetime) clearTimeout(lifetime);
-        stop?.();
+        releaseWatcher();
     };
-    const close = () => { cleanup(); void stream.close().catch(() => {}); };
+    const close = () => {
+        try { cleanup(); }
+        finally {
+            // Promise.resolve also contains synchronous provider/stream throws.
+            void Promise.resolve().then(() => stream.close()).catch(() => {});
+        }
+    };
     stream.onClosed(cleanup);
     const drain = async () => {
         if (draining || closed) return;
@@ -59,7 +74,7 @@ export default defineEventHandler(async event => {
                 if (Date.now() >= expiresAt) { close(); return; }
                 await Promise.all([requireStorageWorkspaceAccess(event, session, workspaceId), requireCloudAccess(event, session)]);
                 // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- close() can run while access is rechecked.
-                if (!closed) await stream.push(JSON.stringify({ version }));
+                if (!closed) await stream.push(JSON.stringify({ historyIncarnation: history, version }));
             }
         } catch { close(); }
         finally { draining = false; }
@@ -69,18 +84,20 @@ export default defineEventHandler(async event => {
         // or permission lookup must still release its backend subscription.
         lifetime = setTimeout(() => {
             if (!closed && Date.now() < expiresAt) {
-                void stream.push(JSON.stringify({ refresh: true })).catch(() => {});
+                void Promise.resolve().then(() => stream.push(JSON.stringify({ historyIncarnation: history, refresh: true }))).catch(() => {});
             }
             close();
         }, Math.max(0, Math.min(startedAt + 60_000, expiresAt) - Date.now()));
         lifetime.unref();
-        stop = await adapter.watchVersion(event, { workspaceId }, version => {
+        stop = await adapter.watchVersion(event, { workspaceId }, position => {
+            if (position.historyIncarnation !== history) { close(); return; }
+            const version = position.version;
             if (!Number.isSafeInteger(version) || version < 0 || closed) return;
             pending = version;
             void drain();
         }, close);
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- The watch can close before it resolves.
-        if (closed) { stop(); return await stream.send(); }
+        if (closed) { releaseWatcher(); return await stream.send(); }
         // Keep proxies alive and revoke idle listeners without per-pull reads.
         // Do not queue heartbeats behind a slow client or an in-flight check.
         heartbeat = setInterval(() => {

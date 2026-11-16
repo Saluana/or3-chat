@@ -32,6 +32,7 @@ import { projectToolResult } from '~~/shared/chat/tool-limits';
 
 import { parseFileHashes } from '~/db/files-util';
 import { captureChatMediaScope } from '~/utils/chat/media-scope';
+import { waitForToolResultSync } from '~/utils/chat/tool-result-sync';
 import { fetchBoundedBlob } from '~/utils/fetch-bounded-blob';
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 
@@ -577,6 +578,8 @@ export async function buildOpenRouterMessages(
         if (!m) continue;
         const toolText = async (text: string) => {
             if (m.role !== 'tool' || !parseToolResultArtifact(text)) return text;
+            media.scope.assertCurrent();
+            await waitForToolResultSync(text, media.scope.db, opts.signal);
             media.scope.assertCurrent();
             const result = await readToolResultStorage(text, id => media.scope.db.kv.get(id));
             media.scope.assertCurrent();

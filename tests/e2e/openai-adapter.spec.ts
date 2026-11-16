@@ -195,9 +195,10 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
                 request.onsuccess = () => resolve(request.result);
                 request.onerror = () => reject(request.error);
             });
-            if (!db.objectStoreNames.contains('messages')) { db.close(); continue; }
+            // Read the active namespace, never the isolated legacy stores.
+            if (!db.objectStoreNames.contains('current_messages')) { db.close(); continue; }
             const rows = await new Promise<Array<{ data?: { content?: string; usage?: { model?: string } } }>>((resolve, reject) => {
-                const request = db.transaction('messages').objectStore('messages').getAll();
+                const request = db.transaction('current_messages').objectStore('current_messages').getAll();
                 request.onsuccess = () => resolve(request.result);
                 request.onerror = () => reject(request.error);
             });
@@ -331,8 +332,22 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
     await page.reload();
     await expect(page.getByRole('textbox', { name: 'Document body' })).toContainText('OpenRouter fixture reply', { timeout: 30_000 });
 
-    // Without a personal or instance OpenAI key, the server refuses OpenAI models.
+    // Workspace restoration can update the URL after a dashboard deep link.
+    // An unrelated query change must preserve the OpenAI connection subpage.
     await openAiSettings(page, 'openai');
+    await expect(page.getByText('Your OpenAI key is saved.')).toBeVisible();
+    await page.evaluate(() => {
+        const url = new URL(location.href);
+        url.searchParams.set('navigation-check', 'settings');
+        history.pushState(null, '', url);
+    });
+    await page.goBack();
+    await page.goForward();
+    await page.evaluate(() => new Promise<void>(resolve => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    }));
+    await expect(page.getByText('Your OpenAI key is saved.')).toBeVisible();
+    // Without a personal or instance OpenAI key, the server refuses OpenAI models.
     await page.getByRole('button', { name: 'Remove key' }).click();
     await expect(page.getByText('No OpenAI key saved.')).toBeVisible();
     const refused = await page.request.post('/api/openrouter/stream', { headers: { origin, 'x-or3-cloud-intent': 'mutation' },
@@ -426,8 +441,9 @@ test('administrators can bound chat limits for the instance and workspace', asyn
             const db = await new Promise<IDBDatabase>((resolve, reject) => {
                 const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
             });
+            if (!db.objectStoreNames.contains('current_messages')) { db.close(); continue; }
             const rows = await new Promise<Array<{ role?: string; file_hashes?: string; data?: { content?: string } }>>((resolve, reject) => {
-                const request = db.transaction('messages').objectStore('messages').getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                const request = db.transaction('current_messages').objectStore('current_messages').getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
             });
             db.close();
             const message = rows.find(row => row.role === 'assistant' && row.data?.content?.includes('Images ready'));

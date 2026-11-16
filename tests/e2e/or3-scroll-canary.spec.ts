@@ -97,6 +97,76 @@ test.beforeEach(async ({ page }) => {
     });
 });
 
+test('paints streaming growth and late row resizes without a stale frame', async ({ page }, info) => {
+    const evidence = await page.evaluate(async () => {
+        const api = (window as typeof window & { __or3ScrollCanary: CanaryApi }).__or3ScrollCanary;
+        const frame = () => new Promise<void>(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+        await api.appendStreamingTail();
+        await api.updateTailText('Streaming paragraph.');
+        await api.scrollToBottom();
+        for (let i = 0; i < 8; i++) await frame();
+        const root = document.querySelector<HTMLElement>('.canary-scroll')!;
+        const errors: number[] = [];
+        for (let i = 1; i <= 8; i++) {
+            await api.updateTailText(Array.from({ length: i + 1 }, (_, n) => `Streaming paragraph ${n}.`).join('\n\n'));
+            await frame();
+            const rows = root.querySelectorAll<HTMLElement>('.or3-scroll-item');
+            const last = rows[rows.length - 1]!;
+            errors.push(last.getBoundingClientRect().bottom - root.getBoundingClientRect().top - root.clientHeight);
+        }
+        await api.scrollToIndex(50);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        const row = root.querySelector<HTMLElement>('.or3-scroll-item')!;
+        const before = api.getSnapshot();
+        row.style.height = `${row.getBoundingClientRect().height + 80}px`;
+        await frame();
+        const after = api.getSnapshot();
+        return { errors, before, after };
+    });
+    await info.attach('pre-paint-layout', { contentType: 'application/json', body: JSON.stringify(evidence) });
+    expect(Math.max(...evidence.errors.map(Math.abs))).toBeLessThanOrEqual(1);
+    expect(evidence.after.visibleAnchor).toBe(evidence.before.visibleAnchor);
+    expect(evidence.after.anchorOffset).toBeCloseTo(evidence.before.anchorOffset!, 0);
+});
+
+test('keeps smooth bottom navigation animated while its destination grows', async ({ page }, info) => {
+    const frames = await page.evaluate(async () => {
+        const api = (window as typeof window & { __or3ScrollCanary: CanaryApi }).__or3ScrollCanary;
+        const frame = () => new Promise<void>(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+        await api.appendStreamingTail();
+        await api.updateTailText('Smooth streaming tail.');
+        await api.scrollToBottom();
+        for (let i = 0; i < 6; i++) await frame();
+        const root = document.querySelector<HTMLElement>('.canary-scroll')!;
+        root.dispatchEvent(new WheelEvent('wheel', { deltaY: -400 }));
+        root.scrollTop -= 400;
+        root.dispatchEvent(new Event('scroll'));
+        const positions = [api.getSnapshot()];
+        void api.scrollToBottom({ smooth: true });
+        for (let i = 0; i < 30; i++) {
+            await api.updateTailText(Array.from({ length: i + 2 }, (_, n) => `Smooth paragraph ${n}.`).join('\n\n'));
+            await frame();
+            positions.push(api.getSnapshot());
+        }
+        return positions;
+    });
+    await info.attach('smooth-growing-tail', { contentType: 'application/json', body: JSON.stringify(frames) });
+    expect(frames.slice(1, 5).filter(frame => frame.bottomDistance > 5 && frame.scrollTop > frames[0]!.scrollTop + 1).length).toBeGreaterThanOrEqual(2);
+    await expect.poll(async () => (await canary(page)).bottomDistance).toBeLessThanOrEqual(5);
+    // Start a second animation from browsing, then interrupt it mid-flight.
+    await page.locator('.canary-scroll').hover();
+    await page.mouse.wheel(0, -500);
+    await settledBrowsingPosition(page);
+    await page.evaluate(() => { void (window as typeof window & { __or3ScrollCanary: CanaryApi }).__or3ScrollCanary.scrollToBottom({ smooth: true }); });
+    await page.waitForTimeout(50);
+    await page.mouse.wheel(0, -500);
+    const browsing = await settledBrowsingPosition(page);
+    expect(browsing.bottomDistance).toBeGreaterThan(5);
+    await page.evaluate(() => (window as typeof window & { __or3ScrollCanary: CanaryApi }).__or3ScrollCanary.appendMessage());
+    await page.waitForTimeout(200);
+    await assertBrowsingPosition(page, browsing, info, 'smooth-interruption');
+});
+
 test('prefetches every decoded image before mounting its row', async ({
     page,
 }) => {

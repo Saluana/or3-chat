@@ -233,7 +233,7 @@ describe('prompt library workspace continuation with real saved prompts', () => 
         const bridge = new HookBridge(current.db); bridge.start();
         const original = IDBObjectStore.prototype.put;
         const fault = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, ...args: Parameters<typeof original>) {
-            if (this.name === 'tombstones') throw new Error('[HookBridge] Non-atomic tombstone capture: tombstones missing from transaction scope');
+            if (this.name === current.db.tombstones.name) throw new Error('[HookBridge] Non-atomic tombstone capture: tombstones missing from transaction scope');
             return original.apply(this, args);
         });
         try {

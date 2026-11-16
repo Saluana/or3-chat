@@ -176,7 +176,7 @@ private job data, so protect the database and its backups accordingly. The
 migration can resume after an interrupted step; this has been tested locally
 with SQLite and a D1 emulator, not on a deployed D1 service.
 
-Tool results larger than 16 KiB (JSON-escaped) are retained through the selected
+Every nonempty tool result is retained through the selected
 sync gateway's optional `retainChatToolResult(actor, { admission, callId, reference, rows })` method.
 The provider authorizes the current workspace writer and live admitted generation,
 validates that the reference and chunks belong to that parent message and tool call,
@@ -185,7 +185,7 @@ one transaction. Identical replays allocate no versions; conflicting or deleted
 artifacts fail closed. The terminal tool receipt contains a bounded reference.
 Providers without this method keep the complete result inline in the tool
 receipt, as earlier releases did; a result that then exceeds the canonical
-message limit fails that history delivery. Update the provider to store large
+message limit fails that history delivery. Update the provider to store tool
 results as chunks; the installed package version alone does not prove that its
 deployed backend has this method.
 
@@ -349,8 +349,10 @@ Viewer queues retain delivery state without server-only execution input or worke
 Canonical sync history has a per-operation ceiling (`MAX_SYNC_PAYLOAD_BYTES`,
 256 KiB). When canonical sync is enabled, generated output is bounded
 *before it is accepted* by `MAX_CANONICAL_MESSAGE_OUTPUT_BYTES` (224 KiB),
-counting JSON-escaped text and reasoning, tool arguments/results, and terminal fields. Exceeding
-the budget stops the stream with an explicit `OutputLimitExceededError`; the
+counting JSON-escaped text and reasoning, tool arguments, result references, and terminal fields.
+Full retained results have their own per-result limit (256 KiB), outside the
+assistant budget; their complete contents remain available for reload and model replay.
+Exceeding the budget stops the stream with an explicit `OutputLimitExceededError`; the
 accepted prefix is preserved and the message is finalized as failed, never
 silently truncated. Local-only workspaces do not have canonical history and keep
 the larger in-memory stream cap (4 MiB).

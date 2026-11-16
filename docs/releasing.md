@@ -127,12 +127,15 @@ mobile WebKit hydration through the shipped Caddy proxy. It also runs the Basic
 profile's owner sign-in, admin, storage and sign-out/re-login journey on the
 disposable local deployment, binding the observed app, operator and CLI package
 to its browser qualification artifact. Screenshots, traces and JSON results are
-retained. This does not qualify authenticated public ingress or the Clerk/S3
+retained, including the full owner journey on failure. The disconnected owner's
+first-run welcome must appear and dismiss through its public UI before the
+journey continues; account-menu clicks after navigation and re-login verify
+that onboarding does not block account access. This does not qualify authenticated public ingress or the Clerk/S3
 profile. A browser timeout fails qualification; detached browser cleanup relies
 on disposal of the hosted runner. The Basic lifecycle job also retains a
 source, image, operator and package-bound result after the required steps. It
 captures the previous release's image identities before updating and checks
-them after recovery and rollback. Its restart is an app-container restart, and
+them after recovery and rollback. Its restart uses the candidate managed CLI, and
 its target-ready interruption is a synthetic journal fixture; neither alone
 establishes managed restart or crash-time evidence generation. The receipt job
 validates and retains the six Basic qualification files as a current-run Actions
@@ -186,8 +189,8 @@ on npm:
 
 ```bash
 npm view or3-provider-basic-auth@0.0.20 version
-npm view or3-provider-sqlite@0.0.28 version
-npm view or3-provider-fs@0.0.17 version
+npm view or3-provider-sqlite@0.0.31 version
+npm view or3-provider-fs@0.0.18 version
 ```
 
 Run the relevant provider qualification in its own repository before tagging.
@@ -346,8 +349,26 @@ npm deprecate 'create-or3-chat@<0.1.12' 'Use npx @or3/cloud init; the creator is
 - Basic Auth login, deep health, conversation persistence, and file persistence
   pass after container restart.
 - Backup archive checksum/list validation passes.
-- A deliberately failed image health check restores the previous version/data
+- A deliberately failed candidate health check with proven health-only admission restores the previous exact version/data
   snapshot.
 - The exact npm version and `npx @or3/cloud@<version> --help` resolve after
   propagation.
 - Release notes include both image digests and the rollback warning.
+
+First-incarnation rollback qualification must pass against published 0.1.116,
+its exact digest and complete 032 schema. The existing candidate lifecycle job
+checks the old mutation-intent fence, kills the exact validation-only candidate,
+requires automatic authenticated source recovery, tests explicit exposed
+recovery and rollback, then records distinct pre-rollback/re-upgrade tokens and
+a managed restart. Missing qualification capability is release-blocking.
+The exact published SQLite 0.0.31 Basic profile advertises testable runtime
+capabilities so this workflow can exercise them; its metadata alone does not
+qualify a release. Mandatory native image and browser proofs must all pass
+before promotion. SQLite 0.0.30 continues to refuse incarnation replacement.
+A failure after admission may open requires a current-data
+safety snapshot and explicit destructive recovery; quiet logs/unchanged counters
+never waive consent. Record source/candidate/provider SHAs and exact registry
+integrities, image/operator digests/platforms, tarball hash, DB/sidecar/asset/file
+hashes, admission transitions, pins and browser evidence in the release receipt.
+The host pins published SQLite 0.0.31. Profile generation verifies its exact
+pinned version and complete installed migration list before advertising this contract.
