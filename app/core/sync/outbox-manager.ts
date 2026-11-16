@@ -1,4 +1,4 @@
-import { invalidateFirstBindEligibility, readHistory, sameHistory, requestHistoryReset, changedHistoryFromError, isHistoryProtocolBoundary, type HistoryGuard } from './history-incarnation';
+import { invalidateFirstBindEligibility, readHistory, sameHistory, requestHistoryReset, changedHistoryFromError, isHistoryProtocolBoundary, pauseHistoryProtocol, protocolPauseId, type HistoryGuard } from './history-incarnation';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { errorDiagnostics, presentError, type ErrorMetadata } from '~~/shared/errors';
 /**
@@ -256,7 +256,6 @@ export class OutboxManager {
     private lifecycleGeneration = 0;
     private historyGuard: HistoryGuard | undefined;
     private superseded = new Map<string, PendingOp[]>();
-    private historyPaused = false;
     private nextStatus: EligibleStatus = 'retry_wait';
 
     constructor(
@@ -343,7 +342,7 @@ export class OutboxManager {
             return false;
         }
 
-        if (this.historyPaused) return false;
+        if ((await this.db.sync_state.get(protocolPauseId(this.provider.id, this.scope)))?.protocolPause) return false;
         if (this.provider.capabilities?.historyIncarnation === 'v1') {
             const captured = await readHistory(this.db);
             if (!this.canFlush(generation)) return false;
@@ -759,7 +758,7 @@ export class OutboxManager {
             if (!await this.historyMatches()) return { successCount: 0, failCount: 0, deferred: true };
             if (this.historyGuard && result.historyIncarnation !== this.historyGuard.historyIncarnation) {
                 if (result.historyIncarnation) await requestHistoryReset(this.db, this.historyGuard, result.historyIncarnation);
-                else this.historyPaused = true;
+                else await pauseHistoryProtocol(this.db, this.provider.id, this.scope, null, this.historyGuard);
                 return { successCount: 0, failCount: 0, deferred: true };
             }
             this.authFailures = 0;
@@ -866,7 +865,7 @@ export class OutboxManager {
             }
 
             if (isHistoryProtocolBoundary(error)) {
-                this.historyPaused = true;
+                await pauseHistoryProtocol(this.db, this.provider.id, this.scope, error, this.historyGuard);
                 await this.releaseBatchForDeferredRetry(batch, 0);
                 console.error('[OutboxManager] Sync paused: server history contract is unavailable', error);
                 return { successCount: 0, failCount: 0, deferred: true };

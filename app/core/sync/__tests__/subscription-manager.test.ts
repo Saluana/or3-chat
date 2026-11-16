@@ -303,7 +303,7 @@ describe('SubscriptionManager', () => {
         await vi.runAllTimersAsync();
 
         expect(provider.subscribe).toHaveBeenCalledTimes(2);
-        expect(provider.subscribe.mock.calls[1]![3]).toEqual({ cursor: 120, limit: 300 });
+        expect(provider.subscribe.mock.calls[1]![3]).toMatchObject({ cursor: 120, limit: 300 });
     });
 
     it('drains backlog after subscription changes', async () => {
@@ -1380,6 +1380,30 @@ describe('SubscriptionManager', () => {
             manager = new SubscriptionManager(db, provider, scope);
             await manager.start();
             expect(updateCursor).not.toHaveBeenCalled();
+        } finally { await manager.stop(); await db.delete(); }
+    });
+
+    it('retains a durable protocol pause until explicit checked rediscovery succeeds', async () => {
+        vi.useRealTimers();
+        vi.spyOn(cursorManagerModule, 'getCursorManager').mockImplementation((db, scope) => new cursorManagerModule.CursorManager(db, scope));
+        const { protocolPauseId } = await import('../history-incarnation');
+        const db = new Or3DB(`protocol-pause-${crypto.randomUUID()}`); await db.open();
+        const scope = { workspaceId: 'ws-1', principalId: 'owner' };
+        await db.sync_state.put({ id: 'sync_history', historyIncarnation: 'I', phase: 'ready', resetTarget: null, cursor: 0, deviceId: '', lastSyncAt: 0 });
+        await db.sync_state.put({ id: cursorManagerModule.getSyncStateId(scope), historyIncarnation: 'I', cursor: 80, deviceId: 'd', lastSyncAt: Date.now() });
+        const provider: SyncProvider = { id: db.name, mode: 'gateway', capabilities: { historyIncarnation: 'v1', subscriptionPages: 'v1' },
+            pull: vi.fn(async () => { throw Object.assign(new Error('old'), { code: 'OR3_SYNC_OLDER_SERVER' }); }),
+            subscribe: vi.fn(async () => () => undefined), push: vi.fn(), updateCursor: vi.fn(), dispose: vi.fn() };
+        const manager = new SubscriptionManager(db, provider, scope);
+        try {
+            await manager.start();
+            expect(await db.sync_state.get(protocolPauseId(provider.id, scope))).toMatchObject({ protocolPause: 'older-server' });
+            expect(provider.updateCursor).not.toHaveBeenCalled();
+            expect(await db.sync_state.get(cursorManagerModule.getSyncStateId(scope))).toMatchObject({ cursor: 80, historyIncarnation: 'I' });
+            vi.mocked(provider.pull).mockResolvedValue({ historyIncarnation: 'I', ...FULL_HISTORY_PULL_RETENTION, changes: [], nextCursor: 80, hasMore: false });
+            await manager.start();
+            expect(manager.getStatus()).toBe('connected');
+            expect(await db.sync_state.get(protocolPauseId(provider.id, scope))).toBeUndefined();
         } finally { await manager.stop(); await db.delete(); }
     });
 

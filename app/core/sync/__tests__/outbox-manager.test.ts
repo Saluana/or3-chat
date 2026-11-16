@@ -2149,6 +2149,21 @@ describe('P0-5 fenced outbox on the shared Dexie database', () => {
         const provider = Object.assign(new SpyProvider(), { capabilities: { historyIncarnation: 'v1' as const } });
         return { db, ops, provider, manager: new OutboxManager(db, provider, { workspaceId: 'workspace-1' }) };
     }
+    it('persists an incompatible-server pause across a follower restart without spending attempts or coalescing originals', async () => {
+        const { db, ops, provider, manager } = await fresh();
+        let follower: OutboxManager | undefined;
+        try {
+            provider.push.mockRejectedValue(Object.assign(new Error('legacy refusal'), { code: 'OR3_SYNC_OLDER_SERVER' }));
+            await manager.flush();
+            await manager.stop();
+            follower = new OutboxManager(db, provider, { workspaceId: 'workspace-1' });
+            await follower.flush();
+            expect(provider.push).toHaveBeenCalledTimes(1);
+            expect((await db.pending_ops.toArray()).map(op => ({ id: op.id, attempts: op.attempts, payload: op.payload })))
+                .toEqual(ops.map(op => ({ id: op.id, attempts: op.attempts, payload: op.payload })));
+            expect(await db.sync_state.get('sync_history')).toMatchObject({ historyIncarnation: 'I', phase: 'ready' });
+        } finally { await follower?.stop(); await manager.stop(); db.close(); await Dexie.delete(db.name); }
+    });
     it('follower mismatch closes the shared guard without coalescing away any original', async () => {
         const { db, ops, provider, manager } = await fresh();
         try {

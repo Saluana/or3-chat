@@ -288,6 +288,8 @@ export interface SyncProviderAuth {
  * Subscribe options for real-time providers
  */
 export interface SyncSubscribeOptions {
+    /** Transport boundary errors must reach the lifecycle owner before auth cleanup. */
+    onError?: (error: unknown) => void | Promise<void>;
     historyIncarnation?: string | null;
     cursor?: number;
     limit?: number;
@@ -394,6 +396,9 @@ export interface Tombstone {
  * Sync state - persisted sync metadata
  */
 export interface SyncState {
+    /** Durable transport pause; stored separately from the history guard and coverage. */
+    protocolPause?: 'older-server' | 'unsupported';
+    pauseId?: string;
     /** Birth-only proof of purely local authorship; consumed by first installation. */
     firstBindEligible?: boolean;
     historyIncarnation?: string | null;

@@ -1,3 +1,4 @@
+import { isHistoryProtocolBoundary } from './history-incarnation';
 import { liveQuery } from 'dexie';
 /**
  * Sync Engine Plugin
@@ -182,7 +183,7 @@ function requestEngine(scope: SyncScope | null, force = false, authorizationRevi
             cleanupSubscriptionManager(getScopeKey(scope));
             cleanupCursorManager(db.name, scope);
             releaseCapture(db.name, scope);
-            if (generation === lifecycleGeneration) scheduleAuthRetry(scope, generation);
+            if (generation === lifecycleGeneration && !isHistoryProtocolBoundary(error)) scheduleAuthRetry(scope, generation);
             throw error;
         } finally {
             if (cancelStartup === cancel) cancelStartup = null;
@@ -206,7 +207,7 @@ function startSyncEngine(
     if (!reconcilePending && desiredScope?.workspaceId === workspaceId && desiredScope.principalId === principalId &&
         engineState?.scope.workspaceId === workspaceId && engineState.scope.principalId === principalId &&
         desiredAuthorizationRevision === authorizationRevision && engineState.subscriptionManager.getStatus() === 'error') {
-        return engineState.subscriptionManager.start();
+        return requestEngine({ workspaceId, ...(principalId ? { principalId } : {}) }, true, authorizationRevision);
     }
     return requestEngine({ workspaceId, ...(principalId ? { principalId } : {}) }, false, authorizationRevision);
 }

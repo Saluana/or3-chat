@@ -104,6 +104,21 @@ function pushBatch() {
     };
 }
 
+describe('legacy server pre-dispatch refusal', () => {
+    afterEach(() => vi.unstubAllGlobals());
+    it('uses the downgrade fence and refuses before invalid-session cleanup', async () => {
+        const dispatch = vi.fn(); vi.stubGlobal('dispatchEvent', dispatch);
+        const fetcher = vi.fn(async (_url: unknown, _options?: RequestInit) => makeErrorResponse(403, { statusMessage: 'Forbidden: Missing mutation intent' }));
+        vi.stubGlobal('fetch', fetcher);
+        const provider = createGatewaySyncProvider();
+        await expect(provider.push(pushBatch())).rejects.toMatchObject({ code: 'OR3_SYNC_OLDER_SERVER' });
+        expect(fetcher.mock.calls[0]?.[1]?.headers).toMatchObject({ 'x-or3-cloud-intent': 'mutation-incarnation-v1' });
+        expect(dispatch).not.toHaveBeenCalled();
+        expect(fetcher).toHaveBeenCalledTimes(1);
+        await provider.dispose();
+    });
+});
+
 describe('GatewaySyncProvider', () => {
     let originalFetch: unknown;
 
@@ -139,17 +154,17 @@ describe('GatewaySyncProvider', () => {
         vi.stubGlobal('fetch', fetchMock);
         const apply = vi.fn(async () => {});
         const provider = createGatewaySyncProvider({ pollIntervalMs: 2000 });
-        const unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['messages'], apply, { cursor: 0 });
+        const unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['messages'], apply, { cursor: 0, historyIncarnation: 'I' });
         try {
             expect(source).toBeDefined();
             source.onopen();
             await vi.advanceTimersByTimeAsync(30_000);
             expect(fetchMock).not.toHaveBeenCalled();
             version = 3;
-            source.onmessage({ data: JSON.stringify({ version }) });
+            source.onmessage({ data: JSON.stringify({ historyIncarnation: 'I', version }) });
             await vi.advanceTimersByTimeAsync(0);
             expect(apply).toHaveBeenCalledTimes(1);
-            source.onmessage({ data: JSON.stringify({ version }) });
+            source.onmessage({ data: JSON.stringify({ historyIncarnation: 'I', version }) });
             await vi.advanceTimersByTimeAsync(0);
             expect(fetchMock).toHaveBeenCalledTimes(1);
             source.onerror();
@@ -177,6 +192,20 @@ describe('GatewaySyncProvider', () => {
         expect(source.close).toHaveBeenCalled();
     });
 
+    it('pauses a missing-incarnation SSE hint without applying or polling and reports it to the owner', async () => {
+        let source: any;
+        vi.stubGlobal('EventSource', class { onmessage?: (event: { data: string }) => void; close = vi.fn(); constructor() { source = this; } });
+        const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
+        const apply = vi.fn(); const onError = vi.fn();
+        const provider = createGatewaySyncProvider({ pollIntervalMs: 100 });
+        const unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['kv'], apply, { cursor: 80, historyIncarnation: 'I', onError });
+        source.onmessage({ data: JSON.stringify({ version: 100 }) });
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: 'OR3_SYNC_HISTORY_UNSUPPORTED' }));
+        expect(source.close).toHaveBeenCalled(); expect(apply).not.toHaveBeenCalled(); expect(fetcher).not.toHaveBeenCalled();
+        unsubscribe(); await provider.dispose();
+    });
+
     it('keeps the safety pull deadline across notification channel refreshes', async () => {
         vi.spyOn(Math, 'random').mockReturnValue(0);
         let source: any;
@@ -189,11 +218,11 @@ describe('GatewaySyncProvider', () => {
         vi.stubGlobal('fetch', fetchMock);
         const apply = vi.fn();
         const provider = createGatewaySyncProvider({ pollIntervalMs: 2000 });
-        const unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['messages'], apply);
+        const unsubscribe = await provider.subscribe({ workspaceId: 'ws-1' }, ['messages'], apply, { historyIncarnation: 'I' });
         try {
             source.onopen();
             await vi.advanceTimersByTimeAsync(59_000);
-            source.onmessage({ data: JSON.stringify({ refresh: true }) });
+            source.onmessage({ data: JSON.stringify({ historyIncarnation: 'I', refresh: true }) });
             source.onopen();
             await vi.advanceTimersByTimeAsync(1_000);
             expect(fetchMock).toHaveBeenCalledTimes(1);

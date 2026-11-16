@@ -1,3 +1,4 @@
+import { CLOUD_MUTATION_INTENT } from '~~/shared/sync/types';
 import { isHistoryProtocolBoundary } from '../history-incarnation';
 import { HistoryIncarnationSchema } from '~~/shared/sync/schemas';
 import { WORKSPACE_ITEM_CAPABILITY } from "~~/shared/posts/workspace-item-capability";
@@ -96,7 +97,7 @@ export interface GatewaySyncProviderConfig {
 class GatewaySyncRequestError extends Error {
     data?: { code?: string; historyIncarnation?: string; requiresSnapshot?: boolean };
     readonly source = 'sync' as const;
-    code: ErrorCode;
+    code: ErrorCode | 'OR3_SYNC_OLDER_SERVER';
     retryable: boolean;
     status: number;
     path: string;
@@ -235,7 +236,7 @@ async function requestJsonRaw<T>(
         credentials: 'include',
         headers: {
             'Content-Type': 'application/json',
-            'x-or3-cloud-intent': 'mutation',
+            'x-or3-cloud-intent': CLOUD_MUTATION_INTENT,
             ...(payload.compressed ? { 'Content-Encoding': 'gzip' } : {}),
         },
         body: payload.body,
@@ -256,7 +257,13 @@ async function requestJsonRaw<T>(
             const decoded = JSON.parse(text) as { data?: GatewaySyncRequestError['data'] };
             error.data = decoded.data;
         } catch { /* Text errors retain their status without inventing protocol data. */ }
-        notifyInvalidSyncSession(error);
+        // The immutable old server rejects this exact intent before route dispatch.
+        // Classify it before the general 403 session-invalid event can log out.
+        try {
+            const refusal = JSON.parse(text) as { statusMessage?: string };
+            if (res.status === 403 && refusal.statusMessage === 'Forbidden: Missing mutation intent') error.code = 'OR3_SYNC_OLDER_SERVER';
+        } catch { /* An intermediary refusal is not evidence of a known older release. */ }
+        if (!isHistoryProtocolBoundary(error)) notifyInvalidSyncSession(error);
         throw error;
     }
 
@@ -450,7 +457,13 @@ export function createGatewaySyncProvider(
                     try {
                         const message: unknown = JSON.parse(event.data);
                         if (!message || typeof message !== 'object') return;
-                        if ('historyIncarnation' in message && message.historyIncarnation !== historyIncarnation) { void run(); return; }
+                        if (!('historyIncarnation' in message) || !HistoryIncarnationSchema.safeParse(message.historyIncarnation).success) {
+                            const error = Object.assign(new Error('Invalid sync event history'), { code: 'OR3_SYNC_HISTORY_UNSUPPORTED' });
+                            unsubscribe();
+                            void options?.onError?.(error);
+                            return;
+                        }
+                        if (message.historyIncarnation !== historyIncarnation) { void run(); return; }
                         if ('refresh' in message && message.refresh === true) { closeChannel(); connectChannel(); return; }
                         const version: unknown = 'version' in message ? message.version : undefined;
                         if (!Number.isSafeInteger(version) || (version as number) < 0) return;
@@ -549,6 +562,7 @@ export function createGatewaySyncProvider(
                     if (isHistoryProtocolBoundary(error)) {
                         console.error('[gateway-sync] Sync paused at an incompatible history boundary', error);
                         unsubscribe();
+                        await options?.onError?.(error);
                     } else if (
                         error instanceof GatewaySyncRequestError &&
                         (error.status === 401 || error.status === 403)

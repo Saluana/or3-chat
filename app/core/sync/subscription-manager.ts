@@ -1,5 +1,5 @@
 import { liveQuery } from 'dexie';
-import { readHistory, sameHistory, assertHistory, requestHistoryReset, changedHistoryFromError, isHistoryProtocolBoundary, type HistoryGuard, StaleHistoryError } from './history-incarnation';
+import { readHistory, sameHistory, assertHistory, requestHistoryReset, changedHistoryFromError, isHistoryProtocolBoundary, pauseHistoryProtocol, protocolPauseId, releaseHistoryProtocol, type HistoryGuard, StaleHistoryError } from './history-incarnation';
 import { assertIncomingIdentity } from '~~/shared/sync/incoming-records';
 import { isStorageQuotaError } from './incoming-evidence';
 /**
@@ -185,6 +185,8 @@ export class SubscriptionManager {
         const generation = ++this.lifecycleGeneration;
         this.setStatus('connecting');
 
+        const pauseKey = protocolPauseId(this.provider.id, this.scope);
+        const paused = await this.db.sync_state.get(pauseKey);
         try {
             if (this.provider.capabilities?.historyIncarnation === 'v1') {
                 this.history = await readHistory(this.db);
@@ -241,6 +243,8 @@ export class SubscriptionManager {
                 if (!this.isCurrentGeneration(generation)) return;
 
                 this.reconnectAttempts = 0;
+                await releaseHistoryProtocol(this.db, pauseKey, paused?.pauseId, this.history);
+                if (!this.isCurrentGeneration(generation)) return;
                 this.setStatus('connected');
                 probe.success();
                 probeSettled = true;
@@ -263,6 +267,7 @@ export class SubscriptionManager {
             if (!this.isCurrentGeneration(generation) || isAbortLikeError(error) && !(error instanceof StaleHistoryError)) {
                 return;
             }
+            if (isHistoryProtocolBoundary(error)) await pauseHistoryProtocol(this.db, this.provider.id, this.scope, error, this.history);
             console.error('[SubscriptionManager] Failed to start:', error);
             this.setStatus('error');
             if (!(error instanceof SnapshotRecoveryPausedError) && !isStorageQuotaError(error) && !isHistoryProtocolBoundary(error)) {
@@ -876,6 +881,11 @@ export class SubscriptionManager {
             (changes) => this.enqueueChanges(changes, generation),
             {
                 historyIncarnation: this.history?.historyIncarnation,
+                onError: async error => {
+                    if (!this.isCurrentGeneration(generation)) return;
+                    if (isHistoryProtocolBoundary(error)) await pauseHistoryProtocol(this.db, this.provider.id, this.scope, error, captured);
+                    this.handleError(error, generation);
+                },
                 cursor, limit: this.config.bootstrapPageSize,
                 ...(this.provider.capabilities?.subscriptionPages === 'v1' ? {
                     onPage: (fromCursor: number, page: PullResponse) => this.enqueuePage(fromCursor, page, generation, captured),
@@ -1183,6 +1193,7 @@ export class SubscriptionManager {
         if (!this.isCurrentGeneration(generation) || isAbortLikeError(error)) {
             return;
         }
+        if (isHistoryProtocolBoundary(error)) void pauseHistoryProtocol(this.db, this.provider.id, this.scope, error, this.history);
         console.error('[SubscriptionManager] Subscription error:', error);
         if (this.unsubscribe) {
             this.unsubscribe();

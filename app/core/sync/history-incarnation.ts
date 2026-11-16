@@ -40,7 +40,7 @@ export function changedHistoryFromError(error: unknown): string | undefined {
 export function isHistoryProtocolBoundary(error: unknown): boolean {
     const value = error as { status?: number; statusCode?: number; code?: string; data?: { code?: string } } | null;
     return value?.status === 426 || value?.statusCode === 426 ||
-        value?.code === 'OR3_SYNC_HISTORY_UNSUPPORTED' || value?.data?.code === 'OR3_SYNC_HISTORY_UNSUPPORTED';
+        value?.code === 'OR3_SYNC_OLDER_SERVER' || value?.code === 'OR3_SYNC_HISTORY_UNSUPPORTED' || value?.data?.code === 'OR3_SYNC_HISTORY_UNSUPPORTED';
 }
 
 /** Call in the same transaction as server-state exposure or unclassified import. */
@@ -49,4 +49,26 @@ export async function invalidateFirstBindEligibility(db: Or3DB | Transaction): P
     if ((await table.get('sync_history'))?.firstBindEligible === true) {
         await table.update('sync_history', { firstBindEligible: false });
     }
+}
+
+/** Shared by owner/followers; no identity/cursor reset is implied by this pause. */
+export const protocolPauseId = (providerId: string, scope: import('~~/shared/sync/types').SyncScope): string =>
+    JSON.stringify(['sync_protocol', providerId, scope.workspaceId, scope.principalId ?? null, scope.projectId ?? null]);
+
+export async function pauseHistoryProtocol(db: Or3DB, providerId: string, scope: import('~~/shared/sync/types').SyncScope,
+    error: unknown, expected?: HistoryGuard): Promise<void> {
+    await db.transaction('rw', ['sync_state'], async () => {
+        if (expected && !sameHistory(await readHistory(db), expected)) return;
+        await db.sync_state.put({ id: protocolPauseId(providerId, scope),
+            protocolPause: (error as { code?: string })?.code === 'OR3_SYNC_OLDER_SERVER' ? 'older-server' : 'unsupported',
+            pauseId: crypto.randomUUID(), cursor: 0, deviceId: '', lastSyncAt: 0 });
+    });
+}
+
+/** Checked discovery may release only the pause it started with, never a later refusal. */
+export async function releaseHistoryProtocol(db: Or3DB, id: string, pauseId: string | undefined, expected?: HistoryGuard): Promise<void> {
+    await db.transaction('rw', ['sync_state'], async () => {
+        if (expected && !sameHistory(await readHistory(db), expected)) return;
+        if ((await db.sync_state.get(id))?.pauseId === pauseId) await db.sync_state.delete(id);
+    });
 }
