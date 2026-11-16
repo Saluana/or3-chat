@@ -58,7 +58,7 @@ export async function readCanonicalToolProjection(
     try {
         const db = tracker.originDb ?? getDb();
         const row = await db.transaction('r', [db.messages, db.sync_state], async () =>
-            await ownsInstalledHistory(db) ? await db.messages.get(tracker.messageId) : undefined);
+            await ownsInstalledHistory(db) ? await db.messages.get(tracker.messageId) as StoredMessage | undefined : undefined);
         if (row && (row.role !== 'assistant' || row.thread_id !== tracker.threadId))
             return 'ended';
         const disposition = classifyProjection(row, tracker, status);

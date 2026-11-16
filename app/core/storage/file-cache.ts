@@ -182,8 +182,8 @@ async function runCleanupFileCache(db: Or3DB, workspaceId: string, provider: Cac
             if (!await eligible(db, row, workspaceId, provider.id)) continue;
             verified++;
             if (!await verifyRemote(row, workspaceId, provider)) continue;
-            await db.transaction('rw', db.file_blobs, db.file_meta, db.file_transfers, db.pending_ops, db.sync_quarantine,
-                db.messages, db.workspace_tab_drafts, db.workspace_draft_versions, async () => {
+            await db.transaction('rw', [db.file_blobs, db.file_meta, db.file_transfers, db.pending_ops, db.sync_quarantine,
+                db.messages, db.workspace_tab_drafts, db.workspace_draft_versions], async () => {
                 const current = await db.file_blobs.get(row.hash);
                 if (!current || current.cache_accessed_at !== row.cache_accessed_at || current.cache_storage_id !== row.cache_storage_id ||
                     !await eligible(db, current, workspaceId, provider.id)) return;

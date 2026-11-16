@@ -177,14 +177,14 @@ it.each(['message-op', 'post-op', 'stream', 'draft', 'version', 'racing-draft', 
             if (kind === 'message-op' || kind === 'post-op') {
                 await db.pending_ops.put({ id: 'local-reference', tableName: kind === 'message-op' ? 'messages' : 'posts',
                     pk: 'local-row', operation: 'put', payload: { file_hashes: JSON.stringify([referencedHash]) },
-                    status: 'failed_permanent', createdAt: 1, stamp: { clock: 1, hlc: '1:0:device', opId: crypto.randomUUID(), deviceId: 'device' } });
+                    status: 'failed_permanent', attempts: 1, createdAt: 1, stamp: { clock: 1, hlc: '1:0:device', opId: crypto.randomUUID(), deviceId: 'device' } });
             } else if (kind === 'stream') {
                 await db.messages.put({ id: 'stream', thread_id: 'thread', role: 'assistant', index: 0,
                     pending: true, file_hashes: JSON.stringify([hash]), data: { content: 'still generating' },
                     created_at: 1, updated_at: 1, clock: 1, deleted: false });
             } else {
-                const draft = { version: 1 as const, text: 'unsent', attachments: [{ hash: referencedHash, name: 'original.txt', mime: 'text/plain', kind: 'file' as const }], largeTextBlocks: [], updatedAt: 1 };
-                if (kind === 'version') await db.workspace_draft_versions.put({ id: 'version', kind: 'version', account_key: 'account', tab_id: 'tab', writer_id: 'writer', sequence: 1, draft, updated_at: 1 } as any);
+                const draft = { version: 1 as const, text: 'unsent', attachments: [{ hash: referencedHash, name: 'original.pdf', mime: 'application/pdf', kind: 'pdf' as const }], largeTextBlocks: [], updatedAt: 1 };
+                if (kind === 'version') await db.workspace_draft_versions.put({ id: 'version', kind: 'version', account_key: 'account', tab_id: 'tab', writer_id: 'writer', sequence: 1, draft, updated_at: 1 });
                 else await db.workspace_tab_drafts.put({ id: 'draft', account_key: 'account', tab_id: 'tab', draft, updated_at: 1 });
             }
         };
