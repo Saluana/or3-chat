@@ -1,3 +1,4 @@
+import { CLOUD_MUTATION_INTENT } from '~~/shared/sync/types';
 /**
  * @module app/core/auth/useOpenrouter
  *
@@ -99,7 +100,7 @@ export function useOpenRouterAuth() {
             try {
                 const session = sessionContext?.data.value?.session;
                 const response = await fetch('/api/openrouter/oauth', { method: 'POST', credentials: 'same-origin', redirect: 'error',
-                    headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation', 'x-or3-account': JSON.stringify([session?.provider, session?.user?.id]) }, body: '{}' });
+                    headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT, 'x-or3-account': JSON.stringify([session?.provider, session?.user?.id]) }, body: '{}' });
                 if (!response.ok) throw new Error('OpenRouter connection is unavailable. Contact the administrator.');
                 const payload: unknown = await response.json();
                 if (!payload || typeof payload !== 'object' || !('url' in payload) || typeof payload.url !== 'string') throw new Error('Invalid OpenRouter authorization response.');

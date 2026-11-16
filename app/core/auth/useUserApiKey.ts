@@ -1,3 +1,4 @@
+import { CLOUD_MUTATION_INTENT } from '~~/shared/sync/types';
 import { err } from '~/utils/errors';
 /** Cloud exposes connection metadata; static deployments retain device-local BYOK. */
 import Dexie from 'dexie';
@@ -20,7 +21,7 @@ async function credentialRequest(operation: string, key?: string) {
     const generation = operation === 'status' ? kvHydrationGeneration : ++kvHydrationGeneration;
     const response = await fetch('/api/openrouter/credentials', {
         method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error',
-        headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation', 'x-or3-account': owner },
+        headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT, 'x-or3-account': owner },
         body: JSON.stringify({ operation, ...(key === undefined ? {} : { key }) }),
     });
     if (!response.ok) throw new Error(response.status === 409 ? 'The server connection changed. Refresh and try again.' : 'OpenRouter credential storage is unavailable. Try again or contact the administrator.');

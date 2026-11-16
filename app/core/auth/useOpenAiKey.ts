@@ -1,3 +1,4 @@
+import { CLOUD_MUTATION_INTENT } from '~~/shared/sync/types';
 /** Cloud keeps the OpenAI key in the account vault; static/local deployments keep it in this device's local-only KV. */
 import { computed, onScopeDispose, reactive, ref, watch } from 'vue';
 import { useRuntimeConfig, useState } from '#imports';
@@ -62,7 +63,7 @@ async function credentialRequest(operation: 'status' | 'save' | 'delete', key?: 
     if (!session?.authenticated || !session.user?.id) throw new Error('Sign in to connect OpenAI.');
     const response = await fetch('/api/openai/credentials', {
         method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error',
-        headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': 'mutation',
+        headers: { 'content-type': 'application/json', 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT,
             'x-or3-account': JSON.stringify([session.provider, session.user.id]) },
         body: JSON.stringify({ operation, ...(key === undefined ? {} : { key }) }),
     });

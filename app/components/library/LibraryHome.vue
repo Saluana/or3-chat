@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { CLOUD_MUTATION_INTENT } from '~~/shared/sync/types';
+
 import { presentError } from '~~/shared/errors';
 /**
  * Dashboard > Library.
@@ -189,7 +191,7 @@ async function requestInstall(release: PurchasedRelease): Promise<void> {
     try {
         const result = await $fetch<{ request: { id: string } }>('/api/plugins/library/install-requests', {
             method: 'POST',
-            headers: { 'x-or3-cloud-intent': 'mutation', 'Content-Type': 'application/json' },
+            headers: { 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT, 'Content-Type': 'application/json' },
             body: { releaseId: release.releaseId, pluginId: release.pluginId, version: release.version },
         });
         if (request !== requestInstallGeneration || identity !== purchaseIdentity.value) return;

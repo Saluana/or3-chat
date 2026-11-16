@@ -363,7 +363,7 @@ describe('openrouterStream', () => {
 
         expect(fetchMock).toHaveBeenCalledWith(
             '/api/openrouter/stream',
-            expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ 'x-or3-cloud-intent': 'mutation' }) })
+            expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ 'x-or3-cloud-intent': 'mutation-incarnation-v1' }) })
         );
         expect(events).toHaveLength(1);
         expect(parseMock).toHaveBeenCalledTimes(1);

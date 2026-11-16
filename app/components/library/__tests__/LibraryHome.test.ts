@@ -160,7 +160,7 @@ describe('LibraryHome purchases', () => {
         await flush();
         expect(fetchMock).toHaveBeenCalledWith('/api/plugins/library/install-requests', expect.objectContaining({
             method: 'POST',
-            headers: { 'x-or3-cloud-intent': 'mutation', 'Content-Type': 'application/json' },
+            headers: { 'x-or3-cloud-intent': 'mutation-incarnation-v1', 'Content-Type': 'application/json' },
             body: { releaseId: 'rel_sample.plugin', pluginId: 'sample.plugin', version: '1.2.3' },
         }));
         expect(wrapper.text()).toContain('Request sent');

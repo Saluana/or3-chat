@@ -1,3 +1,4 @@
+import { CLOUD_MUTATION_INTENT } from '~~/shared/sync/types';
 import { normalizeError, presentError, parseRetryAfter } from '~~/shared/errors';
 /**
  * @module app/core/storage/providers/gateway-storage-provider
@@ -51,7 +52,7 @@ async function requestJson<T>(
             credentials: 'include',
             headers: {
                 'Content-Type': 'application/json',
-                'x-or3-cloud-intent': 'mutation',
+                'x-or3-cloud-intent': CLOUD_MUTATION_INTENT,
             },
             body: JSON.stringify(body),
             signal: requestSignal,

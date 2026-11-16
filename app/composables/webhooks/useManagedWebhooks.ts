@@ -1,3 +1,4 @@
+import { CLOUD_MUTATION_INTENT } from '~~/shared/sync/types';
 import { computed, ref } from 'vue';
 import { useFetch, useToast } from '#imports';
 import type {
@@ -103,7 +104,7 @@ export async function useManagedWebhooks(options: UseManagedWebhooksOptions) {
         try {
             await $fetch(`${options.endpoint}/${webhook.id}`, {
                 method: 'DELETE',
-                headers: { 'x-or3-cloud-intent': 'mutation', 'Content-Type': 'application/json' },
+                headers: { 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT, 'Content-Type': 'application/json' },
                 credentials: 'include',
             });
             if (activeLogWebhook.value?.id === webhook.id) {
@@ -124,7 +125,7 @@ export async function useManagedWebhooks(options: UseManagedWebhooksOptions) {
         try {
             await $fetch(`${options.endpoint}/${webhook.id}/toggle`, {
                 method: 'POST',
-                headers: { 'x-or3-cloud-intent': 'mutation', 'Content-Type': 'application/json' },
+                headers: { 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT, 'Content-Type': 'application/json' },
                 credentials: 'include',
                 body: {},
             });
@@ -153,7 +154,7 @@ export async function useManagedWebhooks(options: UseManagedWebhooksOptions) {
                 options.bulkDisable.endpoint,
                 {
                     method: 'POST',
-                    headers: { 'x-or3-cloud-intent': 'mutation', 'Content-Type': 'application/json' },
+                    headers: { 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT, 'Content-Type': 'application/json' },
                     credentials: 'include',
                 }
             );
@@ -187,7 +188,7 @@ export async function useManagedWebhooks(options: UseManagedWebhooksOptions) {
                 Omit<ManagedWebhookTestResult, 'webhookId'>
             >(`${options.endpoint}/${webhook.id}/test`, {
                 method: 'POST',
-                headers: { 'x-or3-cloud-intent': 'mutation', 'Content-Type': 'application/json' },
+                headers: { 'x-or3-cloud-intent': CLOUD_MUTATION_INTENT, 'Content-Type': 'application/json' },
                 credentials: 'include',
             });
             testResult.value = {
