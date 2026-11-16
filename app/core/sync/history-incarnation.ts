@@ -60,7 +60,7 @@ export async function pauseHistoryProtocol(db: Or3DB, providerId: string, scope:
     await db.transaction('rw', ['sync_state'], async () => {
         if (expected && !sameHistory(await readHistory(db), expected)) return;
         await db.sync_state.put({ id: protocolPauseId(providerId, scope),
-            protocolPause: (error as { code?: string })?.code === 'OR3_SYNC_OLDER_SERVER' ? 'older-server' : 'unsupported',
+            protocolPause: (error as { code?: string } | null)?.code === 'OR3_SYNC_OLDER_SERVER' ? 'older-server' : 'unsupported',
             pauseId: crypto.randomUUID(), cursor: 0, deviceId: '', lastSyncAt: 0 });
     });
 }

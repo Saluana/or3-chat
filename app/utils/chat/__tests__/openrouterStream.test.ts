@@ -730,7 +730,7 @@ describe('background streaming helpers', () => {
         await abortBackgroundAdmission('admission-1', 'original-workspace');
         const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
         expect(JSON.parse(String(init.body))).toEqual({ admissionId: 'admission-1', workspaceId: 'original-workspace' });
-        expect(new Headers(init.headers).get('x-or3-cloud-intent')).toBe('mutation');
+        expect(new Headers(init.headers).get('x-or3-cloud-intent')).toBe('mutation-incarnation-v1');
     });
 
     it('sends mutation intent and JSON when stopping a known job', async () => {
@@ -738,7 +738,7 @@ describe('background streaming helpers', () => {
         vi.stubGlobal('fetch', fetchMock);
         expect(await abortBackgroundJob('job-1')).toBe(true);
         const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-        expect(new Headers(init.headers).get('x-or3-cloud-intent')).toBe('mutation');
+        expect(new Headers(init.headers).get('x-or3-cloud-intent')).toBe('mutation-incarnation-v1');
         expect(new Headers(init.headers).get('content-type')).toBe('application/json');
     });
     const testHistory = () => ({
@@ -838,7 +838,7 @@ describe('background streaming helpers', () => {
             'true'
         );
         const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-        expect(new Headers(init.headers).get('x-or3-cloud-intent')).toBe('mutation');
+        expect(new Headers(init.headers).get('x-or3-cloud-intent')).toBe('mutation-incarnation-v1');
         expect(JSON.parse(String(init.body))._streamedFieldMode).toBe(
             'cumulative-snapshot'
         );

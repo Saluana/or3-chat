@@ -23,7 +23,7 @@ const source = execFileSync('git', ['show', `${baseline}:app/db/client.ts`], { e
 const schema = JSON.parse(await readFile('app/core/sync/__tests__/fixtures/legacy-v31-schema.json', 'utf8'));
 async function bundle(legacy) {
     return (await build({
-        stdin: { contents: `import * as client from '${legacy ? 'legacy-client' : './app/db/client.ts'}'; window.Or3DB = client.Or3DB; window.inspectLegacyStore = client.inspectLegacyStore;`, resolveDir: root },
+        stdin: { contents: `import * as client from '${legacy ? 'legacy-client' : './app/db/client.ts'}'; window.Or3DB = client.Or3DB; ${legacy ? '' : 'window.inspectLegacyStore = client.inspectLegacyStore;'}`, resolveDir: root },
         bundle: true, write: false, format: 'iife', platform: 'browser',
         alias: { '~': path.join(root, 'app'), '~~': root },
         define: { 'import.meta.dev': 'false', 'import.meta.server': 'false' },
@@ -35,7 +35,7 @@ async function bundle(legacy) {
             b.onResolve({ filter: /core\/sync\/(cursor-manager|hook-bridge|subscription-registry)$/ }, args =>
                 args.importer.endsWith('/app/db/client.ts') || args.namespace === 'legacy'
                     ? { path: args.path, namespace: 'cleanup' } : undefined);
-            b.onLoad({ filter: /.*/, namespace: 'cleanup' }, () => ({ contents: 'export const cleanupCursorManager=()=>{}; export const cleanupHookBridge=()=>{}; export const cleanupSubscriptionManagersByWorkspace=()=>{};' }));
+            b.onLoad({ filter: /.*/, namespace: 'cleanup' }, () => ({ contents: 'export const getHookBridge=()=>{throw Error("Unexpected activation in schema-only fixture")}; export const cleanupCursorManager=()=>{}; export const cleanupHookBridge=()=>{}; export const cleanupSubscriptionManagersByWorkspace=()=>{};' }));
         } }],
     })).outputFiles[0].text;
 }

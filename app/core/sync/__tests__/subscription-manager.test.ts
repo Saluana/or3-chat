@@ -1130,7 +1130,7 @@ describe('SubscriptionManager', () => {
                 const sequence = body.pageToken ? Number(body.pageToken) : 0;
                 if (sequence === 120 && !throttled) {
                     throttled = true;
-                    return new Response('try later', { status: outcome === 'expired' ? 410 : outcome === 'fatal' ? 422 : 429, headers: { 'Retry-After': '4' } });
+                    return new Response(JSON.stringify({ statusMessage: 'try later' }), { status: outcome === 'expired' ? 410 : outcome === 'fatal' ? 422 : 429, headers: { 'Retry-After': '4' } });
                 }
                 if (sequence === 120 && !timeout) {
                     timeout = true;

@@ -177,6 +177,7 @@ vi.mock('~/core/sync/providers/gateway-sync-provider', () => ({
 vi.mock('~/core/sync/sync-provider-registry', () => providerRegistryMock);
 
 vi.mock('~/core/sync/hook-bridge', () => ({
+    SYNCED_TABLES: ['threads', 'messages', 'projects', 'posts', 'kv', 'file_meta', 'notifications'],
     getHookBridge: () => hookBridgeMock,
     cleanupHookBridge: vi.fn(),
 }));

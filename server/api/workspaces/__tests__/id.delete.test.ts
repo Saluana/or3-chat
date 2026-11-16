@@ -4,6 +4,7 @@ import type { H3Event } from 'h3';
 const getRouterParamMock = vi.fn();
 
 vi.mock('h3', () => ({
+    getRequestHeader: () => undefined,
     defineEventHandler: (handler: unknown) => handler,
     getRouterParam: (...args: unknown[]) => getRouterParamMock(...args),
     createError: (opts: { statusCode: number; statusMessage?: string }) => {
