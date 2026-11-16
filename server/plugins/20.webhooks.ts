@@ -1,3 +1,4 @@
+import { getShutdownRuntime } from '../utils/shutdown/runtime';
 import { randomUUID } from 'node:crypto';
 import type { NitroApp } from 'nitropack';
 import { defineNitroPlugin } from 'nitropack/runtime';
@@ -36,7 +37,7 @@ function unrefInterval(handle: ReturnType<typeof setInterval>): void {
 export async function startWebhookRuntime(
     nitroApp: NitroApp
 ): Promise<ActiveWebhookRuntime | null> {
-    if (!isWebhooksEnabled()) {
+    if (getShutdownRuntime().controller.validationOnly() || !isWebhooksEnabled()) {
         return null;
     }
 
