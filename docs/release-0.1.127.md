@@ -1,13 +1,37 @@
-# OR3 Cloud 0.1.120
+# OR3 Cloud 0.1.127
 
 Release preparation; candidate qualification and publication are pending.
 
-Candidates 0.1.117–0.1.119 remained unpublished after qualification exposed legacy
-verification, source-ledger and asynchronous browser-onboarding assumptions.
+Candidates 0.1.117–0.1.126 remained unpublished after qualification exposed legacy
+verification, source-ledger, asynchronous browser-onboarding and historical
+upgrade-fixture assumptions. The vault lifecycle now exercises the required
+published 0.1.90 → 0.1.116 bridge before the candidate, retaining direct-update
+refusal and source-health assertions instead of relaxing the schema-2 gate.
+Offline recovery browser probes discover and bind the real history incarnation;
+synthetic validation rejections echo that identity so they exercise permanent
+change recovery rather than malformed-response retries. Catalog and original-byte round trips
+discover and bind the authenticated history before push, replay and snapshot;
+legacy-client and workspace/role rejection checks remain explicit. Post-publication
+rollback and interruption checks use the current schema writer to verify the
+restored old application, whose version is asserted separately. The canonical
+release-policy test requires that schema-writer verification and version check.
+The extended lifecycle separately asserts closed-validation automatic source
+restoration and explicit recovery of a target that may have admitted writes;
+an expected nonzero validation exit cannot be mistaken for successful update.
+New and reloaded browser tabs wait for the authenticated workspace before inspecting
+its rows or injecting a first-bind transaction fault; persisted-content and recovery
+assertions remain unchanged.
+Storage quota, abort and deletion-failure probes target the protected native
+stores and assert that fault injection actually fired before checking rollback,
+retry and safe error display.
 The disconnected owner's welcome is now qualified through its public dismissal
 control before account access, with a retained full owner-journey trace. Cached
 chat views release their teleported welcome while inactive, preventing duplicate
-dialogs during workspace/tab transitions.
+dialogs during workspace/tab transitions. Welcome hydration restarts for the
+current workspace after authentication selects it, rejecting delayed results from
+the previous workspace. Reactivating a cached chat refreshes its saved dismissal
+before showing onboarding again. The modal waits for the authenticated workspace
+binding and preserves an optimistic dismissal while its preference write finishes.
 This candidate verifies
 the exact published 0.1.116 rollback image, whose migration history ends at 032,
 with an explicit protection warning. Current and unknown images retain strict

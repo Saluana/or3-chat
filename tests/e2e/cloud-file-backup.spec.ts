@@ -15,6 +15,14 @@ const storageProvider = process.env.OR3_STORAGE_PROVIDER === 's3' ? 's3' : 'fs';
 test.setTimeout(180_000);
 test.beforeAll(() => expect(process.env.OR3_FILE_BACKUP_E2E_DIR).toMatch(/^\/tmp\/or3-file-backup-cloud-/));
 
+async function waitForWorkspaceClient(page: Page, clientUrl: string, workspaceId: string) {
+    await expect.poll(() => page.evaluate(async ({ url, target }) => {
+        const client = await import(url);
+        const { tryGetHooks } = await import(new URL('../core/hooks/useHooks.ts', url).href);
+        return client.getActiveWorkspaceId() === target && Boolean(tryGetHooks());
+    }, { url: clientUrl, target: workspaceId }), { timeout: 30_000 }).toBe(true);
+}
+
 async function start(page: Page, beforeBind?: (context: { clientUrl: string; workspaceId: string; headers: Record<string, string>; syncHistory: Record<string, string>; releaseBind(): void }) => Promise<void>) {
     let releaseBind!: () => void;
     if (beforeBind) {
@@ -46,11 +54,7 @@ async function start(page: Page, beforeBind?: (context: { clientUrl: string; wor
     await expect.poll(() => requests.find(url => /\/db\/client\.ts(?:\?|$)/.test(url)), { timeout: 30_000 }).toBeTruthy();
     const clientUrl = requests.find(url => /\/db\/client\.ts(?:\?|$)/.test(url))!;
     if (beforeBind) {
-        await expect.poll(() => page.evaluate(async ({ url, target }) => {
-            const client = await import(url);
-            const { tryGetHooks } = await import(new URL('../core/hooks/useHooks.ts', url).href);
-            return client.getActiveWorkspaceId() === target && Boolean(tryGetHooks());
-        }, { url: clientUrl, target }), { timeout: 30_000 }).toBe(true);
+        await waitForWorkspaceClient(page, clientUrl, target);
         try { await beforeBind({ clientUrl, workspaceId: target, headers, syncHistory, releaseBind }); } finally { releaseBind(); }
     }
     await expect.poll(async () => {
@@ -210,6 +214,7 @@ test('first binding preserves offline authorship across restart and a second tab
         expect((before[0] as any).guard.firstBindEligible).toBe(true);
         await page.reload();
         other = await page.context().newPage(); await other.goto('/');
+        await Promise.all([page, other].map(target => waitForWorkspaceClient(target, context.clientUrl, context.workspaceId)));
         await expect.poll(async () => other!.evaluate(async url => {
             const db = (await import(url)).getDb();
             return { eligible: (await db.sync_state.get('sync_history'))?.firstBindEligible,

@@ -44,10 +44,22 @@ async function openWorkspace(page: Page, create = true) {
 }
 
 async function serverChanges(page: Page, workspaceId: string, headers: Record<string, string>) {
+    const fields = { scope: { workspaceId }, cursor: 0, limit: 1000,
+        historyIncarnationCapability: 'incarnation-v1', unavailableRecordCapability: 'unavailable-v1',
+        workspaceItemCapability: 'v1', fileKindCapability: 'v1' };
+    const discovery = await page.request.post('/api/sync/pull', { headers,
+        data: { ...fields, historyIncarnation: null } });
+    expect(discovery.ok(), await discovery.text()).toBe(true);
+    const { historyIncarnation } = await discovery.json();
+    expect(historyIncarnation).toMatch(/^[\x00-\x7f]{1,128}$/);
     const response = await page.request.post('/api/sync/pull', { headers,
-        data: { scope: { workspaceId }, cursor: 0, limit: 1000, workspaceItemCapability: 'v1', fileKindCapability: 'v1' } });
+        data: { ...fields, historyIncarnation } });
     expect(response.ok(), await response.text()).toBe(true);
-    return (await response.json()).changes as Array<{ pk: string; stamp: { opId: string }; serverVersion: number; payload: any }>;
+    const result = await response.json();
+    expect(result.historyIncarnation).toBe(historyIncarnation);
+    expect(result.requiresSnapshot).toBe(false);
+    expect(result.unavailable ?? []).toEqual([]);
+    return result.changes as Array<{ pk: string; stamp: { opId: string }; serverVersion: number; payload: any }>;
 }
 
 test('offline edits and original upload survive a closed tab and converge automatically', async ({ page, context }, info) => {
@@ -200,7 +212,9 @@ test('a normal user recovers failed changes from the workspace sync view', async
             await route.continue();
             return;
         }
-        await route.fulfill({ json: { serverVersion: 0, results: batch.ops.map((row: any) => ({
+        expect(batch.historyIncarnationCapability).toBe('incarnation-v1');
+        expect(batch.historyIncarnation).toMatch(/^[\x00-\x7f]{1,128}$/);
+        await route.fulfill({ json: { historyIncarnation: batch.historyIncarnation, serverVersion: 0, results: batch.ops.map((row: any) => ({
             opId: row.stamp.opId, success: false, error: 'Rejected by fixture: secret-detail', errorCode: 'VALIDATION_ERROR',
         })) } });
     });

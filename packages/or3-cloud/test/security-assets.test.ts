@@ -489,7 +489,14 @@ test('release digest verification uses buildx-compatible manifest output', () =>
   expect(workflow).not.toContain('docker/build-push-action');
   expect(workflow).toContain('dashboard-lifecycle:');
   expect(workflow).toContain('smoke-dashboard-update.mjs');
-  expect(workflow).toContain('npx --yes "@or3/cloud@$PREVIOUS_VERSION" verify');
+  const rollback = workflow.slice(
+    workflow.indexOf('      - name: Roll back and verify previous release'),
+    workflow.indexOf('      - name: Capture post-publication lifecycle diagnostics'),
+  );
+  expect(rollback).toContain('npx --yes "@or3/cloud@$VERSION" rollback --yes');
+  expect(rollback).toContain('npx --yes "@or3/cloud@$VERSION" verify');
+  expect(rollback).not.toContain('npx --yes "@or3/cloud@$PREVIOUS_VERSION" verify');
+  expect(rollback).toContain('grep -q "^OR3_VERSION=\'$PREVIOUS_VERSION\'$" "$MANAGED/.env"');
   expect(workflow).toContain('No earlier dashboard-compatible release satisfies minimum source');
 });
 

@@ -270,8 +270,8 @@ jobs:
       - name: Verify vault upgrade from the published Cloud release
         run: |
           version="$(node -p "require('./package.json').version")"
-          # The unversioned source still identifies as 0.1.90: preserve its
-          # candidate image before pulling the distinct published baseline.
+          # Preserve the candidate while the vault fixture pulls its published
+          # pre-vault baseline and the required 0.1.116 compatibility bridge.
           docker tag "ghcr.io/saluana/or3-chat:$version" or3-cloud-credentials-qualification:local
           docker pull ghcr.io/saluana/or3-chat:0.1.90
           bun scripts/test/run-cloud-vault-lifecycle-e2e.ts
@@ -357,11 +357,46 @@ jobs:
           grep -q 'or3-cloud-unhealthy' "$RUNNER_TEMP/update-failed.log"
           grep -Eq 'container [0-9a-f]+ state:' "$RUNNER_TEMP/update-failed.log"
           ! grep -Fq "$captured_secret" "$RUNNER_TEMP/update-failed.log"
+          # This target fails while admission is proven closed. The CLI must
+          # return failure AND restore the source, leaving no pending journal.
+          grep -q 'Update validation failed and source snapshot restored' "$RUNNER_TEMP/update-failed.log"
+          node -e '
+            const fs = require("node:fs");
+            const state = JSON.parse(fs.readFileSync(process.argv[1] + "/.or3-cloud/state.json", "utf8"));
+            if (state.incompleteOperation || state.appVersion !== process.argv[2]) throw new Error("Closed validation did not restore the source");
+          ' "$managed" "$previous_version"
+          (cd "$managed" && node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" verify)
+          (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
+          # Start the healthy target, then retain a partial journal without
+          # completion proof, as the candidate lifecycle's interruption fixture
+          # does. This running target may have admitted writes.
+          (cd "$managed" && OR3_CLOUD_TEST_IMAGE="$image" OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" update --to "$version")
+          node --input-type=module -e '
+            import { readFileSync, writeFileSync } from "node:fs";
+            import { join } from "node:path";
+            const root = process.argv[1];
+            if (process.env.GITHUB_ACTIONS !== "true" || root !== join(process.env.RUNNER_TEMP, "or3-cloud-managed")) throw new Error("Expected disposable Actions deployment");
+            const path = join(root, ".or3-cloud/state.json");
+            const state = JSON.parse(readFileSync(path, "utf8"));
+            const backupPath = join(root, ".or3-cloud/backups", state.rollback.backupId);
+            const manifest = JSON.parse(readFileSync(join(backupPath, "manifest.json"), "utf8"));
+            state.incompleteOperation = {
+              id: "extended-update-exposure-fixture", operation: "update",
+              startedAt: new Date().toISOString(), phase: "target-mutating",
+              backupId: manifest.backupId, backupPath,
+              backupDataSha256: manifest.dataSha256, backupConfigSha256: manifest.configSha256,
+              targetVersion: state.appVersion, targetImage: state.image,
+              targetImageDigest: state.imageDigest, targetDeploymentId: state.deploymentId,
+              admission: { state: "may-be-open", targetImage: state.image },
+            };
+            writeFileSync(path, JSON.stringify(state, null, 2) + "\n", { mode: 0o600 });
+          ' "$managed"
           # Once the target may have accepted writes the CLI must not silently
           # restore; recovery is an explicit operator choice.
-          grep -q 'NOT restored automatically' "$RUNNER_TEMP/update-failed.log"
           (cd "$managed" && node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" recover --dry-run --json | node -e '
             let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const p=JSON.parse(s);if(p.decision?.action!=="require-explicit-restore")process.exit(1)});')
+          if (cd "$managed" && OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" recover >/dev/null 2>&1); then
+            echo "plain recover silently restored an exposed journal" >&2; exit 1; fi
           if (cd "$managed" && OR3_CLOUD_SKIP_PULL=true node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" recover --finish >/dev/null 2>&1); then
             echo "finish adopted a target without completion proof" >&2; exit 1; fi
           # The qualification images use local image IDs rather than registry
@@ -372,6 +407,8 @@ jobs:
             sleep 1
           done
           curl --fail "http://127.0.0.1:3017/api/health?deep=true"
+          (cd "$managed" && node "$GITHUB_WORKSPACE/packages/or3-cloud/dist/cli.mjs" verify)
+          (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
           node -e '
             const fs = require("fs");
             const dir = process.argv[1];
@@ -564,7 +601,8 @@ jobs:
             echo "finish adopted an interrupted target without completion proof" >&2; exit 1; fi
           (cd "$managed" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$version" recover --restore --yes)
           grep -q "^OR3_VERSION='$previous_version'$" "$managed/.env"
-          (cd "$managed" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$previous_version" verify)
+          # Explicit recovery retains the target CLI's managed-state schema.
+          (cd "$managed" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$version" verify)
           (cd "$managed" && OR3_SMOKE_URL=http://127.0.0.1:3019 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" verify)
       - name: Preserve published interruption evidence
         if: always()
