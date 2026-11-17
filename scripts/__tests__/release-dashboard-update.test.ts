@@ -48,6 +48,19 @@ describe('published dashboard fixture selection', () => {
         registry.versions['0.1.72'].or3Cloud.dashboardUpdateMinimumSourceVersion = '0.1.71';
         expect(() => publishedDashboardPair(registry)).toThrow('No published dashboard-compatible source');
     });
+
+    it('excludes releases whose installed dashboard cannot write its own state', () => {
+        const registry = { 'dist-tags': { latest: '0.1.129' }, versions: {
+            '0.1.116': release('0.1.116'), '0.1.127': release('0.1.127'),
+            '0.1.128': release('0.1.128'), '0.1.129': release('0.1.129', '0.1.116'),
+        } };
+        expect(publishedDashboardPair(registry).source.version).toBe('0.1.116');
+        registry.versions['0.1.129'].or3Cloud.dashboardUpdateMinimumSourceVersion = '0.1.127';
+        expect(() => publishedDashboardPair(registry)).toThrow('No published dashboard-compatible source');
+        registry['dist-tags'].latest = '0.1.130';
+        Object.assign(registry.versions, { '0.1.130': release('0.1.130') });
+        expect(publishedDashboardPair(registry).source.version).toBe('0.1.129');
+    });
 });
 
 let server: Server | undefined;

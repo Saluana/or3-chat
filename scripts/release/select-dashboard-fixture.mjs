@@ -9,6 +9,10 @@ import { fileURLToPath } from 'node:url';
 const stable = /^\d+\.\d+\.\d+$/;
 const digest = /^sha256:[a-f0-9]{64}$/;
 const minimumSource = '0.1.40';
+// These published bundles cannot write the schema-2 state they initialize.
+// Their dashboards need the corrected exact-version CLI, so they cannot
+// initiate the dashboard lifecycle exercised by this fixture.
+const unusableDashboardSources = new Set(['0.1.127', '0.1.128']);
 const requiredFiles = [
     'package/package.json', 'package/dist/cli.mjs',
     'package/assets/compose.yaml', 'package/assets/compose.operator.yaml',
@@ -43,6 +47,7 @@ export function publishedDashboardPair(registry) {
         ? target.or3Cloud.dashboardUpdateMinimumSourceVersion : minimumSource;
     const source = Object.values(registry.versions ?? {})
         .filter((release) => compatible(release)
+            && !unusableDashboardSources.has(release.version)
             && compare(release.version, minimum) >= 0
             && compare(release.version, target.version) < 0)
         .sort((a, b) => compare(b.version, a.version))[0];
