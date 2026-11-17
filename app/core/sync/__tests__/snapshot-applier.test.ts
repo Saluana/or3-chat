@@ -1169,6 +1169,8 @@ describe('proven first binding', () => {
     const page = (historyIncarnation = 'I'): SnapshotResponse => ({ historyIncarnation, workspaceId: scope.workspaceId,
         snapshotId: historyIncarnation, highWatermark: 0, items: [], nextPageToken: null });
 
+    // First binding must preserve startup writes; failed installation must not
+    // adopt a history, and later replacement must still fence the old writer.
     it('preserves birth proof through reopen and discovery, replays local LWW edits/deletes, and consumes even at zero', async () => {
         const db = createDb(); await db.open();
         expect(await db.sync_state.get('sync_history')).toMatchObject({ firstBindEligible: true, historyIncarnation: null });
@@ -1187,6 +1189,7 @@ describe('proven first binding', () => {
         db.kv.hook('creating', quota);
         await expect(stager.apply('local')).rejects.toMatchObject({ name: 'QuotaExceededError' });
         db.kv.hook('creating').unsubscribe(quota);
+        expect(db.syncHistoryAtOpen).toBeNull();
         expect(await db.sync_state.get('sync_history')).toMatchObject({ firstBindEligible: true, historyIncarnation: null });
         expect(await db.pending_ops.toArray()).toEqual(expect.arrayContaining(originals));
         await stager.apply('local');
@@ -1197,9 +1200,17 @@ describe('proven first binding', () => {
         expect(await db.sync_quarantine.count()).toBe(0);
         expect(await db.sync_state.get('sync_history')).toMatchObject({ firstBindEligible: false, historyIncarnation: 'I' });
         expect(await db.sync_state.get(getSyncStateId(scope))).toMatchObject({ cursor: 0 });
+        setHookEngine(createTypedHookEngine(createHookEngine()));
+        const bridge = getHookBridge(db); bridge.start();
+        const startupWrite = () => db.transaction('rw', getWriteTxTableNames(db, 'kv'), () => db.kv.put(local('startup')));
+        await startupWrite();
+        expect(await db.kv.get('startup')).toMatchObject({ value: 'local' });
+        expect(await db.pending_ops.where('[tableName+pk]').equals(['kv', 'startup']).first()).toMatchObject({ operation: 'put', status: 'pending' });
         const next = new SnapshotStager(db, scope); await next.start(); await next.appendPage(page('J')); await next.apply('local');
         expect(await db.pending_ops.count()).toBe(0);
         expect(await db.sync_quarantine.toArray()).toEqual(expect.arrayContaining(originals.map(original => expect.objectContaining({ variant: 'history_reset', op: original }))));
+        await expect(startupWrite()).rejects.toMatchObject({ name: 'AbortError' });
+        bridge.stop();
     });
 
     it('retains local-only provenance when I is replaced by J during private staging and lets only one installer bind', async () => {

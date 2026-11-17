@@ -62,6 +62,29 @@ change your DNS, firewall, Cloudflare, or Tailscale settings.
 The managed public profile forwards its proxy-trust setting into Nuxt runtime
 configuration so HTTPS API requests are not redirected back to themselves.
 
+## Completing a pending dashboard handoff
+
+If the application update is complete but `recover --dry-run` reports
+`reconcile-handoff` with `dataLoss: false`, use the corrected exact CLI even
+while the previous application image is running:
+
+```sh
+npx --yes @or3/cloud@0.1.128 recover --dry-run
+npx --yes @or3/cloud@0.1.128 recover --finish
+npx --yes @or3/cloud@0.1.128 recover --dry-run
+npx --yes @or3/cloud@0.1.128 doctor
+```
+
+The finish command schedules the recorded operator job; completion is
+asynchronous. Wait for recovery to report no pending handoff before a fresh
+backup or update. The helper keeps deployment configuration and assets
+read-only, writes its lease and verified receipt under `.or3-cloud`, and
+replaces only the operator. It preserves the application, its data and the
+rollback point. A healthy successor or a succeeded job alone does not prove
+that the receipt was verified. Do not delete the receipt or lease, edit managed
+state, or restore application data to clear a handoff. If it remains pending,
+retain recovery material and inspect the helper's bounded logs while it exists.
+
 ## Day-to-day commands
 
 Run these from the deployment directory created by `init`:
@@ -336,6 +359,10 @@ that sync semantic health is uncertified; physical/deep health alone is not sync
 certification. History incarnation/reset remains a separate runtime contract.
 
 ### History incarnation recovery boundary
+
+A fresh browser's proven first snapshot adopts its server identity only after
+commit, preserving startup preference and outbox writes. Failed installs stay
+unbound; later history replacements continue to fence stale writers.
 
 Normal restore/data rollback requires the exact image's qualified
 `sync-history-reset.mjs capability` (`incarnation-v1`). The external managed

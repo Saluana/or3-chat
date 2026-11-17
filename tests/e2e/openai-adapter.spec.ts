@@ -102,6 +102,31 @@ async function send(page: Page, text: string, diagnose = false) {
     }
 }
 
+test('a role refresh keeps the selected AI settings view open', async ({ page }, info) => {
+    const origin = new URL(info.project.use.baseURL!).origin;
+    expect((await page.request.post('/api/basic-auth/sign-in', { headers: { origin }, data: {
+        email: process.env.OR3_OPENAI_E2E_EMAIL, password: process.env.OR3_OPENAI_E2E_PASSWORD,
+    } })).ok()).toBe(true);
+    await openAiSettings(page, 'openai');
+    await expect(page.getByLabel('OpenAI API key')).toBeVisible();
+
+    // A session refresh can change permissions without changing the user or workspace.
+    await page.route('**/api/auth/session', async route => {
+        const response = await route.fetch();
+        const payload = await response.json();
+        payload.session.role = 'editor';
+        await route.fulfill({ response, json: payload });
+    });
+    await page.evaluate(() => window.dispatchEvent(new StorageEvent('storage', { key: 'or3:auth-session-changed' })));
+    await expect.poll(() => page.evaluate(() => {
+        const app = (window as unknown as { useNuxtApp(): { payload: { state: Record<string, { session?: { role?: string } }> } } }).useNuxtApp();
+        return app.payload.state['$sauth-session']?.session?.role;
+    })).toBe('editor');
+    await expect(page.getByLabel('OpenAI API key')).toBeVisible();
+    await page.getByRole('button', { name: 'Back to AI Settings' }).click();
+    await expect(page.locator('#dashboard-ai-openai-row')).toBeVisible();
+});
+
 test('a personal OpenAI key chats directly while OpenRouter keeps working', async ({ page }, info) => {
     test.setTimeout(240_000);
     const browserProblems: string[] = [];

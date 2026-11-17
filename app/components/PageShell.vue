@@ -2370,7 +2370,7 @@ async function openNewProjectModal() {
     sideNavExpandedRef.value?.openCreateProject?.();
 }
 
-function activatePaletteHost() {
+function activatePaletteHost(consumeDeepLink = true) {
     if (paletteHostActive) return;
     paletteHostActive = true;
     disposeWorkspaceResourceNavigation?.();
@@ -2453,7 +2453,7 @@ function activatePaletteHost() {
 
     // A deep link opens its dashboard app once the shell is ready; a later
     // navigation to another link is handled by the watcher below.
-    void consumeDashboardDeepLink();
+    if (consumeDeepLink) void consumeDashboardDeepLink();
 }
 
 function deactivatePaletteHost() {
@@ -2474,8 +2474,15 @@ onActivated(activatePaletteHost);
 onDeactivated(deactivatePaletteHost);
 watch(() => emptySession.value?.session?.role, () => {
     if (!paletteHostActive) return;
+    // Refreshing palette permissions must not remount an available page and
+    // discard its selected subview. Retry links that failed or lost access.
+    const { activePluginId, activePageId } = dashboardNavigation.state;
+    const pageAvailable = activePluginId !== null &&
+        dashboardNavigation.dashboardItems.value.some((item) => item.id === activePluginId) &&
+        (!activePageId || listDashboardPluginPages(activePluginId).some((page) => page.id === activePageId));
+    const retryDeepLink = !showDashboardModal.value || dashboardNavigation.state.error !== null || !pageAvailable;
     deactivatePaletteHost();
-    activatePaletteHost();
+    activatePaletteHost(retryDeepLink);
     void getPaletteCoordinator()?.refreshSources(['command']);
 });
 

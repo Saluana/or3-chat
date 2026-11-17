@@ -513,6 +513,7 @@ jobs:
           (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" write)
           (cd "$MANAGED" && timeout --signal=TERM 4m npm exec --yes --package="$CANDIDATE_TARBALL" -- or3 verify)
           (cd "$MANAGED" && timeout --signal=TERM 4m npx --yes "@or3/cloud@$previous_version" backup)
+          (cd "$MANAGED" && OR3_SMOKE_URL=http://127.0.0.1:3017 node "$GITHUB_WORKSPACE/scripts/release/smoke-create-docker.mjs" operator-handoff "$CANDIDATE_TARBALL")
           node --input-type=module -e '
             import { cpSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
             import { join } from "node:path";
@@ -763,6 +764,7 @@ jobs:
             ${{ runner.temp }}/or3-lifecycle-qualification.json
             ${{ runner.temp }}/or3-lifecycle-baseline.json
             ${{ runner.temp }}/or3-lifecycle-inputs.json
+            ${{ env.MANAGED }}/.or3-smoke-handoff.json
           if-no-files-found: error
       - name: Capture lifecycle diagnostics
         if: failure()

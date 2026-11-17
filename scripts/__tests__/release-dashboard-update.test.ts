@@ -152,11 +152,14 @@ describe('dashboard release lifecycle smoke', () => {
         })).rejects.toThrow('continuously unavailable');
     });
 
-    it('accepts a durable terminal job while the operator hands off', async () => {
+    // A successful job is not a completed handoff: qualification must reject
+    // pending or unrelated receipts and wait for the successor's status socket.
+    it.each(['verified', 'pending', 'wrong-job'])('requires the matching verified receipt after handoff: %s', async (handoff) => {
         directory = await mkdtemp(join('/tmp', 'or3-dashboard-smoke-'));
         const socketPath = join(directory, 'operator.sock');
         const statePath = join(directory, 'state.json');
         let claimed = false;
+        let statusReads = 0;
         server = createServer((request, response) => {
             const send = (status: number, body: unknown) => {
                 response.writeHead(status, { 'content-type': 'application/json' });
@@ -166,27 +169,36 @@ describe('dashboard release lifecycle smoke', () => {
             if (request.method === 'POST' && request.url === '/start') {
                 const chunks: Buffer[] = [];
                 request.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-                request.on('end', () => {
+                request.on('end', async () => {
                     if (claimed) return send(409, { message: 'already running' });
                     claimed = true;
                     const input = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-                    void writeFile(join(directory!, 'dashboard-update.json'), JSON.stringify({ id: input.requestId, phase: 'succeeded' }));
+                    await writeFile(statePath, JSON.stringify({ appVersion: '0.1.40', lastReceipt: {
+                        dashboardJobId: handoff === 'wrong-job' ? 'another-job' : input.requestId,
+                        operatorHandoff: handoff === 'pending' ? 'pending' : 'verified',
+                    } }));
+                    await writeFile(join(directory!, 'dashboard-update.json'), JSON.stringify({ id: input.requestId, phase: 'succeeded' }));
                     send(202, { job: { id: input.requestId, phase: 'running' } });
                 });
                 return;
             }
-            if (request.method === 'GET' && request.url === '/status') return send(503, { message: 'operator restarting' });
+            if (request.method === 'GET' && request.url === '/status') {
+                statusReads += 1;
+                return statusReads === 1 ? send(503, { message: 'operator restarting' }) : send(200, { job: null });
+            }
             send(404, { message: 'not found' });
         });
         await writeFile(statePath, JSON.stringify({ appVersion: '0.1.40' }));
         await new Promise<void>((resolveListen) => server!.listen(socketPath, resolveListen));
 
-        const result = await runDashboardUpdateSmoke(socketPath, '0.1.40', {
-            statePath,
-            pollMs: 5,
-            statusErrorTimeoutMs: 20,
-            timeoutMs: 1_000,
+        const result = runDashboardUpdateSmoke(socketPath, '0.1.40', {
+            statePath, log: () => undefined, pollMs: 5, statusErrorTimeoutMs: 1_000, timeoutMs: 100,
         });
-        expect(result.phase).toBe('succeeded');
+        if (handoff === 'verified') {
+            expect((await result).phase).toBe('succeeded');
+            expect(statusReads).toBeGreaterThan(1);
+        } else {
+            await expect(result).rejects.toThrow('did not succeed');
+        }
     });
 });

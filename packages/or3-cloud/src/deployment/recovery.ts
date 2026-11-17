@@ -114,8 +114,8 @@ export function decideRecoveryAction(state: ManagedState): RecoveryDecision {
 /**
  * Reconciles only the privileged operator handoff recorded for a completed
  * application update. It never replaces application data: it reschedules the
- * exact recorded job and leaves the receipt marked pending until the successor
- * operator confirms it is running.
+ * exact recorded job and leaves the receipt marked pending until the helper
+ * confirms the successor is running and records verification.
  */
 export async function reconcileOperatorHandoff(directory: string, state: ManagedState, report: (...args: unknown[]) => void = console.log) {
   const env = parseEnv(await readText(deploymentPaths(directory).env));
@@ -135,7 +135,7 @@ export async function reconcileOperatorHandoff(directory: string, state: Managed
     await writeState(directory, state);
     await exportTerminalReceipt(directory, receipt).catch(() => undefined);
   }
-  const detail = `Rescheduled the dashboard operator handoff for job ${jobId.slice(0, 8)}. The successor operator marks it verified once it is running.`;
+  const detail = `Rescheduled the dashboard operator handoff for job ${jobId.slice(0, 8)}. The handoff helper records verification after starting the successor operator. Recheck recover --dry-run before continuing.`;
   report(detail);
   return detail;
 }

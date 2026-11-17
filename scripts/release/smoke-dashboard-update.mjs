@@ -127,10 +127,11 @@ export async function runDashboardUpdateSmoke(socketPath, targetVersion, options
             log(`[dashboard-smoke +${elapsed()}] operator job phase: ${job.phase}`);
         }
         let durableJob;
+        let managedState;
         if (statePath) {
             try {
-                const state = JSON.parse(await readFile(statePath, 'utf8'));
-                const operationPhase = state?.incompleteOperation?.phase ?? 'idle';
+                managedState = JSON.parse(await readFile(statePath, 'utf8'));
+                const operationPhase = managedState?.incompleteOperation?.phase ?? 'idle';
                 if (operationPhase !== lastOperationPhase) {
                     lastOperationPhase = operationPhase;
                     log(`[dashboard-smoke +${elapsed()}] managed lifecycle phase: ${operationPhase}`);
@@ -140,14 +141,18 @@ export async function runDashboardUpdateSmoke(socketPath, targetVersion, options
                 // The state file is briefly replaced atomically during updates.
             }
         }
-        if (durableJob?.id === jobId && durableJob.phase === 'succeeded') {
-            log(`[dashboard-smoke +${elapsed()}] durable update job succeeded; operator handoff is verified by the next release check`);
+        if (durableJob?.id === jobId && durableJob.phase === 'succeeded'
+            && status?.status === 200 && managedState?.appVersion === targetVersion
+            && !managedState.incompleteOperation
+            && managedState.lastReceipt?.dashboardJobId === jobId
+            && managedState.lastReceipt?.operatorHandoff === 'verified') {
+            log(`[dashboard-smoke +${elapsed()}] durable update job succeeded; matching handoff verified and successor reachable`);
             return durableJob;
         }
         if (durableJob?.id === jobId && ['failed', 'needs_attention'].includes(durableJob.phase)) {
             throw new Error(`Dashboard update ended in ${durableJob.phase}: ${durableJob.error || 'no diagnostic'}`);
         }
-        if (job?.id === jobId && job.phase === 'succeeded') {
+        if (!statePath && job?.id === jobId && job.phase === 'succeeded') {
             log(`[dashboard-smoke +${elapsed()}] update job succeeded`);
             return job;
         }
