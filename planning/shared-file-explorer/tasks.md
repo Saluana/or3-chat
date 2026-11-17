@@ -94,7 +94,7 @@ See [local qualification](local-review.md) for the baseline and fixture.
       Requirements: R4.AC3, R5.AC2, R5.AC3, R5.AC8, R5.AC9, R11.AC5.
       Done when: mounted UTree targets safely register/dispose, the header remains a root target, hover/autoscroll/cancel work, drag never opens content, and project OS drops reject with supported alternatives rather than browser navigation.
 
-- [ ] 4.4 Finish device preferences, indentation, responsive preview, and accessibility (4h).
+- [x] 4.4 Finish device preferences, indentation, responsive preview, and accessibility (4h).
       Design: C4, C5, C8.
       Requirements: R2.AC1, R3.AC1, R4.AC3, R10.AC4, R11.AC2, R11.AC3, R11.AC4, R11.AC5.
       Done when: explicit project choice/defaults and Recently modified persist correctly, 48px indentation/full-name tooltips preserve logical depth, 320/768/1440 layouts have no three-column squeeze, and live announcements/reduced-motion/focus behavior pass.
@@ -111,12 +111,12 @@ See [local qualification](local-review.md) for the baseline and fixture.
       Requirements: R2.AC4, R4.AC1, R4.AC2, R4.AC3.
       Done when: shortcuts retain existing navigation/opening and scoped Move to…, profile gates remain, and an import/reference check supports deleting unused `SidebarProjectTree.vue` plus stale comments without adding a second full tree.
 
-- [ ] 5.3 Finish Files intake/inspector and scope-specific locations (4h).
+- [x] 5.3 Finish Files intake/inspector and scope-specific locations (4h).
       Design: C8, C7, C3.
       Requirements: R2.AC5, R3.AC3, R3.AC4, R3.AC5, R6.AC3, R6.AC5, R7.AC4, R7.AC5.
       Done when: Upload/New folder name the destination, deduplication preserves location, preview explains shared title and separate Files/project paths, reveal does not move content, and Trash/fallback labels identify library placement unambiguously.
 
-- [ ] 5.4 Implement flat filtered results, path updates, and reveal (4h).
+- [x] 5.4 Implement flat filtered results, path updates, and reveal (4h).
       Design: C3, C4, C8, C11.
       Requirements: R10.AC1, R10.AC2, R10.AC3, R10.AC4, R10.AC5, R12.AC2, R12.AC6.
       Done when: active filters/search hide ordinary folder rows, This folder / All Files controls descendant eligibility, explicit full-text search retains existing capped behavior, and Show in Files/project clears incompatible state and reveals the current path.
@@ -155,7 +155,7 @@ See [local qualification](local-review.md) for the baseline and fixture.
 
 ## 7. Verify Phase 1 with repeatable evidence
 
-- [ ] 7.1 Complete the local Files behavior and retention journey (4h).
+- [x] 7.1 Complete the local Files behavior and retention journey (4h).
       Design: C8, C10, C11, C12.
       Requirements: R1.AC1, R1.AC2, R1.AC3, R1.AC4, R3.AC1, R3.AC2, R3.AC3, R3.AC4, R3.AC5, R4.AC4, R6.AC1, R6.AC3, R6.AC5, R6.AC6, R6.AC7, R7.AC1, R7.AC4, R7.AC5, R10.AC1, R10.AC2, R13.AC2.
       Done when: the canonical storage harness proves scoped paths, upload reuse, collision rules, rename/moves, removal counts, bulk partial outcomes, Trash/restore, root fallback, search/reveal, and unchanged hashes with traces/screenshots/JSON receipts.
@@ -175,7 +175,7 @@ See [local qualification](local-review.md) for the baseline and fixture.
       Requirements: R8.AC1, R8.AC2, R8.AC3, R8.AC4, R8.AC5, R8.AC6, R9.AC3, R9.AC4, R9.AC6, R13.AC2.
       Done when: two disposable devices prove offline opposite moves, deleted-parent late children, GC fallback, first-use notice/cancel, old-client workspace-sync refusal, new-device snapshot, and separate backup restore with unchanged hashes.
 
-- [ ] 7.5 Qualify Convex direct/gateway convergence and stale-backend refusal (4h).
+- [x] 7.5 Qualify Convex direct/gateway convergence and stale-backend refusal (4h).
       Design: C9, C10.
       Requirements: R8.AC2, R8.AC3, R8.AC4, R9.AC3, R9.AC4, R9.AC5, R13.AC2, R13.AC3.
       Done when: externally recorded templates/provider versions pass the same graph/cursor/backup expectations through both transports; unsupported backend versions refuse organization before mutation.
@@ -192,7 +192,7 @@ See [local qualification](local-review.md) for the baseline and fixture.
       Requirements: R13.AC1, R9.AC6.
       Done when: scope labels, click/touch/bulk behavior, limits, local migration, nearest-ancestor recovery, version cutover, external repository ownership, and phased scope are documented with working docmap entries.
 
-- [ ] 8.2 Run the proportionate final Phase 1 verification (4h).
+- [x] 8.2 Run the proportionate final Phase 1 verification (4h).
       Design: C10.
       Requirements: R13.AC2, R13.AC3.
       Done when: affected host/provider tests/typechecks, dependency/static/cloud builds, docs checks, and disposable journeys pass with exact profiles/SHAs; unavailable external prerequisites or unrelated existing failures are separately evidenced, never silently marked passed.
@@ -224,7 +224,7 @@ See [local qualification](local-review.md) for the baseline and fixture.
       Requirements: R2.AC6.
       Done when: nested shortcuts use the same behavior without duplicate data writes, retain lazy/profile gates, and preserve the indentation/selection rules.
 
-- [ ] 9.5 Qualify and document Phase 2 separately (3h).
+- [x] 9.5 Qualify and document Phase 2 separately (3h).
       Design: C10.
       Requirements: R2.AC6, R3.AC6, R5.AC6, R10.AC6, R13.AC1, R13.AC2.
       Done when: focused browser evidence covers Undo conflicts/input focus, Type sort, navigator responsiveness, and shortcut parity; docs and receipts distinguish the later delivery.

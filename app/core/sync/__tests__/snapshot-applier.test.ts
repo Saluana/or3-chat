@@ -1158,7 +1158,10 @@ it('namespace upgrade preserves every store/index without copying and rolls back
         expect(await db.table(name).get('saved')).toEqual(row);
         const expected = old.table(name).schema;
         expect(db.table(name).schema.primKey.src).toBe(expected.primKey.src);
-        expect(db.table(name).schema.indexes.map(index => index.src)).toEqual(expected.indexes.map(index => index.src));
+        const additiveIndexes = name === 'posts' ? ['explorer_item_key'] : [];
+        expect(db.table(name).schema.indexes.map(index => index.src)).toEqual([
+            ...expected.indexes.map(index => index.src), ...additiveIndexes,
+        ]);
     }
     expect([...db.backendDB().objectStoreNames]).not.toContain('messages');
     expect(db.file_blobs.name).toBe('current_file_blobs');

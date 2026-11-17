@@ -82,6 +82,6 @@ export function useExplorerDrag(options: {
         const element = options.viewport.value;
         if (!element || !options.enabled.value) return;
         onCleanup(autoScrollForElements({ element, canScroll: ({ source }) => source.data.owner === owner }));
-    });
+    }, { flush: 'post' });
     return { directive, announcement, dragging };
 }

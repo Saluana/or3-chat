@@ -171,7 +171,6 @@ test('Project Home opens its explorer and creates a document in a folder', async
     await expect(page.getByRole('textbox', { name: 'Document title' })).toBeVisible();
 });
 
-
 test('virtualizes a complete Files selection at the planned fixture size', async ({ page }, info) => {
     await page.goto('/_tests/_test-storage');
     const files = page.getByRole('region', { name: 'Workspace Files', exact: true });
@@ -253,8 +252,16 @@ test('duplicate intake reveals the existing Files location and folder removal ke
     const files = page.getByRole('region', { name: 'Workspace Files', exact: true });
     const root = files.getByRole('navigation', { name: 'Files location' });
     await createFolder(page, files, 'Files', 'Research');
+    await upload(files, 'Unfiled.txt', 'A separate root item');
     await files.getByRole('button', { name: 'Research', exact: true }).click();
-    await upload(files, 'Findings.txt', 'The retained research sample');
+    const [picker] = await Promise.all([
+        page.waitForEvent('filechooser'),
+        files.getByRole('button', { name: 'Upload to Research', exact: true }).click(),
+    ]);
+    await picker.setFiles({
+        name: 'Findings.txt', mimeType: 'text/plain', buffer: Buffer.from('The retained research sample'),
+    });
+    await expect(files.getByRole('button', { name: 'Open Findings.txt' })).toBeVisible();
     await root.getByRole('button', { name: 'Files', exact: true }).click();
     await files.getByLabel('Upload files', { exact: true }).setInputFiles({
         name: 'Findings.txt', mimeType: 'text/plain', buffer: Buffer.from('The retained research sample'),
@@ -262,6 +269,14 @@ test('duplicate intake reveals the existing Files location and folder removal ke
     await files.getByRole('button', { name: 'Show in Files', exact: true }).click();
     await expect(root).toContainText('Research');
     await expect(files.getByRole('button', { name: 'Open Findings.txt' })).toHaveCount(1);
+    await files.getByRole('combobox', { name: 'File type' }).click();
+    await page.getByRole('option', { name: 'Uploads', exact: true }).click();
+    await expect(files.getByRole('button', { name: 'Open Unfiled.txt' })).toBeHidden();
+    await files.getByRole('combobox', { name: 'Search location' }).click();
+    await page.getByRole('option', { name: 'All Files', exact: true }).click();
+    await expect(files.getByRole('button', { name: 'Open Unfiled.txt' })).toBeVisible();
+    await files.getByRole('combobox', { name: 'File type' }).click();
+    await page.getByRole('option', { name: 'All types', exact: true }).click();
     await root.getByRole('button', { name: 'Files', exact: true }).click();
     await files.getByRole('button', { name: 'More actions for Research', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Remove folder, keep contents' }).click();

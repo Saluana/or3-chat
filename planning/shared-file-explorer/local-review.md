@@ -59,7 +59,11 @@ Trash and restore, and destination creation independent of a canceled move.
 It also verified touch selection, Type preference across reload, and Undo from
 the notification. Project Home creation, project OS-drop refusal, and nested
 shortcuts passed through the normal sidebar. Blank, Retro, and Cyberpunk
-passed at 320 pixels in Chromium and WebKit. The WebKit runtime reproduces an
+passed at 320 pixels in Chromium and WebKit. An additional Chromium production
+probe confirmed theme tokens and layout fit at 320, 768, and 1440 pixels in all
+three themes in both light and dark mode. Chromium also passed duplicate
+intake and reveal, filtered location switching, and removal of the containing
+folder while retaining the original. The WebKit runtime reproduces an
 IndexedDB Blob failure with a native write, so WebKit upload is still open.
 
 A production static build, served on loopback and opened in Chromium,
@@ -69,7 +73,7 @@ selected all 5,481 root rows. Instrumentation counted one metadata key cursor
 and zero content-body requests. The optional navigator appeared in a wide Files
 pane and collapsed at the narrower width while retaining the active folder.
 
-On the Cloud worktree, screenshots, a 53-second walkthrough, and timing data
+On the Cloud worktree, screenshots, a 53-second walkthrough, and timing and theme data
 are under `test-results/explorer-delivery/`. The underlying Playwright runs
 include `shared-file-explorer-finish`, `explorer-final-interactions`,
 `explorer-project-final`, and `explorer-production-verified`. The source
@@ -87,9 +91,9 @@ included the actual deleted record and the original file bytes verified against
 their SHA-256 hash. Convex direct mode was also exercised through a deployed
 template and a watch wakeup. The loopback Convex binary was
 `precompiled-2026-11-16-80befbc`. The SQLite browser profile verified Cancel,
-Continue, and the device preference on later writes. The separate SQLite browser
-restore preserved the original SHA-256 and recovered the late placement to
-its surviving ancestor.
+Continue, and the device preference on later writes. Separate SQLite and Convex browser restores
+preserved the original SHA-256 and recovered the late placement to its
+surviving ancestor. The Convex restore passed in an isolated rerun.
 
 The provider source baselines are recorded above. The test profiles used the
 modified source builds of SQLite 0.0.31 and Convex 0.0.27. The provider candidate
@@ -106,3 +110,10 @@ Cloud browser checks use `PW_PORT=<profile-port> bun run test:e2e:shared-file-ex
 Set `PW_EXPLORER_RESTORE_RECEIPT` to the gateway qualifier's
 `explorer-receipt.json` to run the independent restore check. Keep this
 fixture data separate from real accounts and workspaces.
+
+The static and authenticated Cloud production builds completed. App types,
+the documentation and import checks, and the 77-test database and snapshot
+run passed. The complete WebKit upload journey and advanced project drag
+qualification remain open. A native IndexedDB Blob write reproduced the
+WebKit error both with the default temporary directory and a separate
+writable browser directory.
