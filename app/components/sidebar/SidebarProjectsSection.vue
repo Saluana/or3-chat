@@ -37,8 +37,12 @@
                             @delete="emit('delete-project', project.id)"
                         />
 
+                        <SidebarProjectExplorer v-if="explorerEnabled && !collapsed && expandedProjectsSet.has(project.id)"
+                            :key="project.id" :project-id="project.id" :project-name="project.name"
+                            :documents-enabled="or3Config.features.documents.enabled" compact class="px-1 pb-1"
+                            @create="(kind, folder) => emit('create-in-project-folder', { kind, projectId: project.id, folder })" />
                         <div
-                            v-if="
+                            v-else-if="
                                 !collapsed &&
                                 expandedProjectsSet.has(project.id) &&
                                 children[project.id]
@@ -102,6 +106,7 @@
                 </p>
             </div>
         </div>
+
     </div>
 </template>
 
@@ -123,6 +128,9 @@ import type {
 import SidebarProjectRoot from './SidebarProjectRoot.vue';
 import SidebarProjectChild from './SidebarProjectChild.vue';
 import SidebarGroupHeader from './SidebarGroupHeader.vue';
+import SidebarProjectExplorer from './SidebarProjectExplorer.vue';
+import type { ExplorerFolderRow } from '~~/shared/explorer/tree';
+import { useExplorerAvailable } from '~/composables/explorer/explorer-availability';
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 type ProjectEntryPayload = {
@@ -153,8 +161,12 @@ const emit = defineEmits<{
     (e: 'remove-from-project', payload: ProjectEntryPayload): void;
     (e: 'select-thread', id: string): void;
     (e: 'select-document', id: string): void;
+    (e: 'create-in-project-folder', value: { kind: 'chat' | 'document'; projectId: string; folder: ExplorerFolderRow }): void;
     (e: 'update:expandedProjects', value: string[]): void;
 }>();
+
+const explorerEnabled = useExplorerAvailable();
+const or3Config = useOr3Config();
 
 const expandedProjectsSet = computed(() => new Set(props.expandedProjects));
 const children = ref<Record<string, ProjectEntry[]>>({});
@@ -169,7 +181,7 @@ function bindChildren() {
         : props.projects.filter((project) =>
               expandedProjectsSet.value.has(project.id),
           );
-    if (!expanded.length) return;
+    if (explorerEnabled.value || !expanded.length) return;
     const db = getDb();
     const generation = getWorkspaceGeneration();
     childSubscription = liveQuery(async () => {
@@ -219,7 +231,7 @@ function bindChildren() {
     });
 }
 watch(
-    () => [props.projects, props.expandedProjects.slice(), props.collapsed],
+    () => [props.projects, props.expandedProjects.slice(), props.collapsed, explorerEnabled.value],
     bindChildren,
     { immediate: true },
 );

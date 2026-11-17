@@ -77,6 +77,46 @@ associations without moving or copying content.
 
 In cloud mode, Files is available when the selected sync provider advertises workspace-item `v1`. Read-only members can inspect and download permitted items; upload and management actions require write access. The inspector reports local, queued, uploading, failed, or synced state separately from successful local intake.
 
+### Organize Files and projects
+
+Files shows folders alongside documents and uploads. Click a row to open it,
+or use Control-click, Command-click, Shift-click, checkboxes, or **Select**
+to build a selection. Use breadcrumbs to navigate and **Move to…** to choose
+a destination. **Select all results** includes rows outside the visible list.
+A move or bulk removal can change up to 100 records, including related
+records where applicable.
+
+Files and each project track their own locations. The preview shows where a
+file is stored in Files and where it appears in projects. Use **Show in
+Files** to reveal its current location. **Remove folder, keep contents**
+promotes direct entries to the named parent. Synced entries whose folder was
+removed appear at the closest surviving ancestor, or at the root when every
+ancestor is gone. Select files and documents to send them to Files Trash.
+
+Project Home offers **Recent activity** and **Explorer**. A project with
+folders initially opens in Explorer. Your view choice is saved on this device.
+New items created from the project header start at the root. Folder menus name
+the destination when creating a chat or document. The recent-project shortcut
+expands to the same folder tree. Removing a project association leaves the
+original item available, and re-adding it starts at the project root.
+
+Files can sort by **Recently modified**, **Name**, or **Type**. In a wide Files
+pane, **Show folders** opens the optional navigator. Opening the preview gives
+its space back to the list and preview. After an Explorer move or folder rename,
+use **Undo** in the notification or Ctrl+Z / Command+Z from the focused explorer.
+The previous location is available for the latest change in that scope until
+you switch scopes or reload. If an item or its location changes first, Undo
+reports the conflict.
+
+Existing local data is indexed when the workspace database upgrades.
+In Cloud, both the host and sync backend need Explorer v1. The first folder
+change on each device and workspace asks you to confirm the version requirement.
+Older clients can stop syncing the workspace when they encounter folder
+history. Cancel leaves the organization untouched. Update your devices before
+creating folders in a shared workspace. SQLite native and Convex provider
+changes are maintained in their own repositories. SQLite D1 does not offer
+folder organization.
+
 Composer file selections, drops and pastes retain one originating workspace and
 composer lifetime across the whole batch. Workspace/tab changes and disposal
 cancel pending intake before later files or preview URLs are allocated. Draft

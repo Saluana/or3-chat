@@ -202,6 +202,7 @@ export interface SyncGatewayAdapter {
         canonicalChatHistory?: 'v1';
         /** Transactional preservation/admission for catalog, Trash and file memberships. */
         workspaceItems?: 'v1';
+        explorer?: 'v1';
         /** `readChatHistory` resolves explicit and legacy project ownership (`project_ownership`). */
         projectOwnership?: 'v1';
         /** Bounded deleted-metadata queries for read-only accounting, not deletion coordination. */
@@ -213,6 +214,8 @@ export interface SyncGatewayAdapter {
      * Must verify source identity/visibility and retain bytes beyond GC/expiry.
      * A failure rejects the page; never return a reference before durable commit.
      */
+    /** Providers with separately deployed backends can verify readiness per workspace. */
+    getExplorerCapability?(event: H3Event, scope: { workspaceId: string }): Promise<'v1' | undefined>;
     retainUnavailableRecord?(event: H3Event, input: {
         scope: SyncScope;
         source: 'pull' | 'snapshot';

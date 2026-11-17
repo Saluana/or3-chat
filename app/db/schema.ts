@@ -280,6 +280,12 @@ export type Message = z.infer<typeof MessageSchema>;
  * Non-Goals:
  * - Does not interpret content format.
  */
+const ExplorerItemKeySchema = z.tuple([
+    z.enum(['active', 'trash']), z.enum(['document', 'file']), z.number(),
+    z.string(), z.string(), z.string(), z.enum(['none', 'prefix', 'full']), z.number(),
+]);
+export type ExplorerItemKey = z.infer<typeof ExplorerItemKeySchema>;
+
 export const PostSchema = z.object({
     title_source: TitleSourceSchema.optional(),
     id: z.string(),
@@ -316,6 +322,7 @@ export const PostSchema = z.object({
     // Local-only sparse index key for active documents; recomputed at the
     // Dexie write boundary and stripped from sync payloads.
     document_reference_key: z.tuple([z.string(), z.string()]).optional(),
+    explorer_item_key: ExplorerItemKeySchema.optional(),
 });
 
 /**

@@ -2,14 +2,16 @@ import { mkdtemp, cp, symlink, writeFile, mkdir } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { resolveQualificationProvider } from './workspace-cloud-providers';
 const source = process.cwd();
 const binary = resolve(process.argv[2] || '');
-if (!binary.startsWith(join(process.env.HOME!, '.cache/convex/binaries/')) || !binary.endsWith('/convex-local-backend'))
+const cache = process.env.XDG_CACHE_HOME || join(process.env.HOME!, '.cache');
+if (!binary.startsWith(join(cache, 'convex/binaries/')) || !binary.endsWith('/convex-local-backend'))
     throw Error('Pass the official cached Convex local backend binary.');
 if (!await Bun.file(join(source, 'public/_documentation/docmap.json')).exists())
     throw Error('Run from the OR3 source root.');
-const root = await mkdtemp('/private/tmp/or3-files-convex-');
+const root = await mkdtemp(join(tmpdir(), 'or3-files-convex-'));
 const provider = await resolveQualificationProvider(source, 'or3-provider-convex', process.argv.includes('--development-providers'));
 const pack = JSON.parse(gunzipSync(await Bun.file(join(provider.path, 'templates/convex.pack.json.gz')).arrayBuffer()).toString());
 for (const [name, text] of Object.entries(pack.files)) {

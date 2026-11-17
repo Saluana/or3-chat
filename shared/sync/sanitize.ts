@@ -60,6 +60,7 @@ export function sanitizePayloadForSync(
     if (tableName === 'posts') {
         // document_reference_key is a local reference index field
         delete sanitized.document_reference_key;
+        delete sanitized.explorer_item_key;
     }
 
     // Ensure required `deleted` field exists for synced tables

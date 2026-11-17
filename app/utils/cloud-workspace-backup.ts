@@ -1,5 +1,5 @@
 import { getActiveWorkspaceId, getDb } from '~/db/client';
-import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
+import { getCachedSessionContext, getCachedSessionPayload } from '~/composables/auth/useSessionContext';
 import type { useSessionContext } from '~/composables/auth/useSessionContext';
 import { createGatewayWorkspaceApi } from '~/core/workspace/gateway-workspace-api';
 import { createGatewaySyncProvider } from '~/core/sync/providers/gateway-sync-provider';
@@ -14,6 +14,7 @@ import type { PendingOp } from '~~/shared/sync/types';
 import { normalizeError } from '~~/shared/errors';
 import { loadFilePolicy } from '~/core/storage/file-policy';
 import { ADMIN_HEADERS } from '~/composables/admin/useAdminExtensions';
+import { hasExplorerSemantics } from '~~/shared/explorer/sync-contract';
 
 type BackupWriter = { write(chunk: Uint8Array<ArrayBuffer>): Promise<unknown>; close(): Promise<unknown>; abort(reason?: unknown): Promise<unknown> };
 const HISTORY_CHANGED = 'Server history changed during restore. Retry with a fresh workspace.';
@@ -96,10 +97,12 @@ export async function restoreCloudWorkspace(file: Blob, session: ReturnType<type
     const originals: Array<{ hash: string; body: Blob }> = [];
     const metadata = new Map<string, FileMeta>();
     let rowCount = 0;
+    let containsExplorer = false;
     const meta = await scanCloudBackup(file, async frame => {
         origin.assertCurrent();
         if (frame.header.type === 'row') {
             rowCount++;
+            containsExplorer ||= hasExplorerSemantics(frame.header.table, String(frame.row?.id), frame.row);
             if (frame.header.table === 'file_meta') {
                 const row = FileMetaSchema.parse(frame.row);
                 metadata.set(row.hash, row);
@@ -107,6 +110,9 @@ export async function restoreCloudWorkspace(file: Blob, session: ReturnType<type
         } else if (frame.header.type === 'file') originals.push({ hash: frame.header.hash, body: frame.body });
     });
     origin.assertCurrent();
+    if (containsExplorer && getCachedSessionPayload()?.explorerCapability !== 'v1') {
+        throw new CloudBackupError('This backup contains folders. Update the sync provider before restoring it.');
+    }
     const largestFile = originals.reduce((largest, original) => Math.max(largest, original.body.size), 0);
     if (largestFile > 1024 * 1024 * 1024) throw new CloudBackupError('A backup original exceeds the supported 1 GiB Cloud upload limit. No workspace was created.');
     const api = createGatewayWorkspaceApi();

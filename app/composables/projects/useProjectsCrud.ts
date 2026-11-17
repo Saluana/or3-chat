@@ -1,6 +1,7 @@
 import { del, type Project } from '~/db';
 import { chatFamilyIds, chatOwnerIn, moveChatProjectRows, notifyChatProjectMove, saveProjectDocument } from '~/db/project-workspace';
 import { prepareProjectWrite } from '~/db/projects';
+import { clearProjectPlacement } from '~/db/explorer-placement-lifecycle';
 import { ProjectSettingsSchema } from '~~/shared/projects/workspace';
 import { workspaceRevision } from '~/utils/chat/workspace-items';
 import { prepareDocumentCreate } from '~/db/documents';
@@ -143,7 +144,7 @@ export function useProjectsCrud() {
         const requested = normalizeProjectData(prepared.row.data);
         const changes: Awaited<ReturnType<typeof moveChatProjectRows>>[] = [];
         let related = 0;
-        const saved = await db.transaction('rw', getWriteTxTableNames(db, ['projects', 'threads']), async () => {
+        const saved = await db.transaction('rw', getWriteTxTableNames(db, ['projects', 'threads', 'posts']), async () => {
             scope.assertCurrent('write');
             const observed = await db.projects.get(id);
             if (!observed || observed.deleted || observed.clock !== existing.clock
@@ -179,6 +180,11 @@ export function useProjectsCrud() {
                 updated_at: nowSec(),
                 clock: nextClock(current.clock),
             };
+            for (const entry of previous) {
+                if (entry.kind !== 'chat' && !requested.some(candidate => candidate.kind === entry.kind && candidate.id === entry.id)) {
+                    await clearProjectPlacement(db, id, { kind: entry.kind === 'doc' ? 'document' : 'file', item_id: entry.id });
+                }
+            }
             await db.projects.put(next);
             scope.assertCurrent('write');
             return next;

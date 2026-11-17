@@ -160,8 +160,9 @@ export async function createThreadInDb(
  * Non-Goals:
  * - Does not merge partial updates.
  */
-export async function upsertThread(value: Thread): Promise<void> {
-    const db = getDb();
+export async function upsertThread(value: Thread, expected?: { db: ReturnType<typeof getDb>; row: Thread; assertCurrent: () => void }): Promise<void> {
+    const db = expected?.db ?? getDb();
+    expected?.assertCurrent();
     const hooks = useHooks();
     const filtered = await hooks.applyFilters('db.threads.upsert:filter:input', value);
     const validated = parseOrThrow(ThreadSchema, filtered);
@@ -171,11 +172,16 @@ export async function upsertThread(value: Thread): Promise<void> {
     const input = parseOrThrow(ThreadSchema, prepared);
     const next = await db.transaction('rw', getWriteTxTableNames(db, 'threads'), async () => {
         const existing = await db.threads.get(input.id);
+        if (expected && (input.id !== expected.row.id || JSON.stringify(existing) !== JSON.stringify(expected.row))) {
+            throw new Error('This chat changed. Open Rename again to use the current title.');
+        }
+        expected?.assertCurrent();
         const fresh = { ...input,
             title_source: existing && input.title !== existing.title ? 'manual' as const : input.title_source,
             clock: nextClock(existing?.clock ?? validated.clock), hlc: input.hlc ?? generateHLC() };
         rejectGenericCompactionTransition(fresh, existing);
         await db.threads.put(fresh);
+        expected?.assertCurrent();
         return fresh;
     });
     await hooks.doAction('db.threads.upsert:action:after', { entity: next, tableName: 'threads' });
@@ -488,7 +494,7 @@ export async function forkThread(
             () => db.threads.put(fork),
             { op: 'write', entity: 'threads', action: 'fork' }
         );
-        membership = scope ? await moveChatProjectRows(scope, fork.id, projectId) : { projects: [], threads: [] };
+        membership = scope ? await moveChatProjectRows(scope, fork.id, projectId) : { projects: [], threads: [], placements: 0 };
 
         if (options.copyMessages) {
             const msgs =

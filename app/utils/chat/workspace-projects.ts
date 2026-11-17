@@ -8,6 +8,7 @@ import { readWorkspaceItem, workspaceRevision, type WorkspaceItemRef } from './w
 import type { ToolExecutionContext } from './types';
 import { FILE_CATALOG_POST_TYPE, isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
 import { parseFileHashes } from '~/db/files-util';
+import { clearProjectPlacement } from '~/db/explorer-placement-lifecycle';
 
 import { preservedProjectEntries, projectEntryIdentity } from '~/utils/projects/normalizeProjectData';
 export { preservedProjectEntries, projectEntryIdentity } from '~/utils/projects/normalizeProjectData';
@@ -160,6 +161,12 @@ export async function updateWorkspaceProject(args: Record<string, unknown>, cont
         saved = { ...prepared.row, ...(moveChat ? { data: current!.data } : {}),
             clock: base ? nextClock(base.clock) : prepared.row.clock };
         await scope.db.projects.put(saved);
+        if (operation === 'remove_item' && (item?.kind === 'document' || item?.kind === 'file')) {
+            const identity = `${item.kind}:${item.id}`;
+            if (!preservedProjectEntries(saved.data).some(entry => projectEntryIdentity(entry) === identity)) {
+                await clearProjectPlacement(scope.db, saved.id, { kind: item.kind, item_id: item.id });
+            }
+        }
         if (moveChat && item) {
             moved = await moveChatProjectRows(scope, item.id, operation === 'add_item' ? proposed.id : null, { family: true });
             saved = (await scope.db.projects.get(proposed.id))!;

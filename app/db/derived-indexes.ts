@@ -5,7 +5,7 @@
  * Derive local-only index fields from canonical rows at the Dexie write boundary.
  *
  * Responsibilities:
- * - Compute sparse `posts.document_reference_key` for active document rows.
+ * - Compute sparse document reference and explorer metadata keys on `posts`.
  * - Compute sparse `file_meta.gallery_state` for verified raster rows.
  * - Compute `pending_ops.readyAt` (`nextAttemptAt ?? 0`) for due-time scheduling.
  * - Install deterministic creating/updating hooks on every `Or3DB` instance.
@@ -15,7 +15,9 @@
  * - Sync capture or sanitization (see `shared/sync/sanitize.ts`).
  */
 import type { Or3DB } from './client';
-import type { FileMeta } from './schema';
+import type { ExplorerItemKey, FileMeta } from './schema';
+import { FILE_CATALOG_POST_TYPE, isVisibleWorkspaceItem, workspaceItemMetadata } from '~~/shared/posts/workspace-item';
+import { isValidHash } from '~/utils/hash';
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 import { normalizeProjectData } from '~/utils/projects/normalizeProjectData';
 
@@ -65,6 +67,30 @@ export function computeDocumentReferenceKey(
     const id = row.id;
     if (typeof id !== 'string' || id.length === 0) return undefined;
     return [fileHashes, id];
+}
+
+export function computeExplorerItemKey(row: Row): ExplorerItemKey | undefined {
+    if (row.deleted || (row.postType !== 'doc' && row.postType !== FILE_CATALOG_POST_TYPE)
+        || typeof row.id !== 'string' || !row.id || typeof row.title !== 'string') return;
+    const state = workspaceItemMetadata(row.meta);
+    if (!state && !isVisibleWorkspaceItem(row as { meta?: unknown })) return;
+    const status = state?.trashed_at == null ? 'active' : 'trash';
+    const updatedAt = typeof row.updated_at === 'number' && Number.isFinite(row.updated_at) ? row.updated_at : 0;
+    const clock = typeof row.clock === 'number' && Number.isFinite(row.clock) ? row.clock : 0;
+    if (row.postType === 'doc') return [status, 'document', updatedAt, row.title, row.id, '', 'full', clock];
+
+    if (typeof row.file_hashes !== 'string') return;
+    let hashes: unknown;
+    try { hashes = JSON.parse(row.file_hashes); }
+    catch { return; }
+    if (!Array.isArray(hashes) || hashes.length !== 1 || typeof hashes[0] !== 'string' || !isValidHash(hashes[0])) return;
+    return [status, 'file', updatedAt, row.title, row.id, hashes[0], state?.text?.coverage ?? 'none', clock];
+}
+
+export function applyExplorerItemKey(row: Row): void {
+    const key = computeExplorerItemKey(row);
+    if (key) row.explorer_item_key = key;
+    else delete row.explorer_item_key;
 }
 
 /**
@@ -160,14 +186,17 @@ export function installDerivedIndexHooks(db: Or3DB): void {
     const posts = db.table('posts') as unknown as DexieHookTable;
     posts.hook('creating', ((_pk: unknown, obj: unknown) => {
         applyDocumentReferenceKey(toRow(obj));
+        applyExplorerItemKey(toRow(obj));
     }) as (...args: never[]) => unknown);
     posts.hook(
         'updating',
-        ((modifications: unknown, _pk: unknown, obj: unknown) => ({
-            document_reference_key: computeDocumentReferenceKey(
-                mergeEffectiveRow(toRow(obj), modifications)
-            ),
-        })) as (...args: never[]) => unknown
+        ((modifications: unknown, _pk: unknown, obj: unknown) => {
+            const row = mergeEffectiveRow(toRow(obj), modifications);
+            return {
+                document_reference_key: computeDocumentReferenceKey(row),
+                explorer_item_key: computeExplorerItemKey(row),
+            };
+        }) as (...args: never[]) => unknown
     );
 
     const fileMeta = db.table('file_meta') as unknown as DexieHookTable;

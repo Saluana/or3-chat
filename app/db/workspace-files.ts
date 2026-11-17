@@ -8,6 +8,7 @@ import { isValidHash } from '~/utils/hash';
 import type { TipTapDocument } from '~/types/database';
 import type { PluginFileLifecycle, PluginFileOperation, PluginSavedFile } from '@or3/plugin-sdk';
 import type { WorkspaceOperationScope } from '~/utils/chat/workspace-access';
+import { assertExplorerQueueCapacity } from './explorer-admission';
 import { workspaceRevision } from '~/utils/chat/workspace-items';
 import {
     FILE_CATALOG_POST_TYPE, mergeWorkspaceItemMetadata, workspaceItemMetadata,
@@ -191,7 +192,7 @@ export async function enableWorkspaceFileText(scope: WorkspaceOperationScope, id
 }
 
 export async function updateWorkspaceFile(scope: WorkspaceOperationScope, id: string, revision: string,
-    changes: { title?: string; trashed?: boolean }): Promise<Post> {
+    changes: { title?: string; trashed?: boolean }, options?: { explorerBulk?: boolean }): Promise<Post> {
     scope.assertCurrent('write');
     if (changes.trashed === true || changes.title !== undefined) {
         const { settleWorkspaceDocumentEditors } = await import('~/composables/documents/useDocumentEditorSessions');
@@ -230,6 +231,7 @@ export async function updateWorkspaceFile(scope: WorkspaceOperationScope, id: st
             const current = await scope.db.posts.get(id);
             scope.assertCurrent('write');
             if (JSON.stringify(current) !== JSON.stringify(base)) throw changed();
+            if (options?.explorerBulk) await assertExplorerQueueCapacity(scope, 1);
             await scope.db.posts.put(post);
             scope.assertCurrent('write');
         });

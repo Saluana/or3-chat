@@ -120,6 +120,7 @@ export interface PullRequest {
     /** Reader capability required before generic file metadata is returned. */
     fileKindCapability?: FileKindCapability;
     workspaceItemCapability?: WorkspaceItemCapability;
+    explorerCapability?: 'v1';
     unavailableRecordCapability?: 'unavailable-v1';
 }
 
@@ -163,6 +164,7 @@ export interface SnapshotRequest {
     /** Reader capability required before generic file metadata is returned. */
     fileKindCapability?: FileKindCapability;
     workspaceItemCapability?: WorkspaceItemCapability;
+    explorerCapability?: 'v1';
     unavailableRecordCapability?: 'unavailable-v1';
 }
 
@@ -217,6 +219,7 @@ export interface PushBatch {
     /** Writer capability required before generic file metadata is accepted. */
     fileKindCapability?: FileKindCapability;
     workspaceItemCapability?: WorkspaceItemCapability;
+    explorerCapability?: 'v1';
 }
 
 /**

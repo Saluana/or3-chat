@@ -1,3 +1,4 @@
+import { EXPLORER_CAPABILITY } from '../explorer/sync-contract';
 import { TitleSourceSchema } from '../titles/title';
 import { WORKSPACE_ITEM_CAPABILITY } from "../posts/workspace-item-capability";
 /**
@@ -331,6 +332,7 @@ export const PullRequestSchema = z.object({
         .optional(),
     fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
     workspaceItemCapability: z.literal(WORKSPACE_ITEM_CAPABILITY).optional(),
+    explorerCapability: z.literal(EXPLORER_CAPABILITY).optional(),
     unavailableRecordCapability: z.literal(UNAVAILABLE_RECORD_CAPABILITY).optional(),
 });
 
@@ -397,6 +399,7 @@ export const SnapshotRequestSchema = z.object({
         .optional(),
     fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
     workspaceItemCapability: z.literal(WORKSPACE_ITEM_CAPABILITY).optional(),
+    explorerCapability: z.literal(EXPLORER_CAPABILITY).optional(),
     unavailableRecordCapability: z.literal(UNAVAILABLE_RECORD_CAPABILITY).optional(),
 });
 
@@ -484,6 +487,7 @@ export const PushBatchSchema = z
         ops: z.array(PendingOpSchema).max(MAX_SYNC_PUSH_BATCH_OPS),
         fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
     workspaceItemCapability: z.literal(WORKSPACE_ITEM_CAPABILITY).optional(),
+    explorerCapability: z.literal(EXPLORER_CAPABILITY).optional(),
     })
     .superRefine((batch, ctx) => {
         if (syncJsonByteLength(batch) > MAX_SYNC_PUSH_BATCH_BYTES) {

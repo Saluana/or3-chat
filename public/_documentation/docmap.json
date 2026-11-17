@@ -425,7 +425,7 @@
                     "category": "Source integration",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Browse saved Files, understand text coverage, atomic Trash removal and shared-byte retention, retry failed actions with plain-language alerts, and extend catalog operations through the trusted Plugin SDK."
+                    "summary": "Browse saved Files, preview the local folder explorer, understand text coverage and shared-byte retention, and extend catalog operations through the trusted Plugin SDK."
                 },
                 {
                     "name": "errors.md",

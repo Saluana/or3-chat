@@ -1,9 +1,11 @@
+import { EXPLORER_FOLDER_POST_TYPE, EXPLORER_PLACEMENT_POST_TYPE } from '../explorer/records';
+
 /** Durable namespace: installed plugins may be disabled while their data remains private.
  * This is visibility/ordinary-editor policy, not an authorization or anti-tamper boundary.
  */
 export const PRIVATE_PLUGIN_POST_PREFIX = 'or3:plugin-private:';
 export const INTERNAL_POST_TYPES = new Set(['or3:document-revision', 'or3:document-revision-chunk', 'or3:file',
-    'or3:project-settings', 'or3:project-memory', 'or3:project-source']);
+    'or3:project-settings', 'or3:project-memory', 'or3:project-source', EXPLORER_FOLDER_POST_TYPE, EXPLORER_PLACEMENT_POST_TYPE]);
 export function isInternalPostType(postType: string): boolean {
     return INTERNAL_POST_TYPES.has(postType) || postType.startsWith(PRIVATE_PLUGIN_POST_PREFIX);
 }

@@ -61,6 +61,13 @@ import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import { useOr3Config } from '~/composables/useOr3Config';
 import SidebarProjectActions from './SidebarProjectActions.vue';
+import SidebarProjectExplorer from './SidebarProjectExplorer.vue';
+import { useExplorerAvailable } from '~/composables/explorer/explorer-availability';
+import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
+import { moveExplorerRows, readExplorerProjectItems } from '~/db/explorer';
+import { explorerItemKey } from '~~/shared/explorer/records';
+import type { ExplorerItemRef } from '~~/shared/explorer/records';
+import type { ExplorerFolderRow } from '~~/shared/explorer/tree';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import SidebarEmptyState from './SidebarEmptyState.vue';
 import SidebarPageLink from './SidebarPageLink.vue';
@@ -98,6 +105,10 @@ const chatIcon = useIcon('sidebar.chat');
 const newDocumentIcon = useIcon('sidebar.new_note');
 const or3Config = useOr3Config();
 const documentsEnabled = computed(() => or3Config.features.documents.enabled);
+const explorerEnabled = useExplorerAvailable();
+const projectExplorerActive = ref(false);
+const { createDocumentEntry } = useProjectsCrud();
+watch(id, () => { projectExplorerActive.value = false; });
 const knowledgeIcon = useIcon('sidebar.note');
 const settingsIcon = useIcon('ui.settings');
 const editIcon = useIcon('ui.edit');
@@ -230,6 +241,7 @@ const memoryTheme = useThemeOverrides({
     isNuxtUI: true,
 });
 const sourceInput = ref<'' | 'note' | 'document' | 'file'>('');
+const sourceDestination = shallowRef<ExplorerFolderRow>();
 const sourceMenuOpen = ref(false);
 const briefEditing = ref(false);
 const inlineBriefEditor = ref<HTMLTextAreaElement | null>(null);
@@ -712,10 +724,15 @@ function goBack() {
     }
 }
 let focusChosenSource = false;
-function chooseSource(kind: 'note' | 'document' | 'file') {
+function chooseSource(kind: 'note' | 'document' | 'file', destination?: ExplorerFolderRow) {
+    sourceDestination.value = destination;
     sourceInput.value = kind;
     focusChosenSource = true;
     sourceMenuOpen.value = false;
+}
+function addFileInExplorer(folder: ExplorerFolderRow) {
+    tab.value = 'Knowledge';
+    chooseSource('file', folder);
 }
 // Closing the menu would return focus to "Add source"; move it into the chosen form.
 function focusSourceForm(event: Event) {
@@ -763,7 +780,29 @@ async function pin(projectId: string) {
         current.settingsRow ?? null,
     );
 }
-async function newChat() {
+async function placeCreatedItem(origin: typeof scope, projectId: string, item: ExplorerItemRef, folder: ExplorerFolderRow) {
+    try {
+        await moveExplorerRows(origin, { kind: 'project', project_id: projectId },
+            [{ row: { kind: 'item', item }, expected: null }], folder.id);
+    } catch {
+        origin.assertCurrent();
+        toast.add({ title: 'Saved to the project root', description: 'The selected folder could not be used.', color: 'warning' });
+    }
+}
+async function createInExplorer(kind: 'chat' | 'document', folder: ExplorerFolderRow) {
+    await run(async () => {
+        if (kind === 'chat') return newChat(folder);
+        const projectId = id.value;
+        const origin = scope;
+        const entry = await createDocumentEntry(projectId);
+        if (!entry) return;
+        origin.assertCurrent();
+        await placeCreatedItem(origin, projectId, { kind: 'document', item_id: entry.id }, folder);
+        const result = await getPaletteHostContext()?.openDocument(entry.id, 'active');
+        if (result && !result.ok) throw new Error(result.error.message);
+    });
+}
+async function newChat(folder?: ExplorerFolderRow) {
     const projectId = id.value;
     scope.assertCurrent('write');
     const captured = scope;
@@ -782,6 +821,7 @@ async function newChat() {
         { assertCurrent: () => captured.assertCurrent('write') },
     );
     captured.assertCurrent();
+    if (folder) await placeCreatedItem(captured, projectId, { kind: 'chat', item_id: thread.id }, folder);
     await openChat(thread.id);
 }
 async function openChat(threadId: string) {
@@ -821,9 +861,16 @@ async function addSelectedFile() {
     const captured = scope;
     const projectId = id.value;
     const selected = fileId.value;
+    const destination = sourceDestination.value;
+    const item = { kind: 'file', item_id: selected } as const;
+    const alreadyInProject = destination && (await readExplorerProjectItems(captured.db, projectId)).has(explorerItemKey(item));
     await addExistingProjectFile(captureIntakeScope(), projectId, selected);
-    if (captured === scope && projectId === id.value && sourceInput.value === 'file' && fileId.value === selected)
+    if (destination && !alreadyInProject) await placeCreatedItem(captured, projectId, item, destination);
+    if (captured === scope && projectId === id.value && sourceInput.value === 'file' && fileId.value === selected) {
         sourceInput.value = '';
+        sourceDestination.value = undefined;
+        if (destination) tab.value = 'Overview';
+    }
 }
 
 async function saveSettings() {
@@ -1178,6 +1225,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                 role="region"
                 aria-label="Project activity"
                 type="all"
+                :hide-activity="explorerEnabled && projectExplorerActive"
                 :project-id="id"
                 :query="props.sidebarQuery ?? query"
                 :active-ids="[
@@ -1296,7 +1344,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                                 :ui="{ leadingIcon: 'size-[18px]' }"
                                 class="project-start theme-btn"
                                 :disabled="busy"
-                                @click="run(newChat)"
+                                @click="run(() => newChat())"
                             />
                             <UButton
                                 v-if="documentsEnabled"
@@ -1326,11 +1374,13 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                                 @select="tab = 'Memory'"
                             />
                         </nav>
-                        <h2
-                            class="project-section-label border-t border-[var(--md-outline-variant)] pt-4!"
-                        >
-                            Recent activity
-                        </h2>
+                        <div v-if="explorerEnabled" class="border-t border-[var(--md-outline-variant)] pt-3">
+                            <SidebarProjectExplorer :key="id" :project-id="id" :project-name="state.project.name"
+                                :documents-enabled="documentsEnabled" :query="props.sidebarQuery ?? query"
+                                @view="projectExplorerActive = $event" @create="createInExplorer"
+                                @add-file="addFileInExplorer" @clear-search="query = ''" />
+                        </div>
+                        <h2 v-else class="project-section-label border-t border-[var(--md-outline-variant)] pt-4!">Recent activity</h2>
                     </div></template
                 ></SidebarTimeGroupedList
             >
@@ -1565,7 +1615,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                             @submit.prevent="run(addSelectedFile)"
                         >
                             <h2 class="font-semibold text-xs">
-                                Add a saved file
+                                {{ sourceDestination ? 'Add a saved file in ' + sourceDestination.payload.name : 'Add a saved file' }}
                             </h2>
                             <select
                                 v-bind="resourceSelectTheme"

@@ -1,3 +1,4 @@
+import { MAX_PENDING_OPS, countQueuedSyncOperations } from './outbox-queue';
 import { invalidateFirstBindEligibility, readHistory, sameHistory, requestHistoryReset, changedHistoryFromError, isHistoryProtocolBoundary, pauseHistoryProtocol, protocolPauseId, type HistoryGuard } from './history-incarnation';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { errorDiagnostics, presentError, type ErrorMetadata } from '~~/shared/errors';
@@ -45,7 +46,7 @@ import { markRecentOpId, unmarkRecentOpId } from './recent-op-cache';
 import { getHookBridge, SYNCED_TABLES } from './hook-bridge';
 import { getSyncCircuitBreaker } from '~~/shared/sync/circuit-breaker';
 import { compareSyncRevision } from '~~/shared/sync/revision';
-import { normalizeSyncPayload } from './sync-payload-normalizer';
+import { normalizeSyncPayload, retainedExplorerPost } from './sync-payload-normalizer';
 import {
     discardQuarantined,
     exportQuarantined,
@@ -66,7 +67,6 @@ const DEFAULT_FLUSH_INTERVAL_MS = 1000;
 const DEFAULT_MAX_BATCH_SIZE = 50;
 
 /** Max pending ops before emitting capacity warning */
-const MAX_PENDING_OPS = 500;
 
 // A request ends before its durable claim expires. If a tab is suspended, the
 // next tab can reclaim it and every late settlement is conditional on the token.
@@ -1098,8 +1098,10 @@ export class OutboxManager {
             ) {
                 return;
             }
-            await table.delete(op.pk);
             const deletedAt = winner.serverDeletedAt ?? nowSec();
+            const retained = retainedExplorerPost(op.tableName, op.pk, local, winner.revision);
+            if (retained) await table.put({ ...retained, deleted_at: deletedAt });
+            else await table.delete(op.pk);
             await tx.table('tombstones').put({
                 id: `${op.tableName}:${op.pk}`,
                 tableName: op.tableName,
@@ -1278,11 +1280,7 @@ export class OutboxManager {
      * Get current pending count
      */
     async getPendingCount(): Promise<number> {
-        const [pending, retryWait] = await Promise.all([
-            this.db.pending_ops.where('status').equals('pending').count(),
-            this.db.pending_ops.where('status').equals('retry_wait').count(),
-        ]);
-        return pending + retryWait;
+        return countQueuedSyncOperations(this.db);
     }
 
     /**

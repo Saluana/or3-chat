@@ -12,12 +12,12 @@ action ordering. Optional `pluginId` and `access` participate in the host gate.
 ## Current caller payload
 
 The declared context includes `treeRow`, `root`, and `child`. The current
-[SidebarProjectTree](../../app/components/sidebar/SidebarProjectTree.vue)
-actually passes `{ root }` for project roots and `{ child }` for entries.
-Resolve `ctx.treeRow ?? ctx.child ?? ctx.root`; do not assume `treeRow`
-is populated by that caller.
+[Project Explorer](../../app/components/sidebar/SidebarProjectExplorer.vue)
+supplies `treeRow` and the corresponding `root` or `child` property. The
+legacy fields remain available to existing action handlers. The Project
+Explorer exposes these actions on the project root and individual content rows.
 
-`showOn` can name `root`, `chat`, and `doc`. Omit it to appear in all
+`showOn` can name `root`, `chat`, `doc`, and `file`. Omit it to appear in all
 locations. Although the type also permits `all`, the current template does
 not interpret that value as a wildcard.
 

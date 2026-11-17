@@ -25,7 +25,7 @@ if (stripeEnv && (!billing ||
 }
 const convexIndex = process.argv.indexOf('--convex-local');
 const convex = convexIndex < 0 ? null : await Bun.file(join(process.argv[convexIndex + 1]!, 'sandbox.json')).json() as { root: string; url: string; adminKey: string };
-if (convex && (!convex.root.startsWith('/private/tmp/or3-files-convex-') || new URL(convex.url).hostname !== '127.0.0.1')) {
+if (convex && (!convex.root.startsWith(join(tmpdir(), 'or3-files-convex-')) || new URL(convex.url).hostname !== '127.0.0.1')) {
     throw new Error('Convex qualification requires the disposable loopback sandbox.');
 }
 const storageProvider = process.argv.includes('--s3') ? 's3' : process.argv.includes('--convex-storage') ? 'convex' : 'fs';

@@ -85,7 +85,13 @@ export default defineEventHandler(async (event) => {
     const appAccessAllowed = session.authenticated && can(session, 'workspace.read', {
         kind: 'workspace', id: session.workspace?.id,
     }).allowed;
-    const workspaceItemCapability = appAccessAllowed && getActiveSyncGatewayAdapter()?.capabilities?.workspaceItems === 'v1' ? 'v1' : undefined;
+    const sync = getActiveSyncGatewayAdapter();
+    const workspaceItemCapability = appAccessAllowed && sync?.capabilities?.workspaceItems === 'v1' ? 'v1' : undefined;
+    const explorerCapability = appAccessAllowed && session.workspace && sync
+        ? sync.getExplorerCapability
+            ? await sync.getExplorerCapability(event, { workspaceId: session.workspace.id }).catch(() => undefined)
+            : sync.capabilities?.explorer
+        : undefined;
     const cloudAccess = session.authenticated ? await resolveCloudAccess(event, session) : undefined;
     return {
         session: clientSession,
@@ -93,5 +99,6 @@ export default defineEventHandler(async (event) => {
         ...(cloudAccess ? { cloudAccess } : {}),
         ...(secrets?.provider ? { secretStoreEnabled: true } : {}),
         ...(workspaceItemCapability ? { workspaceItemCapability } : {}),
+        ...(explorerCapability ? { explorerCapability } : {}),
     };
 });

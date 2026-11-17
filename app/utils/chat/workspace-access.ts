@@ -10,6 +10,8 @@ export interface WorkspaceOperationScope {
     subject: string | null;
     signal: AbortSignal;
     writable: boolean;
+    explorerLocal?: boolean;
+    explorerCloud?: boolean;
     assertCurrent(access?: 'read' | 'write'): void;
 }
 
@@ -25,13 +27,19 @@ export function captureWorkspaceOperation(context: ToolExecutionContext): Worksp
     const db = getDb();
     const generation = getWorkspaceGeneration();
     const workspaceId = getActiveWorkspaceId() ?? 'local';
-    const authenticated = useRuntimeConfig().public.ssrAuthEnabled === true;
+    const config = useRuntimeConfig().public;
+    const authenticated = config.ssrAuthEnabled === true;
     const session = authenticated ? getCachedSessionContext() : null;
     const subject = authenticated ? session?.user?.id ?? null : null;
     const authorizationRevision = session?.authorizationRevision;
     const role = session?.role;
     const scope: WorkspaceOperationScope = {
         db, generation, workspaceId, subject, signal: context.abortSignal,
+        explorerLocal: !authenticated && config.syncEnabled !== true,
+        get explorerCloud() {
+            const payload = getCachedSessionPayload();
+            return authenticated && payload?.appAccessAllowed === true && payload.explorerCapability === 'v1';
+        },
         writable: !authenticated || role === 'owner' || role === 'editor',
         assertCurrent(access = 'read') {
             context.abortSignal.throwIfAborted();

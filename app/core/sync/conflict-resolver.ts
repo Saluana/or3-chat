@@ -36,7 +36,7 @@ import { observeSyncAction } from './sync-observers';
 import { useHooks } from '~/core/hooks/useHooks';
 import { nowSec } from '~/db/util';
 import { isLocalOnlyKvChange } from '~~/shared/sync/local-only-kv';
-import { normalizeSyncPayload } from './sync-payload-normalizer';
+import { normalizeSyncPayload, retainedExplorerPost } from './sync-payload-normalizer';
 
 /** Local record with clock and optional HLC */
 interface LocalRecord {
@@ -225,17 +225,18 @@ export class ConflictResolver {
         const table = tx.table(tableName);
         const hookBridge = getHookBridge(this.db);
         hookBridge.markSyncTransaction(tx);
+        const retained = retainedExplorerPost(tableName, pk, change.payload, stamp);
 
         if (!local) {
+            if (retained) await table.put(retained);
             await this.writeTombstone(tx, tableName, pk, stamp, change.serverVersion, existingTombstone);
-            // Already gone or never existed
-            return { applied: false, skipped: true, isConflict: false };
+            return { applied: !!retained, skipped: !retained, isConflict: false };
         }
 
         if (local.deleted) {
             if (compareSyncRevision(stamp, rowRevision(local)) > 0) {
                 const remotePayload = change.payload as { deleted_at?: number } | undefined;
-                await table.update(pk, { clock: stamp.clock, hlc: stamp.hlc, op_id: stamp.opId,
+                await table.update(pk, { ...retained, clock: stamp.clock, hlc: stamp.hlc, op_id: stamp.opId,
                     deleted_at: remotePayload?.deleted_at ?? local.deleted_at ?? nowSec() });
             }
             await this.writeTombstone(tx, tableName, pk, stamp, change.serverVersion, existingTombstone);
@@ -253,6 +254,7 @@ export class ConflictResolver {
             const deletedAt = remotePayload?.deleted_at ?? nowSec();
 
             await table.update(pk, {
+                ...retained,
                 deleted: true,
                 deleted_at: deletedAt,
                 clock: stamp.clock,
@@ -267,6 +269,7 @@ export class ConflictResolver {
                 const deletedAt = remotePayload?.deleted_at ?? nowSec();
 
                 await table.update(pk, {
+                    ...retained,
                     deleted: true,
                     deleted_at: deletedAt,
                     clock: stamp.clock,

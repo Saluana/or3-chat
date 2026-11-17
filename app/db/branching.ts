@@ -237,7 +237,7 @@ export async function forkThread({
             throw new Error('The anchor changed while preparing its fork. Try again.');
 
         await db.threads.put(fork);
-        membership = scope ? await moveChatProjectRows(scope, fork.id, projectId) : { projects: [], threads: [] };
+        membership = scope ? await moveChatProjectRows(scope, fork.id, projectId) : { projects: [], threads: [], placements: 0 };
 
         if (branchMode === 'copy') {
             const { messages: ancestors } = await resolveThreadProjection(sourceThreadId, db, anchorMessageId);
