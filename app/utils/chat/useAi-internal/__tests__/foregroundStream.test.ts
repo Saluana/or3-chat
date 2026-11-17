@@ -44,6 +44,62 @@ vi.mock('~/utils/chat/uiMessages', () => ({
 }));
 
 describe('runForegroundStreamLoop', () => {
+    it('publishes a completed tool only after its durable result is available', async () => {
+        const { prepareToolResultStorage } = await import('~~/shared/chat/tool-result-artifact');
+        const output = JSON.stringify({ version: 1, workspaceId: 'local', results: [] });
+        const storage = await prepareToolResultStorage(output, {
+            threadId: 'thread-1', parentAssistantId: 'assistant-result', callId: 'source-call',
+        });
+        const entered = deferred<void>();
+        const release = deferred<void>();
+        const assistantEntered = deferred<void>();
+        const assistantRelease = deferred<void>();
+        appendToolResultMock.mockImplementationOnce(async () => {
+            entered.resolve();
+            await release.promise;
+            return { id: 'tool-msg', data: { content: storage.result } };
+        });
+        let iteration = 0;
+        openRouterStreamMock.mockImplementation(async function* () {
+            if (++iteration === 1) yield { type: 'tool_call', tool_call: {
+                id: 'source-call', type: 'function', function: { name: 'workspace_search', arguments: '{}' },
+            } };
+            else yield { type: 'text', text: 'Finished' };
+        });
+        const { runForegroundStreamLoop } = await import('../foregroundStream');
+        const ctx = {
+            apiKey: 'key', modelId: 'model',
+            orMessages: [{ role: 'user' as const, content: [{ type: 'text' as const, text: 'go' }] }],
+            tools: [{ type: 'function' as const, function: { name: 'workspace_search', description: 'search', parameters: { type: 'object' as const } } }],
+            modalities: ['text'], abortSignal: new AbortController().signal,
+            assistantId: 'assistant-result', streamId: 'stream-result', threadId: 'thread-1',
+            streamAcc: { append: vi.fn() }, hooks: { doAction: vi.fn(async () => {}) },
+            toolRegistry: { executeTool: vi.fn(async () => ({ result: output, toolName: 'workspace_search', timedOut: false })) },
+            persistAssistant: vi.fn(async (patch: Parameters<AssistantPersister>[0]) => {
+                if (patch.toolCalls?.some(call => call.status === 'complete')) {
+                    assistantEntered.resolve();
+                    await assistantRelease.promise;
+                }
+                return null;
+            }), assistantFileHashes: [], activeToolCalls: new Map(),
+            tailAssistant: { value: null as any }, rawMessages: { value: [] as any[] },
+        };
+        const run = runForegroundStreamLoop(ctx);
+        await entered.promise;
+        // A browser paint during IndexedDB persistence must not see an inline
+        // result that disappears when the retained reference replaces it.
+        const whileSaving = structuredClone(ctx.tailAssistant.value.toolCalls);
+        release.resolve();
+        await assistantEntered.promise;
+        const whileSavingAssistant = structuredClone(ctx.tailAssistant.value.toolCalls);
+        assistantRelease.resolve();
+        await run;
+        expect(whileSaving).toEqual([expect.objectContaining({ status: 'loading' })]);
+        expect(whileSaving[0].result).toBeUndefined();
+        expect(whileSavingAssistant).toEqual(whileSaving);
+        expect(ctx.tailAssistant.value.toolCalls[0]).toMatchObject({ status: 'complete', result: storage.result });
+    });
+
     it.each(['stored', 'url'] as const)('retains stored image deltas and refuses unsaved image URLs (%s)', async (mode) => {
         const { createStreamAccumulator } = await import('~/composables/chat/useStreamAccumulator');
         const { createOrRefFile } = await import('~/db/files');

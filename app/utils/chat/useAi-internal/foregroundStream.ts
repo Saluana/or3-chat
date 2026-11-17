@@ -664,7 +664,7 @@ async function runForegroundWithRouter(ctx: ForegroundStreamContext, routerId: s
                     }
                     const projectedResult = projectToolResult(toolResultText);
 
-                    ctx.activeToolCalls.set(toolCall.id, {
+                    const completedTool: ToolCallInfo = {
                         id: toolCall.id,
                         name: toolCall.function.name,
                         status: toolStatus,
@@ -683,13 +683,11 @@ async function runForegroundWithRouter(ctx: ForegroundStreamContext, routerId: s
                         fingerprint: decision.fingerprint,
                         completedAt: Date.now(),
                         text_offset: textOffset,
-                    });
-                    current.toolCalls = Array.from(
-                        ctx.activeToolCalls.values()
-                    );
+                    };
 
-                    // Persist the FULL tool result so reload / sync / retry keep the
-                    // real context. The UI already truncates via ToolCallIndicator.formatResult.
+                    // Keep the running presentation until both writes acknowledge
+                    // completion. Publishing inline JSON here briefly mounts source
+                    // controls/cards before storage replaces it with a reference.
                     try {
                         const savedResult = await appendForegroundToolResult({
                             threadId: ctx.threadId,
@@ -707,22 +705,23 @@ async function runForegroundWithRouter(ctx: ForegroundStreamContext, routerId: s
                         const retainedResult = (savedResult.data as Record<string, unknown> | null)?.content;
                         if (typeof retainedResult === 'string' && retainedResult.startsWith('or3-tool-result:v1/')) {
                             projectedResult.durable = retainedResult;
-                            ctx.activeToolCalls.set(toolCall.id, { ...ctx.activeToolCalls.get(toolCall.id)!, result: retainedResult });
+                            completedTool.result = retainedResult;
                         }
 
                         // Both writes must be durable before the next request.
-                        const receipt = ctx.activeToolCalls.get(toolCall.id)?.executionReceipt;
-                        if (receipt) ctx.activeToolCalls.set(toolCall.id, {
-                            ...ctx.activeToolCalls.get(toolCall.id)!, executionReceipt: { ...receipt,
-                                state: ctx.abortSignal.aborted || execution.timedOut ? 'unresolved' : 'settled' },
-                        });
-                        current.toolCalls = Array.from(ctx.activeToolCalls.values());
+                        const receipt = completedTool.executionReceipt;
+                        if (receipt) completedTool.executionReceipt = { ...receipt,
+                            state: ctx.abortSignal.aborted || execution.timedOut ? 'unresolved' : 'settled' };
+                        const completedToolCalls = Array.from(ctx.activeToolCalls.values(), call =>
+                            call.id === toolCall.id ? completedTool : call);
                         await ctx.persistAssistant({
                             content: current.text,
                             reasoning: current.reasoning_text ?? null,
-                            toolCalls: current.toolCalls,
+                            toolCalls: completedToolCalls,
                             requireCurrent: true,
                         });
+                        ctx.activeToolCalls.set(toolCall.id, completedTool);
+                        current.toolCalls = completedToolCalls;
                     } catch (persistenceError) {
                         const error = 'The tool executed, but its result could not be saved. Its outcome is unresolved. Continue chatting; do not retry this operation automatically.';
                         ctx.activeToolCalls.set(toolCall.id, {

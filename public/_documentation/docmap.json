@@ -380,7 +380,7 @@
                     "category": "Using tools",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Configure chat tools, web search, workspace tools, and delegated tasks."
+                    "summary": "Configure chat tools, web search, workspace tools, delegated tasks, and retained results with stable source controls."
                 },
                 {
                     "name": "chat-tool-reliability.md",

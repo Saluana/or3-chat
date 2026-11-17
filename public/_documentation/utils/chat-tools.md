@@ -152,14 +152,17 @@ Definitions and handlers live in `app/utils/chat/thread-chat-tools.ts` and
 `app/utils/documents/document-chat-tools.ts`. The editor's proposal contract
 and snapshot behavior are described in [Documents](/documentation/database/documents).
 
-## Large completed results
+## Completed tool results
 
-Accepted tool results retain their full output up to the existing 256 KiB raw
-result limit. Results above 16 KiB of JSON-escaped text are stored in immutable
-workspace KV chunks, with a bounded reference in the tool transcript. Expanding
-the tool activity exposes **Download full result**. The download checks the
-originating workspace/account and verifies all chunks against SHA-256; missing
-sync pages or corrupt bytes produce a visible error rather than a partial file.
-Reloaded model history resolves the same reference before the normal model
-projection and context-budget check. The model projection may still omit output
-above its own limit; that does not remove the retained full result.
+Accepted nonempty tool results retain their full output in immutable workspace
+KV chunks, up to the existing 256 KiB raw result limit. The tool transcript holds
+a bounded reference. Tool activity publishes completion after the result is
+saved, and source links and document review controls resolve the verified chunks.
+These controls remain available after saving or reloading; when Cloud sync is
+still delivering the chunks, they appear once those chunks are available.
+
+The activity's technical details show the retained reference without a download
+action. Reloaded model history resolves the reference and verifies the chunks
+before the normal model projection and context-budget check. The model projection
+may still omit output above its own limit; that does not remove the retained full
+result.

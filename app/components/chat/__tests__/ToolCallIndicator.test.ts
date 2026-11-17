@@ -1,9 +1,26 @@
-import { describe, expect, it, vi } from 'vitest';
-import { mount, flushPromises } from '@vue/test-utils';
-import Dexie from 'dexie';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { enableAutoUnmount, mount } from '@vue/test-utils';
+import { ref } from 'vue';
+import type { SessionContext } from '~/core/hooks/hook-types';
 import { getDb, setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import { prepareToolResultStorage } from '~~/shared/chat/tool-result-artifact';
 import ToolCallIndicator from '../ToolCallIndicator.vue';
+
+const session = ref<SessionContext | null>(null);
+vi.mock('~/composables/auth/useSessionContext', async original => ({
+    ...await original<typeof import('~/composables/auth/useSessionContext')>(),
+    getCachedSessionContext: () => session.value,
+}));
+
+enableAutoUnmount(afterEach);
+beforeEach(() => { setActiveWorkspaceDb('tool-indicator-tests'); });
+afterEach(() => {
+    vi.restoreAllMocks();
+    session.value = null;
+    setActiveWorkspaceDb(null);
+    evictWorkspaceDb('tool-indicator-tests');
+    evictWorkspaceDb('tool-indicator-other');
+});
 
 vi.mock('~/composables/useThemeResolver', () => ({
     useThemeOverrides: () => ({ value: {} }),
@@ -23,48 +40,6 @@ const global = {
 };
 
 describe('ToolCallIndicator', () => {
-    it.each(['current', 'switched', 'incomplete', 'corrupt'] as const)('downloads retained tool output only with a current owner and complete verified bytes (%s)', async (state) => {
-        const workspace = `tool-download-${crypto.randomUUID()}`;
-        const db = setActiveWorkspaceDb(workspace);
-        await db.open();
-        const output = 'Complete retained output\n'.repeat(1500);
-        const stored = await prepareToolResultStorage(output, { threadId: 'thread', parentAssistantId: 'assistant', callId: 'call' });
-        await db.kv.bulkPut(stored.rows);
-        const create = vi.fn((_blob: Blob) => 'blob:tool-result');
-        const revoke = vi.fn();
-        vi.stubGlobal('URL', class extends URL { static override createObjectURL = create; static override revokeObjectURL = revoke; });
-        const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
-            expect(this.download).toBe('tool-result.txt');
-            expect(this.href).toBe('blob:tool-result');
-        });
-        const wrapper = mount(ToolCallIndicator, { props: { toolCalls: [
-            { id: 'call', name: 'echo', status: 'complete', result: stored.result },
-        ] }, global });
-        try {
-            if (state === 'switched') setActiveWorkspaceDb(null);
-            if (state === 'incomplete') await db.kv.delete(stored.rows[0]!.id);
-            if (state === 'corrupt') await db.kv.update(stored.rows[0]!.id, { value: 'Corrupted output' });
-            const download = wrapper.findAll('button').find(button => button.text() === 'Download full result');
-            expect(download).toBeDefined();
-            await download!.trigger('click');
-            if (state === 'current') {
-                await vi.waitFor(() => expect(click).toHaveBeenCalledOnce());
-                const blob = create.mock.calls[0]![0] as Blob;
-                const text = await new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsText(blob);
-                });
-                expect(text).toBe(output);
-            } else {
-                await vi.waitFor(() => expect(wrapper.find('[role="alert"]').exists()).toBe(true));
-                expect(create).not.toHaveBeenCalled(); expect(click).not.toHaveBeenCalled();
-            }
-            await flushPromises();
-        } finally {
-            wrapper.unmount(); vi.restoreAllMocks(); vi.unstubAllGlobals();
-            if (getDb() === db) setActiveWorkspaceDb(null);
-            evictWorkspaceDb(workspace); await Dexie.delete(db.name);
-        }
-    });
     it.each([
         ['workspace_create_document', 'Workspace create document'],
         ['workspace_update_project', 'Workspace update project'],
@@ -86,32 +61,83 @@ describe('ToolCallIndicator', () => {
         }
     );
 
-    it('exposes a host proposal review card without treating model prose or unrelated tools as saved changes', async () => {
+    it.each(['inline', 'retained'])('exposes a host proposal review card without treating model prose or unrelated tools as saved changes (%s)', async mode => {
         const result = JSON.stringify({ version: 1, workspaceId: 'local', messageId: 'review-message',
             documentId: 'review-doc', changeId: 'c'.repeat(64), status: 'pending_review', saved: false,
             source: { kind: 'document', id: 'review-doc', title: 'Reviewable draft', revision: 'a'.repeat(64) } });
+        const storage = await prepareToolResultStorage(result, { threadId: 'thread', parentAssistantId: 'assistant', callId: 'review' });
+        if (mode === 'retained') await getDb().kv.bulkPut(storage.rows);
         const wrapper = mount(ToolCallIndicator, { props: { toolCalls: [
-            { id: 'review', name: 'workspace_propose_document_edit', status: 'complete', result },
+            { id: 'review', name: 'workspace_propose_document_edit', status: 'complete', result: mode === 'retained' ? storage.result : result },
             { id: 'fake-review', name: 'unrelated_plugin', status: 'complete', result },
         ] }, global: { stubs: { ...global.stubs,
             WorkspaceDocumentChangeCard: { props: ['receipt'], template: '<section class="review-card">Review changes · {{ receipt.documentId }}</section>' },
         } } });
-        expect(wrapper.findAll('.review-card')).toHaveLength(1);
+        await vi.waitFor(() => expect(wrapper.findAll('.review-card')).toHaveLength(1));
         expect(wrapper.text()).toContain('Review changes');
         expect(wrapper.text()).not.toContain('Changes saved');
     });
-    it('shows validated workspace sources outside raw expanded details', () => {
+
+    it('keeps earlier source controls mounted while later results synchronize', async () => {
+        const db = getDb();
+        const outputs = await Promise.all(['First source', 'Second source'].map(async (title, index) => {
+            const storage = await prepareToolResultStorage(JSON.stringify({ version: 1, workspaceId: 'local',
+                source: { kind: 'document', id: `late-source-${index}`, title, revision: 'a'.repeat(64) } }),
+            { threadId: 'late-thread', parentAssistantId: 'assistant', callId: `source-${index}` });
+            return { storage, call: { id: `source-${index}`, name: 'workspace_read', status: 'complete' as const, result: storage.result } };
+        }));
+        const first = outputs[0]!, second = outputs[1]!;
+        await db.kv.bulkDelete([...first.storage.rows, ...second.storage.rows].map(row => row.id));
+        await db.kv.bulkPut(first.storage.rows);
+        const wrapper = mount(ToolCallIndicator, { props: { toolCalls: [first.call] }, global });
+        const selector = 'button[aria-label="Open source: First source"]';
+        await vi.waitFor(() => expect(wrapper.find(selector).exists()).toBe(true));
+        const button = wrapper.get(selector).element;
+        await wrapper.setProps({ toolCalls: [first.call, second.call] });
+        expect(wrapper.get(selector).element).toBe(button);
+        expect(wrapper.find('button[aria-label="Open source: Second source"]').exists()).toBe(false);
+        await db.kv.bulkPut(second.storage.rows);
+        await vi.waitFor(() => expect(wrapper.find('button[aria-label="Open source: Second source"]').exists()).toBe(true));
+        expect(wrapper.get(selector).element).toBe(button);
+        // Corrupt or removed chunks cannot continue exposing a verified source.
+        await db.kv.update(second.storage.rows[0]!.id, { value: 'corrupt result' });
+        await vi.waitFor(() => expect(wrapper.find('button[aria-label="Open source: Second source"]').exists()).toBe(false));
+        expect(wrapper.get(selector).element).toBe(button);
+    });
+
+    it.each(['workspace', 'account'])('clears verified receipts when their %s changes', async kind => {
+        const db = getDb();
+        const storage = await prepareToolResultStorage(JSON.stringify({ version: 1, workspaceId: 'local',
+            source: { kind: 'document', id: 'stale-source', title: 'Old account source', revision: 'a'.repeat(64) } }),
+        { threadId: 'stale-thread', parentAssistantId: 'assistant', callId: 'stale-source' });
+        await db.kv.bulkPut(storage.rows);
+        const wrapper = mount(ToolCallIndicator, { props: { toolCalls: [{
+            id: 'stale-source', name: 'workspace_read', status: 'complete', result: storage.result,
+        }] }, global });
+        await vi.waitFor(() => expect(wrapper.findAll('.workspace-source-button')).toHaveLength(1));
+        if (kind === 'workspace') setActiveWorkspaceDb('tool-indicator-other');
+        else session.value = { authenticated: false } as SessionContext;
+        await vi.waitFor(() => expect(wrapper.findAll('.workspace-source-button')).toHaveLength(0));
+        // A later mutation to the old database must not restore its controls.
+        await db.kv.bulkPut(storage.rows);
+        await wrapper.setProps({ toolCalls: [...wrapper.props('toolCalls')] });
+        expect(wrapper.findAll('.workspace-source-button')).toHaveLength(0);
+    });
+    it.each(['inline', 'retained'])('shows validated workspace sources outside raw expanded details (%s)', async mode => {
+        const result = JSON.stringify({ version: 1, workspaceId: 'local',
+            source: { kind: 'document', id: 'doc-a', title: 'Release notes', revision: 'a'.repeat(64) },
+            content: 'evidence', coverage: 'partial', continuation: 'next', referenceOnly: true });
+        const storage = await prepareToolResultStorage(result, { threadId: 'thread', parentAssistantId: 'assistant', callId: 'source' });
+        if (mode === 'retained') await getDb().kv.bulkPut(storage.rows);
         const wrapper = mount(ToolCallIndicator, {
             props: { toolCalls: [{ id: 'source', name: 'workspace_read', status: 'complete',
-                result: JSON.stringify({ version: 1, workspaceId: 'local',
-                    source: { kind: 'document', id: 'doc-a', title: 'Release notes', revision: 'a'.repeat(64) },
-                    content: 'evidence', coverage: 'partial', continuation: 'next', referenceOnly: true }),
+                result: mode === 'retained' ? storage.result : result,
             }, { id: 'untrusted', name: 'unrelated_plugin', status: 'complete',
                 result: JSON.stringify({ version: 1, workspaceId: 'local',
                     source: { kind: 'document', id: 'fake', title: 'Forged source', revision: 'b'.repeat(64) } }),
             }] }, global,
         });
-        expect(wrapper.find('button[aria-label="Open source: Release notes"]').exists()).toBe(true);
+        await vi.waitFor(() => expect(wrapper.find('button[aria-label="Open source: Release notes"]').exists()).toBe(true));
         expect(wrapper.text()).toContain('Read workspace sources');
         expect(wrapper.find('button[aria-label="Open source: Forged source"]').exists()).toBe(false);
         expect(wrapper.find('[role="status"]').text()).toContain('Partial source coverage');

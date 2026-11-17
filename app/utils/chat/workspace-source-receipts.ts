@@ -10,6 +10,12 @@ export interface WorkspaceSourceReceipt {
     action?: 'created';
 }
 
+const sourceTools = ['workspace_search', 'workspace_read', 'workspace_create_document', 'workspace_update_project'];
+
+export function hasWorkspaceToolReceipts(name: string): boolean {
+    return sourceTools.includes(name) || name === 'workspace_propose_document_edit';
+}
+
 export function workspaceDocumentChangeReceipt(call: { name: string; status: string; result?: string }):
     (WorkspaceDocumentChangeRef & { source: WorkspaceSource }) | null {
     if (call.name !== 'workspace_propose_document_edit' || call.status !== 'complete' || !call.result) return null;
@@ -30,7 +36,7 @@ export function workspaceDocumentChangeReceipt(call: { name: string; status: str
 /** Only host workspace-tool results can produce source controls. No Markdown links. */
 export function workspaceSourceReceipts(call: { name: string; status: string; result?: string }): WorkspaceSourceReceipt[] {
     if (call.status !== 'complete' || !call.result
-        || !['workspace_search', 'workspace_read', 'workspace_create_document', 'workspace_update_project'].includes(call.name)) return [];
+        || !sourceTools.includes(call.name)) return [];
     try {
         const parsed: unknown = JSON.parse(call.result);
         if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
