@@ -308,7 +308,8 @@ jobs:
           npm pkg set "or3Cloud.operatorImageDigest=$OPERATOR_IMAGE_DIGEST"
           npm pkg set "or3Cloud.sourceRevision=$SOURCE_REVISION"
           node -e 'const p=require("./package.json"); if(p.version!==process.env.VERSION||p.or3Cloud?.imageDigest!==process.env.IMAGE_DIGEST||p.or3Cloud?.operatorImageDigest!==process.env.OPERATOR_IMAGE_DIGEST||p.or3Cloud?.sourceRevision!==process.env.SOURCE_REVISION)process.exit(1)'
-          bun run check
+          # Source qualification owns the full CLI suite; only binding metadata changed.
+          bun run check:smoke
           mkdir -p "$GITHUB_WORKSPACE/release-artifact"
           npm pack --ignore-scripts --pack-destination "$GITHUB_WORKSPACE/release-artifact"
           tarball="$GITHUB_WORKSPACE/release-artifact/or3-cloud-$VERSION.tgz"

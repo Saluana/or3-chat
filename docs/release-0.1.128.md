@@ -2,6 +2,11 @@
 
 Release preparation. Publication and production verification remain pending.
 
+Release CI runs the full CLI suite once, preserves exact packed-build and lifecycle
+checks, and selects affected provider browsers. Historical deployment coverage
+remains nightly/on demand. S3 parity is explicitly required for this release.
+Timing and compute savings remain unmeasured until qualification completes.
+
 Fixes completed dashboard updates whose operator handoff remains pending because
 the helper cannot write its lease and receipt through a read-only deployment
 mount. The helper gains write access only to `.or3-cloud`; configuration and

@@ -18,11 +18,22 @@ on:
         options:
           - all
           - tests
+          - release
           - lint
           - performance
           - plugin-runtime
           - deployment
           - dashboard-recovery
+
+      base_ref:
+        description: Previous published tag for release browser selection (required for release)
+        required: false
+        type: string
+      include_s3:
+        description: Force S3 parity even if the release diff does not select it
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: extended-validation-${{ github.ref }}-${{ inputs.suite || 'scheduled' }}
@@ -30,12 +41,50 @@ concurrency:
 
 jobs:
   full-tests:
-    name: Full and browser tests
-    if: github.event_name == 'schedule' || inputs.suite == 'all' || inputs.suite == 'tests'
+    name: Selected and browser tests
+    if: github.event_name == 'schedule' || inputs.suite == 'all' || inputs.suite == 'tests' || inputs.suite == 'release'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Validate the release comparison baseline
+        if: inputs.suite == 'release'
+        env:
+          BASE_REF: ${{ inputs.base_ref }}
+        run: |
+          set -euo pipefail
+          test -n "$BASE_REF"
+          git rev-parse --verify "$BASE_REF^{commit}"
+          git merge-base --is-ancestor "$BASE_REF" HEAD
+      - uses: dorny/paths-filter@v4
+        id: changes
+        if: inputs.suite == 'release'
+        with:
+          base: ${{ inputs.base_ref }}
+          filters: |
+            billing:
+              - 'packages/hosted-billing/**'
+              - 'server/**/billing/**'
+              - 'server/auth/**'
+              - 'shared/auth/**'
+              - 'tests/**/hosted-billing*'
+              - 'scripts/test/*billing*'
+              - 'bun.lock'
+              - 'tsconfig.eslint.hosted-billing.json'
+            s3:
+              - 'app/**'
+              - 'patches/**'
+              - 'server/**'
+              - 'shared/**'
+              - 'modules/**'
+              - 'tests/**'
+              - 'scripts/test/**'
+              - '.github/fixtures/**'
+              - 'nuxt.config.ts'
+              - 'or3.providers.generated.json'
+              - '*lock*'
       - uses: actions/setup-node@v7
         with:
           node-version: "24.22.1"
@@ -44,6 +93,7 @@ jobs:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
       - run: bun run test:full
+        if: inputs.suite != 'release'
       - run: bunx playwright install --with-deps chromium
       - name: Verify workspace backup imports
         run: bun run test:e2e:projects --grep 'pending backup import' --retries=0 --output=test-results/workspace-backup
@@ -61,11 +111,16 @@ jobs:
       - run: bun run test:e2e:storage
       - run: bun run test:e2e:admin-auth
       - name: Install optional billing test dependency
+        if: inputs.suite != 'release' || steps.changes.outputs.billing == 'true'
         run: bun install --cwd packages/hosted-billing --frozen-lockfile
       - run: bun run type-check:hosted-billing
+        if: inputs.suite != 'release' || steps.changes.outputs.billing == 'true'
       - run: bun run test:hosted-billing
+        if: inputs.suite != 'release' || steps.changes.outputs.billing == 'true'
       - run: bun run test:e2e:hosted-billing
+        if: inputs.suite != 'release' || steps.changes.outputs.billing == 'true'
       - name: Verify S3 browser parity
+        if: inputs.suite != 'release' || inputs.include_s3 || steps.changes.outputs.s3 == 'true'
         env:
           SSR_AUTH_ENABLED: 'false'
           OR3_SYNC_ENABLED: 'false'
@@ -229,7 +284,8 @@ jobs:
 
   fixed-cloud-image:
     name: Complete Cloud deployment lifecycle
-    if: github.event_name == 'schedule' || inputs.suite == 'all' || inputs.suite == 'deployment'
+    # Historical vault/adoption/failure matrix; the candidate owns the exact-release lifecycle.
+    if: github.event_name == 'schedule' || inputs.suite == 'deployment'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -244,7 +300,7 @@ jobs:
       - run: npm install --global npm@11.6.2
       - run: bun install --frozen-lockfile
       - run: bun run release:cloud:check
-      - run: bun run cloud:package:check
+      - run: bun run --cwd packages/or3-cloud check:smoke
       - name: Build fixed-profile image
         run: |
           version="$(node -p "require('./package.json').version")"

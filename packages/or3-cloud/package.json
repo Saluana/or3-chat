@@ -28,6 +28,7 @@
     "build": "bun build src/cli.ts --target=node --format=esm --outfile=dist/cli.mjs && bun build src/dashboard-lifecycle.ts --target=node --format=esm --outfile=assets/dashboard-lifecycle.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "check": "bun run typecheck && bun run build && bun test",
+    "check:smoke": "bun run typecheck && bun run build && bun test test/cli.test.ts",
     "prepack": "bun run build",
     "pack:check": "npm pack --dry-run --ignore-scripts"
   },
