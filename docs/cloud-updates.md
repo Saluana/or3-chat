@@ -549,6 +549,29 @@ npx @or3/cloud recover --restore --yes   # return to the recorded snapshot (disc
   a read-only run only exits nonzero for an actual failure. `status` still
   reports readable state when the managed `.env` is unreadable.
 
+### Completing a recorded operator handoff
+
+If the application update is complete but `recover --dry-run` reports
+`reconcile-handoff` with `dataLoss: false`, use the corrected exact CLI even
+while the previous application image is running:
+
+```sh
+npx --yes @or3/cloud@0.1.128 recover --dry-run
+npx --yes @or3/cloud@0.1.128 recover --finish
+npx --yes @or3/cloud@0.1.128 recover --dry-run
+npx --yes @or3/cloud@0.1.128 doctor
+```
+
+The finish command schedules the recorded operator job; completion is
+asynchronous. Wait for recovery to report no pending handoff before a fresh
+backup or update. The helper keeps deployment configuration and assets
+read-only, writes its lease and verified receipt under `.or3-cloud`, and
+replaces only the operator. It preserves the application, its data and the
+rollback point. A healthy successor or a succeeded job alone does not prove
+that the receipt was verified. Do not delete the receipt or lease, edit managed
+state, or restore application data to clear a handoff. If it remains pending,
+retain recovery material and inspect the helper's bounded logs while it exists.
+
 ### Restoring a previous version
 
 - Development deployment: set `OR3_IMAGE` back to the previously recorded

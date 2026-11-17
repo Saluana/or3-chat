@@ -135,7 +135,13 @@ profile. A browser timeout fails qualification; detached browser cleanup relies
 on disposal of the hosted runner. The Basic lifecycle job also retains a
 source, image, operator and package-bound result after the required steps. It
 captures the previous release's image identities before updating and checks
-them after recovery and rollback. Its restart uses the candidate managed CLI, and
+them after recovery and rollback. Before updating, it reconciles a pending
+handoff using the published 0.1.116 operator and exact candidate CLI, requiring
+a verified matching receipt, a replaced operator, unchanged application,
+configuration and rollback point, and an idempotent repeat. Its retained
+`.or3-smoke-handoff.json` records those results. Dashboard qualification with
+managed state requires the matching verified handoff receipt and a reachable
+successor; a succeeded job alone cannot pass. Its restart uses the candidate managed CLI, and
 its target-ready interruption is a synthetic journal fixture; neither alone
 establishes managed restart or crash-time evidence generation. The receipt job
 validates and retains the six Basic qualification files as a current-run Actions
