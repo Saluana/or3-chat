@@ -561,6 +561,46 @@ describe('continue/retry regressions', () => {
         expect(tailAssistant.value?.error).toBe('stream_interrupted');
     });
 
+    it('continue sends tool calls with their results, as OpenAI requires', async () => {
+        // Stopped mid-turn: one call finished (durable tool row), one never did.
+        const rows = [
+            { id: 'u1', role: 'user', thread_id: 't1', index: 1, content: 'Rate the chapters', data: { content: 'Rate the chapters' }, deleted: false, clock: 1 },
+            { id: 'a1', role: 'assistant', thread_id: 't1', index: 2, content: 'Reading chapter one', deleted: false, clock: 1,
+                data: { content: 'Reading chapter one', tool_calls: [
+                    { id: 'c1', name: 'workspace_read', args: '{"item":{"kind":"document","id":"d1"}}', status: 'complete', result: 'Chapter one text', text_offset: 19 },
+                    { id: 'c2', name: 'workspace_read', args: '{"item":{"kind":"document","id":"d2"}}', status: 'loading' },
+                ] } },
+            { id: 'r1', role: 'tool', thread_id: 't1', index: 3, content: 'Chapter one text', deleted: false, clock: 1,
+                data: { tool_call_id: 'c1', tool_name: 'workspace_read', parent_assistant_id: 'a1' } },
+        ];
+        dbState.messagesGet.mockResolvedValue(rows[1]);
+        dbState.where.mockReturnValue({ between: vi.fn().mockReturnThis(), filter: vi.fn().mockReturnThis(), toArray: vi.fn().mockResolvedValue(rows) });
+        makeAssistantPersisterSpy.mockReturnValue(vi.fn(async () => null));
+        openRouterStreamSpy.mockReturnValue((async function* () {})());
+        const { buildOpenRouterMessagesForSend } = await import('../messageBuild');
+        vi.mocked(buildOpenRouterMessagesForSend).mockClear();
+
+        await continueMessageImpl({
+            loading: ref(false), aborted: ref(false), abortController: ref(null), threadIdRef: ref('t1'),
+            tailAssistant: ref(null) as any, rawMessages: ref([]) as any, messages: ref([]) as any,
+            streamId: ref<string | undefined>(undefined),
+            streamAcc: { reset: vi.fn(), append: vi.fn(), finalize: vi.fn(), state: { finalized: false } },
+            streamState: { finalized: false }, hooks: { applyFilters: vi.fn(async (_name, value) => value) },
+            effectiveApiKey: ref(null), hasInstanceKey: ref(false), hasUserKey: ref(true),
+            defaultModelId: '@openai/gpt-5.4', getSystemPromptContent: async () => null,
+            useAiSettings: () => ({ settings: ref(undefined) }), resetStream: vi.fn(),
+        }, 'a1');
+
+        const history = vi.mocked(buildOpenRouterMessagesForSend).mock.calls[0]![0].effectiveMessages;
+        const { encodeOpenAiRequest } = await import('~~/shared/openai/adapter');
+        const { encodeOpenAiResponseRequest } = await import('~~/shared/openai/responses');
+        const { input } = encodeOpenAiResponseRequest(encodeOpenAiRequest({ model: '@openai/gpt-5.4', messages: history })) as { input: Array<{ type?: string; call_id?: string }> };
+        const calls = input.filter(item => item.type === 'function_call').map(item => item.call_id).sort();
+        const outputs = input.filter(item => item.type === 'function_call_output').map(item => item.call_id).sort();
+        expect(calls).toEqual(['c1', 'c2']);
+        expect(outputs).toEqual(calls);
+    });
+
     it('continue cleans up UI and persistence when setup fails before streaming', async () => {
         const target = {
             id: 'a-setup',

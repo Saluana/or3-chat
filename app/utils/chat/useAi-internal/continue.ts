@@ -39,6 +39,7 @@ import { acceptsImageInput } from '~/utils/modelCatalog';
 import type { Ref } from 'vue';
 import type { Message } from '~/db';
 import { compareMessageOrder, patchMessageInDb } from '~/db/messages';
+import { projectTranscriptForOpenRouter, storedMessagesToCanonicalTranscript } from '~/utils/chat/transcript';
 import type { ChatMessage, ContentPart } from '~/utils/chat/types';
 import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { getDb } from '~/db/client';
@@ -298,56 +299,13 @@ export async function continueMessageImpl(
         if (admissionThread?.branch_mode !== 'compacted' && admissionThread?.branch_mode !== 'reference') all.sort(compareMessageOrder);
         if (!ownsThread()) return;
 
-        const toContent = (m: StoredMessage): string => {
-            if (m.id === target.id) return existingText;
-            return normalizeStreamingMessage({
-                content: (m as { content?: string | ContentPart[] | null }).content,
-                data: m.data,
-                reasoning_text: m.reasoning_text,
-            }).text;
-        };
-
-        const baseMessages: ChatMessage[] = all.map((m): ChatMessage => {
-            const storedMsg: StoredMessage = {
-                ...m,
-                data:
-                    m.data && typeof m.data === 'object'
-                        ? (m.data as StoredMessage['data'])
-                        : null,
-            };
-            const rawData = storedMsg.data;
-            const data: Record<string, unknown> | null = rawData
-                ? (rawData as Record<string, unknown>)
-                : null;
-            const name =
-                data && typeof (data as { tool_name?: unknown }).tool_name === 'string'
-                    ? ((data as { tool_name: string }).tool_name as string)
-                    : undefined;
-            const toolCallId =
-                data && typeof (data as { tool_call_id?: unknown }).tool_call_id === 'string'
-                    ? ((data as { tool_call_id: string }).tool_call_id as string)
-                    : undefined;
-            return {
-                role: m.role as ChatMessage['role'],
-                content: toContent(storedMsg),
-                id: m.id,
-                stream_id: m.stream_id ?? undefined,
-                file_hashes: m.file_hashes ?? undefined,
-                reasoning_text: normalizeStreamingMessage(storedMsg)
-                    .reasoningText,
-                data,
-                name,
-                tool_call_id: toolCallId,
-                error: m.error ?? null,
-                index:
-                    typeof m.index === 'number'
-                        ? m.index
-                        : typeof m.index === 'string'
-                          ? Number(m.index) || null
-                          : null,
-                created_at: typeof m.created_at === 'number' ? m.created_at : null,
-            };
-        });
+        // Project history exactly as send does: wire-format tool calls, each
+        // closed by its result (or an "outcome unresolved" result for a call
+        // the stopped turn never finished). Strict providers such as OpenAI
+        // reject a tool result without its call, or a call without a result.
+        const baseMessages: ChatMessage[] = projectTranscriptForOpenRouter(
+            storedMessagesToCanonicalTranscript(all)
+        ).map((m) => (m.id === target.id ? { ...m, content: existingText } : m));
 
         const tailSnippet = existingText.slice(-CONTINUE_TAIL_CHARS);
         const continuationText = buildContinuationText(tailSnippet);
