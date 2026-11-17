@@ -50,7 +50,7 @@
                     "category": "Development",
                     "categoryOrder": 1,
                     "order": 0,
-                    "summary": "Install dependencies, run OR3 from source, verify changes, and troubleshoot development."
+                    "summary": "Install dependencies, run OR3 from source, select affected release checks, and troubleshoot development."
                 },
                 {
                     "name": "plugin-quickstart.md",

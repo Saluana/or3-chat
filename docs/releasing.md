@@ -27,7 +27,9 @@ The **Checks** workflow (`.github/workflows/tests.yml`) separates a fast source
 gate from compatibility checks and from image publication:
 
 - **Core checks** is the blocking gate: type-check, core tests, changed-file
-  lint, documentation, and banned-import checks.
+  lint, documentation, and banned-import checks. Chat/OpenAI browser harnesses
+  run for application, auth, shared/runtime, harness, or dependency changes,
+  and on manual dispatch; docs-only and CLI-only changes skip them.
 - **Contracts and compatibility** runs in parallel: script and release-policy
   tests, Cloud package contracts, and plugin compatibility checks. It does not
   gate development images.
@@ -43,8 +45,42 @@ the deeper suites, so a required status is never left pending.
 Full-project lint, strict performance budgets, full tests, browser suites,
 plugin-runtime matrices, static generation, and the disposable deployment
 lifecycle live in **Extended validation**, which runs on weekday schedules and
-on demand (`tests`, `lint`, `performance`, `plugin-runtime`, `deployment`, or
-`all`). Package publication remains isolated in the candidate and tag
+on demand (`tests`, `release`, `lint`, `performance`, `plugin-runtime`,
+`deployment`, `dashboard-recovery`, or `all`). The extra historical deployment
+matrix runs nightly or with `deployment`, rather than as part of `all`.
+Its unique pre-vault upgrade, adoption/failure cases and public Caddy overlay
+remain covered there. The candidate lifecycle owns the one actual release-build
+upgrade, authenticated backup, rollback, restart and persistence qualification.
+The post-publication dashboard lifecycle stays separate: it verifies real npm
+registry propagation and dashboard acquisition, which a local tarball cannot.
+
+For routine release browsers, dispatch `suite=release` at the exact candidate
+commit with `base_ref` set to the previous published tag. An absent, invalid or
+non-ancestor baseline fails before suite selection. Sync recovery, workspace
+backup imports, filesystem storage and admin authentication always run. Billing
+and S3 run when their owning/shared paths change; schedules and `tests`/`all`
+retain both. Use `include_s3=true` to require S3 regardless of selection; this is
+required for 0.1.128 because its shared storage paths need S3 parity. For example:
+
+```bash
+gh workflow run extended-validation.yml --ref <release-branch> \
+  -f suite=release -f base_ref=v0.1.127 -f include_s3=true
+```
+
+The candidate source-validation job owns the full Cloud CLI suite once. Checks,
+the historical deployment job and final image-bound package use `check:smoke`
+(typecheck, build, and the focused CLI contracts). The image-bound package still
+asserts both digests and source SHA, packs the exact artifact, invokes its CLI
+through the documentation checker, and feeds that tarball to the real lifecycle.
+These jobs use the same source, dependencies and pinned Node/Bun; final binding
+changes only package metadata. Do not run another local full CLI gate before the
+candidate merely to duplicate its result.
+
+Compare per-job and per-step durations with the previous candidate and Extended
+validation runs, recording selected suites as well as runner time. Removing
+three full CLI invocations and the routine historical image build reduces work;
+percentage compute and wall-clock savings require measured runs, not estimates.
+Package publication remains isolated in the candidate and tag
 workflows below.
 
 ## Registry setup
@@ -66,7 +102,8 @@ version.
 
 ## Prepare and qualify before tagging
 
-Use this focused source gate from a clean isolated worktree:
+The candidate runs this focused source gate in its clean checkout. Run it
+locally only for diagnosis when no equivalent candidate run is planned:
 
 ```bash
 bun run release:prepare -- --version <version> --registry
@@ -344,7 +381,7 @@ npm deprecate 'create-or3-chat@<0.1.12' 'Use npx @or3/cloud init; the creator is
 
 ## Release checklist
 
-- `bun run release:prepare -- --version <version> --registry` passes in a clean worktree.
+- Candidate source validation runs `release:prepare -- --version <version> --registry` once in a clean worktree.
 - The candidate workflow succeeds before the release tag exists.
 - The tag and candidate receipt contain the same source SHA and version.
 - `npm pack --dry-run` contains only the Cloud CLI and deployment assets.

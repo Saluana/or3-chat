@@ -397,3 +397,12 @@ The pinned published SQLite 0.0.31 Basic profile advertises testable 036 and leg
 startup snapshot cleanup is fenced by the checked-in provider patch during
 validation. Capability metadata is not a release receipt. A later qualified re-upgrade takes a fresh source
 snapshot and initializes/verifies a fresh 036 history under closed admission.
+
+## Contributor validation
+
+`bun run check` owns the full CLI suite in candidate source qualification.
+`bun run check:smoke` typechecks, builds and runs the focused CLI contracts for
+routine checks and the final image-bound package. The exact packed CLI still
+passes documentation/executable checks and the candidate's managed deployment
+lifecycle. See [release engineering](../../docs/releasing.md) for affected-provider
+browser selection, nightly historical coverage and publication requirements.

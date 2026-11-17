@@ -78,6 +78,23 @@ jobs:
             banned_imports:
               - 'app/**'
               - 'server/**'
+            browser:
+              - 'app/**'
+              - 'server/**'
+              - 'shared/**'
+              - 'modules/**'
+              - 'extensions/**'
+              - 'plugins/**'
+              - 'tests/e2e/**'
+              - 'scripts/test/**'
+              - 'nuxt.config.ts'
+              - 'config.or3*.ts'
+              - 'package.json'
+              - '*lock*'
+              - 'patches/**'
+              - 'packages/plugin-sdk/**'
+              - 'packages/hosted-billing/**'
+              - 'or3.providers.generated.json'
             runtime:
               - '.dockerignore'
               - '.github/workflows/tests.yml'
@@ -157,16 +174,20 @@ jobs:
           fi
 
       - name: Install Chromium for deterministic chat tool tests
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.browser == 'true'
         # The runner image already has Chromium's libraries. --with-deps adds
         # optional fonts from the Ubuntu mirror, which can stall this job past
         # its timeout; these behavioral suites do not depend on those fonts.
         run: bunx playwright install chromium
       - name: Verify chat tool lifecycle and recovery
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.browser == 'true'
         id: chat_tools
         run: bun run test:e2e:chat-tools
       - name: Verify authenticated Cloud tools and claim settlement
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.browser == 'true'
         run: bun run test:e2e:chat-tools:cloud
       - name: Verify OpenAI adapter and provider credential isolation
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.browser == 'true'
         run: bun run test:e2e:openai-adapter
       - uses: actions/upload-artifact@v7
         if: always() && (steps.chat_tools.outcome == 'success' || steps.chat_tools.outcome == 'failure')
@@ -192,6 +213,8 @@ jobs:
         with:
           filters: |
             cloud:
+              - '.github/workflows/tests.yml'
+              - 'bun.lock'
               - '.dockerignore'
               - 'Dockerfile'
               - 'compose*.yaml'
@@ -238,7 +261,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.cloud == 'true'
         run: |
           bun run release:cloud:check
-          bun run cloud:package:check
+          bun run --cwd packages/or3-cloud check:smoke
       - name: Prepare plugin declarations
         if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.plugin_runtime == 'true'
         run: bunx nuxt prepare

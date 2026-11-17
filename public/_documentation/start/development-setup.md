@@ -354,3 +354,18 @@ dev server's dependency cache.
 ## Dashboard restart in development
 
 The standard `bun run dev` and `bun run dev:ssr` launchers supervise the owned Nuxt child on macOS/Linux. With SSR auth and restart permission enabled, Operations can restart it on the same origin while retaining provider artifacts and caches. The wrapper reloads its explicit environment profile and preserves real shell overrides. Ctrl+C stops the owned child tree. Other launchers and Windows report unsupported. See [server restarts](/documentation/cloud/operations).
+
+## Release validation
+
+Stable release candidates run the full Cloud CLI suite once; routine package
+checks use the smaller `check:smoke` command. The exact image-bound tarball still
+passes metadata checks and a real upgrade, backup, rollback and persistence
+lifecycle. Security scans and ARM validation remain required.
+
+Extended validation's `release` suite always checks sync recovery, workspace
+backup imports, filesystem storage and admin authentication. Supply the previous
+published tag as `base_ref`; missing or invalid comparison history fails closed.
+Billing and S3 browsers run for affected paths, while nightly and full test runs
+retain all providers. `include_s3=true` forces S3 parity for shared storage changes.
+The extra historical deployment matrix remains nightly or explicitly selected
+with `deployment`. See the repository's `docs/releasing.md` for the release ceremony.
