@@ -556,10 +556,10 @@ If the application update is complete but `recover --dry-run` reports
 while the previous application image is running:
 
 ```sh
-npx --yes @or3/cloud@0.1.128 recover --dry-run
-npx --yes @or3/cloud@0.1.128 recover --finish
-npx --yes @or3/cloud@0.1.128 recover --dry-run
-npx --yes @or3/cloud@0.1.128 doctor
+npx --yes @or3/cloud@0.1.129 recover --dry-run
+npx --yes @or3/cloud@0.1.129 recover --finish
+npx --yes @or3/cloud@0.1.129 recover --dry-run
+npx --yes @or3/cloud@0.1.129 doctor
 ```
 
 The finish command schedules the recorded operator job; completion is

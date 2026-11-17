@@ -18,8 +18,9 @@ import { parseEnv } from './env';
 import { assertDeploymentDirectoryIdentity, assertDeploymentIdentity } from './identity';
 import { deploymentPaths } from './paths';
 
-/** Older packages without writer metadata remain bridge writers. */
-const LEGACY_STATE_SCHEMA_VERSION = 1;
+// Installed lifecycle bundles run outside npm and have no package manifest.
+// Keep this release's qualified writer capability in the bundle itself.
+const QUALIFIED_STATE_SCHEMA_VERSION = 2;
 
 export async function readState(directory: string): Promise<ManagedState> {
   const paths = deploymentPaths(directory);
@@ -56,7 +57,7 @@ export async function writeState(directory: string, state: ManagedState) {
  */
 export function writeStateSchema(): StateSchemaVersion {
   const value = packagedOr3CloudMetadata().stateSchema;
-  if (value === undefined) return LEGACY_STATE_SCHEMA_VERSION;
+  if (value === undefined) return QUALIFIED_STATE_SCHEMA_VERSION;
   if (value === 1 || value === 2) return value;
   throw new Error('This @or3/cloud package declares an unsupported managed state schema. Refusing to write managed state.');
 }

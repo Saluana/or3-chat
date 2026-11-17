@@ -28,6 +28,7 @@ import { publicStateProjection, stateFingerprint } from '../src/deployment/obser
 import { decideRecoveryAction } from '../src/deployment/recovery';
 import { assertPhaseAllowsCommand, assertStateSchemaWritable, writeStateSchema, stateFromEnv } from '../src/deployment/state-store';
 import { lifecycleFaults } from '../src/lifecycle-faults';
+import { PACKAGE_VERSION } from '../src/package-info';
 import { checkResolvedLoopbackBinding } from '../src/runtime/compose';
 import { assertDashboardOperatorMounts, dashboardOperatorHandoffArgs } from '../src/runtime/dashboard-operator';
 import { assertImageReleaseLabels, assertSupportedArchitecture, supportedImageArchitectures } from '../src/runtime/images';
@@ -1390,6 +1391,42 @@ test('RB-12 qualified writer writes schema 2 while reading both formats', () => 
   expect(writeStateSchema()).toBe(2);
   const env = buildEnv({ mode: 'local', version: '0.1.12', directory: '/tmp/or3-schema-bridge', email: 'admin@example.com', password: 'AValidPassword123', port: 3000 });
   expect(stateFromEnv('/tmp/or3-schema-bridge', env, 'local', 'init', `sha256:${'a'.repeat(64)}`).schemaVersion).toBe(2);
+});
+
+// Failure inventory: the installed bundle has no npm manifest; losing writer
+// qualification must not block schema-2 startup or weaken future-schema refusal.
+test('installed lifecycle bundle starts schema 2 without package metadata and refuses future state', async () => {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'or3-installed-lifecycle-')));
+  try {
+    const env = buildEnv({ mode: 'local', version: PACKAGE_VERSION, directory, email: 'owner@example.com', password: 'AValidPassword123', port: 3000 });
+    await copyAssets(directory, 'local');
+    await mkdir(join(directory, '.or3-cloud'), { recursive: true });
+    await writeFile(join(directory, '.env'), serializeEnv(env), { mode: 0o600 });
+    const state = stateFromEnv(directory, env, 'local', 'init', `sha256:${'a'.repeat(64)}`);
+    await writeFile(join(directory, '.or3-cloud/state.json'), JSON.stringify(state));
+    const script = `
+      import assert from 'node:assert/strict';
+      import {readFile,writeFile} from 'node:fs/promises';
+      import {pathToFileURL} from 'node:url';
+      const {createManagedLifecycle}=await import(pathToFileURL(process.argv[1]).href);
+      const directory=process.argv[2];
+      const service=await createManagedLifecycle(directory);
+      try { assert.equal((await service.controller.status()).capability.mode,'managed'); }
+      finally { service.dispose(); }
+      const path=directory+'/.or3-cloud/state.json';
+      const state=JSON.parse(await readFile(path,'utf8'));
+      assert.equal(state.schemaVersion,2);
+      await writeFile(path,JSON.stringify({...state,schemaVersion:3}));
+      await assert.rejects(createManagedLifecycle(directory),/Unsupported managed state schema/);
+      console.log(JSON.stringify({schema2Initialized:true,futureSchemaRefused:true}));
+    `;
+    const child = Bun.spawn(['node', '--input-type=module', '-e', script, join(directory, 'dashboard-lifecycle.mjs'), directory], { stdout: 'pipe', stderr: 'pipe' });
+    const [stdout, stderr, exit] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+    expect(exit, stderr).toBe(0);
+    const receipt = JSON.parse(stdout);
+    expect(receipt).toEqual({ schema2Initialized: true, futureSchemaRefused: true });
+    await Bun.write(join(import.meta.dir, '../../../output/release/installed-lifecycle-receipt.json'), JSON.stringify(receipt, null, 2) + '\n');
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test('qualified writer accepts both known schemas and reader refuses future state', () => {

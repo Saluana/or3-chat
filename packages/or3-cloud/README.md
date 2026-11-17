@@ -69,10 +69,10 @@ If the application update is complete but `recover --dry-run` reports
 while the previous application image is running:
 
 ```sh
-npx --yes @or3/cloud@0.1.128 recover --dry-run
-npx --yes @or3/cloud@0.1.128 recover --finish
-npx --yes @or3/cloud@0.1.128 recover --dry-run
-npx --yes @or3/cloud@0.1.128 doctor
+npx --yes @or3/cloud@0.1.129 recover --dry-run
+npx --yes @or3/cloud@0.1.129 recover --finish
+npx --yes @or3/cloud@0.1.129 recover --dry-run
+npx --yes @or3/cloud@0.1.129 doctor
 ```
 
 The finish command schedules the recorded operator job; completion is
@@ -193,8 +193,11 @@ target-ready milestone exists) or `recover --restore --yes` (the explicit
 data-loss choice). `recover --restore --yes` works even for a target-ready
 journal, so the advertised escape path is always available.
 
-This release is the compatibility **bridge**: it reads managed state schema 1
-and 2 but writes schema 1. A release explicitly qualified to write schema 2
+This release reads managed state schemas 1 and 2 and is qualified to write
+schema 2, including in the installed lifecycle bundle without an npm manifest.
+Published 0.1.127/0.1.128 lifecycle bundles incorrectly fall back to writer 1;
+upgrade those deployments with the corrected pinned CLI rather than their
+old dashboard updater. A release explicitly qualified to write schema 2
 sets `or3Cloud.stateSchema` in its package metadata, and only then may migrate a
 settled schema-1 deployment — and only when its source is at or above the
 declared `dashboardUpdateMinimumSourceVersion` bridge. A bridge CLI refuses to

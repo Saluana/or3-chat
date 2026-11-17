@@ -1,6 +1,9 @@
 # OR3 Cloud 0.1.128
 
-Release preparation. Publication and production verification remain pending.
+Artifacts published; post-publication dashboard verification failed. Superseded
+by the 0.1.129 correction. Do not deploy this release: installed lifecycle bundles
+lose their package manifest and fall back to a schema-1 writer. Use the corrected
+pinned CLI for upgrade; do not edit managed state.
 
 Release CI runs the full CLI suite once, preserves exact packed-build and lifecycle
 checks, and selects affected provider browsers. Historical deployment coverage

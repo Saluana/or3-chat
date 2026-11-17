@@ -286,7 +286,10 @@ jobs:
           started=$SECONDS
           test "$(npm view "@or3/cloud@$VERSION" version)" = "$VERSION"
           minimum_source="$(npm view "@or3/cloud@$VERSION" or3Cloud.dashboardUpdateMinimumSourceVersion)"
-          candidate_versions="$(npm view @or3/cloud versions --json | MINIMUM_SOURCE="$minimum_source" node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const target=process.env.VERSION,minimum=process.env.MINIMUM_SOURCE;const values=JSON.parse(s);const compare=(a,b)=>{const x=a.split(".").map(Number),y=b.split(".").map(Number);for(let i=0;i<3;i+=1){if(x[i]!==y[i])return x[i]-y[i]}return 0};process.stdout.write((Array.isArray(values)?values:[values]).filter(v=>/^\d+\.\d+\.\d+$/.test(v)&&compare(v,target)<0&&compare(v,minimum)>=0).sort(compare).reverse().join("\n"))})')"
+          # Use the declared compatibility bridge for registry acquisition.
+          # 127/128 installed lifecycle bundles lost their writer metadata;
+          # those deployments require the corrected pinned CLI to upgrade.
+          candidate_versions="$(npm view @or3/cloud versions --json | MINIMUM_SOURCE="$minimum_source" node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const target=process.env.VERSION,minimum=process.env.MINIMUM_SOURCE;const values=JSON.parse(s);const compare=(a,b)=>{const x=a.split(".").map(Number),y=b.split(".").map(Number);for(let i=0;i<3;i+=1){if(x[i]!==y[i])return x[i]-y[i]}return 0};process.stdout.write((Array.isArray(values)?values:[values]).filter(v=>/^\d+\.\d+\.\d+$/.test(v)&&compare(v,target)<0&&compare(v,minimum)>=0).sort(compare).join("\n"))})')"
           previous_version=""
           while IFS= read -r candidate; do
             [ -n "$candidate" ] || continue

@@ -166,7 +166,7 @@ completion proof requires the explicit choice.
 
 For a completed update whose only remaining recovery action is
 `reconcile-handoff` with `dataLoss: false`, use the exact corrected CLI
-`npx --yes @or3/cloud@0.1.128 recover --finish`, even while an older image runs.
+`npx --yes @or3/cloud@0.1.129 recover --finish`, even while an older image runs.
 This schedules only the recorded operator replacement. Wait until the same
 CLI's `recover --dry-run` reports no pending handoff, then rerun `doctor` before
 a fresh backup or upgrade. A running successor and succeeded job do not by
@@ -449,3 +449,11 @@ Candidate qualification uses the exact published SQLite 0.0.31 Basic profile
 for incarnation and legacy rollback capabilities. Runtime capability metadata
 is not a release receipt; native image and browser lifecycle checks remain
 mandatory before promotion. SQLite 0.0.30 remains unqualified.
+
+### Schema-2 dashboard compatibility
+
+Published 0.1.127 and 0.1.128 dashboard lifecycle bundles can refuse operations
+with “qualified to write schema 1” after state has reached schema 2. Use the
+pinned 0.1.129 CLI for recovery and upgrade; preserve managed state and backups.
+The corrected installed bundle retains its schema-2 writer qualification without
+an npm manifest and still refuses unknown future schemas.
