@@ -172,6 +172,18 @@ export async function updateWorkspaceProject(args: Record<string, unknown>, cont
         scope.assertCurrent('write');
     });
     if (moved) await notifyChatProjectMove(moved);
+    // Project chats read documents and files through their Knowledge binding
+    // (which also owns the item entry); an entry alone is refused on every read.
+    // Both calls reuse an existing binding, so a retry or re-add is safe.
+    // Removing the item also removes its Knowledge, or its content would keep
+    // feeding the project's chats.
+    if ((operation === 'add_item' || operation === 'remove_item') && item && item.kind !== 'chat') {
+        const intake = await import('~/utils/projects/source-intake');
+        if (operation === 'remove_item') await intake.removeProjectKnowledge(scope, saved.id, item.id);
+        else if (item.kind === 'document') await intake.addProjectDocument(scope, saved.id, item.id);
+        else if (item.kind === 'file') await intake.addExistingProjectFile(scope, saved.id, item.id, { background: true });
+        scope.assertCurrent();
+    }
     try { await prepared.afterCommit(saved); } catch (error) { console.warn('Project saved; after-write hook failed.', error); }
     const loaded = await readWorkspaceItem(scope, { kind: 'project', id: saved.id });
     return JSON.stringify({ version: 1, workspaceId: scope.workspaceId, source: loaded.source, status: 'saved', operation });

@@ -950,8 +950,14 @@ async function handleRemoveFromProject(payload: {
         const entries = normalizeProjectData(project.data);
         const idx = entries.findIndex((d) => d.id === payload.entryId);
         if (idx === -1) return;
-        entries.splice(idx, 1);
+        const [removed] = entries.splice(idx, 1);
         notifyRelatedChats(await updateProjectEntries(payload.projectId, entries));
+        // Its Knowledge would otherwise keep feeding the project's chats.
+        if (removed && (removed.kind === 'doc' || removed.kind === 'file')) {
+            const { captureProjectOperation } = await import('~/utils/projects/operation');
+            const { removeProjectKnowledge } = await import('~/utils/projects/source-intake');
+            await removeProjectKnowledge(captureProjectOperation(), payload.projectId, removed.id);
+        }
     } catch (e) {
         console.error('remove from project failed', e);
     }
@@ -1126,6 +1132,14 @@ async function submitAddToProject() {
             if (!existing) entries.push(entry);
             else existing.name = entry.name;
             notifyRelatedChats(await updateProjectEntries(project.id, entries));
+        }
+        // Project chats read a document through its Knowledge binding; without
+        // one every read is refused. Idempotent, so re-adding repairs a
+        // document that was added before this binding existed.
+        if (entry.kind === 'doc' && projectId) {
+            const { captureProjectOperation } = await import('~/utils/projects/operation');
+            const { addProjectDocument } = await import('~/utils/projects/source-intake');
+            await addProjectDocument(captureProjectOperation(), projectId, entry.id);
         }
         closeAddToProject();
     } catch (e: any) {

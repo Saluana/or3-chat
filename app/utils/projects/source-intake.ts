@@ -6,6 +6,7 @@ import {
 import {
     saveProjectSource,
     readProjectWorkspace,
+    deleteProjectRecord,
     type ProjectRecord,
 } from '~/db/project-workspace';
 import { newId, nowSec } from '~/db/util';
@@ -299,6 +300,21 @@ export async function addProjectDocument(
             },
         ],
     });
+}
+
+/**
+ * Remove an item's Knowledge binding when the item leaves the project, so its
+ * content stops feeding the project's chats. No-op when it has none.
+ */
+export async function removeProjectKnowledge(
+    scope: WorkspaceOperationScope,
+    projectId: string,
+    itemId: string,
+) {
+    const binding = (await readProjectWorkspace(scope.db, projectId)).sources
+        .find((source) => source.value.item_id === itemId);
+    scope.assertCurrent('write');
+    if (binding) await deleteProjectRecord(scope, projectId, binding.row);
 }
 
 export async function addExistingProjectFile(

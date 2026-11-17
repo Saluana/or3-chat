@@ -687,6 +687,36 @@ describe('chat document tools', () => {
             expect((await db.projects.get('project-c'))?.data).toContainEqual({ id: 'family-elsewhere', kind: 'chat', name: 'Elsewhere', color: 'gold' });
         }
     });
+    it('adds a document to the project Knowledge with the item and removes both together', async () => {
+        disposers.push(registerWorkspaceChatTools());
+        const registry = useToolRegistry();
+        const definition = registry.getTool('workspace_update_project')!.definition;
+        const project = { id: 'project-k', name: 'Project K', data: [], created_at: 1, updated_at: 1, deleted: false, clock: 1 };
+        await getDb().projects.put(project);
+        await getDb().posts.put({ id: 'chapter-1', title: 'Chapter 1', postType: 'doc',
+            content: '{"type":"doc","content":[{"type":"paragraph"}]}', created_at: 1, updated_at: 1, deleted: false, clock: 1 });
+        const context = { subject: null, workspaceId: 'workspace-a', threadId: 'thread-a',
+            messageId: null, callId: 'knowledge-add', requestId: 'knowledge-request', abortSignal: new AbortController().signal };
+        const { readProjectWorkspace } = await import('~/db/project-workspace');
+        const bound = async () => (await readProjectWorkspace(getDb(), project.id)).sources.some((source) => source.value.item_id === 'chapter-1');
+
+        const added = await registry.executeTool('workspace_update_project', JSON.stringify({
+            operation: 'add_item', projectId: project.id, revision: await workspaceRevision(project), item: { kind: 'document', id: 'chapter-1' },
+        }), context, { definition });
+        expect(added.error).toBeUndefined();
+        // Project chats read a document only through its Knowledge binding.
+        expect(await bound()).toBe(true);
+
+        const current = (await getDb().projects.get(project.id))!;
+        const removed = await registry.executeTool('workspace_update_project', JSON.stringify({
+            operation: 'remove_item', projectId: project.id, revision: await workspaceRevision(current), item: { kind: 'document', id: 'chapter-1' },
+        }), { ...context, callId: 'knowledge-remove' }, { definition });
+        expect(removed.error).toBeUndefined();
+        // A removed document must stop feeding the project's chats.
+        expect(await bound()).toBe(false);
+        expect((await getDb().posts.get('chapter-1'))?.deleted).toBe(false);
+    });
+
     it('updates a project by read revision and removes association without deleting its document', async () => {
         disposers.push(registerWorkspaceChatTools());
         const registry = useToolRegistry();

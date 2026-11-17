@@ -794,6 +794,10 @@ async function authorizeProjectTool(
         const hash = kind === 'file' && targetRow && 'file_hashes' in targetRow
             ? parseFileHashes(targetRow.file_hashes)[0] : undefined;
         const meta = hash ? await scope.db.file_meta.get(hash) : undefined;
+        if ((kind === 'document' || kind === 'file') && !source && member)
+            throw new Error(
+                'This item is in the project but not in its Knowledge. Add it to the project\'s Knowledge to use it in project chats.',
+            );
         if (
             source?.mode === 'off' ||
             ((kind === 'document' || kind === 'file') &&
