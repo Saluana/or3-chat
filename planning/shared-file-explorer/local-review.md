@@ -113,7 +113,9 @@ fixture data separate from real accounts and workspaces.
 
 The static and authenticated Cloud production builds completed. App types,
 the documentation and import checks, and the 77-test database and snapshot
-run passed. The complete WebKit upload journey and advanced project drag
-qualification remain open. A native IndexedDB Blob write reproduced the
-WebKit error both with the default temporary directory and a separate
-writable browser directory.
+run passed. Chromium also verified project folder hover expansion, the
+project header as a root drop target, drag cancellation, and autoscroll
+in an overflowing project tree. The complete WebKit journey remains
+open. A native IndexedDB Blob write reproduced the upload error both
+with the default temporary directory and a separate writable browser
+directory.

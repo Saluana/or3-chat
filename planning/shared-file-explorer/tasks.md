@@ -89,7 +89,7 @@ See [local qualification](local-review.md) for the baseline and fixture.
       Requirements: R5.AC5, R7.AC5, R8.AC6, R11.AC3.
       Done when: 500 folders remain navigable by search/path, root is always reachable, New folder names its destination, and recovery/action messages identify Files or the project plus a useful next action.
 
-- [ ] 4.3 Complete drag cleanup, project-tree compatibility, and OS-drop handling (4h).
+- [x] 4.3 Complete drag cleanup, project-tree compatibility, and OS-drop handling (4h).
       Design: C5, C6.
       Requirements: R4.AC3, R5.AC2, R5.AC3, R5.AC8, R5.AC9, R11.AC5.
       Done when: mounted UTree targets safely register/dispose, the header remains a root target, hover/autoscroll/cancel work, drag never opens content, and project OS drops reject with supported alternatives rather than browser navigation.
