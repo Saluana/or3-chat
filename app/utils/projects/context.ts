@@ -9,13 +9,12 @@ import { FILE_CATALOG_POST_TYPE, isVisibleWorkspaceItem } from '~~/shared/posts/
 import type { Post } from '~/db/schema';
 import { chunkText } from '~/core/search/command-palette/chunker';
 import { tiptapToPlainText } from '~/core/search/command-palette/normalize';
-import { readVisibleWorkspaceProjectEntries } from '~/utils/chat/workspace-projects';
+import { projectToolSourceAccess } from './tool-sources';
 import type { WorkspaceOperationScope } from '~/utils/chat/workspace-access';
-import { normalizeProjectData } from '~/utils/projects/normalizeProjectData';
 import { parseFileHashes } from '~/db/files-util';
-import { PROJECT_MEMORY_HEADING, PROJECT_POST_TYPES, ProjectSourceSchema, readPersistedProjectRecord } from '~~/shared/projects/workspace';
+import { PROJECT_MEMORY_HEADING } from '~~/shared/projects/workspace';
 import { asAppError } from '~/utils/errors';
-import { workspaceRevision } from '~/utils/chat/workspace-items';
+import { workspaceRevision, type WorkspaceItemKind } from '~/utils/chat/workspace-items';
 import { workspaceSourceReceipts } from '~/utils/chat/workspace-source-receipts';
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 import type { ChatMessage } from '~/utils/chat/types';
@@ -779,46 +778,12 @@ async function authorizeProjectTool(
           ? 'chat'
           : item?.kind;
     if (typeof target === 'string') {
-        const bindings = kind === 'document' || kind === 'file'
-            ? await scope.db.posts.where('[postType+title]').equals([PROJECT_POST_TYPES.source, projectId]).toArray() : [];
-        const source = bindings.filter(row => !row.deleted)
-            .map(row => readPersistedProjectRecord(ProjectSourceSchema, row.content))
-            .find(value => value?.item_id === target);
-        const targetRow = kind === 'chat' ? await scope.db.threads.get(target)
-            : kind === 'document' || kind === 'file' ? await scope.db.posts.get(target) : undefined;
-        const member = targetRow && isVisibleWorkspaceItem(targetRow) && (
-            kind === 'chat' ? await resolveChatProject(scope.db, target) === projectId
-                : 'postType' in targetRow && targetRow.postType === (kind === 'file' ? 'or3:file' : 'doc')
-                    && normalizeProjectData(state.project.data).some(entry => entry.id === target && entry.kind === (kind === 'document' ? 'doc' : kind))
-        );
-        const hash = kind === 'file' && targetRow && 'file_hashes' in targetRow
-            ? parseFileHashes(targetRow.file_hashes)[0] : undefined;
-        const meta = hash ? await scope.db.file_meta.get(hash) : undefined;
-        if ((kind === 'document' || kind === 'file') && !source && member)
-            throw new Error(
-                'This item is in the project but not in its Knowledge. Add it to the project\'s Knowledge to use it in project chats.',
-            );
-        if (
-            source?.mode === 'off' ||
-            ((kind === 'document' || kind === 'file') &&
-                !source) ||
-            (!(kind === 'project' && target === projectId) &&
-                !member) ||
-            (kind === 'file' && (!meta || meta.deleted)) ||
-            (kind === 'chat' &&
-                state.settings.excluded_chat_ids.includes(target) &&
-                target !== threadId)
-        )
-            throw new Error(
-                'This source is outside the permitted project context.',
-            );
+        const readOnly = ['workspace_read', 'get_document_outline', 'search_document',
+            'list_document_chunks', 'read_blocks'].includes(name);
+        if (!await projectToolSourceAccess(scope, threadId, state).allows(
+            { kind: kind as WorkspaceItemKind, id: target }, !readOnly,
+        )) throw new Error('This source is outside the permitted project context.');
     }
-    if (
-        kind === 'chat' &&
-        typeof target === 'string' &&
-        (await resolveChatProject(scope.db, target)) !== projectId
-    )
-        throw new Error('This chat belongs to another project.');
     if (name === 'workspace_search') {
         if (args.projectId && args.projectId !== projectId)
             throw new Error('Search is restricted to the owning project.');
@@ -887,35 +852,34 @@ export async function filterProjectToolResult(
     const state = await readProjectPolicy(scope.db, projectId);
     if (!projectToolEnabled(state.settings, name))
         throw new Error('Project tool policy changed during execution.');
-    let sources: (ReturnType<typeof ProjectSourceSchema.parse> | null)[] | undefined;
-    const permitted = async (kind: string, id: string) => {
-        if (kind === 'project') return id === projectId;
-        if (kind === 'chat')
-            return (
-                (id === threadId ||
-                    !state.settings.excluded_chat_ids.includes(id)) &&
-                (await resolveChatProject(scope.db, id).catch(() => null)) ===
-                    projectId
-            );
-        const item = await scope.db.posts.get(id);
-        if (!item || !isVisibleWorkspaceItem(item)) return false;
-        sources ??= (await scope.db.posts.where('[postType+title]').equals([PROJECT_POST_TYPES.source, projectId]).toArray())
-            .filter(row => !row.deleted).map(row => readPersistedProjectRecord(ProjectSourceSchema, row.content));
-        const source = sources.find(source => source?.item_id === id);
-        if (source) return source.mode !== 'off';
-        // A newly created document's durable receipt is still visible to its creator.
-        return (
-            name === 'workspace_create_document' &&
-            (
-                await readVisibleWorkspaceProjectEntries(scope, state.project)
-            ).some((entry) => entry.id === id && entry.kind === kind)
-        );
-    };
+    const { allows } = projectToolSourceAccess(scope, threadId, state);
+    if (name === 'search_threads' || name === 'search_documents' || name === 'get_open_pane_context') {
+        type Target = { documentId?: string; threadId?: string };
+        const value = JSON.parse(result) as Target & { results?: Target[]; tabs?: Target[]; total?: number };
+        const allowsTarget = (entry: Target) => {
+            if (entry.documentId) return allows({ kind: 'document', id: entry.documentId });
+            if (entry.threadId) return allows({ kind: 'chat', id: entry.threadId });
+            return false;
+        };
+        if (Array.isArray(value.results)) {
+            const allowed = await Promise.all(value.results.map(allowsTarget));
+            value.results = value.results.filter((_, index) => allowed[index]);
+        }
+        if (Array.isArray(value.tabs)) {
+            const allowed = await Promise.all(value.tabs.map(allowsTarget));
+            value.tabs = value.tabs.filter((_, index) => allowed[index]);
+            value.total = value.tabs.length;
+        } else if (name === 'get_open_pane_context' && !await allowsTarget(value)) {
+            throw new Error('This tab is outside the permitted project context.');
+        }
+        scope.assertCurrent();
+        return JSON.stringify(value);
+    }
     if (name === 'workspace_search') {
         const value = JSON.parse(result) as {
             version?: unknown;
             workspaceId?: unknown;
-            results?: Array<{ source?: { kind: string; id: string }; [key: string]: unknown } | null | undefined>;
+            results?: Array<{ source?: { kind: WorkspaceItemKind; id: string }; [key: string]: unknown } | null | undefined>;
             [key: string]: unknown;
         };
         if (
@@ -928,7 +892,7 @@ export async function filterProjectToolResult(
         for (const row of value.results)
             if (
                 row?.source &&
-                (await permitted(row.source.kind, row.source.id))
+                (await allows(row.source))
             )
                 filtered.push(row);
         scope.assertCurrent();
@@ -941,7 +905,7 @@ export async function filterProjectToolResult(
     })) {
         if (
             receipt.workspaceId !== scope.workspaceId ||
-            !(await permitted(receipt.source.kind, receipt.source.id))
+            !(await allows(receipt.source))
         )
             throw new Error(
                 'A retrieved source is no longer available in this project.',

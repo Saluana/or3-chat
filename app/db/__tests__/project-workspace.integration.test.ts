@@ -30,6 +30,7 @@ import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
 import {
     buildProjectContext,
     assertProjectToolAllowed,
+    filterProjectToolResult,
     finalizeProjectReceipt,
 } from '~/utils/projects/context';
 
@@ -1827,6 +1828,45 @@ describe('automatic memory retrieval budget', () => {
 // exclusion/ownership/deletion; project documents and knowledge commit together;
 // the displayed brief, request brief and project description must agree.
 describe('project review regressions', () => {
+    it('reads all pages of a member document without Knowledge and revokes access if removed or turned off', async () => {
+        const threadId = 'reader';
+        const item = { kind: 'document' as const, id: 'legacy-chapter' };
+        await db.threads.put({ id: threadId, project_id: 'a', status: 'ready', deleted: false,
+            pinned: false, forked: false, clock: 1, created_at: 1, updated_at: 1 });
+        await db.posts.put({ id: item.id, title: 'Chapter Four', postType: 'doc', deleted: false,
+            content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [
+                { type: 'text', text: 'The chapter text. '.repeat(1200) + 'The final sentence.' },
+            ] }] }), clock: 1, created_at: 1, updated_at: 1 });
+        const entries = [{ id: item.id, kind: 'doc' }];
+        await db.projects.update('a', { data: entries });
+        expect((await readProjectWorkspace(db, 'a')).sources).toHaveLength(0);
+
+        const { workspaceRead } = await import('~/utils/chat/workspace-items');
+        const readPage = async (continuation?: string) => {
+            await assertProjectToolAllowed(scope(), threadId, 'workspace_read', { item, continuation });
+            const page = await workspaceRead(scope(), item, continuation);
+            await expect(filterProjectToolResult(scope(), threadId, 'a', 'workspace_read', JSON.stringify(page)))
+                .resolves.toBe(JSON.stringify(page));
+            return page;
+        };
+        const first = await readPage();
+        expect(first.coverage).toBe('partial');
+        let page = first;
+        while (page.continuation) page = await readPage(page.continuation);
+        expect(page.content).toContain('The final sentence.');
+
+        await db.projects.update('a', { data: [] });
+        await expect(readPage()).rejects.toThrow(/outside the permitted project/);
+        await expect(filterProjectToolResult(scope(), threadId, 'a', 'workspace_read', JSON.stringify(first)))
+            .rejects.toThrow(/no longer available/);
+
+        await db.projects.update('a', { data: entries });
+        const { addProjectDocument } = await import('~/utils/projects/source-intake');
+        const source = await addProjectDocument(scope(), 'a', item.id);
+        await saveProjectSource(scope(), 'a', { ...source.value, mode: 'off' }, source.row.id, source.row);
+        await expect(readPage()).rejects.toThrow(/outside the permitted project/);
+    });
+
     it.each(['excluded', 'moved', 'deleted', 'message-deleted'] as const)(
         'stops recalling automatic evidence after it is %s while retaining manual memory', async change => {
             await db.threads.bulkPut(['evidence', 'consumer'].map(id => ({ id, project_id: 'a', status: 'ready' as const,
