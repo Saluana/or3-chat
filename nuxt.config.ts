@@ -795,6 +795,7 @@ export default defineNuxtConfig({
                 'ajv/dist/2020.js',
                 'dexie',
                 'dexie-export-import',
+                'fflate',
                 'lru-cache',
                 'mammoth',
                 ...(localPackageAliases.length ? [] : ['or3-scroll']),

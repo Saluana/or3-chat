@@ -83,6 +83,21 @@ export function projectExplorerTree(records: readonly ExplorerOrganization[]) {
         }
     }
 
+    const duplicates = new Set<string>();
+    for (const siblings of children.values()) {
+        if (siblings.length < 2) continue;
+        const firstByName = new Map<string, string>();
+        for (const folder of siblings) {
+            const name = compareFolderName(folder.payload.name);
+            const first = firstByName.get(name);
+            if (first === undefined) firstByName.set(name, folder.id);
+            else {
+                duplicates.add(first);
+                duplicates.add(folder.id);
+            }
+        }
+    }
+
     function path(parentId: string | null): ExplorerFolderRow[] {
         const ancestors: ExplorerFolderRow[] = [];
         while (parentId !== null) {
@@ -95,11 +110,7 @@ export function projectExplorerTree(records: readonly ExplorerOrganization[]) {
     }
 
     function label(folder: ExplorerFolderRow): string {
-        const location = folderLocations.get(folder.id)!;
-        const normalized = compareFolderName(folder.payload.name);
-        const duplicate = children.get(location.parentId)?.some(sibling =>
-            sibling.id !== folder.id && compareFolderName(sibling.payload.name) === normalized);
-        return duplicate ? `${folder.payload.name} (${folder.id.slice(-8)})` : folder.payload.name;
+        return duplicates.has(folder.id) ? `${folder.payload.name} (${folder.id.slice(-8)})` : folder.payload.name;
     }
 
     return { folders, children, folderLocations, placements, path, label };

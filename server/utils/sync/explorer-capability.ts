@@ -12,6 +12,7 @@ export function requireExplorerCapability(capability: unknown): void {
 export function checkExplorerPage(capability: unknown, ...pages: ReadonlyArray<
     readonly { tableName: string; pk: string; payload?: unknown }[]
 >): void {
+    if (capability === EXPLORER_CAPABILITY) return;
     if (pages.some(page => page.some(row => hasExplorerSemantics(row.tableName, row.pk, row.payload)))) {
         requireExplorerCapability(capability);
     }

@@ -15,7 +15,7 @@ import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import { listExplorerItems } from '~/db/explorer-items';
 import { assertExplorerQueueCapacity } from '~/db/explorer-admission';
 import {
-    createExplorerFolder, explorerRevision, moveExplorerRows, readExplorerOrganization,
+    createExplorerFolder, importPreviewExplorerRecords, explorerRevision, moveExplorerRows, readExplorerOrganization,
     planExplorerFolderRemoval, removeExplorerFolder, renameExplorerFolder, type ExplorerMoveRow, type ExplorerRevision,
 } from '~/db/explorer';
 import { EXPLORER_MAX_WRITES, explorerItemKey, explorerPlacementId } from '~~/shared/explorer/records';
@@ -53,7 +53,12 @@ const pluginFileActions = useWorkspaceFileActions();
 async function closePreview() {
     preview.value = false;
     await nextTick();
-    if (previewTrigger?.isConnected) previewTrigger.focus();
+    if (previewTrigger?.isConnected && previewTrigger.getClientRects().length) {
+        previewTrigger.focus();
+        if (document.activeElement === previewTrigger) return;
+    }
+    const index = listRows.value.findIndex(row => row.kind === 'file' && row.file.id === selected.value?.id);
+    if (index >= 0) await focusListRow(index, false);
 }
 const props = defineProps<{ recordId?: string | null }>();
 type FileListRow = Pick<Post, 'id' | 'postType' | 'title' | 'file_hashes' | 'updated_at' | 'clock' | 'meta'>
@@ -80,6 +85,7 @@ let folderExpected: ExplorerRevision | null = null;
 let folderDestination: string | null = null;
 const folderName = ref('');
 const organizationError = ref('');
+const folderFormError = ref('');
 const moveDialog = ref(false);
 const folderRemoval = shallowRef<Awaited<ReturnType<typeof planExplorerFolderRemoval>>>();
 const removeFolderDialog = ref(false);
@@ -87,7 +93,7 @@ const bulkTrash = ref(false);
 const listViewport = ref<HTMLElement | null>(null);
 const rowHeight = 64;
 const fileDetails = ref<Record<string, FileMeta>>({});
-const syncStatuses = ref<Record<string, string>>({});
+const previewSyncStatus = ref<string>();
 const cloudEnabled = useRuntimeConfig().public.ssrAuthEnabled === true;
 const icons = {
     upload: useIcon('ui.upload'), document: useIcon('sidebar.note'), folder: useIcon('sidebar.folder'),
@@ -142,7 +148,7 @@ const associationProject = ref('');
 let scope: WorkspaceOperationScope | null = null;
 let stop: (() => void) | undefined;
 let subscription: { unsubscribe(): void } | undefined;
-let statusSubscription: { unsubscribe(): void } | undefined;
+let organizationSubscription: { unsubscribe(): void } | undefined;
 let previewSubscription: { unsubscribe(): void } | undefined;
 let resultTimer: ReturnType<typeof setTimeout> | undefined;
 let generation = 0;
@@ -159,7 +165,6 @@ function clearPreview() {
     preview.value = false; selected.value = null; previewText.value = ''; previewProjectLocations.value = [];
     releasePreviewImage();
 }
-const filtered = computed(() => rows.value);
 const activeExplorer = computed(() => explorerEnabled.value && !trash.value);
 const filterActive = computed(() => !!query.value.trim() || typeFilter.value !== 'all' || projectFilter.value !== 'all');
 watch(filterActive, (active, previous) => { if (active && !previous) searchAll.value = false; });
@@ -194,12 +199,15 @@ const contentRef = (row: FileListRow): ExplorerItemRef => ({
 function location(row: FileListRow, tree = organization.value?.tree) {
     return tree?.placements.get(explorerItemKey(contentRef(row)))?.parentId ?? null;
 }
-function visibleHere(row: FileListRow, tree = organization.value?.tree) {
-    const parent = location(row, tree);
-    if (!activeExplorer.value) return true;
-    if (!filterActive.value) return parent === folderId.value;
-    return searchAll.value || folderId.value === null || !!tree?.path(parent).some(parent => parent.id === folderId.value);
-}
+const searchFolders = computed(() => {
+    if (!filterActive.value || searchAll.value || folderId.value === null) return;
+    const descendants = new Set([folderId.value]);
+    const tree = organization.value?.tree;
+    for (const id of descendants) {
+        for (const child of tree?.children.get(id) ?? []) descendants.add(child.id);
+    }
+    return descendants;
+});
 function compareRows(a: { title: string; updatedAt: number; id: string; type?: string }, b: typeof a) {
     return (sort.value === 'recent' ? b.updatedAt - a.updatedAt : 0)
         || (sort.value === 'type' ? (a.type ?? '').localeCompare(b.type ?? '', undefined, { sensitivity: 'base' }) : 0)
@@ -208,7 +216,9 @@ function compareRows(a: { title: string; updatedAt: number; id: string; type?: s
 type ListedFile = { key: string; kind: 'file'; file: FileListRow };
 type ListedFolder = { key: string; kind: 'folder'; folder: ExplorerFolderRow };
 const fileRows = computed<ListedFile[]>(() => {
-    const entries = filtered.value.map(file => ({ key: explorerItemKey(contentRef(file)), kind: 'file' as const, file }));
+    const entries = rows.value.map(file => ({ key: explorerItemKey(contentRef(file)), kind: 'file' as const, file }));
+    if (trash.value && explorerEnabled.value) return entries.sort((a, b) =>
+        b.file.updated_at - a.file.updated_at || b.file.id.localeCompare(a.file.id));
     if (!activeExplorer.value) return entries;
     return entries.map(entry => ({
         id: entry.file.id, title: entry.file.title, updatedAt: entry.file.updated_at,
@@ -235,7 +245,10 @@ const rowsByFolder = computed(() => {
 });
 const listRows = computed(() => {
     if (!activeExplorer.value) return fileRows.value;
-    if (filterActive.value) return fileRows.value.filter(row => visibleHere(row.file));
+    if (filterActive.value) {
+        const folders = searchFolders.value;
+        return folders ? fileRows.value.filter(row => folders.has(location(row.file) ?? '')) : fileRows.value;
+    }
     return rowsByFolder.value.get(folderId.value) ?? [];
 });
 const explorerSelection = useExplorerSelection(computed(() => listRows.value.map(row => row.key)));
@@ -262,11 +275,20 @@ const { directive: vExplorerDrag, announcement: dragAnnouncement, dragging } = u
         if (!selectedRows.value.has(id)) { clearSelection(); choose(id); }
     },
     move: destination => { void moveSelection(destination); },
-    reject: message => { organizationError.value = message; },
+    accepts: destination => {
+        const tree = organization.value?.tree;
+        if (!tree || selectedRows.value.size > EXPLORER_MAX_WRITES
+            || tree.path(destination).some(folder => selectedRows.value.has(folder.id))) return false;
+        for (const key of selectedRows.value) {
+            const location = tree.folderLocations.get(key) ?? tree.placements.get(key);
+            if ((location?.parentId ?? null) !== destination) return true;
+        }
+        return false;
+    },
 });
 const destinations = computed(() => {
     const tree = organization.value?.tree;
-    if (!tree) return [];
+    if (!moveDialog.value || !tree) return [];
     return [...tree.folders.values()].filter(folder => !folder.deleted).map(folder => {
         const path = tree.path(folder.id);
         return { id: folder.id, path: path.map(tree.label).join(' / '),
@@ -296,6 +318,7 @@ function openFolderDialog(folder: ExplorerFolderRow | null = null) {
     folderDestination = folderId.value;
     folderName.value = folder?.payload.name ?? '';
     organizationError.value = '';
+    folderFormError.value = '';
     folderDialog.value = true;
 }
 async function saveFolder() {
@@ -307,7 +330,7 @@ async function saveFolder() {
         if (target) undo.save(origin, await renameExplorerFolder(origin, filesScope, target.id, name, expected), 'Files folder renamed');
         else await createExplorerFolder(origin, filesScope, destination, name);
         folderDialog.value = false;
-    });
+    }, folderFormError);
 }
 async function confirmRemoveFolder(folder: ExplorerFolderRow) {
     await runOrganization(async origin => {
@@ -362,16 +385,16 @@ async function executeBulkTrash() {
         feedback.value = `${completed} moved to Trash, ${failed} failed, ${targets.length - completed - failed} not attempted.`;
     });
 }
-async function runOrganization(action: (origin: WorkspaceOperationScope) => Promise<void>) {
+async function runOrganization(action: (origin: WorkspaceOperationScope) => Promise<void>, errorTarget = organizationError) {
     if (busy.value) return;
     busy.value = true;
-    organizationError.value = '';
+    errorTarget.value = '';
     try {
         const origin = scope ?? capture();
         await action(origin);
         origin.assertCurrent();
     } catch (cause) {
-        organizationError.value = cause instanceof Error ? cause.message : 'Files organization could not be saved.';
+        errorTarget.value = cause instanceof Error ? cause.message : 'Files organization could not be saved.';
     } finally { busy.value = false; }
 }
 function openMove() {
@@ -439,7 +462,13 @@ async function focusListRow(index: number, select: boolean) {
     virtualizer.value.scrollToIndex(index);
     if (select) choose(entry.key, { shiftKey: true });
     await nextTick();
-    listViewport.value?.querySelector<HTMLElement>(`[data-list-index="${index}"] .files-name-button`)?.focus();
+    const selector = `[data-list-index="${index}"] .files-name-button`;
+    // Scrolling and observing the virtual viewport can take separate browser frames.
+    for (let frame = 0; frame < 5 && listRows.value[index]?.key === entry.key; frame++) {
+        const button = listViewport.value?.querySelector<HTMLElement>(selector);
+        if (button?.getClientRects().length) { button.focus(); return; }
+        await new Promise(requestAnimationFrame);
+    }
 }
 function listKey(event: KeyboardEvent) {
     if (!activeExplorer.value || event.isComposing || !(event.target instanceof HTMLElement)
@@ -466,13 +495,14 @@ function listKey(event: KeyboardEvent) {
         case ' ': event.preventDefault(); choose(entry.key, event, true); return;
         case 'F2':
             event.preventDefault();
-            if (selectedRows.value.size > 1) return;
+            if (readOnly.value || busy.value || selectedRows.value.size > 1) return;
             if (entry.kind === 'folder') openFolderDialog(entry.folder);
             else void withFileRow(entry.file, row => { actionTarget.value = row; newTitle.value = row.title; rename.value = true; });
             return;
         case 'Delete':
         case 'Backspace':
             event.preventDefault();
+            if (readOnly.value || busy.value) return;
             if (!selectedRows.value.has(entry.key)) { clearSelection(); choose(entry.key); }
             if (entry.kind === 'folder' && selectedRows.value.size === 1) void confirmRemoveFolder(entry.folder);
             else if (selectedIncludesFolders.value) organizationError.value = 'Select files and documents only to move them to Trash.';
@@ -525,8 +555,8 @@ async function revealInProject(projectId: string) {
         const project = await origin.db.projects.get(projectId);
         origin.assertCurrent();
         if (!project || project.deleted || selected.value?.id !== item.id) return;
-        const request = { projectId, key: explorerItemKey(contentRef(item)), generation: origin.generation };
-        projectReveal.value = request;
+        projectReveal.value = { projectId, key: explorerItemKey(contentRef(item)), generation: origin.generation };
+        const request = projectReveal.value;
         try { await openProjectSidebar(projectId); }
         catch (error) { if (projectReveal.value === request) projectReveal.value = null; throw error; }
     } catch (cause) {
@@ -664,47 +694,36 @@ async function refresh() {
         origin.assertCurrent(); readOnly.value = !origin.writable;
         const term = query.value.trim(); const inTrash = trash.value;
         const type = typeFilter.value; const projectId = projectFilter.value; const pageSize = limit.value;
-        const searchProject = projectId === 'all' ? undefined : await origin.db.projects.get(projectId);
-        const searchMembers = searchProject && !searchProject.deleted ? new Set(normalizeProjectData(searchProject.data)
-            .filter(item => item.kind === 'doc' || item.kind === 'file').map(item => item.id)) : null;
-        const searchMembership = searchMembers ? [...searchMembers].sort().join('\n') : '';
-        let ids: Set<string> | null = null;
-        if (term && !inTrash) {
-            const { useCommandPalette } = await import('~/composables/search/useCommandPalette');
-            const palette = useCommandPalette();
-            if (!palette.getCoordinator()) await palette.warm();
-            origin.assertCurrent();
-            const searchEligibility = explorerEnabled.value ? await listExplorerItems(origin.db, 'active') : null;
-            const searchTree = explorerEnabled.value ? (await readExplorerOrganization(origin, filesScope)).tree : undefined;
-            const eligibleIds = searchEligibility ? new Set(searchEligibility.filter(item => {
-                if (type === 'image' && !item.file?.mime_type.startsWith('image/')) return false;
-                const row = { id: item.id, postType: item.kind === 'file' ? FILE_CATALOG_POST_TYPE : 'doc',
-                    title: item.title, updated_at: item.updatedAt, clock: item.clock };
-                return visibleHere(row, searchTree);
-            }).map(item => item.id)) : null;
-            const result = await palette.getCoordinator()?.searchOnce({ term, sourceIds: ['document', 'file'], limit: 200,
-                accepts: resource => (type === 'all' || resource.sourceId === (type === 'image' ? 'file' : type))
-                    && (!searchMembers || searchMembers.has(resource.recordId))
-                    && (!eligibleIds || eligibleIds.has(resource.recordId)) });
-            if (!result) throw new Error('Search is unavailable. Try again.');
-            ids = new Set(result.results.map(hit => hit.recordId));
-        }
+        const palette = term && !inTrash ? (await import('~/composables/search/useCommandPalette')).useCommandPalette() : null;
+        if (palette && !palette.getCoordinator()) await palette.warm();
         if (disposed || current !== generation) return;
         // Observe the bounded result itself. Changes to unrelated transfers or
         // file metadata cannot trigger a full catalog refresh.
         subscription = liveQuery(async () => {
             origin.assertCurrent();
-            const currentProjects = await origin.db.projects.filter(project => !project.deleted).limit(200).toArray();
-            const project = projectId === 'all' ? undefined : await origin.db.projects.get(projectId);
+            const currentProjects = await origin.db.projects.filter(project => !project.deleted).toArray();
+            const project = projectId === 'all' ? undefined : currentProjects.find(row => row.id === projectId);
             const missingProject = projectId !== 'all' && (!project || project.deleted);
             const members = project && !project.deleted ? new Set(normalizeProjectData(project.data)
                 .filter(item => item.kind === 'doc' || item.kind === 'file').map(item => item.id)) : null;
-            const searchChanged = Boolean(term && !inTrash && !missingProject
-                && (members ? [...members].sort().join('\n') : '') !== searchMembership);
-            if (explorerEnabled.value) {
-                const [items, organization] = await Promise.all([
-                    listExplorerItems(origin.db, inTrash ? 'trash' : 'active'), readExplorerOrganization(origin, filesScope),
-                ]);
+            const items = explorerEnabled.value ? await listExplorerItems(origin.db, inTrash ? 'trash' : 'active') : null;
+            let ids: Set<string> | undefined;
+            if (palette) {
+                const tree = organization.value?.tree;
+                const folders = searchFolders.value;
+                const eligible = items ? new Set(items.filter(item => {
+                    if (type === 'image' && !item.file?.mime_type.startsWith('image/')) return false;
+                    if (!folders) return true;
+                    const key = explorerItemKey({ kind: item.kind, item_id: item.id });
+                    return folders.has(tree?.placements.get(key)?.parentId ?? '');
+                }).map(item => item.id)) : null;
+                const result = await palette.getCoordinator()?.searchOnce({ term, sourceIds: ['document', 'file'], limit: 200,
+                    accepts: resource => (type === 'all' || resource.sourceId === (type === 'image' ? 'file' : type))
+                        && (!members || members.has(resource.recordId)) && (!eligible || eligible.has(resource.recordId)) });
+                if (!result) throw new Error('Search is unavailable. Try again.');
+                ids = new Set(result.results.map(hit => hit.recordId));
+            }
+            if (items) {
                 const metadata: Record<string, FileMeta> = {};
                 const rows = items.flatMap((item): FileListRow[] => {
                     if ((ids && !ids.has(item.id)) || (members && !members.has(item.id))
@@ -716,7 +735,7 @@ async function refresh() {
                         updated_at: item.updatedAt, clock: item.clock, coverage: item.textCoverage }];
                 });
                 origin.assertCurrent();
-                return { projects: currentProjects, missingProject, searchChanged, rows, metadata, organization, more: false };
+                return { projects: currentProjects, missingProject, rows, metadata, more: false };
             }
             const collection = origin.db.posts.orderBy('updated_at').reverse().filter(row =>
                 ['doc', FILE_CATALOG_POST_TYPE].includes(row.postType) && !row.deleted
@@ -741,18 +760,13 @@ async function refresh() {
             }
             origin.assertCurrent();
             return { projects: currentProjects, missingProject,
-                searchChanged, rows: candidates.slice(0, pageSize), organization: undefined,
+                rows: candidates.slice(0, pageSize),
                 metadata: Object.fromEntries(metadata), more: candidates.length > pageSize };
         }).subscribe({ next: snapshot => {
             clearTimeout(resultTimer);
             resultTimer = setTimeout(() => {
                 if (disposed || current !== generation || origin !== scope) return;
-                if (snapshot.searchChanged) { void refresh(); return; }
                 projects.value = snapshot.projects; rows.value = snapshot.rows;
-                organization.value = snapshot.organization;
-                if (folderId.value && snapshot.organization?.tree.folders.get(folderId.value)?.deleted !== false) {
-                    navigateFolder(snapshot.organization?.tree.folderLocations.get(folderId.value)?.parentId ?? null);
-                }
                 fileDetails.value = snapshot.metadata; more.value = snapshot.more;
                 error.value = ''; loading.value = false;
                 if (revealId) {
@@ -773,37 +787,40 @@ async function refresh() {
         } });
     } catch (caught) {
         if (disposed || current !== generation) return;
-        rows.value = []; fileDetails.value = {}; syncStatuses.value = {}; clearPreview();
+        rows.value = []; fileDetails.value = {}; clearPreview();
         error.value = fileErrorMessage(caught, 'Files could not be loaded. Try again.');
         loading.value = false;
     }
 }
 
-function bindVisibleStatus() {
-    statusSubscription?.unsubscribe(); statusSubscription = undefined;
-    const origin = scope; const displayed = rows.value;
-    if (!origin || !cloudEnabled || !displayed.length) { syncStatuses.value = {}; return; }
-    const hashes = [...new Set(displayed.flatMap(row => parseFileHashes(row.file_hashes).slice(0, 1)))];
-    const keys = [...displayed.map(row => ['posts', row.id]), ...hashes.map(hash => ['file_meta', hash])];
-    statusSubscription = liveQuery(async () => {
-        const pending = (await origin.db.pending_ops.where('[tableName+pk]').anyOf(keys).toArray())
-            .filter(op => op.status !== 'applied' && op.status !== 'discarded');
-        const transfers = hashes.length ? await origin.db.file_transfers.where('[hash+direction]').anyOf(hashes.map(hash => [hash, 'upload'])).toArray() : [];
-        const metadata = hashes.length ? await origin.db.file_meta.bulkGet(hashes) : [];
-        return Object.fromEntries(displayed.map(row => {
-            const hash = parseFileHashes(row.file_hashes)[0];
-            const ops = pending.filter(op => op.pk === row.id || op.pk === hash);
-            const transfer = transfers.filter(item => item.hash === hash).sort((a, b) => b.updated_at - a.updated_at)[0];
-            const state = ops.some(op => ['failed', 'failed_retryable', 'failed_permanent'].includes(op.status)) ? 'Sync needs attention'
-                : transfer?.state === 'failed' ? 'Upload needs attention' : transfer?.state === 'running' ? 'Uploading'
-                : ops.length || (transfer && transfer.state !== 'done') ? 'Saved locally · Waiting to sync'
-                : hash && !metadata.find(meta => meta?.hash === hash)?.storage_id ? 'Saved locally' : 'Synced';
-            return [row.id, state];
-        }));
-    }).subscribe({ next: statuses => { if (!disposed && origin === scope) syncStatuses.value = statuses; },
-        error: () => { if (!disposed && origin === scope) syncStatuses.value = {}; } });
-}
-watch(rows, bindVisibleStatus);
+watch([
+    () => preview.value ? selected.value?.id : undefined,
+    () => preview.value && selected.value ? parseFileHashes(selected.value.file_hashes)[0] : undefined,
+], ([id, hash], _, onCleanup) => {
+    previewSyncStatus.value = undefined;
+    const origin = scope;
+    if (!origin || !cloudEnabled || !id) return;
+    const keys = [['posts', id]];
+    if (hash) keys.push(['file_meta', hash]);
+    const sub = liveQuery(async () => {
+        const [operations, uploads, meta] = await Promise.all([
+            origin.db.pending_ops.where('[tableName+pk]').anyOf(keys).toArray(),
+            hash ? origin.db.file_transfers.where('[hash+direction]').equals([hash, 'upload']).toArray() : [],
+            hash ? origin.db.file_meta.get(hash) : undefined,
+        ]);
+        const pending = operations.filter(op => op.status !== 'applied' && op.status !== 'discarded');
+        const transfer = uploads.sort((a, b) => b.updated_at - a.updated_at)[0];
+        if (pending.some(op => ['failed', 'failed_retryable', 'failed_permanent'].includes(op.status))) return 'Sync needs attention';
+        if (transfer?.state === 'failed') return 'Upload needs attention';
+        if (transfer?.state === 'running') return 'Uploading';
+        if (pending.length || (transfer && transfer.state !== 'done')) return 'Saved locally · Waiting to sync';
+        return hash && !meta?.storage_id ? 'Saved locally' : 'Synced';
+    }).subscribe({
+        next: status => { if (origin === scope && selected.value?.id === id) previewSyncStatus.value = status; },
+        error: () => { if (origin === scope && selected.value?.id === id) previewSyncStatus.value = undefined; },
+    });
+    onCleanup(() => sub.unsubscribe());
+});
 watch(() => preview.value ? selected.value?.id : null, id => {
     previewSubscription?.unsubscribe(); previewSubscription = undefined;
     const origin = scope;
@@ -816,7 +833,7 @@ watch(() => preview.value ? selected.value?.id : null, id => {
         const locations = [];
         if (explorerEnabled.value) {
             const kind = row.postType === 'doc' ? 'doc' : 'file';
-            const candidates = await origin.db.projects.filter(project => !project.deleted).limit(200).toArray();
+            const candidates = await origin.db.projects.filter(project => !project.deleted).toArray();
             for (const project of candidates) {
                 if (!normalizeProjectData(project.data).some(item => item.id === row.id && item.kind === kind)) continue;
                 const result = await readExplorerOrganization(origin, { kind: 'project', project_id: project.id });
@@ -1148,15 +1165,20 @@ function resetScope() {
     undo.clear();
     generation++; scope = null; organization.value = undefined;
     filesWorkspace.value = getActiveWorkspaceId() ?? 'local';
-    clearSelection(); revealId = undefined; rows.value = []; fileDetails.value = {}; syncStatuses.value = {}; clearPreview(); rename.value = false;
+    clearSelection(); revealId = undefined; rows.value = []; fileDetails.value = {}; clearPreview(); rename.value = false;
     folderDialog.value = false; moveDialog.value = false; removeFolderDialog.value = false; bulkTrash.value = false;
     associate.value = false; remove.value = false; existingCursor.value = ''; existingComplete.value = false;
     failures.value = []; uploadResult.value = ''; clearTimeout(uploadResultTimer); projects.value = []; readOnly.value = true; projectFilter.value = 'all'; actionTarget.value = null;
-    statusSubscription?.unsubscribe(); previewSubscription?.unsubscribe(); clearTimeout(resultTimer);
+    organizationSubscription?.unsubscribe(); previewSubscription?.unsubscribe(); clearTimeout(resultTimer);
     subscription?.unsubscribe(); subscription = undefined; void initialize();
 }
-watch(() => [sessionData.value?.session?.user?.id, sessionData.value?.session?.role,
-    sessionData.value?.session?.authorizationRevision, sessionData.value?.session?.authenticated, explorerEnabled.value], resetScope);
+watch([
+    () => sessionData.value?.session?.user?.id,
+    () => sessionData.value?.session?.role,
+    () => sessionData.value?.session?.authorizationRevision,
+    () => sessionData.value?.session?.authenticated,
+    explorerEnabled,
+], resetScope);
 // The container query widths in the styles below (page and list).
 const LAYOUT_BREAKPOINTS = [600, 800, 1050];
 const layoutTier = (width: number) => LAYOUT_BREAKPOINTS.filter(breakpoint => width > breakpoint).length;
@@ -1188,14 +1210,34 @@ onMounted(async () => {
     stop = subscribeActiveWorkspaceDb(resetScope);
     await initialize();
 });
+function observeOrganization(origin: WorkspaceOperationScope) {
+    organizationSubscription?.unsubscribe();
+    organizationSubscription = liveQuery(async () => readExplorerOrganization(origin, filesScope)).subscribe({
+        next: state => {
+            if (disposed || origin !== scope) return;
+            organization.value = state;
+            const folder = folderId.value;
+            if (folder && state.tree.folders.get(folder)?.deleted !== false) {
+                navigateFolder(state.tree.folderLocations.get(folder)?.parentId ?? null);
+            } else if (folder && !searchAll.value && !trash.value && query.value.trim()) {
+                scheduleFilesRefresh();
+            }
+        },
+        error: cause => {
+            if (!disposed && origin === scope) organizationError.value = fileErrorMessage(cause, 'Folders could not be loaded.');
+        },
+    });
+}
 async function initialize() {
     let origin: WorkspaceOperationScope | null = null;
     try {
         scope = capture(); readOnly.value = !scope.writable;
         origin = scope;
+        if (explorerEnabled.value) await importPreviewExplorerRecords(origin, filesScope);
         if (origin.writable) await catalogExistingImages(origin);
         origin.assertCurrent();
         if (disposed || origin !== scope) return;
+        if (explorerEnabled.value) observeOrganization(origin);
         await refresh();
         if (disposed || origin !== scope) return;
         if (props.recordId) {
@@ -1226,19 +1268,19 @@ async function catalogExistingImages(origin: WorkspaceOperationScope) {
         cursor = batch[batch.length - 1]!.hash;
     }
 }
-onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generation++; clearTimeout(typeaheadTimer); releasePreviewImage(); clearTimeout(timer); clearTimeout(uploadResultTimer); stop?.(); subscription?.unsubscribe(); statusSubscription?.unsubscribe(); previewSubscription?.unsubscribe(); clearTimeout(resultTimer); });
+onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generation++; clearTimeout(typeaheadTimer); releasePreviewImage(); clearTimeout(timer); clearTimeout(uploadResultTimer); stop?.(); subscription?.unsubscribe(); organizationSubscription?.unsubscribe(); previewSubscription?.unsubscribe(); clearTimeout(resultTimer); });
 </script>
 
 <template>
     <section ref="pageElement" aria-label="Workspace Files" class="files-page" :data-explorer-dragging="dragging || undefined" :data-preview="preview && widePreview" :data-compact-preview="preview && !widePreview">
         <nav v-if="navigatorAvailable && showNavigator" aria-label="Files folders" class="files-navigator">
-            <UButton color="neutral" variant="ghost" size="workspace" label="Files root" :icon="icons.folder.value"
+            <UButton v-explorer-drag="{ destination: null, label: 'Files root' }" color="neutral" variant="ghost" size="workspace" label="Files root" :icon="icons.folder.value"
                 :aria-current="folderId === null ? 'location' : undefined" @click="navigateFolder(null)" />
             <UTree v-if="navigatorFolders.length" v-model:expanded="navigatorExpanded" :items="navigatorFolders"
                 :get-key="item => item.id" :virtualize="{ estimateSize: 40, overscan: 6 }"
                 aria-label="Folders" class="files-navigator-tree">
                 <template #item-wrapper="{ item, level, expanded }">
-                    <div class="flex min-w-0 items-center" :style="{ paddingInlineStart: Math.min((level - 1) * 12, 48) + 'px' }">
+                    <div v-explorer-drag="{ destination: item.id, label: item.path }" class="flex min-w-0 items-center" :style="{ paddingInlineStart: Math.min((level - 1) * 12, 48) + 'px' }">
                         <UButton v-if="item.children?.length" color="neutral" variant="ghost" size="workspace"
                             :icon="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
                             :aria-label="(expanded ? 'Collapse ' : 'Expand ') + item.label"
@@ -1362,7 +1404,7 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
                         @drop="entry.kind === 'folder' && dropFiles($event, entry.folder.id)"
                         v-explorer-drag="activeExplorer && (entry.kind === 'folder'
                             ? { source: entry.key, destination: entry.folder.id, label: entry.folder.payload.name }
-                            : { source: entry.key })"
+                            : { source: entry.key, label: entry.file.title })"
                         :style="explorerEnabled ? { position: 'absolute', insetInline: '0', top: entry.start + 'px', height: rowHeight + 'px' } : undefined"
                         :data-trash="trash" :data-selected="selectedRows.has(entry.key) || (entry.kind === 'file' && preview && selected?.id === entry.file.id)">
                         <template v-if="entry.kind === 'folder'">
@@ -1441,7 +1483,7 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
             <div class="files-inspector-body">
             <WorkspaceFilePreview v-if="selected" :title="selected.title" :type="fileType(selected)" :size="formatSize(selected)" :icon="fileIcon(selected)" :coverage="textCoverage(selected)" :project="projectNames(selected).join(', ')"
                 :files-location="explorerEnabled ? filePath(selected) : undefined" :project-locations="explorerEnabled ? previewProjectLocations : undefined"
-                @reveal="revealInFiles(selected)" @reveal-project="revealInProject" :text="previewText" :image-url="previewImageUrl" :partial="workspaceItemMetadata(selected.meta)?.text?.coverage !== 'full'" :disabled="trash" :document="selected.postType === 'doc'" :status="syncStatuses[selected.id]" @ask="askInChat(selected)" @download="download" @open="openEditor(selected)" />
+                @reveal="revealInFiles(selected)" @reveal-project="revealInProject" :text="previewText" :image-url="previewImageUrl" :partial="workspaceItemMetadata(selected.meta)?.text?.coverage !== 'full'" :disabled="trash" :document="selected.postType === 'doc'" :status="previewSyncStatus" @ask="askInChat(selected)" @download="download" @open="openEditor(selected)" />
             <UAlert v-if="error" role="alert" color="error" variant="soft" title="Could not open item" :description="error" />
             </div>
         </aside>
@@ -1471,7 +1513,7 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
         <AppModal v-model:open="folderDialog" :title="editingFolder ? 'Rename folder in Files' : 'New folder in ' + folderLabel">
             <form id="files-folder-form" @submit.prevent="saveFolder">
                 <UInput v-model="folderName" aria-label="Folder name" class="w-full" size="workspace" />
-                <UAlert v-if="organizationError" role="alert" :description="organizationError" color="error" variant="soft" class="mt-3" />
+                <UAlert v-if="folderFormError" role="alert" :description="folderFormError" color="error" variant="soft" class="mt-3" />
             </form>
             <template #footer>
                 <UButton size="workspace" label="Cancel" color="neutral" variant="ghost" @click="folderDialog = false" />
@@ -1507,7 +1549,7 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
     background: var(--md-surface-hover);
 }
 
-[draggable='true'] [data-explorer-drag-handle] { cursor: grab; user-select: none; }
+.files-row:has([data-explorer-drag-handle]), .files-row .files-name-button { cursor: grab; user-select: none; }
 .files-viewport { max-height: min(64vh, 720px); overflow-y: auto; overscroll-behavior: contain; }
 .files-explorer-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .files-breadcrumbs { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; color: var(--md-on-surface-variant); }

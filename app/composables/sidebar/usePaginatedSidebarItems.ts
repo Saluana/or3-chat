@@ -10,7 +10,7 @@ export const docToUnified = documentToSidebar;
 const preferenceName = familyExpansionPreferenceName;
 
 /** One flat family model shared by both sidebar consumers. */
-export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'document'; query?: Ref<string>;
+export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'document'; query?: Ref<string>; enabled?: Ref<boolean>;
     projectId?: Ref<string | undefined>; pinned?: Ref<boolean | undefined>; activeIds?: Ref<string[]> } = {}) {
     const items = shallowRef<UnifiedSidebarItem[]>([]); const hasMore = ref(true); const loading = ref(false);
     const activeFamilyIds = shallowRef(new Set<string>());
@@ -54,9 +54,16 @@ export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'd
     }
     function startSubscription() {
         if (!mounted) return;
-        const token = ++subscriptionToken; const db = getDb(); const generation = getWorkspaceGeneration();
+        const token = ++subscriptionToken;
+        subscription?.unsubscribe();
+        if (options.enabled?.value === false) {
+            pageRequestPending = false;
+            loading.value = false;
+            return;
+        }
+        const db = getDb(); const generation = getWorkspaceGeneration();
         pageRequestPending = true;
-        loading.value = items.value.length === 0; subscription?.unsubscribe();
+        loading.value = items.value.length === 0;
         subscription = liveQuery(fetchItems).subscribe({ next: (result) => {
             if (token !== subscriptionToken || getDb() !== db || generation !== getWorkspaceGeneration()) return;
             pageRequestPending = false;
@@ -78,7 +85,7 @@ export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'd
         return getDb() === db && generation === getWorkspaceGeneration() ? id : undefined;
     }
     const stopWorkspace = subscribeActiveWorkspaceDb(() => { items.value = []; activeFamilyIds.value = new Set(); reset(); });
-    watch(() => [options.query?.value, options.projectId?.value, options.pinned?.value], reset);
+    watch(() => [options.query?.value, options.projectId?.value, options.pinned?.value, options.enabled?.value], reset);
     watch(() => options.activeIds?.value, startSubscription, { deep: true });
     onMounted(() => { mounted = true; startSubscription(); });
     onActivated(() => { if (!mounted) { mounted = true; startSubscription(); } });

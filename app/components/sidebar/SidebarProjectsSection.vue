@@ -23,6 +23,7 @@
                     <div
                         v-for="project in projects"
                         :key="project.id"
+                        data-project-shortcut
                         class="project-group-container mb-0.5 rounded-[var(--md-border-radius)] overflow-hidden"
                     >
                         <SidebarProjectRoot

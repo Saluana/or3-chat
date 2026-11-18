@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 test.skip(process.env.PW_EXPLORER_CLOUD_PROFILE !== 'true', 'Requires the disposable Cloud gateway profile');
 test.setTimeout(90_000);
 
-test('Cloud folders require a device acknowledgement before the first write', async ({ page }, info) => {
+test('Cloud editors can organize Files on the installed provider', async ({ page, browser }, info) => {
     const origin = new URL(info.project.use.baseURL!).origin;
     expect(new URL(origin).hostname).toBe('127.0.0.1');
     const response = await page.request.post(origin + '/api/basic-auth/sign-in', {
@@ -23,24 +23,54 @@ test('Cloud folders require a device acknowledgement before the first write', as
     await expect(openFolder).toBeVisible({ timeout: 30_000 });
     await openFolder.click();
     const folder = page.getByRole('dialog', { name: 'New folder in Files' });
-    const folderName = `Notice proof ${Date.now()}`;
+    const folderName = `Cloud folder ${Date.now()}`;
     await folder.getByRole('textbox', { name: 'Folder name' }).fill(folderName);
     await folder.getByRole('button', { name: 'Create folder' }).click();
-    const notice = page.getByRole('dialog', { name: 'Update your devices before using folders' });
-    await expect(notice).toContainText('Older devices may stop syncing this workspace.');
-    await notice.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(notice).toBeHidden();
-    await expect(files.getByRole('button', { name: folderName, exact: true })).toHaveCount(0);
-    await folder.getByRole('button', { name: 'Create folder' }).click();
-    await notice.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(folder).toBeHidden();
     await expect(files.getByRole('button', { name: folderName, exact: true })).toBeVisible();
     await openFolder.click();
     await folder.getByRole('textbox', { name: 'Folder name' }).fill(folderName + ' again');
     await folder.getByRole('button', { name: 'Create folder' }).click();
     await expect(folder).toBeHidden();
-    await expect(notice).toBeHidden();
     await expect(files.getByRole('button', { name: folderName + ' again', exact: true })).toBeVisible();
+    const peer = await browser.newContext({ baseURL: origin });
+    try {
+        const headers = { origin, 'x-or3-cloud-intent': 'mutation' };
+        const login = await peer.request.post('/api/basic-auth/sign-in', { headers,
+            data: { email: 'workspace-e2e@example.test', password: 'DisposableWorkspaceE2e!123' } });
+        expect(login.ok()).toBe(true);
+        const session = await (await page.request.get('/api/auth/session')).json();
+        const workspaceId = session.session.workspace.id;
+        const active = await peer.request.post('/api/workspaces/active', { headers, data: { id: workspaceId } });
+        expect(active.ok()).toBe(true);
+        // A peer using the released protocol must receive both exact Files folders.
+        await expect.poll(async () => {
+            const names = new Set<string>();
+            let pageToken: string | undefined;
+            let historyIncarnation: string | null = null;
+            do {
+                const response = await peer.request.post('/api/sync/snapshot', { headers, data: {
+                    scope: { workspaceId }, tables: ['kv'], pageSize: 100, pageToken, historyIncarnation,
+                    historyIncarnationCapability: 'incarnation-v1', unavailableRecordCapability: 'unavailable-v1',
+                    workspaceItemCapability: 'v1', fileKindCapability: 'v1',
+                } });
+                expect(response.ok()).toBe(true);
+                const snapshot = await response.json();
+                for (const { kind, payload } of snapshot.items) {
+                    if (kind !== 'row' || payload?.deleted || !payload?.name?.startsWith('or3.explorer/%5B%22files%22%5D/explorer-folder-')) continue;
+                    const [content, removed] = JSON.parse(payload.value);
+                    const folder = JSON.parse(content);
+                    if (!removed && folder.scope.kind === 'files' && folder.parent_id === null) names.add(folder.name);
+                }
+                historyIncarnation = snapshot.historyIncarnation;
+                pageToken = snapshot.nextPageToken;
+            } while (pageToken);
+            return [names.has(folderName), names.has(folderName + ' again')];
+        }, { timeout: 30_000 }).toEqual([true, true]);
+    } finally {
+        await peer.close();
+    }
+
 });
 
 test('an Explorer backup restores folders and original bytes into a separate workspace', async ({ page }, info) => {

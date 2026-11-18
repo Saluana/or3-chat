@@ -1,5 +1,6 @@
 import { getDb, getWorkspaceGeneration, type Or3DB } from '~/db/client';
 import type { TipTapDocument } from '~/types/database';
+import { normalizedContent } from '~/utils/documents/document-content';
 import type { Post } from '~/db/schema';
 
 export type DocumentEditorFocusedRegion =
@@ -240,6 +241,7 @@ export async function settleWorkspaceDocumentEditors(documentId: string, db: Or3
 
 export function leaseWorkspaceDocumentEditors(documentId: string, db: Or3DB,
     expected: { title: string; content: TipTapDocument }): { release: () => void; accept: (row: Post) => void } {
+    expected = { ...expected, content: normalizedContent(expected.content) };
     const writes = externalWrites.get(db) ?? new Map<string, ExternalDocumentWrite>();
     externalWrites.set(db, writes);
     const existing = writes.get(documentId);
@@ -262,7 +264,7 @@ export function leaseWorkspaceDocumentEditors(documentId: string, db: Or3DB,
         },
         join(session) {
             if (joined.has(session) || released) return;
-            const current = accepted ? { title: accepted.title, content: JSON.parse(accepted.content) as TipTapDocument } : expected;
+            const current = accepted ? { title: accepted.title, content: normalizedContent(JSON.parse(accepted.content)) } : expected;
             if (session.getDocumentSnapshot && JSON.stringify(session.getDocumentSnapshot()) !== JSON.stringify(current)) {
                 throw new Error('This document changed. Update the proposal from a new read.');
             }

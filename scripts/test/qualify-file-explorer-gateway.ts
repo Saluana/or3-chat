@@ -42,40 +42,38 @@ const proofWorkspace = await json(await left('/api/workspaces', { name: 'Disposa
 for (const device of [left, right]) await json(await device('/api/workspaces/active', { id: proofWorkspace.id }));
 const session = await json(await left('/api/auth/session'));
 assert(session.appAccessAllowed);
-assert.equal(session.explorerCapability, 'v1');
+
 const scope = { workspaceId: session.session.workspace.id };
 const protocols = { scope, fileKindCapability: 'v1', workspaceItemCapability: 'v1',
     historyIncarnationCapability: 'incarnation-v1', unavailableRecordCapability: 'unavailable-v1',
     storedRecordCapability: 'stored-record-v1' };
-const initial = await json(await left('/api/sync/snapshot', { ...protocols, explorerCapability: 'v1',
+const initial = await json(await left('/api/sync/snapshot', { ...protocols,
     historyIncarnation: null, pageSize: 100 }));
-const old = { ...protocols, historyIncarnation: initial.historyIncarnation };
-const qualified = { ...old, explorerCapability: 'v1' };
+const bound = { ...protocols, historyIncarnation: initial.historyIncarnation };
 const a = 'explorer-folder-' + crypto.randomUUID();
 const b = 'explorer-folder-' + crypto.randomUUID();
 const files = { kind: 'files' } as const;
-function op(id: string, rowType: string, data: object, clock: number, deviceId: string, operation = 'put') {
-    return { id: crypto.randomUUID(), tableName: 'posts', pk: id, operation, attempts: 0, status: 'pending', createdAt: 1,
+function op(id: string, data: object, clock: number, deviceId: string, operation = 'put') {
+    const name = 'or3.explorer/' + encodeURIComponent('["files"]') + '/' + id;
+    return { id: crypto.randomUUID(), tableName: 'kv', pk: 'kv:' + name, operation: 'put', attempts: 0, status: 'pending', createdAt: 1,
         stamp: { clock, opId: crypto.randomUUID(), deviceId, hlc: `1700000000000:${clock}:${deviceId}` },
-        payload: { id, title: '["files"]', post_type: 'or3:explorer-' + rowType, clock, created_at: 1, updated_at: 1,
-            deleted: operation === 'delete', content: JSON.stringify({ version: 1, scope: files, ...data }) },
+        payload: { id: 'kv:' + name, name, clock, created_at: 1, updated_at: 1, deleted: false,
+            value: JSON.stringify([JSON.stringify({ version: 1, scope: files, ...data }), operation === 'delete']) },
     };
 }
-const rootA = op(a, 'folder', { parent_id: null, name: 'Gateway A' }, 1, 'left');
-assert.equal((await left('/api/sync/push', { ...old, ops: [rootA] })).status, 426);
+const rootA = op(a, { parent_id: null, name: 'Gateway A' }, 1, 'left');
 async function push(device: typeof left, ops: unknown[]) {
-    const result = await json(await device('/api/sync/push', { ...qualified, ops }));
+    const result = await json(await device('/api/sync/push', { ...bound, ops }));
     assert(result.results.every((row: { success: boolean }) => row.success), JSON.stringify(result));
     return result;
 }
-const first = await push(left, [rootA, op(b, 'folder', { parent_id: null, name: 'Gateway B' }, 1, 'right')]);
-assert.equal((await right('/api/sync/pull', { ...old, cursor: initial.highWatermark, limit: 100 })).status, 426);
-assert.equal((await right('/api/sync/snapshot', { ...old, pageSize: 100 })).status, 426);
-await push(left, [op(a, 'folder', { parent_id: b, name: 'Gateway A' }, 2, 'left')]);
-await push(right, [op(b, 'folder', { parent_id: a, name: 'Gateway B' }, 2, 'right')]);
-const opposite = await json(await right('/api/sync/pull', { ...qualified, cursor: first.serverVersion, limit: 100 }));
-assert.deepEqual(opposite.changes.map((row: { pk: string }) => row.pk), [a, b]);
-await push(left, [op(a, 'folder', { parent_id: null, name: 'Gateway A' }, 3, 'left')]);
+const rootB = op(b, { parent_id: null, name: 'Gateway B' }, 1, 'right');
+const first = await push(left, [rootA, rootB]);
+await push(left, [op(a, { parent_id: b, name: 'Gateway A' }, 2, 'left')]);
+await push(right, [op(b, { parent_id: a, name: 'Gateway B' }, 2, 'right')]);
+const opposite = await json(await right('/api/sync/pull', { ...bound, cursor: first.serverVersion, limit: 100 }));
+assert.deepEqual(opposite.changes.map((row: { pk: string }) => row.pk), [rootA.pk, rootB.pk]);
+await push(left, [op(a, { parent_id: null, name: 'Gateway A' }, 3, 'left')]);
 const original = new TextEncoder().encode('Explorer qualification original ' + crypto.randomUUID());
 const fileHash = 'sha256:' + Buffer.from(await crypto.subtle.digest('SHA-256', original)).toString('hex');
 const mime = 'text/plain';
@@ -87,25 +85,34 @@ assert(stored.ok, `Original upload returned ${stored.status}.`);
 await json(await left('/api/storage/commit', { ...makeUpload, storage_id: grant.storageId, intent_id: grant.intentId,
     storage_provider_id: profile.storageProvider, name: 'explorer-proof.txt', kind: 'file', file_kind_capability: 'v1' }));
 const file = 'explorer-proof-file-' + crypto.randomUUID();
-const documentWrite = op(file, 'placement', {}, 1, 'left');
-const fileMeta = op(fileHash, 'placement', {}, 1, 'left');
+const documentWrite = op(file, {}, 1, 'left');
+const fileMeta = op(fileHash, {}, 1, 'left');
 await push(left, [
-    { ...fileMeta, tableName: 'file_meta', payload: {
+    { ...fileMeta, pk: fileHash, tableName: 'file_meta', payload: {
         hash: fileHash, kind: 'file', mime_type: mime, size_bytes: original.byteLength, name: 'explorer-proof.txt',
         storage_id: grant.storageId, storage_provider_id: profile.storageProvider, clock: 1, created_at: 1, updated_at: 1, deleted: false,
     } },
-    { ...documentWrite, payload: { ...documentWrite.payload, post_type: 'or3:file', title: 'Explorer proof original',
+    { ...documentWrite, tableName: 'posts', pk: file, payload: { id: file, clock: 1, created_at: 1, updated_at: 1, deleted: false, post_type: 'or3:file', title: 'Explorer proof original',
         file_hashes: JSON.stringify([fileHash]), content: new TextDecoder().decode(original),
         meta: JSON.stringify({ 'or3.workspace-item': { version: 1, trashed_at: null } }) } },
 ]);
-for (const [id, type, payload, operation] of [[b, 'folder', { parent_id: a, name: 'Gateway B' }, 'delete'],
-    [await explorerPlacementId(files, { kind: 'file', item_id: file }), 'placement',
+for (const [id, payload, operation] of [[b, { parent_id: a, name: 'Gateway B' }, 'delete'],
+    [await explorerPlacementId(files, { kind: 'file', item_id: file }),
         { parent_id: b, item: { kind: 'file', item_id: file } }, 'put']] as const) {
-    await push(left, [op(id, type, payload, 3, 'left', operation)]);
+    await push(left, [op(id, payload, 3, 'left', operation)]);
 }
-const snapshot = await json(await right('/api/sync/snapshot', { ...qualified, pageSize: 100 }));
+// An older client only understands ordinary content and the existing KV table.
+const renamed = { id: file, post_type: 'or3:file', title: 'Renamed by older client',
+    file_hashes: JSON.stringify([fileHash]), content: new TextDecoder().decode(original),
+    meta: JSON.stringify({ 'or3.workspace-item': { version: 1, trashed_at: null } }),
+    clock: 2, created_at: 1, updated_at: 2, deleted: false };
+const edit = op(file, {}, 2, 'right');
+await push(right, [{ ...edit, tableName: 'posts', pk: file, payload: renamed }]);
+const snapshot = await json(await right('/api/sync/snapshot', { ...bound, pageSize: 100 }));
+assert(snapshot.items.some((row: { pk: string; payload?: { title?: string } }) =>
+    row.pk === file && row.payload?.title === renamed.title));
 assert(snapshot.items.some((row: { pk: string; kind: string; payload?: { deleted?: boolean } }) =>
-    row.pk === b && row.kind === 'row' && row.payload?.deleted === true));
+    row.pk === rootB.pk && row.kind === 'row'));
 const backup = await right('/api/workspaces/backup?workspaceId=' + encodeURIComponent(scope.workspaceId));
 assert(backup.ok, `Backup returned ${backup.status}.`);
 const archive = await backup.blob();
@@ -116,8 +123,10 @@ await scanCloudBackup(archive, async ({ header, row, body }) => {
         assert.deepEqual(new Uint8Array(await body.arrayBuffer()), original);
         foundOriginal = true;
     }
-    if (header.type === 'row' && header.table === 'posts' && row?.id === b && row.deleted === true) {
-        assert.equal(JSON.parse(String(row.content)).parent_id, a);
+    if (header.type === 'row' && header.table === 'kv' && row?.id === rootB.pk) {
+        const [content, removed] = JSON.parse(String(row.value));
+        assert.equal(removed, true);
+        assert.equal(JSON.parse(content).parent_id, a);
         foundDeletedFolder = true;
     }
 });
@@ -126,6 +135,6 @@ assert(foundOriginal, 'Backup archive omitted the original placed file');
 await Bun.write(join(root, 'explorer.or3cloud'), archive);
 const receipt = { provider: profile.syncProvider, sourceWorkspace: scope.workspaceId, survivingFolder: a, removedFolder: b, file, fileHash,
     versions: profile.providers.map(({ name, version, mode }: Record<string, string>) => ({ name, version, mode })),
-    checks: ['authenticated capability', 'legacy push/pull/snapshot refusal', 'opposite moves', 'late placement', 'snapshot and backup'] };
+    checks: ['ordinary KV push/pull/snapshot', 'opposite moves', 'late placement', 'snapshot and backup'] };
 await Bun.write(join(root, 'explorer-receipt.json'), JSON.stringify(receipt, null, 2));
 console.log(JSON.stringify(receipt, null, 2));

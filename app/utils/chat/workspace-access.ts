@@ -35,10 +35,10 @@ export function captureWorkspaceOperation(context: ToolExecutionContext): Worksp
     const role = session?.role;
     const scope: WorkspaceOperationScope = {
         db, generation, workspaceId, subject, signal: context.abortSignal,
-        explorerLocal: !authenticated && config.syncEnabled !== true,
+        explorerLocal: !authenticated,
         get explorerCloud() {
             const payload = getCachedSessionPayload();
-            return authenticated && payload?.appAccessAllowed === true && payload.explorerCapability === 'v1';
+            return authenticated && payload?.appAccessAllowed === true;
         },
         writable: !authenticated || role === 'owner' || role === 'editor',
         assertCurrent(access = 'read') {

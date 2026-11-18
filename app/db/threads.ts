@@ -473,7 +473,7 @@ export async function forkThread(
     fork = parseOrThrow(ThreadSchema, fork);
     if (fork.id !== forkId) throw new Error('Invalid ordinary fork identity.');
     let membership!: Awaited<ReturnType<typeof moveChatProjectRows>>;
-    const result = await db.transaction('rw', getWriteTxTableNames(db, ['threads', 'messages', 'projects']), async () => {
+    const result = await db.transaction('rw', getWriteTxTableNames(db, ['threads', 'messages', 'projects', 'posts', 'kv']), async () => {
         scope?.assertCurrent('write');
         const current = await db.threads.get(src.id);
         if (JSON.stringify(current) !== JSON.stringify(src)

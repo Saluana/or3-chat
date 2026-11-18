@@ -46,7 +46,7 @@ function assertBudget(cost: number, remaining: number) {
 }
 
 async function removeOne(origin: WorkspaceOperationScope, projectId: string, item: ExplorerItemRef, remaining: number) {
-    const tables = getWriteTxTableNames(origin.db, ['projects', 'posts', 'threads', 'messages', 'file_meta']);
+    const tables = getWriteTxTableNames(origin.db, ['projects', 'posts', 'threads', 'messages', 'file_meta', 'kv']);
     if (item.kind === 'chat') {
         const changed = await origin.db.transaction('rw', tables, async () => {
             origin.assertCurrent('write');

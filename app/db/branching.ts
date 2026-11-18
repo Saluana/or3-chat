@@ -225,7 +225,7 @@ export async function forkThread({
     };
     await hooks.doAction('branch.fork:action:before', beforePayload);
     let membership!: Awaited<ReturnType<typeof moveChatProjectRows>>;
-    const result = await db.transaction('rw', getWriteTxTableNames(db, ['threads', 'messages', 'projects', 'posts']), async () => {
+    const result = await db.transaction('rw', getWriteTxTableNames(db, ['threads', 'messages', 'projects', 'posts', 'kv']), async () => {
         scope?.assertCurrent('write');
         const current = await db.threads.get(src.id);
         if (JSON.stringify(current) !== JSON.stringify(src)

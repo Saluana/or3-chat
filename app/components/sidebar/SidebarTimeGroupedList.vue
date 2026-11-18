@@ -131,6 +131,7 @@ const query = props.query === undefined
 
 const { items, activeFamilyIds, hasMore, loading, loadMore, reset, toggleFamily, loadMoreMembers, latestCompaction } = usePaginatedSidebarItems({
     type: props.type || 'all',
+    enabled: computed(() => !props.hideActivity),
     query,
     projectId: computed(() => props.projectId),
     pinned: computed(() => props.pinned),

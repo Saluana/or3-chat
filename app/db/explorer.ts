@@ -1,3 +1,5 @@
+import { explorerKvRow, explorerPrefix, explorerFromKv } from './explorer-storage';
+import { MAX_PENDING_OPS, countQueuedSyncOperations } from '~/core/sync/outbox-queue';
 import { admitExplorerWrite, assertExplorerQueueCapacity } from './explorer-admission';
 import type { Or3DB } from './client';
 import { PostSchema, type Post } from './schema';
@@ -23,18 +25,47 @@ export type ExplorerUndoReceipt = Readonly<{
 }>;
 type ScopedRecords = Awaited<ReturnType<typeof loadScopedRecords>>;
 
+function previewPosts(db: Or3DB, key: string) {
+    return db.posts.where('[postType+title]').anyOf([
+        [EXPLORER_FOLDER_POST_TYPE, key], [EXPLORER_PLACEMENT_POST_TYPE, key],
+    ]);
+}
+
+// Preview workspaces may already have organization posts. Leave their history
+// readable and copy only keys that have never been written in the new format.
+export async function importPreviewExplorerRecords(origin: WorkspaceOperationScope, scope: ExplorerScope) {
+    if (!origin.writable) return;
+    const key = explorerScopeKey(scope);
+    const { db } = origin;
+    if (!await previewPosts(db, key).first()) return;
+    await db.transaction('rw', getWriteTxTableNames(db, ['posts', 'kv', 'projects']), async () => {
+        origin.assertCurrent('write');
+        await assertProject(db, scope);
+        const rows = (await previewPosts(db, key).toArray()).filter(row => parseExplorerRecord(row)).map(explorerKvRow);
+        const existing = await db.kv.bulkGet(rows.map(row => row.id));
+        const room = origin.explorerCloud ? MAX_PENDING_OPS - 1 - await countQueuedSyncOperations(db) : rows.length;
+        const missing = rows.filter((_, i) => !existing[i]).slice(0, Math.max(room, 0));
+        if (missing.length) await db.kv.bulkAdd(missing);
+        origin.assertCurrent('write');
+    });
+}
+
 async function loadScopedRecords(db: Or3DB, scope: ExplorerScope) {
     const key = explorerScopeKey(scope);
-    const posts = await db.posts.where('[postType+title]').anyOf([
-        [EXPLORER_FOLDER_POST_TYPE, key], [EXPLORER_PLACEMENT_POST_TYPE, key],
-    ]).toArray();
+    const [posts, values] = await Promise.all([
+        previewPosts(db, key).toArray(), db.kv.where('name').startsWith(explorerPrefix(key)).toArray(),
+    ]);
     const canonical = new Map(posts.map(post => [post.id, post]));
+    for (const value of values) {
+        const row = explorerFromKv(value, key);
+        canonical.set(row.id, row);
+    }
     const records: ExplorerOrganization[] = [];
-    for (const post of posts) {
+    for (const post of canonical.values()) {
         const record = parseExplorerRecord(post);
         if (record) records.push({ ...record, deleted: post.deleted, updatedAt: post.updated_at });
     }
-    return { canonical, tree: projectExplorerTree(records) };
+    return { canonical, records, tree: projectExplorerTree(records) };
 }
 
 async function assertProject(db: Or3DB, scope: ExplorerScope) {
@@ -71,7 +102,7 @@ async function withOrganizationWrite<T>(origin: WorkspaceOperationScope, scope: 
     write: (records: ScopedRecords) => Promise<T>) {
     await admitExplorerWrite(origin);
     const { db } = origin;
-    const tables = getWriteTxTableNames(db, ['posts', 'projects', 'threads', 'file_meta']);
+    const tables = getWriteTxTableNames(db, ['kv', 'posts', 'projects', 'threads', 'file_meta']);
     return db.transaction('rw', tables, async () => {
         origin.assertCurrent('write');
         await assertProject(db, scope);
@@ -89,8 +120,9 @@ function checkParent({ tree }: ScopedRecords, parentId: string | null) {
 }
 
 function checkName({ tree }: ScopedRecords, parentId: string | null, name: string, exclude?: string) {
+    const normalized = compareFolderName(name);
     if (tree.children.get(parentId)?.some(row => row.id !== exclude
-        && compareFolderName(row.payload.name) === compareFolderName(name))) {
+        && compareFolderName(row.payload.name) === normalized)) {
         throw new Error('A folder with that name already exists here.');
     }
 }
@@ -114,8 +146,8 @@ export async function createExplorerFolder(origin: WorkspaceOperationScope, scop
         checkParent(records, parentId);
         checkName(records, parentId, parsedName);
         await assertExplorerQueueCapacity(origin, 1);
-        await origin.db.posts.add(organizationPost(scope, id, EXPLORER_FOLDER_POST_TYPE,
-            { version: 1, scope, parent_id: parentId, name: parsedName }));
+        await origin.db.kv.add(explorerKvRow(organizationPost(scope, id, EXPLORER_FOLDER_POST_TYPE,
+            { version: 1, scope, parent_id: parentId, name: parsedName })));
     });
     return id;
 }
@@ -131,22 +163,24 @@ export async function renameExplorerFolder(origin: WorkspaceOperationScope, scop
         checkName(records, records.tree.folderLocations.get(id)!.parentId, parsedName, id);
         if (parsedName === folder.payload.name) return;
         await assertExplorerQueueCapacity(origin, 1);
-        await origin.db.posts.put(organizationPost(scope, id, EXPLORER_FOLDER_POST_TYPE,
-            { ...folder.payload, name: parsedName }, current));
+        await origin.db.kv.put(explorerKvRow(organizationPost(scope, id, EXPLORER_FOLDER_POST_TYPE,
+            { ...folder.payload, name: parsedName }, current)));
         return readUndoReceipt(origin.db, scope, [id], records.canonical);
     });
 }
 
 async function readUndoReceipt(db: Or3DB, scope: ExplorerScope, ids: string[],
     before: ReadonlyMap<string, Post>): Promise<ExplorerUndoReceipt> {
-    const committed = await db.posts.bulkGet(ids);
-    const entries = committed.map((post, i) => {
-        const expected = explorerRevision(post);
+    const key = explorerScopeKey(scope);
+    const prefix = 'kv:' + explorerPrefix(key);
+    const committed = await db.kv.bulkGet(ids.map(id => prefix + id));
+    const entries = committed.map((row, i) => {
+        const expected = explorerRevision(row && explorerFromKv(row, key));
         if (!expected) throw new Error('Could not read the saved folder location.');
         const id = ids[i]!;
         return { id, before: before.get(id), expected };
     });
-    return { scope: explorerScopeKey(scope), entries };
+    return { scope: key, entries };
 }
 
 export async function undoExplorerChange(origin: WorkspaceOperationScope, scope: ExplorerScope, receipt: ExplorerUndoReceipt) {
@@ -174,7 +208,7 @@ export async function undoExplorerChange(origin: WorkspaceOperationScope, scope:
             changes.push(organizationPost(scope, entry.id, current.postType, previous.payload, current, deleted));
         }
         await assertExplorerQueueCapacity(origin, changes.length);
-        await origin.db.posts.bulkPut(changes);
+        await origin.db.kv.bulkPut(changes.map(explorerKvRow));
     });
 }
 
@@ -194,24 +228,28 @@ export async function readExplorerProjectItems(db: Or3DB, id: string): Promise<S
     return keys;
 }
 
-async function assertEligible(db: Or3DB, scope: ExplorerScope, item: ExplorerItemRef, projectItems?: Set<string>) {
+async function isEligible(db: Or3DB, scope: ExplorerScope, item: ExplorerItemRef, projectItems?: Set<string>) {
     if (item.kind === 'chat' && scope.kind === 'project') {
         const thread = await db.threads.get(item.item_id);
-        if (thread && !thread.deleted && !thread.parent_thread_id
+        return !!thread && !thread.deleted && !thread.parent_thread_id
             && (!thread.root_thread_id || thread.root_thread_id === thread.id)
-            && await resolveChatProject(db, thread.id) === scope.project_id) return;
+            && await resolveChatProject(db, thread.id) === scope.project_id;
     } else if (item.kind !== 'chat') {
         const row = await db.posts.get(item.item_id);
         const type = item.kind === 'file' ? FILE_CATALOG_POST_TYPE : 'doc';
         if (row?.postType === type && isVisibleWorkspaceItem(row) && (scope.kind === 'files'
             || (projectItems ?? await readExplorerProjectItems(db, scope.project_id)).has(explorerItemKey(item)))) {
-            if (item.kind === 'document') return;
+            if (item.kind === 'document') return true;
             const hash = computeExplorerItemKey(row)?.[5];
             const file = hash ? await db.file_meta.get(hash) : undefined;
-            if (file && !file.deleted) return;
+            return !!file && !file.deleted;
         }
     }
-    throw new Error('One of the selected items is no longer available here.');
+    return false;
+}
+
+async function assertEligible(db: Or3DB, scope: ExplorerScope, item: ExplorerItemRef, projectItems?: Set<string>) {
+    if (!await isEligible(db, scope, item, projectItems)) throw new Error('One of the selected items is no longer available here.');
 }
 
 export async function moveExplorerRows(origin: WorkspaceOperationScope, scope: ExplorerScope,
@@ -229,14 +267,11 @@ export async function moveExplorerRows(origin: WorkspaceOperationScope, scope: E
         const names = new Set<string>();
         const changes: Post[] = [];
         const projectItems = scope.kind === 'project' ? await readExplorerProjectItems(origin.db, scope.project_id) : undefined;
-        const stored = await origin.db.posts.bulkGet([...prepared.keys()]);
-        let index = 0;
         for (const [id, { row, expected }] of prepared) {
-            const previous = stored[index++];
+            const previous = canonical.get(id);
             assertExpected(previous, expected);
-            if (previous && !canonical.has(id)) throw new Error('This location belongs to a different scope.');
             const record = previous && parseExplorerRecord(previous);
-            if (previous && !record) throw new Error('This location requires a newer version of OR3.');
+            if (previous && !previous.deleted && !record) throw new Error('This location requires a newer version of OR3.');
             const location = row.kind === 'folder' ? tree.folderLocations.get(id)
                 : tree.placements.get(explorerItemKey(row.item));
             if (tree.path(location?.parentId ?? null).some(folder => selectedFolders.has(folder.id))) continue;
@@ -271,7 +306,7 @@ export async function moveExplorerRows(origin: WorkspaceOperationScope, scope: E
             }
         }
         await assertExplorerQueueCapacity(origin, changes.length);
-        await origin.db.posts.bulkPut(changes);
+        await origin.db.kv.bulkPut(changes.map(explorerKvRow));
         const undo = onUndo && changes.length
             ? await readUndoReceipt(origin.db, scope, changes.map(row => row.id), canonical) : undefined;
         return { count: changes.length, undo };
@@ -284,9 +319,11 @@ function removalPlan(records: ScopedRecords, id: string) {
     const folder = records.tree.folders.get(id);
     if (!folder || folder.deleted) throw new Error('This folder is unavailable.');
     const parentId = records.tree.folderLocations.get(id)!.parentId;
-    const children = [...records.canonical.values()].flatMap(post => {
-        const row = parseExplorerRecord(post);
-        return row?.payload.parent_id === id && !post.deleted ? [{ row, post }] : [];
+    const children = records.records.flatMap(row => {
+        if (row.deleted) return [];
+        const location = row.kind === 'folder' ? records.tree.folderLocations.get(row.id)
+            : records.tree.placements.get(explorerItemKey(row.payload.item));
+        return location?.parentId === id ? [{ row, post: records.canonical.get(row.id)! }] : [];
     });
     const counts = { folder: 0, file: 0, document: 0, chat: 0, hidden: 0 };
     for (const { row } of children) {
@@ -299,10 +336,10 @@ function removalPlan(records: ScopedRecords, id: string) {
 export async function planExplorerFolderRemoval(origin: WorkspaceOperationScope, scope: ExplorerScope, id: string) {
     const records = await readExplorerOrganization(origin, scope);
     const plan = removalPlan(records, id);
+    const members = scope.kind === 'project' && (plan.counts.file || plan.counts.document)
+        ? await readExplorerProjectItems(origin.db, scope.project_id) : undefined;
     for (const { row } of plan.children) {
-        if (row.kind !== 'placement') continue;
-        try { await assertEligible(origin.db, scope, row.payload.item); }
-        catch { plan.counts.hidden++; }
+        if (row.kind === 'placement' && !await isEligible(origin.db, scope, row.payload.item, members)) plan.counts.hidden++;
     }
     origin.assertCurrent();
     return { ...plan, expected: explorerRevision(records.canonical.get(id)),
@@ -315,19 +352,13 @@ export async function removeExplorerFolder(origin: WorkspaceOperationScope, scop
         const current = records.canonical.get(id);
         assertExpected(current, expected.expected);
         const { folder, parentId, children } = removalPlan(records, id);
-        if (children.length >= EXPLORER_MAX_WRITES) {
-            throw new Error(`This folder has ${children.length} direct entries. Move some contents before removing it.`);
-        }
         const revisions = new Map(expected.children.map(({ post }) => [post.id, explorerRevision(post)]));
         if (parentId !== expected.parentId || revisions.size !== children.length) {
             throw new Error('This folder changed. Review its contents and try again.');
         }
         for (const { post } of children) assertExpected(post, revisions.get(post.id) ?? null);
-        await assertExplorerQueueCapacity(origin, children.length + 1);
-        await origin.db.posts.bulkPut([
-            ...children.map(({ row, post }) => organizationPost(scope, row.id, post.postType,
-                { ...row.payload, parent_id: parentId }, post)),
-            organizationPost(scope, id, EXPLORER_FOLDER_POST_TYPE, folder.payload, current, true),
-        ]);
+        await assertExplorerQueueCapacity(origin, 1);
+        await origin.db.kv.put(explorerKvRow(organizationPost(scope, id, EXPLORER_FOLDER_POST_TYPE,
+            folder.payload, current, true)));
     });
 }

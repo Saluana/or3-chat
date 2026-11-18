@@ -38,7 +38,8 @@ export interface ExplorerIdentity {
 /** Read the wire identity and enforce shape before any canonical write. */
 export function explorerIdentity(key: string, payload: unknown): ExplorerIdentity | null {
     const row = object(payload);
-    if (!row || row.id !== key || typeof row.title !== 'string' || typeof row.content !== 'string'
+    const type = row?.post_type ?? row?.postType;
+    if (!row || !isExplorerPostType(type) || row.id !== key || typeof row.title !== 'string' || typeof row.content !== 'string'
         || row.content.length > 8192 || bytes.encode(row.content).byteLength > 8192
         || (row.meta !== undefined && row.meta !== null && row.meta !== '')
         || (row.file_hashes !== undefined && row.file_hashes !== null && row.file_hashes !== '[]')
@@ -53,7 +54,6 @@ export function explorerIdentity(key: string, payload: unknown): ExplorerIdentit
         : scope.kind === 'project' && typeof scope.project_id === 'string' && scope.project_id
             ? JSON.stringify(['project', scope.project_id]) : undefined;
     if (!title || title !== row.title) return null;
-    const type = row.post_type ?? row.postType;
     if (type === EXPLORER_FOLDER_POST_TYPE && folderId.test(key)) {
         const { name } = content;
         if (typeof name !== 'string' || name !== name.trim() || !name || name === '.' || name === '..'

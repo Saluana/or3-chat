@@ -125,17 +125,19 @@ async function seedExplorerFixture() {
     if (!explorerPreview.value || explorerSeeded.value) return;
     const folderId = (index: number) => 'explorer-folder-00000000-0000-4000-8000-' + String(index).padStart(12, '0');
     const common = { deleted: false, clock: 1, created_at: 1, updated_at: 1 };
-    const folders = Array.from({ length: 500 }, (_, index) => ({
-        ...common, id: folderId(index), title: '["files"]', postType: 'or3:explorer-folder',
-        content: JSON.stringify({ version: 1, scope: { kind: 'files' },
+    const folders = Array.from({ length: 500 }, (_, index) => {
+        const name = 'or3.explorer/' + encodeURIComponent('["files"]') + '/' + folderId(index);
+        const content = { version: 1, scope: { kind: 'files' },
             parent_id: index > 0 && index < 20 ? folderId(index - 1) : null,
-            name: 'Folder ' + String(index).padStart(3, '0') }),
-    }));
+            name: 'Folder ' + String(index).padStart(3, '0') };
+        return { ...common, id: 'kv:' + name, name, value: JSON.stringify([JSON.stringify(content), false]) };
+    });
     const documents = Array.from({ length: 5000 }, (_, index) => ({
         ...common, id: 'scale-' + index, title: 'Document ' + String(index).padStart(4, '0'),
         postType: 'doc', content: '{"type":"doc","content":[]}',
     }));
-    await getDb().posts.bulkAdd([...folders, ...documents]);
+    await getDb().kv.bulkAdd(folders);
+    await getDb().posts.bulkAdd(documents);
     explorerSeeded.value = true;
 }
 const explorerPreview = useExplorerAvailable();

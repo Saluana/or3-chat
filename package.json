@@ -174,8 +174,6 @@
         "or3-marketplace": "./scripts/cli/marketplace-submit.mjs"
     },
     "dependencies": {
-        "@atlaskit/pragmatic-drag-and-drop": "4.0.0",
-        "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "3.2.1",
         "@cfworker/json-schema": "4.1.1",
         "@noble/hashes": "^2.4.0",
         "@nuxt/ui": "4.12.0",

@@ -1,6 +1,7 @@
 import Dexie from 'dexie';
 import type { Or3DB } from './client';
 import type { ExplorerItemKey, FileMeta } from './schema';
+import { explorerItemKey } from '~~/shared/explorer/records';
 
 export interface ExplorerItemMetadata {
     id: string;
@@ -13,11 +14,15 @@ export interface ExplorerItemMetadata {
 }
 
 /** Only the explicit search and activation paths need full post values. */
-export async function listExplorerItems(db: Or3DB, state: ExplorerItemKey[0]): Promise<ExplorerItemMetadata[]> {
+export async function listExplorerItems(db: Or3DB, state: ExplorerItemKey[0], members?: ReadonlySet<string>): Promise<ExplorerItemMetadata[]> {
+    if (members?.size === 0) return [];
     const keys: ExplorerItemKey[] = [];
     await db.posts.where('explorer_item_key').between(
         [state, Dexie.minKey], [state, Dexie.maxKey], true, true,
-    ).eachKey(key => { keys.push(key as ExplorerItemKey); });
+    ).eachKey(key => {
+        const entry = key as ExplorerItemKey;
+        if (!members || members.has(explorerItemKey({ kind: entry[1], item_id: entry[4] }))) keys.push(entry);
+    });
 
     const hashes = [...new Set(keys.map(key => key[5]).filter(Boolean))];
     const fileMeta = new Map<string, FileMeta>();

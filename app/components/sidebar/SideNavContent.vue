@@ -171,6 +171,7 @@ const emit = defineEmits([
     'add-to-project',
     'add-document-to-project',
     'add-chat-to-project',
+    'create-in-project-folder',
     'rename-project',
     'delete-project',
     'rename-entry',
@@ -339,12 +340,14 @@ const activePageProps = computed(() => {
 // Forward events from active page to parent
 const forwardedEvents = computed(() => {
     const forwardedEventNames = [
+        'update:sidebar-query',
         'new-chat',
         'new-document',
         'new-project',
         'update:expandedProjects',
         'add-to-project',
         'add-chat-to-project',
+        'create-in-project-folder',
         'add-document-to-project',
         'rename-project',
         'delete-project',

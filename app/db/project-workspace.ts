@@ -634,7 +634,7 @@ export async function moveChatToProject(
     options: { family?: boolean } = { family: true },
 ): Promise<number> {
     const changed = await scope.db.transaction('rw',
-        getWriteTxTableNames(scope.db, ['threads', 'projects', 'posts']),
+        getWriteTxTableNames(scope.db, ['threads', 'projects', 'posts', 'kv']),
         () => moveChatProjectRows(scope, threadId, projectId, options));
     await notifyChatProjectMove(changed);
     return changed.threads.filter((thread) => thread.id !== threadId).length;

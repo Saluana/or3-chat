@@ -1,3 +1,4 @@
+import { openFilesTab } from '~/composables/explorer/useExplorerReveal';
 import { usePaneApps } from '~/composables/core/usePaneApps';
 import { registerSidebarPage } from '~/composables/sidebar/registerSidebarPage';
 import { watch } from 'vue';
@@ -18,9 +19,7 @@ export default defineNuxtPlugin(() => {
                 const { getPaletteHostContext } = await import('~/composables/search/useCommandPalette');
                 const host = getPaletteHostContext();
                 if (!host) return true;
-                const { getOpenWorkspaceTabs } = await import('~/core/search/command-palette/sources/workspace-tab-source');
-                const existing = getOpenWorkspaceTabs().find(tab => tab.resource.kind === 'app' && tab.resource.appId === 'or3-files' && !tab.resource.recordId);
-                const result = existing && host.openWorkspaceTab ? await host.openWorkspaceTab(existing.id) : await host.openPaneApp('or3-files', undefined, 'active');
+                const result = await openFilesTab(host);
                 if (!result.ok) throw new Error(result.error.message);
                 return 'handled';
             } });

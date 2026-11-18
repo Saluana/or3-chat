@@ -24,6 +24,12 @@ async function openProjectSection(page: Page, section: string) {
         exact: true,
     });
     if (await overview.isVisible()) await overview.click();
+    // Knowledge and Memory live in the project actions menu.
+    if (section === 'Knowledge' || section === 'Memory') {
+        await projects.getByRole('button', { name: /^Project actions for / }).first().click();
+        await page.getByRole('button', { name: section, exact: true }).click();
+        return;
+    }
     await projects.getByRole('button', { name: section, exact: true }).click();
 }
 async function createProject(page: Page, title: string) {
@@ -562,9 +568,10 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     await expect(
         projects.getByRole('button', { name: 'Chats', exact: true }),
     ).toHaveCount(0);
-    for (const section of ['Knowledge', 'Memory', 'Settings']) {
+    for (const name of ['Settings', /^Project actions for /]) {
         const control = await projects
-            .getByRole('button', { name: section, exact: true })
+            .getByRole('button', { name, exact: typeof name === 'string' })
+            .first()
             .boundingBox();
         expect(control!.x).toBeGreaterThanOrEqual(bounds!.x);
         expect(control!.x + control!.width).toBeLessThanOrEqual(

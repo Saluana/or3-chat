@@ -144,7 +144,7 @@ export function useProjectsCrud() {
         const requested = normalizeProjectData(prepared.row.data);
         const changes: Awaited<ReturnType<typeof moveChatProjectRows>>[] = [];
         let related = 0;
-        const saved = await db.transaction('rw', getWriteTxTableNames(db, ['projects', 'threads', 'posts']), async () => {
+        const saved = await db.transaction('rw', getWriteTxTableNames(db, ['projects', 'threads', 'posts', 'kv']), async () => {
             scope.assertCurrent('write');
             const observed = await db.projects.get(id);
             if (!observed || observed.deleted || observed.clock !== existing.clock

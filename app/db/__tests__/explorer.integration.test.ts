@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Or3DB, physicalStoreName } from '../client';
-import { createExplorerFolder, explorerRevision, moveExplorerRows, planExplorerFolderRemoval, readExplorerOrganization, removeExplorerFolder, renameExplorerFolder, undoExplorerChange, type ExplorerUndoReceipt } from '../explorer';
+import { importPreviewExplorerRecords, createExplorerFolder, explorerRevision, moveExplorerRows, planExplorerFolderRemoval, readExplorerOrganization, removeExplorerFolder, renameExplorerFolder, undoExplorerChange, type ExplorerUndoReceipt } from '../explorer';
 import { assertExplorerQueueCapacity } from '../explorer-admission';
 import { removeExplorerProjectItems } from '../explorer-project-removal';
 import { saveProjectSource } from '../project-workspace';
@@ -37,6 +37,40 @@ describe('local explorer storage', () => {
     });
     afterEach(async () => { await db.delete(); });
 
+    it('imports preview folder paths once and preserves subsequent KV edits', async () => {
+        const id = 'explorer-folder-' + crypto.randomUUID();
+        await db.posts.add(PostSchema.parse({ id, title: '["files"]', postType: 'or3:explorer-folder',
+            content: JSON.stringify({ version: 1, scope: files, parent_id: null, name: 'Preview' }),
+            created_at: 10, updated_at: 10 }));
+        await importPreviewExplorerRecords(origin, files);
+        const current = (await readExplorerOrganization(origin, files)).canonical.get(id);
+        await renameExplorerFolder(origin, files, id, 'Current', explorerRevision(current));
+        await importPreviewExplorerRecords(origin, files);
+        await db.posts.delete(id);
+        expect((await readExplorerOrganization(origin, files)).tree.path(id).map(row => row.payload.name)).toEqual(['Current']);
+    });
+
+    it('keeps an unsupported or deleted KV placement authoritative over its preview copy', async () => {
+        await db.posts.add(document('alpha'));
+        const folder = await createExplorerFolder(origin, files, null, 'Research');
+        const id = await explorerPlacementId(files, item('alpha'));
+        const payload = { version: 1, scope: files, parent_id: folder, item: item('alpha') };
+        await db.posts.add(PostSchema.parse({ id, postType: 'or3:explorer-placement', title: '["files"]',
+            content: JSON.stringify(payload), created_at: 10, updated_at: 10 }));
+        await importPreviewExplorerRecords(origin, files);
+        const key = 'kv:or3.explorer/%5B%22files%22%5D/' + id;
+        const future = JSON.stringify([JSON.stringify({ ...payload, version: 2 }), false]);
+        await db.kv.update(key, { value: future });
+        const state = await readExplorerOrganization(origin, files);
+        expect(state.tree.placements.has(explorerItemKey(item('alpha')))).toBe(false);
+        await expect(moveExplorerRows(origin, files, [{ ...selection('alpha'),
+            expected: explorerRevision(state.canonical.get(id)) }], null)).rejects.toThrow('newer version');
+        expect((await db.kv.get(key))?.value).toBe(future);
+        await db.kv.update(key, { value: null, deleted: true });
+        await importPreviewExplorerRecords(origin, files);
+        expect((await readExplorerOrganization(origin, files)).tree.placements.size).toBe(0);
+    });
+
     it('undoes a move atomically and declines an inverse after a revision change', async () => {
         await db.posts.bulkAdd([document('alpha'), document('beta')]);
         const folder = await createExplorerFolder(origin, files, null, 'Research');
@@ -45,9 +79,9 @@ describe('local explorer storage', () => {
         await moveExplorerRows(origin, files, [selection('alpha'), selection('beta')], folder, capture);
         await undoExplorerChange(origin, files, receipt!);
         expect((await readExplorerOrganization(origin, files)).tree.placements.size).toBe(0);
-        const rename = await renameExplorerFolder(origin, files, folder, 'Archive', explorerRevision(await db.posts.get(folder)));
+        const rename = await renameExplorerFolder(origin, files, folder, 'Archive', explorerRevision((await readExplorerOrganization(origin, files)).canonical.get(folder)));
         const nested = await createExplorerFolder(origin, files, folder, 'Nested');
-        await renameExplorerFolder(origin, files, folder, 'Updated elsewhere', explorerRevision(await db.posts.get(folder)));
+        await renameExplorerFolder(origin, files, folder, 'Updated elsewhere', explorerRevision((await readExplorerOrganization(origin, files)).canonical.get(folder)));
         await expect(undoExplorerChange(origin, files, rename!)).rejects.toThrow('changed');
         expect((await readExplorerOrganization(origin, files)).tree.path(nested).map(row => row.payload.name))
             .toEqual(['Updated elsewhere', 'Nested']);
@@ -65,9 +99,9 @@ describe('local explorer storage', () => {
         await expect(assertExplorerQueueCapacity(cloud, 2)).rejects.toMatchObject({ code: 'explorer-queue-full' });
     });
 
-    it('refuses removal of a folder with 2,000 direct children without writes', async () => {
+    it('removes a folder with 2,000 preview children in one KV write', async () => {
         const parent = await createExplorerFolder(origin, files, null, 'Large folder');
-        const ancestor = (await db.posts.get(parent))!;
+        const ancestor = ((await readExplorerOrganization(origin, files)).canonical.get(parent))!;
         await new Promise<void>((resolve, reject) => {
             const table = physicalStoreName('posts');
             const transaction = db.backendDB().transaction(table, 'readwrite');
@@ -81,9 +115,11 @@ describe('local explorer storage', () => {
         });
         const plan = await planExplorerFolderRemoval(origin, files, parent);
         expect(plan.counts.folder).toBe(2000);
-        await expect(removeExplorerFolder(origin, files, parent, plan)).rejects.toThrow(/2000 direct entries/);
-        expect(await db.posts.get(parent)).toMatchObject(ancestor);
-        expect(await db.posts.count()).toBe(2001);
+        await removeExplorerFolder(origin, files, parent, plan);
+        const tree = (await readExplorerOrganization(origin, files)).tree;
+        expect(tree.children.get(null)).toHaveLength(2000);
+        expect(await db.kv.count()).toBe(1);
+        expect(await db.posts.count()).toBe(2000);
     }, 120_000);
 
     it('keeps stable nested folder IDs and independent Files and project placements', async () => {
@@ -96,7 +132,8 @@ describe('local explorer storage', () => {
         expect((await readExplorerOrganization(origin, files)).tree.placements.size).toBe(0);
         expect(await moveExplorerRows(origin, files, [selection('doc-a')], sub)).toBe(1);
         expect(await moveExplorerRows(origin, project, [selection('doc-a')], projectFolder)).toBe(1);
-        const before = await db.posts.get(root);
+        expect(await db.kv.count()).toBe(5);
+        const before = (await readExplorerOrganization(origin, files)).canonical.get(root);
         await renameExplorerFolder(origin, files, root, 'Archive', explorerRevision(before));
         const filesData = await readExplorerOrganization(origin, files);
         const projectData = await readExplorerOrganization(origin, project);
@@ -108,7 +145,7 @@ describe('local explorer storage', () => {
         expect((await listExplorerItems(db, 'active')).map(row => row.id)).toEqual(['doc-a']);
         await expect(renameExplorerFolder(origin, files, root, 'Stale', explorerRevision(before))).rejects.toThrow('changed');
         await expect(moveExplorerRows(origin, files,
-            [{ row: { kind: 'folder', id: root }, expected: explorerRevision(await db.posts.get(root)) }], sub))
+            [{ row: { kind: 'folder', id: root }, expected: explorerRevision((await readExplorerOrganization(origin, files)).canonical.get(root)) }], sub))
             .rejects.toThrow('descendants');
     });
 
@@ -123,7 +160,7 @@ describe('local explorer storage', () => {
         await expect(moveExplorerRows(revoked, files, [selection(ids[0]!)], folder)).rejects.toThrow('Access revoked');
         expect((await readExplorerOrganization(origin, files)).tree.placements.size).toBe(0);
         expect(await moveExplorerRows(origin, files, ids.slice(0, 100).map(selection), folder)).toBe(100);
-        const placement = await db.posts.get(await explorerPlacementId(files, item(ids[0]!)));
+        const placement = (await readExplorerOrganization(origin, files)).canonical.get(await explorerPlacementId(files, item(ids[0]!)));
         expect(placement?.deleted).toBe(false);
         expect((await readExplorerOrganization(origin, files)).tree.placements.size).toBe(100);
     });

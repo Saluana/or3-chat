@@ -70,7 +70,7 @@ import type { ExplorerItemRef } from '~~/shared/explorer/records';
 import type { ExplorerFolderRow } from '~~/shared/explorer/tree';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import SidebarEmptyState from './SidebarEmptyState.vue';
-import SidebarPageLink from './SidebarPageLink.vue';
+import { useSidebarProjectActionButtonProps } from '~/composables/sidebar/useSidebarProjectActionButtonProps';
 import SidebarTimeGroupedList from './SidebarTimeGroupedList.vue';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 
@@ -82,6 +82,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
     (e: 'new-project'): void;
+    (e: 'update:sidebar-query', query: string): void;
     (e: 'rename-project' | 'delete-project', projectId: string): void;
     (e: 'add-document-to-project-root', projectId: string): void;
     (
@@ -95,6 +96,10 @@ const emit = defineEmits<{
         item: UnifiedSidebarItem,
     ): void;
 }>();
+function clearExplorerSearch() {
+    query.value = '';
+    if (props.sidebarQuery !== undefined) emit('update:sidebar-query', '');
+}
 const { projectId: id, returnTo } = useProjectSidebar();
 const { setActivePage } = useActiveSidebarPage();
 const backIcon = useIcon('ui.chevron.left');
@@ -107,6 +112,7 @@ const or3Config = useOr3Config();
 const documentsEnabled = computed(() => or3Config.features.documents.enabled);
 const explorerEnabled = useExplorerAvailable();
 const projectExplorerActive = ref(false);
+const projectHeading = ref<HTMLElement | null>(null);
 const { createDocumentEntry } = useProjectsCrud();
 watch(id, () => { projectExplorerActive.value = false; });
 const knowledgeIcon = useIcon('sidebar.note');
@@ -120,6 +126,11 @@ const searchIcon = useIcon('ui.search');
 const toolIcon = useIcon('chat.tool.wrench');
 const closeIcon = useIcon('ui.close');
 const projectMemoryIcon = useIcon('sidebar.project.memory');
+const sectionMenuButton = useSidebarProjectActionButtonProps({ identifier: 'sidebar.project-section' });
+const projectSections = computed(() => [
+    { label: 'Knowledge' as const, icon: knowledgeIcon.value, count: state.value?.sources.length ?? 0 },
+    { label: 'Memory' as const, icon: projectMemoryIcon.value, count: state.value?.memories.length ?? 0 },
+]);
 const sourceUploadIcon = useIcon('sidebar.project.knowledge.upload');
 const sourceDocumentIcon = useIcon('sidebar.project.knowledge.document');
 const sourceFileIcon = useIcon('sidebar.project.knowledge.file');
@@ -447,6 +458,7 @@ function captureDraft() {
         editRevision: editRevision.value,
         briefEditing: briefEditing.value,
         sourceInput: sourceInput.value,
+        sourceDestination: sourceInput.value === 'file' ? sourceDestination.value : undefined,
         noteTitle: noteTitle.value,
         noteText: noteText.value,
         documentId: documentId.value,
@@ -501,6 +513,7 @@ function connect() {
     editingMemory.value = null;
     releasePreview();
     const draft = drafts.get(id.value);
+    sourceDestination.value = draft?.sourceDestination;
     drafts.delete(id.value);
     tab.value = draft?.tab ?? 'Overview';
     if (draft) {
@@ -1099,7 +1112,21 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                     :disabled="busy"
                     @rename="emit('rename-project', id)"
                     @delete="emit('delete-project', id)"
-                />
+                    ><template #default="{ close }">
+                        <UButton
+                            v-for="section in projectSections"
+                            :key="section.label"
+                            v-bind="sectionMenuButton"
+                            :icon="section.icon"
+                            :aria-label="section.label"
+                            class="w-full justify-start"
+                            @click.stop.prevent="close(); tab = section.label"
+                        >
+                            <span class="flex-1 truncate text-start">{{ section.label }}</span>
+                            <span class="project-muted text-xs tabular-nums">{{ section.count }}</span>
+                        </UButton>
+                    </template></SidebarProjectActions
+                >
             </div>
         </header>
         <p
@@ -1272,7 +1299,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                                 <UIcon :name="projectIcon" class="size-5" />
                             </span>
                             <div class="min-w-0 flex-1">
-                                <h1
+                                <h1 ref="projectHeading"
                                     class="text-lg font-semibold leading-snug break-words"
                                 >
                                     {{ state.project.name }}
@@ -1343,7 +1370,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                                 color="neutral"
                                 :ui="{ leadingIcon: 'size-[18px]' }"
                                 class="project-start theme-btn"
-                                :disabled="busy"
+                                :disabled="busy || !scope.writable"
                                 @click="run(() => newChat())"
                             />
                             <UButton
@@ -1354,33 +1381,17 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                                 variant="ghost"
                                 :ui="{ leadingIcon: 'size-[18px]' }"
                                 class="project-new-document theme-btn"
-                                :disabled="busy"
+                                :disabled="busy || !scope.writable"
                                 @click="emit('add-document-to-project-root', id)"
                             />
                         </div>
-                        <nav aria-label="Project sections" class="space-y-1.5">
-                            <SidebarPageLink
-                                label="Knowledge"
-                                :description="`${state.sources.length} ${state.sources.length === 1 ? 'source' : 'sources'}`"
-                                :icon="knowledgeIcon"
-                                accent="docs"
-                                @select="tab = 'Knowledge'"
-                            />
-                            <SidebarPageLink
-                                label="Memory"
-                                :description="`${state.memories.length} saved ${state.memories.length === 1 ? 'memory' : 'memories'}`"
-                                :icon="projectMemoryIcon"
-                                accent="projects"
-                                @select="tab = 'Memory'"
-                            />
-                        </nav>
                         <div v-if="explorerEnabled" class="border-t border-[var(--md-outline-variant)] pt-3">
-                            <SidebarProjectExplorer :key="id" :project-id="id" :project-name="state.project.name"
+                            <SidebarProjectExplorer :root-target="projectHeading" :key="id" :project-id="id" :project-name="state.project.name"
                                 :documents-enabled="documentsEnabled" :query="props.sidebarQuery ?? query"
                                 @view="projectExplorerActive = $event" @create="createInExplorer"
-                                @add-file="addFileInExplorer" @clear-search="query = ''" />
+                                @add-file="addFileInExplorer" @clear-search="clearExplorerSearch" />
                         </div>
-                        <h2 v-else class="project-section-label border-t border-[var(--md-outline-variant)] pt-4!">Recent activity</h2>
+                        <h2 v-else class="project-section-label border-t border-[var(--md-outline-variant)] pt-4!">Recent</h2>
                     </div></template
                 ></SidebarTimeGroupedList
             >

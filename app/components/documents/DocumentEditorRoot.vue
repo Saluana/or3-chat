@@ -332,7 +332,7 @@ import type { BubbleMenuPluginProps } from '@tiptap/extension-bubble-menu';
 import { downloadBlob } from '~/utils/download-blob';
 import { MAX_SYNC_PAYLOAD_BYTES, sanitizePayloadForSync } from '~~/shared/sync/sanitize';
 import { isSyncPayloadTooLarge } from '~/core/sync/sync-payload-size';
-import { Editor, EditorContent, type JSONContent } from '@tiptap/vue-3';
+import { Editor, EditorContent } from '@tiptap/vue-3';
 import { Selection } from '@tiptap/pm/state';
 import { BubbleMenu } from '@tiptap/vue-3/menus';
 import { VIEW_ONLY_NOTICE, useViewOnlyAccess } from '~/composables/auth/useViewOnlyAccess';
@@ -375,6 +375,7 @@ import { loadDocumentEditorExtensions } from '~/utils/documents/document-editor-
 import { DEFAULT_DOCUMENT_TITLE } from '~/db/documents';
 import { createOrRefFile } from '~/db/files';
 import { createDocumentRevision, type CompleteDocumentRevision } from '~/db/document-revisions';
+import { emptyDocument, normalizedContent } from '~/utils/documents/document-content';
 import { parseNativeDocumentContent, validateDocumentContent } from '~/utils/documents/validate-document-content';
 import type { TipTapDocument } from '~/types/database';
 import { isAllowedDocumentHref } from '~/utils/documents/document-href';
@@ -690,24 +691,6 @@ const autocompleteStatus = computed(() => ({
 }));
 
 onClickOutside(slashMenu, () => closeSlashMenu(false));
-
-function emptyDocument(): TipTapDocument {
-    return { type: 'doc', content: [{ type: 'paragraph' }] };
-}
-
-function normalizedContent(value: unknown): TipTapDocument {
-    if (!value || typeof value !== 'object') return emptyDocument();
-    const content = value as JSONContent;
-    if (content.type !== 'doc' || (content.content !== undefined && !Array.isArray(content.content))) throw new Error('Invalid native document.');
-    if (!content.content?.length) return { ...content, content: emptyDocument().content } as TipTapDocument;
-    // StarterKit's trailingNode adds a paragraph after a final non-paragraph
-    // block. Compare saved content in that same shape: this editor-only
-    // normalization is not a competing edit from another pane.
-    if (content.content.at(-1)?.type !== 'paragraph') {
-        return { ...content, content: [...content.content, { type: 'paragraph' }] } as TipTapDocument;
-    }
-    return content as TipTapDocument;
-}
 
 function scheduleCapture() {
     if (captureTimer) clearTimeout(captureTimer);

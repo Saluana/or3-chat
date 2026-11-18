@@ -6,7 +6,7 @@ Provider paths are external dependencies, not host-checkout contents. A missing 
 
 ## 1. Ground the revision and prepare local review
 
-See [local qualification](local-review.md) for the baseline and fixture.
+This plan records the experimental post-backed implementation. The [KV-backed plan](../shared-file-explorer-v2/tasks.md) covers the implementation used in Files and Projects.
 
 - [x] 1.1 Record host SHA/dirty paths and distinguish external provider availability (1h).
       Design: C10, C9.

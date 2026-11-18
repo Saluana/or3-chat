@@ -1,3 +1,4 @@
+import { useToast } from '@nuxt/ui/composables/useToast';
 import { undoExplorerChange, type ExplorerUndoReceipt } from '~/db/explorer';
 import type { WorkspaceOperationScope } from '~/utils/chat/workspace-access';
 import { explorerScopeKey, type ExplorerScope } from '~~/shared/explorer/records';
