@@ -103,6 +103,8 @@ async function send(page: Page, text: string, diagnose = false) {
 }
 
 test('a role refresh keeps the selected AI settings view open', async ({ page }, info) => {
+    // Cold startup and session refresh must fit alongside the 45s settings wait.
+    test.setTimeout(90_000);
     const origin = new URL(info.project.use.baseURL!).origin;
     expect((await page.request.post('/api/basic-auth/sign-in', { headers: { origin }, data: {
         email: process.env.OR3_OPENAI_E2E_EMAIL, password: process.env.OR3_OPENAI_E2E_PASSWORD,
