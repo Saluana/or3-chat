@@ -303,11 +303,10 @@ describe('mounted sidebar workspace isolation', () => {
             SidebarSideMobileBottomNav: true, SidebarEntityModals: true, UModal: true,
             SidebarProjectRoot: true,
             SidebarProjectChild: { props: ['child'], template: '<span data-shortcut>{{ child.name }}</span>' },
-            UTree: { props: ['items'], template: '<div><span v-for="row in items" :key="row.key" data-shortcut>{{ row.label }}</span></div>' },
             AppModal: true, ExplorerMoveDialog: true,
             SidebarCreateProjectModal: true, SidebarAddToProjectModal: true, SidebarCreateDocumentModal: true,
         } } });
-        const child = () => wrapper!.find('[data-shortcut]');
+        const child = () => wrapper!.find(view === 'explorer' ? '[role=treeitem] .tree-label' : '[data-shortcut]');
         await vi.waitFor(() => expect(child().text()).toBe('Saved project file'));
         await db.projects.update('file-project', { data: [{ kind: 'file', id: 'project-file', name: 'Project alias' }] });
         const expectedName = view === 'explorer' ? 'Saved project file' : 'Project alias';

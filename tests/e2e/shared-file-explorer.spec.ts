@@ -149,7 +149,8 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) {
 
 
 async function createProject(page: Page, name: string) {
-    const navigation = page.getByRole('complementary', { name: 'Navigation' });
+    const navigation = page.getByRole('complementary', { name: 'Navigation' })
+        .or(page.getByRole('dialog', { name: 'Navigation' }));
     await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
     const projects = page.getByRole('region', { name: 'Projects', exact: true });
     await projects.getByRole('button', { name: 'New project', exact: true }).click();
@@ -159,6 +160,92 @@ async function createProject(page: Page, name: string) {
     await expect(projects.getByRole('heading', { name, exact: true })).toBeVisible();
     return projects;
 }
+
+test.describe('Project explorer scrolling', () => {
+    for (const [name, viewport, hasTouch] of [
+        ['phone', { width: 390, height: 750 }, true],
+        ['desktop', { width: 1440, height: 900 }, false],
+    ] as const) {
+        test.describe(name, () => {
+            test.use({ viewport, hasTouch });
+            test('scrolls the project overview and Home shortcuts through the last tree row', async ({ page, browserName, context }) => {
+                let clientUrl: string | undefined;
+                page.on('request', request => {
+                    if (/\/db\/client\.ts(?:\?|$)/u.test(request.url())) clientUrl = request.url();
+                });
+                await page.addLocatorHandler(page.getByRole('button', { name: 'Dismiss welcome' }), button => button.click());
+                await page.goto('/chat');
+                if (hasTouch) {
+                    const sidebar = page.getByRole('button', { name: 'Open sidebar', exact: true }).first();
+                    await expect(sidebar).toBeVisible();
+                    await sidebar.click();
+                }
+                const projects = await createProject(page, 'Long project');
+                if (!clientUrl) throw new Error('Workspace DB module did not load.');
+                await page.evaluate(async url => {
+                    const { getDb } = await import(url);
+                    const db = getDb();
+                    const project = await db.projects.filter((row: { name: string }) => row.name === 'Long project').first();
+                    if (!project) throw new Error('Expected the disposable project.');
+                    const docs = Array.from({ length: 180 }, (_, index) => ({
+                        id: 'scroll-doc-' + index,
+                        title: 'Chapter ' + String(index).padStart(3, '0'),
+                        postType: 'doc', content: '{"type":"doc","content":[]}',
+                        clock: 1, created_at: 1, updated_at: 1, deleted: false,
+                    }));
+                    await db.posts.bulkPut(docs);
+                    await db.projects.update(project.id, { data: docs.map(doc => ({ id: doc.id, kind: 'doc' })) });
+                }, clientUrl);
+                const cdp = hasTouch && browserName === 'chromium' ? await context.newCDPSession(page) : undefined;
+                const scrollTree = async (container: Locator, heading: Locator) => {
+                    const tree = container.getByRole('tree', { name: 'Project contents' });
+                    const first = tree.getByRole('button', { name: 'Chapter 000', exact: true });
+                    const last = tree.getByRole('button', { name: 'Chapter 179', exact: true });
+                    await expect(heading).toBeInViewport();
+                    await expect(first).toBeInViewport();
+                    const bounds = await first.boundingBox();
+                    if (!bounds) throw new Error('Missing first row.');
+                    const x = Math.round(bounds.x + bounds.width / 2);
+                    const y = Math.round(bounds.y + bounds.height / 2);
+                    if (cdp) await cdp.send('Input.synthesizeScrollGesture', {
+                        x, y, yDistance: -640, gestureSourceType: 'touch', speed: 1400,
+                    });
+                    else {
+                        await page.mouse.move(x, y);
+                        await page.mouse.wheel(0, 640);
+                    }
+                    await expect(heading).not.toBeInViewport();
+                    await page.mouse.move(x, y);
+                    await expect.poll(async () => {
+                        if (await last.count() && await last.evaluate(element => {
+                            const row = element.getBoundingClientRect();
+                            const clip = element.closest('.or3-scroll')!.getBoundingClientRect();
+                            return row.bottom > clip.top && row.top < clip.bottom;
+                        })) return true;
+                        await page.mouse.wheel(0, 1250);
+                        return false;
+                    }, { intervals: [300], timeout: 20_000 }).toBe(true);
+                    await expect(last).toBeInViewport();
+                    expect(await tree.getByRole('treeitem').count()).toBeLessThan(75);
+                    await last.press('Home');
+                    await expect(first).toBeFocused();
+                    await first.press('End');
+                    await expect(last).toBeFocused();
+                };
+                await scrollTree(projects, projects.getByRole('heading', { name: 'Long project' }));
+                const navigation = page.getByRole('complementary', { name: 'Navigation' })
+                    .or(page.getByRole('dialog', { name: 'Navigation' }));
+                await navigation.getByRole('button', { name: 'Home', exact: true }).first().click();
+                const shortcut = navigation.getByRole('button', { name: /^(Expand|Collapse) Long project shortcuts$/ });
+                await expect(shortcut).toBeVisible();
+                if (await shortcut.getAttribute('aria-expanded') === 'true') await shortcut.click();
+                await shortcut.click();
+                const recent = navigation.getByRole('region', { name: 'Project shortcuts for Long project', exact: true });
+                await scrollTree(recent, navigation.getByRole('button', { name: 'Open project Long project', exact: true }));
+            });
+        });
+    }
+});
 
 test('Project Home opens its explorer and creates a document in a folder', async ({ page }, info) => {
     await page.goto('/chat');

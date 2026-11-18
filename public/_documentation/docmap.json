@@ -41,7 +41,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 3,
-                    "summary": "Project navigation and deletion, preserved editor drafts, canonical briefs, readable project documents with current Knowledge titles, source library, evidence-aware memory, continuity, and tool permissions."
+                    "summary": "Project navigation and deletion, preserved editor drafts, canonical briefs, project-scoped document and chat retrieval, source library, evidence-aware memory, continuity, and tool permissions."
                 },
                 {
                     "name": "development-setup.md",

@@ -42,6 +42,57 @@ afterEach(async () => {
 });
 
 describe('chat document tools', () => {
+    it('finds and reads project members through the registered tools while keeping other sources out', async () => {
+        const { registerThreadChatTools } = await import('~/utils/chat/thread-chat-tools');
+        const { registerPaletteSource } = await import('~/core/search/command-palette/registry');
+        const { createDocumentPaletteSource } = await import('~/core/search/command-palette/sources/document-source');
+        const { createChatPaletteSource } = await import('~/core/search/command-palette/sources/chat-source');
+        const { useCommandPalette, disposeCommandPalette } = await import('~/composables/search/useCommandPalette');
+        const { saveProjectSettings } = await import('~/db/project-workspace');
+        const { captureWorkspaceOperation } = await import('~/utils/chat/workspace-access');
+        const { defaultProjectSettings } = await import('~~/shared/projects/workspace');
+        const doc = registerPaletteSource(createDocumentPaletteSource());
+        const chat = registerPaletteSource(createChatPaletteSource());
+        disposers.push(() => { disposeCommandPalette(); doc.dispose(); chat.dispose(); });
+        disposers.push(registerWorkspaceChatTools(), registerDocumentChatTools(), registerThreadChatTools());
+        const db = getDb();
+        const row = { created_at: 1, updated_at: 1, deleted: false, clock: 1 };
+        await db.projects.bulkPut([
+            { ...row, id: 'book', name: 'Book', data: [{ kind: 'doc', id: 'member-doc' }] },
+            { ...row, id: 'other', name: 'Other', data: [{ kind: 'doc', id: 'other-doc' }] },
+        ]);
+        await db.posts.bulkPut(['member-doc', 'other-doc'].map(id => ({ ...row, id, title: 'Chapter notes', postType: 'doc',
+            content: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: `Saved text from ${id}` }] }] }),
+        })));
+        await db.threads.update('thread-a', { project_id: 'book' });
+        await db.threads.bulkPut(['member-chat', 'excluded-chat', 'other-chat'].map(id => ({ ...row, id, title: 'Chapter chat',
+            status: 'ready', pinned: false, forked: false, project_id: id === 'other-chat' ? 'other' : 'book',
+        })));
+        await db.messages.put({ ...row, id: 'member-message', thread_id: 'member-chat', role: 'user', index: 1, data: { content: 'Chapter discussion.' } });
+        const context = { subject: null, workspaceId: 'workspace-a', threadId: 'thread-a', messageId: null,
+            requestId: 'book-request', callId: 'book-call', abortSignal: new AbortController().signal };
+        await saveProjectSettings(captureWorkspaceOperation(context), 'book',
+            { ...defaultProjectSettings(), excluded_chat_ids: ['excluded-chat'] }, null);
+        await useCommandPalette().warm();
+        const registry = useToolRegistry();
+        const execute = (name: string, args: unknown) => registry.executeTool(name, JSON.stringify(args), context);
+        const call = async (name: string, args: unknown) => {
+            const response = await execute(name, args);
+            expect(response.error).toBeUndefined();
+            return JSON.parse(response.result!);
+        };
+        const found = await call('workspace_search', { query: 'Chapter', kinds: ['document', 'chat'] });
+        expect(found.results.map((entry: { source: { id: string } }) => entry.source.id).sort()).toEqual(['member-chat', 'member-doc']);
+        expect((await call('search_documents', { query: 'Chapter' })).results).toMatchObject([{ documentId: 'member-doc' }]);
+        expect((await call('search_threads', { query: 'Chapter' })).results).toMatchObject([{ threadId: 'member-chat' }]);
+        expect((await call('workspace_read', { item: { kind: 'document', id: 'member-doc' } })).content).toBe('Saved text from member-doc');
+        expect((await call('workspace_read', { item: { kind: 'chat', id: 'member-chat' } })).content).toContain('Chapter discussion.');
+        expect((await call('read_thread', { threadId: 'member-chat' })).messages).toEqual([{ role: 'user', content: 'Chapter discussion.' }]);
+        expect((await execute('read_thread', { threadId: 'excluded-chat' })).error).toMatch(/outside the permitted project/);
+        expect((await execute('read_thread', { threadId: 'other-chat' })).error).toMatch(/outside the permitted project/);
+        expect((await execute('workspace_read', { item: { kind: 'document', id: 'other-doc' } })).error).toMatch(/outside the permitted project/);
+    });
+
     // Registered reads must page the admitted extraction, never binary upload
     // offsets, and reject an old cursor after its extraction revision changes.
     // Existing document paging does not exercise file bytes or project bindings.

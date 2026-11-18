@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onScopeDispose, ref, shallowRef, useId, watch } from 'vue';
-import { useLocalStorage } from '@vueuse/core';
+import { useVirtualizer } from '@tanstack/vue-virtual';
+import { useEventListener, useLocalStorage, useMediaQuery, useResizeObserver } from '@vueuse/core';
 import { liveQuery } from 'dexie';
+import { TreeItem, TreeRoot } from 'reka-ui';
 import AppModal from '~/components/ui/AppModal.vue';
 import ExplorerMoveDialog from '~/components/files/ExplorerMoveDialog.vue';
 import { useExplorerDrag } from '~/composables/explorer/useExplorerDrag';
@@ -94,15 +96,6 @@ const rowButtons = useThemeOverrides({
 const menuButtons = useThemeOverrides({
     component: 'button', context: 'sidebar', identifier: 'sidebar.project-explorer.menu-item', isNuxtUI: true,
 });
-const ROW_HEIGHT = 36;
-const treeVirtualization = {
-    estimateSize: ROW_HEIGHT,
-    overscan: 8,
-    // Reka supplies the row value directly to the virtualizer's type-ahead callback.
-    textContent: (item: Node) => item.label,
-};
-// The global Tree recipe draws each row as a card; Explorer rows use sidebar list geometry instead.
-const treeUi = { root: '', item: 'm-0 p-0 border-0 rounded-none bg-transparent shadow-none backdrop-blur-none' };
 const extensionActions = useProjectTreeActions();
 const scopeLabel = computed(() => 'project ' + props.projectName);
 const explorer = computed(() => props.compact || view.value !== 'recent');
@@ -177,30 +170,79 @@ const tree = computed(() => {
     return nodes(null);
 });
 const visible = computed(() => {
-    const result: Node[] = [];
+    const result: Array<{ node: Node; level: number; position: number; setSize: number }> = [];
     const open = new Set(expanded.value);
-    function visit(nodes: Node[]) {
-        for (const node of nodes) {
-            result.push(node);
-            if (node.children && open.has(node.key)) visit(node.children);
-        }
+    function visit(nodes: Node[], level: number) {
+        nodes.forEach((node, index) => {
+            result.push({ node, level, position: index + 1, setSize: nodes.length });
+            if (node.children && open.has(node.key)) visit(node.children, level + 1);
+        });
     }
-    visit(tree.value);
+    visit(tree.value, 1);
     return result;
 });
-const { selected, selectMode, choose, clear: clearSelection, all } = useExplorerSelection(computed(() => visible.value.map(node => node.key)));
+const visibleNodes = computed(() => visible.value.map(row => row.node));
+const { selected, selectMode, choose, clear: clearSelection, all } = useExplorerSelection(computed(() => visibleNodes.value.map(node => node.key)));
+const selectedNodes = computed(() => visibleNodes.value.filter(node => selected.value.has(node.key)));
+
+// Project Home and Home shortcuts both live inside the sidebar's Or3Scroll.
+// Keep a single scroll owner while mounting only the rows near its viewport.
+const scrollOwner = computed(() => viewport.value?.closest<HTMLElement>('.or3-scroll') ?? null);
+const scrollTrack = computed(() => viewport.value?.closest<HTMLElement>('.or3-scroll-track') ?? null);
+const touchRows = useMediaQuery('(hover: none)');
+const treeScale = ref(1);
+const rowHeight = computed(() => (touchRows.value ? 40 : 36) * treeScale.value);
+const scrollMargin = ref(0);
+function measureTreeGeometry() {
+    const owner = scrollOwner.value;
+    const treeViewport = viewport.value;
+    if (!owner?.offsetHeight || !treeViewport) return;
+    const bounds = owner.getBoundingClientRect();
+    const ownerScale = bounds.height / owner.offsetHeight;
+    if (!ownerScale) return;
+    const treeBounds = treeViewport.getBoundingClientRect();
+    scrollMargin.value = Math.round(owner.scrollTop + (treeBounds.top - bounds.top) / ownerScale - owner.clientTop);
+    // Or3Scroll uses viewport pixels while the rows carry the app's CSS zoom.
+    if (treeViewport.offsetHeight && treeBounds.height) {
+        treeScale.value = Math.round(10_000 * treeBounds.height / (treeViewport.offsetHeight * ownerScale)) / 10_000;
+    }
+}
+useResizeObserver([viewport, scrollOwner, scrollTrack], measureTreeGeometry);
+useEventListener(scrollOwner, 'scroll', measureTreeGeometry, { passive: true });
+const virtualizer = useVirtualizer(computed(() => ({
+    count: visible.value.length,
+    estimateSize: () => rowHeight.value,
+    getScrollElement: () => scrollOwner.value,
+    getItemKey: index => visible.value[index]!.node.key,
+    scrollMargin: scrollMargin.value,
+    overscan: 8,
+})));
+watch(rowHeight, () => virtualizer.value.measure());
+const renderedRows = computed(() => scrollOwner.value
+    ? virtualizer.value.getVirtualItems().flatMap(item => {
+        const row = visible.value[item.index];
+        return row ? [{ ...row, offset: (item.start - scrollMargin.value) / treeScale.value }] : [];
+    })
+    : visible.value.map(row => ({ ...row, offset: undefined })));
 async function focusNode(node: Node) {
     await nextTick();
-    const root = viewport.value?.querySelector<HTMLElement>('.project-explorer-tree');
+    const root = viewport.value;
     if (!root) return;
     const selector = `[data-project-row="${CSS.escape(node.key)}"] .project-explorer-activate`;
-    const position = visible.value.findIndex(item => item.key === node.key);
-    if (!root.querySelector(selector) && position >= 0) {
-        root.scrollTop = position * ROW_HEIGHT;
+    const position = visibleNodes.value.findIndex(item => item.key === node.key);
+    if (position < 0) return;
+    // Center long jumps within the tree. The shared viewport can also have
+    // activity below the tree, so its end is not the tree's last row.
+    if (!root.querySelector(selector)) virtualizer.value.scrollToIndex(position, { align: 'center' });
+    for (let frame = 0; frame < 5 && viewport.value === root; frame++) {
+        const button = root.querySelector<HTMLElement>(selector);
+        if (button) {
+            button.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            button.focus({ preventScroll: true });
+            return;
+        }
         await new Promise(requestAnimationFrame);
-        await nextTick();
     }
-    root.querySelector<HTMLElement>(selector)?.focus();
 }
 async function revealInTree(node: Node) {
     const projection = organization.value?.tree;
@@ -306,7 +348,7 @@ function saveContentTitle() {
     });
 }
 async function move(parent: string | null) {
-    const nodes = visible.value.filter(node => selected.value.has(node.key));
+    const nodes = visibleNodes.value.filter(node => selected.value.has(node.key));
     const records = organization.value?.canonical;
     if (!nodes.length) return;
     await run(async () => {
@@ -353,10 +395,10 @@ function showInFiles(item: ExplorerItemRef) {
         filesReveal.value = { itemId: item.item_id, generation: origin.generation };
     });
 }
-const selectionHasFolders = computed(() => visible.value.some(node => node.folder && selected.value.has(node.key)));
+const selectionHasFolders = computed(() => visibleNodes.value.some(node => node.folder && selected.value.has(node.key)));
 function removeSelectedContents() {
     if (selectionHasFolders.value) return;
-    const content = visible.value.flatMap(node => node.item && selected.value.has(node.key) ? [node.item] : []);
+    const content = visibleNodes.value.flatMap(node => node.item && selected.value.has(node.key) ? [node.item] : []);
     if (!content.length || content.length > EXPLORER_MAX_WRITES) return;
     void run(async () => {
         const outcome = await removeExplorerProjectItems(origin, props.projectId, content);
@@ -412,7 +454,7 @@ function acceptsDrop(destination: string | null) {
 const toolbarBeforeDrag = ref(false);
 const { directive: vExplorerDrag, announcement, dragging, over } = useExplorerDrag({
     enabled: computed(() => explorer.value && !busy.value && origin.writable),
-    viewport: computed(() => visible.value.length ? viewport.value?.querySelector<HTMLElement>('.project-explorer-tree') ?? null : null),
+    viewport: scrollOwner,
     start: key => {
         toolbarBeforeDrag.value = selected.value.size > 1 || selectMode.value;
         if (!selected.value.has(key)) { clearSelection(); choose(key); }
@@ -427,13 +469,13 @@ const { directive: vExplorerDrag, announcement, dragging, over } = useExplorerDr
 /** Rows travelling with the drag: the selection and everything inside selected folders. */
 const draggedRows = computed(() => {
     if (!dragging.value) return new Set<string>();
-    return new Set(visible.value.filter(node => isSelectedOrDescendant(node.key)).map(node => node.key));
+    return new Set(visibleNodes.value.filter(node => isSelectedOrDescendant(node.key)).map(node => node.key));
 });
 /** The destination folder and its visible contents, marked so they read as one drop zone. */
 const dropBlock = computed(() => {
     const marks = new Map<string, 'only' | 'first' | 'middle' | 'last'>();
     const target = over.value;
-    const order = visible.value;
+    const order = visibleNodes.value;
     if (target === undefined || !order.length) return marks;
     // The root zone spans every row, drawn exactly like a folder zone.
     const start = target === null ? 0 : order.findIndex(node => node.key === target);
@@ -465,8 +507,8 @@ function explorerKey(event: KeyboardEvent) {
     if (event.key === 'Escape') { clearSelection(); return; }
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     const key = event.target.closest<HTMLElement>('[data-project-row]')?.dataset.projectRow;
-    const index = visible.value.findIndex(row => row.key === key);
-    const node = visible.value[index];
+    const index = visibleNodes.value.findIndex(row => row.key === key);
+    const node = visibleNodes.value[index];
     if (!node) return;
     if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !activeQuery.value) {
         event.preventDefault();
@@ -474,17 +516,18 @@ function explorerKey(event: KeyboardEvent) {
         const right = event.key === 'ArrowRight';
         if (node.folder && expanded.value.includes(node.key) !== right) expand(node.key, true);
         else {
-            const next = right ? node.children?.[0] : visible.value.find(item => item.key === parentOf.value.get(node.key));
+            const next = right ? node.children?.[0] : visibleNodes.value.find(item => item.key === parentOf.value.get(node.key));
             if (next) void focusNode(next);
         }
         return;
     }
     if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
-        const target = event.key === 'Home' ? 0 : event.key === 'End' ? visible.value.length - 1
+        const target = event.key === 'Home' ? 0 : event.key === 'End' ? visibleNodes.value.length - 1
             : index + (event.key === 'ArrowDown' ? 1 : -1);
-        const next = visible.value[target];
+        const next = visibleNodes.value[target];
         if (!next) return;
         event.preventDefault();
+        event.stopPropagation();
         if (event.shiftKey) choose(next.key, { shiftKey: true });
         void focusNode(next);
         return;
@@ -494,7 +537,7 @@ function explorerKey(event: KeyboardEvent) {
         clearTimeout(prefixTimer);
         prefixTimer = setTimeout(() => { prefix = ''; }, 700);
         const match = (row: Node) => row.label.toLocaleLowerCase().startsWith(prefix);
-        const next = visible.value.find((row, position) => position > index && match(row)) ?? visible.value.find(match);
+        const next = visibleNodes.value.find((row, position) => position > index && match(row)) ?? visibleNodes.value.find(match);
         if (next) { event.preventDefault(); void focusNode(next); }
         return;
     }
@@ -619,20 +662,23 @@ function recoveredLocation(node: Node) {
         <p v-if="status" role="status" class="explorer-note">{{ status }}</p>
         <UAlert v-if="error && !folderDialog && !titleDialog && !removal" role="alert" :description="error" color="error" variant="soft" class="mb-1" />
         <div ref="viewport" v-explorer-drag="{ destination: null, label: projectName }" class="explorer-viewport">
-            <UTree v-if="tree.length" v-model:expanded="expanded" :items="tree" :get-key="item => item.key"
-                :virtualize="treeVirtualization" :as="{ link: 'div' }" :ui="treeUi" aria-label="Project contents"
-                class="project-explorer-tree max-h-[60vh] overflow-auto sidebar-scroll">
-                <template #item-wrapper="{ item, level, expanded: open }">
+            <TreeRoot v-if="tree.length" v-model:expanded="expanded" :items="tree" :get-key="item => item.key"
+                :model-value="selectedNodes" multiple as="div" aria-label="Project contents"
+                class="relative" :style="scrollOwner ? { height: (virtualizer.getTotalSize() / treeScale) + 'px' } : undefined">
+                <TreeItem v-for="{ node: item, level, position, setSize, offset } in renderedRows" :key="item.key"
+                    :value="item" :level="level" :aria-posinset="position" :aria-setsize="setSize"
+                    as-child @select.prevent v-slot="{ isExpanded: open }">
                     <div v-explorer-drag="item.folder ? { source: item.key, destination: item.key, label: item.label,
                         target: item.path, hover: () => expand(item.key) } : { source: item.key, label: item.label,
                         destination: parentOf.get(item.key) ?? null, target: item.path || projectName }"
-                        class="explorer-row group"
+                        class="explorer-row group" :class="{ 'is-selected': selected.has(item.key) }"
                         :data-drop="dropBlock.get(item.key)"
                         :data-dragged="draggedRows.has(item.key) || undefined"
                         :data-landed="landed.has(item.key) || undefined"
-                        :style="{ '--depth': Math.min(level - 1, 6) }"
+                        :style="{ '--depth': Math.min(level - 1, 6), ...(offset === undefined ? {} : {
+                            position: 'absolute', insetInline: 0, top: 0, transform: 'translateY(' + offset + 'px)',
+                        }) }"
                         :data-project-row="item.key"
-                        :aria-selected="selected.has(item.key)" :data-selected="selected.has(item.key)"
                         :title="item.path ? item.path + (item.folder ? '' : ' / ' + item.label) : item.label"
                         @keydown.enter.stop.prevent="activate(item, $event)" @keydown.space.stop.prevent="choose(item.key, $event, true)">
                         <input v-if="selectMode" type="checkbox" :aria-label="'Select ' + item.label" :checked="selected.has(item.key)"
@@ -667,8 +713,8 @@ function recoveredLocation(node: Node) {
                             </template>
                         </UPopover>
                     </div>
-                </template>
-            </UTree>
+                </TreeItem>
+            </TreeRoot>
             <p v-else class="explorer-empty">{{ activeQuery ? 'No matches in this project' : 'Nothing in this project yet' }}</p>
         </div>
         </template>
@@ -757,10 +803,10 @@ function recoveredLocation(node: Node) {
     background:repeating-linear-gradient(to right, var(--md-outline-variant) 0 1px, transparent 1px var(--indent));
 }
 .explorer-row:hover { background:var(--md-surface-hover); }
-.explorer-row[data-selected="true"] { background:color-mix(in srgb,var(--md-primary) 12%,transparent); color:var(--md-primary); }
+.explorer-row.is-selected { background:color-mix(in srgb,var(--md-primary) 12%,transparent); color:var(--md-primary); }
 .explorer-check { flex:none; margin-inline-end:6px; accent-color:var(--md-primary); }
 .explorer-icon { flex:none; width:var(--row-icon); height:var(--row-icon); color:color-mix(in srgb,var(--md-on-surface-variant) 75%,transparent); transition:opacity 150ms, transform 150ms; }
-.explorer-row[data-selected="true"] .explorer-icon { color:var(--md-primary); }
+.explorer-row.is-selected .explorer-icon { color:var(--md-primary); }
 /* Folders swap their icon for the disclosure chevron on hover, like project roots. */
 .explorer-disclosure {
     display:grid; place-items:center; flex:none; width:calc(var(--row-icon) + 6px); height:calc(var(--row-icon) + 6px); margin-inline:-3px;
