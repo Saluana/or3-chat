@@ -1,5 +1,5 @@
 <template>
-    <div class="flex-1 flex flex-col min-h-0 relative px-2">
+    <div v-if="!hideActivity" class="flex-1 flex flex-col min-h-0 relative px-2">
         <ClientOnly>
             <Or3Scroll
                 ref="scroller"
@@ -13,10 +13,7 @@
                 @reach-bottom="!hideActivity && loadMore()"
             >
                 <template #default="{ item }">
-                    <div v-if="item.type === 'header'">
-                        <slot name="header" />
-                    </div>
-                    <div v-else-if="item.type === 'status'" class="px-2 py-4 text-xs text-[var(--md-on-surface-variant)]">
+                    <div v-if="item.type === 'status'" class="px-2 py-4 text-xs text-[var(--md-on-surface-variant)]">
                         <p v-if="loading" class="or3-loading-delay" role="status">Loading activity…</p>
                         <template v-else>
                             <p class="font-medium">{{ emptyMessage || 'Nothing here yet' }}</p>
@@ -57,7 +54,7 @@
             </Or3Scroll>
             
             <!-- Loading state (absolute overlay) -->
-            <div v-if="loading && !$slots.header" class="absolute inset-0 p-4 space-y-4 animate-pulse bg-[var(--md-surface)]">
+            <div v-if="loading && !projectId" class="absolute inset-0 p-4 space-y-4 animate-pulse bg-[var(--md-surface)]">
                 <div v-for="i in 3" :key="i" class="flex items-center gap-3">
                     <div class="w-8 h-8 rounded-[var(--md-border-radius)] bg-[var(--md-surface-variant)]" />
                     <div class="flex-1 space-y-2">
@@ -68,7 +65,7 @@
             </div>
             
             <!-- Empty state (absolute overlay) -->
-            <div v-if="!loading && items.length === 0 && !$slots.header" class="absolute inset-0">
+            <div v-if="!loading && items.length === 0 && !projectId" class="absolute inset-0">
                 <SidebarEmptyState
                     :icon="emptyIcon ?? 'lucide:layout-list'"
                     :title="emptyMessage || 'Nothing here yet'"
@@ -91,7 +88,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onUnmounted, useSlots } from 'vue';
+import { ref, computed, onUnmounted } from 'vue';
 import { Or3Scroll } from 'or3-scroll';
 import 'or3-scroll/style.css';
 import { usePaginatedSidebarItems } from '~/composables/sidebar/usePaginatedSidebarItems';
@@ -115,7 +112,6 @@ const props = defineProps<{
     emptyIcon?: string;
     ctaLabel?: string;
 }>();
-const slots = useSlots();
 
 const emit = defineEmits<{
     (e: 'select', item: UnifiedSidebarItem): void;
@@ -129,7 +125,7 @@ const query = props.query === undefined
     ? useSidebarEnvironment().getSidebarQuery()
     : computed(() => props.query ?? '');
 
-const { items, activeFamilyIds, hasMore, loading, loadMore, reset, toggleFamily, loadMoreMembers, latestCompaction } = usePaginatedSidebarItems({
+const { items, activeFamilyIds, loading, loadMore, reset, toggleFamily, loadMoreMembers, latestCompaction } = usePaginatedSidebarItems({
     type: props.type || 'all',
     enabled: computed(() => !props.hideActivity),
     query,
@@ -188,15 +184,12 @@ function toggleGroup(group: TimeGroup) {
 // Flattened items list for true per-item virtualization
 const groupedItemsList = computed(() => {
     const result: Array<
-        | { key: string; type: 'header' | 'status' }
+        | { key: string; type: 'status' }
         | { key: string; type: 'time-group-header'; label: string; groupKey: TimeGroup }
         | { key: string; type: 'time-group-item'; item: UnifiedSidebarItem; groupKey: TimeGroup; timeDisplay: string }
     > = [];
-    if (slots.header) {
-        result.push({ key: 'header', type: 'header' });
-        if (!props.hideActivity && !items.value.length) result.push({ key: 'status', type: 'status' });
-    }
     if (props.hideActivity) return result;
+    if (props.projectId && !items.value.length) result.push({ key: 'status', type: 'status' });
     const groups = new Map<TimeGroup, UnifiedSidebarItem[]>();
 
     for (const item of items.value) {
