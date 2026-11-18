@@ -55,7 +55,7 @@ const searchThreadsDefinition: ToolDefinition = {
     type: 'function',
     function: {
         name: 'search_threads',
-        description: 'Search other chat threads in the current workspace by title or message text. Returns thread IDs, titles, and matching snippets. Use a threadId with read_thread or send_message_to_thread. The current chat is excluded from results.',
+        description: 'Search other chats by title or message text. In a project chat, finds included chats in that project. Returns thread IDs, titles, and snippets. Use workspace_read with kind chat for the full transcript or read_thread for recent messages. The current chat is excluded.',
         parameters: {
             type: 'object',
             additionalProperties: false,
@@ -79,7 +79,7 @@ const readThreadDefinition: ToolDefinition = {
     type: 'function',
     function: {
         name: 'read_thread',
-        description: 'Read the recent messages of another chat thread in the current workspace. Supply a threadId from search_threads. Returns up to the most recent messages with their roles and text. Content is read-only.',
+        description: 'Read a bounded recent excerpt from another chat. In a project chat the target must be an included chat in this project. Use workspace_read with kind chat and follow its continuation to read the full transcript.',
         parameters: {
             type: 'object',
             additionalProperties: false,
@@ -144,7 +144,14 @@ async function searchThreads(query: string, context: ToolExecutionContext): Prom
     if (!palette.getCoordinator()) await palette.warm();
     const coordinator = palette.getCoordinator();
     if (!coordinator) throw new Error('Chat search is unavailable right now.');
-    const results = await coordinator.searchSource('chat', normalized, MAX_SEARCH_RESULTS + 1);
+    const members = context.projectId
+        ? await (await import('~/utils/projects/tool-sources')).projectToolSearchCandidates(context)
+        : undefined;
+    const results = members ? (await coordinator.searchOnce({
+        term: normalized, sourceIds: ['chat'], limit: MAX_SEARCH_RESULTS,
+        signal: context.abortSignal,
+        accepts: (item) => item.recordId !== context.threadId && members.has(`chat:${item.recordId}`),
+    })).results : await coordinator.searchSource('chat', normalized, MAX_SEARCH_RESULTS + 1);
     assertChatWorkspace(context);
     if (getDb().name !== originDbName) throw new Error('The workspace changed during chat search.');
     return JSON.stringify({

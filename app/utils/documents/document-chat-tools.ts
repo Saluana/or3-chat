@@ -52,7 +52,7 @@ const searchDocumentsDefinition: ToolDefinition = {
     type: 'function',
     function: {
         name: 'search_documents',
-        description: 'Find documents in the current workspace by title or text. Returns document IDs and open tab IDs. Use a document ID with the document tools; editing requires its editor to be open in a visible pane.',
+        description: 'Find documents by title or text. In a project chat, finds documents in that project. Returns document IDs and open tab IDs. Use workspace_read with kind document for the full saved text, even when the editor is closed.',
         parameters: {
             type: 'object',
             additionalProperties: false,
@@ -76,7 +76,7 @@ const openPaneContextDefinition: ToolDefinition = {
     type: 'function',
     function: {
         name: 'get_open_pane_context',
-        description: 'Call with no arguments, or a blank tabId, to list open workspace tabs and their exact tabIds. Do not invent a tabId. A new chat with no messages is still open: it has no threadId, and reading it reports that it is empty. Pass a listed tabId to read that tab. An unknown tabId returns the current list instead of failing. Visible document editors include live unsaved content and block refs; inactive documents and chats return read-only saved content. App tabs return metadata.',
+        description: 'List open tabs and their exact tabIds, or pass a listed tabId to read a preview. In a project chat, lists the project’s open documents and included chats. Visible editors may include unsaved content. Use workspace_read and its continuation for full saved documents or transcripts.',
         parameters: {
             type: 'object',
             additionalProperties: false,
@@ -103,7 +103,7 @@ const documentChatDefinitions: ToolDefinition[] = DOCUMENT_AI_AGENT_TOOLS.map((t
     ...tool,
     function: {
         ...tool.function,
-        description: `${tool.function.description} Requires documentId from search_documents or get_open_pane_context and a visible document editor. If the same document is visible in two panes, supply tabId.${['read_blocks', 'propose_edits'].includes(tool.function.name) ? ' Use the snapshotId returned by the latest document outline, search, or open-pane context.' : ''} Changes appear in the editor for review; they are never applied automatically.`,
+        description: `${tool.function.description} Requires documentId from search_documents or get_open_pane_context and a visible document editor. Use workspace_read for full saved text, including when the document is closed. If the same document is visible in two panes, supply tabId.${['read_blocks', 'propose_edits'].includes(tool.function.name) ? ' Use the snapshotId returned by the latest document outline, search, or open-pane context.' : ''} Changes appear in the editor for review; they are never applied automatically.`,
         parameters: {
             ...tool.function.parameters,
             required: [

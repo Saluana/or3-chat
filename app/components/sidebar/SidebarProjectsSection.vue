@@ -18,13 +18,13 @@
                     : 'grid-rows-[1fr] opacity-100'
             "
         >
-            <div class="overflow-hidden min-h-0">
+            <div class="overflow-clip min-h-0">
                 <div v-if="projects.length > 0" class="space-y-0.5">
                     <div
                         v-for="project in projects"
                         :key="project.id"
                         data-project-shortcut
-                        class="project-group-container mb-0.5 rounded-[var(--md-border-radius)] overflow-hidden"
+                        class="project-group-container mb-0.5 rounded-[var(--md-border-radius)] overflow-clip"
                     >
                         <SidebarProjectRoot
                             :project="project"

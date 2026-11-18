@@ -112,7 +112,13 @@ export async function searchDocuments(query: string, context: ToolExecutionConte
     if (!palette.getCoordinator()) await palette.warm();
     const coordinator = palette.getCoordinator();
     if (!coordinator) throw new Error('Document search is unavailable right now.');
-    const results = await coordinator.searchSource('document', normalized, MAX_SEARCH_RESULTS);
+    const members = context.projectId
+        ? await (await import('~/utils/projects/tool-sources')).projectToolSearchCandidates(context)
+        : undefined;
+    const results = members ? (await coordinator.searchOnce({
+        term: normalized, sourceIds: ['document'], limit: MAX_SEARCH_RESULTS,
+        signal: context.abortSignal, accepts: (item) => members.has(`document:${item.recordId}`),
+    })).results : await coordinator.searchSource('document', normalized, MAX_SEARCH_RESULTS);
     assertChatWorkspace(context);
     if (getDb().name !== originDbName) throw new Error('The workspace changed during document search.');
     const tabs = getOpenWorkspaceTabs();
@@ -184,7 +190,13 @@ function listOpenTabsPayload(tabs: readonly WorkspaceTab[], currentThreadId: str
 export async function openPaneContext(tabId: string | undefined, context: ToolExecutionContext): Promise<string> {
     assertChatWorkspace(context);
     const requested = tabId?.trim();
-    const tabs = getOpenWorkspaceTabs();
+    const members = context.projectId
+        ? await (await import('~/utils/projects/tool-sources')).projectToolSearchCandidates(context)
+        : undefined;
+    const visibleTabs = () => getOpenWorkspaceTabs().filter(({ resource }) => !members ||
+        (resource.kind === 'document' && members.has(`document:${resource.documentId}`)) ||
+        (resource.kind === 'chat' && members.has(`chat:${resource.threadId}`)));
+    const tabs = visibleTabs();
     if (!requested) {
         return JSON.stringify(listOpenTabsPayload(tabs, context.threadId));
     }
@@ -238,7 +250,7 @@ export async function openPaneContext(tabId: string | undefined, context: ToolEx
         return JSON.stringify({
             matched: false,
             message: 'That tab changed while it was being read. Copy a tabId from tabs and call again.',
-            ...listOpenTabsPayload(getOpenWorkspaceTabs(), context.threadId),
+            ...listOpenTabsPayload(visibleTabs(), context.threadId),
         });
     }
     const identity = resource.kind === 'chat'
