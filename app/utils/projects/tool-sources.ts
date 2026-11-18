@@ -10,6 +10,11 @@ import type { ProjectSource } from '~~/shared/projects/workspace';
 
 type ProjectPolicy = Awaited<ReturnType<typeof readProjectPolicy>>;
 
+// Keep the runtime check for callers that supply an invalid item kind.
+function isFileKind(kind: string): boolean {
+    return kind === 'file';
+}
+
 export async function projectToolSearchCandidates(context: ToolExecutionContext) {
     if (!context.projectId || !context.threadId) return undefined;
     const scope = captureWorkspaceOperation(context);
@@ -48,7 +53,7 @@ export function projectToolSourceAccess(scope: WorkspaceOperationScope, threadId
         const mode = (await modes()).get(key);
         if (mode === 'off') return false;
         if (kind === 'document') return item.postType === 'doc' && (!requireDocumentKnowledge || !!mode);
-        if (kind !== 'file' || item.postType !== FILE_CATALOG_POST_TYPE || !mode) return false;
+        if (!isFileKind(kind) || item.postType !== FILE_CATALOG_POST_TYPE || !mode) return false;
         const hashes = parseFileHashes(item.file_hashes);
         const meta = hashes.length === 1 ? await scope.db.file_meta.get(hashes[0]!) : undefined;
         return !!meta && !meta.deleted;
