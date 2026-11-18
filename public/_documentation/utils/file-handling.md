@@ -71,7 +71,7 @@ Trusted-host plugins can observe catalog operations, manage saved metadata throu
 
 **Files** opens a lazy workspace tab containing native documents
 and saved uploads. Search names or indexed text, filter by type or project, and
-use **Upload** or **New document**. Choose **Trash** to view deleted items and **Back to files** to return to active files. The **Files options** menu offers **Add existing uploads** in active files and is hidden in Trash. Each row has one menu for Rename, project association, original download, and moving to Trash. Click any file or document to inspect it. Wide panes show an adjacent preview and details panel; narrower panes show a scrollable preview inside the Files pane, with Close or Escape returning to the list. Choose **Open document** in the inspector to edit a native document. The list initially
+use **Upload** or **New document**. Choose **Trash** to view deleted items. On narrow panes, find **Trash** in **Files options**. Use the **Files** back button to return to active files. The **Files options** menu also offers **Add existing uploads** in active files. Each row has one menu for Rename, project association, original download, and moving to Trash. Click any file or document to inspect it. Wide panes show an adjacent preview and details panel; narrower panes show a scrollable preview inside the Files pane, with Close or Escape returning to the list. Choose **Open document** in the inspector to edit a native document. The list initially
 shows at most 50 rows; **Load more** extends it. Project actions create or remove
 associations without moving or copying content.
 
@@ -83,6 +83,7 @@ Files shows folders alongside documents and uploads. Click a row to open it,
 or use Control-click, Command-click, Shift-click, checkboxes, or **Select**
 to build a selection. Use breadcrumbs to navigate and **Move to…** to choose
 a destination. **Select all results** includes rows outside the visible list.
+On narrow panes, open **Files options** to select all after selecting some results.
 A move or bulk removal can change up to 100 records, including related
 records where applicable.
 

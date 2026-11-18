@@ -425,7 +425,7 @@
                     "category": "Source integration",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Browse and search within folders, find an item's Files and project locations, and organize them with workspace KV sync. Covers text coverage, shared-byte retention, and trusted Plugin SDK catalog actions."
+                    "summary": "Browse and search within folders, find an item's Files and project locations, and use bulk selection and Trash in narrow panes. Covers workspace KV sync, text coverage, shared-byte retention, and trusted Plugin SDK catalog actions."
                 },
                 {
                     "name": "errors.md",
