@@ -62,6 +62,7 @@ import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import { useOr3Config } from '~/composables/useOr3Config';
 import SidebarProjectActions from './SidebarProjectActions.vue';
+import SidebarProjectCreateMenu from './SidebarProjectCreateMenu.vue';
 import SidebarProjectExplorer from './SidebarProjectExplorer.vue';
 import { useExplorerAvailable } from '~/composables/explorer/explorer-availability';
 import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
@@ -106,9 +107,7 @@ const { setActivePage } = useActiveSidebarPage();
 const backIcon = useIcon('ui.chevron.left');
 const projectIcon = useIcon('sidebar.folder');
 const newProjectIcon = useIcon('sidebar.new_folder');
-const newChatIcon = useIcon('sidebar.new_chat');
 const chatIcon = useIcon('sidebar.chat');
-const newDocumentIcon = useIcon('sidebar.new_note');
 const or3Config = useOr3Config();
 const documentsEnabled = computed(() => or3Config.features.documents.enabled);
 const explorerEnabled = useExplorerAvailable();
@@ -816,6 +815,11 @@ async function createInExplorer(kind: 'chat' | 'document', folder: ExplorerFolde
         if (result && !result.ok) throw new Error(result.error.message);
     });
 }
+function createAtProjectRoot(kind: 'chat' | 'document') {
+    if (busy.value || !scope.writable) return;
+    if (kind === 'chat') void run(() => newChat());
+    else if (documentsEnabled.value) emit('add-document-to-project-root', id.value);
+}
 async function newChat(folder?: ExplorerFolderRow) {
     const projectId = id.value;
     scope.assertCurrent('write');
@@ -1248,154 +1252,145 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
             </SidebarEmptyState>
         </template>
         <template v-else-if="state">
-            <SidebarTimeGroupedList
-                v-if="tab === 'Overview'"
-                role="region"
-                aria-label="Project activity"
-                type="all"
-                :hide-activity="explorerEnabled && projectExplorerActive"
-                :project-id="id"
-                :query="props.sidebarQuery ?? query"
-                :active-ids="[
-                    ...(props.activeThreadIds ?? []),
-                    ...(props.activeDocumentIds ?? []),
-                ]"
-                empty-message="No activity yet"
-                empty-description="Your project chats and documents will appear here."
-                @select="(item) => run(() => openActivity(item))"
-                @rename="
-                    (item) =>
-                        emit(
-                            item.type === 'thread'
-                                ? 'rename-thread'
-                                : 'rename-document',
-                            item,
-                        )
-                "
-                @delete="
-                    (item) =>
-                        emit(
-                            item.type === 'thread'
-                                ? 'delete-thread'
-                                : 'delete-document',
-                            item,
-                        )
-                "
-                @add-to-project="
-                    (item) =>
-                        emit(
-                            item.type === 'thread'
-                                ? 'add-to-project'
-                                : 'add-document-to-project-from-list',
-                            item,
-                        )
-                "
-                ><template #header>
-                    <div class="project-content px-1 pt-2 pb-1 space-y-4">
-                        <div class="flex items-center gap-3 min-w-0">
-                            <span
-                                class="project-avatar shrink-0"
-                                aria-hidden="true"
-                            >
-                                <UIcon :name="projectIcon" class="size-5" />
-                            </span>
-                            <div class="min-w-0 flex-1">
-                                <h1 ref="projectHeading"
-                                    class="text-lg font-semibold leading-snug break-words"
-                                >
-                                    {{ state.project.name }}
-                                </h1>
-                                <div v-if="!briefEditing" class="flex items-center gap-1 mt-0.5">
-                                    <p
-                                        class="project-muted min-w-0 text-xs leading-relaxed whitespace-pre-wrap line-clamp-2"
-                                        aria-label="Project brief"
-                                    >
-                                        {{ state.settings.brief || 'Add a project brief' }}
-                                    </p>
-                                    <UButton
-                                        :icon="editIcon"
-                                        :aria-label="state.settings.brief ? 'Edit project brief' : 'Add project brief'"
-                                        square
-                                        size="xs"
-                                        color="neutral"
-                                        variant="ghost"
-                                        :ui="{ leadingIcon: 'size-3.5' }"
-                                        class="project-brief-edit shrink-0"
-                                        @click="editInlineBrief"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                        <form
-                            v-if="briefEditing"
-                            class="project-inline-brief space-y-2"
-                            aria-label="Edit project brief"
-                            @submit.prevent="run(saveBrief)"
+            <div v-if="tab === 'Overview'" class="flex min-h-0 min-w-0 flex-1 flex-col">
+                <header class="project-content shrink-0 space-y-3 px-3 pt-2 pb-3">
+                    <div class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3">
+                        <span class="project-avatar row-span-2" aria-hidden="true">
+                            <UIcon :name="projectIcon" class="size-5" />
+                        </span>
+                        <h1
+                            ref="projectHeading"
+                            class="line-clamp-2 text-lg font-semibold leading-snug"
+                            :title="state.project.name"
                         >
-                            <label class="sr-only" for="project-inline-brief-editor">Project brief</label>
-                            <textarea
-                                id="project-inline-brief-editor"
-                                ref="inlineBriefEditor"
-                                v-model="settings.brief"
-                                class="project-input !mt-0"
-                                rows="3"
-                                maxlength="8000"
-                                placeholder="Describe the current state and next steps…"
-                                :disabled="busy"
-                                @input="dirty = true"
-                                @keydown.esc.stop.prevent="cancelBriefEdit"
-                            />
-                            <div class="flex justify-end items-center gap-2">
-                                <UButton
-                                    label="Cancel"
-                                    color="neutral"
-                                    variant="ghost"
-                                    size="xs"
-                                    :disabled="busy"
-                                    @click="cancelBriefEdit"
-                                />
-                                <UButton
-                                    type="submit"
-                                    label="Save brief"
-                                    color="neutral"
-                                    size="xs"
-                                    :loading="busy"
-                                    :disabled="busy"
-                                />
-                            </div>
-                        </form>
-                        <div class="project-create-actions">
+                            {{ state.project.name }}
+                        </h1>
+                        <SidebarProjectCreateMenu
+                            :key="id"
+                            :project-name="state.project.name"
+                            :documents-enabled="documentsEnabled"
+                            :disabled="busy || !scope.writable"
+                            @create="createAtProjectRoot"
+                        />
+                        <div v-if="!briefEditing" class="col-span-2 col-start-2 row-start-2 flex items-center gap-1">
+                            <p
+                                class="project-muted min-w-0 text-xs leading-relaxed whitespace-pre-wrap line-clamp-2"
+                                aria-label="Project brief"
+                            >
+                                {{ state.settings.brief || 'Add a project brief' }}
+                            </p>
                             <UButton
-                                :icon="newChatIcon"
-                                :aria-label="`New chat in ${state.project?.name || 'project'}`" label="New chat"
-                                color="neutral"
-                                :ui="{ leadingIcon: 'size-[18px]' }"
-                                class="project-start theme-btn"
-                                :disabled="busy || !scope.writable"
-                                @click="run(() => newChat())"
-                            />
-                            <UButton
-                                v-if="documentsEnabled"
-                                :icon="newDocumentIcon"
-                                :aria-label="`New document in ${state.project?.name || 'project'}`" label="New document"
+                                :icon="editIcon"
+                                :aria-label="state.settings.brief ? 'Edit project brief' : 'Add project brief'"
+                                square
+                                size="xs"
                                 color="neutral"
                                 variant="ghost"
-                                :ui="{ leadingIcon: 'size-[18px]' }"
-                                class="project-new-document theme-btn"
-                                :disabled="busy || !scope.writable"
-                                @click="emit('add-document-to-project-root', id)"
+                                :ui="{ leadingIcon: 'size-3.5' }"
+                                class="project-brief-edit shrink-0"
+                                @click="editInlineBrief"
                             />
                         </div>
-                        <div v-if="explorerEnabled" class="border-t border-[var(--md-outline-variant)] pt-3">
-                            <SidebarProjectExplorer :root-target="projectHeading" :key="id" :project-id="id" :project-name="state.project.name"
-                                :documents-enabled="documentsEnabled" :query="props.sidebarQuery ?? query"
-                                @view="projectExplorerActive = $event" @create="createInExplorer"
-                                @add-file="addFileInExplorer" @clear-search="clearExplorerSearch" />
+                    </div>
+                    <form
+                        v-if="briefEditing"
+                        class="project-inline-brief space-y-2"
+                        aria-label="Edit project brief"
+                        @submit.prevent="run(saveBrief)"
+                    >
+                        <label class="sr-only" for="project-inline-brief-editor">Project brief</label>
+                        <textarea
+                            id="project-inline-brief-editor"
+                            ref="inlineBriefEditor"
+                            v-model="settings.brief"
+                            class="project-input !mt-0"
+                            rows="3"
+                            maxlength="8000"
+                            placeholder="Describe the current state and next steps…"
+                            :disabled="busy"
+                            @input="dirty = true"
+                            @keydown.esc.stop.prevent="cancelBriefEdit"
+                        />
+                        <div class="flex justify-end items-center gap-2">
+                            <UButton
+                                label="Cancel"
+                                color="neutral"
+                                variant="ghost"
+                                size="xs"
+                                :disabled="busy"
+                                @click="cancelBriefEdit"
+                            />
+                            <UButton
+                                type="submit"
+                                label="Save brief"
+                                color="neutral"
+                                size="xs"
+                                :loading="busy"
+                                :disabled="busy"
+                            />
                         </div>
-                        <h2 v-else class="project-section-label border-t border-[var(--md-outline-variant)] pt-4!">Recent</h2>
-                    </div></template
-                ></SidebarTimeGroupedList
-            >
+                    </form>
+                </header>
+                <SidebarProjectExplorer
+                    v-if="explorerEnabled"
+                    :key="id"
+                    class="mx-3 border-t border-[var(--md-outline-variant)] pt-3"
+                    :root-target="projectHeading"
+                    :project-id="id"
+                    :project-name="state.project.name"
+                    :documents-enabled="documentsEnabled"
+                    :query="props.sidebarQuery ?? query"
+                    @view="projectExplorerActive = $event"
+                    @create="createInExplorer"
+                    @add-file="addFileInExplorer"
+                    @clear-search="clearExplorerSearch"
+                />
+                <div v-else class="mx-3 shrink-0 border-t border-[var(--md-outline-variant)] pt-3">
+                    <h2 class="project-section-label">Recent</h2>
+                </div>
+                <SidebarTimeGroupedList
+                    role="region"
+                    aria-label="Project activity"
+                    type="all"
+                    :hide-activity="explorerEnabled && projectExplorerActive"
+                    :project-id="id"
+                    :query="props.sidebarQuery ?? query"
+                    :active-ids="[
+                        ...(props.activeThreadIds ?? []),
+                        ...(props.activeDocumentIds ?? []),
+                    ]"
+                    empty-message="No activity yet"
+                    empty-description="Your project chats and documents will appear here."
+                    @select="(item) => run(() => openActivity(item))"
+                    @rename="
+                        (item) =>
+                            emit(
+                                item.type === 'thread'
+                                    ? 'rename-thread'
+                                    : 'rename-document',
+                                item,
+                            )
+                    "
+                    @delete="
+                        (item) =>
+                            emit(
+                                item.type === 'thread'
+                                    ? 'delete-thread'
+                                    : 'delete-document',
+                                item,
+                            )
+                    "
+                    @add-to-project="
+                        (item) =>
+                            emit(
+                                item.type === 'thread'
+                                    ? 'add-to-project'
+                                    : 'add-document-to-project-from-list',
+                                item,
+                            )
+                    "
+                />
+            </div>
             <div v-else class="flex-1 min-h-0 flex flex-col">
                 <div
                     class="project-content flex-1 min-h-0 min-w-0 overflow-y-auto sidebar-scroll px-3 pt-2 pb-5 space-y-4 text-sm"
@@ -2822,27 +2817,6 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
     justify-content: center;
     background: color-mix(in srgb, var(--project-accent) 80%, #000);
     color: #fff;
-}
-.project-create-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-.project-create-actions > button {
-    flex: 1 1 auto;
-    width: auto;
-    min-width: 0;
-    padding-inline: 10px !important;
-    white-space: nowrap;
-    justify-content: center;
-    min-height: 38px;
-}
-.project-new-document {
-    background: var(--md-surface-hover);
-    color: var(--md-on-surface);
-}
-.project-new-document:hover {
-    background: var(--md-surface-container-high);
 }
 .project-start:hover {
     background: color-mix(in srgb, var(--project-accent) 70%, #000);

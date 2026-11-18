@@ -248,6 +248,10 @@ test('project cards open on the first click and while pinning is pending', async
 test('Projects stays in the sidebar while browsing, creating, pinning and searching', async ({
     page,
 }, info) => {
+    let clientUrl: string | undefined;
+    page.on('request', request => {
+        if (/\/db\/client\.ts(?:\?|$)/u.test(request.url())) clientUrl = request.url();
+    });
     await page.route(/\/models(?:\?|$)/, (route) =>
         route.fulfill({
             json: {
@@ -717,9 +721,21 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
         }),
     ).toBeVisible();
     expect(await tabs.allTextContents()).toEqual(originalTabs);
-    await projects
-        .getByRole('button', { name: 'New chat in Sidebar project', exact: true })
-        .click();
+    const projectCreate = projects.getByRole('button', {
+        name: 'New in Sidebar project',
+        exact: true,
+    });
+    await projectCreate.click();
+    await page.getByRole('menuitem', { name: 'New document', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Document title' })).toBeVisible();
+    await expect(
+        projects.getByRole('region', { name: 'Project Explorer' })
+            .getByRole('button', { name: 'Untitled', exact: true }),
+    ).toBeVisible();
+
+    await projects.getByRole('button', { name: 'Recent', exact: true }).click();
+    await projectCreate.press('Enter');
+    await page.getByRole('menuitem', { name: 'New chat', exact: true }).press('Enter');
     const activity = projects.getByRole('region', {
         name: 'Project activity',
         exact: true,
@@ -776,57 +792,24 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
     });
     // A large collection must keep Home and the full list's mounted work bounded.
     const startedAt = Date.now();
-    await page.evaluate(async () => {
-        for (const database of await indexedDB.databases()) {
-            if (!database.name) continue;
-            const db = await new Promise<IDBDatabase>((resolve, reject) => {
-                const request = indexedDB.open(database.name!);
-                request.onsuccess = () => resolve(request.result);
-                request.onerror = () => reject(request.error);
-            });
-            if (!db.objectStoreNames.contains('projects')) {
-                db.close();
-                continue;
-            }
-            const rows = await new Promise<any[]>((resolve, reject) => {
-                const request = db
-                    .transaction('projects')
-                    .objectStore('projects')
-                    .getAll();
-                request.onsuccess = () => resolve(request.result);
-                request.onerror = () => reject(request.error);
-            });
-            if (!rows.some((row) => row.name === 'Sidebar project')) {
-                db.close();
-                continue;
-            }
-            await new Promise<void>((resolve, reject) => {
-                const transaction = db.transaction('projects', 'readwrite');
-                const store = transaction.objectStore('projects');
-                for (let i = 0; i < 2000; i++)
-                    store.put({
-                        id: `bulk-project-${i}`,
-                        name: `Bulk project ${i}`,
-                        description: null,
-                        data: Array.from({ length: 20 }, (_, j) => ({
-                            id: `missing-child-${i}-${j}`,
-                            kind: 'chat',
-                        })),
-                        created_at: 1,
-                        updated_at: 2000000000 + i,
-                        clock: 1,
-                        deleted: false,
-                    });
-                transaction.oncomplete = () => resolve();
-                transaction.onerror = () => reject(transaction.error);
-            });
-            db.close();
-            return;
-        }
-        throw new Error('Native project database not found');
-    });
-    // Native fixture writes bypass Dexie's notifications. A normal project write
-    // refreshes the mounted queries through the same path as user-created data.
+    if (!clientUrl) throw new Error('Workspace DB module did not load.');
+    await page.evaluate(async url => {
+        const { getDb } = await import(url);
+        const db = getDb();
+        await db.projects.bulkPut(Array.from({ length: 2000 }, (_, i) => ({
+            id: `bulk-project-${i}`,
+            name: `Bulk project ${i}`,
+            description: null,
+            data: Array.from({ length: 20 }, (_, j) => ({
+                id: `missing-child-${i}-${j}`,
+                kind: 'chat',
+            })),
+            created_at: 1,
+            updated_at: 2000000000 + i,
+            clock: 1,
+            deleted: false,
+        })));
+    }, clientUrl);
     await openAllProjects(page);
     await createProject(page, 'Collection refresh');
     await navigation
