@@ -138,6 +138,16 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) {
         const files = page.getByRole('region', { name: 'Workspace Files', exact: true });
         await expect(page.locator('html')).toHaveAttribute('data-theme', theme, { timeout: 30_000 });
         await createFolder(page, files, 'Files', 'Reading list');
+        const title = await files.getByRole('heading', { name: 'Files', exact: true }).evaluate(heading => {
+            const range = document.createRange();
+            range.selectNodeContents(heading);
+            const { right, bottom } = range.getBoundingClientRect();
+            return { right, bottom };
+        });
+        const newDocument = await files.getByRole('button', { name: 'New document', exact: true }).boundingBox();
+        if (!newDocument) throw new Error('Missing New document button.');
+        expect(newDocument.x >= title.right || newDocument.y >= title.bottom).toBe(true);
+
         const folder = files.getByRole('button', { name: 'Reading list', exact: true });
         await files.getByRole('button', { name: 'Select', exact: true }).click();
         await expect(files.getByRole('button', { name: 'Done', exact: true })).toBeVisible();

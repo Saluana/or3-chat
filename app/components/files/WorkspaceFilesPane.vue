@@ -1712,12 +1712,13 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
 }
 @container (max-width: 600px) {
     .files-content { padding: 16px 16px 24px; }
-    .files-header, .files-page[data-preview="true"] .files-header { flex-direction: row; align-items: center; flex-wrap: nowrap; gap: 12px; margin-bottom: 16px; }
+    .files-header, .files-page[data-preview="true"] .files-header { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
     .files-header[data-trash="true"] { align-items: flex-start; }
     .files-header[data-trash="true"] { margin-bottom: 20px; }
     .files-header h1 { font-size: 24px; }
     .files-header p { font-size: 13px; margin-top: 4px; }
-    .files-header-actions { gap: 2px; }
+    .files-header[data-trash="false"] .files-heading { flex-shrink: 0; }
+    .files-header-actions { max-width: 100%; flex-wrap: wrap; justify-content: flex-end; gap: 2px; margin-inline-start: auto; }
     .files-header-actions .files-upload-button { margin-left: 6px; }
     .files-toolbar { flex-direction: column; align-items: stretch; gap: 10px; margin-bottom: 8px; }
     .files-search :deep(input) { border-color: transparent !important; background: var(--md-surface-container-low, var(--md-surface-variant)); }
