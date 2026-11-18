@@ -23,6 +23,10 @@ async function chooseModel(page: Page, name: string) {
     await catalog.getByRole('listitem').filter({ hasText: name.replace(' (OpenAI key)', '') }).getByRole('button', { name: 'Use model', exact: true }).click();
 }
 
+function routerReplies(page: Page) {
+    return page.getByRole('tabpanel').getByText('OpenRouter fixture reply', { exact: true });
+}
+
 async function send(page: Page, text: string, diagnose = false) {
     await expect(page.getByRole('button', { name: 'Stop generation', exact: true })).toHaveCount(0, { timeout: 45_000 });
     const input = page.getByRole('textbox', { name: 'Message input' });
@@ -324,7 +328,7 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
     // The same chat continues on OpenRouter with the instance key.
     await chooseModel(page, 'Fixture Router');
     await send(page, 'openrouter:hello', true);
-    await expect(page.getByText('OpenRouter fixture reply')).toBeVisible({ timeout: 45_000 });
+    await expect(routerReplies(page)).toBeVisible({ timeout: 45_000 });
     const openRouter = (await captured()).filter(request => request.path === '/api/v1/chat/completions').at(-1);
     expect(openRouter).toMatchObject({ credential: 'instance-openrouter', model: 'fixture/router' });
     await page.screenshot({ path: resolve(process.env.OR3_OPENAI_E2E_OUTPUT!, 'openai-and-openrouter-chat.png') });
@@ -666,7 +670,7 @@ test('reloading after a user turn is saved leaves a recoverable response', async
     await page.goto('/chat');
     await chooseModel(page, 'Fixture Router');
     await send(page, 'establish chat');
-    await expect(page.getByText('OpenRouter fixture reply')).toBeVisible({ timeout: 45_000 });
+    await expect(routerReplies(page)).toBeVisible({ timeout: 45_000 });
     // Pause a real post-commit hook before the send can create a response or
     // reach the provider. Reloading drops this hook along with the old page.
     await page.evaluate(async () => {
@@ -696,7 +700,7 @@ test('reloading after a user turn is saved leaves a recoverable response', async
     await assistant.getByRole('button', { name: 'Retry message' }).click();
     await expect.poll(async () => ((await (await page.request.get(`${fixture}/__capture`)).json()).requests as Captured[])
         .slice(before).filter(request => request.path === '/api/v1/chat/completions' && request.stream === true).length, { timeout: 45_000 }).toBe(1);
-    await expect(page.getByText('OpenRouter fixture reply')).toHaveCount(2, { timeout: 45_000 });
+    await expect(routerReplies(page)).toHaveCount(2, { timeout: 45_000 });
     const requests = (await (await page.request.get(`${fixture}/__capture`)).json()).requests;
     const calls = requests.slice(before).filter((request: Captured) => request.path === '/api/v1/chat/completions' && request.stream === true);
     expect(calls).toHaveLength(1);
@@ -713,7 +717,7 @@ test('switching tabs while a saved turn is preparing does not lose its reply', a
     await page.goto('/chat');
     await chooseModel(page, 'Fixture Router');
     await send(page, 'establish chat');
-    await expect(page.getByText('OpenRouter fixture reply')).toBeVisible({ timeout: 45_000 });
+    await expect(routerReplies(page)).toBeVisible({ timeout: 45_000 });
     const originalTabId = await page.getByRole('tab', { selected: true }).getAttribute('id');
     expect(originalTabId).toBeTruthy();
     await page.evaluate(async () => {
@@ -731,13 +735,13 @@ test('switching tabs while a saved turn is preparing does not lose its reply', a
     await expect.poll(() => page.evaluate(() => sessionStorage.getItem('switch-before-admission-committed'))).toBe('yes');
     await page.locator('.workspace-tab-new').click();
     await send(page, 'separate conversation');
-    await expect(page.getByText('OpenRouter fixture reply')).toHaveCount(1, { timeout: 30_000 });
+    await expect(routerReplies(page)).toHaveCount(1, { timeout: 30_000 });
     await page.evaluate(() => (window as any).releaseSwitchPreparation());
     await page.locator(`[id="${originalTabId}"]`).click();
     await expect(page.getByText('separate conversation', { exact: true })).toHaveCount(0);
-    await expect(page.getByText('OpenRouter fixture reply')).toHaveCount(2, { timeout: 30_000 });
+    await expect(routerReplies(page)).toHaveCount(2, { timeout: 30_000 });
     await page.reload();
-    await expect(page.getByText('OpenRouter fixture reply')).toHaveCount(2, { timeout: 30_000 });
+    await expect(routerReplies(page)).toHaveCount(2, { timeout: 30_000 });
     await page.screenshot({ path: resolve(process.env.OR3_OPENAI_E2E_OUTPUT!, 'early-switch-recovered.png') });
 });
 
@@ -750,7 +754,7 @@ test('switching tabs before a send is saved still sends the original message', a
     await page.goto('/chat');
     await chooseModel(page, 'Fixture Router');
     await send(page, 'establish chat');
-    await expect(page.getByText('OpenRouter fixture reply')).toBeVisible({ timeout: 45_000 });
+    await expect(routerReplies(page)).toBeVisible({ timeout: 45_000 });
     await expect(page.getByRole('button', { name: 'Stop generation', exact: true })).toHaveCount(0, { timeout: 45_000 });
     const originalTabId = await page.getByRole('tab', { selected: true }).getAttribute('id');
     expect(originalTabId).toBeTruthy();
@@ -777,13 +781,13 @@ test('switching tabs before a send is saved still sends the original message', a
     await page.getByRole('textbox', { name: 'Message input' }).fill('other tab draft');
     await page.locator(`[id="${originalTabId}"]`).click();
     await expect(page.locator('.chat-message-container').getByText('switch-before-save', { exact: true })).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText('OpenRouter fixture reply')).toHaveCount(2, { timeout: 30_000 });
+    await expect(routerReplies(page)).toHaveCount(2, { timeout: 30_000 });
     await expect(page.getByRole('textbox', { name: 'Message input' })).not.toContainText('switch-before-save');
     await page.locator(`[id="${otherTabId}"]`).click();
     await expect(page.getByRole('textbox', { name: 'Message input' })).toContainText('other tab draft');
     await page.locator(`[id="${originalTabId}"]`).click();
     await page.reload();
-    await expect(page.getByText('OpenRouter fixture reply')).toHaveCount(2, { timeout: 30_000 });
+    await expect(routerReplies(page)).toHaveCount(2, { timeout: 30_000 });
     await page.screenshot({ path: resolve(process.env.OR3_OPENAI_E2E_OUTPUT!, 'switch-before-save-recovered.png') });
 });
 
@@ -825,10 +829,10 @@ test('switching away during the first send keeps the new conversation', async ({
     await expect(page.getByRole('tab', { selected: true }).locator('.workspace-tab-status.is-streaming')).toHaveCount(0);
     await expect(page.locator(`[id="${originalTabId}"] .workspace-tab-status.is-streaming`)).toHaveCount(0, { timeout: 30_000 });
     await page.locator(`[id="${originalTabId}"]`).click();
-    await expect(page.getByText('OpenRouter fixture reply')).toBeVisible({ timeout: 30_000 });
+    await expect(routerReplies(page)).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole('textbox', { name: 'Message input' })).not.toContainText('first-send-before-switch');
     await page.reload();
-    await expect(page.getByText('OpenRouter fixture reply')).toBeVisible({ timeout: 30_000 });
+    await expect(routerReplies(page)).toBeVisible({ timeout: 30_000 });
     await page.screenshot({ path: resolve(process.env.OR3_OPENAI_E2E_OUTPUT!, 'first-send-switch-recovered.png') });
 });
 

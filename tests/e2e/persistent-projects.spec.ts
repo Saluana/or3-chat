@@ -107,11 +107,12 @@ async function projectState(page: Page) {
                 'chat_request_recoveries',
                 'posts',
             ]) {
-                if (!db.objectStoreNames.contains(table)) continue;
+                const store = `current_${table}`;
+                if (!db.objectStoreNames.contains(store)) continue;
                 const rows = await new Promise<any[]>((resolve, reject) => {
                     const request = db
-                        .transaction(table)
-                        .objectStore(table)
+                        .transaction(store)
+                        .objectStore(store)
                         .getAll();
                     request.onsuccess = () => resolve(request.result);
                     request.onerror = () => reject(request.error);
@@ -161,6 +162,7 @@ test.afterEach(async ({ page }, info) => {
     });
 });
 test('project cards open on the first click and while pinning is pending', async ({ page }, info) => {
+    test.setTimeout(90_000);
     await page.context().addCookies([
         { name: 'or3_active_theme', value: 'retro', domain: '127.0.0.1', path: '/' },
     ]);
@@ -207,10 +209,10 @@ test('project cards open on the first click and while pinning is pending', async
             request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
         });
-        const transaction = db.transaction('posts', 'readwrite');
+        const transaction = db.transaction('current_posts', 'readwrite');
         let held = true;
         const keepAlive = () => {
-            const request = transaction.objectStore('posts').get('sidebar-navigation-lock');
+            const request = transaction.objectStore('current_posts').get('sidebar-navigation-lock');
             request.onsuccess = () => { if (held) keepAlive(); };
         };
         keepAlive();
@@ -243,6 +245,97 @@ test('project cards open on the first click and while pinning is pending', async
         navigationDuringPendingPin: true,
     }, null, 2));
     await info.attach('project-card-click-receipt', { path: receipt, contentType: 'application/json' });
+});
+
+test('recent project actions fit inside a narrow sidebar', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.context().addCookies([
+        { name: 'or3_active_theme', value: 'blank', domain: '127.0.0.1', path: '/' },
+    ]);
+    await page.addInitScript(() => {
+        localStorage.setItem('activeTheme', 'blank');
+        localStorage.setItem('sidebar:width', '320');
+        localStorage.setItem('sidebar:width:collapsed', 'false');
+    });
+    await page.addLocatorHandler(page.getByRole('button', { name: 'Dismiss welcome' }), button => button.click());
+    await page.goto('/chat');
+    const navigation = page.getByRole('complementary', { name: 'Navigation' });
+    await navigation.getByRole('button', { name: 'Projects', exact: true }).click({ timeout: 45000 });
+    const name = 'Product development and customer research';
+    await createProject(page, name);
+    await navigation.getByRole('button', { name: 'Home', exact: true }).first().click();
+
+    const project = navigation.getByRole('button', { name: `Open project ${name}` });
+    const actions = navigation.getByRole('button', { name: `Project actions for ${name}` });
+    await project.hover();
+    await expect(actions).toBeInViewport({ ratio: 1 });
+    await actions.click();
+    const rename = page.getByRole('button', { name: 'Rename project', exact: true });
+    await expect(rename).toBeInViewport();
+    const closing = await rename.evaluateHandle(button => {
+        const menu = button.closest<HTMLElement>('[role="dialog"]')!;
+        const start = menu.getBoundingClientRect();
+        const displacement = new Promise<number>(resolve => {
+            let max = 0;
+            function sample() {
+                if (!menu.isConnected) return resolve(max);
+                const style = getComputedStyle(menu);
+                if (style.visibility === 'visible' && Number(style.opacity) > 0) {
+                    const frame = menu.getBoundingClientRect();
+                    max = Math.max(max, Math.abs(frame.x - start.x), Math.abs(frame.y - start.y));
+                }
+                requestAnimationFrame(sample);
+            }
+            requestAnimationFrame(sample);
+        });
+        return { displacement };
+    });
+    await page.getByRole('textbox', { name: 'Message input' }).click();
+    await expect(rename).toHaveCount(0);
+    expect(await closing.evaluate(frames => frames.displacement)).toBeLessThan(32);
+    await closing.dispose();
+
+    const shortcuts = navigation.getByRole('button', { name: /^(Expand|Collapse) .* shortcuts$/ });
+    if (await shortcuts.getAttribute('aria-expanded') === 'true') await shortcuts.click();
+    await expect(shortcuts).toHaveAttribute('aria-expanded', 'false');
+    await project.hover();
+    await actions.click();
+    await page.getByRole('button', { name: 'New folder', exact: true }).click();
+    const folderDialog = page.getByRole('dialog', { name: `New folder in ${name}` });
+    await folderDialog.getByRole('textbox', { name: 'Folder name' }).fill('Research notes');
+    await folderDialog.getByRole('button', { name: 'Create folder', exact: true }).click();
+    await expect(folderDialog).toBeHidden();
+    const tree = navigation.getByRole('region', { name: `Project shortcuts for ${name}` });
+    await expect(tree.getByRole('treeitem', { name: 'Research notes' })).toBeVisible();
+
+    await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
+    await createProject(page, 'Another project');
+    await navigation.getByRole('button', { name: 'Home', exact: true }).first().click();
+    const projectLinks = navigation.getByRole('button', { name: /^Open project / });
+    await expect(projectLinks).toHaveCount(2);
+    const unpinnedOrder = await projectLinks.evaluateAll(links => links.map(link => link.getAttribute('aria-label')!));
+    const olderName = unpinnedOrder[1]!.slice('Open project '.length);
+    const olderProject = navigation.getByRole('button', { name: unpinnedOrder[1], exact: true });
+    const olderActions = navigation.getByRole('button', { name: `Project actions for ${olderName}`, exact: true });
+    await olderProject.hover();
+    await olderActions.click();
+    await page.getByRole('button', { name: 'Pin project', exact: true }).click();
+    await expect(projectLinks.first()).toHaveAttribute('aria-label', unpinnedOrder[1]!);
+    await expect(olderProject).toHaveAccessibleDescription('Pinned project');
+    const pinnedShortcut = navigation.getByRole('button', { name: `Expand ${olderName} shortcuts`, exact: true })
+        .or(navigation.getByRole('button', { name: `Collapse ${olderName} shortcuts`, exact: true }));
+    await expect(pinnedShortcut.locator('.project-icon')).toHaveClass(/i-blank-solar:pin-linear/);
+    await olderProject.hover();
+    await olderActions.click();
+    await page.getByRole('button', { name: 'Unpin project', exact: true }).click();
+    await expect(projectLinks.first()).toHaveAttribute('aria-label', unpinnedOrder[0]!);
+
+    await olderProject.hover();
+    await olderActions.click();
+    await page.getByRole('button', { name: 'Project settings', exact: true }).click();
+    const projects = navigation.getByRole('region', { name: 'Projects', exact: true });
+    await expect(projects.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+    await expect(projects.getByRole('textbox', { name: 'Instructions', exact: true })).toBeVisible();
 });
 
 test('Projects stays in the sidebar while browsing, creating, pinning and searching', async ({
@@ -816,10 +909,11 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
         .getByRole('button', { name: 'Home', exact: true })
         .first()
         .click();
-    await expect(navigation.locator('[data-project-id]')).toHaveCount(5);
-    await expect(
-        navigation.locator('[data-project-id]').first(),
-    ).toHaveAttribute('data-project-id', 'bulk-project-1999');
+    const homeProjects = navigation.locator('[data-project-id]');
+    await expect(homeProjects).toHaveCount(5);
+    await expect(homeProjects.first().getByRole('button', { name: 'Open project Sidebar project', exact: true }))
+        .toHaveAccessibleDescription('Pinned project');
+    await expect(homeProjects.nth(1)).toHaveAttribute('data-project-id', 'bulk-project-1999');
     const homeDurationMs = Date.now() - startedAt;
     await navigation.screenshot({
         path: info.outputPath('home-five-projects.png'),

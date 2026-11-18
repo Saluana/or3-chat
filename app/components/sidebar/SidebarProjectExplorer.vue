@@ -61,7 +61,7 @@ const viewport = ref<HTMLElement | null>(null);
 const revealRequest = useProjectExplorerReveal();
 const filesReveal = useFilesExplorerReveal();
 const activeQuery = computed(() => props.query);
-const status = ref('');
+const removalStatus = shallowRef<{ message: string; incomplete: boolean }>();
 const error = ref('');
 const busy = ref(false);
 const undo = useExplorerUndo(scope, () => origin, () => busy.value, action => run(() => action(origin)));
@@ -307,6 +307,11 @@ function openFolderDialog(folder?: ExplorerFolderRow, mode: 'new' | 'rename' = '
     error.value = '';
     folderDialog.value = true;
 }
+function openRootFolderDialog() {
+    if (origin.writable && !busy.value) openFolderDialog();
+}
+defineExpose({ projectId: props.projectId, openRootFolderDialog });
+
 function saveFolder() {
     const target = folderTarget.value;
     const name = folderName.value;
@@ -405,10 +410,17 @@ function removeSelectedContents() {
     const content = visibleNodes.value.flatMap(node => node.item && selected.value.has(node.key) ? [node.item] : []);
     if (!content.length || content.length > EXPLORER_MAX_WRITES) return;
     void run(async () => {
+        removalStatus.value = undefined;
         const outcome = await removeExplorerProjectItems(origin, props.projectId, content);
         const count = outcome.completed.size;
+        const remaining = content.length - count;
         for (const item of outcome.completed) selected.value.delete(explorerItemKey(item));
-        status.value = `${count} removed from ${scopeLabel.value}, ${outcome.failed.size} failed, ${content.length - count - outcome.failed.size} not attempted.`;
+        removalStatus.value = {
+            message: remaining
+                ? `Couldn’t remove ${remaining} of ${content.length} selected items from ${scopeLabel.value}.`
+                : `${count} ${count === 1 ? 'item' : 'items'} removed from ${scopeLabel.value}.`,
+            incomplete: remaining > 0,
+        };
         removeContents.value = false;
     });
 }
@@ -639,7 +651,7 @@ function recoveredLocation(node: Node) {
             </div>
             <div v-if="explorer" class="explorer-tools">
                 <UButton v-bind="rowButtons" class="explorer-tool" :icon="newFolderIcon" :aria-label="'New folder in ' + projectName" title="New folder"
-                    color="neutral" variant="ghost" size="xs" square :disabled="busy || !origin.writable" @click="openFolderDialog()" />
+                    color="neutral" variant="ghost" size="xs" square :disabled="busy || !origin.writable" @click="openRootFolderDialog" />
                 <UButton v-bind="rowButtons" class="explorer-tool" icon="i-lucide-fold-vertical" aria-label="Collapse all folders" title="Collapse all folders"
                     color="neutral" variant="ghost" size="xs" square :disabled="!expanded.length" @click="expanded = []" />
                 <UButton v-bind="rowButtons" class="explorer-tool"  icon="i-lucide-list-checks" :aria-label="selectMode ? 'Done' : 'Select'" title="Select items"
@@ -669,7 +681,9 @@ function recoveredLocation(node: Node) {
         </div>
         <p v-if="selectionHasFolders && (selected.size > 1 || selectMode)" class="explorer-note">Folders can't be removed with project items.</p>
         <p role="status" class="sr-only">{{ announcement }}</p>
-        <p v-if="status" role="status" class="explorer-note">{{ status }}</p>
+        <p role="status" aria-live="polite" aria-atomic="true" :class="removalStatus?.incomplete ? 'explorer-note' : 'sr-only'">
+            {{ removalStatus?.message }}
+        </p>
         <UAlert v-if="error && !folderDialog && !titleDialog && !removal" role="alert" :description="error" color="error" variant="soft" class="mb-1" />
         <div ref="viewport" v-explorer-drag="{ destination: null, label: projectName }" class="explorer-viewport"
             :class="{ 'min-h-0 flex-1 overflow-auto sidebar-scroll': !compact }">

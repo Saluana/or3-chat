@@ -15,11 +15,11 @@ const editIcon = useIcon('ui.edit');
 const trashIcon = useIcon('ui.trash');
 const renameButtonProps = useSidebarProjectActionButtonProps({
     identifier: 'sidebar.project-rename',
-    icon: editIcon.value,
+    icon: editIcon,
 });
 const deleteButtonProps = useSidebarProjectActionButtonProps({
     identifier: 'sidebar.project-delete',
-    icon: trashIcon.value,
+    icon: trashIcon,
 });
 </script>
 
@@ -38,7 +38,7 @@ const deleteButtonProps = useSidebarProjectActionButtonProps({
         square
         @click.stop="menuMounted = true; menuOpen = true"
     />
-    <UPopover v-else v-model:open="menuOpen" :content="{ side: 'right', align: 'start', sideOffset: 6 }">
+    <UPopover v-else v-model:open="menuOpen" :content="{ side: 'right', align: 'start', sideOffset: 6, hideWhenDetached: true }">
         <UButton
             :icon="moreIcon"
             class="project-more-btn"

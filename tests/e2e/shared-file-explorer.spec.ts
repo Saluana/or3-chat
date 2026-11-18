@@ -377,6 +377,9 @@ test('project folder actions create a chat and attach, locate, and remove a save
     await page.getByRole('button', { name: 'Remove from project Library', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Remove from project', exact: true }).click();
     await expect(row('source.txt')).toHaveCount(0);
+    const removalStatus = explorer.getByRole('status').filter({ hasText: /removed from project Library/ });
+    await expect(removalStatus).toHaveCount(1);
+    await expect.poll(async () => (await removalStatus.boundingBox())?.height).toBeLessThanOrEqual(1);
     await expect(row('New chat')).toBeVisible();
     await expect(preview.getByRole('button', { name: 'Show in project Library' })).toHaveCount(0);
     await expect(preview).toContainText('The original project source');

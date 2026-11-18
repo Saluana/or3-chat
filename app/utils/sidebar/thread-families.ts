@@ -11,7 +11,12 @@ import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
 
 export const FAMILY_PAGE_SIZE = 50;
 export const familyExpansionPreferenceName = (rootId: string) => 'compaction-family:expanded:' + encodeURIComponent(rootId);
-export interface FamilyFilter { query?: string; projectId?: string; pinned?: boolean }
+export interface FamilyFilter {
+    query?: string;
+    projectId?: string;
+    pinned?: boolean;
+    excludedIds?: Readonly<Record<UnifiedSidebarItem['type'], ReadonlySet<string>>>;
+}
 type Root = { id: string; damaged?: boolean; cyclic?: boolean; original?: Thread };
 const compare = (a: { updated_at: number; created_at: number; id: string }, b: typeof a) =>
     b.updated_at - a.updated_at || b.created_at - a.created_at || b.id.localeCompare(a.id);
@@ -28,8 +33,14 @@ export function documentToSidebar(post: Post): UnifiedSidebarItem {
 function allowed(thread: Thread, filter: FamilyFilter, legacy?: ReadonlySet<string>) {
     return !thread.deleted && (filter.projectId === undefined || thread.project_id === filter.projectId
         || !thread.project_id && legacy?.has(thread.id))
+        && !filter.excludedIds?.thread.has(thread.id)
         && (filter.pinned === undefined || thread.pinned === filter.pinned)
         && (!filter.query || thread.title?.toLowerCase().includes(filter.query.toLowerCase()));
+}
+function documentMatches(post: Post, filter: FamilyFilter) {
+    return post.postType === 'doc' && isVisibleWorkspaceItem(post)
+        && !filter.excludedIds?.document.has(post.id)
+        && (!filter.query || post.title.toLowerCase().includes(filter.query.toLowerCase()));
 }
 function rootResolver(db: Or3DB) {
     const resolved = new Map<string, Root>(); const known = new Map<string, Thread | undefined>();
@@ -139,7 +150,7 @@ export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 
         }
         if (projectDocuments) {
             for (const row of await db.posts.bulkGet([...projectDocuments])) {
-                if (row && row.postType === "doc" && isVisibleWorkspaceItem(row) && (!options.filter.query || row.title.toLowerCase().includes(options.filter.query.toLowerCase()))) documents.push(row);
+                if (row && documentMatches(row, options.filter)) documents.push(row);
             }
             documents.sort(compare);
             documents.splice(options.limit + 1);
@@ -148,8 +159,7 @@ export async function readFamilyPage(db: Or3DB, options: { limit: number; type: 
             while (documents.length <= options.limit) {
                 const query = before ? db.posts.where('[updated_at+created_at+id]').below(before) : db.posts.orderBy('[updated_at+created_at+id]');
                 const page = await query.reverse().limit(100).toArray(); if (!page.length) break;
-                for (const row of page) if (row.postType === 'doc' && isVisibleWorkspaceItem(row)
-                    && (!options.filter.query || row.title.toLowerCase().includes(options.filter.query.toLowerCase()))) documents.push(row);
+                for (const row of page) if (documentMatches(row, options.filter)) documents.push(row);
                 const last = page.at(-1)!; before = [last.updated_at, last.created_at, last.id];
                 if (page.length < 100) break;
                 await Dexie.waitFor(new Promise<void>((resolve) => setTimeout(resolve, 0)));

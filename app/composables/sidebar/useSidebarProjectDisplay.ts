@@ -5,12 +5,12 @@ import {
     type ProjectEntry,
 } from '~/utils/projects/normalizeProjectData';
 
-type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
+export type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[]; pinned: boolean };
 
 interface UseSidebarProjectDisplayOptions {
     sidebarQuery: Ref<string>;
     items: Ref<Thread[]>;
-    projects: Ref<Project[]>;
+    projects: Ref<Array<Project & { pinned: boolean }>>;
     docs: Ref<Post[]>;
     threadResults: Ref<Thread[]>;
     projectResults: Ref<Array<{ id: string }>>;

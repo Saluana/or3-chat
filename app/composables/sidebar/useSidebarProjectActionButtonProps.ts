@@ -1,9 +1,9 @@
-import { computed } from 'vue';
+import { computed, toValue, type MaybeRefOrGetter } from 'vue';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 interface SidebarProjectActionButtonOptions {
     identifier: string;
-    icon?: string;
+    icon?: MaybeRefOrGetter<string>;
     className?: string;
 }
 
@@ -21,7 +21,7 @@ export function useSidebarProjectActionButtonProps(
         color: 'neutral' as const,
         variant: 'popover' as const,
         size: 'sm' as const,
-        ...(options.icon ? { icon: options.icon } : {}),
+        ...(options.icon ? { icon: toValue(options.icon) } : {}),
         ...(options.className ? { class: options.className } : {}),
         ...overrides.value,
     }));

@@ -23,7 +23,7 @@ it('observes canonical automatic and manual titles without rewriting cached proj
     await db.threads.add({ id: 'chat', title: 'Temporary title', title_source: 'temporary', created_at: 1, updated_at: 1,
         clock: 1, deleted: false, pinned: false, forked: false, status: 'ready' });
     const project = { id: 'project', name: 'Project', data: [{ kind: 'chat' as const, id: 'chat', name: 'Stale shortcut label' }],
-        created_at: 1, updated_at: 1, clock: 1, deleted: false };
+        created_at: 1, updated_at: 1, clock: 1, deleted: false, pinned: false };
     wrapper = mount(SidebarProjectsSection, { props: { projects: [project], hasMore: false, collapsed: false,
         expandedProjects: ['project'], activeThreadIds: [], activeDocumentIds: [] },
         global: { stubs: { SidebarProjectRoot: true, SidebarGroupHeader: true, SidebarProjectChild: Child } } });

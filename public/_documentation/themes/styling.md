@@ -301,6 +301,8 @@ ambiguous maintenance. Adding a new semantic token requires a host source change
 The default fullscreen controls use a locally bundled subset of [Material Symbols by Google](https://github.com/google/material-design-icons), licensed under [Apache 2.0](https://github.com/google/material-design-icons/blob/master/LICENSE). The `or3-material` subset is available to both server and static clients without replacing the wider Material Symbols collection.
 The collapsed sidebar Files button and Files tabs use `sidebar.page.files`; the retro theme overrides it with `pixelarticons:files`, Blank uses `blank-solar:documents-linear`, and the default is `i-lucide-files`.
 
+Project pin indicators and controls use `ui.pin`. Blank supplies a Solar Linear pin, Retro uses the default pixel pin, and Cyberpunk supplies a Carbon pin.
+
 The notification bell and its loading placeholder resolve `notification.bell`
 through `useIcon()`, so Blank's Solar mapping also applies to workspace chrome.
 Blank sizes desktop header icons, including the bell, uniformly at 20px for both
