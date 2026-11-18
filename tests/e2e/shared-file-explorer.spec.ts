@@ -168,7 +168,7 @@ test.describe('Project explorer scrolling', () => {
     ] as const) {
         test.describe(name, () => {
             test.use({ viewport, hasTouch });
-            test('scrolls the project overview and Home shortcuts through the last tree row', async ({ page, browserName, context }) => {
+            test('keeps the project header visible and scrolls both trees through the last row', async ({ page, browserName, context }) => {
                 let clientUrl: string | undefined;
                 page.on('request', request => {
                     if (/\/db\/client\.ts(?:\?|$)/u.test(request.url())) clientUrl = request.url();
@@ -197,7 +197,7 @@ test.describe('Project explorer scrolling', () => {
                     await db.projects.update(project.id, { data: docs.map(doc => ({ id: doc.id, kind: 'doc' })) });
                 }, clientUrl);
                 const cdp = hasTouch && browserName === 'chromium' ? await context.newCDPSession(page) : undefined;
-                const scrollTree = async (container: Locator, heading: Locator) => {
+                const scrollTree = async (container: Locator, heading: Locator, projectCreate?: Locator) => {
                     const tree = container.getByRole('tree', { name: 'Project contents' });
                     const first = tree.getByRole('button', { name: 'Chapter 000', exact: true });
                     const last = tree.getByRole('button', { name: 'Chapter 179', exact: true });
@@ -214,14 +214,22 @@ test.describe('Project explorer scrolling', () => {
                         await page.mouse.move(x, y);
                         await page.mouse.wheel(0, 640);
                     }
-                    await expect(heading).not.toBeInViewport();
+                    await expect(first).not.toBeInViewport();
+                    if (projectCreate) {
+                        await expect(heading).toBeInViewport();
+                        await expect(projectCreate).toBeInViewport();
+                    } else {
+                        await expect(heading).not.toBeInViewport();
+                    }
                     await page.mouse.move(x, y);
                     await expect.poll(async () => {
-                        if (await last.count() && await last.evaluate(element => {
-                            const row = element.getBoundingClientRect();
-                            const clip = element.closest('.or3-scroll')!.getBoundingClientRect();
-                            return row.bottom > clip.top && row.top < clip.bottom;
-                        })) return true;
+                        if (await last.count() && await last.evaluate(element => new Promise(resolve => {
+                            const observer = new IntersectionObserver(([entry]) => {
+                                observer.disconnect();
+                                resolve(entry?.isIntersecting);
+                            });
+                            observer.observe(element);
+                        }))) return true;
                         await page.mouse.wheel(0, 1250);
                         return false;
                     }, { intervals: [300], timeout: 20_000 }).toBe(true);
@@ -232,7 +240,9 @@ test.describe('Project explorer scrolling', () => {
                     await first.press('End');
                     await expect(last).toBeFocused();
                 };
-                await scrollTree(projects, projects.getByRole('heading', { name: 'Long project' }));
+                const heading = projects.getByRole('heading', { name: 'Long project' });
+                const projectCreate = projects.getByRole('button', { name: 'New in Long project', exact: true });
+                await scrollTree(projects, heading, projectCreate);
                 const navigation = page.getByRole('complementary', { name: 'Navigation' })
                     .or(page.getByRole('dialog', { name: 'Navigation' }));
                 await navigation.getByRole('button', { name: 'Home', exact: true }).first().click();

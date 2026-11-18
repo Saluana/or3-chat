@@ -103,6 +103,9 @@ async function send(page: Page, text: string, diagnose = false) {
 }
 
 test('a role refresh keeps the selected AI settings view open', async ({ page }, info) => {
+    // This is the first browser journey against the cold dev server. The test
+    // budget must cover AI Settings loading as well as the session refresh.
+    test.setTimeout(90_000);
     const origin = new URL(info.project.use.baseURL!).origin;
     expect((await page.request.post('/api/basic-auth/sign-in', { headers: { origin }, data: {
         email: process.env.OR3_OPENAI_E2E_EMAIL, password: process.env.OR3_OPENAI_E2E_PASSWORD,

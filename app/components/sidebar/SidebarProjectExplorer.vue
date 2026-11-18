@@ -185,15 +185,19 @@ const visibleNodes = computed(() => visible.value.map(row => row.node));
 const { selected, selectMode, choose, clear: clearSelection, all } = useExplorerSelection(computed(() => visibleNodes.value.map(node => node.key)));
 const selectedNodes = computed(() => visibleNodes.value.filter(node => selected.value.has(node.key)));
 
-// Project Home and Home shortcuts both live inside the sidebar's Or3Scroll.
-// Keep a single scroll owner while mounting only the rows near its viewport.
-const scrollOwner = computed(() => viewport.value?.closest<HTMLElement>('.or3-scroll') ?? null);
-const scrollTrack = computed(() => viewport.value?.closest<HTMLElement>('.or3-scroll-track') ?? null);
+// Project Home scrolls below its header. Expanded Home shortcuts share the Home list's scroll area.
+const scrollOwner = computed(() => props.compact
+    ? viewport.value?.closest<HTMLElement>('.or3-scroll') ?? null
+    : viewport.value);
+const scrollTrack = computed(() => props.compact
+    ? viewport.value?.closest<HTMLElement>('.or3-scroll-track') ?? null
+    : null);
 const touchRows = useMediaQuery('(hover: none)');
 const treeScale = ref(1);
 const rowHeight = computed(() => (touchRows.value ? 40 : 36) * treeScale.value);
 const scrollMargin = ref(0);
 function measureTreeGeometry() {
+    if (!props.compact) return;
     const owner = scrollOwner.value;
     const treeViewport = viewport.value;
     if (!owner?.offsetHeight || !treeViewport) return;
@@ -620,9 +624,15 @@ function recoveredLocation(node: Node) {
 
 <template>
     <section v-if="explorer || !compact" :aria-label="explorer ? (compact ? 'Project shortcuts for ' + projectName : 'Project Explorer') : undefined"
-        class="project-explorer" :class="{ 'project-explorer--compact': compact }" :data-explorer-dragging="dragging || undefined"
+        class="project-explorer"
+        :class="{
+            'project-explorer--compact': compact,
+            'flex min-h-0 flex-1 flex-col': !compact && explorer,
+            'shrink-0': !compact && !explorer,
+        }"
+        :data-explorer-dragging="dragging || undefined"
         @dragover="blockExternal" @drop="blockExternal" @keydown.capture="explorer && explorerKey($event)">
-        <header v-if="!compact" v-explorer-drag="{ destination: null, label: projectName }" class="project-explorer-header">
+        <header v-if="!compact" v-explorer-drag="{ destination: null, label: projectName }" class="project-explorer-header shrink-0">
             <div role="group" aria-label="Project content view" class="explorer-views">
                 <button type="button" class="explorer-view" :aria-pressed="!explorer" @click="view = 'recent'">Recent</button>
                 <button type="button" class="explorer-view" :aria-pressed="explorer" @click="view = 'explorer'">Explorer</button>
@@ -661,7 +671,8 @@ function recoveredLocation(node: Node) {
         <p role="status" class="sr-only">{{ announcement }}</p>
         <p v-if="status" role="status" class="explorer-note">{{ status }}</p>
         <UAlert v-if="error && !folderDialog && !titleDialog && !removal" role="alert" :description="error" color="error" variant="soft" class="mb-1" />
-        <div ref="viewport" v-explorer-drag="{ destination: null, label: projectName }" class="explorer-viewport">
+        <div ref="viewport" v-explorer-drag="{ destination: null, label: projectName }" class="explorer-viewport"
+            :class="{ 'min-h-0 flex-1 overflow-auto sidebar-scroll': !compact }">
             <TreeRoot v-if="tree.length" v-model:expanded="expanded" :items="tree" :get-key="item => item.key"
                 :model-value="selectedNodes" multiple as="div" aria-label="Project contents"
                 class="relative" :style="scrollOwner ? { height: (virtualizer.getTotalSize() / treeScale) + 'px' } : undefined">
@@ -765,7 +776,7 @@ function recoveredLocation(node: Node) {
 </template>
 
 <style scoped>
-.project-explorer-header { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:32px; margin-bottom:6px; border-radius:var(--md-border-radius-small,var(--md-border-radius)); }
+.project-explorer-header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:2px 8px; min-height:32px; margin-bottom:6px; border-radius:var(--md-border-radius-small,var(--md-border-radius)); }
 .explorer-views { display:flex; align-items:center; gap:2px; }
 .explorer-view {
     height:28px; padding-inline:10px; border-radius:var(--md-border-radius-small,var(--md-border-radius));
