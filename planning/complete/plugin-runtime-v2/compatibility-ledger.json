@@ -2836,7 +2836,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "8fe83e32a553d39fbfeb8bb0fff18fbf63929c026a36d657dccac9511b576194",
+      "apiSha256": "0af485b8d667213c26146aa9c2e318841f12ef7e926a319dbd8673b2ddc4b103",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -2933,7 +2933,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 22,
+              "line": 23,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ActiveDocumentEditorSession {\n    readonly documentId: string;\n    readonly paneId?: string;\n    readonly tabId?: string;\n    captureContent: () => void;\n    ensureLocalDurability: () => Promise<void>;\n    captureViewState: () => DocumentEditorViewState;\n    restoreViewState: (\n        state: DocumentEditorViewState,\n        options?: { focus?: boolean }\n    ) => Promise<void>;\n    /** Live, frozen context for a chat request; may include unsaved editor text. */\n    getChatContext?: (requestId: string) => string;\n    /** Execute one of the document agent's native tools in this editor. */\n    executeChatTool?: (name: string, argsJson: string, requestId: string) => string;\n    /** Actual buffer used to refuse competing drafts before a workspace read/apply. */\n    getDocumentSnapshot?: () => { title: string; content: TipTapDocument };\n    /** Captured origin handle, including while an old editor is saving after a switch. */\n    originDb?: Or3DB;\n    /** Brief host Apply/Undo lease; rejects a buffer that changed during preparation. */\n    beginExternalWrite?: (expected: { title: string; content: TipTapDocument }) => () => void;\n    /** Accept the already committed row synchronously, without another fallible storage read. */\n    acceptExternalWrite?: (row: Post) => void;\n}"
             }
@@ -3046,7 +3046,7 @@
               "resolvedReturnType": "Promise<void>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 195,
+                "line": 196,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function captureDocumentEditor(documentId: string): Promise<void>;"
               }
@@ -3055,7 +3055,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 195,
+              "line": 196,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function captureDocumentEditor(documentId: string): Promise<void>;"
             }
@@ -3179,7 +3179,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectsCrud.ts",
-              "line": 17,
+              "line": 18,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface CreateProjectInput {\n    name: string;\n    description?: string | null;\n    id?: string;\n}"
             }
@@ -3345,7 +3345,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectsCrud.ts",
-              "line": 23,
+              "line": 24,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DeleteProjectOptions {\n    soft?: boolean;\n}"
             }
@@ -3513,7 +3513,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 5,
+              "line": 6,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type DocumentEditorFocusedRegion =\n    | 'title'\n    | 'content'\n    | 'inspector';"
             }
@@ -3527,7 +3527,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 55,
+              "line": 56,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentEditorSessionLookup {\n    paneId: string;\n    tabId: string;\n}"
             }
@@ -3541,7 +3541,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 10,
+              "line": 11,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface DocumentEditorViewState {\n    version: 1;\n    documentId: string;\n    contentRevision?: number;\n    scrollTop: number;\n    selectionJson?: unknown;\n    inspectorOpen?: boolean;\n    inspectorTab?: string;\n    findOpen?: boolean;\n    focusedRegion?: DocumentEditorFocusedRegion;\n}"
             }
@@ -3698,7 +3698,7 @@
               "resolvedReturnType": "Promise<void>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 213,
+                "line": 214,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function ensureDocumentEditorLocalDurability(\n    documentId: string\n): Promise<void>;"
               }
@@ -3707,7 +3707,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 213,
+              "line": 214,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function ensureDocumentEditorLocalDurability(\n    documentId: string\n): Promise<void>;"
             }
@@ -3776,7 +3776,7 @@
               "resolvedReturnType": "ActiveDocumentEditorSession | undefined",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 294,
+                "line": 296,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getActiveDocumentEditorSession(\n    documentId: string,\n    tabId?: string,\n): ActiveDocumentEditorSession | undefined;"
               }
@@ -3785,7 +3785,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 294,
+              "line": 296,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getActiveDocumentEditorSession(\n    documentId: string,\n    tabId?: string,\n): ActiveDocumentEditorSession | undefined;"
             }
@@ -3854,7 +3854,7 @@
               "resolvedReturnType": "ActiveDocumentEditorSession | undefined",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 157,
+                "line": 158,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup\n): ActiveDocumentEditorSession | undefined;"
               }
@@ -3863,7 +3863,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 157,
+              "line": 158,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup\n): ActiveDocumentEditorSession | undefined;"
             }
@@ -3932,7 +3932,7 @@
               "resolvedReturnType": "boolean",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 289,
+                "line": 291,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function hasActiveDocumentEditor(documentId: string): boolean;"
               }
@@ -3941,7 +3941,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 289,
+              "line": 291,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function hasActiveDocumentEditor(documentId: string): boolean;"
             }
@@ -4144,7 +4144,7 @@
               "resolvedReturnType": "{ release: () => void; accept: (row: Post) => void; }",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 241,
+                "line": 242,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function leaseWorkspaceDocumentEditors(documentId: string, db: Or3DB,\n    expected: { title: string; content: TipTapDocument }): { release: () => void; accept: (row: Post) => void };"
               }
@@ -4153,7 +4153,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 241,
+              "line": 242,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function leaseWorkspaceDocumentEditors(documentId: string, db: Or3DB,\n    expected: { title: string; content: TipTapDocument }): { release: () => void; accept: (row: Post) => void };"
             }
@@ -4522,7 +4522,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 100,
+                "line": 99,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredProjectTreeActionIds(): string[];"
               }
@@ -4531,7 +4531,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 100,
+              "line": 99,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredProjectTreeActionIds(): string[];"
             }
@@ -4973,7 +4973,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 42,
+              "line": 41,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeAction extends RegistryItem {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** Owning plugin used for enabled-state and server access checks. */\n    pluginId?: string;\n    /** Optional per-contribution access requirements. */\n    access?: PluginGatePolicy;\n    /** Icon name (passed to UButton icon prop). */\n    icon: string;\n    /** Label text. */\n    label: string;\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n    showOn?: ShowOnKind[]; // if present, limits visibility to these kinds\n    /** Handler invoked on click. */\n    handler: (ctx: ProjectTreeHandlerCtx) => void | Promise<void>;\n}"
             }
@@ -4987,9 +4987,9 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 13,
+              "line": 12,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface ProjectTreeChild {\n    value: string; // id of the entry\n    label: string;\n    icon?: string;\n    kind?: ProjectTreeKind; // 'chat' | 'doc'\n    parentId?: string;\n    onSelect?: (e: Event) => void;\n}"
+              "text": "export interface ProjectTreeChild {\n    value: string; // id of the entry\n    label: string;\n    icon?: string;\n    kind?: ProjectTreeKind\n    parentId?: string;\n    onSelect?: (e: Event) => void;\n}"
             }
           ]
         },
@@ -5001,7 +5001,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 32,
+              "line": 31,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeHandlerCtx {\n    // The tree row this action was invoked for (root or child)\n    treeRow: ProjectTreeRow;\n    // legacy/alternate shapes seen in the wild may include a `child` property\n    // but prefer to use `treeRow`.\n    child?: ProjectTreeChild;\n    root?: ProjectTreeRoot;\n}"
             }
@@ -5015,7 +5015,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 10,
+              "line": 9,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ProjectTreeKind = 'chat' | 'doc' | 'file';"
             }
@@ -5029,7 +5029,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 22,
+              "line": 21,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeRoot {\n    value: string; // project id\n    label: string; // project name\n    defaultExpanded?: boolean;\n    children?: ProjectTreeChild[];\n    onSelect?: (e: Event) => void;\n}"
             }
@@ -5043,7 +5043,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 30,
+              "line": 29,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ProjectTreeRow = ProjectTreeRoot | ProjectTreeChild;"
             }
@@ -5190,7 +5190,7 @@
               "resolvedReturnType": "() => void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 96,
+                "line": 97,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDocumentEditorSession(\n    session: ActiveDocumentEditorSession\n): () => void;"
               }
@@ -5201,7 +5201,7 @@
               "resolvedReturnType": "() => void",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 100,
+                "line": 101,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerDocumentEditorSession(\n    documentId: string,\n    session: LegacyDocumentEditorSession\n): () => void;"
               }
@@ -5210,19 +5210,19 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 96,
+              "line": 97,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDocumentEditorSession(\n    session: ActiveDocumentEditorSession\n): () => void;"
             },
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 100,
+              "line": 101,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDocumentEditorSession(\n    documentId: string,\n    session: LegacyDocumentEditorSession\n): () => void;"
             },
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 104,
+              "line": 105,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerDocumentEditorSession(\n    documentIdOrSession: string | ActiveDocumentEditorSession,\n    legacySession?: LegacyDocumentEditorSession\n): () => void;"
             }
@@ -5487,7 +5487,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 76,
+                "line": 75,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerProjectTreeAction(action: ProjectTreeAction);"
               }
@@ -5496,7 +5496,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 76,
+              "line": 75,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerProjectTreeAction(action: ProjectTreeAction);"
             }
@@ -5983,7 +5983,7 @@
               "resolvedReturnType": "Promise<void>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 227,
+                "line": 228,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function settleWorkspaceDocumentEditors(documentId: string, db: Or3DB): Promise<void>;"
               }
@@ -5992,7 +5992,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 227,
+              "line": 228,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function settleWorkspaceDocumentEditors(documentId: string, db: Or3DB): Promise<void>;"
             }
@@ -6006,7 +6006,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 11,
+              "line": 10,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ShowOnKind = 'root' | 'all' | ProjectTreeKind;"
             }
@@ -6579,7 +6579,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 83,
+                "line": 82,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterProjectTreeAction(id: string);"
               }
@@ -6588,7 +6588,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 83,
+              "line": 82,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterProjectTreeAction(id: string);"
             }
@@ -7521,7 +7521,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/projects/useProjectsCrud.ts",
-                "line": 27,
+                "line": 28,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useProjectsCrud();"
               }
@@ -7530,7 +7530,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectsCrud.ts",
-              "line": 27,
+              "line": 28,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useProjectsCrud();"
             }
@@ -7547,7 +7547,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 89,
+                "line": 88,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useProjectTreeActions();"
               }
@@ -7556,7 +7556,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 89,
+              "line": 88,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useProjectTreeActions();"
             }
@@ -7833,7 +7833,7 @@
               "resolvedReturnType": "Promise<ActiveDocumentEditorSession | undefined>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 165,
+                "line": 166,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function waitForDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup,\n    timeoutMs = 1_500\n): Promise<ActiveDocumentEditorSession | undefined>;"
               }
@@ -7842,7 +7842,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 165,
+              "line": 166,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function waitForDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup,\n    timeoutMs = 1_500\n): Promise<ActiveDocumentEditorSession | undefined>;"
             }
@@ -8232,7 +8232,7 @@
     },
     {
       "source": "app/composables/projects/useProjectTreeActions.ts",
-      "apiSha256": "c8da419ef0514444025f515c35e5c2f9bef04641c0b142a64d9ed3f161ba93e7",
+      "apiSha256": "6f37d74ad666c239ecaed826d6f8a9f7a768e3d8baa68efab470caf1e4d2e90c",
       "runtime": "client",
       "publicPaths": [
         "~/composables/projects/useProjectTreeActions"
@@ -8256,7 +8256,7 @@
               "resolvedReturnType": "string[]",
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 100,
+                "line": 99,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function listRegisteredProjectTreeActionIds(): string[];"
               }
@@ -8265,7 +8265,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 100,
+              "line": 99,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function listRegisteredProjectTreeActionIds(): string[];"
             }
@@ -8279,7 +8279,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 42,
+              "line": 41,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeAction extends RegistryItem {\n    /** Unique id (stable across reloads). */\n    id: string;\n    /** Owning plugin used for enabled-state and server access checks. */\n    pluginId?: string;\n    /** Optional per-contribution access requirements. */\n    access?: PluginGatePolicy;\n    /** Icon name (passed to UButton icon prop). */\n    icon: string;\n    /** Label text. */\n    label: string;\n    /** Optional ordering (lower = earlier). Defaults to 200 (after built-ins). */\n    order?: number;\n    showOn?: ShowOnKind[]; // if present, limits visibility to these kinds\n    /** Handler invoked on click. */\n    handler: (ctx: ProjectTreeHandlerCtx) => void | Promise<void>;\n}"
             }
@@ -8293,9 +8293,9 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 13,
+              "line": 12,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface ProjectTreeChild {\n    value: string; // id of the entry\n    label: string;\n    icon?: string;\n    kind?: ProjectTreeKind; // 'chat' | 'doc'\n    parentId?: string;\n    onSelect?: (e: Event) => void;\n}"
+              "text": "export interface ProjectTreeChild {\n    value: string; // id of the entry\n    label: string;\n    icon?: string;\n    kind?: ProjectTreeKind\n    parentId?: string;\n    onSelect?: (e: Event) => void;\n}"
             }
           ]
         },
@@ -8307,7 +8307,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 32,
+              "line": 31,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeHandlerCtx {\n    // The tree row this action was invoked for (root or child)\n    treeRow: ProjectTreeRow;\n    // legacy/alternate shapes seen in the wild may include a `child` property\n    // but prefer to use `treeRow`.\n    child?: ProjectTreeChild;\n    root?: ProjectTreeRoot;\n}"
             }
@@ -8321,7 +8321,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 10,
+              "line": 9,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ProjectTreeKind = 'chat' | 'doc' | 'file';"
             }
@@ -8335,7 +8335,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 22,
+              "line": 21,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ProjectTreeRoot {\n    value: string; // project id\n    label: string; // project name\n    defaultExpanded?: boolean;\n    children?: ProjectTreeChild[];\n    onSelect?: (e: Event) => void;\n}"
             }
@@ -8349,7 +8349,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 30,
+              "line": 29,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ProjectTreeRow = ProjectTreeRoot | ProjectTreeChild;"
             }
@@ -8366,7 +8366,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 76,
+                "line": 75,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerProjectTreeAction(action: ProjectTreeAction);"
               }
@@ -8375,7 +8375,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 76,
+              "line": 75,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerProjectTreeAction(action: ProjectTreeAction);"
             }
@@ -8389,7 +8389,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 11,
+              "line": 10,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ShowOnKind = 'root' | 'all' | ProjectTreeKind;"
             }
@@ -8406,7 +8406,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 83,
+                "line": 82,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterProjectTreeAction(id: string);"
               }
@@ -8415,7 +8415,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 83,
+              "line": 82,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterProjectTreeAction(id: string);"
             }
@@ -8432,7 +8432,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/projects/useProjectTreeActions.ts",
-                "line": 89,
+                "line": 88,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useProjectTreeActions();"
               }
@@ -8441,7 +8441,7 @@
           "declarations": [
             {
               "source": "app/composables/projects/useProjectTreeActions.ts",
-              "line": 89,
+              "line": 88,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useProjectTreeActions();"
             }
