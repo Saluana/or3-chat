@@ -5,9 +5,14 @@
             <p class="text-sm opacity-80">
                 Exercises the real file metadata store and persistent transfer queue.
             </p>
+            <button v-if="explorerPreview" type="button" data-testid="seed-explorer-fixture"
+                :disabled="!ready || explorerSeeded" @click="seedExplorerFixture">Seed explorer fixture</button>
             <output data-testid="storage-ready">{{ ready ? 'true' : 'false' }}</output>
         </header>
-        <WorkspaceFilesPane />
+        <div v-if="explorerPreview" class="h-[min(660px,90dvh)]">
+            <WorkspaceFilesPane />
+        </div>
+        <WorkspaceFilesPane v-else />
         <section class="space-y-2" aria-label="File plugin fixture">
             <button data-testid="file-plugin-enable" type="button" :disabled="!ready || !!filePlugin" @click="enableFilePlugin">Enable file plugin</button>
             <button data-testid="file-plugin-disable" type="button" :disabled="!filePlugin" @click="disableFilePlugin">Disable file plugin</button>
@@ -100,6 +105,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, shallowRef } from 'vue';
 import WorkspaceFilesPane from '~/components/files/WorkspaceFilesPane.vue';
+import { useExplorerAvailable } from '~/composables/explorer/explorer-availability';
 import { FileTransferQueue } from '~/core/storage/transfer-queue';
 import type { ObjectStorageProvider } from '~/core/storage/types';
 import { getActiveWorkspaceId, getDb } from '~/db/client';
@@ -114,6 +120,27 @@ if (!import.meta.dev) {
     throw createError({ statusCode: 404, statusMessage: 'Not Found' });
 }
 
+const explorerSeeded = ref(false);
+async function seedExplorerFixture() {
+    if (!explorerPreview.value || explorerSeeded.value) return;
+    const folderId = (index: number) => 'explorer-folder-00000000-0000-4000-8000-' + String(index).padStart(12, '0');
+    const common = { deleted: false, clock: 1, created_at: 1, updated_at: 1 };
+    const folders = Array.from({ length: 500 }, (_, index) => {
+        const name = 'or3.explorer/' + encodeURIComponent('["files"]') + '/' + folderId(index);
+        const content = { version: 1, scope: { kind: 'files' },
+            parent_id: index > 0 && index < 20 ? folderId(index - 1) : null,
+            name: 'Folder ' + String(index).padStart(3, '0') };
+        return { ...common, id: 'kv:' + name, name, value: JSON.stringify([JSON.stringify(content), false]) };
+    });
+    const documents = Array.from({ length: 5000 }, (_, index) => ({
+        ...common, id: 'scale-' + index, title: 'Document ' + String(index).padStart(4, '0'),
+        postType: 'doc', content: '{"type":"doc","content":[]}',
+    }));
+    await getDb().kv.bulkAdd(folders);
+    await getDb().posts.bulkAdd(documents);
+    explorerSeeded.value = true;
+}
+const explorerPreview = useExplorerAvailable();
 const TEST_WORKSPACE_ID = 'storage-harness';
 const db = getDb();
 const provider: ObjectStorageProvider = {

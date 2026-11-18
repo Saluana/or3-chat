@@ -1,3 +1,6 @@
+import { hasExplorerSemantics } from '~~/shared/explorer/sync-contract';
+import { requireExplorerCapability, validateExplorerOperation } from '../../utils/sync/explorer-capability';
+import { EXPLORER_CAPABILITY } from '~~/shared/explorer/sync-contract';
 import { HistoryRequestFields } from '~~/shared/sync/schemas';
 import { requireHistoryCapability, checkHistory, assertHistoryResponse } from '../../utils/sync/history-incarnation';
 import { prepareSyncWrite, SyncWriteError } from '~~/shared/sync/prepare-sync-write';
@@ -58,6 +61,7 @@ const PushEnvelopeSchema = z.object({
     ops: z.array(z.unknown()).max(MAX_SYNC_PUSH_BATCH_OPS),
     fileKindCapability: z.literal(FILE_KIND_CAPABILITY).optional(),
     workspaceItemCapability: z.literal(WORKSPACE_ITEM_CAPABILITY).optional(),
+    explorerCapability: z.literal(EXPLORER_CAPABILITY).optional(),
 });
 
 function opIdFromUnknown(op: unknown, index: number): string {
@@ -215,11 +219,23 @@ export default defineEventHandler(async (event) => {
             throw createError({ statusCode: 503, statusMessage: 'The selected sync provider needs workspace Files support' });
         }
 
+        const explorerOps = validOps.filter(op => hasExplorerSemantics(op.tableName, op.pk, op.payload));
+        if (explorerOps.length) {
+            requireExplorerCapability(envelope.data.explorerCapability);
+            const capability = adapter.getExplorerCapability
+                ? await adapter.getExplorerCapability(event, envelope.data.scope)
+                : adapter.capabilities?.explorer;
+            if (capability !== EXPLORER_CAPABILITY) {
+                throw createError({ statusCode: 503, statusMessage: 'The selected sync provider needs Explorer support' });
+            }
+            for (const op of explorerOps) validateExplorerOperation(op);
+        }
         const normalizedBatch = {
             historyIncarnation: history,
             historyIncarnationCapability: 'incarnation-v1' as const,
             scope: envelope.data.scope,
             ops: validOps,
+            ...(envelope.data.explorerCapability ? { explorerCapability: envelope.data.explorerCapability } : {}),
             ...(envelope.data.storedRecordCapability ? { storedRecordCapability: envelope.data.storedRecordCapability } : {}),
             ...(envelope.data.workspaceItemCapability ? { workspaceItemCapability: envelope.data.workspaceItemCapability } : {}),
         };

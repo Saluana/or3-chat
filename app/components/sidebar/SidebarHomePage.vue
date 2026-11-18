@@ -77,6 +77,7 @@
                         @add-document-to-project-root="
                             (id) => emit('add-document-to-project-root', id)
                         "
+                        @create-in-project-folder="payload => emit('create-in-project-folder', payload)"
                         @rename-project="(id) => emit('rename-project', id)"
                         @delete-project="(id) => emit('delete-project', id)"
                         @rename-entry="
@@ -432,6 +433,7 @@ const emit = defineEmits([
     'add-chat-to-project',
     'add-document-to-project',
     'add-document-to-project-root',
+    'create-in-project-folder',
     'rename-project',
     'delete-project',
     'rename-entry',

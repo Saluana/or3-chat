@@ -82,7 +82,7 @@ it('keeps a v28 legacy original unclassified and protected after upgrade and reo
 
     db = new Or3DB(name);
     await db.open();
-    expect(db.verno).toBe(32);
+    expect(db.verno).toBeGreaterThanOrEqual(32);
     expect(await db.file_blobs.get(hash)).toEqual({ hash, blob: expect.any(NodeBlob) });
     // The new sparse index exists, but migrating must not enroll legacy bytes.
     expect(await db.file_blobs.where('cache_accessed_at').aboveOrEqual(1).count()).toBe(0);

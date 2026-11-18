@@ -1,3 +1,5 @@
+import { checkExplorerPage } from '../../utils/sync/explorer-capability';
+import { EXPLORER_CAPABILITY } from '~~/shared/explorer/sync-contract';
 import { createError, defineEventHandler, getHeader, getQuery, getRequestURL, sendStream, setResponseHeader } from 'h3';
 import { Readable } from 'node:stream';
 import { createHash } from 'node:crypto';
@@ -36,6 +38,9 @@ export default defineEventHandler(async event => {
     if (!sync?.backupSnapshot || (storage?.id === 'convex' && !storage.readBackupFile)) {
         throw createError({ statusCode: 503, statusMessage: 'Update the Cloud provider and backend before exporting workspace backups' });
     }
+    const explorerCapability = sync.getExplorerCapability
+        ? await sync.getExplorerCapability(event, { workspaceId })
+        : sync.capabilities?.explorer === EXPLORER_CAPABILITY ? EXPLORER_CAPABILITY : undefined;
     const directory = await mkdtemp(join(tmpdir(), 'or3-workspace-backup-'));
     const path = join(directory, 'records.jsonl');
     let rows = 0;
@@ -49,8 +54,9 @@ export default defineEventHandler(async event => {
             let watermark: number | undefined;
             const tokens = new Set<string>();
             do {
-                const request: SnapshotRequest = { scope: { workspaceId }, pageSize: 200, pageToken, tables: [...ARCHIVE_TABLES], fileKindCapability: FILE_KIND_CAPABILITY, workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY };
+                const request: SnapshotRequest = { scope: { workspaceId }, pageSize: 200, pageToken, tables: [...ARCHIVE_TABLES], fileKindCapability: FILE_KIND_CAPABILITY, workspaceItemCapability: WORKSPACE_ITEM_CAPABILITY, explorerCapability };
                 const page = SnapshotResponseSchema.parse(await sync.backupSnapshot!(event, request));
+                checkExplorerPage(explorerCapability, page.items, page.unavailable ?? []);
                 if (getSnapshotResponseContractError(request, page)) throw new Error('Invalid snapshot page.');
                 if (snapshotId && (snapshotId !== page.snapshotId || watermark !== page.highWatermark)) throw new Error('Backup snapshot changed while paging.');
                 snapshotId = page.snapshotId; watermark = page.highWatermark;

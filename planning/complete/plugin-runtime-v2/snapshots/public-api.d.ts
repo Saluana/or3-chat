@@ -1701,7 +1701,7 @@ export interface ProjectTreeHandlerCtx {
     child?: ProjectTreeChild;
     root?: ProjectTreeRoot;
 }
-/** Definition for an extendable chat message action button. */
+/** Definition for a Project Explorer menu action. */
 export interface ProjectTreeAction extends RegistryItem {
     /** Unique id (stable across reloads). */
     id: string;
@@ -1719,11 +1719,11 @@ export interface ProjectTreeAction extends RegistryItem {
     /** Handler invoked on click. */
     handler: (ctx: ProjectTreeHandlerCtx) => void | Promise<void>;
 }
-/** Register (or replace) a message action. */
+/** Register (or replace) a Project Explorer action. */
 export declare function registerProjectTreeAction(action: ProjectTreeAction): import("#imports").RegistrationHandle;
 /** Unregister an action by id (optional utility). */
 export declare function unregisterProjectTreeAction(id: string): void;
-/** Accessor for actions applicable to a specific message. */
+/** Read registered explorer actions that pass the plugin access gate. */
 export declare function useProjectTreeActions(): import("vue").ComputedRef<ProjectTreeAction[]>;
 /** Convenience for plugin authors to check existing action ids. */
 export declare function listRegisteredProjectTreeActionIds(): string[];
@@ -2539,6 +2539,7 @@ export declare function useSidebarDocuments(): Ref<{
     } | null | undefined;
     file_hashes?: string | null | undefined;
     document_reference_key?: [string, string] | undefined;
+    explorer_item_key?: ["active" | "trash", "file" | "document", number, string, string, string, "none" | "prefix" | "full", number] | undefined;
 }[], {
     id: string;
     title: string;
@@ -2560,6 +2561,7 @@ export declare function useSidebarDocuments(): Ref<{
     } | null | undefined;
     file_hashes?: string | null | undefined;
     document_reference_key?: [string, string] | undefined;
+    explorer_item_key?: ["active" | "trash", "file" | "document", number, string, string, string, "none" | "prefix" | "full", number] | undefined;
 }[]>;
 /**
  * `useSidebarQuery`

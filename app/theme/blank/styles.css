@@ -440,6 +440,25 @@ html[data-theme="blank"] {
         background: var(--md-surface-active);
     }
 
+    /* Project Explorer rows use the chat rows' icon size, tone and spacing. */
+    .project-explorer .explorer-row {
+        --row-icon: var(--blank-sb-row-icon);
+        --row-gap: 0.5rem;
+    }
+
+    .project-explorer .explorer-row .explorer-icon {
+        color: var(--blank-sb-icon);
+    }
+
+    .project-explorer .explorer-row:is(:hover, :focus-within) .explorer-icon {
+        color: var(--md-on-surface);
+    }
+
+    .project-explorer .explorer-row .tree-label {
+        font-size: var(--blank-text-body);
+        line-height: var(--blank-leading-body);
+    }
+
     /* Section actions such as "+ New" stay quiet until hovered. */
     .sb-group-header-action {
         color: var(--md-on-surface-variant);

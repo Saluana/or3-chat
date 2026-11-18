@@ -15,6 +15,8 @@ import {
 } from '~/utils/workspace-backup-stream';
 import type { SnapshotResponse } from '~~/shared/sync/types';
 import type { FileMeta, Post } from '../schema';
+import { mergeWorkspaceItemMetadata } from '~~/shared/posts/workspace-item';
+import { workspaceRevision } from '~~/shared/posts/workspace-revision';
 
 const hooksMock = vi.hoisted(() => ({
     doAction: vi.fn(async () => undefined),
@@ -109,6 +111,47 @@ describe('derived index maintenance', () => {
         return db;
     }
 
+    it('backfills and maintains explorer keys without changing canonical post revisions', async () => {
+        const name = `or3-explorer-index-${crypto.randomUUID()}`;
+        const legacy = new Dexie(name);
+        const schema = new Or3DB(name);
+        const stores = Object.fromEntries(schema.tables.map(table => [
+            table.name,
+            [table.schema.primKey.src, ...table.schema.indexes.map(index => index.src)]
+                .filter(index => index !== 'explorer_item_key').join(','),
+        ]));
+        schema.close();
+        legacy.version(32).stores(stores);
+        const doc = docPost('explorer-doc');
+        await legacy.table('current_posts').put(doc);
+        legacy.close();
+
+        const aborted = new Or3DB(name);
+        aborted.version(34).stores({}).upgrade(() => { throw new Error('Abort explorer index upgrade'); });
+        await expect(aborted.open()).rejects.toThrow('Abort explorer index upgrade');
+        aborted.close();
+        await legacy.open();
+        expect(await legacy.table('current_posts').get(doc.id)).toStrictEqual(doc);
+        legacy.close();
+
+        const db = new Or3DB(name);
+        databases.push(db);
+        await db.open();
+        const key = ['active', 'document', 10, doc.title, doc.id, '', 'full', 1];
+        expect(await db.posts.orderBy('explorer_item_key').keys()).toEqual([key]);
+        const migrated = await db.posts.get(doc.id);
+        expect(await workspaceRevision(migrated)).toBe(await workspaceRevision(doc));
+        expect(sanitizePayloadForSync('posts', migrated, 'put')).not.toHaveProperty('explorer_item_key');
+        expect(await db.pending_ops.count()).toBe(0);
+
+        const meta = mergeWorkspaceItemMetadata(doc.meta, { version: 1, trashed_at: 12 });
+        await db.posts.update(doc.id, { meta, updated_at: 12, clock: 2, explorer_item_key: undefined });
+        expect(await db.posts.orderBy('explorer_item_key').keys())
+            .toEqual([['trash', 'document', 12, doc.title, doc.id, '', 'full', 2]]);
+        await db.posts.update(doc.id, { deleted: true });
+        expect(await db.posts.orderBy('explorer_item_key').keys()).toEqual([]);
+    });
+
     // Local ownership keys must backfill legacy data, follow bulk/remote writes,
     // ignore forged projections, roll back atomically and never enter sync payloads.
     it('upgrades and maintains local project membership lookup keys', async () => {
@@ -187,7 +230,7 @@ describe('derived index maintenance', () => {
         const db = new Or3DB(name);
         databases.push(db);
         await db.open();
-        expect(db.verno).toBe(32);
+        expect(db.verno).toBe(33);
         expect(await db.snapshot_staging.count()).toBe(0);
 
         const storedActive = await db.posts.get('doc-active');
@@ -637,7 +680,7 @@ describe('derived index maintenance', () => {
         const db = new Or3DB(name);
         databases.push(db);
         await db.open();
-        expect(db.verno).toBe(32);
+        expect(db.verno).toBe(33);
         if (sourceVersion >= 18) expect(await db.snapshot_staging.get('__active__')).toEqual(sentinel);
 
         // IDs, revisions, attempts, statuses, and payloads are preserved.

@@ -6,6 +6,8 @@ defineProps<{
     icon: string;
     coverage: string;
     project: string;
+    filesLocation?: string;
+    projectLocations?: { id: string; name: string; path: string }[];
     text: string;
     imageUrl: string;
     partial: boolean;
@@ -13,7 +15,7 @@ defineProps<{
     document: boolean;
     status?: string;
 }>();
-defineEmits<{ ask: []; download: []; open: [] }>();
+defineEmits<{ ask: []; download: []; open: []; reveal: []; revealProject: [id: string] }>();
 const chatIcon = useIcon('sidebar.chat');
 const openIcon = useIcon('ui.open_tab');
 const downloadIcon = useIcon('ui.download');
@@ -42,10 +44,22 @@ const downloadIcon = useIcon('ui.download');
             <dl>
                 <div><dt>Type</dt><dd>{{ type }}</dd></div>
                 <div v-if="size !== '—'"><dt>Size</dt><dd>{{ size }}</dd></div>
-                <div><dt>Project</dt><dd>{{ project || 'No project' }}</dd></div>
+                <div v-if="filesLocation"><dt>Files location</dt><dd>{{ filesLocation }}</dd></div>
+                <template v-if="projectLocations">
+                    <div v-for="location in projectLocations" :key="location.id">
+                        <dt>Project {{ location.name }} location</dt>
+                        <dd>{{ location.path }}</dd>
+                    </div>
+                </template>
+                <div v-else><dt>Project</dt><dd>{{ project || 'No project' }}</dd></div>
                 <div><dt>Search</dt><dd>{{ coverage }}</dd></div>
                 <div v-if="status"><dt>Storage</dt><dd>{{ status }}</dd></div>
             </dl>
+            <UButton v-if="filesLocation" label="Show in Files" size="workspace" color="neutral" variant="ghost"
+                class="mt-3" @click="$emit('reveal')" />
+            <UButton v-for="location in disabled ? [] : projectLocations ?? []" :key="location.id"
+                :label="'Show in project ' + location.name" size="workspace" color="neutral" variant="ghost"
+                class="mt-3" @click="$emit('revealProject', location.id)" />
         </div>
     </div>
 </template>

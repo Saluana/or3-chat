@@ -225,7 +225,7 @@ export async function forkThread({
     };
     await hooks.doAction('branch.fork:action:before', beforePayload);
     let membership!: Awaited<ReturnType<typeof moveChatProjectRows>>;
-    const result = await db.transaction('rw', getWriteTxTableNames(db, ['threads', 'messages', 'projects', 'posts']), async () => {
+    const result = await db.transaction('rw', getWriteTxTableNames(db, ['threads', 'messages', 'projects', 'posts', 'kv']), async () => {
         scope?.assertCurrent('write');
         const current = await db.threads.get(src.id);
         if (JSON.stringify(current) !== JSON.stringify(src)
@@ -237,7 +237,7 @@ export async function forkThread({
             throw new Error('The anchor changed while preparing its fork. Try again.');
 
         await db.threads.put(fork);
-        membership = scope ? await moveChatProjectRows(scope, fork.id, projectId) : { projects: [], threads: [] };
+        membership = scope ? await moveChatProjectRows(scope, fork.id, projectId) : { projects: [], threads: [], placements: 0 };
 
         if (branchMode === 'copy') {
             const { messages: ancestors } = await resolveThreadProjection(sourceThreadId, db, anchorMessageId);

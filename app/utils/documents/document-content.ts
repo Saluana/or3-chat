@@ -1,3 +1,4 @@
+import type { JSONContent } from '@tiptap/core';
 import type { TipTapDocument, TipTapNode } from '~/types/database';
 
 const IMAGE_NODE_NAMES = new Set(['image', 'or3Image']);
@@ -39,4 +40,22 @@ export function parseDocumentFileHashes(
     } catch {
         return [];
     }
+}
+
+export function emptyDocument(): TipTapDocument {
+    return { type: 'doc', content: [{ type: 'paragraph' }] };
+}
+
+export function normalizedContent(value: unknown): TipTapDocument {
+    if (!value || typeof value !== 'object') return emptyDocument();
+    const content = value as JSONContent;
+    if (content.type !== 'doc' || (content.content !== undefined && !Array.isArray(content.content))) throw new Error('Invalid native document.');
+    if (!content.content?.length) return { ...content, content: emptyDocument().content } as TipTapDocument;
+    // StarterKit's trailingNode adds a paragraph after a final non-paragraph
+    // block. Compare saved content in that same shape: this editor-only
+    // normalization is not a competing edit from another pane.
+    if (content.content.at(-1)?.type !== 'paragraph') {
+        return { ...content, content: [...content.content, { type: 'paragraph' }] } as TipTapDocument;
+    }
+    return content as TipTapDocument;
 }

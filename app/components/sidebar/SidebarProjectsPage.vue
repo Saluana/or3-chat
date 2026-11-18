@@ -8,6 +8,7 @@ import {
     onDeactivated,
     nextTick,
     ref,
+    shallowRef,
     watch,
     toRaw,
 } from 'vue';
@@ -61,9 +62,16 @@ import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import { useActiveSidebarPage } from '~/composables/sidebar/useActiveSidebarPage';
 import { useOr3Config } from '~/composables/useOr3Config';
 import SidebarProjectActions from './SidebarProjectActions.vue';
+import SidebarProjectExplorer from './SidebarProjectExplorer.vue';
+import { useExplorerAvailable } from '~/composables/explorer/explorer-availability';
+import { useProjectsCrud } from '~/composables/projects/useProjectsCrud';
+import { moveExplorerRows, readExplorerProjectItems } from '~/db/explorer';
+import { explorerItemKey } from '~~/shared/explorer/records';
+import type { ExplorerItemRef } from '~~/shared/explorer/records';
+import type { ExplorerFolderRow } from '~~/shared/explorer/tree';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import SidebarEmptyState from './SidebarEmptyState.vue';
-import SidebarPageLink from './SidebarPageLink.vue';
+import { useSidebarProjectActionButtonProps } from '~/composables/sidebar/useSidebarProjectActionButtonProps';
 import SidebarTimeGroupedList from './SidebarTimeGroupedList.vue';
 import type { UnifiedSidebarItem } from '~/types/sidebar';
 
@@ -75,6 +83,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
     (e: 'new-project'): void;
+    (e: 'update:sidebar-query', query: string): void;
     (e: 'rename-project' | 'delete-project', projectId: string): void;
     (e: 'add-document-to-project-root', projectId: string): void;
     (
@@ -88,6 +97,10 @@ const emit = defineEmits<{
         item: UnifiedSidebarItem,
     ): void;
 }>();
+function clearExplorerSearch() {
+    query.value = '';
+    if (props.sidebarQuery !== undefined) emit('update:sidebar-query', '');
+}
 const { projectId: id, returnTo } = useProjectSidebar();
 const { setActivePage } = useActiveSidebarPage();
 const backIcon = useIcon('ui.chevron.left');
@@ -98,6 +111,11 @@ const chatIcon = useIcon('sidebar.chat');
 const newDocumentIcon = useIcon('sidebar.new_note');
 const or3Config = useOr3Config();
 const documentsEnabled = computed(() => or3Config.features.documents.enabled);
+const explorerEnabled = useExplorerAvailable();
+const projectExplorerActive = ref(false);
+const projectHeading = ref<HTMLElement | null>(null);
+const { createDocumentEntry } = useProjectsCrud();
+watch(id, () => { projectExplorerActive.value = false; });
 const knowledgeIcon = useIcon('sidebar.note');
 const settingsIcon = useIcon('ui.settings');
 const editIcon = useIcon('ui.edit');
@@ -109,6 +127,11 @@ const searchIcon = useIcon('ui.search');
 const toolIcon = useIcon('chat.tool.wrench');
 const closeIcon = useIcon('ui.close');
 const projectMemoryIcon = useIcon('sidebar.project.memory');
+const sectionMenuButton = useSidebarProjectActionButtonProps({ identifier: 'sidebar.project-section' });
+const projectSections = computed(() => [
+    { label: 'Knowledge' as const, icon: knowledgeIcon.value, count: state.value?.sources.length ?? 0 },
+    { label: 'Memory' as const, icon: projectMemoryIcon.value, count: state.value?.memories.length ?? 0 },
+]);
 const sourceUploadIcon = useIcon('sidebar.project.knowledge.upload');
 const sourceDocumentIcon = useIcon('sidebar.project.knowledge.document');
 const sourceFileIcon = useIcon('sidebar.project.knowledge.file');
@@ -230,6 +253,7 @@ const memoryTheme = useThemeOverrides({
     isNuxtUI: true,
 });
 const sourceInput = ref<'' | 'note' | 'document' | 'file'>('');
+const sourceDestination = shallowRef<ExplorerFolderRow>();
 const sourceMenuOpen = ref(false);
 const briefEditing = ref(false);
 const inlineBriefEditor = ref<HTMLTextAreaElement | null>(null);
@@ -435,6 +459,7 @@ function captureDraft() {
         editRevision: editRevision.value,
         briefEditing: briefEditing.value,
         sourceInput: sourceInput.value,
+        sourceDestination: sourceInput.value === 'file' ? sourceDestination.value : undefined,
         noteTitle: noteTitle.value,
         noteText: noteText.value,
         documentId: documentId.value,
@@ -489,6 +514,7 @@ function connect() {
     editingMemory.value = null;
     releasePreview();
     const draft = drafts.get(id.value);
+    sourceDestination.value = draft?.sourceDestination;
     drafts.delete(id.value);
     tab.value = draft?.tab ?? 'Overview';
     if (draft) {
@@ -712,10 +738,15 @@ function goBack() {
     }
 }
 let focusChosenSource = false;
-function chooseSource(kind: 'note' | 'document' | 'file') {
+function chooseSource(kind: 'note' | 'document' | 'file', destination?: ExplorerFolderRow) {
+    sourceDestination.value = destination;
     sourceInput.value = kind;
     focusChosenSource = true;
     sourceMenuOpen.value = false;
+}
+function addFileInExplorer(folder: ExplorerFolderRow) {
+    tab.value = 'Knowledge';
+    chooseSource('file', folder);
 }
 // Closing the menu would return focus to "Add source"; move it into the chosen form.
 function focusSourceForm(event: Event) {
@@ -763,7 +794,29 @@ async function pin(projectId: string) {
         current.settingsRow ?? null,
     );
 }
-async function newChat() {
+async function placeCreatedItem(origin: typeof scope, projectId: string, item: ExplorerItemRef, folder: ExplorerFolderRow) {
+    try {
+        await moveExplorerRows(origin, { kind: 'project', project_id: projectId },
+            [{ row: { kind: 'item', item }, expected: null }], folder.id);
+    } catch {
+        origin.assertCurrent();
+        toast.add({ title: 'Saved to the project root', description: 'The selected folder could not be used.', color: 'warning' });
+    }
+}
+async function createInExplorer(kind: 'chat' | 'document', folder: ExplorerFolderRow) {
+    await run(async () => {
+        if (kind === 'chat') return newChat(folder);
+        const projectId = id.value;
+        const origin = scope;
+        const entry = await createDocumentEntry(projectId);
+        if (!entry) return;
+        origin.assertCurrent();
+        await placeCreatedItem(origin, projectId, { kind: 'document', item_id: entry.id }, folder);
+        const result = await getPaletteHostContext()?.openDocument(entry.id, 'active');
+        if (result && !result.ok) throw new Error(result.error.message);
+    });
+}
+async function newChat(folder?: ExplorerFolderRow) {
     const projectId = id.value;
     scope.assertCurrent('write');
     const captured = scope;
@@ -782,6 +835,7 @@ async function newChat() {
         { assertCurrent: () => captured.assertCurrent('write') },
     );
     captured.assertCurrent();
+    if (folder) await placeCreatedItem(captured, projectId, { kind: 'chat', item_id: thread.id }, folder);
     await openChat(thread.id);
 }
 async function openChat(threadId: string) {
@@ -821,9 +875,16 @@ async function addSelectedFile() {
     const captured = scope;
     const projectId = id.value;
     const selected = fileId.value;
+    const destination = sourceDestination.value;
+    const item = { kind: 'file', item_id: selected } as const;
+    const alreadyInProject = destination && (await readExplorerProjectItems(captured.db, projectId)).has(explorerItemKey(item));
     await addExistingProjectFile(captureIntakeScope(), projectId, selected);
-    if (captured === scope && projectId === id.value && sourceInput.value === 'file' && fileId.value === selected)
+    if (destination && !alreadyInProject) await placeCreatedItem(captured, projectId, item, destination);
+    if (captured === scope && projectId === id.value && sourceInput.value === 'file' && fileId.value === selected) {
         sourceInput.value = '';
+        sourceDestination.value = undefined;
+        if (destination) tab.value = 'Overview';
+    }
 }
 
 async function saveSettings() {
@@ -1052,7 +1113,21 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                     :disabled="busy"
                     @rename="emit('rename-project', id)"
                     @delete="emit('delete-project', id)"
-                />
+                    ><template #default="{ close }">
+                        <UButton
+                            v-for="section in projectSections"
+                            :key="section.label"
+                            v-bind="sectionMenuButton"
+                            :icon="section.icon"
+                            :aria-label="section.label"
+                            class="w-full justify-start"
+                            @click.stop.prevent="close(); tab = section.label"
+                        >
+                            <span class="flex-1 truncate text-start">{{ section.label }}</span>
+                            <span class="project-muted text-xs tabular-nums">{{ section.count }}</span>
+                        </UButton>
+                    </template></SidebarProjectActions
+                >
             </div>
         </header>
         <p
@@ -1178,6 +1253,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                 role="region"
                 aria-label="Project activity"
                 type="all"
+                :hide-activity="explorerEnabled && projectExplorerActive"
                 :project-id="id"
                 :query="props.sidebarQuery ?? query"
                 :active-ids="[
@@ -1224,7 +1300,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                                 <UIcon :name="projectIcon" class="size-5" />
                             </span>
                             <div class="min-w-0 flex-1">
-                                <h1
+                                <h1 ref="projectHeading"
                                     class="text-lg font-semibold leading-snug break-words"
                                 >
                                     {{ state.project.name }}
@@ -1295,8 +1371,8 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                                 color="neutral"
                                 :ui="{ leadingIcon: 'size-[18px]' }"
                                 class="project-start theme-btn"
-                                :disabled="busy"
-                                @click="run(newChat)"
+                                :disabled="busy || !scope.writable"
+                                @click="run(() => newChat())"
                             />
                             <UButton
                                 v-if="documentsEnabled"
@@ -1306,31 +1382,17 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                                 variant="ghost"
                                 :ui="{ leadingIcon: 'size-[18px]' }"
                                 class="project-new-document theme-btn"
-                                :disabled="busy"
+                                :disabled="busy || !scope.writable"
                                 @click="emit('add-document-to-project-root', id)"
                             />
                         </div>
-                        <nav aria-label="Project sections" class="space-y-1.5">
-                            <SidebarPageLink
-                                label="Knowledge"
-                                :description="`${state.sources.length} ${state.sources.length === 1 ? 'source' : 'sources'}`"
-                                :icon="knowledgeIcon"
-                                accent="docs"
-                                @select="tab = 'Knowledge'"
-                            />
-                            <SidebarPageLink
-                                label="Memory"
-                                :description="`${state.memories.length} saved ${state.memories.length === 1 ? 'memory' : 'memories'}`"
-                                :icon="projectMemoryIcon"
-                                accent="projects"
-                                @select="tab = 'Memory'"
-                            />
-                        </nav>
-                        <h2
-                            class="project-section-label border-t border-[var(--md-outline-variant)] pt-4!"
-                        >
-                            Recent activity
-                        </h2>
+                        <div v-if="explorerEnabled" class="border-t border-[var(--md-outline-variant)] pt-3">
+                            <SidebarProjectExplorer :root-target="projectHeading" :key="id" :project-id="id" :project-name="state.project.name"
+                                :documents-enabled="documentsEnabled" :query="props.sidebarQuery ?? query"
+                                @view="projectExplorerActive = $event" @create="createInExplorer"
+                                @add-file="addFileInExplorer" @clear-search="clearExplorerSearch" />
+                        </div>
+                        <h2 v-else class="project-section-label border-t border-[var(--md-outline-variant)] pt-4!">Recent</h2>
                     </div></template
                 ></SidebarTimeGroupedList
             >
@@ -1565,7 +1627,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                             @submit.prevent="run(addSelectedFile)"
                         >
                             <h2 class="font-semibold text-xs">
-                                Add a saved file
+                                {{ sourceDestination ? 'Add a saved file in ' + sourceDestination.payload.name : 'Add a saved file' }}
                             </h2>
                             <select
                                 v-bind="resourceSelectTheme"

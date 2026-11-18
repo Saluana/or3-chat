@@ -10,7 +10,7 @@
                 mutation-mode="arbitrary"
                 :maintain-bottom="false"
                 class="flex-1 min-h-0 sidebar-scroll"
-                @reach-bottom="loadMore"
+                @reach-bottom="!hideActivity && loadMore()"
             >
                 <template #default="{ item }">
                     <div v-if="item.type === 'header'">
@@ -108,6 +108,7 @@ const props = defineProps<{
     type?: 'all' | 'thread' | 'document';
     projectId?: string;
     query?: string;
+    hideActivity?: boolean;
     pinned?: boolean;
     emptyMessage?: string;
     emptyDescription?: string;
@@ -130,6 +131,7 @@ const query = props.query === undefined
 
 const { items, activeFamilyIds, hasMore, loading, loadMore, reset, toggleFamily, loadMoreMembers, latestCompaction } = usePaginatedSidebarItems({
     type: props.type || 'all',
+    enabled: computed(() => !props.hideActivity),
     query,
     projectId: computed(() => props.projectId),
     pinned: computed(() => props.pinned),
@@ -192,8 +194,9 @@ const groupedItemsList = computed(() => {
     > = [];
     if (slots.header) {
         result.push({ key: 'header', type: 'header' });
-        if (!items.value.length) result.push({ key: 'status', type: 'status' });
+        if (!props.hideActivity && !items.value.length) result.push({ key: 'status', type: 'status' });
     }
+    if (props.hideActivity) return result;
     const groups = new Map<TimeGroup, UnifiedSidebarItem[]>();
 
     for (const item of items.value) {

@@ -2,6 +2,7 @@ import { readHistory, assertHistory, invalidateFirstBindEligibility, type Histor
 import { holdHistoryInTx } from './sync-quarantine';
 import { clearRecentOpIds } from './recent-op-cache';
 import { MAX_SYNC_PAYLOAD_BYTES } from '~~/shared/sync/sanitize';
+import { explorerIdentity } from '~~/shared/explorer/sync-contract';
 import { assertIncomingIdentity, isSyncTable } from '~~/shared/sync/incoming-records';
 import { retainIncomingEvidenceInTx } from './incoming-evidence';
 import { compareSyncTuple, syncJsonByteLength, SnapshotItemSchema, SnapshotResponseSchema, SnapshotUnavailableRecordSchema } from '~~/shared/sync/schemas';
@@ -13,7 +14,7 @@ import type { Message } from '~/db/schema';
 import type { PendingOp, SnapshotItem, SnapshotResponse, SyncScope } from '~~/shared/sync/types';
 import { compareSyncRevision } from '~~/shared/sync/revision';
 import { SYNCED_TABLES, getHookBridge, getLocalOnlyKvNames } from './hook-bridge';
-import { normalizeSyncPayload } from './sync-payload-normalizer';
+import { normalizeSyncPayload, retainedExplorerPost } from './sync-payload-normalizer';
 import { QUARANTINE_SUPPORT_TABLES, collectReplayableOps, pruneResolvedQuarantineBestEffort } from './sync-quarantine';
 
 const STAGE_BATCH_SIZE = 300;
@@ -88,11 +89,14 @@ export async function applyPendingOp(
         return;
     }
 
-    await table.delete(op.pk);
     const payload = op.payload && typeof op.payload === 'object' && !Array.isArray(op.payload)
         ? op.payload as { deleted_at?: unknown }
         : null;
     const deletedAt = typeof payload?.deleted_at === 'number' ? payload.deleted_at : Math.floor(Date.now() / 1000);
+    const retained = retainedExplorerPost(op.tableName, op.pk, op.payload, op.stamp)
+        ?? retainedExplorerPost(op.tableName, op.pk, local, op.stamp);
+    if (retained) await table.put({ ...retained, deleted_at: deletedAt });
+    else await table.delete(op.pk);
     await tombstoneTable.put({
         id: tombstoneId,
         tableName: op.tableName,
@@ -382,6 +386,13 @@ export class SnapshotStager {
                             ? { ...normalized.payload, ref_count: 0 }
                             : normalized.payload);
                         rowsByTable.set(item.tableName, rows);
+                        if (item.tableName === 'posts' && normalized.payload.deleted === true
+                            && explorerIdentity(item.pk, normalized.payload)) {
+                            const deletedAt = Number(normalized.payload.deleted_at ?? normalized.payload.updated_at) || 0;
+                            tombstones.push({ id: `posts:${item.pk}`, tableName: 'posts', pk: item.pk,
+                                deletedAt, clock: item.revision.clock, hlc: item.revision.hlc, opId: item.revision.opId,
+                                serverDeletedAt: deletedAt, syncedAt: deletedAt });
+                        }
                     } else {
                         const keys = deletesByTable.get(item.tableName) ?? [];
                         keys.push(item.pk);

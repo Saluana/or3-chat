@@ -5,8 +5,7 @@ import { getContributionSurfaceKernel } from '~/composables/plugins/contribution
 import { getPluginGateDecision } from '~/utils/plugins/access-gate';
 import type { PluginGatePolicy } from '~~/shared/plugins/access-policy';
 
-// Local interfaces describing the tree rows printed in the console.
-// These mirror the shape produced by SidebarProjectTree.vue for root and child items.
+// Payloads for the Project Explorer root and individual content entries.
 export type ProjectTreeKind = 'chat' | 'doc' | 'file';
 export type ShowOnKind = 'root' | 'all' | ProjectTreeKind;
 
@@ -14,7 +13,7 @@ export interface ProjectTreeChild {
     value: string; // id of the entry
     label: string;
     icon?: string;
-    kind?: ProjectTreeKind; // 'chat' | 'doc'
+    kind?: ProjectTreeKind
     parentId?: string;
     onSelect?: (e: Event) => void;
 }
@@ -38,7 +37,7 @@ export interface ProjectTreeHandlerCtx {
     root?: ProjectTreeRoot;
 }
 
-/** Definition for an extendable chat message action button. */
+/** Definition for a Project Explorer menu action. */
 export interface ProjectTreeAction extends RegistryItem {
     /** Unique id (stable across reloads). */
     id: string;
@@ -72,7 +71,7 @@ function useV2Surface(): boolean {
     return getContributionSurfaceSelection().isSelected('project-tree-actions');
 }
 
-/** Register (or replace) a message action. */
+/** Register (or replace) a Project Explorer action. */
 export function registerProjectTreeAction(action: ProjectTreeAction) {
     return useV2Surface()
         ? v2Kernel.registry.registerLegacy({ value: action })
@@ -85,7 +84,7 @@ export function unregisterProjectTreeAction(id: string) {
     else registry.unregister(id);
 }
 
-/** Accessor for actions applicable to a specific message. */
+/** Read registered explorer actions that pass the plugin access gate. */
 export function useProjectTreeActions() {
     const items = useV2Surface() ? v2Kernel.items : registry.useItems();
     return computed(() =>
@@ -100,6 +99,3 @@ export function useProjectTreeActions() {
 export function listRegisteredProjectTreeActionIds(): string[] {
     return useV2Surface() ? [...v2Kernel.registry.listLegacyIds()] : registry.listIds();
 }
-
-// Note: Core (built-in) actions remain hard-coded in ChatProjectTree.vue so they always appear;
-// external plugins should use order >= 200 to appear after them unless intentionally overriding.

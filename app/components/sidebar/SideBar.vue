@@ -45,6 +45,7 @@
             @add-document-to-project="openAddDocumentToProject"
             @add-chat-to-project="handleAddChatToProject"
             @add-document-to-project-root="handleAddDocumentToProject"
+            @create-in-project-folder="handleCreateInProjectFolder"
             @rename-project="openRenameProject"
             @delete-project="confirmDeleteProject"
             @rename-entry="handleRenameEntry"
@@ -172,6 +173,7 @@ import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
 import { parseFileHashes } from '~/db/files-util';
 import { useRuntimeConfig, useToast } from '#imports';
 import { captureWorkspaceOperation } from '~/utils/chat/workspace-access';
+import { captureProjectOperation } from '~/utils/projects/operation';
 import { workspaceRevision } from '~/utils/chat/workspace-items';
 import { getActiveWorkspaceId } from '~/db/client';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
@@ -715,8 +717,6 @@ function confirmDelete(thread: ThreadItem) {
 
 // Confirm deletion of a project (opens modal)
 function confirmDeleteProject(projectOrId: string | Project) {
-    // SidebarProjectTree may emit either the project id (string) or
-    // a project object; handle both safely.
     const id =
         typeof projectOrId === 'string'
             ? projectOrId
@@ -851,10 +851,12 @@ async function onProjectDocumentSelected(id: string) {
 }
 
 // ---- Project Tree Handlers ----
-async function handleAddChatToProject(projectId: string) {
+async function handleAddChatToProject(projectId: string, folder?: string) {
     try {
+        const origin = folder ? captureProjectOperation() : undefined;
         const created = await createThreadEntry(projectId);
         if (!created) return;
+        if (origin && folder) await placeNewShortcutItem(origin, projectId, folder, { kind: 'chat', item_id: created.id });
         if (!expandedProjects.value.includes(projectId))
             expandedProjects.value.push(projectId);
         emit('chatSelected', created.id);
@@ -863,16 +865,34 @@ async function handleAddChatToProject(projectId: string) {
     }
 }
 
-async function handleAddDocumentToProject(projectId: string) {
+async function handleAddDocumentToProject(projectId: string, folder?: string) {
     try {
+        const origin = folder ? captureProjectOperation() : undefined;
         const doc = await createDocumentEntry(projectId);
         if (!doc) return;
+        if (origin && folder) await placeNewShortcutItem(origin, projectId, folder, { kind: 'document', item_id: doc.id });
         if (!expandedProjects.value.includes(projectId))
             expandedProjects.value.push(projectId);
         emit('documentSelected', doc.id);
     } catch (e) {
         console.error('add document to project failed', e);
     }
+}
+
+async function placeNewShortcutItem(origin: ReturnType<typeof captureWorkspaceOperation>, projectId: string,
+    folder: string, item: import('~~/shared/explorer/records').ExplorerItemRef) {
+    const { moveExplorerRows } = await import('~/db/explorer');
+    try {
+        await moveExplorerRows(origin, { kind: 'project', project_id: projectId }, [{ row: { kind: 'item', item }, expected: null }], folder);
+    } catch {
+        origin.assertCurrent();
+        toast.add({ title: 'Saved to the project root', description: 'The selected folder could not be used.', color: 'warning' });
+    }
+}
+
+function handleCreateInProjectFolder(payload: { kind: 'chat' | 'document'; projectId: string; folder: { id: string } }) {
+    return payload.kind === 'chat' ? handleAddChatToProject(payload.projectId, payload.folder.id)
+        : handleAddDocumentToProject(payload.projectId, payload.folder.id);
 }
 
 // ---- Project Rename Modal Logic ----
@@ -1021,7 +1041,6 @@ async function submitCreateProject() {
     }
 }
 
-// (Project tree logic moved to SidebarProjectTree component)
 
 // ---- Add To Project Flow ----
 const showAddToProjectModal = ref(false);

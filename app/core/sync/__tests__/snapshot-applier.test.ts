@@ -93,6 +93,34 @@ afterEach(async () => {
 });
 
 describe('applySnapshotChain', () => {
+    it('keeps retained Explorer ancestry on snapshot and on a deletion received before the live row', async () => {
+        const db = createDb();
+        await db.open();
+        const ancestor = 'explorer-folder-0483f8df-cab7-4f34-aec5-32c325058bbd';
+        const child = 'explorer-folder-0483f8df-cab7-4f34-aec5-32c325058bbc';
+        const payload = (id: string, parent_id: string | null, deleted: boolean) => ({
+            id, title: '["files"]', post_type: 'or3:explorer-folder', deleted, clock: 2, created_at: 1, updated_at: 2,
+            content: JSON.stringify({ version: 1, scope: { kind: 'files' }, parent_id, name: id.slice(-4) }),
+        });
+        const revision = { clock: 2, hlc: '1:0:remote', opId: testUuid('explorer-parent') };
+        await new ConflictResolver(db).applyChanges([{
+            tableName: 'posts', pk: ancestor, op: 'delete', serverVersion: 10, payload: payload(ancestor, null, true),
+            stamp: { ...revision, deviceId: 'remote' },
+        }]);
+        expect(await db.posts.get(ancestor)).toMatchObject({ deleted: true });
+        await applySnapshotChain(db, [{
+            workspaceId: 'workspace-1', snapshotId: 'explorer-retained', highWatermark: 10, nextPageToken: null,
+            items: [
+                { kind: 'row', tableName: 'posts', pk: child, revision, payload: payload(child, ancestor, false) },
+                { kind: 'row', tableName: 'posts', pk: ancestor, revision, payload: payload(ancestor, null, true) },
+            ],
+        }], { workspaceId: 'workspace-1' }, 'device', () => true, ['posts']);
+        expect(await db.posts.get(ancestor)).toMatchObject({ deleted: true, postType: 'or3:explorer-folder' });
+        expect(await db.tombstones.get(`posts:${ancestor}`)).toMatchObject({ pk: ancestor, clock: 2 });
+        expect(await db.posts.get(child)).toMatchObject({ deleted: false });
+        expect(await db.pending_ops.count()).toBe(0);
+    });
+
     it('quarantines malformed and unknown incoming rows durably while applying healthy siblings', async () => {
         const db = createDb(); await db.open();
         const row = pages()[0]!.items[0]!;
@@ -1031,7 +1059,7 @@ it('P0-5.9 reopened legacy Dexie cannot mutate, coalesce or launder installed hi
             expect(await db.sync_state.get('sync_history')).toEqual(before[3]![0]);
             expect(await db.sync_quarantine.toArray()).toEqual(before[5]);
         }
-        expect(versions).toEqual([310, 320, 321]);
+        expect(versions).toEqual([310, 330, 331]);
         // A legitimate current edit cannot inherit stale fields/publication.
         db.syncHistoryAtOpen = 'J'; getHookBridge(db).start();
         await db.transaction('rw', getWriteTxTableNames(db, 'kv'), () => db.kv.update('current', { updated_at: 2 }));
@@ -1130,7 +1158,10 @@ it('namespace upgrade preserves every store/index without copying and rolls back
         expect(await db.table(name).get('saved')).toEqual(row);
         const expected = old.table(name).schema;
         expect(db.table(name).schema.primKey.src).toBe(expected.primKey.src);
-        expect(db.table(name).schema.indexes.map(index => index.src)).toEqual(expected.indexes.map(index => index.src));
+        const additiveIndexes = name === 'posts' ? ['explorer_item_key'] : [];
+        expect(db.table(name).schema.indexes.map(index => index.src)).toEqual([
+            ...expected.indexes.map(index => index.src), ...additiveIndexes,
+        ]);
     }
     expect([...db.backendDB().objectStoreNames]).not.toContain('messages');
     expect(db.file_blobs.name).toBe('current_file_blobs');

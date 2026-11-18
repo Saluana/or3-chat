@@ -1,3 +1,4 @@
+import { checkExplorerPage } from '../../utils/sync/explorer-capability';
 import { requireHistoryCapability, checkHistory, assertHistoryResponse } from '../../utils/sync/history-incarnation';
 import { classifySnapshotPage } from '../../utils/sync/unavailable-records';
 import { observeSyncRequest } from '../../sync/observations';
@@ -100,6 +101,7 @@ export default defineEventHandler(async (event) => {
             requireFileKindCapability(request.data.fileKindCapability);
         }
 
+        checkExplorerPage(request.data.explorerCapability, response.data.items, response.data.unavailable ?? []);
         if (response.data.items.some(item => item.kind === "row" && hasWorkspaceItemSemantics(item.tableName, item.payload))) requireWorkspaceItemCapability(request.data.workspaceItemCapability);
         return response.data;
     });

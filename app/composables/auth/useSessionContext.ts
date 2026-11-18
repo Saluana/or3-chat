@@ -15,6 +15,7 @@ export type SessionPayload = {
     session: SessionContext | null;
     appAccessAllowed: boolean;
     workspaceItemCapability?: 'v1';
+    explorerCapability?: 'v1';
     secretStoreEnabled?: boolean;
     cloudAccess?: CloudAccess;
 };

@@ -810,9 +810,9 @@ test('project chat uploads become sources automatically without duplicate bindin
         for (const { name } of await indexedDB.databases()) {
             if (!name) continue;
             const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); });
-            if (!db.objectStoreNames.contains('posts')) { db.close(); continue; }
+            if (!db.objectStoreNames.contains('current_posts')) { db.close(); continue; }
             const rows = await new Promise<Array<{ id: string; title: string; postType: string; content: string; deleted: boolean }>>(resolve => {
-                const request = db.transaction('posts', 'readonly').objectStore('posts').getAll();
+                const request = db.transaction('current_posts', 'readonly').objectStore('current_posts').getAll();
                 request.onsuccess = () => resolve(request.result);
             });
             db.close();
@@ -1759,9 +1759,10 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) {
         await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 45_000 });
         await page.getByRole('button', { name: 'Files', exact: true }).click();
         const files = page.locator('#main-content').getByRole('region', { name: 'Workspace Files' });
-        await expect(files.getByRole('listitem')).toHaveCount(50);
-        await files.getByRole('button', { name: 'Load more', exact: true }).click();
-        await expect(files.getByRole('listitem')).toHaveCount(61);
+        await expect(files.getByText('61 items', { exact: true })).toBeVisible();
+        const mountedRows = files.getByRole('listitem');
+        await expect(mountedRows.first()).toBeVisible();
+        expect(await mountedRows.count()).toBeLessThan(61);
         await files.getByLabel('Upload files', { exact: true }).setInputFiles({ name: 'keyboard.md', mimeType: 'text/markdown', buffer: Buffer.from('Keyboard and layout proof.') });
         await files.getByRole('textbox', { name: 'Search Files' }).fill('keyboard.md');
         const open = files.getByRole('button', { name: 'Open keyboard.md', exact: true });
@@ -1825,7 +1826,7 @@ test('a trashed source receipt reports unavailable and preserves the chat draft'
     await expect(row).toHaveCount(0);
     await page.getByRole('tab').first().click();
     await source.click();
-    await expect(page.getByRole('status').filter({ hasText: /document is unavailable/i })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: /this source is unavailable/i })).toBeVisible();
     await expect(input).toContainText('Preserved unavailable-source draft');
     await expect(page.getByRole('textbox', { name: 'Document body' })).toHaveCount(0);
     const path = info.outputPath('unavailable-source-draft.png');

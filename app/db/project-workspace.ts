@@ -2,6 +2,7 @@ import type { Or3DB } from './client';
 import Dexie from 'dexie';
 import { PostSchema, type Post, type Thread, type Project } from './schema';
 import { getWriteTxTableNames, newId, nextClock, nowSec } from './util';
+import { clearProjectPlacement } from './explorer-placement-lifecycle';
 import { changeFileRefRows } from './files';
 import type { CoreHookPayloadMap } from '~/core/hooks/hook-types';
 import { parseDocumentFileHashes } from '~/utils/documents/document-content';
@@ -540,26 +541,26 @@ export async function saveProjectDocument(scope: WorkspaceOperationScope, projec
     const row = await save(scope, projectId, PROJECT_POST_TYPES.source, value, newId(), null, [], false, PostSchema.parse(document));
     return { row, value };
 }
+export function prepareProjectRecordRemoval(
+    scope: WorkspaceOperationScope,
+    projectId: string,
+    record: Post,
+) {
+    if (record.postType !== PROJECT_POST_TYPES.memory && record.postType !== PROJECT_POST_TYPES.source) {
+        throw new Error('This project record cannot be removed.');
+    }
+    return prepareProjectRecord(scope, projectId, record.postType, JSON.parse(record.content),
+        record.id, record, [], true);
+}
+
 export async function deleteProjectRecord(
     scope: WorkspaceOperationScope,
     projectId: string,
     record: Post,
 ) {
-    if (
-        record.postType !== PROJECT_POST_TYPES.memory &&
-        record.postType !== PROJECT_POST_TYPES.source
-    )
-        throw new Error('This project record cannot be removed.');
-    await save(
-        scope,
-        projectId,
-        record.postType,
-        JSON.parse(record.content),
-        record.id,
-        record,
-        [],
-        true,
-    );
+    const prepared = await prepareProjectRecordRemoval(scope, projectId, record);
+    await prepared.commit();
+    await prepared.afterCommit();
 }
 
 /** Legacy folders that list a chat. Several entries mean its owner is ambiguous until the user chooses. */
@@ -633,7 +634,7 @@ export async function moveChatToProject(
     options: { family?: boolean } = { family: true },
 ): Promise<number> {
     const changed = await scope.db.transaction('rw',
-        getWriteTxTableNames(scope.db, ['threads', 'projects']),
+        getWriteTxTableNames(scope.db, ['threads', 'projects', 'posts', 'kv']),
         () => moveChatProjectRows(scope, threadId, projectId, options));
     await notifyChatProjectMove(changed);
     return changed.threads.filter((thread) => thread.id !== threadId).length;
@@ -692,13 +693,16 @@ export async function moveChatProjectRows(scope: WorkspaceOperationScope, thread
     }
     const projects = new Map<string, Project>();
     const threads: Thread[] = [];
+    const placements = (scope.explorerLocal || scope.explorerCloud) && origin && leaving && leaving !== projectId && !origin.parent_thread_id
+        && (!origin.root_thread_id || origin.root_thread_id === origin.id)
+        ? await clearProjectPlacement(scope.db, leaving, { kind: 'chat', item_id: origin.id }) : 0;
     for (const id of moving) {
         const changed = await moveOneChatProjectRows(scope, id, projectId);
         for (const project of changed.projects) projects.set(project.id, project);
         if (changed.thread) threads.push(changed.thread);
     }
     scope.assertCurrent('write');
-    return { projects: [...projects.values()], threads };
+    return { projects: [...projects.values()], threads, placements };
 }
 
 async function moveOneChatProjectRows(scope: WorkspaceOperationScope, threadId: string, projectId: string | null) {

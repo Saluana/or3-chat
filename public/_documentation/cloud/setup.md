@@ -81,3 +81,7 @@ workspace store when sync transfer is disabled. It checks Bun's built-in SQLite
 and any required `better-sqlite3` bindings in the selected runtime before Nuxt
 starts. Install the project-pinned Bun version for Bun configurations. Basic
 Auth still needs its own `better-sqlite3` binding with either sync driver.
+
+## File organization
+
+The updated host enables folders automatically in Files and Project Home. SQLite and Convex sync the layout as ordinary workspace metadata.

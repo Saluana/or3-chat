@@ -52,6 +52,10 @@ const deleteButtonProps = useSidebarProjectActionButtonProps({
         />
         <template #content>
             <div class="or3-action-menu project-menu-content p-1 w-48">
+                <template v-if="$slots.default">
+                    <slot :close="() => { menuOpen = false; }" />
+                    <div class="my-1 border-t border-[color:var(--md-border-color)]/30" />
+                </template>
                 <UButton
                     v-bind="renameButtonProps"
                     class="w-full justify-start"

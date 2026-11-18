@@ -77,6 +77,45 @@ associations without moving or copying content.
 
 In cloud mode, Files is available when the selected sync provider advertises workspace-item `v1`. Read-only members can inspect and download permitted items; upload and management actions require write access. The inspector reports local, queued, uploading, failed, or synced state separately from successful local intake.
 
+### Organize Files and projects
+
+Files shows folders alongside documents and uploads. Click a row to open it,
+or use Control-click, Command-click, Shift-click, checkboxes, or **Select**
+to build a selection. Use breadcrumbs to navigate and **Move to…** to choose
+a destination. **Select all results** includes rows outside the visible list.
+A move or bulk removal can change up to 100 records, including related
+records where applicable.
+
+Files and each project track their own locations. The preview shows where a
+file is stored in Files and where it appears in projects. Use **Show in
+Files** to reveal its current location. **Remove folder, keep contents**
+promotes direct entries to the named parent. Synced entries whose folder was
+removed appear at the closest surviving ancestor, or at the root when every
+ancestor is gone. Select files and documents to send them to Files Trash.
+
+Project Home offers **Recent** and **Explorer**. Projects initially open in Explorer. Drag a chat, document or folder by its name onto a folder or anything inside it; the destination folder is highlighted and the drag card names it. Drop on a top-level item or the Recent/Explorer bar to return it to the project root. Moves that would change nothing, or put a folder inside itself, show no highlight. Use **Select** for checkboxes or **Move to…** on touchscreens. Your view choice is saved on this device.
+New items created from the project header start at the root. Folder menus name
+the destination when creating a chat or document. The recent-project shortcut
+expands to the same folder tree. Removing a project association leaves the
+original item available, and re-adding it starts at the project root.
+
+Files can sort by **Recently modified**, **Name**, or **Type**. Trash shows the most recently modified items first. A search in **This folder** includes its subfolders and reflects files moved there from another tab. In a wide Files
+pane, **Show folders** opens the optional navigator. Drag rows onto a folder in the list, a navigator folder, or a breadcrumb. Opening the preview gives
+its space back to the list and preview. After an Explorer move or folder rename,
+use **Undo** in the notification or Ctrl+Z / Command+Z from the focused explorer.
+The previous location is available for the latest change in that scope until
+you switch scopes or reload. If an item or its location changes first, Undo
+reports the conflict.
+
+Existing local data is indexed when the workspace database upgrades.
+An updated OR3 Cloud host shows **New folder** in Files and **Explorer** in Project Home
+automatically. Folder names and locations use ordinary workspace KV sync on the existing
+SQLite and Convex providers. Older clients can keep using their flat lists. Workspace
+viewers can browse folders and use **Show in Files** from a project. Editors can organize folders. Opening Files or a project
+as an editor also imports folders created with the experimental explorer. If that
+preview already wrote special posts into Cloud sync history, its older-client
+compatibility restriction still applies to that history.
+
 Composer file selections, drops and pastes retain one originating workspace and
 composer lifetime across the whole batch. Workspace/tab changes and disposal
 cancel pending intake before later files or preview URLs are allocated. Draft

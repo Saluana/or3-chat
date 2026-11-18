@@ -33,6 +33,14 @@ import {
 import { hlcToOrderKey } from './hlc';
 import { getPkField } from '~~/shared/sync/table-metadata';
 import { toClientFormat, toServerFormat } from '~~/shared/sync/field-mappings';
+import { explorerIdentity } from '~~/shared/explorer/sync-contract';
+
+export function retainedExplorerPost(tableName: string, pk: string, payload: unknown,
+    revision: { clock: number; hlc: string; opId: string }) {
+    if (tableName !== 'posts' || !explorerIdentity(pk, payload)) return;
+    const normalized = normalizeSyncPayload(tableName, pk, payload, revision);
+    if (normalized.isValid) return { ...normalized.payload, deleted: true };
+}
 
 /**
  * Purpose:

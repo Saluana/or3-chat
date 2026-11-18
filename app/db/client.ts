@@ -37,6 +37,7 @@ import { cleanupSubscriptionManagersByWorkspace } from '~/core/sync/subscription
 import { cleanupSyncCircuitBreakers } from '~~/shared/sync/circuit-breaker';
 import {
     applyDocumentReferenceKey,
+    applyExplorerItemKey,
     applyGalleryState,
     applyReadyAt,
     computeProjectChatIds,
@@ -538,6 +539,16 @@ export class Or3DB extends Dexie {
                 tx.idbtrans.objectStore(table.name).name = name;
             }
         });
+
+        const postsStore = physicalStoreName('posts');
+        this.version(33).stores({ [postsStore]: stores[postsStore] + ', explorer_item_key' })
+            .upgrade(async tx => {
+                updateDatabaseRecovery(this, 'upgrading');
+                // This one-time cursor reads eligible values to derive index keys.
+                // The transaction rolls back canonical values if the upgrade fails.
+                await tx.table(postsStore).where('postType').anyOf('doc', 'or3:file')
+                    .modify(row => applyExplorerItemKey(row));
+            });
 
         // Keep the existing logical accessors and transaction API. Table objects
         // carry their real physical names, so Dexie scopes/hooks remain native.

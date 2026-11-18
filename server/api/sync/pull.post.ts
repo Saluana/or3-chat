@@ -1,3 +1,4 @@
+import { checkExplorerPage } from '../../utils/sync/explorer-capability';
 import { requireHistoryCapability, checkHistory, assertHistoryResponse } from '../../utils/sync/history-incarnation';
 import { classifyPullPage } from '../../utils/sync/unavailable-records';
 import { observeSyncRequest } from '../../sync/observations';
@@ -139,6 +140,7 @@ export default defineEventHandler(async (event) => {
             hasWorkspaceItemSemantics(change.tableName, change.payload)
         )) requireWorkspaceItemCapability(parsed.data.workspaceItemCapability);
 
+        checkExplorerPage(parsed.data.explorerCapability, result.data.changes, result.data.unavailable ?? []);
         return result.data;
     });
 });
