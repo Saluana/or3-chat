@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { Blob as NodeBlob, File as NodeFile } from 'node:buffer';
-import { defineComponent, nextTick, ref, shallowRef } from 'vue';
+import { computed, defineComponent, nextTick, ref, shallowRef } from 'vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import Dexie from 'dexie';
@@ -13,14 +13,19 @@ import { testRuntimeConfig } from '~~/tests/setup';
 
 const projectId = ref('a');
 const toolCatalog = vi.hoisted(() => ({ tools: [] as unknown[] }));
-const auth = vi.hoisted(() => ({ session: null as any }));
+const authSession = shallowRef<ReturnType<typeof import('~/composables/auth/useSessionContext').getCachedSessionContext>>(null);
+const authPayload = computed(() => authSession.value ? { session: authSession.value, appAccessAllowed: true } : null);
 vi.mock('#imports', async load => ({ ...(await load<Record<string, unknown>>()), useRuntimeConfig: () => testRuntimeConfig.value }));
 vi.mock('~/composables/sidebar/useProjectSidebar', () => ({ useProjectSidebar: () => ({ projectId, returnTo: ref('home') }) }));
 vi.mock('~/composables/sidebar/useActiveSidebarPage', () => ({ useActiveSidebarPage: () => ({ setActivePage: async () => {} }) }));
 vi.mock('~/utils/chat/tool-registry', () => ({ useToolRegistry: () => ({ listTools: shallowRef(toolCatalog.tools) }) }));
 vi.mock('~/composables/chat/useModelStore', () => ({ useModelStore: () => ({ catalog: ref([]), favoriteModels: ref([]) }) }));
 vi.mock('~/composables/search/useCommandPalette', () => ({ getPaletteHostContext: () => null }));
-vi.mock('~/composables/auth/useSessionContext', () => ({ getCachedSessionContext: () => auth.session, getCachedSessionPayload: () => auth.session ? { session: auth.session } : null }));
+vi.mock('~/composables/auth/useSessionContext', () => ({
+    useSessionContext: () => ({ data: authPayload }),
+    getCachedSessionContext: () => authSession.value,
+    getCachedSessionPayload: () => authPayload.value,
+}));
 import SidebarProjectsPage from '../SidebarProjectsPage.vue';
 
 // The actual kept-alive page owns navigation cancellation. Store tests cannot
@@ -34,7 +39,7 @@ const visible = ref(true);
 const workers: Array<{ onmessage?: (event: { data: unknown }) => void }> = [];
 beforeEach(async () => {
     toolCatalog.tools = [];
-    auth.session = null;
+    authSession.value = null;
     ssr = testRuntimeConfig.value.public.ssrAuthEnabled;
     testRuntimeConfig.value.public.ssrAuthEnabled = false;
     vi.stubGlobal('Blob', NodeBlob);
@@ -68,21 +73,26 @@ beforeEach(async () => {
     } } });
 });
 
+async function openProjectSection(section: 'Knowledge' | 'Memory') {
+    await wrapper.get('button[aria-label="Project actions for Project A"]').trigger('click');
+    await wrapper.get(`button[aria-label="${section}"]`).trigger('click');
+}
+
 // A signed-out session can clear the selected project before the kept-alive page unmounts.
 it('clears the project safely during sign-out and reconnects on sign-in', async () => {
     await vi.waitFor(() => expect(wrapper.text()).toContain('Project A'));
     const onError = vi.fn();
     wrapper.vm.$.appContext.config.errorHandler = onError;
     testRuntimeConfig.value.public.ssrAuthEnabled = true;
-    auth.session = null;
+    authSession.value = null;
     projectId.value = '';
     await nextTick();
     expect(onError).not.toHaveBeenCalled();
     expect(wrapper.text()).not.toContain('Project A');
 
     setActiveWorkspaceDb(null);
-    auth.session = { authenticated: true, user: { id: 'test-user' },
-        workspace: { id: workspaceId }, role: 'owner' };
+    authSession.value = { authenticated: true, user: { id: 'test-user' },
+        workspace: { id: workspaceId, name: 'Test workspace' }, role: 'owner' };
     setActiveWorkspaceDb(workspaceId);
     projectId.value = 'a';
     await nextTick();
@@ -114,7 +124,7 @@ it.each(['note', 'document', 'file'] as const)('retains a newer %s draft after k
     const { captureProjectOperation } = await import('~/utils/projects/context');
     const saved = kind === 'file' ? await Promise.all(['one', 'two'].map(name => importWorkspaceFile(captureProjectOperation(), new NodeBlob([name], { type: 'text/plain' }) as Blob, `${name}.txt`))) : [];
     await vi.waitFor(() => expect(wrapper.text()).toContain('Project A'));
-    await wrapper.get('button[aria-label="Knowledge"]').trigger('click');
+    await openProjectSection('Knowledge');
     const label = kind === 'note' ? 'Write a note' : kind === 'document' ? 'OR3 document' : 'Saved file';
     await wrapper.get(`button[label="${label}"]`).trigger('click');
     let release!: () => void;
@@ -148,7 +158,7 @@ it.each(['note', 'document', 'file'] as const)('retains a newer %s draft after k
 
 it('does not commit a note when its project knowledge binding is refused', async () => {
     await vi.waitFor(() => expect(wrapper.text()).toContain('Project A'));
-    await wrapper.get('button[aria-label="Knowledge"]').trigger('click');
+    await openProjectSection('Knowledge');
     await wrapper.get('button[label="Write a note"]').trigger('click');
     await wrapper.get('input[aria-label="Note title"]').setValue('Atomic note');
     await wrapper.get('textarea[aria-label="Note text"]').setValue('Keep on failure');
@@ -171,9 +181,7 @@ afterEach(async () => {
 
 it.each(['hidden', 'home', 'other project'] as const)('finishes an admitted project upload after navigating to %s', async destination => {
     await vi.waitFor(() => expect(wrapper.text()).toContain('Project A'));
-    const knowledge = wrapper.findAll('button').find(button => button.text().includes('Knowledge'));
-    expect(knowledge).toBeDefined();
-    await knowledge!.trigger('click');
+    await openProjectSection('Knowledge');
     const input = wrapper.get('input[type="file"]');
     Object.defineProperty(input.element, 'files', { configurable: true, value: [new NodeFile(['Knowledge content'], 'notes.txt', { type: 'text/plain' })] });
     await input.trigger('change');
@@ -192,8 +200,8 @@ it.each(['hidden', 'home', 'other project'] as const)('finishes an admitted proj
     visible.value = true;
     await nextTick();
     if (destination !== 'hidden') {
-        await vi.waitFor(() => expect(wrapper.find('button[aria-label="Knowledge"]').exists()).toBe(true));
-        await wrapper.get('button[aria-label="Knowledge"]').trigger('click');
+        await vi.waitFor(() => expect(wrapper.find('button[aria-label="Project actions for Project A"]').exists()).toBe(true));
+        await openProjectSection('Knowledge');
     }
     await vi.waitFor(() => expect(wrapper.text()).toContain('notes.txt'));
 });
@@ -210,11 +218,11 @@ it.each(['brief', 'settings', 'note', 'memory'] as const)('retains the %s draft 
         await wrapper.get('button[title="Project settings"]').trigger('click');
         selector = 'textarea[aria-label="Instructions"]';
     } else if (kind === 'note') {
-        await wrapper.get('button[aria-label="Knowledge"]').trigger('click');
+        await openProjectSection('Knowledge');
         await wrapper.get('button[label="Write a note"]').trigger('click');
         selector = 'textarea[aria-label="Note text"]';
     } else {
-        await wrapper.get('button[aria-label="Memory"]').trigger('click');
+        await openProjectSection('Memory');
         await wrapper.get('button[aria-label="Add memory"]').trigger('click');
         selector = 'textarea[aria-label="New project memory"]';
     }

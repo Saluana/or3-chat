@@ -131,6 +131,7 @@ import SidebarProjectChild from './SidebarProjectChild.vue';
 import SidebarGroupHeader from './SidebarGroupHeader.vue';
 import SidebarProjectExplorer from './SidebarProjectExplorer.vue';
 import type { ExplorerFolderRow } from '~~/shared/explorer/tree';
+import { useOr3Config } from '~/composables/useOr3Config';
 import { useExplorerAvailable } from '~/composables/explorer/explorer-availability';
 
 type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };

@@ -8,6 +8,7 @@ import { useExplorerDrag } from '~/composables/explorer/useExplorerDrag';
 import { useExplorerSelection } from '~/composables/explorer/useExplorerSelection';
 import { useExplorerUndo } from '~/composables/explorer/useExplorerUndo';
 import { openFilesTab, useFilesExplorerReveal, useProjectExplorerReveal } from '~/composables/explorer/useExplorerReveal';
+import { useIcon } from '~/composables/useIcon';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useProjectTreeActions, type ProjectTreeChild, type ProjectTreeRoot } from '~/composables/projects/useProjectTreeActions';
 import { getPaletteHostContext } from '~/composables/search/useCommandPalette';

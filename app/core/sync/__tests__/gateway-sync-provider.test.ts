@@ -751,7 +751,7 @@ describe('GatewaySyncProvider', () => {
         );
         expect(JSON.parse((fetchMock.mock.calls as unknown as [string, RequestInit][])[0]![1].body as string)).toEqual({
             historyIncarnationCapability: 'incarnation-v1', scope: { workspaceId: 'ws-1' }, pageSize: 50, pageToken: 'opaque-page', tables: ['messages'],
-            workspaceItemCapability: 'v1', fileKindCapability: 'v1', unavailableRecordCapability: 'unavailable-v1',
+            workspaceItemCapability: 'v1', explorerCapability: 'v1', fileKindCapability: 'v1', unavailableRecordCapability: 'unavailable-v1',
         });
     });
 

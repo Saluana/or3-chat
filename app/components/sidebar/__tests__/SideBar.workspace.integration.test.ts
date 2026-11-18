@@ -270,9 +270,13 @@ describe('mounted sidebar workspace isolation', () => {
         expect(wrapper.find('[aria-label="Expand Original"]').exists()).toBe(kind !== 'standalone');
     });
 
-    it('hides unavailable project file shortcuts and restores them without changing membership', async () => {
+    it.each(['explorer', 'list'] as const)('hides and restores unavailable project files in the %s without changing membership', async view => {
         setHookEngine(createTypedHookEngine(createHookEngine()));
         const id = `sidebar-file-${crypto.randomUUID()}`;
+        if (view === 'explorer') {
+            session.payload = { appAccessAllowed: true, workspaceItemCapability: 'v1',
+                session: { authenticated: true, user: { id: 'owner' }, workspace: { id }, role: 'owner' } };
+        }
         const db = setActiveWorkspaceDb(id);
         workspaces.push({ id, name: db.name });
         const hash = `sha256:${'a'.repeat(64)}`;
@@ -297,18 +301,22 @@ describe('mounted sidebar workspace isolation', () => {
         wrapper = mount(SideBar, { global: { stubs: {
             SidebarSideNavContent: ProjectContent, SidebarSideNavContentCollapsed: true,
             SidebarSideMobileBottomNav: true, SidebarEntityModals: true, UModal: true,
-            SidebarProjectRoot: true, SidebarProjectChild: true,
+            SidebarProjectRoot: true,
+            SidebarProjectChild: { props: ['child'], template: '<span data-shortcut>{{ child.name }}</span>' },
+            UTree: { props: ['items'], template: '<div><span v-for="row in items" :key="row.key" data-shortcut>{{ row.label }}</span></div>' },
+            AppModal: true, ExplorerMoveDialog: true,
             SidebarCreateProjectModal: true, SidebarAddToProjectModal: true, SidebarCreateDocumentModal: true,
         } } });
-        const child = () => wrapper!.findComponent({ name: 'SidebarProjectChild' });
-        await vi.waitFor(() => expect(child().props('child')).toMatchObject({ id: 'project-file', name: 'Saved project file' }));
+        const child = () => wrapper!.find('[data-shortcut]');
+        await vi.waitFor(() => expect(child().text()).toBe('Saved project file'));
         await db.projects.update('file-project', { data: [{ kind: 'file', id: 'project-file', name: 'Project alias' }] });
-        await vi.waitFor(() => expect(child().props('child').name).toBe('Project alias'));
+        const expectedName = view === 'explorer' ? 'Saved project file' : 'Project alias';
+        await vi.waitFor(() => expect(child().text()).toBe(expectedName));
         await db.file_meta.update(hash, { deleted: true });
         await vi.waitFor(() => expect(child().exists()).toBe(false));
         expect((await db.projects.get('file-project'))?.data).toEqual([{ kind: 'file', id: 'project-file', name: 'Project alias' }]);
         await db.file_meta.update(hash, { deleted: false });
-        await vi.waitFor(() => expect(child().props('child')).toMatchObject({ id: 'project-file', name: 'Project alias' }));
+        await vi.waitFor(() => expect(child().text()).toBe(expectedName));
     });
 
     it.each([false, true])('moves a supported document to Files Trash (SSR: %s)', async ssr => {

@@ -8,6 +8,7 @@ import {
     onDeactivated,
     nextTick,
     ref,
+    shallowRef,
     watch,
     toRaw,
 } from 'vue';
