@@ -42,6 +42,7 @@ import { isCloudFileStorageEnabled, isCloudFileStorageConfigured } from '~/core/
 
 const pageElement = ref<HTMLElement | null>(null);
 const paneWidth = ref(0);
+const filesHeading = ref<HTMLElement | null>(null);
 const previewHeading = ref<HTMLElement | null>(null);
 let resizeObserver: ResizeObserver | undefined;
 let previewTrigger: HTMLElement | null = null;
@@ -105,6 +106,11 @@ const icons = {
 };
 const query = ref('');
 const trash = ref(false);
+async function setTrashView(inTrash: boolean) {
+    trash.value = inTrash;
+    await nextTick();
+    filesHeading.value?.focus();
+}
 const limit = ref(50);
 const more = ref(false);
 const loading = ref(true);
@@ -171,7 +177,7 @@ watch(filterActive, (active, previous) => { if (active && !previous) searchAll.v
 const folderPath = computed(() => organization.value?.tree.path(folderId.value) ?? []);
 const folderLabel = computed(() => folderPath.value.at(-1)?.payload.name ?? 'Files');
 /** Phone and narrow tablet panes get the condensed header and chip filters. */
-const compact = computed(() => paneWidth.value > 0 && paneWidth.value < 600);
+const compact = computed(() => paneWidth.value > 0 && paneWidth.value <= 600);
 const filterUi = computed(() => ({
     base: compact.value
         ? 'files-filter-base rounded-full! h-[34px]! min-h-[34px]! max-md:h-[34px]! max-md:min-h-[34px]! ps-3! pe-8! text-[13px]! max-md:text-[13px]!'
@@ -261,6 +267,8 @@ const listRows = computed(() => {
 });
 const explorerSelection = useExplorerSelection(computed(() => listRows.value.map(row => row.key)));
 const { selected: selectedRows, selectMode, choose, clear: clearSelection, all: selectAll } = explorerSelection;
+const hasPartialSelection = computed(() => activeExplorer.value && selectedRows.value.size > 0
+    && selectedRows.value.size < listRows.value.length);
 const virtualizer = useVirtualizer(computed(() => ({
     count: explorerEnabled.value ? listRows.value.length : 0,
     estimateSize: () => rowHeight,
@@ -1149,7 +1157,15 @@ async function newDocument() {
     });
 }
 
-watch([query, trash, typeFilter, projectFilter], scheduleFilesRefresh);
+watch([query, typeFilter, projectFilter], scheduleFilesRefresh);
+watch(trash, () => {
+    // Never render a snapshot with actions belonging to the other view.
+    rows.value = [];
+    more.value = false;
+    limit.value = 50;
+    clearTimeout(timer);
+    void refresh();
+});
 watch([folderId, searchAll], () => { if (query.value.trim()) scheduleFilesRefresh(); });
 function scheduleFilesRefresh() {
     limit.value = 50;
@@ -1304,8 +1320,8 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
             <header class="files-header" :data-trash="trash">
                 <div class="files-heading">
                     <UButton v-if="trash" class="files-back" size="workspace" color="neutral" variant="ghost" label="Files" aria-label="Back to files"
-                        icon="i-lucide-arrow-left" @click="trash = false" />
-                    <h1>{{ trash ? 'Trash' : 'Files' }}</h1>
+                        icon="i-lucide-arrow-left" @click="setTrashView(false)" />
+                    <h1 ref="filesHeading" tabindex="-1">{{ trash ? 'Trash' : 'Files' }}</h1>
                     <p v-if="!compact || trash">{{ trash ? 'Restore items to put them back where they were.' : 'Your documents and uploads, all in one place.' }}</p>
                 </div>
                 <div v-if="!trash" class="files-header-actions">
@@ -1313,7 +1329,8 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
                         <UButton size="workspace" aria-label="New document" icon="i-lucide-file-plus" color="neutral" variant="ghost" square :disabled="busy || readOnly" @click="newDocument" />
                         <UButton v-if="activeExplorer" size="workspace" :aria-label="'New folder in ' + folderLabel" icon="i-lucide-folder-plus" color="neutral" variant="ghost" square :disabled="busy || readOnly" @click="openFolderDialog()" />
                         <UDropdownMenu :ui="menuUi" :content="{ align: 'end', sideOffset: 6 }" :items="[
-                            { label: 'Trash', icon: icons.trash.value, onSelect: () => { trash = true; } },
+                            { label: 'Trash', icon: icons.trash.value, onSelect: () => setTrashView(true) },
+                            ...(hasPartialSelection ? [{ label: 'Select all results', onSelect: selectAll }] : []),
                             { label: 'Add existing uploads', icon: icons.upload.value, disabled: busy || readOnly || existingComplete, onSelect: addExisting },
                         ]">
                             <UButton size="workspace" :icon="icons.more.value" aria-label="Files options" color="neutral" variant="ghost" square />
@@ -1326,7 +1343,7 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
                         <UButton size="workspace" label="Upload" :aria-label="activeExplorer ? 'Upload to ' + folderLabel : 'Upload'" :icon="icons.upload.value" :disabled="busy || readOnly" @click="chooseUpload" />
                         <span class="files-header-divider" aria-hidden="true" />
                         <UTooltip text="Trash">
-                            <UButton size="workspace" color="neutral" variant="ghost" aria-label="Trash" :icon="icons.trash.value" square @click="trash = true" />
+                            <UButton size="workspace" color="neutral" variant="ghost" aria-label="Trash" :icon="icons.trash.value" square @click="setTrashView(true)" />
                         </UTooltip>
                         <UDropdownMenu :ui="menuUi" :content="{ align: 'end', sideOffset: 6 }" :items="[
                             { label: 'Add existing uploads', icon: icons.upload.value, disabled: busy || readOnly || existingComplete, onSelect: addExisting },
@@ -1387,7 +1404,7 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
                         :aria-pressed="showNavigator" :label="showNavigator ? 'Hide folders' : 'Show folders'" @click="showNavigator = !showNavigator" />
                     <span v-if="compact && !folderPath.length" class="files-count">{{ listRows.length }} {{ listRows.length === 1 ? 'item' : 'items' }}</span>
                     <nav aria-label="Files location" class="files-breadcrumbs" :class="{ 'sr-only': compact && !folderPath.length }">
-                        <UButton v-explorer-drag="{ destination: null, label: 'Files root' }" color="neutral" variant="ghost" label="Files" size="workspace" @dragover="dropFiles($event, null)" @drop="dropFiles($event, null)" :aria-current="folderId === null ? 'location' : undefined" @click="navigateFolder(null)" />
+                        <UButton v-explorer-drag="{ destination: null, label: 'Files root' }" color="neutral" variant="ghost" label="Files" size="workspace" @dragover="dropFiles($event, null)" @drop="dropFiles($event, null)" :aria-current="folderId === null ? 'location' : undefined" :tabindex="compact && !folderPath.length ? -1 : undefined" @click="navigateFolder(null)" />
                         <template v-for="folder in folderPath" :key="folder.id">
                             <span aria-hidden="true">/</span>
                             <UButton v-explorer-drag="{ destination: folder.id, label: folder.payload.name }" color="neutral" variant="ghost" :label="organization?.tree.label(folder)" size="workspace" @dragover="dropFiles($event, folder.id)" @drop="dropFiles($event, folder.id)" :aria-current="folder.id === folderId ? 'location' : undefined" @click="navigateFolder(folder.id)" />
@@ -1709,7 +1726,8 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
     .files-filters::-webkit-scrollbar { display: none; }
     .files-filter { flex-shrink: 0; }
     .files-explorer-tools:not(.files-selection-bar) { flex-wrap: nowrap; gap: 0; margin-bottom: 4px; }
-    .files-explorer-tools:not(.files-selection-bar) .files-breadcrumbs { flex-wrap: nowrap; overflow: hidden; }
+    .files-explorer-tools:not(.files-selection-bar) .files-breadcrumbs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+    .files-breadcrumbs > * { flex-shrink: 0; }
     .files-selection-bar { margin-bottom: 8px; flex-wrap: wrap; padding: 4px 4px 4px 14px; gap: 0 4px; }
     .files-selection-note { order: 10; flex-basis: 100%; padding-bottom: 6px; }
     /* Edge-to-edge list with inset separators, like a native list. */
