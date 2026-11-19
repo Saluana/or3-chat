@@ -500,7 +500,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Use Theme studio, apply immediate CSS state changes with reduced motion, and understand how appearance preferences are saved."
+                    "summary": "Preview theme colors on a sample chat, document, menu, and rename dialog. Customize dialog backdrops and keyboard focus rings and learn how appearance preferences are saved."
                 },
                 {
                     "name": "first-theme.md",

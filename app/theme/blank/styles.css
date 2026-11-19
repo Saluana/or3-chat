@@ -2861,8 +2861,8 @@ html[data-theme='blank'] {
    unlayered !important. */
 @layer utilities {
     html[data-theme='blank'] .app-modal :is(input, textarea):not([type='checkbox'], [type='radio'], [type='range'], [type='color'], [type='file']):is(:focus, :focus-visible) {
-        border-color: color-mix(in srgb, var(--md-on-surface) 55%, transparent) !important;
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--md-on-surface) 10%, transparent) !important;
+        border-color: color-mix(in srgb, var(--md-focus-ring, var(--md-on-surface)) 55%, transparent) !important;
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--md-focus-ring, var(--md-on-surface)) 10%, transparent) !important;
         outline: none !important;
     }
 }

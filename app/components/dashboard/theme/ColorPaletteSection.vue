@@ -3,18 +3,10 @@
         id="dashboard-theme-palette-section"
         class="section-card space-y-4"
         role="group"
-        aria-labelledby="theme-section-palette"
+        aria-label="Theme colors"
     >
-        <div class="flex flex-wrap items-start justify-between gap-3">
-            <div>
-                <h2 id="theme-section-palette" class="dashboard-section-title">
-                    Theme colors
-                </h2>
-                <p class="supporting-text mt-1">
-                    Customize the main colors used throughout the app. Changes
-                    apply to this color mode only.
-                </p>
-            </div>
+        <div class="flex flex-wrap items-center justify-between gap-x-3">
+            <p class="supporting-text text-xs">Changes apply to this color mode only.</p>
             <label class="palette-toggle">
                 <span>Custom colors</span>
                 <input
@@ -29,68 +21,39 @@
         </div>
 
         <div class="color-workspace">
-            <div class="color-list" aria-label="Theme color categories">
-                <section
-                    v-for="group in visibleColorGroups"
-                    :key="group.label"
-                >
-                    <h3 class="color-list-heading">{{ group.label }}</h3>
-                    <button
-                        v-for="color in group.colors"
-                        :key="color.key"
-                        type="button"
-                        class="color-list-item"
-                        :class="{ active: color.key === activeColorKey }"
-                        :aria-pressed="color.key === activeColorKey"
-                        @click="selectColor(color.key)"
+            <section class="color-editor" aria-label="Color editor">
+                <div class="color-token-field">
+                    <label class="field-label" for="dashboard-color-token">Color token</label>
+                    <USelect
+                        id="dashboard-color-token"
+                        v-model="activeColorKey"
+                        :items="colorOptions"
+                        :content="{ align: 'start', sideOffset: 4, collisionPadding: 8 }"
+                        :ui="{ content: 'w-[calc(var(--reka-select-trigger-width)/var(--app-ui-zoom,1))] data-[state=open]:animate-none! data-[state=closed]:animate-none!' }"
+                        :trailing-icon="chevronIcon"
+                        color="neutral"
+                        class="color-token-select w-full"
                     >
-                        <span
-                            class="color-list-swatch"
-                            :style="{ backgroundColor: displayColor(color) }"
-                            aria-hidden="true"
-                        />
-                        <span class="color-list-label">{{ color.label }}</span>
-                        <span class="color-list-value">
-                            {{ displayColor(color) || 'Theme default' }}
-                        </span>
-                        <UIcon
-                            :name="chevronIcon"
-                            class="h-4 w-4 shrink-0"
-                            aria-hidden="true"
-                        />
-                    </button>
-                </section>
-            </div>
-
-            <section
-                ref="editorEl"
-                class="color-editor"
-                :class="{ pinned: editorPinned }"
-                aria-labelledby="active-color-heading"
-            >
-                <header class="color-editor-header">
-                    <span
-                        class="color-editor-swatch"
-                        :style="{ backgroundColor: activeColorValue }"
-                        aria-hidden="true"
-                    />
-                    <div class="min-w-0">
-                        <h3 id="active-color-heading" class="color-editor-title">
-                            {{ activeColor.label }}
-                        </h3>
-                        <p class="color-editor-group">{{ activeGroupLabel }}</p>
-                    </div>
-                </header>
-
+                        <template #leading>
+                            <span
+                                class="color-token-swatch"
+                                :style="{ backgroundColor: activeColorValue }"
+                                aria-hidden="true"
+                            />
+                        </template>
+                    </USelect>
+                    <p v-if="activeColor.hint && !showAdvanced" class="supporting-text text-xs">{{ activeColor.hint }}</p>
+                </div>
                 <div class="color-editor-body">
                     <div class="color-picker-block">
                         <span class="field-label">Color</span>
                         <UColorPicker
                             v-bind="paletteColorPickerProps"
                             :ui="colorPickerUi"
+                            :key="activeColorKey"
                             :throttle="50"
                             :disabled="!colorsEnabled"
-                            :model-value="activeColorValue || undefined"
+                            :model-value="activeRgbHex || undefined"
                             :aria-label="`${activeColor.label} color picker`"
                             class="palette-editor-picker"
                             @pointerdown.capture="startPickerInteraction"
@@ -99,18 +62,16 @@
                     </div>
 
                     <div class="color-fields">
-                        <label class="color-field color-field-wide">
-                            <span class="field-label">Hex</span>
+                        <div class="color-field color-field-wide">
+                            <label for="dashboard-color-hex" class="field-label">Hex</label>
                             <div class="color-hex-row">
                                 <input
+                                    id="dashboard-color-hex"
                                     class="color-hex-input"
                                     type="text"
                                     placeholder="#RRGGBB"
-                                    :value="
-                                        colorsEnabled
-                                            ? localHex[activeColor.key]
-                                            : activeColorValue
-                                    "
+                                    :value="hexDraft ?? activeHex"
+                                    @blur="hexDraft = null"
                                     :disabled="!colorsEnabled"
                                     :aria-label="`${activeColor.label} hex color`"
                                     @input="updateActiveHex"
@@ -118,13 +79,13 @@
                                 <UButton
                                     v-bind="copyButtonProps"
                                     class="shrink-0"
-                                    :disabled="!colorsEnabled || !activeColorValue"
+                                    :disabled="!activeColorValue"
                                     :aria-label="`Copy ${activeColor.label}`"
                                     :title="`Copy ${activeColor.label}`"
-                                    @click="copyColor(activeColor.key)"
+                                    @click="copyToClipboard(activeHex)"
                                 />
                             </div>
-                        </label>
+                        </div>
 
                         <fieldset class="rgb-fields" :disabled="!colorsEnabled">
                             <legend class="field-label">RGB</legend>
@@ -142,6 +103,11 @@
                         </fieldset>
                     </div>
 
+                    <label v-if="activeColorKey === 'dialogBackdrop'" class="color-field">
+                        <span class="field-label">Backdrop opacity · {{ backdropOpacity }}%</span>
+                        <input type="range" min="0" max="100" aria-label="Backdrop opacity"
+                            :value="backdropOpacity" :disabled="!colorsEnabled" @input="setBackdropOpacity" />
+                    </label>
                     <div class="color-presets">
                         <span class="field-label">Quick colors</span>
                         <div class="color-preset-row">
@@ -150,7 +116,7 @@
                                 :key="preset"
                                 type="button"
                                 class="color-preset"
-                                :class="{ active: preset.toLowerCase() === activeColorValue.toLowerCase() }"
+                                :class="{ active: preset === activeRgbHex }"
                                 :style="{
                                     backgroundColor: preset,
                                     color: contrastingTextColor(preset),
@@ -160,64 +126,37 @@
                                 @click="setActiveColorValue(preset)"
                             >
                                 <UIcon
-                                    v-if="preset.toLowerCase() === activeColorValue.toLowerCase()"
+                                    v-if="preset === activeRgbHex"
                                     :name="checkIcon"
                                     class="h-4 w-4"
                                 />
                             </button>
                         </div>
                     </div>
-
-                    <div class="color-preview" :style="previewStyle">
-                        <span class="field-label">Preview</span>
-                        <div class="preview-canvas">
-                            <div class="preview-actions">
-                                <button type="button" class="preview-button filled">
-                                    Primary action
-                                </button>
-                                <button type="button" class="preview-button outlined">
-                                    Secondary
-                                </button>
-                            </div>
-                            <div class="preview-active-item">
-                                <span aria-hidden="true" />
-                                Active item
-                            </div>
-                            <div class="preview-panel">
-                                <strong>Example panel</strong>
-                                <span class="preview-primary-text">Primary text</span>
-                                <span class="preview-secondary-text">Secondary text</span>
-                            </div>
-                        </div>
-                    </div>
                 </div>
+                <button
+                    type="button"
+                    class="advanced-colors-toggle"
+                    :aria-pressed="showAdvanced"
+                    @click="toggleAdvancedColors"
+                >
+                    {{ showAdvanced ? 'Hide advanced colors' : 'Show advanced colors' }}
+                </button>
             </section>
-        </div>
 
-        <div class="flex justify-center">
-            <button
-                type="button"
-                class="advanced-colors-toggle"
-                :aria-expanded="showAdvanced"
-                @click="toggleAdvancedColors"
-            >
-                {{
-                    showAdvanced
-                        ? 'Hide advanced colors'
-                        : 'Show advanced colors'
-                }}
-            </button>
+            <ColorPalettePreview />
         </div>
     </section>
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
-import { useClipboard, useResizeObserver } from '@vueuse/core';
+import { useClipboard, useMutationObserver } from '@vueuse/core';
 import { isBrowser } from '~/utils/env';
 import type { ColorKey } from './types';
+import ColorPalettePreview from './ColorPalettePreview.vue';
 import {
     COLOR_TOKEN_ALIASES,
     COLOR_TOKEN_REGISTRY,
@@ -230,6 +169,7 @@ const set = themeApi.set;
 interface PaletteColorControl {
     key: ColorKey;
     label: string;
+    hint?: string;
     linkedKeys?: ColorKey[];
     contrastKey?: ColorKey;
 }
@@ -241,52 +181,6 @@ interface PaletteColorGroup {
 
 const showAdvanced = ref(false);
 const activeColorKey = ref<ColorKey>('primary');
-const editorEl = ref<HTMLElement | null>(null);
-const scrollEl = ref<HTMLElement | null>(null);
-const editorPinned = ref(false);
-
-function findScrollParent(element: HTMLElement | null): HTMLElement | null {
-    let parent = element?.parentElement ?? null;
-    while (parent && !/(auto|scroll)/.test(getComputedStyle(parent).overflowY)) {
-        parent = parent.parentElement;
-    }
-    return parent;
-}
-
-// A sticky editor taller than the scroll viewport hides its lower controls
-// and drifts against the list, so only pin it while it fits completely.
-function updateEditorPinning() {
-    const editor = editorEl.value;
-    const scroller = scrollEl.value;
-    editorPinned.value = Boolean(
-        editor && scroller && editor.offsetHeight + 24 <= scroller.clientHeight
-    );
-}
-
-onMounted(() => {
-    scrollEl.value = findScrollParent(editorEl.value);
-    updateEditorPinning();
-});
-useResizeObserver([editorEl, scrollEl], updateEditorPinning);
-
-function selectColor(key: ColorKey) {
-    activeColorKey.value = key;
-    const editor = editorEl.value;
-    const scroller = scrollEl.value;
-    if (!editor || !scroller || editorPinned.value) return;
-    // An unpinned editor can sit far from the clicked row (below the list on
-    // narrow screens), so bring it into view unless its top is already visible.
-    const top =
-        editor.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-    if (top >= 0 && top < scroller.clientHeight / 2) return;
-    editor.scrollIntoView({
-        block: 'start',
-        behavior:
-            document.documentElement.dataset.motionResolved === 'reduced'
-                ? 'auto'
-                : 'smooth',
-    });
-}
 
 const basicColorGroups: PaletteColorGroup[] = [
     {
@@ -299,7 +193,7 @@ const basicColorGroups: PaletteColorGroup[] = [
             },
             {
                 key: 'primaryContainer',
-                label: 'Accent surface',
+                label: 'Accent fill',
                 contrastKey: 'onPrimaryContainer',
             },
         ],
@@ -311,13 +205,16 @@ const basicColorGroups: PaletteColorGroup[] = [
             {
                 key: 'surfaceContainerLow',
                 label: 'Panel background',
+                hint: 'Sets the panel and standard container backgrounds together.',
                 linkedKeys: ['surfaceContainer'],
             },
             {
                 key: 'surfaceContainerHigh',
                 label: 'Elevated background',
+                hint: 'Sets both raised background shades together.',
                 linkedKeys: ['surfaceContainerHighest'],
             },
+            { key: 'menuSurface', label: 'Menu & dialog background' },
             { key: 'onSurface', label: 'Primary text' },
             { key: 'onSurfaceVariant', label: 'Muted text' },
         ],
@@ -327,12 +224,13 @@ const basicColorGroups: PaletteColorGroup[] = [
         colors: [
             {
                 key: 'borderColor',
-                label: 'Borders',
+                label: 'Borders & dividers',
+                hint: 'Also sets subtle outlines.',
                 linkedKeys: ['outlineVariant'],
             },
-            { key: 'outline', label: 'Outline color' },
+            { key: 'outline', label: 'Control outlines' },
             { key: 'surfaceHover', label: 'Hover surface' },
-            { key: 'surfaceActive', label: 'Pressed / selected surface' },
+            { key: 'surfaceActive', label: 'Selected & pressed background' },
         ],
     },
     {
@@ -350,7 +248,7 @@ const advancedColorGroups: PaletteColorGroup[] = [
         label: 'Advanced Accent States',
         colors: [
             { key: 'onPrimary', label: 'Text on primary' },
-            { key: 'onPrimaryContainer', label: 'Text on accent surface' },
+            { key: 'onPrimaryContainer', label: 'Text & icons on accent fill' },
             { key: 'primaryHover', label: 'Primary hover' },
             { key: 'primaryActive', label: 'Primary pressed' },
         ],
@@ -362,40 +260,40 @@ const advancedColorGroups: PaletteColorGroup[] = [
                 key: 'surfaceContainerLowest',
                 label: 'Surface container lowest',
             },
-            { key: 'surfaceContainerLow', label: 'Surface container low' },
             { key: 'surfaceContainer', label: 'Surface container' },
-            { key: 'surfaceContainerHigh', label: 'Surface container high' },
             {
                 key: 'surfaceContainerHighest',
                 label: 'Surface container highest',
             },
             { key: 'surfaceVariant', label: 'Surface Variant' },
+            { key: 'dialogBackdrop', label: 'Dialog backdrop' },
             { key: 'inverseSurface', label: 'Inverse Surface' },
-            { key: 'inverseOnSurface', label: 'Inverse On Surface' },
+            { key: 'inverseOnSurface', label: 'Text & icons on inverted background' },
         ],
     },
     {
         label: 'Advanced Borders',
         colors: [
-            { key: 'outlineVariant', label: 'Outline Variant' },
+            { key: 'focusRing', label: 'Keyboard focus ring' },
+            { key: 'outlineVariant', label: 'Subtle outlines' },
         ],
     },
     {
         label: 'Secondary Colors',
         colors: [
             { key: 'secondary', label: 'Secondary' },
-            { key: 'onSecondary', label: 'On Secondary' },
+            { key: 'onSecondary', label: 'Text & icons on secondary' },
             { key: 'secondaryContainer', label: 'Secondary Container' },
-            { key: 'onSecondaryContainer', label: 'On Secondary Container' },
+            { key: 'onSecondaryContainer', label: 'Text & icons on secondary fill' },
         ],
     },
     {
         label: 'Tertiary Colors',
         colors: [
             { key: 'tertiary', label: 'Tertiary' },
-            { key: 'onTertiary', label: 'On Tertiary' },
+            { key: 'onTertiary', label: 'Text & icons on tertiary' },
             { key: 'tertiaryContainer', label: 'Tertiary Container' },
-            { key: 'onTertiaryContainer', label: 'On Tertiary Container' },
+            { key: 'onTertiaryContainer', label: 'Text & icons on tertiary fill' },
         ],
     },
     {
@@ -418,25 +316,19 @@ const advancedColorGroups: PaletteColorGroup[] = [
     },
 ];
 
-const visibleColorGroups = computed(() =>
-    showAdvanced.value
-        ? [...basicColorGroups, ...advancedColorGroups]
-        : basicColorGroups
-);
-
 const allColorGroups = [...basicColorGroups, ...advancedColorGroups];
+const colorOptions = computed(() =>
+    (showAdvanced.value ? allColorGroups : basicColorGroups).map((group) => [
+        { type: 'label' as const, label: group.label },
+        ...group.colors.map(({ key, label }) => ({ value: key, label })),
+    ])
+);
 const activeColor = computed(
     () =>
         allColorGroups
             .flatMap((group) => group.colors)
             .find((color) => color.key === activeColorKey.value) ??
         basicColorGroups[0]!.colors[0]!
-);
-const activeGroupLabel = computed(
-    () =>
-        allColorGroups.find((group) =>
-            group.colors.some((color) => color.key === activeColorKey.value)
-        )?.label ?? 'Theme color'
 );
 const colorsEnabled = computed(
     () => overrides.value.colors?.enabled ?? false
@@ -452,29 +344,7 @@ const quickColors = [
     '#e83e78',
 ];
 
-const allColorKeys = [
-    ...new Set(
-        [...basicColorGroups, ...advancedColorGroups].flatMap((group) =>
-            group.colors.flatMap((color) => [
-                color.key,
-                ...(color.linkedKeys ?? []),
-                ...(color.contrastKey ? [color.contrastKey] : []),
-            ])
-        )
-    ),
-];
-
-const colorCssVarMap = COLOR_TOKEN_REGISTRY as Record<ColorKey, string>;
-
-// Local hex inputs
-const localHex: Record<ColorKey, string> = reactive(
-    Object.fromEntries(
-        allColorKeys.map((key) => {
-            const value = String(overrides.value.colors?.[key] || '');
-            return [key, value.startsWith('#') ? value : ''];
-        })
-    ) as Record<ColorKey, string>
-);
+const hexDraft = ref<string | null>(null);
 
 // Theme overrides for UI components
 const paletteColorPickerOverride = useThemeOverrides({
@@ -487,8 +357,9 @@ const paletteColorPickerProps = computed(
     () => paletteColorPickerOverride.value || {}
 );
 const colorPickerUi = {
-    selector: '!h-48 !w-48',
-    track: '!h-48',
+    picker: 'grid! w-full grid-cols-[minmax(0,1fr)_auto] items-stretch!',
+    selector: 'aspect-square h-auto! w-full!',
+    track: 'h-auto!',
 };
 
 const copyButtonOverride = useThemeOverrides({
@@ -498,7 +369,7 @@ const copyButtonOverride = useThemeOverrides({
     isNuxtUI: true,
 });
 const copyIcon = useIcon('ui.copy');
-const chevronIcon = useIcon('ui.chevron.right');
+const chevronIcon = useIcon('ui.chevron.down');
 const checkIcon = useIcon('ui.check');
 const copyButtonProps = computed(() => {
     return {
@@ -533,8 +404,9 @@ function getCurrentThemeColor(cssVar: string): string {
 
 function getCurrentTokenColor(key: ColorKey): string {
     const cssVariables = [
-        colorCssVarMap[key],
+        COLOR_TOKEN_REGISTRY[key],
         ...(COLOR_TOKEN_ALIASES[key] ?? []),
+        ...(key === 'menuSurface' ? [COLOR_TOKEN_REGISTRY.surface] : []),
     ].filter((value): value is string => Boolean(value));
     for (const cssVariable of cssVariables) {
         const color = getCurrentThemeColor(cssVariable);
@@ -543,52 +415,28 @@ function getCurrentTokenColor(key: ColorKey): string {
     return '';
 }
 
-function displayColor(control: PaletteColorControl): string {
-    const customized = overrides.value.colors?.[control.key];
-    if (
-        colorsEnabled.value &&
-        typeof customized === 'string' &&
-        isValidHex(customized)
-    ) {
-        return customized;
-    }
-    return getCurrentTokenColor(control.key);
+const themeColor = ref('');
+function readThemeColor() {
+    themeColor.value = getCurrentTokenColor(activeColorKey.value);
 }
-
-const activeColorValue = computed(() => displayColor(activeColor.value));
-const activeRgb = computed(() => hexToRgb(activeColorValue.value));
-const previewStyle = computed(() => {
-    const color = activeColorValue.value || '#3478f6';
-    return {
-        '--preview-color': color,
-        '--preview-on-color': contrastingTextColor(color),
-    };
+onMounted(readThemeColor);
+watch(activeColorKey, readThemeColor);
+useMutationObserver(() => isBrowser() ? document.documentElement : null, readThemeColor, {
+    attributes: true,
+    attributeFilter: ['class', 'style', 'data-theme'],
 });
 
+const activeColorValue = computed(() => {
+    const saved = overrides.value.colors?.[activeColorKey.value];
+    return colorsEnabled.value && saved && isValidHex(saved) ? saved : themeColor.value;
+});
+const activeRgbHex = computed(() => expandHex(activeColorValue.value).slice(0, 7));
+const activeHex = computed(() => activeColorKey.value === 'dialogBackdrop' ? activeRgbHex.value : activeColorValue.value);
+const activeRgb = computed(() => hexToRgb(activeRgbHex.value));
+watch([activeColorKey, colorsEnabled], () => { hexDraft.value = null; });
+
 function togglePaletteOverrides() {
-    const currentlyEnabled = overrides.value.colors?.enabled ?? false;
-
-    if (!currentlyEnabled) {
-        // Enabling: Initialize with current theme colors
-        const initialColors: Partial<Record<ColorKey, string>> & {
-            enabled: boolean;
-        } = { enabled: true };
-        for (const key of allColorKeys) {
-            const savedColor = overrides.value.colors?.[key];
-            const color =
-                typeof savedColor === 'string' && savedColor.length > 0
-                    ? savedColor
-                    : getCurrentTokenColor(key);
-            if (color) {
-                initialColors[key] = color;
-            }
-        }
-
-        set({ colors: initialColors });
-    } else {
-        // Disabling: Just toggle off
-        set({ colors: { enabled: false } });
-    }
+    set({ colors: { enabled: !colorsEnabled.value } });
 }
 
 // Hex handling
@@ -603,18 +451,7 @@ function ensureHash(v: string) {
 }
 
 function contrastingTextColor(color: string): '#000000' | '#ffffff' {
-    const hex = color.slice(1);
-    const expanded =
-        hex.length === 3 || hex.length === 4
-            ? hex
-                  .slice(0, 3)
-                  .split('')
-                  .map((part) => part + part)
-                  .join('')
-            : hex.slice(0, 6);
-    const channels = [0, 2, 4].map((offset) =>
-        Number.parseInt(expanded.slice(offset, offset + 2), 16) / 255
-    );
+    const channels = hexToRgb(color).map(channel => channel / 255);
     const luminance = channels
         .map((channel) =>
             channel <= 0.04045
@@ -633,11 +470,13 @@ function setColor(control: PaletteColorControl, color: string) {
     const colors: Partial<Record<ColorKey, string>> = {
         [control.key]: color,
     };
-    for (const linkedKey of control.linkedKeys ?? []) {
-        colors[linkedKey] = color;
-    }
-    if (control.contrastKey) {
-        colors[control.contrastKey] = contrastingTextColor(color);
+    if (!showAdvanced.value) {
+        for (const linkedKey of control.linkedKeys ?? []) {
+            colors[linkedKey] = color;
+        }
+        if (control.contrastKey) {
+            colors[control.contrastKey] = contrastingTextColor(color);
+        }
     }
     set({ colors });
 }
@@ -646,14 +485,17 @@ function setActiveColorValue(color?: string) {
     if (!color || !colorsEnabled.value) return;
     const normalized = ensureHash(color).toLowerCase();
     if (!isValidHex(normalized)) return;
-    localHex[activeColor.value.key] = normalized;
-    setColor(activeColor.value, normalized);
+    const next = activeColorKey.value === 'dialogBackdrop'
+        ? expandHex(normalized).slice(0, 7) + backdropAlpha.value
+        : normalized;
+    setColor(activeColor.value, next);
 }
 
 // Nuxt UI's picker echoes rounded HSL values after programmatic changes.
 // Accept those updates only while a user is actually dragging the picker.
 let pickerInteracting = false;
 let pickerReleaseTimer: ReturnType<typeof setTimeout> | undefined;
+watch(activeColorKey, () => { pickerInteracting = false; });
 function startPickerInteraction() {
     clearTimeout(pickerReleaseTimer);
     pickerInteracting = true;
@@ -677,26 +519,32 @@ onUnmounted(() => {
 });
 
 function updateActiveHex(event: Event) {
-    localHex[activeColor.value.key] = String(
-        (event.currentTarget as HTMLInputElement).value ?? ''
-    );
-    onHexInput(activeColor.value);
+    const value = (event.currentTarget as HTMLInputElement).value;
+    hexDraft.value = value;
+    const color = ensureHash(value.trim()).toLowerCase();
+    if (activeColorKey.value === 'dialogBackdrop' && color.length !== 4 && color.length !== 7) return;
+    setActiveColorValue(color);
+}
+
+const backdropAlpha = computed(() => expandHex(activeColorValue.value).slice(7) || 'ff');
+const backdropOpacity = computed(() => Math.round(parseInt(backdropAlpha.value, 16) * 100 / 255));
+function setBackdropOpacity(event: Event) {
+    const percent = (event.currentTarget as HTMLInputElement).valueAsNumber;
+    const alpha = Math.round(percent * 255 / 100).toString(16).padStart(2, '0');
+    setColor(activeColor.value, activeRgbHex.value + alpha);
+}
+
+function expandHex(color: string): string {
+    if (color.length === 4 || color.length === 5) {
+        return '#' + Array.from(color.slice(1), digit => digit + digit).join('').toLowerCase();
+    }
+    return color.toLowerCase();
 }
 
 function hexToRgb(color: string): [number, number, number] {
     if (!isValidHex(color)) return [0, 0, 0];
-    const hex = color.slice(1);
-    const expanded =
-        hex.length === 3 || hex.length === 4
-            ? hex
-                  .slice(0, 3)
-                  .split('')
-                  .map((part) => part + part)
-                  .join('')
-            : hex.slice(0, 6);
-    return [0, 2, 4].map((offset) =>
-        Number.parseInt(expanded.slice(offset, offset + 2), 16)
-    ) as [number, number, number];
+    const rgb = expandHex(color);
+    return [1, 3, 5].map(offset => parseInt(rgb.slice(offset, offset + 2), 16)) as [number, number, number];
 }
 
 function setRgbChannel(index: number, event: Event) {
@@ -725,44 +573,7 @@ function toggleAdvancedColors() {
     }
 }
 
-function onHexInput(control: PaletteColorControl) {
-    const raw = localHex[control.key];
-    if (!raw) return;
-    const candidate = ensureHash(raw.trim());
-    if (isValidHex(candidate)) {
-        setColor(control, candidate.toLowerCase());
-    }
-}
-
 const { copy: copyToClipboard } = useClipboard({ legacy: true });
-
-async function copyColor(key: ColorKey) {
-    const val = overrides.value.colors?.[key] || '';
-    if (!val || !val.startsWith('#')) return;
-    try {
-        await copyToClipboard(val);
-        if (import.meta.dev) {
-            console.log('[ColorPaletteSection] Copied color:', val);
-        }
-    } catch {
-        console.error('[ColorPaletteSection] Copy failed');
-    }
-}
-
-// Sync local hex when overrides change
-watch(
-    overrides,
-    (o) => {
-        if (!o?.colors) return;
-        for (const key of Object.keys(localHex) as ColorKey[]) {
-            const val = o.colors[key];
-            if (val && val.startsWith('#')) {
-                localHex[key] = val;
-            }
-        }
-    },
-    { deep: true }
-);
 </script>
 
 <style scoped>
@@ -770,10 +581,8 @@ watch(
     width: 100%;
     max-width: 74rem;
     margin-inline: auto;
+    container-type: inline-size;
     --theme-editor-accent: var(--md-primary);
-    --theme-editor-on-accent: var(--md-on-primary);
-    --theme-editor-accent-container: var(--md-primary-container);
-    --theme-editor-on-accent-container: var(--md-on-primary-container);
     --theme-editor-subtle: var(
         --md-surface-container-low,
         var(--md-surface)
@@ -782,13 +591,6 @@ watch(
         --md-outline-variant,
         var(--md-border-color)
     );
-}
-#dashboard-theme-palette-section .dashboard-section-title {
-    font-size: 1.25rem;
-    font-weight: 650;
-}
-#dashboard-theme-palette-section > div:first-child .supporting-text {
-    font-size: 0.8125rem;
 }
 .palette-toggle {
     position: relative;
@@ -847,136 +649,37 @@ watch(
     display: grid;
     min-width: 0;
     gap: 1.25rem;
-    padding-top: 0.25rem;
+    align-items: start;
+    padding-top: 0.75rem;
     border-top: var(--md-border-width) solid var(--theme-editor-border);
 }
-.color-list,
-.color-editor {
-    min-width: 0;
-    color: var(--md-on-surface);
-    background: transparent;
-    border: 0;
-    border-radius: 0;
-}
-.color-list section + section {
-    margin-top: 0.8rem;
-}
-.color-list-heading {
-    margin: 0 0.65rem;
-    padding: 0.7rem 0 0.45rem;
-    color: var(--md-on-surface-variant, var(--md-on-surface));
-    background: transparent;
-    border-bottom: var(--md-border-width-subtle) solid
-        var(--theme-editor-border);
-    font-size: 0.7rem;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-}
-.color-list-item {
+.color-editor,
+.color-editor-body,
+.color-token-field {
     display: grid;
-    width: 100%;
-    min-height: 2.8rem;
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
-    align-items: center;
+    min-width: 0;
     gap: 0.65rem;
-    padding: 0.45rem 0.65rem;
-    color: var(--md-on-surface);
-    text-align: left;
-    background: transparent;
-    border: 0;
-    border-radius: var(--md-border-radius-small);
-    cursor: pointer;
 }
-.color-list-item:hover {
-    background: var(--theme-editor-subtle);
+.color-token-field {
+    gap: 0.35rem;
 }
-.color-list-item.active {
-    color: var(--theme-editor-on-accent-container);
-    background: var(--theme-editor-accent-container);
-    box-shadow: inset var(--md-border-width-strong) 0 0
-        var(--theme-editor-accent);
-}
-.color-list-item:focus-visible {
-    position: relative;
-    z-index: 1;
-    outline: var(--app-focus-ring-width, 2px) solid
-        var(--md-focus-ring, var(--theme-editor-accent));
-    outline-offset: calc(-1 * var(--app-focus-ring-width, 2px));
-}
-.color-list-swatch,
-.color-editor-swatch {
+.color-token-swatch {
     display: block;
-    width: 1.35rem;
-    height: 1.35rem;
-    background-color: var(--md-surface-container-high);
+    width: 0.95rem;
+    height: 0.95rem;
     border: var(--md-border-width) solid var(--md-border-color);
     border-radius: var(--md-border-radius-small);
-    box-shadow: inset 0 0 0 1px
-        color-mix(in srgb, var(--md-on-surface) 18%, transparent);
-}
-.color-list-label {
-    min-width: 0;
-    overflow: hidden;
-    font-size: 0.875rem;
-    font-weight: 600;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.color-list-value {
-    color: var(--md-on-surface-variant, var(--md-on-surface));
-    font-family: ui-monospace, monospace;
-    font-size: 0.72rem;
-    text-transform: uppercase;
-}
-.color-editor {
-    align-self: start;
-    padding: 0.55rem 0;
-    scroll-margin-top: 0.75rem;
-}
-.color-editor-header {
-    display: flex;
-    min-height: auto;
-    align-items: center;
-    gap: 0.7rem;
-    padding: 0.65rem 0.8rem 0.35rem;
-    background: transparent;
-    border-bottom: 0;
-}
-.color-editor-swatch {
-    width: 1.8rem;
-    height: 1.8rem;
-}
-.color-editor-title {
-    overflow: hidden;
-    font-size: 1.0625rem;
-    font-weight: 650;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.color-editor-group {
-    color: var(--md-on-surface-variant, var(--md-on-surface));
-    font-size: 0.66rem;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-}
-.color-editor-body {
-    display: grid;
-    min-width: 0;
-    gap: 0.85rem 1.25rem;
-    padding: 0.75rem 0.8rem;
 }
 .color-picker-block,
 .color-fields,
-.color-presets,
-.color-preview {
+.color-presets {
     display: flex;
     min-width: 0;
     flex-direction: column;
     gap: 0.55rem;
 }
 .palette-editor-picker {
-    max-width: 100%;
+    width: min(100%, 11rem);
 }
 .field-label {
     color: var(--md-on-surface-variant, var(--md-on-surface));
@@ -1017,7 +720,6 @@ watch(
     min-width: 0;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.45rem;
-    margin-top: 0.8rem;
     padding: 0;
     border: 0;
 }
@@ -1057,6 +759,7 @@ watch(
     opacity: 0.55;
 }
 .advanced-colors-toggle {
+    justify-self: start;
     min-height: 2.35rem;
     padding: 0.4rem 0.7rem;
     color: var(--md-on-surface) !important;
@@ -1071,102 +774,13 @@ watch(
     ) !important;
     border-color: var(--md-primary) !important;
 }
-.color-preview {
-    padding-top: 0.8rem;
-    background: transparent;
-    border: 0;
-    border-top: var(--md-border-width) solid var(--theme-editor-border);
-    border-radius: 0;
-}
-.preview-canvas {
-    display: flex;
-    flex-direction: column;
-    gap: 0.65rem;
-    padding: 0.75rem;
-    background: var(--theme-editor-subtle);
-    border: var(--md-border-width) solid var(--theme-editor-border);
-    border-radius: var(--md-border-radius-small);
-}
-.preview-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.45rem;
-}
-.preview-button {
-    min-width: 6.5rem;
-    padding: 0.5rem 0.7rem;
-    border: var(--md-border-width) solid var(--preview-color);
-    border-radius: var(--md-border-radius-small);
-}
-.preview-button.filled {
-    color: var(--preview-on-color);
-    background: var(--preview-color);
-}
-.preview-button.outlined {
-    color: var(--preview-color);
-    background: var(--md-surface);
-}
-.preview-panel {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    padding: 0.65rem;
-    background: var(--md-surface);
-    border: var(--md-border-width) solid var(--theme-editor-border);
-    border-radius: var(--md-border-radius-small);
-}
-.preview-primary-text {
-    color: var(--md-on-surface);
-    font-size: 0.72rem;
-}
-.preview-secondary-text {
-    color: var(--md-on-surface-variant, var(--md-on-surface));
-    font-size: 0.7rem;
-}
-.preview-active-item {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    color: var(--md-on-surface);
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-.preview-active-item > span {
-    width: 0.65rem;
-    height: 0.65rem;
-    background: var(--preview-color);
-    border-radius: 50%;
-}
-@media (max-width: 520px) {
-    .color-list-value {
-        display: none;
-    }
-    .color-editor-body {
-        padding: 0.75rem;
-    }
-}
-@media (min-width: 760px) {
-    .color-editor-body {
-        grid-template-columns: auto minmax(12rem, 1fr);
-        align-items: start;
-    }
-    .color-presets,
-    .color-preview {
-        grid-column: 1 / -1;
-    }
-}
-@media (min-width: 980px) {
+@container (min-width: 35rem) {
     .color-workspace {
-        grid-template-columns: minmax(18rem, 0.88fr) minmax(22rem, 1.12fr);
-        align-items: start;
+        grid-template-columns: minmax(12rem, 1fr) min(62%, 26rem);
     }
     .color-editor {
-        padding-left: 1.25rem;
-        border-left: var(--md-border-width) solid var(--theme-editor-border);
-    }
-    .color-editor.pinned {
-        position: sticky;
-        top: 0.75rem;
+        padding-inline-end: 1.25rem;
+        border-inline-end: var(--md-border-width) solid var(--theme-editor-border);
     }
 }
 </style>
