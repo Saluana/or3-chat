@@ -166,8 +166,8 @@
                         </div>
 
                         <p v-if="policyError" role="status" class="text-xs text-[var(--md-on-surface-variant)]">{{ policyError }}</p>
-                        <p v-for="(status, platform) in platformStatus" v-show="status === 'unavailable' || status === 'stale' || status === 'loading'" :key="platform" role="status" class="text-xs text-[var(--md-on-surface-variant)]">
-                            {{ platform === 'openai' ? 'OpenAI' : 'OpenRouter' }}: {{ status === 'loading' ? 'Loading models…' : status === 'stale' ? 'Showing saved models. Refresh to try again.' : 'Models unavailable. Refresh to try again.' }}
+                        <p v-for="(status, platform) in platformStatus" v-show="status === 'unavailable' || status === 'stale'" :key="platform" role="status" class="text-xs text-[var(--md-on-surface-variant)]">
+                            {{ platform === 'openai' ? 'OpenAI' : 'OpenRouter' }}: {{ status === 'stale' ? 'Showing saved models. Refresh to try again.' : 'Models unavailable. Refresh to try again.' }}
                         </p>
                         <!-- Count + sort -->
                         <div class="flex items-center justify-between gap-2">
@@ -197,13 +197,7 @@
 
                     <!-- List -->
                     <div ref="listElement" class="model-catalog-list flex-1 min-h-0 relative" role="list" aria-label="Models" @keydown="onListKeydown">
-                        <div
-                            v-if="!searchReady"
-                            class="p-6 text-sm text-[var(--md-on-surface-variant)]"
-                        >
-                            Loading models…
-                        </div>
-                        <template v-else>
+                        <template v-if="searchReady">
                             <ClientOnly v-if="visibleModels.length">
                                 <Or3Scroll
                                     ref="modelScroller"
@@ -228,9 +222,6 @@
                                         </div>
                                     </template>
                                 </Or3Scroll>
-                                <template #fallback>
-                                    <div class="p-6 text-sm text-[var(--md-on-surface-variant)]">Loading models…</div>
-                                </template>
                             </ClientOnly>
                             <div
                                 v-else
