@@ -20,9 +20,11 @@
 
         <div class="typography-grid">
             <label class="typography-field">
-                <span>Body font</span>
+                <span id="theme-body-font-label">Body font</span>
                 <select
                     :value="bodyFontChoice"
+                    aria-labelledby="theme-body-font-label"
+                    aria-describedby="theme-body-font-help"
                     @change="setFontChoice('bodyFont', $event)"
                 >
                     <option
@@ -33,13 +35,15 @@
                         {{ option.label }}
                     </option>
                 </select>
-                <small>Used for controls, messages, and supporting text.</small>
+                <small id="theme-body-font-help">{{ descriptions.bodyFont }}</small>
             </label>
 
             <label class="typography-field">
-                <span>Heading font</span>
+                <span id="theme-heading-font-label">Heading font</span>
                 <select
                     :value="headingFontChoice"
+                    aria-labelledby="theme-heading-font-label"
+                    aria-describedby="theme-heading-font-help"
                     @change="setFontChoice('headingFont', $event)"
                 >
                     <option
@@ -50,13 +54,15 @@
                         {{ option.label }}
                     </option>
                 </select>
-                <small>Used for titles, section labels, and display text.</small>
+                <small id="theme-heading-font-help">{{ descriptions.headingFont }}</small>
             </label>
 
             <label class="typography-field">
-                <span>Interface scale</span>
+                <span id="theme-ui-scale-label">Interface scale</span>
                 <select
                     :value="uiScaleChoice"
+                    aria-labelledby="theme-ui-scale-label"
+                    aria-describedby="theme-ui-scale-help"
                     @change="setUiScale"
                 >
                     <option
@@ -67,17 +73,16 @@
                         {{ choice === 'theme' ? 'Theme default' : `${choice}%` }}
                     </option>
                 </select>
-                <small>
-                    Resizes the whole app. Message and document text keeps
-                    its own size.
-                </small>
+                <small id="theme-ui-scale-help">{{ descriptions.uiScale }}</small>
             </label>
 
             <label class="typography-field typography-size-field">
-                <span>Base font size</span>
+                <span id="theme-font-size-label">Base font size</span>
                 <span class="typography-range-row">
                     <input
                         type="range"
+                        aria-labelledby="theme-font-size-label"
+                        aria-describedby="theme-font-size-help"
                         min="14"
                         max="24"
                         :value="localBaseFontPx"
@@ -85,9 +90,7 @@
                     />
                     <output>{{ localBaseFontPx }}px</output>
                 </span>
-                <small>
-                    Scales interface text that follows the shared root size.
-                </small>
+                <small id="theme-font-size-help">{{ descriptions.baseFontPx }}</small>
             </label>
         </div>
     </section>
@@ -96,6 +99,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useDebounceFn } from '@vueuse/core';
+import { APPEARANCE_SETTING_DESCRIPTIONS } from '~/core/theme/appearance-setting-descriptions';
 import { USER_FONT_OPTIONS } from '~/core/theme/font-options';
 import {
     UI_SCALE_CHOICES,
@@ -110,6 +114,7 @@ import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 const themeApi = useUserThemeOverrides();
 const overrides = themeApi.overrides;
 const set = themeApi.set;
+const descriptions = APPEARANCE_SETTING_DESCRIPTIONS.typography;
 
 // Without an override, show the size the active theme actually renders.
 function themeBaseFontPx(): number {

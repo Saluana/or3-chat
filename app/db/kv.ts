@@ -590,16 +590,20 @@ export async function hardDeleteKvByName(
 export async function tombstoneKvByName(
     name: string,
     targetDb: Or3DB = getDb(),
-    guard?: StorageMutationGuard
+    guard?: StorageMutationGuard & { readonly ifClock?: number }
 ): Promise<void> {
     throwIfRevoked(guard);
+    throwIfBadClock(guard?.ifClock);
     await ensureDbOpen(targetDb);
     throwIfRevoked(guard);
     const hooks = useHooks();
     // Fast refusal outside the transaction only; the authoritative state is
     // re-read inside it below.
-    const { row: outer } = await readKvRevisionState(targetDb, name);
+    const { row: outer, clock: outerClock } = await readKvRevisionState(targetDb, name);
     throwIfRevoked(guard);
+    if (guard?.ifClock !== undefined && guard.ifClock !== outerClock) {
+        throw staleRevisionError(outerClock);
+    }
     if (!outer || outer.deleted) return;
     const now = nowSec();
     await targetDb.transaction(
@@ -617,6 +621,9 @@ export async function tombstoneKvByName(
                 targetDb,
                 name
             );
+            if (guard?.ifClock !== undefined && guard.ifClock !== currentClock) {
+                throw staleRevisionError(currentClock);
+            }
             if (!current || current.deleted) return;
             throwIfRevoked(guard);
             await hooks.doAction('db.kv.deleteByName:action:hard:before', {

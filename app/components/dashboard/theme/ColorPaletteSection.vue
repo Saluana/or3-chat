@@ -6,11 +6,14 @@
         aria-label="Theme colors"
     >
         <div class="flex flex-wrap items-center justify-between gap-x-3">
-            <p class="supporting-text text-xs">Changes apply to this color mode only.</p>
+            <p id="theme-custom-colors-help" class="supporting-text text-xs">
+                {{ APPEARANCE_SETTING_DESCRIPTIONS.colors.enabled }}
+            </p>
             <label class="palette-toggle">
                 <span>Custom colors</span>
                 <input
                     type="checkbox"
+                    aria-describedby="theme-custom-colors-help"
                     :checked="overrides.colors?.enabled ?? false"
                     @change="togglePaletteOverrides"
                 />
@@ -27,10 +30,17 @@
                     <USelect
                         id="dashboard-color-token"
                         v-model="activeColorKey"
-                        :aria-describedby="activeColor.description ? 'dashboard-color-token-description' : undefined"
+                        aria-describedby="dashboard-color-token-description"
                         :items="colorOptions"
-                        :content="{ align: 'start', sideOffset: 4, collisionPadding: 8 }"
-                        :ui="{ content: 'w-[calc(var(--reka-select-trigger-width)/var(--app-ui-zoom,1))] data-[state=open]:animate-none! data-[state=closed]:animate-none!' }"
+                        :content="colorTokenMenuPlacement"
+                        :ui="{
+                            base: 'ps-9',
+                            leading: 'ps-3',
+                            trailing: 'pe-3',
+                            content: 'w-[calc(var(--reka-select-trigger-width)/var(--app-ui-zoom,1))] data-[state=open]:animate-none! data-[state=closed]:animate-none!',
+                            label: 'px-2',
+                            item: 'items-center gap-2 px-2',
+                        }"
                         :trailing-icon="chevronIcon"
                         color="neutral"
                         class="color-token-select w-full"
@@ -42,9 +52,17 @@
                                 aria-hidden="true"
                             />
                         </template>
+                        <template #item-leading="{ item }">
+                            <span
+                                v-if="'swatch' in item"
+                                class="color-token-swatch"
+                                :style="{ backgroundColor: item.swatch }"
+                                aria-hidden="true"
+                            />
+                        </template>
                     </USelect>
-                    <p v-if="activeColor.description" id="dashboard-color-token-description" class="supporting-text text-xs">
-                        {{ activeColor.description }}
+                    <p id="dashboard-color-token-description" class="supporting-text text-xs">
+                        {{ COLOR_TOKEN_DESCRIPTIONS[activeColor.key] }}
                         <template v-if="activeColor.hint && !showAdvanced"> {{ activeColor.hint }}</template>
                     </p>
                 </div>
@@ -110,7 +128,11 @@
                     <label v-if="activeColorKey === 'dialogBackdrop'" class="color-field">
                         <span class="field-label">Backdrop opacity · {{ backdropOpacity }}%</span>
                         <input type="range" min="0" max="100" aria-label="Backdrop opacity"
+                            aria-describedby="theme-backdrop-opacity-help"
                             :value="backdropOpacity" :disabled="!colorsEnabled" @input="setBackdropOpacity" />
+                        <span id="theme-backdrop-opacity-help" class="supporting-text text-xs">
+                            {{ APPEARANCE_SETTING_DESCRIPTIONS.backdropOpacity }}
+                        </span>
                     </label>
                     <div class="color-presets">
                         <span class="field-label">Quick colors</span>
@@ -159,10 +181,12 @@ import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useClipboard, useMutationObserver } from '@vueuse/core';
 import { isBrowser } from '~/utils/env';
+import { APPEARANCE_SETTING_DESCRIPTIONS } from '~/core/theme/appearance-setting-descriptions';
 import type { ColorKey } from './types';
 import ColorPalettePreview from './ColorPalettePreview.vue';
 import {
     COLOR_TOKEN_ALIASES,
+    COLOR_TOKEN_DESCRIPTIONS,
     COLOR_TOKEN_REGISTRY,
 } from '~/theme/_shared/design-token-registry';
 
@@ -170,10 +194,18 @@ const themeApi = useUserThemeOverrides();
 const overrides = themeApi.overrides;
 const set = themeApi.set;
 
+const colorTokenMenuPlacement = {
+    align: 'start',
+    alignFlip: false,
+    sideOffset: 4,
+    // The menu fits the trigger. Allow for Floating UI mistaking body zoom
+    // for a scrollbar gutter while keeping its vertical collision checks.
+    collisionPadding: { top: 8, bottom: 8, left: -32, right: -32 },
+} as const;
+
 interface PaletteColorControl {
     key: ColorKey;
     label: string;
-    description?: string;
     hint?: string;
     linkedKeys?: ColorKey[];
     contrastKey?: ColorKey;
@@ -194,13 +226,11 @@ const basicColorGroups: PaletteColorGroup[] = [
             {
                 key: 'primary',
                 label: 'Primary accent',
-                description: 'Colors primary actions such as Send and Save.',
                 contrastKey: 'onPrimary',
             },
             {
                 key: 'primaryContainer',
                 label: 'Accent fill',
-                description: 'Fills tinted highlights such as the selected heading in the document outline.',
                 contrastKey: 'onPrimaryContainer',
             },
         ],
@@ -211,36 +241,30 @@ const basicColorGroups: PaletteColorGroup[] = [
             {
                 key: 'surface',
                 label: 'App background',
-                description: 'Sets the base background for chats, documents, and the document toolbar.',
             },
             {
                 key: 'surfaceContainerLow',
                 label: 'Panel background',
-                description: 'Fills inset areas such as chat settings panels and attachment placeholders.',
                 hint: 'Also updates the standard container background.',
                 linkedKeys: ['surfaceContainer'],
             },
             {
                 key: 'surfaceContainerHigh',
                 label: 'Elevated background',
-                description: 'Fills raised surfaces such as the tiles behind notification icons.',
                 hint: 'Also updates the highest container shade.',
                 linkedKeys: ['surfaceContainerHighest'],
             },
             {
                 key: 'menuSurface',
                 label: 'Menu & dialog background',
-                description: 'Fills action menus, dropdowns, and dialogs such as Rename.',
             },
             {
                 key: 'onSurface',
                 label: 'Primary text',
-                description: 'Colors main text such as headings, chat messages, and item names.',
             },
             {
                 key: 'onSurfaceVariant',
                 label: 'Muted text',
-                description: 'Colors secondary details such as sidebar timestamps and helper text.',
             },
         ],
     },
@@ -250,24 +274,20 @@ const basicColorGroups: PaletteColorGroup[] = [
             {
                 key: 'borderColor',
                 label: 'Borders & dividers',
-                description: 'Colors separators between sections and borders around panels and dialogs.',
                 hint: 'Also sets subtle outlines.',
                 linkedKeys: ['outlineVariant'],
             },
             {
                 key: 'outline',
                 label: 'Control outlines',
-                description: 'Colors the edges of controls such as the chat composer and message editor.',
             },
             {
                 key: 'surfaceHover',
                 label: 'Hover surface',
-                description: 'Fills hovered rows and controls and also colors chat bubbles in the Blank theme.',
             },
             {
                 key: 'surfaceActive',
                 label: 'Selected & pressed background',
-                description: 'Fills pressed buttons and selected controls such as the project view toggle.',
             },
         ],
     },
@@ -277,17 +297,14 @@ const basicColorGroups: PaletteColorGroup[] = [
             {
                 key: 'error',
                 label: 'Error',
-                description: 'Colors error alerts and destructive actions such as Delete.',
             },
             {
                 key: 'success',
                 label: 'Success',
-                description: 'Colors positive status indicators such as the dot for a connected provider.',
             },
             {
                 key: 'warning',
                 label: 'Warning',
-                description: 'Colors caution indicators such as the icon beside a recovered project item.',
             },
         ],
     },
@@ -309,7 +326,6 @@ const advancedColorGroups: PaletteColorGroup[] = [
             {
                 key: 'surfaceContainerLowest',
                 label: 'Surface container lowest',
-                description: 'Fills the Files table header and related surfaces such as upload notices.',
             },
             { key: 'surfaceContainer', label: 'Surface container' },
             {
@@ -371,7 +387,14 @@ const allColorGroups = [...basicColorGroups, ...advancedColorGroups];
 const colorOptions = computed(() =>
     (showAdvanced.value ? allColorGroups : basicColorGroups).map((group) => [
         { type: 'label' as const, label: group.label },
-        ...group.colors.map(({ key, label }) => ({ value: key, label })),
+        ...group.colors.map(({ key, label }) => ({
+            value: key,
+            label,
+            swatch: tokenColorVariables(key).reduceRight(
+                (fallback, variable) => `var(${variable}, ${fallback})`,
+                'transparent'
+            ),
+        })),
     ])
 );
 const activeColor = computed(
@@ -453,13 +476,16 @@ function getCurrentThemeColor(cssVar: string): string {
     return value.startsWith('#') ? value : '';
 }
 
-function getCurrentTokenColor(key: ColorKey): string {
-    const cssVariables = [
+function tokenColorVariables(key: ColorKey): readonly string[] {
+    return [
         COLOR_TOKEN_REGISTRY[key],
         ...(COLOR_TOKEN_ALIASES[key] ?? []),
         ...(key === 'menuSurface' ? [COLOR_TOKEN_REGISTRY.surface] : []),
-    ].filter((value): value is string => Boolean(value));
-    for (const cssVariable of cssVariables) {
+    ];
+}
+
+function getCurrentTokenColor(key: ColorKey): string {
+    for (const cssVariable of tokenColorVariables(key)) {
         const color = getCurrentThemeColor(cssVariable);
         if (color) return color;
     }
@@ -716,8 +742,9 @@ const { copy: copyToClipboard } = useClipboard({ legacy: true });
 }
 .color-token-swatch {
     display: block;
-    width: 0.95rem;
-    height: 0.95rem;
+    flex: none;
+    width: 1rem;
+    height: 1rem;
     border: var(--md-border-width) solid var(--md-border-color);
     border-radius: var(--md-border-radius-small);
 }

@@ -69,6 +69,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useNuxtApp, useRuntimeConfig } from '#imports';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
+import { readThemeSwatch } from '~/core/theme/theme-swatch';
 import type { ThemePlugin } from '~/plugins/90.theme.client';
 
 interface ThemeInfo {
@@ -100,29 +101,12 @@ const availableThemes = computed(() =>
 // Compiled variable blocks per theme: the light block first, then `.dark` overrides.
 const themeVariables = ref<Record<string, string>>({});
 const activeMode = useUserThemeOverrides().activeMode;
-const SWATCH_TOKENS = ['--md-primary', '--md-secondary', '--md-tertiary'];
-
 const swatches = computed(() =>
     Object.fromEntries(
-        Object.entries(themeVariables.value).map(([name, css]) => {
-            const colors: Record<string, string> = {};
-            for (const block of css.split('}')) {
-                const [selector = '', body = ''] = block.split('{');
-                if (selector.includes('.dark') && activeMode.value !== 'dark') continue;
-                for (const [, token = '', value = ''] of body.matchAll(
-                    /(--md-(?:primary|secondary|tertiary|surface)):\s*([^;]+);/g
-                )) {
-                    colors[token] = value.trim();
-                }
-            }
-            return [
-                name,
-                {
-                    surface: colors['--md-surface'],
-                    accents: SWATCH_TOKENS.flatMap((token) => colors[token] ?? []),
-                },
-            ];
-        })
+        Object.entries(themeVariables.value).map(([name, css]) => [
+            name,
+            readThemeSwatch(css, activeMode.value),
+        ])
     )
 );
 

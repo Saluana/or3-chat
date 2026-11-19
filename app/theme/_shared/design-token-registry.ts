@@ -48,6 +48,54 @@ export const COLOR_TOKEN_REGISTRY = {
 
 export type RegisteredColorToken = keyof typeof COLOR_TOKEN_REGISTRY;
 
+/** Usage descriptions shared by the Appearance picker and chat tools. */
+export const COLOR_TOKEN_DESCRIPTIONS = {
+    primary: 'Colors primary actions such as Send and Save.',
+    onPrimary: 'Colors text and icons on primary buttons and selected chips.',
+    primaryContainer: 'Fills tinted highlights such as the selected heading in the document outline.',
+    onPrimaryContainer: 'Colors text and icons on tinted accent fills such as the workspace indicator.',
+    secondary: 'Provides the secondary accent used by sidebar highlights and secondary controls.',
+    onSecondary: 'Provides the foreground for themes that place text or icons on the secondary accent.',
+    secondaryContainer: 'Fills secondary accent surfaces such as hovered items in the resizable sidebar.',
+    onSecondaryContainer: 'Colors text and icons on secondary accent surfaces such as hovered sidebar items.',
+    tertiary: 'Provides an extra accent, including the fallback accent for tiles in the mobile More menu.',
+    onTertiary: 'Provides the foreground for themes that place text or icons on the tertiary accent.',
+    tertiaryContainer: 'Provides a tinted background for components that use a tertiary accent fill.',
+    onTertiaryContainer: 'Colors text and icons on tertiary accent fills and workflow tags in the chat composer.',
+    error: 'Colors error alerts and destructive actions such as Delete.',
+    onError: 'Colors text and icons on solid error backgrounds such as the unread notification count.',
+    errorContainer: 'Fills tinted error surfaces such as error notices in the dashboard.',
+    onErrorContainer: 'Colors text and icons on tinted error surfaces such as dashboard error notices.',
+    surface: 'Sets the base background for chats, documents, and the document toolbar.',
+    menuSurface: 'Fills action menus, dropdowns, and dialogs such as Rename.',
+    dialogBackdrop: 'Colors the overlay that dims the page behind a dialog.',
+    focusRing: 'Colors the outline that marks which control has keyboard focus.',
+    onSurface: 'Colors main text such as headings, chat messages, and item names.',
+    surfaceVariant: 'Fills alternate surfaces such as document status banners.',
+    onSurfaceVariant: 'Colors secondary details such as sidebar timestamps and helper text.',
+    surfaceContainerLowest: 'Fills the Files table header and related surfaces such as upload notices.',
+    surfaceContainerLow: 'Fills inset areas such as chat settings panels and attachment placeholders.',
+    surfaceContainer: 'Fills muted surfaces such as inline code backgrounds.',
+    surfaceContainerHigh: 'Fills raised surfaces such as the tiles behind notification icons.',
+    surfaceContainerHighest: 'Fills high-emphasis surfaces such as admin navigation labels and loading placeholders.',
+    surfaceHover: 'Fills hovered rows and controls and also colors chat bubbles in the Blank theme.',
+    surfaceActive: 'Fills pressed buttons and selected controls such as the project view toggle.',
+    inverseSurface: 'Fills inverted controls such as the primary action in the sidebar account menu.',
+    inverseOnSurface: 'Colors text and icons on inverted surfaces such as the sidebar account action.',
+    outline: 'Colors the edges of controls such as the chat composer and message editor.',
+    outlineVariant: 'Colors muted borders such as those around admin panels.',
+    borderColor: 'Colors separators between sections and borders around panels and dialogs.',
+    primaryHover: 'Fills primary controls on hover, including the selected tab in Appearance.',
+    primaryActive: 'Fills primary controls while pressed, including Send in Retro and Cyberpunk.',
+    errorHover: 'Fills destructive and error-colored controls on hover, such as Stop in chat.',
+    errorActive: 'Fills destructive and error-colored controls while pressed, such as Stop in chat.',
+    success: 'Colors positive status indicators such as the dot for a connected provider.',
+    warning: 'Colors caution indicators such as the icon beside a recovered project item.',
+    info: 'Colors informational elements such as Marketplace status badges.',
+    infoHover: 'Fills informational buttons on hover in themes such as Retro and Cyberpunk.',
+    infoActive: 'Fills informational buttons while pressed in themes such as Retro and Cyberpunk.',
+} as const satisfies Record<RegisteredColorToken, string>;
+
 /** Compatibility variables consumed by Nuxt UI's semantic color bridge. */
 export const COLOR_TOKEN_ALIASES: Partial<
     Record<RegisteredColorToken, readonly string[]>

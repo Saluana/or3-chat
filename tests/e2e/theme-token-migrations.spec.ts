@@ -1710,6 +1710,81 @@ test('empty chat: theme changes and the first send preserve composer ownership',
 });
 
 
+test('saved themes restore their base theme and both color modes after reload', async ({ page }, info) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openResponsiveChat(page, 'blank', 'light');
+    await openThemeStudio(page, false);
+    const settings = page.getByRole('dialog', { name: 'Appearance', exact: true });
+    const root = page.locator('html');
+    const colorsTab = settings.getByRole('tab', { name: 'Colors', exact: true });
+    const themeTab = settings.getByRole('tab', { name: 'Theme', exact: true });
+    const customColors = settings.getByRole('checkbox', { name: 'Custom colors' });
+    const accent = settings.getByRole('textbox', { name: 'Primary accent hex color' });
+
+    async function save(name: string) {
+        await themeTab.click();
+        const section = settings.getByRole('region', { name: 'Saved themes', exact: true });
+        await section.getByRole('button', { name: 'Save current theme' }).click();
+        await section.getByRole('textbox', { name: 'Theme name' }).fill(name);
+        await section.getByRole('button', { name: 'Save', exact: true }).click();
+        await expect(card(name)).toHaveAttribute('aria-pressed', 'true');
+    }
+
+    function card(name: string) {
+        return settings.getByRole('button', { name: `Apply ${name}`, exact: true });
+    }
+
+    async function apply(name: string) {
+        await themeTab.click();
+        await card(name).click();
+        await expect(card(name)).toHaveAttribute('aria-pressed', 'true');
+    }
+
+    await selectThemeAndMode(page, 'retro', 'light');
+    await save('Original Retro');
+    await selectThemeAndMode(page, 'blank', 'light');
+    await colorsTab.click();
+    await settings.getByText('Custom colors', { exact: true }).click();
+    await accent.fill('#2165ad');
+    await expect(root).toHaveCSS('--md-primary', '#2165ad');
+    await selectThemeAndMode(page, 'blank', 'dark');
+    await colorsTab.click();
+    await settings.getByText('Custom colors', { exact: true }).click();
+    await accent.fill('#bf6924');
+    await expect(root).toHaveCSS('--md-primary', '#bf6924');
+    await save('Custom Blank');
+
+    await apply('Original Retro');
+    await expect(root).toHaveAttribute('data-theme', 'retro');
+    await expect(root).toHaveClass(/\bdark\b/);
+    await colorsTab.click();
+    await expect(customColors).not.toBeChecked();
+
+    await openThemeStudio(page, false);
+    await apply('Custom Blank');
+    await expect(root).toHaveAttribute('data-theme', 'blank');
+    await expect(root).toHaveCSS('--md-primary', '#2165ad');
+    await settings.getByRole('button', { name: 'Dark', exact: true }).click();
+    await expect(root).toHaveCSS('--md-primary', '#bf6924');
+
+    // Delete is immediate and can be undone from the inline notice.
+    await themeTab.click();
+    await settings.getByRole('button', { name: 'More actions for Original Retro' }).click();
+    await page.getByRole('menuitem', { name: 'Delete' }).click();
+    await expect(card('Original Retro')).toHaveCount(0);
+    await settings.getByRole('button', { name: 'Undo' }).click();
+    await expect(card('Original Retro')).toBeVisible();
+    await expect(card('Custom Blank')).toHaveAttribute('aria-pressed', 'true');
+    await captureChat(page, info, 'saved-themes-dark');
+    await selectThemeAndMode(page, 'blank', 'light');
+    await expect(card('Custom Blank')).toHaveAttribute('aria-pressed', 'true');
+    await settings.getByRole('button', { name: 'Save current theme' }).click();
+    await captureChat(page, info, 'saved-themes-light-save-form');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await captureChat(page, info, 'saved-themes-mobile');
+});
+
 // Theme studio must recolor both the modal frame and its internal dividers.
 for (const mode of modes) test('blank modal border follows custom colors in ' + mode + ' mode', async ({ page }, info) => {
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -1821,6 +1896,10 @@ test('theme color preview keeps the sample rename dialog open during color edits
     await tokenSelect.click();
     const colorOptions = page.getByRole('listbox');
     await expect(colorOptions).toBeInViewport();
+    await expect(colorOptions.getByRole('option', { name: 'Hover surface', exact: true }).locator('.color-token-swatch'))
+        .toHaveCSS('background-color', 'rgb(66, 100, 130)');
+    await expect(colorOptions.getByRole('option', { name: 'App background', exact: true }).locator('.color-token-swatch'))
+        .toHaveCSS('background-color', 'rgb(255, 255, 255)');
     const optionsBounds = (await colorOptions.boundingBox())!;
     expect(Math.abs(optionsBounds.y - (tokenBounds.y + tokenBounds.height))).toBeLessThan(12);
     expect(Math.abs(optionsBounds.x - tokenBounds.x)).toBeLessThan(12);
@@ -1854,6 +1933,22 @@ test('theme color preview keeps the sample rename dialog open during color edits
     await expect(preview.getByRole('heading', { name: 'Weekend packing list' })).toBeVisible();
 
     await page.setViewportSize({ width: 390, height: 780 });
+    await tokenSelect.click();
+    const primaryAccentOption = colorOptions.getByRole('option', { name: 'Primary accent', exact: true });
+    await primaryAccentOption.click();
+    const triggerSwatch = (await tokenSelect.locator('.color-token-swatch').boundingBox())!;
+    const triggerLabel = (await tokenSelect.locator('[data-slot="value"]').boundingBox())!;
+    await tokenSelect.click();
+    await expect(primaryAccentOption).toBeInViewport({ ratio: 1 });
+    for (const name of ['Primary accent', 'Accent fill']) {
+        const option = colorOptions.getByRole('option', { name, exact: true });
+        const swatch = (await option.locator('.color-token-swatch').boundingBox())!;
+        const label = (await option.locator('[data-slot="itemLabel"]').boundingBox())!;
+        expect(Math.abs(swatch.x - triggerSwatch.x)).toBeLessThan(2);
+        expect(Math.abs(label.x - triggerLabel.x)).toBeLessThan(2);
+        expect(Math.abs(swatch.y + swatch.height / 2 - label.y - label.height / 2)).toBeLessThan(1);
+    }
+    await page.keyboard.press('Escape');
     await preview.getByRole('button', { name: 'Trip notes', exact: true }).click();
     await expect(preview.getByText('What should I pack?')).toBeVisible();
     await preview.getByRole('button', { name: 'Actions for Trip notes' }).click();

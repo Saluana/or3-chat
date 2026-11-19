@@ -242,7 +242,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 8,
-                    "summary": "Name-based storage, revisions, compare-and-set, and quotas."
+                    "summary": "Name-based storage, sidebar pins, saved theme presets, revisions, compare-and-set, and quotas."
                 },
                 {
                     "name": "files.md",
@@ -380,7 +380,7 @@
                     "category": "Using tools",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Configure chat tools, web search, appearance editing, workspace tools, delegated tasks, and retained results with stable source controls."
+                    "summary": "Configure chat tools, web search, appearance editing with shared setting descriptions, workspace tools, delegated tasks, and retained results."
                 },
                 {
                     "name": "chat-tool-reliability.md",
@@ -500,7 +500,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Preview theme colors on a sample chat, document, menu, and rename dialog. Customize appearance in Theme Studio or with chat tools and learn how preferences are saved."
+                    "summary": "Save and switch named light and dark appearance presets, preview theme colors, and customize appearance in Theme Studio or with chat tools."
                 },
                 {
                     "name": "first-theme.md",

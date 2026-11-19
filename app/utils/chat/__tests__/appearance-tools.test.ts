@@ -63,7 +63,36 @@ it('uses the chat tool switch and applies appearance updates only to the request
     await expect(execute('update_appearance', patch)).resolves.toMatchObject({ error: /active color mode changed/ });
     const inspected = await execute('get_appearance', {});
     expect(inspected.error).toBeUndefined();
-    expect(JSON.parse(inspected.result!)).toMatchObject({ mode: 'dark', overrides: { colors: { enabled: false } } });
+    const descriptions = {
+        primary: expect.stringContaining('Send and Save'),
+        surfaceContainerLowest: expect.stringContaining('Files table header'),
+        focusRing: expect.stringContaining('keyboard focus'),
+    };
+    const modeDescription = expect.stringContaining('light and dark');
+    const scaleDescription = expect.stringContaining('keeping message and document text');
+    const emphasisDescription = expect.stringContaining('selected base theme card');
+    expect(JSON.parse(inspected.result!)).toMatchObject({
+        mode: 'dark',
+        overrides: { colors: { enabled: false } },
+        colorTokenDescriptions: descriptions,
+        settingDescriptions: {
+            mode: modeDescription,
+            typography: { uiScale: scaleDescription },
+            shape: { borderWidthStrongPx: emphasisDescription },
+        },
+    });
+    const definitions = registry.getEnabledDefinitions({ workspaceId, threadId });
+    const update = definitions.find(tool => tool.function.name === 'update_appearance');
+    expect(update?.function.parameters).toMatchObject({
+        properties: {
+            mode: { description: modeDescription },
+            colors: {
+                properties: Object.fromEntries(Object.entries(descriptions).map(([key, description]) => [key, { description }])),
+            },
+            typography: { properties: { uiScale: { description: scaleDescription } } },
+            shape: { properties: { borderWidthStrongPx: { description: emphasisDescription } } },
+        },
+    });
 });
 
 it('rejects unknown tokens and non-hex CSS before applying any part of an update', async () => {

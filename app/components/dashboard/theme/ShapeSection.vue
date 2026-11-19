@@ -18,6 +18,7 @@
             <label class="shape-toggle">
                 <input
                     type="checkbox"
+                    aria-describedby="theme-shape-overrides-help"
                     :checked="overrides.shape?.enabled ?? false"
                     @change="toggleShapeOverrides"
                 />
@@ -25,9 +26,8 @@
             </label>
         </div>
 
-        <p class="supporting-text text-xs">
-            Overrides affect only this color mode. Disabling them restores the
-            active theme's original shape.
+        <p id="theme-shape-overrides-help" class="supporting-text text-xs">
+            {{ descriptions.enabled }}
         </p>
 
         <div class="shape-controls">
@@ -38,6 +38,7 @@
                 </div>
                 <input
                     id="theme-border-width-subtle"
+                    aria-describedby="theme-border-width-subtle-help"
                     v-model.number="localBorderWidthSubtlePx"
                     type="range"
                     min="0"
@@ -46,8 +47,8 @@
                     :disabled="!shapeOverridesEnabled"
                     @input="commitBorderWidthSubtle(localBorderWidthSubtlePx)"
                 />
-                <p class="supporting-text">
-                    Used for subtle separators and dividers.
+                <p id="theme-border-width-subtle-help" class="supporting-text">
+                    {{ descriptions.borderWidthSubtlePx }}
                 </p>
             </div>
 
@@ -58,6 +59,7 @@
                 </div>
                 <input
                     id="theme-border-width"
+                    aria-describedby="theme-border-width-help"
                     v-model.number="localBorderWidthPx"
                     type="range"
                     min="0"
@@ -66,8 +68,8 @@
                     :disabled="!shapeOverridesEnabled"
                     @input="commitBorderWidth(localBorderWidthPx)"
                 />
-                <p class="supporting-text">
-                    The standard border used by existing components.
+                <p id="theme-border-width-help" class="supporting-text">
+                    {{ descriptions.borderWidthPx }}
                 </p>
             </div>
 
@@ -78,6 +80,7 @@
                 </div>
                 <input
                     id="theme-border-width-strong"
+                    aria-describedby="theme-border-width-strong-help"
                     v-model.number="localBorderWidthStrongPx"
                     type="range"
                     min="0"
@@ -86,8 +89,8 @@
                     :disabled="!shapeOverridesEnabled"
                     @input="commitBorderWidthStrong(localBorderWidthStrongPx)"
                 />
-                <p class="supporting-text">
-                    Used for emphasized frames and high-attention boundaries.
+                <p id="theme-border-width-strong-help" class="supporting-text">
+                    {{ descriptions.borderWidthStrongPx }}
                 </p>
             </div>
 
@@ -98,6 +101,7 @@
                 </div>
                 <input
                     id="theme-border-radius-small"
+                    aria-describedby="theme-border-radius-small-help"
                     v-model.number="localBorderRadiusSmallPx"
                     type="range"
                     min="0"
@@ -106,8 +110,8 @@
                     :disabled="!shapeOverridesEnabled"
                     @input="commitBorderRadiusSmall(localBorderRadiusSmallPx)"
                 />
-                <p class="supporting-text">
-                    Used for compact controls and inputs.
+                <p id="theme-border-radius-small-help" class="supporting-text">
+                    {{ descriptions.borderRadiusSmallPx }}
                 </p>
             </div>
 
@@ -118,6 +122,7 @@
                 </div>
                 <input
                     id="theme-border-radius"
+                    aria-describedby="theme-border-radius-help"
                     v-model.number="localBorderRadiusPx"
                     type="range"
                     min="0"
@@ -126,8 +131,8 @@
                     :disabled="!shapeOverridesEnabled"
                     @input="commitBorderRadius(localBorderRadiusPx)"
                 />
-                <p class="supporting-text">
-                    The standard rounding used by existing surfaces.
+                <p id="theme-border-radius-help" class="supporting-text">
+                    {{ descriptions.borderRadiusPx }}
                 </p>
             </div>
 
@@ -138,6 +143,7 @@
                 </div>
                 <input
                     id="theme-border-radius-large"
+                    aria-describedby="theme-border-radius-large-help"
                     v-model.number="localBorderRadiusLargePx"
                     type="range"
                     min="0"
@@ -146,8 +152,8 @@
                     :disabled="!shapeOverridesEnabled"
                     @input="commitBorderRadiusLarge(localBorderRadiusLargePx)"
                 />
-                <p class="supporting-text">
-                    Used for large panels, dialogs, and other broad surfaces.
+                <p id="theme-border-radius-large-help" class="supporting-text">
+                    {{ descriptions.borderRadiusLargePx }}
                 </p>
             </div>
         </div>
@@ -158,12 +164,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useDebounceFn } from '@vueuse/core';
+import { APPEARANCE_SETTING_DESCRIPTIONS } from '~/core/theme/appearance-setting-descriptions';
 import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 import { isBrowser } from '~/utils/env';
 
 const themeApi = useUserThemeOverrides();
 const overrides = themeApi.overrides;
 const set = themeApi.set;
+const descriptions = APPEARANCE_SETTING_DESCRIPTIONS.shape;
 
 const localBorderWidthSubtlePx = ref(
     overrides.value.shape?.borderWidthSubtlePx ?? 1

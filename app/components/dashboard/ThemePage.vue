@@ -39,6 +39,7 @@
             <template v-if="activeSection === 'theme'">
                 <div class="flex min-w-0 flex-col gap-4">
                     <DashboardThemeModeToggle />
+                    <DashboardThemeSavedThemes />
                     <DashboardThemeSelector />
                 </div>
             </template>

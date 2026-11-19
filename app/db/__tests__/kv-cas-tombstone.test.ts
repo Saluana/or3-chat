@@ -135,6 +135,9 @@ describe('kv CAS guards', () => {
         await expect(
             setKvByName('k', 'stale', undefined, { ifClock: 1 })
         ).rejects.toMatchObject({ rpcCode: 'conflict', details: { currentRevision: 3 } });
+        await expect(tombstoneKvByName('k', undefined, { ifClock: first.clock }))
+            .rejects.toMatchObject({ rpcCode: 'conflict', details: { currentRevision: 3 } });
+        expect(dbState.table.__rows.get(second.id)).toMatchObject({ value: 'v2', deleted: false });
     });
 
     it('refuses writes past the derived quota and frees quota on delete', async () => {

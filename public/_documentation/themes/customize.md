@@ -10,6 +10,21 @@ choices: Retro can be light or dark. A disabled or undiscovered theme cannot be
 selected. Administrator installation is covered in
 [Package and install](/documentation/themes/package-install).
 
+## Save and switch themes
+
+On the **Theme** tab, choose **Save current theme**, enter a name, and select
+**Save**. The preset captures the installed base theme and your customizations
+for both light and dark mode. Saving with the name of an existing preset
+replaces that preset.
+
+Select a saved theme's card to apply it. Applying replaces both sets of active
+customizations and keeps the current light or dark mode; save your current look
+first if you want to switch back to it later. The card whose preset matches
+your current look is marked **Active**. Each card's menu can update the preset
+with your current look, rename it, or delete it; a deletion can be undone from
+the notice that follows. Background images appear on devices that have the
+referenced workspace files.
+
 ## Customize one area
 
 | Section | What it changes |
@@ -25,9 +40,10 @@ chat, sidebar, and dialogs as well as the preview. Keep foreground/background
 pairs readable. The color editor pairs high-impact roles, but a custom palette
 still needs checks in both modes.
 
-In **Colors**, use **Color token** to choose the color you want to edit. A short
-description below the picker shows where each main color is used. Switch
-between the sample chat and document in **Live preview**. Open either item's
+In **Colors**, use **Color token** to choose the color you want to edit. Each
+option shows a swatch of its current color. A short description below the picker
+shows where each color is used, including advanced colors. Switch between the
+sample chat and document in **Live preview**. Open either item's
 **⋯** menu and choose **Rename** to preview the sidebar's rename dialog.
 **Menu & dialog background** changes the open dialog and sidebar action menus.
 **App background** also colors the document toolbar. Under **Show advanced
@@ -40,6 +56,7 @@ Renaming changes only the sample title for the current preview.
 
 You can also ask a tool-capable chat to change colors, typography, borders,
 corner radii, or color mode when its **Appearance** tools are enabled.
+The AI sees the same one-sentence descriptions shown next to those controls.
 See [Appearance tools](/documentation/utils/chat-tools#appearance-tools).
 
 Style groups have their own enable switches. Disabling a group restores the
@@ -77,6 +94,7 @@ appearance without discarding your saved choices.
 | First SSR theme paint | `or3_active_theme` browser cookie, checked against discovered themes |
 | Light/dark mode | Browser `localStorage['theme']` |
 | Personal style overrides | Browser localStorage, separately for light and dark |
+| Saved themes | One `theme-preset:<id>` KV record per preset in the active workspace, eligible for its configured sync |
 | Focus width and motion | Browser localStorage, shared across modes |
 
 Personal style and accessibility overrides are not currently an account-synced
