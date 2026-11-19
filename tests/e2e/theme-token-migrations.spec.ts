@@ -732,7 +732,7 @@ test.describe('responsive modal layouts', () => {
     }
 });
 
-async function openThemeStudio(page: Page, isMobile: boolean): Promise<void> {
+async function openThemeStudio(page: Page, isMobile: boolean, path = '/chat'): Promise<void> {
     await page.context().addCookies([
         {
             name: 'or3_workspace_profile_v1',
@@ -752,9 +752,10 @@ async function openThemeStudio(page: Page, isMobile: boolean): Promise<void> {
         localStorage.removeItem('or3:user-theme-overrides:dark');
         localStorage.removeItem('or3:user-theme-accessibility');
     });
-    await page.goto('/chat');
+    await page.goto(path);
 
-    await expect(page.getByRole('textbox', { name: 'Message input' }).first())
+    const readyInput = path.startsWith('/docs/') ? 'Document title' : 'Message input';
+    await expect(page.getByRole('textbox', { name: readyInput, exact: true }).first())
         .toBeVisible({ timeout: 30_000 });
     const dismissWelcome = page.getByRole('button', { name: 'Dismiss welcome' });
     if (await dismissWelcome.isVisible()) await dismissWelcome.click();
@@ -1771,7 +1772,11 @@ test('theme color preview keeps the sample rename dialog open during color edits
     test.setTimeout(60_000);
     await page.setViewportSize({ width: 1280, height: 900 });
     await openResponsiveChat(page, 'blank', 'light');
-    await openThemeStudio(page, false);
+    await page.getByTestId('sidebar-inner').getByRole('button', { name: 'Create a document', exact: true }).click();
+    const editorToolbar = page.locator('.document-editor-root .editor-toolbar');
+    await expect(editorToolbar).toBeVisible();
+    await expect(page).toHaveURL(/\/docs\/.+/);
+    await openThemeStudio(page, false, new URL(page.url()).pathname);
     await selectThemeAndMode(page, 'blank', 'light');
     const settings = page.getByRole('dialog', { name: 'Appearance', exact: true });
     await settings.getByRole('tab', { name: 'Colors', exact: true }).click();
@@ -1792,6 +1797,8 @@ test('theme color preview keeps the sample rename dialog open during color edits
     expect(frameBounds.x).toBeGreaterThan(editorBounds.x + editorBounds.width);
     await preview.getByRole('button', { name: 'Packing list', exact: true }).click();
     await expect(preview.getByRole('heading', { name: 'Packing list' })).toBeVisible();
+    const previewToolbar = preview.locator('.preview-toolbar');
+    const initialToolbarColor = await editorToolbar.evaluate((element) => getComputedStyle(element).backgroundColor);
 
     const actions = preview.getByRole('button', { name: 'Actions for Packing list' });
     await actions.press('Enter');
@@ -1821,6 +1828,9 @@ test('theme color preview keeps the sample rename dialog open during color edits
     await captureChat(page, info, 'theme-color-preview-token-dropdown');
     await colorOptions.getByRole('option', { name: 'App background', exact: true }).click();
     await settings.getByRole('textbox', { name: 'App background hex color' }).fill('#FFF6E8');
+    const updatedToolbarColor = () => editorToolbar.evaluate((element) => getComputedStyle(element).backgroundColor);
+    await expect.poll(updatedToolbarColor).not.toBe(initialToolbarColor);
+    await expect(previewToolbar).toHaveCSS('background-color', await updatedToolbarColor());
     await expect(dialog).toHaveCSS('background-color', 'rgb(255, 246, 232)');
     await expect(dialog).toBeInViewport({ ratio: 1 });
     await expect(title).toHaveValue('Weekend packing list');

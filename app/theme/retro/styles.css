@@ -1324,6 +1324,10 @@
  * Do not mirror into blank / cyberpunk.
  */
 [data-theme="retro"] {
+	.document-toolbar-surface {
+		--doc-toolbar-surface: var(--md-surface);
+	}
+
 	.document-editor-root .editor-toolbar {
 		--doc-tb-size: 36px;
 		--doc-tb-icon: 16px;
@@ -1351,7 +1355,6 @@
 		--doc-tb-shadow-hover: 2px 2px 0 var(--md-border-color);
 		--doc-tb-shadow-pressed: 0 0 0 transparent;
 		--doc-toolbar-fade: 1rem;
-		--doc-toolbar-surface: var(--md-surface);
 
 		min-height: 52px;
 		padding-block: 5px;

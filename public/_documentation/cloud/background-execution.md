@@ -119,8 +119,8 @@ server-executable tool set apart from delegation itself. It rejects unsupported
 requests before creating a job instead of silently switching modes. The field
 is private routing metadata and is not sent to the model provider. The client
 selects this protocol only when discovery and request preparation establish
-eligibility. Otherwise it warns before sending that delegated chats need the
-browser to stay open. Native SQLite provider 0.0.25 supplies this capability
+eligibility. Browser-run delegated chats need the originating browser to stay
+open until they finish. Native SQLite provider 0.0.25 supplies this capability
 with a compatible host; D1 does not.
 
 For eligible durable calls, child activity can show waiting, working, or saving.

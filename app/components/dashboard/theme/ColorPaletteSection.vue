@@ -27,6 +27,7 @@
                     <USelect
                         id="dashboard-color-token"
                         v-model="activeColorKey"
+                        :aria-describedby="activeColor.description ? 'dashboard-color-token-description' : undefined"
                         :items="colorOptions"
                         :content="{ align: 'start', sideOffset: 4, collisionPadding: 8 }"
                         :ui="{ content: 'w-[calc(var(--reka-select-trigger-width)/var(--app-ui-zoom,1))] data-[state=open]:animate-none! data-[state=closed]:animate-none!' }"
@@ -42,7 +43,10 @@
                             />
                         </template>
                     </USelect>
-                    <p v-if="activeColor.hint && !showAdvanced" class="supporting-text text-xs">{{ activeColor.hint }}</p>
+                    <p v-if="activeColor.description" id="dashboard-color-token-description" class="supporting-text text-xs">
+                        {{ activeColor.description }}
+                        <template v-if="activeColor.hint && !showAdvanced"> {{ activeColor.hint }}</template>
+                    </p>
                 </div>
                 <div class="color-editor-body">
                     <div class="color-picker-block">
@@ -169,6 +173,7 @@ const set = themeApi.set;
 interface PaletteColorControl {
     key: ColorKey;
     label: string;
+    description?: string;
     hint?: string;
     linkedKeys?: ColorKey[];
     contrastKey?: ColorKey;
@@ -189,11 +194,13 @@ const basicColorGroups: PaletteColorGroup[] = [
             {
                 key: 'primary',
                 label: 'Primary accent',
+                description: 'Colors primary actions such as Send and Save.',
                 contrastKey: 'onPrimary',
             },
             {
                 key: 'primaryContainer',
                 label: 'Accent fill',
+                description: 'Fills tinted highlights such as the selected heading in the document outline.',
                 contrastKey: 'onPrimaryContainer',
             },
         ],
@@ -201,22 +208,40 @@ const basicColorGroups: PaletteColorGroup[] = [
     {
         label: 'Backgrounds & Text',
         colors: [
-            { key: 'surface', label: 'App background' },
+            {
+                key: 'surface',
+                label: 'App background',
+                description: 'Sets the base background for chats, documents, and the document toolbar.',
+            },
             {
                 key: 'surfaceContainerLow',
                 label: 'Panel background',
-                hint: 'Sets the panel and standard container backgrounds together.',
+                description: 'Fills inset areas such as chat settings panels and attachment placeholders.',
+                hint: 'Also updates the standard container background.',
                 linkedKeys: ['surfaceContainer'],
             },
             {
                 key: 'surfaceContainerHigh',
                 label: 'Elevated background',
-                hint: 'Sets both raised background shades together.',
+                description: 'Fills raised surfaces such as the tiles behind notification icons.',
+                hint: 'Also updates the highest container shade.',
                 linkedKeys: ['surfaceContainerHighest'],
             },
-            { key: 'menuSurface', label: 'Menu & dialog background' },
-            { key: 'onSurface', label: 'Primary text' },
-            { key: 'onSurfaceVariant', label: 'Muted text' },
+            {
+                key: 'menuSurface',
+                label: 'Menu & dialog background',
+                description: 'Fills action menus, dropdowns, and dialogs such as Rename.',
+            },
+            {
+                key: 'onSurface',
+                label: 'Primary text',
+                description: 'Colors main text such as headings, chat messages, and item names.',
+            },
+            {
+                key: 'onSurfaceVariant',
+                label: 'Muted text',
+                description: 'Colors secondary details such as sidebar timestamps and helper text.',
+            },
         ],
     },
     {
@@ -225,20 +250,45 @@ const basicColorGroups: PaletteColorGroup[] = [
             {
                 key: 'borderColor',
                 label: 'Borders & dividers',
+                description: 'Colors separators between sections and borders around panels and dialogs.',
                 hint: 'Also sets subtle outlines.',
                 linkedKeys: ['outlineVariant'],
             },
-            { key: 'outline', label: 'Control outlines' },
-            { key: 'surfaceHover', label: 'Hover surface' },
-            { key: 'surfaceActive', label: 'Selected & pressed background' },
+            {
+                key: 'outline',
+                label: 'Control outlines',
+                description: 'Colors the edges of controls such as the chat composer and message editor.',
+            },
+            {
+                key: 'surfaceHover',
+                label: 'Hover surface',
+                description: 'Fills hovered rows and controls and also colors chat bubbles in the Blank theme.',
+            },
+            {
+                key: 'surfaceActive',
+                label: 'Selected & pressed background',
+                description: 'Fills pressed buttons and selected controls such as the project view toggle.',
+            },
         ],
     },
     {
         label: 'Status',
         colors: [
-            { key: 'error', label: 'Error' },
-            { key: 'success', label: 'Success' },
-            { key: 'warning', label: 'Warning' },
+            {
+                key: 'error',
+                label: 'Error',
+                description: 'Colors error alerts and destructive actions such as Delete.',
+            },
+            {
+                key: 'success',
+                label: 'Success',
+                description: 'Colors positive status indicators such as the dot for a connected provider.',
+            },
+            {
+                key: 'warning',
+                label: 'Warning',
+                description: 'Colors caution indicators such as the icon beside a recovered project item.',
+            },
         ],
     },
 ];
@@ -259,6 +309,7 @@ const advancedColorGroups: PaletteColorGroup[] = [
             {
                 key: 'surfaceContainerLowest',
                 label: 'Surface container lowest',
+                description: 'Fills the Files table header and related surfaces such as upload notices.',
             },
             { key: 'surfaceContainer', label: 'Surface container' },
             {

@@ -140,7 +140,7 @@ function saveRename() {
                         </div>
                     </template>
                     <template v-else>
-                        <div class="preview-toolbar" aria-hidden="true">
+                        <div class="preview-toolbar document-toolbar-surface" aria-hidden="true">
                             <span>Text</span>
                             <UIcon :name="boldIcon" class="size-4" />
                             <UIcon :name="listIcon" class="size-4" />
@@ -303,7 +303,6 @@ function saveRename() {
 .preview-toolbar {
     grid-row: 2;
     color: var(--md-on-surface-variant);
-    background: var(--md-surface-container-lowest);
 }
 .preview-pane:has(.preview-document) {
     grid-template-rows: auto auto 1fr;

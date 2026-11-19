@@ -380,7 +380,7 @@
                     "category": "Using tools",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Configure chat tools, web search, workspace tools, delegated tasks, and retained results with stable source controls."
+                    "summary": "Configure chat tools, web search, appearance editing, workspace tools, delegated tasks, and retained results with stable source controls."
                 },
                 {
                     "name": "chat-tool-reliability.md",
@@ -500,7 +500,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Preview theme colors on a sample chat, document, menu, and rename dialog. Customize dialog backdrops and keyboard focus rings and learn how appearance preferences are saved."
+                    "summary": "Preview theme colors on a sample chat, document, menu, and rename dialog. Customize appearance in Theme Studio or with chat tools and learn how preferences are saved."
                 },
                 {
                     "name": "first-theme.md",
@@ -629,7 +629,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "Understand server-side jobs, admission, compact streaming, retained tool results outside the answer budget, recovery, and work that continues after detachment."
+                    "summary": "Understand server-side jobs, browser and server requirements for delegated chats, retained tool results, and recovery after detachment."
                 },
                 {
                     "name": "notifications.md",

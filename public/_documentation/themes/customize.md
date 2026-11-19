@@ -25,15 +25,22 @@ chat, sidebar, and dialogs as well as the preview. Keep foreground/background
 pairs readable. The color editor pairs high-impact roles, but a custom palette
 still needs checks in both modes.
 
-In **Colors**, use **Color token** to choose the color you want to edit. Switch
+In **Colors**, use **Color token** to choose the color you want to edit. A short
+description below the picker shows where each main color is used. Switch
 between the sample chat and document in **Live preview**. Open either item's
 **⋯** menu and choose **Rename** to preview the sidebar's rename dialog.
 **Menu & dialog background** changes the open dialog and sidebar action menus.
-Under **Show advanced colors**, use **Dialog backdrop** to change the tint and
-opacity behind the dialog, or **Keyboard focus ring** to customize the outline
-you see when tabbing between controls. With advanced colors shown, edits apply
+**App background** also colors the document toolbar. Under **Show advanced
+colors**, choose **Surface container lowest** to color the Files table header,
+**Dialog backdrop** to change the tint and opacity behind the dialog, or
+**Keyboard focus ring** to customize the outline you see when tabbing between
+controls. With advanced colors shown, edits apply
 to the selected token only. You can edit colors with the dialog open.
 Renaming changes only the sample title for the current preview.
+
+You can also ask a tool-capable chat to change colors, typography, borders,
+corner radii, or color mode when its **Appearance** tools are enabled.
+See [Appearance tools](/documentation/utils/chat-tools#appearance-tools).
 
 Style groups have their own enable switches. Disabling a group restores the
 active theme's authored values without discarding its saved customizations.
