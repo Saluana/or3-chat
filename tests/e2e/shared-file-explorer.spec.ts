@@ -98,9 +98,14 @@ test('organizes actual Files through selection, drag, breadcrumbs and Move to', 
     await trashDialog.getByRole('button', { name: 'Move to Trash', exact: true }).click();
     await expect(trashDialog).toBeHidden();
     await expect(alpha).toBeHidden();
-    await files.getByRole('button', { name: 'Trash', exact: true }).click();
-    await files.getByRole('button', { name: 'Restore', exact: true }).click();
-    await files.getByRole('button', { name: 'Back to files', exact: true }).click();
+    await files.getByRole('button', { name: 'Trash', exact: true }).press('Enter');
+    await expect(files.getByRole('heading', { name: 'Trash', exact: true })).toBeFocused();
+    const trashList = files.getByRole('list', { name: 'Trash', exact: true });
+    expect(await trashList.getByRole('button', { name: 'Open beta.txt', exact: true }).isVisible()).toBe(false);
+    await trashList.getByRole('listitem').filter({ has: page.getByRole('button', { name: 'Open alpha.txt', exact: true }) }).getByRole('button', { name: 'Restore', exact: true }).click();
+    await expect(alpha).toBeHidden();
+    await files.getByRole('button', { name: 'Back to files', exact: true }).press('Enter');
+    await expect(files.getByRole('heading', { name: 'Files', exact: true })).toBeFocused();
     await expect(alpha).toBeVisible();
 
     await createFolder(page, files, 'Files', 'Archive');
@@ -133,6 +138,16 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) {
         const files = page.getByRole('region', { name: 'Workspace Files', exact: true });
         await expect(page.locator('html')).toHaveAttribute('data-theme', theme, { timeout: 30_000 });
         await createFolder(page, files, 'Files', 'Reading list');
+        const title = await files.getByRole('heading', { name: 'Files', exact: true }).evaluate(heading => {
+            const range = document.createRange();
+            range.selectNodeContents(heading);
+            const { right, bottom } = range.getBoundingClientRect();
+            return { right, bottom };
+        });
+        const newDocument = await files.getByRole('button', { name: 'New document', exact: true }).boundingBox();
+        if (!newDocument) throw new Error('Missing New document button.');
+        expect(newDocument.x >= title.right || newDocument.y >= title.bottom).toBe(true);
+
         const folder = files.getByRole('button', { name: 'Reading list', exact: true });
         await files.getByRole('button', { name: 'Select', exact: true }).click();
         await expect(files.getByRole('button', { name: 'Done', exact: true })).toBeVisible();
@@ -362,6 +377,9 @@ test('project folder actions create a chat and attach, locate, and remove a save
     await page.getByRole('button', { name: 'Remove from project Library', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Remove from project', exact: true }).click();
     await expect(row('source.txt')).toHaveCount(0);
+    const removalStatus = explorer.getByRole('status').filter({ hasText: /removed from project Library/ });
+    await expect(removalStatus).toHaveCount(1);
+    await expect.poll(async () => (await removalStatus.boundingBox())?.height).toBeLessThanOrEqual(1);
     await expect(row('New chat')).toBeVisible();
     await expect(preview.getByRole('button', { name: 'Show in project Library' })).toHaveCount(0);
     await expect(preview).toContainText('The original project source');
@@ -539,9 +557,13 @@ test.describe('Files touch selection', () => {
         await page.goto('/_tests/_test-storage');
         const files = page.getByRole('region', { name: 'Workspace Files', exact: true });
         await createFolder(page, files, 'Files', 'Touch target');
+        await createFolder(page, files, 'Files', 'Second folder');
         await files.getByRole('button', { name: 'Select', exact: true }).tap();
         await files.getByRole('button', { name: 'Touch target', exact: true }).tap();
         await expect(files.getByText('1 selected', { exact: true })).toBeVisible();
+        await files.getByRole('button', { name: 'Files options', exact: true }).tap();
+        await page.getByRole('menuitem', { name: 'Select all results', exact: true }).tap();
+        await expect(files.getByText('2 selected', { exact: true })).toBeVisible();
         await files.getByRole('button', { name: 'Done', exact: true }).tap();
         await files.getByRole('button', { name: 'Touch target', exact: true }).tap();
         await expect(files.getByRole('navigation', { name: 'Files location' })).toContainText('Touch target');

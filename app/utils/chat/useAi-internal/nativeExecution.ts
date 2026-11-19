@@ -13,7 +13,6 @@ import { asAppError, reportError } from '~/utils/errors';
 import { errorDiagnostics } from '~~/shared/errors';
 import { ToolIterationLimitError } from '~~/shared/chat/stream-errors';
 import { contextAdmissionFailureReason } from '~~/shared/chat/context-budget';
-import { DELEGATE_CHAT_TOOL } from '~~/shared/chat/delegation';
 import { startBackgroundStream, prepareOpenRouterRequest } from '~/utils/chat/openrouterStream';
 import { saveNativeRecoveryCheckpoint } from '~/utils/chat/native-recovery';
 import { BackgroundTrackerConflict } from './background-tracker-conflict';
@@ -57,7 +56,6 @@ export function createNativeExecution(ports: {
     ownsCurrentView: (request: ChatRequest) => boolean;
     reportFinalization: (result: RequestFinalization) => void;
     isStaleDevModuleError: (error: unknown) => boolean;
-    warnDelegation: () => void;
 }) {
     const { rawMessages, tailAssistant, resolveUiMessage, threadIdRef, visibleRequest, abortController,
         loading, isDetached, resetStream, getActivePaneContext } = ports.view;
@@ -108,9 +106,6 @@ export function createNativeExecution(ports: {
             if (!ownsAdmission()) {
                 requestScope.attached.value = false;
                 return { status: 'detached', requestId, reason: 'detached', userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id };
-            }
-            if (!durableDelegation && enabledToolDefs.some(tool => tool.function.name === DELEGATE_CHAT_TOOL)) {
-                ports.warnDelegation();
             }
             logBgStream('send-message-stream-mode-decision', {
                 threadId: requestThreadId,

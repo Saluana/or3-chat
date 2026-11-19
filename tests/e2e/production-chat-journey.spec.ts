@@ -920,6 +920,40 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) {
     });
 }
 
+test('Home shows pinned chats and documents only in Pinned', async ({ page }) => {
+    await page.route('**openrouter.ai/**', route => route.abort());
+    await page.goto(`${chatPage}?project=1`);
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 60_000 });
+    await page.goto('/chat');
+    const navigation = page.getByRole('complementary', { name: 'Navigation' });
+    const titles = ['Saffron project chat', 'Workspace evidence'];
+    const row = (title: string) => navigation.getByRole('button', { name: `Open ${title}`, exact: true });
+    async function changePin(title: string, action: 'Pin' | 'Unpin') {
+        await row(title).hover();
+        await navigation.getByRole('button', { name: `Actions for ${title}`, exact: true }).click();
+        await page.getByRole('button', { name: action, exact: true }).click();
+    }
+
+    for (const title of titles) await changePin(title, 'Pin');
+    const pinned = navigation.getByRole('button', { name: 'Pinned', exact: true });
+    await expect(pinned).toBeVisible();
+    for (const title of titles) await expect(row(title)).toHaveCount(1);
+
+    const search = navigation.getByRole('textbox', { name: 'Filter sidebar by title', exact: true });
+    await search.fill(titles[1]!);
+    await expect(row(titles[0]!)).toHaveCount(0);
+    await expect(row(titles[1]!)).toBeVisible();
+    await search.clear();
+    await expect(row(titles[0]!)).toBeVisible();
+
+    await pinned.click();
+    for (const title of titles) await expect(row(title)).toHaveCount(0);
+    await pinned.click();
+    for (const title of titles) await changePin(title, 'Unpin');
+    await expect(pinned).toHaveCount(0);
+    for (const title of titles) await expect(row(title)).toBeVisible();
+});
+
 test('sidebar chat and document switching keeps the workspace mounted without a page reload', async ({ page }, info) => {
     test.setTimeout(120_000);
     const serverRenderErrors: string[] = [];
@@ -1441,8 +1475,9 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     const screenshot = info.outputPath('family-keyboard-reload.png'); await page.screenshot({ path: screenshot, animations: 'disabled' });
     await info.attach('family-keyboard-reload', { path: screenshot, contentType: 'image/png' });
     const input = page.getByRole('textbox', { name: 'Message input' }); await input.fill('Preserve this unsent native compaction draft.');
-    const compact = page.getByRole('region', { name: 'Context & compaction', exact: true })
-        .getByRole('button', { name: 'Compact', exact: true });
+    const memory = page.getByRole('region', { name: 'Conversation memory', exact: true });
+    const compact = memory.getByRole('button', { name: 'Summarize', exact: true });
+    const progress = memory.getByRole('status').filter({ hasText: 'Summarizing…' });
     const summaryRow = page.locator('[data-msg-id]').filter({ has: page.locator('[data-compaction-card]') });
     const originalSummaryId = await settledCompactionSummaryId(page);
     const selectVariant = async (name: string) => {
@@ -1456,19 +1491,19 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await page.getByTestId('fixture-hold-summary').check();
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await compact.click();
-    await expect(page.getByText('Compacting…', { exact: true })).toBeVisible();
+    await expect(progress).toBeVisible();
     await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeEnabled();
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(page.getByText('Compacting…', { exact: true })).toHaveCount(0, { timeout: 5000 });
+    await expect(progress).toHaveCount(0, { timeout: 5000 });
     await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
     await expect.poll(() => compactionSummaryId(page), { timeout: COMPACTION_NAVIGATION_TIMEOUT }).toBe(originalSummaryId);
     await expect(input).toHaveText('Preserve this unsent native compaction draft.');
     await selectVariant('Floor');
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await compact.click();
-    await expect(page.getByText('Compacting…', { exact: true })).toBeVisible();
+    await expect(progress).toBeVisible();
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(page.getByText('Compacting…', { exact: true })).toHaveCount(0);
+    await expect(progress).toHaveCount(0);
     await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
     await expect.poll(() => compactionSummaryId(page), { timeout: COMPACTION_NAVIGATION_TIMEOUT }).toBe(originalSummaryId);
     await expect(input).toHaveText('Preserve this unsent native compaction draft.');
@@ -1515,7 +1550,7 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await page.evaluate(() => window.dispatchEvent(new CustomEvent('or3:model-selected', { detail: { modelId: 'scripted-no-tools' } })));
     const noToolsCard = page.locator('[data-compaction-card]');
     await noToolsCard.locator('summary').click();
-    await expect(noToolsCard.getByText('Historical retrieval tools are unavailable for this model or tool selection. You can still follow the original and landmark links.')).toBeVisible();
+    await expect(noToolsCard.getByText(/The AI cannot look up earlier messages with the current settings/)).toBeVisible();
     await noToolsCard.getByRole('button', { name: /^View original/ }).click();
     await expect(reverseCompactions).toHaveCount(2);
     await expect(input).toHaveText(originalRootDraft);
@@ -1524,8 +1559,8 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
         for (const { name } of await indexedDB.databases()) {
             if (!name) continue;
             const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
-            if (!db.objectStoreNames.contains('threads')) { db.close(); continue; }
-            const request = db.transaction('threads', 'readonly').objectStore('threads').getAll();
+            if (!db.objectStoreNames.contains('current_threads')) { db.close(); continue; }
+            const request = db.transaction('current_threads', 'readonly').objectStore('current_threads').getAll();
             const rows = await new Promise<Array<{ id: string; root_thread_id?: string; branch_mode?: string; created_at: number; summary_message_id?: string }>>((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); }); db.close();
             const compacted = rows.filter((row) => row.root_thread_id === root && row.branch_mode === 'compacted');
             if (compacted.length) return compacted.sort((a, b) => b.created_at - a.created_at || b.id.localeCompare(a.id))[0]!.summary_message_id;

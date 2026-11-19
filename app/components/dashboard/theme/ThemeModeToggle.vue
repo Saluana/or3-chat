@@ -9,14 +9,13 @@
             <h2 id="theme-section-mode" class="dashboard-section-title">
                 Edit color mode
             </h2>
-            <p class="supporting-text mt-1">
-                Choose which color mode to customize. Changes are previewed
-                live across the app.
+            <p id="theme-mode-help" class="supporting-text mt-1">
+                {{ APPEARANCE_SETTING_DESCRIPTIONS.mode }}
             </p>
         </div>
         <div class="theme-mode-row">
             <span class="theme-mode-label">Customize:</span>
-            <div class="theme-mode-control" role="group" aria-label="Theme mode">
+            <div class="theme-mode-control" role="group" aria-label="Theme mode" aria-describedby="theme-mode-help">
                 <button
                     type="button"
                     class="theme-mode-option"
@@ -54,6 +53,7 @@
 const hoistedUiCheckIcon = useIcon('ui.check');
 
 import { useIcon } from '#imports';
+import { APPEARANCE_SETTING_DESCRIPTIONS } from '~/core/theme/appearance-setting-descriptions';
 import { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
 
 const themeApi = useUserThemeOverrides();

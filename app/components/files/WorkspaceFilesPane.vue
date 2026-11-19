@@ -42,6 +42,7 @@ import { isCloudFileStorageEnabled, isCloudFileStorageConfigured } from '~/core/
 
 const pageElement = ref<HTMLElement | null>(null);
 const paneWidth = ref(0);
+const filesHeading = ref<HTMLElement | null>(null);
 const previewHeading = ref<HTMLElement | null>(null);
 let resizeObserver: ResizeObserver | undefined;
 let previewTrigger: HTMLElement | null = null;
@@ -105,6 +106,11 @@ const icons = {
 };
 const query = ref('');
 const trash = ref(false);
+async function setTrashView(inTrash: boolean) {
+    trash.value = inTrash;
+    await nextTick();
+    filesHeading.value?.focus();
+}
 const limit = ref(50);
 const more = ref(false);
 const loading = ref(true);
@@ -170,6 +176,14 @@ const filterActive = computed(() => !!query.value.trim() || typeFilter.value !==
 watch(filterActive, (active, previous) => { if (active && !previous) searchAll.value = false; });
 const folderPath = computed(() => organization.value?.tree.path(folderId.value) ?? []);
 const folderLabel = computed(() => folderPath.value.at(-1)?.payload.name ?? 'Files');
+/** Phone and narrow tablet panes get the condensed header and chip filters. */
+const compact = computed(() => paneWidth.value > 0 && paneWidth.value <= 600);
+const filterUi = computed(() => ({
+    base: compact.value
+        ? 'files-filter-base rounded-full! h-[34px]! min-h-[34px]! max-md:h-[34px]! max-md:min-h-[34px]! ps-3! pe-8! text-[13px]! max-md:text-[13px]!'
+        : 'files-filter-base',
+    trailingIcon: 'size-4',
+}));
 const navigatorAvailable = computed(() => activeExplorer.value && paneWidth.value >= 1280 && !preview.value);
 interface NavigatorFolder {
     id: string;
@@ -253,6 +267,8 @@ const listRows = computed(() => {
 });
 const explorerSelection = useExplorerSelection(computed(() => listRows.value.map(row => row.key)));
 const { selected: selectedRows, selectMode, choose, clear: clearSelection, all: selectAll } = explorerSelection;
+const hasPartialSelection = computed(() => activeExplorer.value && selectedRows.value.size > 0
+    && selectedRows.value.size < listRows.value.length);
 const virtualizer = useVirtualizer(computed(() => ({
     count: explorerEnabled.value ? listRows.value.length : 0,
     estimateSize: () => rowHeight,
@@ -1141,7 +1157,15 @@ async function newDocument() {
     });
 }
 
-watch([query, trash, typeFilter, projectFilter], scheduleFilesRefresh);
+watch([query, typeFilter, projectFilter], scheduleFilesRefresh);
+watch(trash, () => {
+    // Never render a snapshot with actions belonging to the other view.
+    rows.value = [];
+    more.value = false;
+    limit.value = 50;
+    clearTimeout(timer);
+    void refresh();
+});
 watch([folderId, searchAll], () => { if (query.value.trim()) scheduleFilesRefresh(); });
 function scheduleFilesRefresh() {
     limit.value = 50;
@@ -1272,7 +1296,7 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
 </script>
 
 <template>
-    <section ref="pageElement" aria-label="Workspace Files" class="files-page" :data-explorer-dragging="dragging || undefined" :data-preview="preview && widePreview" :data-compact-preview="preview && !widePreview">
+    <section ref="pageElement" aria-label="Workspace Files" class="files-page" :data-explorer-dragging="dragging || undefined" :data-preview="preview && widePreview" :data-compact-preview="preview && !widePreview" :data-selecting="activeExplorer && (selectMode || selectedRows.size > 0) || undefined">
         <nav v-if="navigatorAvailable && showNavigator" aria-label="Files folders" class="files-navigator">
             <UButton v-explorer-drag="{ destination: null, label: 'Files root' }" color="neutral" variant="ghost" size="workspace" label="Files root" :icon="icons.folder.value"
                 :aria-current="folderId === null ? 'location' : undefined" @click="navigateFolder(null)" />
@@ -1293,28 +1317,51 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
             </UTree>
         </nav>
         <div v-show="!preview || widePreview" class="files-content" @keydown="undo.onKey">
-            <header class="files-header">
-                <div>
-                    <h1>{{ trash ? 'Trash' : 'Files' }}</h1>
-                    <p>{{ trash ? 'Restore files you want to keep.' : 'Your documents and uploads, all in one place.' }}</p>
+            <header class="files-header" :data-trash="trash">
+                <div class="files-heading">
+                    <UButton v-if="trash" class="files-back" size="workspace" color="neutral" variant="ghost" label="Files" aria-label="Back to files"
+                        icon="i-lucide-arrow-left" @click="setTrashView(false)" />
+                    <h1 ref="filesHeading" tabindex="-1">{{ trash ? 'Trash' : 'Files' }}</h1>
+                    <p v-if="!compact || trash">{{ trash ? 'Restore items to put them back where they were.' : 'Your documents and uploads, all in one place.' }}</p>
                 </div>
-                <div class="files-header-actions">
-                    <UButton v-if="!trash" size="workspace" label="New document" :icon="icons.document.value" color="neutral" variant="outline" :disabled="busy || readOnly" @click="newDocument" />
-                    <UButton v-if="activeExplorer" size="workspace" :label="'New folder in ' + folderLabel" :icon="icons.folder.value" color="neutral" variant="outline" :disabled="busy || readOnly" @click="openFolderDialog()" />
-                    <UButton v-if="!trash" size="workspace" :label="activeExplorer ? 'Upload to ' + folderLabel : 'Upload'" :icon="icons.upload.value" :disabled="busy || readOnly" @click="chooseUpload" />
-                    <UButton size="workspace" color="neutral" variant="outline" :label="trash ? 'Back to files' : 'Trash'" :icon="trash ? undefined : icons.trash.value" :aria-pressed="trash" @click="trash = !trash" />
-                    <UDropdownMenu v-if="!trash" :ui="menuUi" :content="{ align: 'end', sideOffset: 6 }" :items="[
-                        { label: 'Add existing uploads', icon: icons.upload.value, disabled: busy || readOnly || existingComplete, onSelect: addExisting },
-                    ]">
-                        <UButton size="workspace" :icon="icons.more.value" aria-label="Files options" color="neutral" variant="ghost" square />
-                    </UDropdownMenu>
+                <div v-if="!trash" class="files-header-actions">
+                    <template v-if="compact">
+                        <UButton size="workspace" aria-label="New document" icon="i-lucide-file-plus" color="neutral" variant="ghost" square :disabled="busy || readOnly" @click="newDocument" />
+                        <UButton v-if="activeExplorer" size="workspace" :aria-label="'New folder in ' + folderLabel" icon="i-lucide-folder-plus" color="neutral" variant="ghost" square :disabled="busy || readOnly" @click="openFolderDialog()" />
+                        <UDropdownMenu :ui="menuUi" :content="{ align: 'end', sideOffset: 6 }" :items="[
+                            { label: 'Trash', icon: icons.trash.value, onSelect: () => setTrashView(true) },
+                            ...(hasPartialSelection ? [{ label: 'Select all results', onSelect: selectAll }] : []),
+                            { label: 'Add existing uploads', icon: icons.upload.value, disabled: busy || readOnly || existingComplete, onSelect: addExisting },
+                        ]">
+                            <UButton size="workspace" :icon="icons.more.value" aria-label="Files options" color="neutral" variant="ghost" square />
+                        </UDropdownMenu>
+                        <UButton size="workspace" class="files-upload-button" label="Upload" :aria-label="activeExplorer ? 'Upload to ' + folderLabel : 'Upload'" :icon="icons.upload.value" :disabled="busy || readOnly" @click="chooseUpload" />
+                    </template>
+                    <template v-else>
+                        <UButton size="workspace" label="New document" :icon="icons.document.value" color="neutral" variant="outline" :disabled="busy || readOnly" @click="newDocument" />
+                        <UButton v-if="activeExplorer" size="workspace" label="New folder" :aria-label="'New folder in ' + folderLabel" :icon="icons.folder.value" color="neutral" variant="outline" :disabled="busy || readOnly" @click="openFolderDialog()" />
+                        <UButton size="workspace" label="Upload" :aria-label="activeExplorer ? 'Upload to ' + folderLabel : 'Upload'" :icon="icons.upload.value" :disabled="busy || readOnly" @click="chooseUpload" />
+                        <span class="files-header-divider" aria-hidden="true" />
+                        <UTooltip text="Trash">
+                            <UButton size="workspace" color="neutral" variant="ghost" aria-label="Trash" :icon="icons.trash.value" square @click="setTrashView(true)" />
+                        </UTooltip>
+                        <UDropdownMenu :ui="menuUi" :content="{ align: 'end', sideOffset: 6 }" :items="[
+                            { label: 'Add existing uploads', icon: icons.upload.value, disabled: busy || readOnly || existingComplete, onSelect: addExisting },
+                        ]">
+                            <UButton size="workspace" :icon="icons.more.value" aria-label="Files options" color="neutral" variant="ghost" square />
+                        </UDropdownMenu>
+                    </template>
                 </div>
             </header>
             <input ref="uploadInput" type="file" multiple aria-label="Upload files" hidden tabindex="-1" aria-hidden="true" :disabled="busy || readOnly" @change="upload">
             <div class="files-toolbar">
                 <UInput v-model="query" :aria-label="trash ? 'Search trash' : 'Search Files'" :placeholder="trash ? 'Search deleted files…' : 'Search files or their contents…'" :icon="icons.search.value" class="files-search" size="workspace" />
-                <USelect v-model="typeFilter" aria-label="File type" size="workspace" :items="[{ label: 'All types', value: 'all' }, { label: 'Documents', value: 'document' }, { label: 'Uploads', value: 'file' }, { label: 'Images', value: 'image' }]" />
-                <USelect v-model="projectFilter" aria-label="Filter by project" size="workspace" :ui="{ content: 'min-w-[240px] max-w-[calc(100vw-2rem)]' }" :items="[{ label: 'All projects', value: 'all' }, ...projects.map(project => ({ label: project.name, value: project.id }))]" />
+                <div class="files-filters">
+                    <USelect v-model="typeFilter" aria-label="File type" size="workspace" class="files-filter" :ui="filterUi" :items="[{ label: 'All types', value: 'all' }, { label: 'Documents', value: 'document' }, { label: 'Uploads', value: 'file' }, { label: 'Images', value: 'image' }]" />
+                    <USelect v-model="projectFilter" aria-label="Filter by project" size="workspace" class="files-filter" :ui="{ ...filterUi, content: 'min-w-[240px] max-w-[calc(100vw-2rem)]' }" :items="[{ label: 'All projects', value: 'all' }, ...projects.map(project => ({ label: project.name, value: project.id }))]" />
+                    <USelect v-if="activeExplorer" v-model="sort" aria-label="Sort Files" size="workspace" class="files-filter" :ui="filterUi"
+                        :items="[{ label: 'Recently modified', value: 'recent' }, { label: 'Name', value: 'name' }, { label: 'Type', value: 'type' }]" />
+                </div>
             </div>
             <div v-if="readOnly || feedback || error" class="files-notices">
                 <p v-if="readOnly" role="status">This workspace is read-only.</p>
@@ -1355,8 +1402,9 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
                     <span class="sr-only" role="status">{{ dragAnnouncement }}</span>
                     <UButton v-if="navigatorAvailable" size="workspace" color="neutral" variant="ghost" :icon="icons.folder.value"
                         :aria-pressed="showNavigator" :label="showNavigator ? 'Hide folders' : 'Show folders'" @click="showNavigator = !showNavigator" />
-                    <nav aria-label="Files location" class="files-breadcrumbs">
-                        <UButton v-explorer-drag="{ destination: null, label: 'Files root' }" color="neutral" variant="ghost" label="Files" size="workspace" @dragover="dropFiles($event, null)" @drop="dropFiles($event, null)" :aria-current="folderId === null ? 'location' : undefined" @click="navigateFolder(null)" />
+                    <span v-if="compact && !folderPath.length" class="files-count">{{ listRows.length }} {{ listRows.length === 1 ? 'item' : 'items' }}</span>
+                    <nav aria-label="Files location" class="files-breadcrumbs" :class="{ 'sr-only': compact && !folderPath.length }">
+                        <UButton v-explorer-drag="{ destination: null, label: 'Files root' }" color="neutral" variant="ghost" label="Files" size="workspace" @dragover="dropFiles($event, null)" @drop="dropFiles($event, null)" :aria-current="folderId === null ? 'location' : undefined" :tabindex="compact && !folderPath.length ? -1 : undefined" @click="navigateFolder(null)" />
                         <template v-for="folder in folderPath" :key="folder.id">
                             <span aria-hidden="true">/</span>
                             <UButton v-explorer-drag="{ destination: folder.id, label: folder.payload.name }" color="neutral" variant="ghost" :label="organization?.tree.label(folder)" size="workspace" @dragover="dropFiles($event, folder.id)" @drop="dropFiles($event, folder.id)" :aria-current="folder.id === folderId ? 'location' : undefined" @click="navigateFolder(folder.id)" />
@@ -1364,26 +1412,26 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
                     </nav>
                     <USelect v-if="filterActive" :model-value="searchAll ? 'all' : 'folder'" aria-label="Search location" size="workspace"
                         :items="[{ label: 'This folder', value: 'folder' }, { label: 'All Files', value: 'all' }]" @update:model-value="searchAll = $event === 'all'" />
-                    <USelect v-model="sort" aria-label="Sort Files" size="workspace"
-                        :items="[{ label: 'Recently modified', value: 'recent' }, { label: 'Name', value: 'name' }, { label: 'Type', value: 'type' }]" />
                     <UButton size="workspace" color="neutral" variant="ghost" :label="selectMode ? 'Done' : 'Select'" :aria-pressed="selectMode" @click="selectMode = !selectMode" />
                     <UButton v-if="selectMode && !selectedRows.size" size="workspace" color="neutral" variant="ghost"
                         label="Select all results" @click="selectAll" />
                 </div>
-                <div v-if="dragging ? toolbarBeforeDrag : selectedRows.size" class="files-explorer-tools">
+                <div v-if="dragging ? toolbarBeforeDrag : selectedRows.size" class="files-explorer-tools files-selection-bar">
                     <span aria-live="polite" class="text-muted">{{ selectedRows.size }} selected</span>
-                    <UButton size="workspace" color="neutral" variant="ghost" label="Select all results" @click="selectAll" />
+                    <UButton v-if="!compact" size="workspace" color="neutral" variant="ghost" label="Select all results" @click="selectAll" />
                     <UButton size="workspace" color="neutral" variant="ghost" label="Clear" @click="clearSelection" />
-                    <UButton size="workspace" color="neutral" variant="outline" :label="bulkTrashLabel"
+                    <span v-if="compact" class="flex-1" aria-hidden="true" />
+                    <UButton size="workspace" color="neutral" :variant="compact ? 'ghost' : 'outline'" :label="compact ? undefined : bulkTrashLabel"
+                        :aria-label="bulkTrashLabel" :icon="compact ? icons.trash.value : undefined" :square="compact"
                         :title="selectedIncludesFolders ? 'Select files and documents only' : undefined"
                         :disabled="selectedIncludesFolders || !selectedRows.size || selectedRows.size > EXPLORER_MAX_WRITES || busy || readOnly" @click="bulkTrash = true" />
-                    <span v-if="selectedIncludesFolders" class="text-muted text-xs">Select files and documents only to move them to Trash.</span>
+                    <span v-if="selectedIncludesFolders" class="files-selection-note text-muted text-xs">Select files and documents only to move them to Trash.</span>
                     <UButton size="workspace" label="Move to…" :disabled="!selectedRows.size || selectedRows.size > EXPLORER_MAX_WRITES || busy || readOnly" @click="openMove" />
                 </div>
                 <UAlert v-if="organizationError && !folderDialog" role="alert" :description="organizationError" color="error" variant="soft" class="mb-3" />
             </template>
             <div class="files-list" @dragover="dropFiles($event, folderId)" @drop="dropFiles($event, folderId)">
-                <div class="files-columns" :data-trash="trash" aria-hidden="true">
+                <div class="files-columns" :data-trash="trash" :data-checkboxes="activeExplorer || undefined" aria-hidden="true">
                     <span class="files-name-label">Name</span><span class="files-type-column">Type</span><span class="files-project-column">{{ activeExplorer && filterActive || explorerEnabled && trash ? 'Files location' : 'Project' }}</span><span class="files-date-column">Last modified</span><span class="files-size-column">Size</span><span />
                 </div>
                 <div v-if="loading && !listRows.length" class="files-empty or3-loading-delay" role="status">
@@ -1433,7 +1481,7 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
                             <PaletteImageThumb v-if="row.postType === FILE_CATALOG_POST_TYPE && isSupportedRasterMimeType(detail(row)?.mime_type ?? '')" :key="`${scope?.workspaceId}:${row.id}`" :hash="parseFileHashes(row.file_hashes)[0]!" alt="" :fallback-icon="fileIcon(row)" :size-bytes="detail(row)?.size_bytes" class="size-8! rounded-[var(--md-border-radius-small)]!" />
                             <span v-else data-explorer-drag-handle class="files-kind-icon" :data-kind="fileType(row)"><UIcon :name="fileIcon(row)" class="size-5" /></span>
                             <div class="files-name-text">
-                                <UButton size="workspace" :label="row.title" :aria-label="'Open ' + row.title" color="neutral" variant="ghost" class="files-name-button" :ui="{ base: 'px-0! gap-0!' }" :title="row.title" @click="activateFile(row, $event)" />
+                                <UButton size="workspace" :label="row.title" :aria-label="'Open ' + row.title" color="neutral" variant="ghost" class="files-name-button" :ui="{ base: 'px-0! gap-0! py-0! h-auto! min-h-5! max-md:h-auto! max-md:min-h-5!' }" :title="row.title" @click="activateFile(row, $event)" />
                                 <span class="files-mobile-detail">{{ fileType(row) }} · {{ modifiedDate(row) }}</span>
                                 <span v-if="explorerEnabled && (filterActive || trash)" class="files-mobile-detail truncate">
                                     {{ trash ? 'Restores to' : 'Files location' }} · {{ filePath(row) }}
@@ -1470,9 +1518,8 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
                     </li>
                 </ul>
                 </div>
-                <footer v-if="listRows.length" class="files-footer">
-                    <span>{{ listRows.length }} {{ activeExplorer ? (listRows.length === 1 ? 'item' : 'items') : (listRows.length === 1 ? 'file' : 'files') }}{{ more ? ' shown' : '' }}{{ activeExplorer && query.trim() ? ' · Up to 200 search results' : '' }}</span>
-                    <span v-if="!activeExplorer" class="files-sort-label">Recently modified</span>
+                <footer v-if="listRows.length" class="files-footer" :data-count-shown="compact && activeExplorer && !folderPath.length || undefined">
+                    <span class="files-footer-count">{{ listRows.length }} {{ activeExplorer ? (listRows.length === 1 ? 'item' : 'items') : (listRows.length === 1 ? 'file' : 'files') }}{{ more ? ' shown' : '' }}{{ activeExplorer && query.trim() ? ' · Up to 200 search results' : '' }}</span>
                     <UButton v-if="more" size="workspace" label="Load more" color="neutral" variant="outline" :disabled="loading" @click="limit += 50; refresh()" />
                 </footer>
             </div>
@@ -1551,7 +1598,8 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
 
 .files-row:has([data-explorer-drag-handle]), .files-row .files-name-button { cursor: grab; user-select: none; }
 .files-viewport { max-height: min(64vh, 720px); overflow-y: auto; overscroll-behavior: contain; }
-.files-explorer-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.files-explorer-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin-bottom: 8px; }
+.files-selection-bar { padding: 6px 8px 6px 14px; border-radius: var(--md-border-radius-small); background: color-mix(in srgb, var(--md-primary) 6%, var(--md-surface)); font-size: 13px; }
 .files-breadcrumbs { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; color: var(--md-on-surface-variant); }
 .files-explorer-tools .files-breadcrumbs :deep(button) { min-width: 0; max-width: 100%; }
 .files-row :deep([data-slot="label"]) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -1561,13 +1609,18 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
 .files-navigator { flex: 0 0 224px; min-height: 0; padding: 24px 12px; border-inline-end: var(--md-border-width, 1px) solid var(--md-border-color, var(--md-outline-variant)); background: var(--md-surface-container-low, var(--md-surface)); }
 .files-navigator-tree { max-height: calc(100% - 48px); overflow: auto; overscroll-behavior: contain; }
 .files-navigator :deep([aria-current="location"]) { background: var(--md-surface-hover); color: var(--md-primary); }
-.files-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
-.files-header h1 { font-size: 30px; font-weight: 700; line-height: 1.2; letter-spacing: -0.035em; }
-.files-header p { color: var(--md-on-surface-variant); font-size: 14px; margin-top: 8px; line-height: 1.5; }
-.files-header-actions :deep(button) { gap: 8px; }
+.files-header { display: flex; align-items: center; justify-content: space-between; gap: 16px 24px; margin-bottom: 24px; }
+.files-heading { min-width: 0; }
+.files-header h1 { font-size: 28px; font-weight: 700; line-height: 1.2; letter-spacing: -0.03em; }
+.files-header p { color: var(--md-on-surface-variant); font-size: 14px; margin-top: 6px; line-height: 1.5; }
+.files-back { margin: -8px 0 2px -10px; color: var(--md-on-surface-variant); }
+.files-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.files-header-actions :deep(button) { gap: 8px; white-space: nowrap; }
 .files-header-actions :deep([data-slot="label"]) { letter-spacing: normal; }
-.files-header-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-.files-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+.files-header-divider { width: 1px; height: 24px; margin-inline: 4px; background: var(--md-border-color, var(--md-outline-variant)); }
+.files-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.files-filters { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.files-count { flex: 1; min-width: 0; font-size: 13px; color: var(--md-on-surface-variant); padding-inline: 4px; }
 .files-search { flex: 1; min-width: 180px; }
 .files-list { box-shadow: var(--app-elevation-low, none); container-type: inline-size; border: var(--md-border-width,1px) solid var(--md-border-color,var(--md-outline-variant)); border-radius: var(--md-border-radius); overflow: hidden; }
 .files-page[data-preview="true"] .files-header { align-items: flex-start; flex-direction: column; gap: 20px; }
@@ -1589,20 +1642,32 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
 .files-inspector-header h2 { font-size: 13px; font-weight: 600; }
 .files-columns, .files-row { display: grid; grid-template-columns: minmax(180px, 1fr) 110px minmax(100px, .5fr) 155px 80px 48px; gap: 16px; align-items: center; padding: 0 20px; }
 .files-name-label { padding-left: 44px; }
+.files-page[data-selecting] .files-columns[data-checkboxes] .files-name-label { padding-left: 72px; }
 .files-columns { min-height: 42px; font-size: 12px; font-weight: 500; color: var(--md-on-surface-variant); background: var(--md-surface-container-lowest,var(--md-surface-container-low,var(--md-surface-variant))); border-bottom: 1px solid var(--md-border-color,var(--md-outline-variant)); }
 .files-rows { margin: 0; padding: 0; list-style: none; }
 .files-row { min-height: 56px; border-bottom: 1px solid color-mix(in srgb, var(--md-border-color,var(--md-outline-variant)) 40%, var(--md-surface)); font-size: 13px; transition: background 120ms ease; }
 .files-row:last-child { border-bottom: 0; }
-.files-row:hover { background: var(--md-surface-hover); }
+@media (hover: hover) { .files-row:hover { background: var(--md-surface-hover); } }
 .files-row[data-selected="true"] { background: color-mix(in srgb, var(--md-primary) 8%, var(--md-surface)); }
 .files-name-cell { display: flex; gap: 12px; align-items: center; min-width: 0; }
-.files-name-text { min-width: 0; flex: 1; }
+.files-name-cell { position: relative; }
+.files-name-cell > input[type="checkbox"] { flex-shrink: 0; width: 16px; height: 16px; transition: opacity 120ms ease; }
+.files-name-cell > input[type="checkbox"] + * { transition: opacity 120ms ease; }
+/* Outside selection mode the checkbox sits over the file icon and appears on hover or focus,
+   so rows don't carry an empty checkbox gutter. */
+.files-page:not([data-selecting]) .files-name-cell > input[type="checkbox"] { position: absolute; left: 8px; top: 50%; margin-top: -8px; z-index: 1; opacity: 0; }
+.files-page:not([data-selecting]) .files-row:is(:hover, :focus-within) .files-name-cell > input[type="checkbox"] { opacity: 1; }
+.files-page:not([data-selecting]) .files-row:is(:hover, :focus-within) .files-name-cell > input[type="checkbox"] + * { opacity: 0; }
+/* The title stays compact; its hit area covers the whole title/detail block. */
+.files-name-text :deep(button.files-name-button) { position: static; }
+.files-name-text :deep(button.files-name-button)::after { content: ""; position: absolute; inset: -8px 0; }
+.files-name-text { position: relative; min-width: 0; flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 1px; }
 .files-name-text :deep(button.files-name-button) { padding-inline: 0 !important; }
 .files-name-button { width: 100%; min-width: 0; padding-left: 0 !important; padding-right: 0 !important; justify-content: flex-start !important; font-size: 14px; font-weight: 500; background: transparent !important; }
 .files-name-button :deep(span) { letter-spacing: normal; }
 .files-kind-icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--md-border-radius-small); flex-shrink: 0; color: var(--md-primary); background: color-mix(in srgb, var(--md-primary) 9%, var(--md-surface)); }
 .files-kind-icon[data-kind="PDF"] { color: var(--md-error); background: color-mix(in srgb, var(--md-error) 8%, var(--md-surface)); }
-.files-type-badge { display: inline-block; font-size: 12px; padding: 4px 8px; border-radius: var(--md-border-radius-small); background: var(--md-surface-container-lowest,var(--md-surface-container-low,var(--md-surface-variant))); color: var(--md-on-surface-variant); }
+.files-type-badge { display: inline-block; margin-inline-start: -8px; font-size: 12px; padding: 4px 8px; border-radius: var(--md-border-radius-small); background: transparent; color: var(--md-on-surface-variant); }
 .files-type-badge[data-kind="Document"] { color: var(--md-primary); background: color-mix(in srgb, var(--md-primary) 8%, var(--md-surface)); }
 .files-type-badge[data-kind="PDF"] { color: var(--md-error); background: color-mix(in srgb, var(--md-error) 8%, var(--md-surface)); }
 .files-project { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--md-on-surface-variant); }
@@ -1610,9 +1675,10 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
 .files-muted, .files-footer { color: var(--md-on-surface-variant); }
 .files-row-actions { display: flex; justify-content: flex-end; align-items: center; }
 .files-row[data-trash="true"], .files-columns[data-trash="true"] { grid-template-columns: minmax(180px, 1fr) 110px minmax(100px, .5fr) 155px 80px 130px; }
-.files-footer { display: flex; align-items: center; gap: 16px; padding: 16px 20px; border-top: 1px solid var(--md-border-color,var(--md-outline-variant)); font-size: 12px; }
-.files-sort-label { margin-left: auto; }
-.files-mobile-detail { display: none; color: var(--md-on-surface-variant); font-size: 12px; }
+.files-footer[data-count-shown] .files-footer-count { display: none; }
+.files-footer[data-count-shown]:not(:has(button)) { display: none; }
+.files-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 20px; border-top: 1px solid var(--md-border-color,var(--md-outline-variant)); font-size: 12px; }
+.files-mobile-detail { display: none; color: var(--md-on-surface-variant); font-size: 12px; line-height: 16px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .files-empty { min-height: 320px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center; padding: 32px; }
 .files-empty h2 { font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
 .files-empty p { color: var(--md-on-surface-variant); font-size: 14px; max-width: 320px; line-height: 1.6; }
@@ -1645,26 +1711,42 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
     .files-row[data-trash="true"], .files-columns[data-trash="true"] { grid-template-columns: minmax(140px, 1fr) 100px 140px 130px; }
 }
 @container (max-width: 600px) {
-    .files-content { padding: 20px 16px; }
-    .files-header h1 { font-size: 26px; }
-    /* Two tidy rows instead of letting the options menu wrap onto a line of its own:
-       [New document][Upload] / [Trash ......][⋮] */
-    .files-header-actions { width: 100%; flex-wrap: wrap; }
-    .files-header-actions > * { flex: 1 1 calc(50% - 5px); justify-content: center; }
-    .files-header-actions > :last-child { flex: 0 0 auto; }
-    .files-toolbar { flex-wrap: wrap; gap: 8px; }
-    .files-search { flex-basis: 100%; }
-    .files-toolbar > :not(.files-search) { flex: 1; min-width: 0; }
+    .files-content { padding: 16px 16px 24px; }
+    .files-header, .files-page[data-preview="true"] .files-header { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+    .files-header[data-trash="true"] { align-items: flex-start; }
+    .files-header[data-trash="true"] { margin-bottom: 20px; }
+    .files-header h1 { font-size: 24px; }
+    .files-header p { font-size: 13px; margin-top: 4px; }
+    .files-header[data-trash="false"] .files-heading { flex-shrink: 0; }
+    .files-header-actions { max-width: 100%; flex-wrap: wrap; justify-content: flex-end; gap: 2px; margin-inline-start: auto; }
+    .files-header-actions .files-upload-button { margin-left: 6px; }
+    .files-toolbar { flex-direction: column; align-items: stretch; gap: 10px; margin-bottom: 8px; }
+    .files-search :deep(input) { border-color: transparent !important; background: var(--md-surface-container-low, var(--md-surface-variant)); }
+    /* Filters become one row of compact chips that scrolls sideways instead of wrapping. */
+    .files-filters { overflow-x: auto; scrollbar-width: none; margin-inline: -16px; padding: 2px 16px; gap: 6px; }
+    .files-filters::-webkit-scrollbar { display: none; }
+    .files-filter { flex-shrink: 0; }
+    .files-explorer-tools:not(.files-selection-bar) { flex-wrap: nowrap; gap: 0; margin-bottom: 4px; }
+    .files-explorer-tools:not(.files-selection-bar) .files-breadcrumbs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+    .files-breadcrumbs > * { flex-shrink: 0; }
+    .files-selection-bar { margin-bottom: 8px; flex-wrap: wrap; padding: 4px 4px 4px 14px; gap: 0 4px; }
+    .files-selection-note { order: 10; flex-basis: 100%; padding-bottom: 6px; }
+    /* Edge-to-edge list with inset separators, like a native list. */
+    .files-list { border: 0; border-radius: 0; box-shadow: none; margin-inline: -16px; overflow: visible; }
     .files-columns { display: none; }
     .files-type-column, .files-date-column { display: none; }
-    .files-row { grid-template-columns: minmax(0, 1fr) 44px; padding: 8px 12px; gap: 8px; }
-    .files-row[data-trash="true"], .files-columns[data-trash="true"] { grid-template-columns: minmax(0, 1fr) 116px; }
-    .files-mobile-detail { display: block; padding-bottom: 4px; }
-    .files-name-button { min-height: 44px !important; padding-top: 2px !important; padding-bottom: 2px !important; }
-    .files-header-actions { flex-wrap: wrap; gap: 8px; }
-    .files-sort-label { display: none; }
+    .files-row { position: relative; grid-template-columns: minmax(0, 1fr) 40px; padding: 0 8px 0 16px; gap: 4px; border-bottom: 0; }
+    .files-row::after { content: ""; position: absolute; left: 64px; right: 0; bottom: 0; height: 1px; background: color-mix(in srgb, var(--md-border-color, var(--md-outline-variant)) 55%, transparent); }
+    .files-page[data-selecting] .files-row::after { left: 92px; }
+    .files-row:last-child::after { display: none; }
+    .files-row[data-trash="true"], .files-columns[data-trash="true"] { grid-template-columns: minmax(0, 1fr) auto; }
+    .files-page:not([data-selecting]) .files-name-cell > input[type="checkbox"] { display: none; }
+    .files-page:not([data-selecting]) .files-row:is(:hover, :focus-within) .files-name-cell > input[type="checkbox"] + * { opacity: 1; }
+    .files-mobile-detail { display: block; }
+    .files-name-cell > .files-name-button { min-height: 44px !important; }
+    .files-footer { border-top: 0; padding: 12px 16px; justify-content: center; }
     .files-empty { min-height: 260px; padding: 24px 16px; }
 }
-@media (pointer: coarse) { .files-page :deep(button), .files-page :deep(input), .files-page :deep([role=combobox]) { min-height: 44px !important; } }
+@media (pointer: coarse) { .files-page :deep(button:not(.files-name-button):not(.files-filter-base)), .files-page :deep(input:not([type="checkbox"])), .files-page :deep([role=combobox]:not(.files-filter-base)) { min-height: 44px !important; } }
 @media (prefers-reduced-motion: reduce) { .files-row, .files-inspector-enter-active, .files-inspector-leave-active, .files-upload-leave-active { transition: none; } }
 </style>

@@ -67,6 +67,7 @@ export default <IconMap>{
     'ui.check': 'carbon:checkmark',
     'ui.close': 'carbon:close',
     'ui.copy': 'carbon:copy',
+    'ui.pin': 'carbon:pin',
     'ui.trash': 'carbon:trash-can',
     'ui.edit': 'carbon:edit',
     'ui.warning': 'carbon:warning-alt',

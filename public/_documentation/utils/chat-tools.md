@@ -26,6 +26,23 @@ Unsent drafts keep their tool choices and pass them to the chat when sent.
 Tools still require a compatible model and the applicable project permissions.
 Document AI has its own tool settings.
 
+## Appearance tools
+
+Use the **Appearance** category in the chat's **Tools** settings to let a
+compatible model inspect and change your browser's appearance. For example,
+ask “Make my dark-mode accent teal and increase the text size to 18px.”
+
+| Tool | Behavior |
+| --- | --- |
+| `get_appearance` | Reads the active theme and mode, effective colors, saved overrides, and what each editable setting changes. |
+| `update_appearance` | Updates color tokens, fonts, interface scale, border widths, or corner radii for the active mode. It preserves omitted settings and rejects a request for a different mode. |
+| `set_appearance_mode` | Switches between light and dark mode. |
+
+Changes use the same browser-local preferences as Theme Studio. To keep a
+change in a specific mode, switch to that mode before applying it.
+The model gets the same one-sentence help shown in Appearance for every setting
+it can change, including advanced color tokens.
+
 ## Conversation tools
 
 | Tool | Behavior |

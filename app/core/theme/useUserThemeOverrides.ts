@@ -222,6 +222,20 @@ export function useUserThemeOverrides() {
         reset('dark');
     }
 
+    function applyPreset(light: UserThemeOverrides, dark: UserThemeOverrides) {
+        const nextLight = deepMerge(createEmpty(), validatePatch(light));
+        const nextDark = deepMerge(createEmpty(), validatePatch(dark));
+        invalidateChangedBackgrounds(store.light.value, nextLight);
+        invalidateChangedBackgrounds(store.dark.value, nextDark);
+        store.light.value = nextLight;
+        store.dark.value = nextDark;
+        if (store.persistTimer) {
+            clearTimeout(store.persistTimer);
+            store.persistTimer = null;
+        }
+        persist(store);
+    }
+
     function switchMode(mode: 'light' | 'dark') {
         if (mode === store.activeMode.value) return;
         store.activeMode.value = mode;
@@ -240,6 +254,7 @@ export function useUserThemeOverrides() {
         set,
         reset,
         resetAll,
+        applyPreset,
         switchMode,
         reapply,
     };

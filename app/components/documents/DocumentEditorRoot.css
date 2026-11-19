@@ -8,7 +8,6 @@
 .document-unavailable p { margin: 0; max-width: 32rem; line-height: 1.5; }
 
 .editor-toolbar {
-    --doc-toolbar-surface: color-mix(in oklab, var(--md-surface), transparent 2%);
     --doc-toolbar-fade: 1.1rem;
     position: relative;
     z-index: 10;
@@ -21,7 +20,6 @@
     padding-inline-start: max(calc(var(--or3-pane-chrome-left-clearance, 0px) + 0.65rem), calc(var(--or3-pane-chrome-left-clearance, 0px) + (100% - var(--editor-canvas)) / 2));
     padding-inline-end: max(calc(var(--or3-pane-chrome-right-clearance, 0px) + 0.65rem), calc(var(--or3-pane-chrome-right-clearance, 0px) + (100% - var(--editor-canvas)) / 2));
     border-bottom: var(--md-border-width-subtle, var(--md-border-width)) solid var(--md-border-color);
-    background: var(--doc-toolbar-surface);
     box-shadow: 0 5px 18px rgb(0 0 0 / 3%);
 }
 /* A docked inspector narrows the document column; keep the rail aligned with

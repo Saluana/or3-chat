@@ -1,8 +1,16 @@
 <template>
-    <div class="flex flex-col w-72">
+    <div class="notification-panel flex w-80 max-w-[calc(100vw-2rem)] flex-col">
         <!-- Header -->
-        <div class="flex items-center justify-between px-3 py-2 border-b-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)]">
-            <span class="text-sm font-semibold text-[var(--md-on-surface)]">Notifications</span>
+        <div class="notification-panel-header flex items-center justify-between gap-2 px-3 py-2.5">
+            <div class="flex min-w-0 items-center gap-2">
+                <span class="text-sm font-semibold text-[var(--md-on-surface)]">Notifications</span>
+                <span
+                    v-if="unreadCount > 0"
+                    class="notification-panel-count rounded-full px-1.5 text-[11px] font-semibold leading-[18px]"
+                >
+                    {{ unreadCount > 99 ? '99+' : unreadCount }} new
+                </span>
+            </div>
             <UButton
                 v-if="unreadCount > 0"
                 v-bind="markAllReadButtonProps"
@@ -13,18 +21,19 @@
         </div>
 
         <!-- Notifications list -->
-        <div class="overflow-y-auto max-h-80">
+        <div class="max-h-[min(22rem,60vh)] overflow-y-auto overscroll-contain">
             <div v-if="loading" class="p-4 text-center or3-loading-delay">
                 <span class="text-xs text-[var(--md-on-surface-variant)] animate-pulse">
                     Loading…
                 </span>
             </div>
 
-            <div v-else-if="notifications.length === 0" class="flex flex-col items-center justify-center p-8 min-h-[120px]">
+            <div v-else-if="notifications.length === 0" class="flex min-h-[140px] flex-col items-center justify-center gap-1 p-8 text-center">
                 <UIcon
                     :name="iconBell"
-                    class="w-8 h-8 mb-2 text-[var(--md-on-surface-variant)] opacity-40"
+                    class="mb-1 h-8 w-8 text-[var(--md-on-surface-variant)] opacity-40"
                 />
+                <span class="text-sm font-medium text-[var(--md-on-surface)]">You're all caught up</span>
                 <span class="text-xs text-[var(--md-on-surface-variant)]">
                     No notifications
                 </span>
@@ -40,38 +49,48 @@
             </template>
         </div>
 
-        <!-- Footer -->
-        <div v-if="notifications.length > 0 && !showClearConfirm" class="px-3 py-2 border-t-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)]">
-            <UButton
-                v-bind="clearAllButtonProps"
-                @click="showClearConfirm = true"
-            >
-                Clear all
-            </UButton>
-        </div>
-
-        <!-- Inline clear confirmation -->
-        <div v-if="showClearConfirm" class="px-3 py-2 border-t-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)] bg-[var(--md-error-container)]">
-            <p class="text-xs text-[var(--md-on-error-container)] mb-2">Clear all notifications?</p>
-            <div class="flex gap-2">
-                <UButton v-bind="clearCancelButtonProps" @click="showClearConfirm = false">
-                    Cancel
+        <!-- Footer: clear all, confirmed in place -->
+        <div
+            v-if="notifications.length > 0"
+            class="notification-panel-footer flex min-h-11 items-center justify-between gap-2 px-3 py-1.5"
+        >
+            <template v-if="!showClearConfirm">
+                <span class="text-xs text-[var(--md-on-surface-variant)]">
+                    {{ notifications.length }} {{ notifications.length === 1 ? 'notification' : 'notifications' }}
+                </span>
+                <UButton
+                    v-bind="clearAllButtonProps"
+                    @click="showClearConfirm = true"
+                >
+                    Clear all
                 </UButton>
-                <UButton v-bind="clearConfirmButtonProps" @click="confirmClearAll">
-                    Clear
-                </UButton>
-            </div>
+            </template>
+            <template v-else>
+                <span role="alert" class="min-w-0 text-xs font-medium text-[var(--md-on-surface)]">
+                    Clear all notifications?
+                </span>
+                <div class="flex shrink-0 gap-1.5">
+                    <UButton v-bind="clearCancelButtonProps" @click="showClearConfirm = false">
+                        Cancel
+                    </UButton>
+                    <UButton v-bind="clearConfirmButtonProps" @click="confirmClearAll">
+                        Clear
+                    </UButton>
+                </div>
+            </template>
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useIcon } from '~/composables/useIcon';
 import { useNotifications } from '~/composables/notifications/useNotifications';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 
 const iconBell = useIcon('notification.bell');
+const iconTrash = useIcon('ui.trash');
+const iconCheck = useIcon('ui.check');
 
 const { notifications, unreadCount, loading, markRead, markAllRead, clearAll } =
     useNotifications();
@@ -107,24 +126,27 @@ const clearConfirmOverrides = useThemeOverrides({
 });
 
 const markAllReadButtonProps = computed(() => ({
-    variant: 'link' as const,
+    variant: 'ghost' as const,
     color: 'primary' as const,
     size: 'xs' as const,
-    class: 'w-fit',
+    icon: iconCheck.value,
+    class: 'w-fit shrink-0',
     ...markAllReadOverrides.value,
 }));
 
 const clearAllButtonProps = computed(() => ({
     variant: 'ghost' as const,
-    color: 'error' as const,
+    color: 'neutral' as const,
     size: 'xs' as const,
-    block: true,
+    icon: iconTrash.value,
+    class: 'notification-clear-all w-fit',
     ...clearAllOverrides.value,
 }));
 
 const clearCancelButtonProps = computed(() => ({
-    variant: 'solid' as const,
-    size: 'sm' as const,
+    variant: 'ghost' as const,
+    color: 'neutral' as const,
+    size: 'xs' as const,
     class: 'w-fit',
     ...clearCancelOverrides.value,
 }));
@@ -132,7 +154,7 @@ const clearCancelButtonProps = computed(() => ({
 const clearConfirmButtonProps = computed(() => ({
     variant: 'solid' as const,
     color: 'error' as const,
-    size: 'sm' as const,
+    size: 'xs' as const,
     class: 'w-fit',
     ...clearConfirmOverrides.value,
 }));
@@ -146,3 +168,19 @@ async function confirmClearAll() {
     showClearConfirm.value = false;
 }
 </script>
+
+<style scoped>
+.notification-panel-header {
+    border-bottom: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid var(--md-border-color);
+}
+.notification-panel-footer {
+    border-top: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid var(--md-border-color);
+}
+.notification-panel-count {
+    color: var(--md-on-primary);
+    background: var(--md-primary);
+}
+.notification-panel :deep(.notification-clear-all:hover) {
+    color: var(--md-error);
+}
+</style>

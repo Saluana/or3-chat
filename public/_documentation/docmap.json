@@ -23,7 +23,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Connect OpenRouter, choose a model through chat settings or desktop favorites, inspect settings while streaming, send a message, set the default-off per-chat tool switch and dashboard tool default, and understand draft and system-prompt recovery and saved work."
+                    "summary": "Connect OpenRouter, choose a model through chat settings or desktop favorites, inspect settings while streaming, send a message, set the default-off per-chat tool switch and dashboard tool default, pin chats and documents on Home, and understand draft and system-prompt recovery and saved work."
                 },
                 {
                     "name": "command-palette.md",
@@ -41,7 +41,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 3,
-                    "summary": "Project navigation and deletion, the fixed project header and New menu, preserved editor drafts, canonical briefs, project-scoped document and chat retrieval, source library, evidence-aware memory, continuity, and tool permissions."
+                    "summary": "Project navigation and deletion, Home shortcut pinning, settings access and folder creation, Explorer item removal feedback, the fixed project header and New menu, preserved editor drafts, canonical briefs, project-scoped document and chat retrieval, source library, evidence-aware memory, continuity, and tool permissions."
                 },
                 {
                     "name": "development-setup.md",
@@ -242,7 +242,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 8,
-                    "summary": "Name-based storage, revisions, compare-and-set, and quotas."
+                    "summary": "Name-based storage, sidebar pins, saved theme presets, revisions, compare-and-set, and quotas."
                 },
                 {
                     "name": "files.md",
@@ -380,7 +380,7 @@
                     "category": "Using tools",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Configure chat tools, web search, workspace tools, delegated tasks, and retained results with stable source controls."
+                    "summary": "Configure chat tools, web search, appearance editing with shared setting descriptions, workspace tools, delegated tasks, and retained results."
                 },
                 {
                     "name": "chat-tool-reliability.md",
@@ -425,7 +425,7 @@
                     "category": "Source integration",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Browse and search within folders, find an item's Files and project locations, and organize them with workspace KV sync. Covers text coverage, shared-byte retention, and trusted Plugin SDK catalog actions."
+                    "summary": "Browse and search within folders, find an item's Files and project locations, and use bulk selection and Trash in narrow panes. Covers workspace KV sync, text coverage, shared-byte retention, and trusted Plugin SDK catalog actions."
                 },
                 {
                     "name": "errors.md",
@@ -500,7 +500,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Use Theme studio, apply immediate CSS state changes with reduced motion, and understand how appearance preferences are saved."
+                    "summary": "Save and switch named light and dark appearance presets, preview theme colors, and customize appearance in Theme Studio or with chat tools."
                 },
                 {
                     "name": "first-theme.md",
@@ -518,7 +518,7 @@
                     "category": "Building themes",
                     "categoryOrder": 1,
                     "order": 1,
-                    "summary": "Style OR3 components using theme tokens, icons, and shared UI conventions."
+                    "summary": "Style OR3 components using theme tokens, semantic icons such as project pins, and shared UI conventions."
                 },
                 {
                     "name": "package-install.md",
@@ -629,7 +629,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "Understand server-side jobs, admission, compact streaming, retained tool results outside the answer budget, recovery, and work that continues after detachment."
+                    "summary": "Understand server-side jobs, browser and server requirements for delegated chats, retained tool results, and recovery after detachment."
                 },
                 {
                     "name": "notifications.md",

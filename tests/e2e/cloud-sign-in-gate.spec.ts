@@ -1072,3 +1072,39 @@ test('admin settings persistence after restart', async ({ page }, info) => {
     await expect(page.getByRole('switch', { name: 'Documents', exact: true })).not.toBeChecked();
     await saveEvidence(info, 'settings-after-restart', { body: await page.screenshot(), contentType: 'image/png' });
 });
+
+// The bell is shown only with SSR auth, so the panel's visual check lives in this harness.
+for (const mode of ['light', 'dark'] as const) test(`notification panel lists and clears notifications in ${mode} mode`, async ({ page }, info) => {
+    const origin = new URL(info.project.use.baseURL!).origin;
+    const signIn = await page.request.post('/api/basic-auth/sign-in', {
+        headers: { origin, 'x-or3-cloud-intent': 'mutation' },
+        data: credentials,
+    });
+    expect(signIn.ok(), await signIn.text()).toBe(true);
+    await page.emulateMedia({ colorScheme: mode });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openComposer(page);
+    await page.evaluate(async () => {
+        const hooks = (globalThis as unknown as { __NUXT_HOOKS__: { doAction: (name: string, payload: unknown) => Promise<void> } }).__NUXT_HOOKS__;
+        for (const title of ['Workflow finished', 'AI response ready']) {
+            await hooks.doAction('notify:action:push', {
+                type: title.startsWith('AI') ? 'ai.message.received' : 'workflow.completed',
+                title,
+                body: 'Your background response is ready.',
+                actions: [{ id: 'open', label: 'Open chat', kind: 'navigate', target: { route: '/' } }],
+            });
+        }
+    });
+    await expect(page.getByLabel('2 unread notifications').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Notifications', exact: true }).first().click();
+    const panel = page.locator('.notification-panel');
+    await expect(panel.getByText('2 new')).toBeVisible();
+    await saveEvidence(info, `notification-panel-${mode}`, { body: await page.screenshot(), contentType: 'image/png' });
+
+    await panel.getByRole('button', { name: 'Clear all' }).click();
+    await expect(panel.getByRole('alert')).toHaveText('Clear all notifications?');
+    await saveEvidence(info, `notification-panel-confirm-${mode}`, { body: await page.screenshot(), contentType: 'image/png' });
+    await panel.getByRole('button', { name: 'Clear', exact: true }).click();
+    await expect(panel.getByText("You're all caught up")).toBeVisible();
+    await expect(page.getByLabel(/unread notifications/)).toHaveCount(0);
+});

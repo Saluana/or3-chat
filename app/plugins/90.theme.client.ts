@@ -516,8 +516,10 @@ export default defineNuxtPlugin(async (nuxtApp) => {
      *
      * This switches the active theme and persists the selection.
      */
-    const setActiveTheme = async (themeName: string) => {
+    const setActiveTheme = async (themeName: string, isValid?: () => boolean) => {
+        if (isValid && !isValid()) return;
         const transaction = activationCoordinator.begin();
+        const canCommit = () => transaction.isCurrent() && (isValid?.() ?? true);
         const previousThemeName = activeTheme.value;
         let target = sanitizeTheme(themeName) ?? DEFAULT_THEME;
 
@@ -551,7 +553,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             ensureLoaded: ensureThemeLoaded,
         });
 
-        if (!transaction.isCurrent()) return;
+        if (!canCommit()) return;
 
         if (!activation.ok) {
             if (import.meta.dev) {
@@ -587,7 +589,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
                 return;
             }
         }
-        if (!transaction.isCurrent()) return;
+        if (!canCommit()) return;
 
         // A hydration re-apply may target the already-active theme. In that
         // case the links above are the active resources, not stale resources.

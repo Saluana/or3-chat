@@ -178,6 +178,8 @@ import { workspaceRevision } from '~/utils/chat/workspace-items';
 import { getActiveWorkspaceId } from '~/db/client';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
 import { presentError } from '~~/shared/errors';
+import { PROJECT_POST_TYPES, ProjectSettingsSchema, readPersistedProjectRecord } from '~~/shared/projects/workspace';
+import { projectSettingsId } from '~/db/project-workspace';
 import {
     db,
     upsert,
@@ -266,7 +268,7 @@ interface SideNavContentInstance extends ComponentPublicInstance {
 
 const sideNavContentRef = ref<SideNavContentInstance | null>(null);
 const items = shallowRef<Thread[]>([]);
-const projects = shallowRef<Project[]>([]);
+const projects = shallowRef<Array<Project & { pinned: boolean }>>([]);
 const expandedProjects = ref<string[]>([]);
 const listHeight = ref(400);
 import { useSidebarSearch } from '~/composables/sidebar/useSidebarSearch';
@@ -415,9 +417,24 @@ function bindProjectQuery() {
     subProjects?.unsubscribe();
     const workspaceDb = getDb(); const generation = getWorkspaceGeneration();
     const fullCatalog = Boolean(sidebarQuery.value.trim() || showAddToProjectModal.value);
-    subProjects = liveQuery(() => {
-        const rows = workspaceDb.projects.orderBy("updated_at").reverse().filter(p => !p.deleted);
-        return (fullCatalog ? rows : rows.limit(6)).toArray();
+    subProjects = liveQuery(async () => {
+        const recent = workspaceDb.projects.orderBy('updated_at').reverse().filter(project => !project.deleted);
+        const [settings, projects] = await Promise.all([
+            workspaceDb.posts.where('postType').equals(PROJECT_POST_TYPES.settings).toArray(),
+            (fullCatalog ? recent : recent.limit(6)).toArray(),
+        ]);
+        const pinnedIds = new Set(settings.flatMap(row =>
+            !row.deleted && row.id === projectSettingsId(row.title)
+                && readPersistedProjectRecord(ProjectSettingsSchema, row.content)?.pinned ? [row.title] : [],
+        ));
+        if (!fullCatalog && pinnedIds.size) {
+            const recentIds = new Set(projects.map(project => project.id));
+            const missing = await workspaceDb.projects.bulkGet([...pinnedIds].filter(id => !recentIds.has(id)));
+            for (const project of missing) if (project && !project.deleted) projects.push(project);
+        }
+        const ordered = projects.map(project => ({ ...project, pinned: pinnedIds.has(project.id) }));
+        ordered.sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updated_at - a.updated_at);
+        return fullCatalog ? ordered : ordered.slice(0, 6);
     }).subscribe({
         next: rows => { if (generation === getWorkspaceGeneration()) projects.value = rows; },
         error: err => console.error("projects liveQuery error", err),

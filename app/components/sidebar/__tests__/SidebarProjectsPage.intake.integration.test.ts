@@ -16,7 +16,9 @@ const toolCatalog = vi.hoisted(() => ({ tools: [] as unknown[] }));
 const authSession = shallowRef<ReturnType<typeof import('~/composables/auth/useSessionContext').getCachedSessionContext>>(null);
 const authPayload = computed(() => authSession.value ? { session: authSession.value, appAccessAllowed: true } : null);
 vi.mock('#imports', async load => ({ ...(await load<Record<string, unknown>>()), useRuntimeConfig: () => testRuntimeConfig.value }));
-vi.mock('~/composables/sidebar/useProjectSidebar', () => ({ useProjectSidebar: () => ({ projectId, returnTo: ref('home') }) }));
+vi.mock('~/composables/sidebar/useProjectSidebar', () => ({
+    useProjectSidebar: () => ({ projectId, returnTo: ref('home'), settingsRequest: ref<string | null>(null) }),
+}));
 vi.mock('~/composables/sidebar/useActiveSidebarPage', () => ({ useActiveSidebarPage: () => ({ setActivePage: async () => {} }) }));
 vi.mock('~/utils/chat/tool-registry', () => ({ useToolRegistry: () => ({ listTools: shallowRef(toolCatalog.tools) }) }));
 vi.mock('~/composables/chat/useModelStore', () => ({ useModelStore: () => ({ catalog: ref([]), favoriteModels: ref([]) }) }));

@@ -33,7 +33,7 @@
         <template v-if="documentLoaded">
         <div
             v-theme="'document.toolbar'"
-            class="editor-toolbar document-editor-toolbar"
+            class="editor-toolbar document-editor-toolbar document-toolbar-surface"
             :class="{
                 'editor-toolbar--compact': isCompactToolbar,
                 'editor-toolbar--mobile': isMobile,

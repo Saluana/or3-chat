@@ -26,6 +26,7 @@ import {
     PROJECT_INTAKE_TIMEOUT_SECONDS,
     moveChatToProject,
     projectSettingsId,
+    setProjectPinned,
 } from '~/db/project-workspace';
 import {
     captureProjectOperation,
@@ -102,7 +103,7 @@ function clearExplorerSearch() {
     query.value = '';
     if (props.sidebarQuery !== undefined) emit('update:sidebar-query', '');
 }
-const { projectId: id, returnTo } = useProjectSidebar();
+const { projectId: id, returnTo, settingsRequest } = useProjectSidebar();
 const { setActivePage } = useActiveSidebarPage();
 const backIcon = useIcon('ui.chevron.left');
 const projectIcon = useIcon('sidebar.folder');
@@ -117,6 +118,7 @@ const { createDocumentEntry } = useProjectsCrud();
 watch(id, () => { projectExplorerActive.value = false; });
 const knowledgeIcon = useIcon('sidebar.note');
 const settingsIcon = useIcon('ui.settings');
+const pinIcon = useIcon('ui.pin');
 const editIcon = useIcon('ui.edit');
 const chevronIcon = useIcon('ui.chevron.right');
 const plusIcon = useIcon('ui.plus');
@@ -435,7 +437,7 @@ const projectListItems = computed(() =>
         ...entry,
         // The virtual slot runs as its window moves. Keep the UButton callback
         // stable so retained rows do not recompute forwarded link props.
-        onPin: () => run(() => pin(entry.project.id)),
+        onPin: () => run(() => setProjectPinned(scope, entry.project.id, !entry.pinned)),
         heading:
             index === 0 || entries[index - 1]?.pinned !== entry.pinned
                 ? entry.pinned
@@ -690,6 +692,7 @@ onActivated(() => {
 });
 const stopWorkspace = subscribeActiveWorkspaceDb(() => {
     drafts.clear();
+    settingsRequest.value = null;
     state.value = null;
     id.value = '';
     connect();
@@ -699,6 +702,11 @@ watch(id, (_next, previous) => {
     connect();
 });
 connect();
+watch(settingsRequest, (requestedId) => {
+    if (!requestedId) return;
+    if (requestedId === id.value) tab.value = 'Settings';
+    settingsRequest.value = null;
+}, { immediate: true, flush: 'post' });
 onBeforeUnmount(() => {
     clearTimeout(intakeRefresh);
     disposed = true;
@@ -782,16 +790,6 @@ async function editInlineBrief() {
     briefEditing.value = true;
     await nextTick();
     inlineBriefEditor.value?.focus();
-}
-async function pin(projectId: string) {
-    const captured = scope;
-    const current = await readProjectWorkspace(captured.db, projectId);
-    await saveProjectSettings(
-        captured,
-        projectId,
-        { ...current.settings, pinned: !current.settings.pinned },
-        current.settingsRow ?? null,
-    );
 }
 async function placeCreatedItem(origin: typeof scope, projectId: string, item: ExplorerItemRef, folder: ExplorerFolderRow) {
     try {
@@ -1200,7 +1198,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                             </button>
                             <UButton
                                 class="relative z-10"
-                                color="neutral"
+                                :color="entry.pinned ? 'primary' : 'neutral'"
                                 variant="ghost"
                                 size="xs"
                                 square
@@ -1209,11 +1207,7 @@ function toolMode(name: string, mode: 'enabled' | 'disabled' | 'ask') {
                                         ? 'Unpin project'
                                         : 'Pin project'
                                 "
-                                :icon="
-                                    entry.pinned
-                                        ? 'i-lucide-pin-off'
-                                        : 'i-lucide-pin'
-                                "
+                                :icon="pinIcon"
                                 @click="entry.onPin"
                             />
                             <SidebarProjectActions

@@ -338,8 +338,7 @@ import type { Component } from 'vue';
 defineOptions({
     name: 'sidebar-home',
 });
-import type { Project } from '~/db';
-import type { ProjectEntry } from '~/utils/projects/normalizeProjectData';
+import type { SidebarProject } from '~/composables/sidebar/useSidebarProjectDisplay';
 import { Or3Scroll, type Or3ScrollRef } from 'or3-scroll';
 import { usePaginatedSidebarItems } from '~/composables/sidebar/usePaginatedSidebarItems';
 import {
@@ -365,7 +364,6 @@ import { isMobile } from '~/state/global';
 import { useCommandPalette } from '~/composables/search/useCommandPalette';
 import { useViewOnlyAccess } from '~/composables/auth/useViewOnlyAccess';
 
-type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 interface SidebarPageLinkItem {
     key: string;
     label: string;
@@ -490,6 +488,18 @@ const documentsEnabled = computed(() => or3Config.features.documents.enabled);
 
 // Paginated items
 const sidebarQuery = computed(() => props.sidebarQuery.trim());
+const { items: pinnedItems } = usePinnedItems();
+const pinnedCollapsed = ref(false);
+const pinnedIds = computed(() => {
+    const ids = { thread: new Set<string>(), document: new Set<string>() };
+    for (const item of pinnedItems.value) ids[item.type].add(item.id);
+    return ids;
+});
+const visiblePinnedItems = computed(() => {
+    const query = sidebarQuery.value.toLowerCase();
+    return pinnedItems.value.filter(item => (documentsEnabled.value || item.type === 'thread')
+        && item.title.toLowerCase().includes(query));
+});
 const commandPalette = useCommandPalette();
 /** The sidebar filters titles; the command palette also searches message text. */
 function searchInsideMessages(): void {
@@ -500,6 +510,7 @@ const { items, activeFamilyIds, loading, loadMore, toggleFamily, loadMoreMembers
     query: sidebarQuery,
     type: documentsEnabled.value ? 'all' : 'thread',
     activeIds: computed(() => props.activeThreadIds),
+    excludedIds: pinnedIds,
 });
 const familyToast = useToast();
 async function goToLatestCompaction(rootId: string) {
@@ -529,6 +540,7 @@ const groupedItems = computed(() => {
     const groups = new Map<TimeGroup, UnifiedSidebarItem[]>();
 
     for (const item of items.value) {
+        if (item.family?.kind !== 'load-more-members' && pinnedIds.value[item.type].has(item.id)) continue;
         const groupKey = computeTimeGroup(item.family?.groupUpdatedAt ?? item.updatedAt);
         if (!groups.has(groupKey)) {
             groups.set(groupKey, []);
@@ -540,7 +552,7 @@ const groupedItems = computed(() => {
 });
 
 const showEmptyState = computed(
-    () => !loading.value && items.value.length === 0
+    () => !loading.value && groupedItems.value.size === 0 && visiblePinnedItems.value.length === 0
 );
 const isCompletelyEmpty = computed(
     () => showEmptyState.value && props.displayProjects.length === 0
@@ -570,9 +582,6 @@ const welcomeSparkles = [
 ];
 
 // Build combined items list for Or3Scroll
-const { items: pinnedItems } = usePinnedItems();
-const pinnedCollapsed = ref(false);
-
 const combinedItems = computed(() => {
     const result: SidebarCombinedItem[] = [];
 
@@ -633,10 +642,10 @@ const combinedItems = computed(() => {
     }
 
     // Pinned chats and documents sit under projects
-    if (pinnedItems.value.length > 0) {
+    if (visiblePinnedItems.value.length > 0) {
         result.push({ key: 'pinned-header', type: 'pinned-header' });
         if (!pinnedCollapsed.value) {
-            for (const item of pinnedItems.value) {
+            for (const item of visiblePinnedItems.value) {
                 result.push({ key: `pinned-${item.type}-${item.id}`, type: 'pinned-item', item });
             }
         }

@@ -633,7 +633,7 @@ export interface ThemePlugin {
     current: Ref<string>;
     activeTheme: Ref<string>;
     resolversVersion: Ref<number>;
-    setActiveTheme: (themeName: string) => Promise<void>;
+    setActiveTheme: (themeName: string, isValid?: () => boolean) => Promise<void>;
     getResolver: (themeName: string) => RuntimeResolver | null;
     loadTheme: (themeName: string) => Promise<CompiledTheme | null>;
     getTheme: (themeName: string) => CompiledTheme | null;

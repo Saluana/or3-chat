@@ -4,7 +4,7 @@ Open **Projects** in the sidebar to search, pin, create, or return to a workspac
 
 Click anywhere on a project card, including its padding, to open it with one click. The pin button only changes pinning. Opening a project remains available while a pin save is pending; keyboard users can open the focused card with Enter or Space.
 
-The Home sidebar has a **Projects** navigation row below Chats and Documents. It opens the full project list. Home shows up to five recent project shortcuts; **Show more** opens the full list when there are additional projects. Projects is a Home destination and does not add an icon to the collapsed rail or mobile bottom navigation. Expanded Home shortcuts load their children on demand, and the full Projects list renders only the rows near the visible area. Explicit workspace-profile navigation restrictions still apply.
+The Home sidebar has a **Projects** navigation row below Chats and Documents. It opens the full project list. Home shows up to five shortcuts, with pinned projects ahead of recent unpinned projects. **Show more** opens the full list when there are additional projects. Open a shortcut’s **⋯** menu to **Pin project**, **Unpin project**, or go directly to **Project settings**. The full list uses the same pin state. Projects is a Home destination and does not add an icon to the collapsed rail or mobile bottom navigation. Expanded Home shortcuts load their children on demand, and the full Projects list renders only the rows near the visible area. Explicit workspace-profile navigation restrictions still apply.
 
 Project Home brings together the brief, a **⋯** menu with **Knowledge** and **Memory** (with their counts), and a time-grouped **Recent** list mixing project chats and documents. The list includes OR3 documents added through Knowledge and uses the same rows, conversation families, search, and pagination as the normal sidebar. The single top back button returns to the project from a section, then to **Home** when you entered through a Home shortcut or **Projects** when you entered through the list. The settings icon opens **Settings**, including controls to move chats into the project or exclude them from memory. Use the sidebar search to filter projects. **New project** opens the shared creation modal with a title and optional brief; creating from the Projects page opens the new project's home in the sidebar. Browsing a project preserves the active pane and workspace tabs; opening or creating a chat uses the chat pane as usual.
 
@@ -123,5 +123,9 @@ Workspace permissions apply to cloud copies: viewers cannot edit, and losing mem
 ## Project folders
 
 Project Home opens in **Explorer** by default. Scroll the sidebar to reach the rest of the tree on mobile or desktop. Use the folder-plus button to create a folder, drag a row by its name to move it, and drop on the project name to move it to the root. Moving a file inside a project changes only its project location. **Show in Files** focuses its independent workspace location and reuses the open Files tab. The project name is also a root drop target in an expanded Home shortcut.
+
+Explorer announces successful item removals to screen readers. If any selected items remain after a removal, Explorer shows how many it couldn’t remove.
+
+Under **Recent projects** on Home, open a project’s **⋯** menu and choose **New folder** to create a folder at the project root. The shortcut expands so you can see the folder without leaving Home.
 
 With a project row focused, Right expands a folder or enters its first child. Left collapses a folder or returns to its parent. Space toggles selection, and Enter opens the focused item.

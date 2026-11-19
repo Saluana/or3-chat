@@ -279,6 +279,10 @@ function applyColorOverrides(
     style: CSSStyleDeclaration,
     overrides: UserThemeOverrides
 ): void {
+    document.documentElement.toggleAttribute(
+        'data-custom-menu-surface',
+        Boolean(overrides.colors?.enabled && overrides.colors.menuSurface)
+    );
     if (overrides.colors?.enabled) {
         for (const [key, cssVar] of Object.entries(COLOR_TOKEN_REGISTRY)) {
             const value = (overrides.colors as Record<string, unknown>)[key];

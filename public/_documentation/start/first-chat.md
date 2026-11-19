@@ -39,7 +39,7 @@ A failed response keeps its error in the conversation after reload. Use **Retry 
 
 ## Pin chats and documents
 
-Open the **...** menu on a chat or document in the sidebar and choose **Pin** (or **Unpin**), or right-click its tab at the top and choose **Pin to sidebar**. Pinned items appear under **Pinned**, below projects, most recently pinned first, and stay in their usual place in the list too. Pins are saved with your workspace and sync with it.
+Open the **...** menu on a chat or document in the sidebar and choose **Pin** (or **Unpin**), or right-click its tab at the top and choose **Pin to sidebar**. On Home, pinned items appear only under **Pinned**, below projects, most recently pinned first. Unpinning moves an item back to the date groups. Pins are saved with your workspace and sync with it.
 
 ## If something goes wrong
 

@@ -732,7 +732,7 @@ test.describe('responsive modal layouts', () => {
     }
 });
 
-async function openThemeStudio(page: Page, isMobile: boolean): Promise<void> {
+async function openThemeStudio(page: Page, isMobile: boolean, path = '/chat'): Promise<void> {
     await page.context().addCookies([
         {
             name: 'or3_workspace_profile_v1',
@@ -752,9 +752,10 @@ async function openThemeStudio(page: Page, isMobile: boolean): Promise<void> {
         localStorage.removeItem('or3:user-theme-overrides:dark');
         localStorage.removeItem('or3:user-theme-accessibility');
     });
-    await page.goto('/chat');
+    await page.goto(path);
 
-    await expect(page.getByRole('textbox', { name: 'Message input' }).first())
+    const readyInput = path.startsWith('/docs/') ? 'Document title' : 'Message input';
+    await expect(page.getByRole('textbox', { name: readyInput, exact: true }).first())
         .toBeVisible({ timeout: 30_000 });
     const dismissWelcome = page.getByRole('button', { name: 'Dismiss welcome' });
     if (await dismissWelcome.isVisible()) await dismissWelcome.click();
@@ -1709,6 +1710,81 @@ test('empty chat: theme changes and the first send preserve composer ownership',
 });
 
 
+test('saved themes restore their base theme and both color modes after reload', async ({ page }, info) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openResponsiveChat(page, 'blank', 'light');
+    await openThemeStudio(page, false);
+    const settings = page.getByRole('dialog', { name: 'Appearance', exact: true });
+    const root = page.locator('html');
+    const colorsTab = settings.getByRole('tab', { name: 'Colors', exact: true });
+    const themeTab = settings.getByRole('tab', { name: 'Theme', exact: true });
+    const customColors = settings.getByRole('checkbox', { name: 'Custom colors' });
+    const accent = settings.getByRole('textbox', { name: 'Primary accent hex color' });
+
+    async function save(name: string) {
+        await themeTab.click();
+        const section = settings.getByRole('region', { name: 'Saved themes', exact: true });
+        await section.getByRole('button', { name: 'Save current theme' }).click();
+        await section.getByRole('textbox', { name: 'Theme name' }).fill(name);
+        await section.getByRole('button', { name: 'Save', exact: true }).click();
+        await expect(card(name)).toHaveAttribute('aria-pressed', 'true');
+    }
+
+    function card(name: string) {
+        return settings.getByRole('button', { name: `Apply ${name}`, exact: true });
+    }
+
+    async function apply(name: string) {
+        await themeTab.click();
+        await card(name).click();
+        await expect(card(name)).toHaveAttribute('aria-pressed', 'true');
+    }
+
+    await selectThemeAndMode(page, 'retro', 'light');
+    await save('Original Retro');
+    await selectThemeAndMode(page, 'blank', 'light');
+    await colorsTab.click();
+    await settings.getByText('Custom colors', { exact: true }).click();
+    await accent.fill('#2165ad');
+    await expect(root).toHaveCSS('--md-primary', '#2165ad');
+    await selectThemeAndMode(page, 'blank', 'dark');
+    await colorsTab.click();
+    await settings.getByText('Custom colors', { exact: true }).click();
+    await accent.fill('#bf6924');
+    await expect(root).toHaveCSS('--md-primary', '#bf6924');
+    await save('Custom Blank');
+
+    await apply('Original Retro');
+    await expect(root).toHaveAttribute('data-theme', 'retro');
+    await expect(root).toHaveClass(/\bdark\b/);
+    await colorsTab.click();
+    await expect(customColors).not.toBeChecked();
+
+    await openThemeStudio(page, false);
+    await apply('Custom Blank');
+    await expect(root).toHaveAttribute('data-theme', 'blank');
+    await expect(root).toHaveCSS('--md-primary', '#2165ad');
+    await settings.getByRole('button', { name: 'Dark', exact: true }).click();
+    await expect(root).toHaveCSS('--md-primary', '#bf6924');
+
+    // Delete is immediate and can be undone from the inline notice.
+    await themeTab.click();
+    await settings.getByRole('button', { name: 'More actions for Original Retro' }).click();
+    await page.getByRole('menuitem', { name: 'Delete' }).click();
+    await expect(card('Original Retro')).toHaveCount(0);
+    await settings.getByRole('button', { name: 'Undo' }).click();
+    await expect(card('Original Retro')).toBeVisible();
+    await expect(card('Custom Blank')).toHaveAttribute('aria-pressed', 'true');
+    await captureChat(page, info, 'saved-themes-dark');
+    await selectThemeAndMode(page, 'blank', 'light');
+    await expect(card('Custom Blank')).toHaveAttribute('aria-pressed', 'true');
+    await settings.getByRole('button', { name: 'Save current theme' }).click();
+    await captureChat(page, info, 'saved-themes-light-save-form');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await captureChat(page, info, 'saved-themes-mobile');
+});
+
 // Theme studio must recolor both the modal frame and its internal dividers.
 for (const mode of modes) test('blank modal border follows custom colors in ' + mode + ' mode', async ({ page }, info) => {
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -1718,8 +1794,9 @@ for (const mode of modes) test('blank modal border follows custom colors in ' + 
     await page.getByRole('tab', { name: 'Colors', exact: true }).click();
     await page.getByText('Custom colors', { exact: true }).click();
     await expect(page.getByRole('checkbox', { name: 'Custom colors' })).toBeChecked();
-    await page.getByRole('button', { name: /^Borders / }).click();
-    await page.getByRole('textbox', { name: 'Borders hex color', exact: true }).fill('#FF7171');
+    await page.getByRole('combobox', { name: 'Color token' }).click();
+    await page.getByRole('option', { name: 'Borders & dividers', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Borders & dividers hex color', exact: true }).fill('#FF7171');
     const settings = page.getByRole('dialog', { name: 'Appearance', exact: true });
     await expect(settings.locator('[data-slot="header"]').first()).toHaveCSS('border-bottom-color', 'rgb(255, 113, 113)');
     for (const side of ['top', 'right', 'bottom', 'left']) {
@@ -1752,4 +1829,134 @@ test('theme palette preserves exact typed colors while the picker remains intera
     await settings.getByRole('tab', { name: 'Typography', exact: true }).click();
     await settings.getByRole('tab', { name: 'Colors', exact: true }).click();
     await expect(hex).toHaveValue(picked);
+    const token = settings.getByRole('combobox', { name: 'Color token' });
+    await settings.getByRole('button', { name: 'Show advanced colors' }).click();
+    await token.click();
+    await page.getByRole('option', { name: 'Surface container', exact: true }).click();
+    const container = settings.getByRole('textbox', { name: 'Surface container hex color' });
+    const original = await container.inputValue();
+    await token.click();
+    await page.getByRole('option', { name: 'Panel background', exact: true }).click();
+    await settings.getByRole('textbox', { name: 'Panel background hex color' }).fill('#c0ffee');
+    await token.click();
+    await page.getByRole('option', { name: 'Surface container', exact: true }).click();
+    await expect(container).toHaveValue(original);
+});
+
+test('theme color preview keeps the sample rename dialog open during color edits', async ({ page }, info) => {
+    test.setTimeout(60_000);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openResponsiveChat(page, 'blank', 'light');
+    await page.getByTestId('sidebar-inner').getByRole('button', { name: 'Create a document', exact: true }).click();
+    const editorToolbar = page.locator('.document-editor-root .editor-toolbar');
+    await expect(editorToolbar).toBeVisible();
+    await expect(page).toHaveURL(/\/docs\/.+/);
+    await openThemeStudio(page, false, new URL(page.url()).pathname);
+    await selectThemeAndMode(page, 'blank', 'light');
+    const settings = page.getByRole('dialog', { name: 'Appearance', exact: true });
+    await settings.getByRole('tab', { name: 'Colors', exact: true }).click();
+    await settings.getByText('Custom colors', { exact: true }).click();
+
+    const preview = settings.getByRole('region', { name: 'Live preview' });
+    const frame = preview.locator('.preview-frame');
+    const tokenSelect = settings.getByRole('combobox', { name: 'Color token' });
+    await expect(preview.getByText('What should I pack?')).toBeVisible();
+    await tokenSelect.click();
+    await page.getByRole('option', { name: 'Hover surface', exact: true }).click();
+    await settings.getByRole('textbox', { name: 'Hover surface hex color' }).fill('#426482');
+    await expect(preview.getByText('What should I pack?')).toHaveCSS('background-color', 'rgb(66, 100, 130)');
+    await expect(frame).toBeInViewport({ ratio: 0.99 });
+    const frameBounds = (await frame.boundingBox())!;
+    const editorBounds = (await tokenSelect.boundingBox())!;
+    expect(Math.abs(frameBounds.width - frameBounds.height)).toBeLessThan(1);
+    expect(frameBounds.x).toBeGreaterThan(editorBounds.x + editorBounds.width);
+    await preview.getByRole('button', { name: 'Packing list', exact: true }).click();
+    await expect(preview.getByRole('heading', { name: 'Packing list' })).toBeVisible();
+    const previewToolbar = preview.locator('.preview-toolbar');
+    const initialToolbarColor = await editorToolbar.evaluate((element) => getComputedStyle(element).backgroundColor);
+
+    const actions = preview.getByRole('button', { name: 'Actions for Packing list' });
+    await actions.press('Enter');
+    const renameAction = page.getByRole('button', { name: 'Rename', exact: true });
+    await expect(renameAction).toBeInViewport({ ratio: 1 });
+    const actionBounds = (await actions.boundingBox())!;
+    const renameBounds = (await renameAction.boundingBox())!;
+    expect(Math.abs(renameBounds.y - actionBounds.y)).toBeLessThan(16);
+    expect(Math.abs(renameBounds.x - (actionBounds.x + actionBounds.width))).toBeLessThan(19);
+    await captureChat(page, info, 'theme-color-preview-menu');
+    await renameAction.press('Enter');
+    const dialog = preview.getByRole('dialog', { name: 'Rename document' });
+    await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
+    await expect(dialog).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    const title = dialog.getByRole('textbox', { name: 'Document title' });
+    await expect(title).toBeFocused();
+    await title.fill('Weekend packing list');
+
+    const tokenBounds = (await tokenSelect.boundingBox())!;
+    await tokenSelect.click();
+    const colorOptions = page.getByRole('listbox');
+    await expect(colorOptions).toBeInViewport();
+    await expect(colorOptions.getByRole('option', { name: 'Hover surface', exact: true }).locator('.color-token-swatch'))
+        .toHaveCSS('background-color', 'rgb(66, 100, 130)');
+    await expect(colorOptions.getByRole('option', { name: 'App background', exact: true }).locator('.color-token-swatch'))
+        .toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    const optionsBounds = (await colorOptions.boundingBox())!;
+    expect(Math.abs(optionsBounds.y - (tokenBounds.y + tokenBounds.height))).toBeLessThan(12);
+    expect(Math.abs(optionsBounds.x - tokenBounds.x)).toBeLessThan(12);
+    expect(Math.abs(optionsBounds.width - tokenBounds.width)).toBeLessThan(2);
+    await captureChat(page, info, 'theme-color-preview-token-dropdown');
+    await colorOptions.getByRole('option', { name: 'App background', exact: true }).click();
+    await settings.getByRole('textbox', { name: 'App background hex color' }).fill('#FFF6E8');
+    const updatedToolbarColor = () => editorToolbar.evaluate((element) => getComputedStyle(element).backgroundColor);
+    await expect.poll(updatedToolbarColor).not.toBe(initialToolbarColor);
+    await expect(previewToolbar).toHaveCSS('background-color', await updatedToolbarColor());
+    await expect(dialog).toHaveCSS('background-color', 'rgb(255, 246, 232)');
+    await expect(dialog).toBeInViewport({ ratio: 1 });
+    await expect(title).toHaveValue('Weekend packing list');
+    await captureChat(page, info, 'theme-color-preview-rename');
+    await tokenSelect.click();
+    await page.getByRole('option', { name: 'Menu & dialog background', exact: true }).click();
+    await settings.getByRole('textbox', { name: 'Menu & dialog background hex color' }).fill('#ede4ff');
+    await expect(dialog).toHaveCSS('background-color', 'rgb(237, 228, 255)');
+    await expect(frame).toHaveCSS('background-color', 'rgb(255, 246, 232)');
+
+    await settings.getByRole('button', { name: 'Show advanced colors' }).click();
+    await tokenSelect.click();
+    await page.getByRole('option', { name: 'Dialog backdrop', exact: true }).click();
+    const opacity = settings.getByRole('slider', { name: 'Backdrop opacity' });
+    await opacity.press('End');
+    await settings.getByRole('textbox', { name: 'Dialog backdrop hex color' }).fill('#345678');
+    await opacity.press('ArrowLeft');
+    await expect(preview.locator('.preview-scrim')).toHaveCSS('background-color', 'rgba(52, 86, 120, 0.99)');
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(preview.getByRole('button', { name: 'Actions for Weekend packing list' })).toBeFocused();
+    await expect(preview.getByRole('heading', { name: 'Weekend packing list' })).toBeVisible();
+
+    await page.setViewportSize({ width: 390, height: 780 });
+    await tokenSelect.click();
+    const primaryAccentOption = colorOptions.getByRole('option', { name: 'Primary accent', exact: true });
+    await primaryAccentOption.click();
+    const triggerSwatch = (await tokenSelect.locator('.color-token-swatch').boundingBox())!;
+    const triggerLabel = (await tokenSelect.locator('[data-slot="value"]').boundingBox())!;
+    await tokenSelect.click();
+    await expect(primaryAccentOption).toBeInViewport({ ratio: 1 });
+    for (const name of ['Primary accent', 'Accent fill']) {
+        const option = colorOptions.getByRole('option', { name, exact: true });
+        const swatch = (await option.locator('.color-token-swatch').boundingBox())!;
+        const label = (await option.locator('[data-slot="itemLabel"]').boundingBox())!;
+        expect(Math.abs(swatch.x - triggerSwatch.x)).toBeLessThan(2);
+        expect(Math.abs(label.x - triggerLabel.x)).toBeLessThan(2);
+        expect(Math.abs(swatch.y + swatch.height / 2 - label.y - label.height / 2)).toBeLessThan(1);
+    }
+    await page.keyboard.press('Escape');
+    await preview.getByRole('button', { name: 'Trip notes', exact: true }).click();
+    await expect(preview.getByText('What should I pack?')).toBeVisible();
+    await preview.getByRole('button', { name: 'Actions for Trip notes' }).click();
+    await expect(page.getByRole('dialog').filter({ has: renameAction }).last()).toHaveCSS('background-color', 'rgb(237, 228, 255)');
+    await renameAction.click();
+    const chatTitle = preview.getByRole('dialog', { name: 'Rename chat' }).getByRole('textbox', { name: 'Chat title' });
+    await expect(chatTitle).toBeFocused();
+    await chatTitle.press('Escape');
+    await expect(chatTitle).toBeHidden();
+    await expect(preview.getByRole('button', { name: 'Actions for Trip notes' })).toBeFocused();
 });

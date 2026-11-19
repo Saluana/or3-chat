@@ -10,6 +10,7 @@ const props = withDefaults(defineProps<{
     open: boolean;
     title: string;
     size?: 'sm' | 'md' | 'lg' | 'workspace';
+    contained?: boolean;
     closeLabel?: string;
     ui?: ModalProps['ui'];
     content?: ModalProps['content'];
@@ -18,6 +19,18 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ 'update:open': [value: boolean] }>();
 const closeIcon = useIcon('ui.close');
 const dialogContent = useDialogFocus(() => props.content, () => props.size === 'workspace' ? 'workspace' : 'center');
+// A contained dialog leaves neighboring controls available and lets its caller restore focus.
+const containedContent = computed<ModalProps['content']>(() => ({
+    ...props.content,
+    onInteractOutside(event) {
+        props.content?.onInteractOutside?.(event);
+        event.preventDefault();
+    },
+    onCloseAutoFocus(event) {
+        props.content?.onCloseAutoFocus?.(event);
+        event.preventDefault();
+    },
+}));
 const widths = {
     sm: 'max-w-[560px]',
     md: 'max-w-[700px]',
@@ -29,12 +42,13 @@ const widths = {
 // The scrim only dims: a full-viewport backdrop blur flashes while content scrolls.
 const modalUi = computed<ModalProps['ui']>(() => ({
     ...props.ui,
-    overlay: [props.ui?.overlay, 'bg-[rgb(15_23_42/0.22)]!'].filter(Boolean).join(' '),
+    overlay: [props.ui?.overlay, 'bg-[var(--md-dialog-backdrop)]!'].filter(Boolean).join(' '),
     content: [
         props.ui?.content,
-        'app-modal w-[calc(100dvw-2rem)] h-auto max-h-[calc(100dvh-2rem)]! overflow-hidden rounded-[var(--md-border-radius-large,var(--md-border-radius))] ring-0 divide-y-0 border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-surface)] text-[var(--md-on-surface)]',
-        widths[props.size],
-        props.size === 'workspace' && 'h-[min(800px,calc(100dvh-2rem))] max-sm:w-[calc(100dvw/var(--app-ui-zoom,1))] max-sm:h-[calc(100dvh/var(--app-ui-zoom,1))] max-sm:max-w-none max-sm:max-h-[calc(100dvh/var(--app-ui-zoom,1))]! max-sm:rounded-none max-sm:border-0 max-sm:pt-[env(safe-area-inset-top)]',
+        'app-modal h-auto overflow-hidden rounded-[var(--md-border-radius-large,var(--md-border-radius))] ring-0 divide-y-0 border-[length:var(--md-border-width)] border-[color:var(--md-border-color)] bg-[var(--md-menu-surface,var(--md-surface))] text-[var(--md-on-surface)]',
+        props.contained ? 'static! translate-none! w-full max-w-full max-h-full!' : 'w-[calc(100dvw-2rem)] max-h-[calc(100dvh-2rem)]!',
+        !props.contained && widths[props.size],
+        !props.contained && props.size === 'workspace' && 'h-[min(800px,calc(100dvh-2rem))] max-sm:w-[calc(100dvw/var(--app-ui-zoom,1))] max-sm:h-[calc(100dvh/var(--app-ui-zoom,1))] max-sm:max-w-none max-sm:max-h-[calc(100dvh/var(--app-ui-zoom,1))]! max-sm:rounded-none max-sm:border-0 max-sm:pt-[env(safe-area-inset-top)]',
     ].filter(Boolean).join(' '),
     header: [props.ui?.header, 'relative flex shrink-0 items-center justify-between gap-4 min-h-0! px-6! py-5! bg-transparent! text-[var(--md-on-surface)]!'].filter(Boolean).join(' '),
     wrapper: 'min-w-0 flex-1',
@@ -50,13 +64,13 @@ const modalUi = computed<ModalProps['ui']>(() => ({
 
 <template>
     <UModal
-        v-bind="$attrs"
+        v-bind="contained ? { ...$attrs, modal: false, portal: false, overlay: false, scrollable: false, fullscreen: false, transition: false, dismissible: true } : $attrs"
         :open="open"
         :title="title"
         :close-icon="closeIcon"
         :close="true"
         :ui="modalUi"
-        :content="dialogContent"
+        :content="contained ? containedContent : dialogContent"
         @update:open="emit('update:open', $event)"
     >
         <template v-if="closeLabel" #close="{ ui }">

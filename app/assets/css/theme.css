@@ -13,3 +13,8 @@
   --md-border-radius-small: var(--md-border-radius);
   --md-border-radius-large: var(--md-border-radius);
 }
+
+.document-toolbar-surface {
+  --doc-toolbar-surface: color-mix(in oklab, var(--md-surface), transparent 2%);
+  background: var(--doc-toolbar-surface);
+}

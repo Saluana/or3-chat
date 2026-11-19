@@ -1180,12 +1180,11 @@ describe('native context admission at the actual durable boundary', () => {
                 if (scenario === 'durable' || scenario === 'durable-model-search' || scenario === 'builtin-mentions-unchanged') {
                     expect(body._durableDelegation).toBe(1);
                     if (scenario === 'durable-model-search') expect(body._toolRuntime).toMatchObject({ search_models: 'hybrid' });
-                    expect(external.notices.some(notice => notice.title === 'Keep this page open for delegated chats')).toBe(false);
                 } else {
                     expect(body).not.toHaveProperty('_durableDelegation');
                     if (scenario === 'old-server-model-search' || scenario === 'modified-model-search') expect(body._toolRuntime).toMatchObject({ search_models: 'client' });
-                    expect(external.notices.some(notice => notice.title === 'Keep this page open for delegated chats')).toBe(true);
                 }
+                expect(external.notices).not.toContainEqual(expect.objectContaining({ title: 'Keep this page open for delegated chats' }));
             } finally { removeBuiltin?.(); modelSearch?.dispose(); browserTool?.dispose(); registration.dispose(); }
         });
     it.each(['supported', 'durable', 'durable-downgrade', 'server-downgrade', 'browser-hook'] as const)(

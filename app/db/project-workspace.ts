@@ -464,6 +464,14 @@ export async function saveProjectSettings(
         expected,
     );
 }
+
+export async function setProjectPinned(scope: WorkspaceOperationScope, projectId: string, pinned: boolean) {
+    scope.assertCurrent('write');
+    const current = await readProjectPolicy(scope.db, projectId);
+    scope.assertCurrent('write');
+    if (current.settings.pinned === pinned) return;
+    await saveProjectSettings(scope, projectId, { ...current.settings, pinned }, current.settingsRow ?? null);
+}
 export async function saveProjectMemory(
     scope: WorkspaceOperationScope,
     projectId: string,

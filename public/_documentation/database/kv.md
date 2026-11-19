@@ -38,7 +38,7 @@ Key-value helpers for storing small preference or credential blobs in the Dexie 
 | `getKvByName(name)`        | Finds first row matching `name`. Accepts an optional target DB.             |
 | `getKvRecordByName(name)` | Reads the filtered row and its CAS `revision` from one database snapshot, including sync tombstone history. Accepts an optional target DB. |
 | `setKvByName(name, value)` | Creates or updates a row using `kv:${name}` ids, increments `clock`, runs hooks. Accepts an optional target DB, CAS revision, revocation signal, and `StorageQuota`. |
-| `tombstoneKvByName(name)`  | Soft-deletes by `name` (tombstone with bumped `clock`, value null) so the revision chain survives. Accepts an optional target DB and revocation guard. |
+| `tombstoneKvByName(name)`  | Soft-deletes by `name` (tombstone with bumped `clock`, value null) so the revision chain survives. Accepts an optional target DB, expected revision, and revocation guard. |
 | `hardDeleteKvByName(name)` | Deletes by `name` with before/after hooks. Accepts an optional target DB.   |
 
 ---
@@ -58,6 +58,7 @@ Key-value helpers for storing small preference or credential blobs in the Dexie 
 -   KV stores strings; it does not encrypt values. Use [the key API](/documentation/auth/reference) for OpenRouter keys so persistence and reactive state stay aligned.
 -   Use hooks to redact values before logging or to enforce naming conventions.
 -   The host owns the `sidebar-pin:<thread|document>:<encoded id>` names: one row per pinned chat or document, whose value is the pin time in milliseconds. A row per item lets pins from different devices merge without overwriting each other; unpinning tombstones the row, and a pinned item that was deleted or trashed is simply not listed. Pick a different prefix for plugin or application keys.
+-   The host owns `theme-preset:<id>` names, with one versioned record per saved Appearance preset containing its name, base theme, and light and dark customizations.
 -   Keep preference payloads small. For structured values, serialize and validate explicitly; `kv.get(name)` returns a row, not the parsed value.
 -   Revision allocation and CAS span sync tombstone history, so a key recreated after snapshot recovery continues past the deletion clock instead of restarting (no ABA).
 -   `StorageQuota` accounting is derived from the live rows under its `prefix` inside the write transaction; it is never stored as a synchronized counter row, so multi-device merges cannot undercount.

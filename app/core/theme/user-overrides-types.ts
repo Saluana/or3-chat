@@ -76,6 +76,9 @@ export interface UserThemeOverrides {
         onErrorContainer?: string;
         // Surface
         surface?: string;
+        menuSurface?: string;
+        dialogBackdrop?: string;
+        focusRing?: string;
         onSurface?: string;
         surfaceVariant?: string;
         onSurfaceVariant?: string;

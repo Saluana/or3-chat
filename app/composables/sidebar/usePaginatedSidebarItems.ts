@@ -11,7 +11,8 @@ const preferenceName = familyExpansionPreferenceName;
 
 /** One flat family model shared by both sidebar consumers. */
 export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'document'; query?: Ref<string>; enabled?: Ref<boolean>;
-    projectId?: Ref<string | undefined>; pinned?: Ref<boolean | undefined>; activeIds?: Ref<string[]> } = {}) {
+    projectId?: Ref<string | undefined>; pinned?: Ref<boolean | undefined>; activeIds?: Ref<string[]>;
+    excludedIds?: Readonly<Ref<FamilyFilter['excludedIds']>> } = {}) {
     const items = shallowRef<UnifiedSidebarItem[]>([]); const hasMore = ref(true); const loading = ref(false);
     const activeFamilyIds = shallowRef(new Set<string>());
     const targetCount = ref(FAMILY_PAGE_SIZE); const memberLimits = new Map<string, number>();
@@ -21,7 +22,9 @@ export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'd
     let pageRequestPending = false;
     const filter = (): FamilyFilter => ({ query: options.query?.value.trim(), projectId: options.projectId?.value, pinned: options.pinned?.value });
     async function fetchItems() {
-        const db = getDb(); const generation = getWorkspaceGeneration(); const currentFilter = filter();
+        const db = getDb(); const generation = getWorkspaceGeneration();
+        const familyFilter = filter();
+        const currentFilter = { ...familyFilter, excludedIds: options.excludedIds?.value };
         const activeRoots = new Set<string>();
         for (const id of options.activeIds?.value ?? []) {
             const thread = await db.threads.get(id);
@@ -37,7 +40,7 @@ export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'd
             item.family.expanded = expanded; item.family.searchExpanded = Boolean(currentFilter.query); rows.push(item);
             if (!expanded) continue;
             const memberPage = await readFamilyMembers(db, rootId, memberLimits.get(rootId) ?? FAMILY_PAGE_SIZE, currentFilter, fallback);
-            const latestCompactionId = await latestFamilyCompaction(db, rootId, currentFilter, fallback);
+            const latestCompactionId = await latestFamilyCompaction(db, rootId, familyFilter, fallback);
             const members = memberPage.members.sort((a, b) => b.created_at - a.created_at || b.id.localeCompare(a.id));
             for (const [index, member] of members.entries()) rows.push({ ...threadToSidebar(member),
                 family: { kind: 'thread-member', key: 'member:' + rootId + ':' + member.id, rootId, expanded: true,
@@ -86,6 +89,7 @@ export function usePaginatedSidebarItems(options: { type?: 'all' | 'thread' | 'd
     }
     const stopWorkspace = subscribeActiveWorkspaceDb(() => { items.value = []; activeFamilyIds.value = new Set(); reset(); });
     watch(() => [options.query?.value, options.projectId?.value, options.pinned?.value, options.enabled?.value], reset);
+    watch(() => options.excludedIds?.value, startSubscription);
     watch(() => options.activeIds?.value, startSubscription, { deep: true });
     onMounted(() => { mounted = true; startSubscription(); });
     onActivated(() => { if (!mounted) { mounted = true; startSubscription(); } });

@@ -79,6 +79,7 @@
 	--app-focus-ring-width: 2px;
 	--app-focus-ring-offset: 2px;
 	--md-focus-ring: var(--md-primary);
+	--md-dialog-backdrop: #0f172a38;
 }
 
 .font-ps2 {
@@ -765,7 +766,7 @@ html[data-density] #dashboard-theme-appearance-section .appearance-toggle,
 html[data-density] #dashboard-theme-appearance-section .appearance-control select,
 html[data-density] #dashboard-theme-typography-section .typography-field select,
 html[data-density] #dashboard-theme-palette-section .palette-toggle,
-html[data-density] #dashboard-theme-palette-section .color-list-item,
+html[data-density] #dashboard-theme-palette-section .color-token-select,
 html[data-density] #dashboard-theme-palette-section .color-hex-input,
 html[data-density] #dashboard-theme-palette-section .rgb-fields input,
 html[data-density] #dashboard-theme-palette-section .advanced-colors-toggle,
@@ -878,7 +879,7 @@ html [class~='duration-1000'] {
 	html[data-density] #dashboard-theme-appearance-section .appearance-control select,
 	html[data-density] #dashboard-theme-typography-section .typography-field select,
 	html[data-density] #dashboard-theme-palette-section .palette-toggle,
-	html[data-density] #dashboard-theme-palette-section .color-list-item,
+	html[data-density] #dashboard-theme-palette-section .color-token-select,
 	html[data-density] #dashboard-theme-palette-section .color-hex-input,
 	html[data-density] #dashboard-theme-palette-section .rgb-fields input,
 	html[data-density] #dashboard-theme-palette-section .advanced-colors-toggle,

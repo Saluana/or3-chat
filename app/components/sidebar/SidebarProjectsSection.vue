@@ -11,7 +11,7 @@
 
         <!-- Grid-based height animation for smooth collapse/expand -->
         <div
-            class="grid transition-[grid-template-rows,opacity] duration-300 ease-out"
+            class="grid grid-cols-1 transition-[grid-template-rows,opacity] duration-300 ease-out"
             :class="
                 collapsed
                     ? 'grid-rows-[0fr] opacity-0'
@@ -29,6 +29,8 @@
                         <SidebarProjectRoot
                             :project="project"
                             :expanded="expandedProjectsSet.has(project.id)"
+                            :can-create-folder="explorerEnabled && !viewOnly"
+                            :can-pin="!viewOnly"
                             @toggle-expand="toggleProjectExpand(project.id)"
                             @add-chat="emit('add-chat-to-project', project.id)"
                             @add-document="
@@ -36,10 +38,11 @@
                             "
                             @rename="emit('rename-project', project.id)"
                             @delete="emit('delete-project', project.id)"
+                            @new-folder="createRootFolder(project.id)"
                         />
 
                         <SidebarProjectExplorer v-if="explorerEnabled && !collapsed && expandedProjectsSet.has(project.id)"
-                            :key="project.id" :project-id="project.id" :project-name="project.name"
+                            :key="project.id" ref="projectExplorers" :project-id="project.id" :project-name="project.name"
                             :documents-enabled="or3Config.features.documents.enabled" compact class="px-1 pb-1"
                             @create="(kind, folder) => emit('create-in-project-folder', { kind, projectId: project.id, folder })" />
                         <div
@@ -112,7 +115,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onBeforeUnmount } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 import { liveQuery } from 'dexie';
 import {
     getDb,
@@ -121,7 +124,7 @@ import {
 } from '~/db/client';
 import { isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
 import { parseFileHashes } from '~/db/files-util';
-import type { Project } from '~/db';
+import type { SidebarProject } from '~/composables/sidebar/useSidebarProjectDisplay';
 import type {
     ProjectEntry,
     ProjectEntryKind,
@@ -133,8 +136,8 @@ import SidebarProjectExplorer from './SidebarProjectExplorer.vue';
 import type { ExplorerFolderRow } from '~~/shared/explorer/tree';
 import { useOr3Config } from '~/composables/useOr3Config';
 import { useExplorerAvailable } from '~/composables/explorer/explorer-availability';
+import { useViewOnlyAccess } from '~/composables/auth/useViewOnlyAccess';
 
-type SidebarProject = Omit<Project, 'data'> & { data: ProjectEntry[] };
 type ProjectEntryPayload = {
     projectId: string;
     entryId: string;
@@ -168,7 +171,9 @@ const emit = defineEmits<{
 }>();
 
 const explorerEnabled = useExplorerAvailable();
+const viewOnly = useViewOnlyAccess();
 const or3Config = useOr3Config();
+const projectExplorers = useTemplateRef<InstanceType<typeof SidebarProjectExplorer>[]>('projectExplorers');
 
 const expandedProjectsSet = computed(() => new Set(props.expandedProjects));
 const children = ref<Record<string, ProjectEntry[]>>({});
@@ -255,6 +260,15 @@ function toggleProjectExpand(id: string) {
         next.add(id);
     }
     emit('update:expandedProjects', Array.from(next));
+}
+
+async function createRootFolder(id: string) {
+    if (!explorerEnabled.value || viewOnly.value) return;
+    const generation = getWorkspaceGeneration();
+    if (!expandedProjectsSet.value.has(id)) toggleProjectExpand(id);
+    await nextTick();
+    if (generation !== getWorkspaceGeneration()) return;
+    projectExplorers.value?.find(explorer => explorer.projectId === id)?.openRootFolderDialog();
 }
 
 function isProjectChildActive(child: ProjectEntry) {

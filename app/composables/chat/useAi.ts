@@ -916,9 +916,6 @@ export function useChat(
             normalizeBackgroundToolCalls, notifyBackgroundAdmissionUncertain, logBgStream, warnBgStream },
         hooks, nativeRecoveryCandidates, effectiveApiKey, resolveChatLimits, taskPrompt: () => activePromptContent.value,
         canonicalOutputLimitBytes, ownsCurrentView, reportFinalization, isStaleDevModuleError,
-        warnDelegation: () => toast.add({ title: 'Keep this page open for delegated chats',
-            description: 'If this response starts another chat, it needs this browser to stay open.',
-            color: 'warning', duration: 8000 }),
     });
 
     const dispatchTurn = createTurnDispatch({

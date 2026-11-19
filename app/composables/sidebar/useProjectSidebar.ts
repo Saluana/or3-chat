@@ -8,10 +8,12 @@ export function useProjectSidebar() {
         'or3-sidebar-project-return',
         () => 'home',
     );
+    const settingsRequest = useState<string | null>('or3-sidebar-project-settings-request', () => null);
 
     async function openProjectSidebar(
         id: string,
         from: 'home' | 'projects' = 'home',
+        section?: 'Settings',
     ) {
         const previous = projectId.value;
         const previousReturn = returnTo.value;
@@ -22,6 +24,7 @@ export function useProjectSidebar() {
             returnTo.value = previousReturn;
             throw new Error('Projects is unavailable in this workspace.');
         }
+        if (section === 'Settings' && projectId.value === id) settingsRequest.value = id;
     }
 
     async function openProjectsSidebar() {
@@ -34,5 +37,5 @@ export function useProjectSidebar() {
         return true;
     }
 
-    return { projectId, returnTo, openProjectSidebar, openProjectsSidebar };
+    return { projectId, returnTo, settingsRequest, openProjectSidebar, openProjectsSidebar };
 }
