@@ -27,7 +27,7 @@ const GPT5_OR_LATER = /^gpt-([5-9]|\d{2})/;
 /** Efforts each family accepts, from the API's own refusals; null when a model takes no effort at all. */
 export function openAiReasoningEfforts(id: string): readonly string[] | null {
     if (id.includes('-chat')) return null;
-    if (/^(?:gpt-6-astra|gpt-6\.1-sol)(?:-|$)/.test(id)) return ['low', 'medium', 'high', 'xhigh', 'max'];
+    if (/^(?:gpt-6-astra|gpt-6\.1-sol|gpt-6\.2-(?:astra|sol))(?:-|$)/.test(id)) return ['low', 'medium', 'high', 'xhigh', 'max'];
     if (/^(?:gpt-6-(?:sol|luna)|gpt-6\.1-terra|gpt-5\.6)(?:-|$)/.test(id)) return ['none', 'low', 'medium', 'high', 'xhigh', 'max'];
     if (/^o\d/.test(id)) return ['low', 'medium', 'high'];
     if (/^gpt-5(-|$)/.test(id)) return ['minimal', 'low', 'medium', 'high'];
@@ -40,7 +40,7 @@ export function openAiReasoningEfforts(id: string): readonly string[] | null {
 function capacity(id: string): { context: number; output: number } | null {
     const undated = id.replace(/-\d{4}-\d{2}-\d{2}$/, '');
     if (/^gpt-4\.1(?:-mini|-nano)?$/.test(undated)) return { context: 1_047_576, output: 32_768 };
-    if (/^(?:gpt-6-(?:astra|sol|luna)|gpt-6\.1-(?:sol|terra)|gpt-5\.[45]|gpt-5\.6(?:-sol|-terra|-luna)?)$/.test(undated))
+    if (/^(?:gpt-6-(?:astra|sol|luna)|gpt-6\.1-(?:sol|terra)|gpt-6\.2-(?:astra|sol)|gpt-5\.[45]|gpt-5\.6(?:-sol|-terra|-luna)?)$/.test(undated))
         return { context: 1_050_000, output: 128_000 };
     if (/^gpt-5\.[13]-chat(?:-latest)?$/.test(undated)) return { context: 128_000, output: 16_384 };
     if (/^(?:gpt-4o|gpt-4o-mini|gpt-4o-mini-2024-07-18|gpt-4o-2024-08-06|gpt-4o-2024-11-20)$/.test(id))

@@ -122,6 +122,15 @@ describe('OpenAI endpoint contracts', () => {
         expect(turbo!.top_provider!.max_completion_tokens).toBe(4096);
         expect(encodeOpenAiRequest({ model: '@openai/gpt-6-astra', messages: [], reasoning: { effort: 'none' } }).reasoning_effort).toBe('low');
     });
+    it.each(['gpt-6.2-astra', 'gpt-6.2-sol'])('lists %s with its published limits and required reasoning', id => {
+        const [model] = mapOpenAiModels([{ id }]);
+        expect(model).toMatchObject({
+            id: `@openai/${id}`,
+            context_length: 1_050_000,
+            top_provider: { max_completion_tokens: 128_000 },
+            reasoning: { mandatory: true, supported_efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+        });
+    });
     it('preserves supported effort levels and the GPT-5.4 context window', () => {
         const [flagship, astra, legacy, newer, terra] = mapOpenAiModels([
             { id: 'gpt-5.4' }, { id: 'gpt-6-astra' }, { id: 'gpt-5.1' }, { id: 'gpt-5.6-terra' }, { id: 'gpt-6.1-terra' },

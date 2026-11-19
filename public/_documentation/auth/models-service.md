@@ -30,7 +30,11 @@ asks the user to choose another model or remove them. Unsupported tools require
 an explicit choice to continue without tools; reasoning remains independent.
 Normal response recovery keeps the ordinary reply/loading presentation.
 Because OpenAI's model-list endpoint does not report capacity, OR3 shows only
-models whose limits are in its host table; newly released models require a table update.
+models whose limits are in its host table. Refresh fetches the current list for
+the configured OpenAI key. Newly released IDs appear once the running OR3 version
+includes their verified limits and the key has access to them.
+The refresh icon spins during a manual refresh. The catalog displays a notice
+when a platform fails or falls back to saved models.
 Direct OpenAI chat uses the Responses API, preserving supported sampling,
 structured-output formats, and explicit strict tool schemas while allowing supported models to reason
 while calling tools. Only reasoning models request encrypted reasoning state to carry between tool rounds.

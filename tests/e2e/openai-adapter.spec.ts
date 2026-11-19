@@ -859,7 +859,7 @@ test('catalog publishes platforms independently and keeps saved models during an
     await page.getByRole('button', { name: /^Model catalog/ }).click();
     const catalog = page.getByRole('dialog', { name: 'Model catalog', exact: true });
     await expect(catalog.locator('[data-model-id="@openai/gpt-6-luna"]')).toBeVisible();
-    await expect(catalog.getByText('OpenRouter: Loading models…')).toBeVisible();
+    await expect(catalog.getByText(/loading models/i)).toBeHidden();
     release();
     await expect(catalog.getByText('OpenRouter: Models unavailable. Refresh to try again.')).toBeVisible();
     await expect(catalog.locator('[data-model-id="@openai/gpt-6-luna"]')).toBeVisible();
