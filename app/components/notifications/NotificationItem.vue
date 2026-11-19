@@ -1,64 +1,58 @@
 <template>
     <div
-        class="notification-item flex flex-col p-3 hover:bg-[var(--md-surface-hover)] cursor-pointer transition-colors border-b-[length:var(--md-border-width-subtle,var(--md-border-width))] border-[var(--md-border-color)] last:border-b-0"
-        :class="{ 'bg-[var(--md-surface-container)]': !notification.read_at }"
+        class="notification-item relative flex cursor-pointer gap-3 px-3 py-3 transition-colors"
+        :class="{ 'notification-item--unread': !notification.read_at }"
         @click="handleClick"
     >
-        <div class="flex items-start gap-3">
-            <!-- Type icon -->
-            <div
-                class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface-container-high)] notification-type-icon"
-            >
-                <UIcon :name="typeIcon" class="w-5 h-5" />
-            </div>
+        <!-- Type icon -->
+        <div
+            class="notification-type-icon flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-[var(--md-surface-container-high)]"
+        >
+            <UIcon :name="typeIcon" class="h-[18px] w-[18px]" />
+        </div>
 
-            <!-- Content -->
-            <div class="flex-1 min-w-0">
-                <!-- Title -->
+        <!-- Content -->
+        <div class="min-w-0 flex-1">
+            <div class="flex items-baseline gap-2">
                 <div
-                    class="font-medium text-[var(--md-on-surface)] mb-1 notification-title"
-                    :class="{ 'font-bold': !notification.read_at }"
+                    class="notification-title min-w-0 flex-1 wrap-anywhere text-sm text-[var(--md-on-surface)]"
+                    :class="notification.read_at ? 'font-medium' : 'font-semibold'"
                 >
                     {{ notification.title }}
                 </div>
-
-                <!-- Body -->
-                <div
-                    v-if="notification.body"
-                    class="text-sm text-[var(--md-on-surface-variant)] mb-2 notification-body"
-                >
-                    {{ notification.body }}
-                </div>
-
-                <!-- Timestamp -->
-                <div class="text-xs text-[var(--md-on-surface-variant)] notification-timestamp">
+                <div class="notification-timestamp shrink-0 text-[11px] text-[var(--md-on-surface-variant)]">
                     {{ formattedTime }}
                 </div>
+                <span
+                    v-if="!notification.read_at"
+                    class="notification-unread-indicator h-2 w-2 shrink-0 self-center rounded-full bg-[var(--md-primary)]"
+                ><span class="sr-only">Unread</span></span>
             </div>
 
-            <!-- Unread indicator -->
             <div
-                v-if="!notification.read_at"
-                class="flex-shrink-0 w-2 h-2 rounded-full bg-[var(--md-primary)] notification-unread-indicator"
-            />
-        </div>
-
-        <!-- Actions -->
-        <div
-            v-if="notification.actions && notification.actions.length > 0"
-            class="flex gap-2 mt-3 pl-11 notification-actions"
-        >
-            <UButton
-                v-for="action in notification.actions"
-                :key="action.id"
-                class="theme-btn notification-action-btn"
-                variant="ghost"
-                color="primary"
-                size="sm"
-                @click.stop="handleActionClick(action)"
+                v-if="notification.body"
+                class="notification-body mt-0.5 wrap-anywhere text-xs leading-relaxed text-[var(--md-on-surface-variant)]"
             >
-                {{ action.label }}
-            </UButton>
+                {{ notification.body }}
+            </div>
+
+            <!-- Actions -->
+            <div
+                v-if="notification.actions && notification.actions.length > 0"
+                class="notification-actions mt-1.5 flex flex-wrap gap-x-3"
+            >
+                <UButton
+                    v-for="action in notification.actions"
+                    :key="action.id"
+                    class="theme-btn notification-action-btn h-auto! min-w-0! px-0! py-0.5!"
+                    variant="link"
+                    color="primary"
+                    size="xs"
+                    @click.stop="handleActionClick(action)"
+                >
+                    {{ action.label }}
+                </UButton>
+            </div>
         </div>
     </div>
 </template>
@@ -205,6 +199,12 @@ async function handleActionClick(action: NotificationAction) {
 </script>
 
 <style scoped>
+.notification-item + .notification-item {
+    border-top: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid var(--md-border-color);
+}
+.notification-item--unread {
+    background-color: color-mix(in srgb, var(--md-primary) 6%, transparent);
+}
 .notification-item:hover {
     background-color: var(--md-surface-hover);
 }
