@@ -183,7 +183,7 @@ test('Docker patch preparation drops patches for inactive providers only', async
     const names = [
         'or3-provider-clerk+0.0.11.patch',
         'or3-provider-s3+0.0.15.patch',
-        'or3-provider-basic-auth+0.0.20.patch',
+        'or3-provider-basic-auth+0.0.21.patch',
         'streamdown-vue+1.0.35.patch',
         'README.md',
     ];
@@ -196,7 +196,7 @@ test('Docker patch preparation drops patches for inactive providers only', async
 
     assert.deepEqual(await remaining('basic-sqlite-fs'), [
         'README.md',
-        'or3-provider-basic-auth+0.0.20.patch',
+        'or3-provider-basic-auth+0.0.21.patch',
         'streamdown-vue+1.0.35.patch',
     ]);
     assert.deepEqual(await remaining('clerk-sqlite-s3'), [

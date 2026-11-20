@@ -144,25 +144,25 @@ export async function resolveLockPageAccess(): Promise<LockPageAccessResult> {
     let hadSessionError = Boolean(sessionState.error.value);
     let errorMessage = extractErrorMessage(sessionState.error.value);
 
+    let payload = cachedPayload;
     try {
         if (shouldRefresh) {
-            // SSR refresh joins the pending useFetch request (dedupe: 'defer').
-            // Wait for it before treating an empty startup payload as signed out.
-            await sessionState.refresh();
+            // Wait for any pending validation before treating an empty startup
+            // payload as signed out.
+            const validated = await sessionState.refresh({ dedupe: 'defer' });
             // Nuxt reports SSR failures through the error ref without rejecting.
-            hadSessionError = Boolean(sessionState.error.value);
+            payload = import.meta.server ? sessionState.data.value : validated ?? null;
+            hadSessionError = Boolean(sessionState.error.value) || (!import.meta.server && !validated);
             errorMessage = extractErrorMessage(sessionState.error.value);
-            validatedAt.value = hadSessionError ? 0 : Date.now();
+            validatedAt.value = !hadSessionError && payload === sessionState.data.value ? Date.now() : 0;
         }
     } catch (error) {
         hadSessionError = true;
-        // A new composable caller has its own error ref; it must retry rather
-        // than trusting stale shared data after this failed validation.
+        // A failed validation must invalidate the shared cache.
         validatedAt.value = 0;
         errorMessage = extractErrorMessage(error) ?? errorMessage;
     }
 
-    const payload = sessionState.data.value;
     const session = payload?.session ?? null;
     const result = evaluateLockPageAccess({
         config,

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, ref } from 'vue';
+import { defineComponent, h, KeepAlive, nextTick, ref } from 'vue';
 import { mount } from '@vue/test-utils';
 
 const open = vi.fn();
@@ -103,6 +103,26 @@ describe('useCommandPaletteShortcut', () => {
         expect(schedulePrewarm).toHaveBeenCalledWith();
         expect(warm).not.toHaveBeenCalled();
         wrapper.unmount();
+    });
+
+    it('leaves the shortcut to the active page while the workspace is cached', async () => {
+        const showWorkspace = ref(true);
+        const OtherPage = defineComponent({ render: () => h('div') });
+        const wrapper = mount(defineComponent({
+            render: () => h(KeepAlive, null, () => h(showWorkspace.value ? Host : OtherPage)),
+        }));
+        try {
+            showWorkspace.value = false;
+            await nextTick();
+            expect(press({ key: 'k', metaKey: true }).defaultPrevented).toBe(false);
+            expect(open).not.toHaveBeenCalled();
+            showWorkspace.value = true;
+            await nextTick();
+            press({ key: 'k', metaKey: true });
+            expect(open).toHaveBeenCalledOnce();
+        } finally {
+            wrapper.unmount();
+        }
     });
 
     it('removes listeners on unmount', () => {

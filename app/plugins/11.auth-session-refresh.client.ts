@@ -1,4 +1,6 @@
 import { watch } from 'vue';
+import type { FetchError } from 'ofetch';
+import { normalizeError, parseRetryAfter } from '~~/shared/errors';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { confirmClientSignedOut } from '~/composables/auth/confirmClientSignedOut';
 import {
@@ -12,7 +14,7 @@ import { useWorkspaceManagerSession } from '~/composables/workspace/useWorkspace
 const AUTH_SESSION_STORAGE_KEY = 'or3:auth-session-changed';
 const AUTH_SESSION_ERROR_TOAST_ID = 'auth-session-refresh-failed';
 
-export default defineNuxtPlugin(() => {
+export default defineNuxtPlugin((nuxtApp) => {
     if (import.meta.server) return;
 
     const runtimeConfig = useRuntimeConfig();
@@ -23,51 +25,82 @@ export default defineNuxtPlugin(() => {
     const { refreshSessionForActiveWorkspaceRevision } =
         useWorkspaceManagerSession(sessionContext);
 
+    let retryAt = 0;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let activeRefreshes = 0;
     const handleAuthSessionChanged = async (): Promise<void> => {
+        if (Date.now() < retryAt) {
+            retryTimer ??= setTimeout(() => {
+                retryTimer = undefined;
+                void handleAuthSessionChanged();
+            }, retryAt - Date.now());
+            return;
+        }
+        clearTimeout(retryTimer);
+        retryTimer = undefined;
+        activeRefreshes++;
         try {
-            const previousWorkspaceId =
-                sessionContext.data.value?.session?.workspace?.id ?? null;
-            const previousAuthenticated =
-                sessionContext.data.value?.session?.authenticated ?? false;
+            const previous = sessionContext.data.value?.session;
+            const transition = { reload: false, signedOut: false };
+            const refreshed = await sessionContext.refresh({
+                async shouldCommit(payload) {
+                    const next = payload.session;
+                    const previousAuthenticated = previous?.authenticated ?? false;
+                    const nextAuthenticated = next?.authenticated ?? false;
+                    const workspaceChanged = (previous?.workspace?.id ?? null) !== (next?.workspace?.id ?? null);
+                    const userChanged = previous?.user?.id !== next?.user?.id;
 
-            await sessionContext.refresh();
+                    // A transient signed-out response should not replace a live session.
+                    if (previousAuthenticated && !nextAuthenticated) {
+                        transition.signedOut = await confirmClientSignedOut();
+                        transition.reload = transition.signedOut;
+                        return transition.signedOut;
+                    }
+                    if (!previousAuthenticated && nextAuthenticated) {
+                        // Let the new page bootstrap sync once.
+                        transition.reload = true;
+                        return false;
+                    }
+                    transition.reload = workspaceChanged || userChanged;
+                    return true;
+                },
+            });
+            if (!refreshed) return;
+            retryAt = 0;
             toast.remove(AUTH_SESSION_ERROR_TOAST_ID);
-
-            const nextWorkspaceId =
-                sessionContext.data.value?.session?.workspace?.id ?? null;
-            const nextAuthenticated =
-                sessionContext.data.value?.session?.authenticated ?? false;
-
-            const workspaceChanged = previousWorkspaceId !== nextWorkspaceId;
-            const authChanged = previousAuthenticated !== nextAuthenticated;
-
-            if (!workspaceChanged && !authChanged) {
-                return;
+            if (transition.signedOut) {
+                const { cleanupConfirmedLogout } = await import('~/utils/logout-cleanup');
+                if (sessionContext.data.value !== refreshed) return;
+                await cleanupConfirmedLogout(refreshed, nuxtApp);
+                if (sessionContext.data.value !== refreshed) return;
             }
-
-            // Auth flip to signed-out must be confirmed — HMR can briefly null the session.
-            if (previousAuthenticated && !nextAuthenticated) {
-                const signedOut = await confirmClientSignedOut();
-                if (!signedOut) {
-                    return;
-                }
-            }
-
-            reloadNuxtApp({ ttl: 500 });
+            if (transition.reload) reloadNuxtApp({ ttl: 500 });
         } catch (error) {
-            console.warn('[auth-session-refresh] Failed to refresh auth session:', error);
+            const rateLimited = normalizeError(error).status === 429;
+            const retryAfter = rateLimited
+                ? parseRetryAfter((error as FetchError).response?.headers.get('retry-after') ?? null)
+                : undefined;
+            if (rateLimited) retryAt = Math.max(retryAt, Date.now() + (retryAfter ?? 60_000));
+            const seconds = Math.ceil((retryAt - Date.now()) / 1000);
             toast.add({
                 id: AUTH_SESSION_ERROR_TOAST_ID,
-                title: 'Unable to load your account',
-                description: "We couldn't load your workspace session. Please try again.",
+                title: rateLimited ? 'Too many requests' : 'Unable to load your account',
+                description: rateLimited
+                    ? `Try again in ${seconds} ${seconds === 1 ? 'second' : 'seconds'}.`
+                    : "We couldn't load your workspace session. Please try again.",
                 color: 'error',
                 duration: 0,
                 actions: [{
                     label: 'Retry',
                     closeOnClick: false,
-                    onClick: () => { void handleAuthSessionChanged(); },
+                    onClick: () => {
+                        if (!activeRefreshes && Date.now() >= retryAt) void handleAuthSessionChanged();
+                    },
                 }],
             });
+            console.warn('[auth-session-refresh] Failed to refresh auth session:', error);
+        } finally {
+            activeRefreshes--;
         }
     };
 
@@ -146,6 +179,7 @@ export default defineNuxtPlugin(() => {
         import.meta.hot.dispose(() => {
             stopExpiryWatch();
             clearTimeout(expiryTimer);
+            clearTimeout(retryTimer);
             window.removeEventListener('focus', refreshExpiredSession);
             document.removeEventListener('visibilitychange', handleVisibility);
             window.removeEventListener(

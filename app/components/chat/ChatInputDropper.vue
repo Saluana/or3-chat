@@ -275,8 +275,10 @@
                     @click="removeImage(image.index)"
                     :disabled="loading"
                     aria-label="Remove image"
+                    :aria-describedby="`${attachmentNameId}-${image.index}`"
                 />
                 <div
+                    :id="`${attachmentNameId}-${image.index}`"
                     class="chat-input-attachment-image-name absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[11px] p-1 truncate group-hover:opacity-100 opacity-0 transition-opacity duration-[var(--app-motion-duration-medium,200ms)] ease-[var(--app-motion-easing-standard,ease)] rounded-b-[var(--md-border-radius-small,var(--md-border-radius))]"
                 >
                     {{ image.name }}
@@ -305,6 +307,7 @@
                         >PDF</span
                     >
                     <span
+                        :id="`${attachmentNameId}-${pdf.index}`"
                         class="chat-input-attachment-pdf-inner-name text-[11px] leading-snug line-clamp-2 px-1 wrap-break-word"
                         :title="pdf.name"
                         >{{ pdf.name }}</span
@@ -315,6 +318,7 @@
                     @click="removeImage(pdf.index)"
                     :disabled="loading"
                     aria-label="Remove PDF"
+                    :aria-describedby="`${attachmentNameId}-${pdf.index}`"
                 />
             </div>
             <!-- Large Text Blocks -->
@@ -414,6 +418,7 @@ import {
     onBeforeUnmount,
     watch,
     getCurrentInstance,
+    useId,
     defineAsyncComponent,
 } from 'vue';
 import { isMentionSourceEnabled, useOr3Config } from '~/composables/useOr3Config';
@@ -1239,6 +1244,7 @@ watch(
     { deep: true }
 );
 
+const attachmentNameId = useId();
 const { imageAttachments, pdfAttachments } =
     useChatAttachmentDisplay(uploadedImages);
 

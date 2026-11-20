@@ -1,6 +1,6 @@
 import { computed, onBeforeUnmount, reactive, ref, watch, type Ref } from 'vue';
 import { resizePreview } from '~/utils/files/resizePreview';
-import { parseHashes } from '~/utils/files/attachments';
+import { parseHashes, type AttachmentSelection } from '~/utils/files/attachments';
 import { getFileBlob, getFileMeta } from '~/db/files';
 import {
     useThumbnailUrlCache,
@@ -13,6 +13,7 @@ import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 type MessageWithAttachments = {
     role?: string;
     file_hashes?: unknown;
+    attachmentSelections?: AttachmentSelection[];
     _expanded?: boolean;
 };
 
@@ -24,7 +25,8 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
     // Read the hashes on every projection: the producer may have appended to
     // its raw array without changing that array's identity.
     const hashList = computed<string[]>((previous) => {
-        const next = parseHashes(message.value.file_hashes);
+        const next = message.value.attachmentSelections?.map(selection => selection.hash)
+            ?? parseHashes(message.value.file_hashes);
         return previous?.length === next.length &&
             next.every((hash, index) => hash === previous[index])
             ? previous
@@ -42,17 +44,15 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
         message.value.role === 'assistant' ? hashList.value : displayedHashes.value
     );
 
-    function getAttachmentName(hash: string): string {
-        const meta = pdfMeta[hash];
-        if (meta?.name) {
-            return truncateAttachmentName(meta.name, 20);
-        }
-        return 'Document';
+    const attachmentNames = computed(() => message.value.attachmentSelections?.map(selection => selection.name));
+    function getAttachmentName(hash: string, index: number): string {
+        const name = attachmentNames.value?.[index] ?? pdfMeta[hash]?.name;
+        return name ? truncateAttachmentName(name, 20) : 'Document';
     }
 
     /** Original file name of an image attachment, if known. */
-    function getImageName(hash: string): string | undefined {
-        const name = imageNames[hash];
+    function getImageName(hash: string, index: number): string | undefined {
+        const name = attachmentNames.value?.[index] ?? imageNames[hash];
         return name ? truncateAttachmentName(name, 20) : undefined;
     }
 
@@ -171,6 +171,7 @@ export function useMessageThumbnails(message: Ref<MessageWithAttachments>) {
         pdfMeta,
         maxDisplayedThumbs,
         displayedHashes,
+        attachmentNames,
         getAttachmentName,
         getImageName,
         expanded,

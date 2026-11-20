@@ -75,7 +75,10 @@ Permission invalidation also fences in-flight resolution: an older lookup cannot
 `GET /api/auth/session` reserves its existing per-IP `auth:session` rate allowance before
 resolving identity or entitlements, so concurrent lookups share the configured
 bucket. A rate-limited response includes `Retry-After`; all session responses
-remain `no-store`.
+remain `no-store`. If an auth-change refresh hits the limit, the account
+notification shows the retry window. Its **Retry** action waits for the
+window to end, and auth-change events received during that window share one
+refresh when it ends. The lock page's **Try again** action reloads the page.
 
 It returns an envelope with `session` and `appAccessAllowed`. Client code reads
 it through `useSessionContext()`:
@@ -86,7 +89,9 @@ const authenticated = computed(() => context.data.value?.session.authenticated =
 await context.refresh();
 ```
 
-Auth-provider client adapters signal sign-in/sign-out changes so the application refreshes its session and workspace scope. Provider SDK refresh/recovery belongs in those adapters; there is no `AuthProvider.refreshSession` interface method or POST session-refresh endpoint.
+Auth-provider client adapters signal sign-in and sign-out changes so the application refreshes its session and workspace scope. When the auth-change handler reloads after sign-in, it waits for the new page to publish the session and start sync. Confirmed sign-out, account switches, and workspace changes publish the new session before reload so local cleanup can run. Cross-tab workspace revisions refresh and publish the workspace in the current page before reload.
+
+Provider SDK refresh and recovery belong in the client adapters. Before clearing local data on sign-out, the host requires two fresh signed-out checks. For Basic Auth, each check uses the session endpoint and treats a failed request as indeterminate.
 
 Direct sync providers acquire provider-specific JWTs through `AuthTokenBroker`. Gateway providers call SSR endpoints that enforce `can()`; core should not reach directly into a Clerk SDK for tokens.
 

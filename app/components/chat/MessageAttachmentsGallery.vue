@@ -9,7 +9,7 @@
         >
             <div
                 v-for="(h, index) in hashes"
-                :key="h"
+                :key="`${h}-${index}`"
                 :id="`attachment-item-${index}`"
                 :class="[
                     'message-attachment-item relative aspect-square overflow-hidden flex items-center justify-center bg-[var(--md-surface-container-lowest)]',
@@ -31,14 +31,14 @@
                         >
                         <span
                             class="message-attachment-pdf-name text-[9px] leading-snug line-clamp-3 break-words px-1"
-                            :title="fileNames[h] || h.slice(0, 8)"
-                            >{{ fileNames[h] || 'document.pdf' }}</span
+                            :title="fileName(h, index) || h.slice(0, 8)"
+                            >{{ fileName(h, index) || 'document.pdf' }}</span
                         >
                         <button
                             type="button"
                             class="message-attachment-file-download text-[10px] underline"
                             :disabled="downloading[h] === true"
-                            @click="downloadAttachment(h)"
+                            @click="downloadAttachment(h, index)"
                         >
                             {{ downloading[h] ? 'Downloading…' : 'Download' }}
                         </button>
@@ -54,14 +54,14 @@
                         >
                         <span
                             class="message-attachment-file-name text-[9px] leading-snug line-clamp-3 break-words px-1"
-                            :title="fileNames[h] || h.slice(0, 8)"
-                            >{{ fileNames[h] || 'Attachment' }}</span
+                            :title="fileName(h, index) || h.slice(0, 8)"
+                            >{{ fileName(h, index) || 'Attachment' }}</span
                         >
                         <button
                             type="button"
                             class="message-attachment-file-download text-[10px] underline"
                             :disabled="downloading[h] === true"
-                            @click="downloadAttachment(h)"
+                            @click="downloadAttachment(h, index)"
                         >
                             {{ downloading[h] ? 'Downloading…' : 'Download' }}
                         </button>
@@ -86,7 +86,7 @@
                                   }
                                 : undefined
                         "
-                        :alt="'file ' + h.slice(0, 8)"
+                        :alt="fileName(h, index) || 'file ' + h.slice(0, 8)"
                         class="message-attachment-image object-cover w-full h-full"
                         draggable="false"
                     />
@@ -141,7 +141,7 @@ import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 
 type LocalThumbState = ThumbState | { status: 'loading' };
 
-const props = defineProps<{ hashes: string[] }>();
+const props = defineProps<{ hashes: string[]; names?: (string | undefined)[] }>();
 defineEmits<{ (e: 'collapse'): void }>();
 
 const collapseButtonProps = useThemeOverrides({
@@ -208,7 +208,11 @@ async function ensure(h: string, owner: object) {
     }
 }
 
-async function downloadAttachment(hash: string): Promise<void> {
+function fileName(hash: string, index: number): string | undefined {
+    return props.names?.[index] ?? fileNames[hash];
+}
+
+async function downloadAttachment(hash: string, index: number): Promise<void> {
     if (downloading[hash]) return;
     downloading[hash] = true;
     const generation = getWorkspaceGeneration();
@@ -219,7 +223,7 @@ async function downloadAttachment(hash: string): Promise<void> {
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement('a');
         anchor.href = url;
-        anchor.download = fileNames[hash] || 'attachment';
+        anchor.download = fileName(hash, index) || 'attachment';
         anchor.click();
         // Some browsers read the blob after click returns.
         window.setTimeout(() => URL.revokeObjectURL(url), 1000);

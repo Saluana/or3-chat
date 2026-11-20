@@ -3,12 +3,11 @@
  * Fetches the full session context including workspace info from the server.
  */
 import { computed, ref, watchEffect } from 'vue';
-import { $fetch } from 'ofetch';
 import { useFetch, useRuntimeConfig, useState } from 'nuxt/app';
 import type { ComputedRef, Ref } from 'vue';
 import type { SessionContext } from '~/core/hooks/hook-types';
 import type { CloudAccess } from '~~/shared/cloud/access';
-import { recoverClientSession } from '~/composables/auth/useClientSessionRecovery';
+import { fetchClientSession } from '~/composables/auth/client-session-request';
 import { takeBootSession } from '~/utils/boot-session';
 
 export type SessionPayload = {
@@ -19,11 +18,16 @@ export type SessionPayload = {
     secretStoreEnabled?: boolean;
     cloudAccess?: CloudAccess;
 };
+type SessionRefreshOptions = {
+    dedupe?: 'defer';
+    shouldCommit?: (payload: SessionPayload) => boolean | Promise<boolean>;
+};
+
 type SessionContextState = {
     data: ComputedRef<SessionPayload | null>;
     pending: Ref<boolean>;
     error: Ref<Error | null | undefined>;
-    refresh: () => Promise<SessionPayload | void>;
+    refresh: (options?: SessionRefreshOptions) => Promise<SessionPayload | void>;
 };
 
 // Every client refresh owns a monotonic generation. A later auth/workspace
@@ -34,10 +38,11 @@ let latestRefreshGeneration = 0;
 // starts. When no session is cached yet they must share one automatic fetch,
 // and after any failed check wait before trying again: otherwise a single
 // failing check (a 403, or a 429 from the endpoint's own limit) is repeated by
-// every caller and the burst itself exhausts the rate limit. Explicit
-// refresh() calls always go through.
+// every caller and the burst itself exhausts the rate limit.
 const AUTO_LOAD_COOLDOWN_MS = 10_000;
-let autoLoadInFlight = false;
+const clientPending = ref(false);
+const clientError = ref<Error | null>(null);
+let latestRequest: Promise<SessionPayload | void> | undefined;
 let lastSessionFailureAt = 0;
 
 /** True when SSR auth is disabled — blocks all network requests. */
@@ -66,12 +71,12 @@ export function useSessionContext(
     options: { autoLoad?: boolean } = {}
 ): SessionContextState {
     const state = useState<SessionPayload | null>('auth-session', () => null);
-    const pending = ref(false);
-    const error = ref<Error | null>(null);
+    const pending = import.meta.server ? ref(false) : clientPending;
+    const error = import.meta.server ? ref<Error | null>(null) : clientError;
 
     const data = computed<SessionPayload | null>(() => state.value);
 
-    const refresh = async () => {
+    const refresh = async ({ dedupe, shouldCommit }: SessionRefreshOptions = {}) => {
         // Never fetch when auth is disabled (static builds, no server)
         if (isAuthDisabled()) {
             state.value = {
@@ -81,51 +86,56 @@ export function useSessionContext(
             return state.value;
         }
 
-        const refreshGeneration = ++latestRefreshGeneration;
-        pending.value = true;
-        error.value = null;
+        let generation = latestRefreshGeneration;
+        let request = latestRequest;
+        const canJoin = dedupe === 'defer' && !shouldCommit;
+        if (!canJoin || !pending.value || !request) {
+            generation = ++latestRefreshGeneration;
+            const ownGeneration = generation;
+            pending.value = true;
+            error.value = null;
 
-        const fetchSession = () =>
-            $fetch<SessionPayload>('/api/auth/session', {
-                // Always bypass caches; workspace switching depends on fresh session reads.
-                cache: 'no-store',
-                // ofetch resends failed GETs once, immediately, even after a 429,
-                // which only repeats the request into the same rate limit.
-                retry: 0,
-            });
-
-        return (async () => {
-            try {
-                // The first check reuses the request the page head started.
-                let res = (await takeBootSession()) ?? await fetchSession();
-
-                // Access may be expired while refresh is still valid. Let the
-                // active provider recover (silent refresh / Clerk session touch)
-                // once, then retry. No-op when no recovery is registered.
-                if (!res.session?.authenticated) {
-                    const recovered = await recoverClientSession();
-                    if (recovered) {
-                        res = await fetchSession();
-                    }
-                }
-
-                if (refreshGeneration !== latestRefreshGeneration) {
-                    return undefined;
-                }
-                state.value = res;
-                return res;
-            } catch (err) {
-                lastSessionFailureAt = Date.now();
-                if (refreshGeneration === latestRefreshGeneration) {
+            request = latestRequest = (async () => {
+                try {
+                    const bootSession = shouldCommit ? null : await takeBootSession();
+                    const payload = await fetchClientSession(bootSession);
+                    if (ownGeneration !== latestRefreshGeneration) return;
+                    const commit = !shouldCommit || await shouldCommit(payload);
+                    if (ownGeneration !== latestRefreshGeneration) return;
+                    if (!commit) return payload;
+                    state.value = payload;
+                    return state.value;
+                } catch (err) {
+                    if (ownGeneration !== latestRefreshGeneration) return;
+                    lastSessionFailureAt = Date.now();
                     error.value = err instanceof Error ? err : new Error(String(err));
+                    throw err;
+                } finally {
+                    if (ownGeneration === latestRefreshGeneration) pending.value = false;
                 }
-                throw err;
-            } finally {
-                if (refreshGeneration === latestRefreshGeneration) {
-                    pending.value = false;
+            })();
+        }
+
+        // A deferred validation follows the winner if a newer request takes
+        // over. Explicit refreshes settle with the shared request state, but
+        // only their own result can trigger caller-specific side effects.
+        let superseded = false;
+        for (;;) {
+            try {
+                const payload = await request;
+                if (generation === latestRefreshGeneration) {
+                    return superseded && !canJoin ? undefined : payload;
+                }
+            } catch (err) {
+                if (generation === latestRefreshGeneration) {
+                    if (superseded && !canJoin) return;
+                    throw err;
                 }
             }
-        })();
+            superseded = true;
+            generation = latestRefreshGeneration;
+            request = latestRequest;
+        }
     };
 
     if (import.meta.server) {
@@ -157,15 +167,10 @@ export function useSessionContext(
     if (
         options.autoLoad !== false &&
         !state.value &&
-        !autoLoadInFlight &&
+        !pending.value &&
         Date.now() - lastSessionFailureAt > AUTO_LOAD_COOLDOWN_MS
     ) {
-        autoLoadInFlight = true;
-        void refresh()
-            .catch(() => undefined)
-            .finally(() => {
-                autoLoadInFlight = false;
-            });
+        void refresh({ dedupe: 'defer' }).catch(() => undefined);
     }
 
     return {

@@ -620,7 +620,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Configure sign-in, registration, invitations, accounts, workspace access, and bounded Basic Auth credential requests."
+                    "summary": "Configure sign-in, registration, invitations, accounts, workspace access, session refresh and retry behavior, and Basic Auth rate limits."
                 },
                 {
                     "name": "background-execution.md",

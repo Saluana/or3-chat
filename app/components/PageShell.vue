@@ -1002,8 +1002,8 @@ useHookEffect('db.documents.update:action:after', () =>
 );
 
 const themePlugin = useNuxtApp().$theme as ThemePlugin | undefined;
-// After the workspace is restored, load the code the first chat open, ⌘K and
-// document would otherwise download on click (~740 KB for the message renderer).
+// Warm the chat renderer and command palette once the workspace is restored.
+// The document editor loads when a document pane opens.
 if (import.meta.client && props.routeSync) {
     const stopPrefetchWatch = watch(hasSyncedInitial, (ready) => {
         if (!ready) return;
@@ -1012,7 +1012,6 @@ if (import.meta.client && props.routeSync) {
         prefetchWhenIdle([
             () => loadAsyncComponent(components['chat-message']),
             () => import('~/components/search/CommandPalette.vue'),
-            ...(documentsEnabled.value ? [() => loadAsyncComponent(components['document-editor'])] : []),
         ]);
     });
 }

@@ -73,6 +73,32 @@ export function parseHashes(raw: unknown): string[] {
     return [];
 }
 
+export type AttachmentSelection = { hash: string; name?: string };
+
+/** Project named selections from message data using only hashes the message owns. */
+export function readAttachmentSelections(
+    hashes: string[] | undefined,
+    attachments: unknown
+): AttachmentSelection[] | undefined {
+    if (!hashes?.length || !Array.isArray(attachments)) return;
+    const allowed = new Set(hashes);
+    const named = new Set<string>();
+    const selections: AttachmentSelection[] = [];
+    for (const attachment of attachments as unknown[]) {
+        if (!attachment || typeof attachment !== 'object') continue;
+        const ref = attachment as { url?: unknown; name?: unknown };
+        if (typeof ref.url !== 'string' || !allowed.has(ref.url) ||
+            typeof ref.name !== 'string' || !ref.name) continue;
+        named.add(ref.url);
+        selections.push({ hash: ref.url, name: ref.name });
+    }
+    if (!selections.length) return;
+    for (const hash of hashes) {
+        if (!named.has(hash)) selections.push({ hash });
+    }
+    return selections;
+}
+
 /**
  * `mergeAssistantFileHashes`
  *

@@ -129,8 +129,8 @@ describe('resolveLockPageAccess', () => {
         session, appAccessAllowed, allowed, reason,
     }) => {
         const data = { value: null as { session: SessionContext | null; appAccessAllowed: boolean } | null };
-        let finishRequest!: () => void;
-        const request = new Promise<void>((resolve) => { finishRequest = resolve; });
+        let finishRequest!: (payload: NonNullable<typeof data.value>) => void;
+        const request = new Promise<NonNullable<typeof data.value>>((resolve) => { finishRequest = resolve; });
         useSessionContextMock.mockReturnValue({
             data,
             pending: { value: true },
@@ -147,7 +147,7 @@ describe('resolveLockPageAccess', () => {
         await Promise.resolve();
         const settledWhilePending = settled;
         data.value = { session, appAccessAllowed };
-        finishRequest();
+        finishRequest(data.value);
 
         await expect(access).resolves.toMatchObject({ allowed, reason });
         expect(settledWhilePending).toBe(false);
@@ -185,6 +185,7 @@ describe('resolveLockPageAccess', () => {
             data, pending: { value: false }, error: { value: null },
             refresh: async () => {
                 data.value = { session: null, appAccessAllowed: false };
+                return data.value;
             },
         });
         const { resolveLockPageAccess } = await import('../../app/core/lock-page/access');
@@ -193,15 +194,24 @@ describe('resolveLockPageAccess', () => {
         await expect(resolveLockPageAccess()).resolves.toMatchObject({ allowed: false, reason: 'unauthenticated' });
     });
 
-    it('denies authenticated sessions when app access is denied after refresh', async () => {
-        const refresh = vi.fn().mockResolvedValue(undefined);
+    it('does not validate the stale shared session after an uncommitted response', async () => {
+        const stale = { session: createSession(), appAccessAllowed: true };
+        const signedOut = { session: null, appAccessAllowed: false };
+        const refresh = vi.fn().mockResolvedValue(signedOut);
         useSessionContextMock.mockReturnValue({
-            data: {
-                value: {
-                    session: createSession(),
-                    appAccessAllowed: false,
-                },
-            },
+            data: { value: stale }, pending: { value: false }, error: { value: null }, refresh,
+        });
+        const { resolveLockPageAccess } = await import('../../app/core/lock-page/access');
+        await expect(resolveLockPageAccess()).resolves.toMatchObject({ allowed: false });
+        await expect(resolveLockPageAccess()).resolves.toMatchObject({ allowed: false });
+        expect(refresh).toHaveBeenCalledTimes(2);
+    });
+
+    it('denies authenticated sessions when app access is denied after refresh', async () => {
+        const payload = { session: createSession(), appAccessAllowed: false };
+        const refresh = vi.fn().mockResolvedValue(payload);
+        useSessionContextMock.mockReturnValue({
+            data: { value: payload },
             pending: { value: false },
             error: { value: null },
             refresh,

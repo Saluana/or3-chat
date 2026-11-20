@@ -82,9 +82,13 @@ export async function refreshOpenAiConnection(): Promise<void> {
     }
 }
 
+export function isValidOpenAiKeyFormat(key: string): boolean {
+    return OPENAI_KEY_FORMAT.test(key.trim());
+}
+
 export async function saveOpenAiKey(input: string): Promise<void> {
     const key = input.trim();
-    if (!OPENAI_KEY_FORMAT.test(key)) throw new Error('Enter an OpenAI API key that starts with "sk-".');
+    if (!isValidOpenAiKeyFormat(key)) throw new Error('Enter an OpenAI API key that starts with "sk-".');
     if (cloudMode()) return credentialRequest('save', key);
     const request = beginStatus('mutation');
     try { await setKvByName(LOCAL_KEY, key); } catch { throw new Error('This browser could not save the key.'); }

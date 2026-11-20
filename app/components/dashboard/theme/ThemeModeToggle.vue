@@ -2,49 +2,44 @@
     <section
         id="dashboard-theme-mode-section"
         class="section-card theme-mode-section"
-        role="group"
-        aria-labelledby="theme-section-mode"
     >
         <div class="theme-mode-copy">
             <h2 id="theme-section-mode" class="dashboard-section-title">
-                Edit color mode
+                Color mode
             </h2>
             <p id="theme-mode-help" class="supporting-text mt-1">
                 {{ APPEARANCE_SETTING_DESCRIPTIONS.mode }}
             </p>
         </div>
-        <div class="theme-mode-row">
-            <span class="theme-mode-label">Customize:</span>
-            <div class="theme-mode-control" role="group" aria-label="Theme mode" aria-describedby="theme-mode-help">
-                <button
-                    type="button"
-                    class="theme-mode-option"
-                    :class="activeMode === 'light' ? 'active' : ''"
-                    :aria-pressed="activeMode === 'light'"
-                    @click="selectMode('light')"
-                >
-                    <UIcon
-                        v-if="activeMode === 'light'"
-                        :name="hoistedUiCheckIcon"
-                        class="h-4 w-4"
-                    />
-                    Light
-                </button>
-                <button
-                    type="button"
-                    class="theme-mode-option"
-                    :class="activeMode === 'dark' ? 'active' : ''"
-                    :aria-pressed="activeMode === 'dark'"
-                    @click="selectMode('dark')"
-                >
-                    <UIcon
-                        v-if="activeMode === 'dark'"
-                        :name="hoistedUiCheckIcon"
-                        class="h-4 w-4"
-                    />
-                    Dark
-                </button>
-            </div>
+        <div class="theme-mode-control" role="group" aria-labelledby="theme-section-mode" aria-describedby="theme-mode-help">
+            <button
+                type="button"
+                class="theme-mode-option"
+                :class="activeMode === 'light' ? 'active' : ''"
+                :aria-pressed="activeMode === 'light'"
+                @click="selectMode('light')"
+            >
+                <UIcon
+                    v-if="activeMode === 'light'"
+                    :name="hoistedUiCheckIcon"
+                    class="h-4 w-4"
+                />
+                Light
+            </button>
+            <button
+                type="button"
+                class="theme-mode-option"
+                :class="activeMode === 'dark' ? 'active' : ''"
+                :aria-pressed="activeMode === 'dark'"
+                @click="selectMode('dark')"
+            >
+                <UIcon
+                    v-if="activeMode === 'dark'"
+                    :name="hoistedUiCheckIcon"
+                    class="h-4 w-4"
+                />
+                Dark
+            </button>
         </div>
     </section>
 </template>
@@ -68,24 +63,12 @@ function selectMode(mode: 'light' | 'dark') {
 <style scoped>
 .theme-mode-control {
     display: flex;
-    flex: 1 1 14rem;
-    max-width: 18rem;
+    width: min(100%, 12rem);
     gap: 0.25rem;
     padding: 0.25rem;
     background: var(--md-surface);
     border: var(--md-border-width) solid var(--md-border-color);
     border-radius: var(--md-border-radius);
-}
-.theme-mode-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.65rem 1rem;
-}
-.theme-mode-label {
-    color: var(--md-on-surface);
-    font-size: 0.78rem;
-    font-weight: 700;
 }
 .theme-mode-option {
     display: inline-flex;

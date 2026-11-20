@@ -12,7 +12,7 @@ import {
  */
 
 // Canonical UI message utilities (content part type no longer needed directly)
-import { parseHashes } from '~/utils/files/attachments';
+import { parseHashes, readAttachmentSelections, type AttachmentSelection } from '~/utils/files/attachments';
 import { readCompactionData, readRequestUsage, type CompactionData, type RequestUsage } from '~~/shared/chat/compaction';
 import {
     isWorkflowMessageData,
@@ -106,6 +106,7 @@ export interface UiChatMessage {
     role: 'user' | 'assistant' | 'system' | 'tool';
     text: string; // flattened text + markdown image placeholders
     file_hashes?: string[];
+    attachmentSelections?: AttachmentSelection[];
     reasoning_text?: string | null;
     stream_id?: string;
     pending?: boolean;
@@ -299,12 +300,16 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
             ? (raw.data as { error?: string | null }).error ?? null
             : null);
 
+    const attachmentSelections = role === 'user'
+        ? readAttachmentSelections(file_hashes, raw.data?.attachments)
+        : undefined;
     return {
         id,
         ...(raw.thread_id ? { sourceThreadId: raw.thread_id } : {}),
         role,
         text,
         file_hashes,
+        ...(attachmentSelections ? { attachmentSelections } : {}),
         reasoning_text,
         stream_id: raw.stream_id,
         pending,

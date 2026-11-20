@@ -7,13 +7,6 @@ import { clearPersistedUserApiKey } from '~/core/auth/useUserApiKey';
 import { stopWorkspacePluginsAndAwait } from '~/composables/plugins/workspace-plugin-coordinator';
 import { abortBackgroundClientToolDispatchesForWorkspace } from '~/utils/chat/useAi-internal/backgroundJobs';
 
-async function shouldRunLogoutCleanup(
-    authenticated: boolean | undefined
-): Promise<boolean> {
-    if (authenticated) return false;
-    return await confirmClientSignedOut();
-}
-
 export default defineNuxtPlugin(async () => {
     if (import.meta.server) return;
 
@@ -31,15 +24,17 @@ export default defineNuxtPlugin(async () => {
         import('~/core/sync/cursor-manager'), import('~/core/sync/hook-bridge'), import('~/core/sync/subscription-manager'),
     ]);
 
-    const { logoutCleanup, clearDevicePluginSecrets } = await import('~/utils/logout-cleanup');
+    const { logoutCleanup, clearDevicePluginSecrets, cleanupConfirmedLogout } = await import('~/utils/logout-cleanup');
     // A failed session request must leave startup available for the lock page's
     // error/retry flow. It also isn't evidence that local user data needs cleanup.
-    const sessionChecked = await refresh().then(() => true, () => false);
+    const validated = await refresh({ dedupe: 'defer' }).catch(() => undefined);
     const initialSession = data.value?.session;
     if (
-        sessionChecked &&
-        (await shouldRunLogoutCleanup(initialSession?.authenticated)) &&
-        data.value?.session === initialSession
+        validated === data.value &&
+        validated &&
+        !initialSession?.authenticated &&
+        (await confirmClientSignedOut()) &&
+        data.value === validated
     ) {
         const cleanupOptions: {
             preservePluginSecrets: boolean;
@@ -100,17 +95,16 @@ export default defineNuxtPlugin(async () => {
 
     // Watch for logout to clean up
     watch(
-        () => data.value?.session,
-        async (newSession, oldSession) => {
+        data,
+        async (next, previous) => {
             if (
-                oldSession?.authenticated &&
-                !newSession?.authenticated &&
-                (await shouldRunLogoutCleanup(newSession?.authenticated)) &&
-                data.value?.session === newSession
+                previous?.session?.authenticated &&
+                next &&
+                !next.session?.authenticated &&
+                (await confirmClientSignedOut()) &&
+                data.value === next
             ) {
-                const cleanup = logoutCleanup(nuxtApp as Parameters<typeof logoutCleanup>[0]);
-                await stopWorkspacePluginsAndAwait();
-                await cleanup;
+                await cleanupConfirmedLogout(next, nuxtApp);
             }
         }
     );

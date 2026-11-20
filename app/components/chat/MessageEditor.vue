@@ -184,6 +184,11 @@ async function init() {
         enableInputRules: !props.plainText,
         enablePasteRules: !props.plainText,
         editorProps: {
+            attributes: {
+                role: 'textbox',
+                'aria-label': 'Edit message',
+                'aria-multiline': 'true',
+            },
             // Escape cancels, Ctrl/Cmd+Enter saves (plain Enter stays a newline).
             handleKeyDown: (_view, event) => {
                 if (event.isComposing) return false;

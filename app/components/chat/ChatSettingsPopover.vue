@@ -59,6 +59,7 @@
                         variant="ghost"
                         color="neutral"
                         aria-label="Current model"
+                        :aria-describedby="modelLabelId"
                         class="chat-settings-model-trigger ring-0! w-full px-3.5!"
                         :disabled="loading"
                         @click="emit('open-model-catalog')"
@@ -67,7 +68,7 @@
                             <ModelCatalogProviderLogo :slug="selectedProviderSlug" :size="18" />
                         </span>
                         <span class="chat-settings-row-copy min-w-0 text-left">
-                            <span class="chat-settings-row-title truncate">{{ selectedModelLabel }}</span>
+                            <span :id="modelLabelId" class="chat-settings-row-title truncate">{{ selectedModelLabel }}</span>
                             <span class="chat-settings-row-description truncate">Browse available models</span>
                         </span>
                         <UIcon :name="iconChevronDown" class="chat-settings-option-chevron size-4 shrink-0" aria-hidden="true" />
@@ -82,6 +83,7 @@
                         :search-input="modelSearchInput"
                         :disabled="loading"
                         aria-label="Current model"
+                        :aria-describedby="modelLabelId"
                         class="chat-settings-model-trigger ring-0!"
                         :ui="selectMenuUi"
                     >
@@ -90,7 +92,7 @@
                                 <ModelCatalogProviderLogo :slug="selectedProviderSlug" :size="18" />
                             </span>
                             <span class="chat-settings-row-copy min-w-0">
-                                <span class="chat-settings-row-title truncate">
+                                <span :id="modelLabelId" class="chat-settings-row-title truncate">
                                     {{ selectedModelLabel }}
                                 </span>
                                 <span class="chat-settings-row-description truncate">
@@ -127,6 +129,7 @@
                         :search-input="promptSearchInput"
                         :disabled="loading || streaming || promptSaving || promptLoading"
                         aria-label="System prompt for this chat"
+                        :aria-describedby="promptLabelId"
                         class="chat-settings-model-trigger ring-0!"
                         :ui="selectMenuUi"
                         @update:model-value="selectPrompt"
@@ -136,7 +139,7 @@
                                 <UIcon :name="iconSystemPrompt" class="size-4" />
                             </span>
                             <span class="chat-settings-row-copy min-w-0">
-                                <span class="chat-settings-row-title truncate">
+                                <span :id="promptLabelId" class="chat-settings-row-title truncate">
                                     {{ selectedPromptLabel }}
                                 </span>
                                 <span class="chat-settings-row-description truncate">
@@ -454,7 +457,7 @@
 
 <script setup lang="ts">
 import ChatMemorySettings from './ChatMemorySettings.vue';
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref, useId, watch } from 'vue';
 import { useIcon } from '~/composables/useIcon';
 import { useToolRegistry } from '~/utils/chat/tools-public';
 import { useChatToolPreferences } from '~/composables/chat/useChatToolPreferences';
@@ -691,6 +694,8 @@ const closeButtonProps = computed(() => {
 // Favorites model dropdown (narrow composers). Rows open the menu directly.
 const { favoriteModels, catalog } = useModelStore();
 const { policy: workspaceModels } = useWorkspaceModels();
+const modelLabelId = useId();
+const promptLabelId = useId();
 const selectedModelLabel = computed(() => {
     const model = catalog.value.find(row => row.id === selectedModel.value || row.canonical_slug === selectedModel.value);
     if (!selectedModel.value) return 'Choose a model';

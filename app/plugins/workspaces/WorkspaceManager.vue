@@ -16,12 +16,13 @@
                     class="whitespace-nowrap shrink-0"
                     :loading="creating"
                     :disabled="!createName.trim()"
-                    @click="createWorkspace"
+                    type="submit"
+                    form="workspace-create-form"
                 >
                     Create
                 </UButton>
             </div>
-            <div class="flex flex-col gap-3">
+            <form id="workspace-create-form" class="flex flex-col gap-3" @submit.prevent="createWorkspace">
                 <UInput
                     v-model="createName"
                     placeholder="Workspace name"
@@ -37,7 +38,7 @@
                     class="w-full"
                 />
                 <div class="flex flex-col gap-1">
-                    <label class="text-xs font-semibold">On sign out</label>
+                    <span class="text-xs font-semibold">On sign out</span>
                     <USelectMenu
                         v-model="createLogoutPolicy"
                         :items="logoutPolicyItems"
@@ -46,12 +47,13 @@
                         size="sm"
                         class="w-full"
                         v-bind="logoutPolicySelectProps"
+                        :aria-label="`On sign out: ${formatLogoutPolicy(createLogoutPolicy)}`"
                     />
                     <p class="text-[11px] opacity-70">
                         Choose whether this workspace stays on this device after you sign out.
                     </p>
                 </div>
-            </div>
+            </form>
             <div class="flex flex-wrap items-center justify-between gap-3 text-xs opacity-70">
                 <span>
                     Legacy data: {{ legacyStats.threads }} threads,
@@ -145,17 +147,18 @@
                         </div>
                     </div>
 
-                    <div v-if="editingWorkspaceId === workspace.id" class="flex flex-col gap-3">
-                        <UInput v-model="editName" placeholder="Workspace name" class="w-full" />
+                    <form v-if="editingWorkspaceId === workspace.id" class="flex flex-col gap-3" @submit.prevent="saveEdit(workspace)">
+                        <UInput v-model="editName" placeholder="Workspace name" aria-label="Workspace name" class="w-full" />
                         <UTextarea
                             v-model="editDescription"
                             placeholder="Workspace description (optional)"
+                            aria-label="Workspace description"
                             :rows="2"
                             autoresize
                             class="w-full"
                         />
                         <div class="flex flex-col gap-1">
-                            <label class="text-xs font-semibold">On sign out</label>
+                            <span class="text-xs font-semibold">On sign out</span>
                             <USelectMenu
                                 v-model="editLogoutPolicy"
                                 :items="logoutPolicyItems"
@@ -164,6 +167,7 @@
                                 size="sm"
                                 class="w-full"
                                 v-bind="logoutPolicySelectProps"
+                                :aria-label="`On sign out: ${formatLogoutPolicy(editLogoutPolicy)}`"
                             />
                             <p class="text-[11px] opacity-70">
                                 Keep or clear this workspace on this device after you sign out.
@@ -175,7 +179,7 @@
                                 class="whitespace-nowrap shrink-0"
                                 :loading="saving"
                                 :disabled="!editName.trim()"
-                                @click="saveEdit(workspace)"
+                                type="submit"
                             >
                                 Save
                             </UButton>
@@ -183,12 +187,13 @@
                                 size="sm"
                                 class="whitespace-nowrap shrink-0"
                                 variant="outline"
+                                type="button"
                                 @click="cancelEdit"
                             >
                                 Cancel
                             </UButton>
                         </div>
-                    </div>
+                    </form>
                 </div>
             </div>
         </section>
@@ -374,7 +379,7 @@ async function saveWorkspacePolicy(workspaceId: string, policy: LogoutPolicy) {
 }
 
 async function createWorkspace() {
-    if (!createName.value.trim()) return;
+    if (creating.value || !createName.value.trim()) return;
     creating.value = true;
     try {
         const result = await workspaceApi.create({
@@ -465,7 +470,7 @@ async function selectWorkspace(workspace: WorkspaceSummary) {
 }
 
 async function saveEdit(workspace: WorkspaceSummary) {
-    if (!editName.value.trim()) return;
+    if (saving.value || !editName.value.trim()) return;
     saving.value = true;
     try {
         await workspaceApi.update({

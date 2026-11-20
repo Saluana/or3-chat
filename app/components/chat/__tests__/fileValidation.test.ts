@@ -11,16 +11,19 @@ vi.mock('#imports', () => ({
 
 // Mock file persistence to control failures
 vi.mock('~/db/files', () => ({
-    createOrRefFile: vi.fn(async () => ({
-        hash: 'h',
-        name: 'x',
-        mime_type: 'image/png',
-        kind: 'image',
-        size_bytes: 10,
+    createOrRefFileWithStatus: vi.fn(async () => ({
+        created: true,
+        meta: {
+            hash: 'h',
+            name: 'x',
+            mime_type: 'image/png',
+            kind: 'image',
+            size_bytes: 10,
+        },
     })),
 }));
 
-import { createOrRefFile } from '~/db/files';
+import { createOrRefFileWithStatus } from '~/db/files';
 vi.mock('~/core/hooks/useHooks', () => ({
     useHooks: () => ({
         applyFilters: (_: any, v: any) => v,
@@ -36,7 +39,7 @@ function makeFile(name: string, type: string, size = 1000): File {
 describe('file validation & persistence', () => {
     beforeEach(() => {
         runtime.public.ssrAuthEnabled = false;
-        (createOrRefFile as any).mockClear();
+        (createOrRefFileWithStatus as any).mockClear();
     });
 
     it.each(['image/png', 'application/pdf'])('persists SSR guest %s attachments without catalog authorization', async mime => {
@@ -45,7 +48,7 @@ describe('file validation & persistence', () => {
         const att: any = { file, name: file.name, status: 'pending', kind: mime === 'application/pdf' ? 'pdf' : 'image' };
         await persistAttachment(att);
         expect(att.status).toBe('ready');
-        expect(createOrRefFile).toHaveBeenCalledOnce();
+        expect(createOrRefFileWithStatus).toHaveBeenCalledOnce();
         expect(att.hash).toBe('h');
     });
 
@@ -54,7 +57,7 @@ describe('file validation & persistence', () => {
         const v = validateFile(file);
         expect(v.ok).toBe(false);
         expect((v as any).message).toMatch(/Unsupported/);
-        expect(createOrRefFile).not.toHaveBeenCalled();
+        expect(createOrRefFileWithStatus).not.toHaveBeenCalled();
     });
 
     it('rejects oversize file', async () => {
@@ -62,11 +65,11 @@ describe('file validation & persistence', () => {
         const v = validateFile(big);
         expect(v.ok).toBe(false);
         expect((v as any).message).toMatch(/too large/i);
-        expect(createOrRefFile).not.toHaveBeenCalled();
+        expect(createOrRefFileWithStatus).not.toHaveBeenCalled();
     });
 
     it('reports persistence failure with retry', async () => {
-        (createOrRefFile as any).mockImplementationOnce(async () => {
+        (createOrRefFileWithStatus as any).mockImplementationOnce(async () => {
             throw new Error('disk boom');
         });
         const img = makeFile('x.png', 'image/png');
@@ -74,7 +77,7 @@ describe('file validation & persistence', () => {
         expect(v.ok).toBe(true);
         const att: any = { file: img, name: 'x.png', status: 'pending' };
         await persistAttachment(att);
-        expect(createOrRefFile).toHaveBeenCalledOnce();
+        expect(createOrRefFileWithStatus).toHaveBeenCalledOnce();
         expect(att.status).toBe('error');
         expect(att.error).toBe('The attachment could not be saved. Please try attaching it again.');
     });

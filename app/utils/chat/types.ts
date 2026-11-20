@@ -35,7 +35,7 @@ export interface SendMessageParams {
     /** Explicit read-only omission inspection, followed by a one-use confirmation. */
     inspectLossyRequest?: boolean;
     lossyConfirmation?: import('~~/shared/chat/context-budget').LossyRequestPreview;
-    files?: { type: string; url: string }[];
+    files?: MessageFileRef[];
     model?: string;
     file_hashes?: string[];
     extraTextParts?: string[];
@@ -171,3 +171,10 @@ export type ToolChoice =
 
 // Re-export from shared location (single source of truth)
 export type { ORStreamEvent } from '~~/shared/openrouter/parseOpenRouterSSE';
+
+/** Existing message attachment reference, with an optional selection filename. */
+export interface MessageFileRef {
+    type: string;
+    url: string;
+    name?: string;
+}
