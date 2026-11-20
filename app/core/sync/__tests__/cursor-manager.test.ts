@@ -41,7 +41,7 @@ describe('CursorManager', () => {
     });
 
     it('persists cursor and updates lastSyncAt on markSyncComplete', async () => {
-        vi.useFakeTimers();
+        vi.useFakeTimers({ toNotFake: ['setImmediate', 'clearImmediate'] });
         vi.setSystemTime(new Date('2026-02-06T10:00:00.000Z'));
 
         const db = makeDb();
@@ -58,7 +58,7 @@ describe('CursorManager', () => {
     });
 
     it('checks cursor expiry with custom maxAgeMs', async () => {
-        vi.useFakeTimers();
+        vi.useFakeTimers({ toNotFake: ['setImmediate', 'clearImmediate'] });
         const db = makeDb();
         const manager = new CursorManager(db as any, { workspaceId: 'ws-1' });
 

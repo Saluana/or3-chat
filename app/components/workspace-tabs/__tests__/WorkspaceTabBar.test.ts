@@ -194,22 +194,12 @@ describe('WorkspaceTabBar', () => {
             }
         );
 
-        await wrappers[0]!.trigger('pointerdown', {
-            pointerId: 1,
-            pointerType: 'mouse',
-            button: 0,
-            clientX: 10,
-        });
-        await wrappers[0]!.trigger('pointermove', {
-            pointerId: 1,
-            pointerType: 'mouse',
-            clientX: 250,
-        });
-        await wrappers[0]!.trigger('pointerup', {
-            pointerId: 1,
-            pointerType: 'mouse',
-            clientX: 250,
-        });
+        const source = wrappers[0]!.element;
+        const pointer = { bubbles: true, pointerId: 1, pointerType: 'mouse', isPrimary: true };
+        source.dispatchEvent(new PointerEvent('pointerdown', { ...pointer, button: 0, clientX: 10 }));
+        source.dispatchEvent(new PointerEvent('pointermove', { ...pointer, clientX: 250 }));
+        source.dispatchEvent(new PointerEvent('pointerup', { ...pointer, clientX: 250 }));
+        await wrapper.vm.$nextTick();
 
         expect(wrapper.emitted('reorder')).toEqual([['tab-chat', 1]]);
         expect(wrapper.emitted('activate')).toBeUndefined();
