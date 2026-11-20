@@ -38,6 +38,7 @@
         "es-module-lexer": "2.3.1",
         "exsolve": "^1.2.0",
         "fflate": "^0.8.3",
+        "h3": "1.15.11",
         "jsonwebtoken": "^9.0.3",
         "katex": "^0.19.1",
         "lru-cache": "^11.5.2",
@@ -10326,6 +10327,7 @@
       "resolved": "https://registry.npmjs.org/crossws/-/crossws-0.4.17.tgz",
       "integrity": "sha512-YG2kyfafNXKmu7e6k64yrj6whrw7m5sBIsOSXOlJ/72X3TQWRQuw8DhvXFDcBk8HF77PnTSygnm7xpYCTnFpow==",
       "license": "MIT",
+      "peer": true,
       "peerDependencies": {
         "srvx": ">=0.11.5"
       },
@@ -11342,7 +11344,6 @@
       "resolved": "https://registry.npmjs.org/devframe/-/devframe-1.4.0.tgz",
       "integrity": "sha512-NwXHetQRcBTbAVBSF8duDPFmaB4h673VBLr6oJ6BOGcAxfUc9XLB2FqsRzWkTeRbTIRqPp/dT//PhhqokETz/Q==",
       "license": "MIT",
-      "peer": true,
       "dependencies": {
         "crossws": "^0.4.17",
         "h3": "^2.0.8",
@@ -11363,6 +11364,43 @@
         "cac": {
           "optional": true
         }
+      }
+    },
+    "node_modules/devframe/node_modules/h3": {
+      "version": "2.0.8",
+      "resolved": "https://registry.npmjs.org/h3/-/h3-2.0.8.tgz",
+      "integrity": "sha512-ENuKlF9kC6E6PrvY1PUyE0qkrnnPTIt2/v48uyEEfTVfgoiqBCE0uwwf++2XrWwT1gxjQBDLQ8PAsmZVniKvTw==",
+      "license": "MIT",
+      "dependencies": {
+        "rou3": "^1.0.0",
+        "srvx": "^1.0.6"
+      },
+      "bin": {
+        "h3": "bin/h3.mjs"
+      },
+      "engines": {
+        "node": ">=20.19.0"
+      },
+      "peerDependencies": {
+        "crossws": "^0.4.12",
+        "ocache": ">=0.3.0"
+      },
+      "peerDependenciesMeta": {
+        "crossws": {
+          "optional": true
+        },
+        "ocache": {
+          "optional": true
+        }
+      }
+    },
+    "node_modules/devframe/node_modules/rou3": {
+      "version": "1.0.0",
+      "resolved": "https://registry.npmjs.org/rou3/-/rou3-1.0.0.tgz",
+      "integrity": "sha512-ySeaQkSrua+ut9g+65I7FHqOFBaY8tV0FmccXItoq0q21se32Q3u4YiW7/RqXSosWgYJaaKwRHXy3BST9PeCNQ==",
+      "license": "MIT",
+      "engines": {
+        "node": ">=20.19.0"
       }
     },
     "node_modules/devlop": {
