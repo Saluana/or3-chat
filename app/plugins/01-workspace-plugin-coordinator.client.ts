@@ -26,7 +26,14 @@ export default defineNuxtPlugin((nuxtApp) => {
     let stopWatcher = () => {};
     // All execution adapters register during plugin setup, before the boot fetch.
     const removeMountedHook = nuxtApp.hook('app:mounted', () => {
-        stopWatcher = watch(() => [context().workspaceId, context().sessionKey], refresh, { immediate: true, flush: 'sync' });
+        // Revalidating the same session can replace its object without changing plugin access.
+        stopWatcher = watch([
+            () => context().workspaceId,
+            () => context().sessionKey,
+            () => session.data.value?.session?.role,
+            () => session.data.value?.session?.authorizationRevision,
+            () => JSON.stringify([...(session.data.value?.session?.entitlements ?? [])].sort()),
+        ], refresh, { immediate: true, flush: 'sync' });
     });
     window.addEventListener('focus', refresh);
     window.addEventListener('pageshow', refresh);

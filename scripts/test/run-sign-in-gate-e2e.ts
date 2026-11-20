@@ -95,7 +95,24 @@ try {
             PW_SKIP_WEB_SERVER: 'false',
         },
     };
-    process.exitCode = await Bun.spawn(args, options).exited;
+    const explicitSelection = args.some(arg => /^--(?:shard|grep|grep-invert|list)(?:=|$)|^-g$/.test(arg));
+    if (siteSettings || waitlist || explicitSelection) {
+        process.exitCode = await Bun.spawn(args, options).exited;
+    } else {
+        // Each shard gets a fresh loopback server and its own per-IP auth quota.
+        // Nitro can enforce auth:session even with the dev limiter bypass set.
+        let exitCode = 0;
+        for (const shard of [1, 2]) {
+            const shardPort = shard === 1 ? port : await reservePort();
+            const shardHttpsPort = shard === 1 ? httpsPort : await reservePort();
+            const status = await Bun.spawn(
+                [...args, `--shard=${shard}/2`, '--output', `test-results/sign-in-gate-${shard}`],
+                { ...options, env: { ...options.env, PW_PORT: String(shardPort), OR3_DEV_HTTPS_PORT: String(shardHttpsPort) } }
+            ).exited;
+            exitCode ||= status;
+        }
+        process.exitCode = exitCode;
+    }
     if (process.exitCode === 0 && siteSettings) {
         const restartArgs = args.map(arg => arg === 'admin experience settings' ? 'admin settings persistence after restart'
             : arg === 'test-results/admin-settings' ? 'test-results/admin-settings-restart' : arg);

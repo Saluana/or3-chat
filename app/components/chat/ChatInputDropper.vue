@@ -1672,6 +1672,13 @@ onMounted(() => {
         rootEl instanceof HTMLElement
             ? rootEl
             : (composerShell.value?.rootElement ?? null);
+    // Seed chat padding before the parent mounts its message scroller. The
+    // observer reports later edits and responsive changes.
+    const initialHeight = componentRootRef.value?.offsetHeight;
+    if (initialHeight) {
+        lastHeight = initialHeight;
+        emit('resize', { height: initialHeight });
+    }
 });
 
 if (import.meta.client) {

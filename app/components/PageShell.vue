@@ -515,7 +515,7 @@ import type { ThemePlugin } from '~/plugins/90.theme.client';
 import type { PanePluginApi } from '~/plugins/pane-plugin-api.client';
 import { usePageShellTheme } from '~/composables/core/usePageShellTheme';
 import { CORE_APP_COMPONENT_DEFAULTS } from '~/theme/_shared/theme-components-registry';
-import { loadAsyncComponent, prefetchWhenIdle } from '~/utils/prefetch-when-idle';
+import { prefetchWhenIdle } from '~/utils/prefetch-when-idle';
 import {
     validateDbRecordWithRetry,
     type ValidationStatus,
@@ -1002,15 +1002,13 @@ useHookEffect('db.documents.update:action:after', () =>
 );
 
 const themePlugin = useNuxtApp().$theme as ThemePlugin | undefined;
-// Warm the chat renderer and command palette once the workspace is restored.
-// The document editor loads when a document pane opens.
+// Warm the command palette once the workspace is restored. Chat message
+// rendering and math load when ChatContainer needs to display history.
 if (import.meta.client && props.routeSync) {
     const stopPrefetchWatch = watch(hasSyncedInitial, (ready) => {
         if (!ready) return;
         stopPrefetchWatch();
-        const components = themePlugin?.activeComponents.value ?? CORE_APP_COMPONENT_DEFAULTS;
         prefetchWhenIdle([
-            () => loadAsyncComponent(components['chat-message']),
             () => import('~/components/search/CommandPalette.vue'),
         ]);
     });
