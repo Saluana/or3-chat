@@ -253,6 +253,14 @@ export async function createOrRefFile(
     name: string,
     owner?: { assertCurrent(): void; onDirectUpload?(): void }
 ): Promise<FileMeta> {
+    return (await createOrRefFileWithStatus(file, name, owner)).meta;
+}
+
+export async function createOrRefFileWithStatus(
+    file: Blob,
+    name: string,
+    owner?: Parameters<typeof createOrRefFile>[2]
+): Promise<{ meta: FileMeta; created: boolean }> {
     const { db, assertCurrent } = captureFileWrite();
     const assertCurrentDb = () => {
         owner?.assertCurrent();
@@ -340,7 +348,7 @@ export async function createOrRefFile(
                 });
             }
             if (markId && hasPerf) finalizePerf(markId, 'ref', file.size);
-            return incremented;
+            return { meta: incremented, created: false };
         }
     }
     const mime = declaredMime;
@@ -457,7 +465,7 @@ export async function createOrRefFile(
     if (markId && hasPerf) {
         finalizePerf(markId, wasCreated() ? 'create' : 'ref', file.size);
     }
-    return finalMeta;
+    return { meta: finalMeta, created: createdNew };
 }
 
 /**

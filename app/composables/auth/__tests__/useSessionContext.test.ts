@@ -45,6 +45,40 @@ describe('useSessionContext refresh generations', () => {
         sessionState.value = { session: null, appAccessAllowed: false };
     });
 
+    it('shares overlapping startup validation across session consumers', async () => {
+        const response = deferred<TestPayload>();
+        fetchMock.mockRejectedValueOnce(new Error('offline')).mockReturnValue(response.promise);
+        const { useSessionContext } = await import('../useSessionContext');
+        const first = useSessionContext({ autoLoad: false });
+        const second = useSessionContext({ autoLoad: false });
+        await expect(second.refresh()).rejects.toThrow('offline');
+        const startup = first.refresh({ dedupe: 'defer' });
+        const lockPage = second.refresh({ dedupe: 'defer' });
+        expect(second.pending.value).toBe(true);
+        expect(second.error.value).toBeNull();
+        const payload = { session: null, appAccessAllowed: false };
+        response.resolve(payload);
+
+        await expect(Promise.all([startup, lockPage])).resolves.toEqual([payload, payload]);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(second.pending.value).toBe(false);
+        expect(second.error.value).toBeNull();
+        expect(second.data.value).toEqual(payload);
+    });
+
+    it('keeps a reload-bound session out of the shared state', async () => {
+        const payload = {
+            session: { authenticated: true, workspace: { id: 'signed-in' } },
+            appAccessAllowed: true,
+        };
+        fetchMock.mockResolvedValue(payload);
+        const { useSessionContext } = await import('../useSessionContext');
+        const context = useSessionContext();
+
+        await expect(context.refresh({ shouldCommit: () => false })).resolves.toEqual(payload);
+        expect(context.data.value?.session).toBeNull();
+    });
+
     it('ignores an older response that completes after a newer workspace refresh', async () => {
         const older = deferred<TestPayload>();
         const newer = deferred<TestPayload>();
@@ -107,16 +141,33 @@ describe('useSessionContext refresh generations', () => {
 
         const { useSessionContext } = await import('../useSessionContext');
         const context = useSessionContext();
-        const staleRefresh = context.refresh().catch(() => undefined);
+        const staleRefresh = context.refresh();
         const currentRefresh = context.refresh();
 
         newer.resolve({ session: null, appAccessAllowed: false });
         await currentRefresh;
-        older.reject(new Error('stale failure'));
-        await staleRefresh;
+        older.reject(Object.assign(new Error('Too many requests'), { status: 429 }));
+        await expect(staleRefresh).resolves.toBeUndefined();
 
         expect(context.error.value).toBeNull();
         expect(context.pending.value).toBe(false);
+    });
+
+    it('lets a deferred validation follow the refresh that superseded it', async () => {
+        const older = deferred<TestPayload>();
+        const newer = deferred<TestPayload>();
+        fetchMock.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+        const { useSessionContext } = await import('../useSessionContext');
+        const guard = useSessionContext();
+        const validation = guard.refresh({ dedupe: 'defer' });
+        const winner = useSessionContext().refresh();
+        older.resolve({ session: { authenticated: true, workspace: { id: 'old' } }, appAccessAllowed: true });
+        const payload = { session: null, appAccessAllowed: false };
+        newer.resolve(payload);
+
+        await expect(validation).resolves.toEqual(payload);
+        await winner;
+        expect(guard.pending.value).toBe(false);
     });
 
     it('retries session fetch after successful provider recovery', async () => {

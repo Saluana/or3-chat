@@ -2786,8 +2786,7 @@ html[data-theme='blank'] {
     }
 
     /* Field labels: one size whichever component wrote them, flush with the field edge. */
-    .dashboard-page-frame label:is(.text-xs, .text-sm),
-    .theme-mode-label {
+    .dashboard-page-frame label:is(.text-xs, .text-sm) {
         color: var(--md-on-surface);
         font-size: var(--blank-text-body);
         font-weight: var(--blank-weight-medium);

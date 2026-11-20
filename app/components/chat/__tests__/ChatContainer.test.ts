@@ -1,18 +1,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { flushPromises, mount as mountComponent } from '@vue/test-utils';
 import * as nuxtImports from '#imports';
+import * as nuxtApp from '#app';
 import { kv } from '~/db';
 import { evictWorkspaceDb, getActiveWorkspaceId, getWorkspaceGeneration, setActiveWorkspaceDb } from '~/db/client';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine, tryGetHooks } from '~/core/hooks/useHooks';
-import { defineAsyncComponent, defineComponent, h, KeepAlive, nextTick, reactive, ref, toRaw, type Component } from 'vue';
+import { defineAsyncComponent, defineComponent, getCurrentInstance, h, KeepAlive, nextTick, reactive, ref, shallowRef, toRaw, type Component } from 'vue';
 import ChatContainer from '../ChatContainer.vue';
+import { CORE_APP_COMPONENT_DEFAULTS } from '~/theme/_shared/theme-components-registry';
 import type { ChatRequestState, SendResult } from '~/utils/chat/types';
 import type { SessionPayload } from '~/composables/auth/useSessionContext';
 
-// ChatContainer rendering coverage uses the real scroller so the revision
-// contract is exercised end to end. `tests/setup.ts` mocks `or3-scroll` for
+// ChatContainer rendering coverage uses the real scroller so streaming row
+// updates are exercised end to end. `tests/setup.ts` mocks `or3-scroll` for
 // the rest of the suite; this file opts back into the installed package.
 vi.unmock('or3-scroll');
 
@@ -160,13 +162,23 @@ const AsyncThemeMessage = Object.assign(defineAsyncComponent(async () => LazyCha
 });
 
 const createThemeMock = (messageRenderer: Component = LazyChatMessage) => ({
-    activeComponents: {
-        value: {
-            'chat-message': messageRenderer,
-            'chat-input': LazyChatInputDropper,
-        },
-    },
+    ...useNuxtApp().$theme,
+    activeComponents: shallowRef({
+        ...CORE_APP_COMPONENT_DEFAULTS,
+        'chat-message': messageRenderer,
+        'chat-input': LazyChatInputDropper,
+    }),
 });
+
+const useNuxtApp = nuxtApp.useNuxtApp;
+beforeEach(() => {
+    vi.spyOn(nuxtApp, 'useNuxtApp').mockImplementation(() => {
+        const app = useNuxtApp();
+        const theme = getCurrentInstance()?.appContext.config.globalProperties.$theme;
+        return { ...app, $theme: theme ?? createThemeMock() };
+    });
+});
+afterEach(() => { vi.mocked(nuxtApp.useNuxtApp).mockRestore(); });
 
 describe('ChatContainer', () => {
     it('accepts synced completion for a reloaded pending turn without a local request', async () => {
@@ -254,7 +266,7 @@ describe('ChatContainer', () => {
         return {
             props: { ...defaultProps, ...props },
             global: {
-                mocks: { $theme: createThemeMock(messageRenderer) },
+                config: { globalProperties: { $theme: createThemeMock(messageRenderer) } },
                 stubs: {
                     Teleport: true,
                     ChatWelcomeCard: {
@@ -274,6 +286,74 @@ describe('ChatContainer', () => {
             },
         };
     }
+
+    it('keeps the loading placeholder until the themed message renderer is ready', async () => {
+        const instance = makeChatInstance();
+        instance.messages.value = [{ id: 'saved', role: 'user', text: 'Saved message' }];
+        let resolveRenderer!: (renderer: typeof LazyChatMessage) => void;
+        const renderer = defineAsyncComponent(() => new Promise<typeof LazyChatMessage>(resolve => { resolveRenderer = resolve; }));
+        const wrapper = mountChatInstance(instance, {}, renderer);
+        await nextTick();
+
+        expect(wrapper.find('.chat-message-list[aria-hidden="true"]').exists()).toBe(true);
+        expect(wrapper.findComponent({ name: 'Or3Scroll' }).exists()).toBe(false);
+        resolveRenderer(LazyChatMessage);
+        await flushPromises();
+        expect(wrapper.get('[data-msg-id="saved"]').text()).toContain('Saved message');
+    });
+
+    it('waits for the active themed scroller to restore a cold conversation', async () => {
+        const instance = makeChatInstance();
+        instance.messages.value = [{ id: 'saved', role: 'user', text: 'Saved message' }];
+        let resolveA!: (value: typeof LazyChatMessage) => void;
+        let resolveB!: (value: typeof LazyChatMessage) => void;
+        const a = defineAsyncComponent(() => new Promise<typeof LazyChatMessage>(resolve => { resolveA = resolve; }));
+        const b = defineAsyncComponent(() => new Promise<typeof LazyChatMessage>(resolve => { resolveB = resolve; }));
+        useChatMock.mockImplementationOnce(() => instance);
+        const options = chatMountOptions({}, a);
+        const wrapper = mount(ChatContainer, options);
+        await nextTick();
+
+        let restored = false;
+        const saved = wrapper.vm.captureViewState();
+        const restoring = wrapper.vm.restoreViewState(saved).then(() => { restored = true; });
+        options.global.config.globalProperties.$theme.activeComponents.value = {
+            ...options.global.config.globalProperties.$theme.activeComponents.value,
+            'chat-message': b,
+        };
+        await nextTick();
+        resolveA(LazyChatMessage);
+        await flushPromises();
+        const restoredBeforeMount = restored;
+        resolveB(LazyChatMessage);
+        await restoring;
+
+        expect(restoredBeforeMount).toBe(false);
+        expect(wrapper.findComponent({ name: 'Or3Scroll' }).exists()).toBe(true);
+    });
+
+    it('sends the names of both composer selections even when their bytes match', async () => {
+        const send = vi.fn().mockResolvedValue({ status: 'complete' });
+        const instance = makeChatInstance({ send });
+        const wrapper = mountChatInstance(instance);
+        await flushPromises();
+        const attachments = ['first.pdf', 'second.pdf'].map(name => ({
+            file: new File(['shared bytes'], name, { type: 'application/pdf' }),
+            hash: 'shared-hash', name, status: 'ready', mime: 'application/pdf', kind: 'pdf',
+        }));
+
+        wrapper.findComponent(LazyChatInputDropper).vm.$emit('send', {
+            text: 'Send', images: [], attachments, largeTexts: [], model: 'model', settings: {},
+            registerResult: vi.fn(),
+        });
+
+        expect(send).toHaveBeenCalledWith(expect.objectContaining({
+            files: [
+                { type: 'application/pdf', url: 'shared-hash', name: 'first.pdf' },
+                { type: 'application/pdf', url: 'shared-hash', name: 'second.pdf' },
+            ],
+        }));
+    });
 
     it.each(['persisted', 'streaming'] as const)('accepts the matching turn once it is %s without waiting for the provider', async phase => {
         const instance = makeChatInstance();
@@ -643,9 +723,7 @@ describe('ChatContainer', () => {
             props: defaultProps,
             attachTo: document.body,
             global: {
-                mocks: {
-                    $theme: createThemeMock(),
-                },
+                config: { globalProperties: { $theme: createThemeMock() } },
                 stubs: {
                     LazyChatMessage,
                     LazyChatInputDropper,
@@ -658,6 +736,7 @@ describe('ChatContainer', () => {
             },
         });
 
+        await nextTick();
         // Simulate scroll event
         const scroller = wrapper.findComponent({ name: 'Or3Scroll' });
 
@@ -733,6 +812,7 @@ describe('ChatContainer', () => {
 
     it('requests smooth bottom navigation when the button is clicked', async () => {
         const wrapper = mountChatInstance(makeChatInstance());
+        await nextTick();
         const scroller = wrapper.findComponent({ name: 'Or3Scroll' });
         const exposed = scroller.vm.$.exposed as {
             scrollToBottom: (options?: { smooth?: boolean }) => void;
@@ -760,9 +840,7 @@ describe('ChatContainer', () => {
         const wrapper = mount(ChatContainer, {
             props: defaultProps,
             global: {
-                mocks: {
-                    $theme: createThemeMock(),
-                },
+                config: { globalProperties: { $theme: createThemeMock() } },
                 stubs: {
                     LazyChatMessage,
                     LazyChatInputDropper,
@@ -799,7 +877,6 @@ describe('ChatContainer', () => {
             const scroller = wrapper.findComponent({ name: 'Or3Scroll' });
             const itemsBefore = toRaw(scroller.props('items') as unknown[]);
             const rowElement = rowFor(wrapper, 'tail-1').element;
-            const revisionBefore = scroller.props('rowContentRevision') as number;
 
             for (const text of ['Hel', 'Hello', 'Hello world']) {
                 // Intake updates the persistence snapshot before the display
@@ -819,9 +896,6 @@ describe('ChatContainer', () => {
                 itemsBefore
             );
             expect(rowFor(wrapper, 'tail-1').element).toBe(rowElement);
-            expect(
-                scroller.props('rowContentRevision') as number
-            ).toBe(revisionBefore + 3);
             expect(messageUpdates.mock.calls.map(([id]) => id)).toEqual([
                 'tail-1', 'tail-1', 'tail-1',
             ]);

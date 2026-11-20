@@ -14,7 +14,7 @@ On a Cloud instance, sign in if requested. The operator may supply instance cred
 
 ## 2. Choose a model and send a message
 
-Open a chat and choose a model in **Settings → Model catalog**. On phones, **Settings → Current model** also opens it. Favorite models appear in the desktop model selector. Type a short prompt such as “Give me three ideas for a weekend project.” Send it using the chat input's send control. The assistant response appears incrementally while it streams.
+Open a chat and choose a model in **Settings → Model catalog**. In a narrow chat pane, select the current model in **Settings** to switch between favorites. If you have no favorites, that control opens the catalog. Type a short prompt such as “Give me three ideas for a weekend project.” Send it using the chat input's send control. The assistant response appears incrementally while it streams.
 
 The input clears once your message is saved, without waiting for the model to respond. If sending is blocked before the message is saved, your draft and attachments stay in the input. If the model fails after saving, retry from the saved conversation.
 
@@ -27,7 +27,7 @@ and select the **Tools** row to choose individual tools. The switch remembers
 your selection when you turn it off and back on. Each chat keeps its own setup.
 Change the starting default using **Dashboard → AI → Tools**.
 
-Choose a model with the capabilities your request needs. For an image or file, use the attachment control and select a compatible model. A text-only model cannot be assumed to understand an image. If an attachment cannot be prepared, remove it or reattach the original file and try again.
+Choose a model with the capabilities your request needs. For an image or file, use the attachment control and select a compatible model. A text-only model cannot be assumed to understand an image. If an attachment cannot be prepared, remove it or reattach the original file and try again. Sent attachments keep their selected filenames, even when two selections share the same file contents.
 
 ## 3. Check that your work is saved
 
@@ -36,6 +36,8 @@ After the response completes, reload the page and reopen the chat from the sideb
 Use the stop control to cancel an active response. Server background behavior depends on the instance's configuration; do not assume that closing the browser always stops generation.
 
 A failed response keeps its error in the conversation after reload. Use **Retry message** to retry the saved turn, or continue with a new message. A stopped response keeps any accepted partial text.
+
+Use **Edit message** to update a saved message. Press **Escape** to cancel and return focus to **Edit message**, or **Ctrl+Enter** (**⌘+Enter** on Mac) to save.
 
 ## Pin chats and documents
 

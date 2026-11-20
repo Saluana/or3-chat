@@ -80,6 +80,20 @@ describe('files.attach:filter:input hook', () => {
         expect(await getDb().file_blobs.count()).toBe(0);
     });
 
+    it('shows the DB hook name for a new file and the selection name for reused bytes', async () => {
+        useHooks().addFilter('db.files.create:filter:input', payload => ({ ...payload, name: 'plugin-title.pdf' }));
+        const first = attachment();
+        const second = { ...attachment(), name: 'another-selection.pdf' };
+
+        await persistAttachment(first);
+        await persistAttachment(second);
+
+        expect(first.name).toBe('plugin-title.pdf');
+        expect(second.name).toBe('another-selection.pdf');
+        expect(second.hash).toBe(first.hash);
+        expect(await getDb().file_blobs.count()).toBe(1);
+    });
+
     it.each([false, true])('persists accepted attachment values (rename: %s)', async rename => {
         const att = attachment();
         let receivedPayload: FilesAttachInputPayload | false | null = null;

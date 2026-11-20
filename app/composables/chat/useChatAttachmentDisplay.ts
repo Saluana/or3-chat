@@ -8,10 +8,8 @@ export function useChatAttachmentDisplay(
         attachments.value.map((attachment, index) => ({
             ...attachment,
             index,
-            key:
-                attachment.hash ||
-                attachment.url ||
-                `${index}:${attachment.name}`,
+            // Equal file contents share a hash, but each selected preview has its own URL.
+            key: attachment.url || `${index}:${attachment.name}`,
         }))
     );
     const imageAttachments = computed(() =>

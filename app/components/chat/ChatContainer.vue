@@ -20,78 +20,68 @@
             :fallback="{ background: emptyAppearance.background, src: emptyAppearance.background.image }"
             :light="emptyMediaVariants.light?.background && { background: emptyMediaVariants.light.background, src: emptyMediaVariants.light.background.image }"
             :dark="emptyMediaVariants.dark?.background && { background: emptyMediaVariants.dark.background, src: emptyMediaVariants.dark.background.image }" />
-        <ClientOnly v-if="!emptyAppearance">
-            <Or3Scroll
-                ref="scroller"
-                :items="allMessages"
-                :item-key="messageKey"
-                :estimate-height="80"
-                :overscan="2500"
-                :prefetch-overscan="5500"
-                :content-key="scrollContentKey"
-                :row-content-revision="rowContentRevision"
-                mutation-mode="append-prepend"
-                :maintain-bottom="!anyEditing"
-                :bottom-threshold="5"
-                :padding-bottom="bottomPad"
-                :padding-top="28"
-                class="chat-message-list"
-                :style="scrollParentStyle"
-                @scroll="onScroll"
-                @prefetchRange="onPrefetchRange"
-                @reachTop="emit('reached-top')"
-                @reachBottom="emit('reached-bottom')"
-            >
-                <template #default="{ item, index }">
-                    <div
-                        :key="item.id || item.stream_id || index"
-                        :class="CHAT_MESSAGE_ROW_CLASS"
-                        :data-msg-id="item.id"
-                        :data-stream-id="item.stream_id"
-                    >
-                        <ChatMessageHost
-                            :renderer="
-                                resolveCoreChatComponent(
-                                    $theme.activeComponents.value[
-                                        'chat-message'
-                                    ],
-                                    'chat-message'
-                                )
-                            "
-                            :message="item"
-                            :thread-id="props.threadId"
-                            :retry-disabled="retryPending || loading"
-                            :compaction-action="compactionActionFor(item)"
-                            :history-retrieval-available="
-                                historyRetrievalAvailable
-                            "
-                            @retry="onRetry"
-                            @continue="onContinue"
-                            @branch="onBranch"
-                            :on-view-compaction-source="onViewCompactionSource"
-                            :on-view-related-thread="onViewRelatedThread"
-                            @edited="onEdited"
-                            :on-begin-edit="onBeginEdit"
-                            :on-end-edit="onEndEdit"
-                        />
-                    </div>
-                </template>
-            </Or3Scroll>
-            <template #fallback>
-                <!-- Bottom-anchored like the real list, so messages replace the
-                     placeholder in place instead of dropping in from the top. -->
+        <Or3Scroll
+            v-if="!emptyAppearance && mounted && (!messageRendererLoad || readyMessageRenderer)"
+            ref="scroller"
+            :items="scrollItems"
+            :item-key="messageKey"
+            :estimate-height="80"
+            :overscan="chatOverscan"
+            :prefetch-overscan="5500"
+            :content-key="scrollContentKey"
+            mutation-mode="append-prepend"
+            :maintain-bottom="!anyEditing"
+            :bottom-threshold="5"
+            :padding-bottom="bottomPad"
+            :padding-top="28"
+            class="chat-message-list"
+            :style="scrollParentStyle"
+            @scroll="onScroll"
+            @prefetchRange="onPrefetchRange"
+            @reachTop="emit('reached-top')"
+            @reachBottom="emit('reached-bottom')"
+        >
+            <template #default="{ item, index }">
                 <div
-                    class="chat-message-list flex-1 min-h-0 px-4 pt-7 flex flex-col justify-end"
-                    :style="{ ...scrollParentStyle, paddingBottom: `${bottomPad}px` }"
-                    aria-hidden="true"
+                    :key="item.id || item.stream_id || index"
+                    :class="CHAT_MESSAGE_ROW_CLASS"
+                    :data-msg-id="item.id"
+                    :data-stream-id="item.stream_id"
                 >
-                    <div v-if="threadId" class="mx-auto w-full max-w-[780px] space-y-6 animate-pulse">
-                        <div class="ml-auto h-12 w-2/3 bg-[var(--md-surface-variant)]" />
-                        <div class="h-24 w-5/6 bg-[var(--md-surface-variant)]" />
-                    </div>
+                    <ChatMessageHost
+                        :renderer="readyMessageRenderer ?? messageRenderer"
+                        :message="item"
+                        :thread-id="props.threadId"
+                        :retry-disabled="retryPending || loading"
+                        :compaction-action="compactionActionFor(item)"
+                        :history-retrieval-available="
+                            historyRetrievalAvailable
+                        "
+                        @retry="onRetry"
+                        @continue="onContinue"
+                        @branch="onBranch"
+                        :on-view-compaction-source="onViewCompactionSource"
+                        :on-view-related-thread="onViewRelatedThread"
+                        @edited="onEdited"
+                        :on-begin-edit="onBeginEdit"
+                        :on-end-edit="onEndEdit"
+                    />
                 </div>
             </template>
-        </ClientOnly>
+        </Or3Scroll>
+        <!-- Bottom-anchored like the real list, so messages replace the
+             placeholder in place instead of dropping in from the top. -->
+        <div
+            v-else-if="!emptyAppearance"
+            class="chat-message-list flex-1 min-h-0 px-4 pt-7 flex flex-col justify-end"
+            :style="{ ...scrollParentStyle, paddingBottom: `${bottomPad}px` }"
+            aria-hidden="true"
+        >
+            <div v-if="threadId" class="mx-auto w-full max-w-[780px] space-y-6 animate-pulse">
+                <div class="ml-auto h-12 w-2/3 bg-[var(--md-surface-variant)]" />
+                <div class="h-24 w-5/6 bg-[var(--md-surface-variant)]" />
+            </div>
+        </div>
 
         <!-- First-run welcome: true modal layer above mobile input (z-40) -->
         <Teleport to="body">
@@ -195,6 +185,7 @@ import { pluginOk, pluginError } from '@or3/plugin-sdk';
 // Reqs: 3.1,3.2,3.3,3.4,3.5,3.6,3.10,3.11
 import {
     shallowRef,
+    shallowReactive,
     computed,
     watch,
     ref,
@@ -235,9 +226,10 @@ import { useEmptyChatActionHost } from '~/composables/chat/useEmptyChatActions';
 import { useSignInGate } from '~/composables/auth/useSignInGate';
 import { focusPaneInput } from '~/composables/chat/useChatInputBridge';
 import { useNuxtApp } from '#app';
+import { loadAsyncComponent } from '~/utils/prefetch-when-idle';
 import { CORE_APP_COMPONENT_DEFAULTS } from '~/theme/_shared/theme-components-registry';
 import 'or3-scroll/style.css';
-import { useElementSize, useEventListener } from '@vueuse/core';
+import { useElementSize, useEventListener, useMediaQuery } from '@vueuse/core';
 import { isMobile } from '~/state/global';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { useThemeOverrides } from '~/composables/useThemeResolver';
@@ -840,6 +832,9 @@ const stableMessageIdentities = computed(() => {
     return identities;
 });
 const allMessages = shallowRef<UiChatMessage[]>([]);
+// Only the scroller subscribes to tail slot writes. Its resize observer
+// measures height changes without synchronously measuring every mounted row.
+const scrollItems = computed(() => shallowReactive(allMessages.value));
 function messageKey(message: UiChatMessage) {
     return message.id || message.stream_id || '';
 }
@@ -923,7 +918,6 @@ const threadCompactionBlockedReason = computed(() => {
     const anchor = [...allMessages.value].reverse().find((row) => localCompactionIds.value?.has(row.id));
     return compaction.blockedReason.value ?? (anchor ? anchorCompactionReasons.value.get(anchor.id) : 'Choose a saved conversation with completed replies.');
 });
-const rowContentRevision = ref(0);
 let renderedStableSnapshot: UiChatMessage[] | null = null;
 
 watch(
@@ -957,11 +951,7 @@ watch(
             currentTailKey !== null &&
             currentTailKey === tailKey
         ) {
-            // Same stable snapshot, length, and tail key: patch the tail slot in
-            // place and bump the revision so Or3Scroll re-reads mounted rows
-            // without replacing the combined array or scanning history.
-            allMessages.value[stable.length] = mergedTail;
-            rowContentRevision.value++;
+            scrollItems.value[stable.length] = mergedTail;
             return;
         }
 
@@ -973,8 +963,11 @@ watch(
     { immediate: true }
 );
 
-// Media prefetch is intentionally separate from row mounting: rows mount within
-// 1200px of the viewport while media prefetch looks 5500px ahead (canary-gated).
+// Keep extra rows ahead of fast touch flings while limiting desktop render work.
+const finePointer = useMediaQuery('(hover: hover) and (pointer: fine)');
+const chatOverscan = computed(() => finePointer.value ? 1200 : 2500);
+
+// Media prefetch looks farther ahead than the mounted row buffer.
 const mediaPrefetch = createMessageMediaPrefetchController({ concurrency: 4 });
 
 function onPrefetchRange(range: { startIndex: number; endIndex: number }) {
@@ -1034,16 +1027,17 @@ function scrollToMessage(target: { threadId: string; messageId: string; generati
     if (getWorkspaceGeneration() !== target.generation || props.threadId !== target.threadId) return;
     compactionNavigation.value = { ...target, origin: currentThreadId.value };
 }
-watch([currentThreadId, allMessages, loading, compactionNavigation], async () => {
+watch([currentThreadId, allMessages, loading, compactionNavigation, scroller], async () => {
     const target = compactionNavigation.value;
     if (!target) return;
     if (getWorkspaceGeneration() !== target.generation || currentThreadId.value !== target.threadId && currentThreadId.value !== target.origin) {
         compactionNavigation.value = undefined; return;
     }
-    if (loading.value || currentThreadId.value !== target.threadId || !allMessages.value.some((row) => row.id === target.messageId)) return;
+    if (!scroller.value || loading.value || currentThreadId.value !== target.threadId || !allMessages.value.some((row) => row.id === target.messageId)) return;
     await nextTick();
     if (compactionNavigation.value !== target || getWorkspaceGeneration() !== target.generation || currentThreadId.value !== target.threadId) return;
-    scroller.value?.scrollToItemKey?.(target.messageId, { align: 'center', smooth: false });
+    if (!scroller.value) return;
+    scroller.value.scrollToItemKey?.(target.messageId, { align: 'center', smooth: false });
     compactionNavigation.value = undefined;
 });
 
@@ -1157,7 +1151,23 @@ async function restoreViewState(saved?: ReturnType<typeof captureViewState>) {
     // A cached view that is putting back its exact pixel position wins over
     // the tab's anchor memento, which cannot re-anchor reattached rows.
     if (!saved?.scroll || keptViewRestored) return;
+    const revision = scrollRestoreRevision;
     await nextTick();
+    if (revision !== scrollRestoreRevision || keptViewRestored || emptyAppearance.value) return;
+    if (!scroller.value) {
+        await new Promise<void>((resolve) => {
+            const stop = watch(scroller, (mountedScroller) => {
+                if (mountedScroller) finish();
+            }, { flush: 'post' });
+            function finish() {
+                stop();
+                pendingScrollRestores.delete(finish);
+                resolve();
+            }
+            pendingScrollRestores.add(finish);
+        });
+    }
+    if (revision !== scrollRestoreRevision || keptViewRestored) return;
     if (saved.scroll.mode === 'bottom') {
         scroller.value?.scrollToBottom?.({ smooth: false });
         return;
@@ -1370,16 +1380,10 @@ function onSend(payload: ChatInputSendPayload) {
             return {
                 type: img.file?.type || img.mime || 'image/png',
                 url,
+                ...(img.hash ? { name: img.name } : {}),
             };
         })
-        .filter(
-            (
-                f
-            ): f is {
-                type: string;
-                url: string;
-            } => Boolean(f)
-        );
+        .filter(file => file !== null);
     const file_hashes = readyImages
         .map((img) => img.hash)
         .filter((h): h is string => typeof h === 'string');
@@ -1612,12 +1616,47 @@ onBeforeUnmount(() => {
 const emptyActionHost = useEmptyChatActionHost();
 const { signInRequired: emptySignInRequired, promptSignIn: promptEmptySignIn } = useSignInGate();
 const emptyTheme = useNuxtApp().$theme;
+const messageRenderer = computed(() => resolveCoreChatComponent(
+    emptyTheme.activeComponents.value['chat-message'], 'chat-message'
+));
+const readyMessageRenderer = shallowRef<Component>();
+const messageRendererLoad = shallowRef<Promise<void> | null>(null);
+if (!import.meta.server) {
+    watch(
+        [messageRenderer, () => Boolean(props.threadId || currentThreadId.value || allMessages.value.length)],
+        ([renderer, needsRenderer], _, onCleanup) => {
+            const asyncRenderer = renderer as Component & { __asyncLoader?: unknown; __asyncResolved?: Component };
+            if (!asyncRenderer.__asyncLoader || asyncRenderer.__asyncResolved) {
+                readyMessageRenderer.value = renderer;
+                messageRendererLoad.value = null;
+                return;
+            }
+            if (!needsRenderer) {
+                readyMessageRenderer.value = undefined;
+                messageRendererLoad.value = null;
+                return;
+            }
+
+            // Hold the skeleton on first mount and keep existing rows during a theme switch.
+            let current = true;
+            onCleanup(() => { current = false; });
+            const finish = () => {
+                if (!current) return;
+                readyMessageRenderer.value = renderer;
+                messageRendererLoad.value = null;
+            };
+            // Let Vue handle rendering errors if a preload fails.
+            messageRendererLoad.value = loadAsyncComponent(renderer).then(finish, finish);
+        },
+        { immediate: true }
+    );
+}
 // The server cannot read a localStorage color preference. Hydrate text with
 // its emitted mode; paired public artwork follows the pre-paint CSS mode.
-const emptyMounted = ref(false);
+const mounted = ref(false);
 const emptyInitialMode = useState('chat-empty-initial-mode', () => emptyTheme.current.value);
-const emptyMode = computed(() => emptyMounted.value ? emptyTheme.current.value : emptyInitialMode.value);
-onMounted(() => { emptyMounted.value = true; });
+const emptyMode = computed(() => mounted.value ? emptyTheme.current.value : emptyInitialMode.value);
+onMounted(() => { mounted.value = true; });
 const emptyAppearance = computed(() => {
     if (props.threadId || currentThreadId.value || allMessages.value.length || inputLoading.value || streamingActive.value || compaction.active.value) return null;
     void emptyTheme.resolversVersion.value;
@@ -1651,7 +1690,7 @@ const emptyInitialActions = useState<readonly EmptyChatActionId[]>(
     () => [...(emptyActionHost?.available.value ?? ['start-chat'])],
 );
 const emptyActions = computed(() => {
-    const available = emptyMounted.value
+    const available = mounted.value
         ? emptyActionHost?.available.value : emptyInitialActions.value;
     return emptyAppearance.value?.actions.filter(action =>
         action.id === 'start-chat' || available?.includes(action.id)) ?? [];
@@ -1688,13 +1727,15 @@ useEventListener(() => (scroller.value as { $el?: HTMLElement } | null)?.$el, 's
     attachedAtBottom = root.scrollHeight - root.scrollTop - root.clientHeight <= 2;
 }, { passive: true });
 let scrollRestoreRevision = 0;
+const pendingScrollRestores = new Set<() => void>();
 let revealRestoringScroll: (() => void) | undefined;
 function cancelScrollRestore() {
     scrollRestoreRevision++;
+    for (const finish of pendingScrollRestores) finish();
     revealRestoringScroll?.();
     revealRestoringScroll = undefined;
 }
-watch([() => props.threadId, () => props.tabId], () => { keptViewRestored = false; cancelScrollRestore(); }, { flush: 'sync' });
+watch([() => props.threadId, () => props.tabId, scrollContentKey], () => { keptViewRestored = false; cancelScrollRestore(); }, { flush: 'sync' });
 onBeforeUnmount(cancelScrollRestore);
 onDeactivated(() => {
     cancelScrollRestore();

@@ -22,8 +22,11 @@ After sign-in or registration, the host loads the canonical workspace session.
 If that service is unavailable, a persistent **Unable to load your account**
 notification offers **Retry**. Retry keeps the accepted credentials and loads
 the session again; when the service recovers, the account and workspace open
-without creating another account or submitting the password again. For local
-Convex development, keep the local Convex backend running alongside the app.
+without creating another account or submitting the password again. A rate-limited
+auth-change refresh shows **Too many requests** and enables retry when the server's window
+ends. Before clearing local data, the host verifies sign-out with two fresh session checks.
+
+For local Convex development, keep the local Convex backend running alongside the app.
 
 ## Lock page
 

@@ -4,11 +4,11 @@
             v-for="group in groupedLinks"
             :key="group.section"
             class="mb-3 last:mb-0"
-            :aria-labelledby="!(isDesktop && collapsed) ? `admin-nav-${group.slug}` : undefined"
+            :aria-labelledby="!(isDesktop && collapsed) ? `${headingId}-${group.slug}` : undefined"
         >
             <h2
                 v-if="!(isDesktop && collapsed)"
-                :id="`admin-nav-${group.slug}`"
+                :id="`${headingId}-${group.slug}`"
                 class="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--md-on-surface-variant)] opacity-60"
             >
                 {{ group.section }}
@@ -58,6 +58,10 @@
 </template>
 
 <script setup lang="ts">
+import { computed, useId } from 'vue';
+import { useIcon } from '~/composables/useIcon';
+
+const headingId = useId();
 interface NavLink {
     label: string;
     to: string;

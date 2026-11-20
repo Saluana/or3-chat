@@ -25,6 +25,8 @@ import { kv } from '~/db';
 import { getDb, getWorkspaceGeneration } from '~/db/client';
 import { clearPersistedUserApiKey, getUserApiKeyGeneration } from '~/core/auth/useUserApiKey';
 import { clearWorkspaceDbsOnLogout } from '~/utils/workspace-db-logout';
+import type { SessionPayload } from '~/composables/auth/useSessionContext';
+import { stopWorkspacePluginsAndAwait } from '~/composables/plugins/workspace-plugin-coordinator';
 import { stopAllPortableClientsAndAwait } from '~/composables/plugins/portable-client-runtime';
 
 type SyncEngine = { stop?: () => Promise<void> | void };
@@ -44,6 +46,18 @@ interface LogoutCleanupOptions {
      * exchanging its authorization code. The callback clears them itself.
      */
     preserveOpenRouterPkce?: boolean;
+}
+
+const confirmedLogouts = new WeakMap<SessionPayload, Promise<void>>();
+
+/** Both the workspace watcher and a reload-bound auth event can observe this logout. */
+export function cleanupConfirmedLogout(payload: SessionPayload, nuxtApp: NuxtApp): Promise<void> {
+    let cleanup = confirmedLogouts.get(payload);
+    if (!cleanup) {
+        cleanup = Promise.all([logoutCleanup(nuxtApp), stopWorkspacePluginsAndAwait()]).then(() => undefined);
+        confirmedLogouts.set(payload, cleanup);
+    }
+    return cleanup;
 }
 
 /** Device plugin credentials have no account namespace; clear before teardown awaits. */

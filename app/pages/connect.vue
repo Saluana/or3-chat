@@ -22,9 +22,6 @@
                     before it can be enabled. Use a local agent connection through
                     Agents → Connection settings instead.
                 </p>
-                <UButton to="/" block size="xl" class="mt-8!">
-                    Back to OR3
-                </UButton>
             </section>
 
             <section

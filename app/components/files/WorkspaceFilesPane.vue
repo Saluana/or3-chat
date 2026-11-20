@@ -946,9 +946,13 @@ async function change(row: Post, changes: { title?: string; trashed?: boolean })
         rename.value = false;
     });
 }
-function renameOnEnter(event: KeyboardEvent) {
-    if (event.isComposing || event.keyCode === 229 || !actionTarget.value) return;
+function submitRename() {
+    if (!actionTarget.value || busy.value || readOnly.value || !newTitle.value.trim()) return;
     void change(actionTarget.value, { title: newTitle.value });
+}
+function renameOnEnter(event: KeyboardEvent) {
+    if (event.isComposing || event.keyCode === 229) return;
+    submitRename();
 }
 async function open(row: FileListRow) {
     previewTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -1551,7 +1555,7 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
             </template>
         </AppModal>
         <AppModal v-model:open="bulkTrash" :title="bulkTrashLabel">
-            <p>Restore these files and documents from Files Trash.</p>
+            <p>You can restore these items from Files Trash.</p>
             <template #footer>
                 <UButton size="workspace" label="Cancel" color="neutral" variant="ghost" @click="bulkTrash = false" />
                 <UButton size="workspace" color="error" label="Move to Trash" :loading="busy" @click="executeBulkTrash" />
@@ -1571,7 +1575,7 @@ onBeforeUnmount(() => { resizeObserver?.disconnect(); disposed = true; generatio
             <p class="mb-3 text-sm text-muted">This changes the shared title in Files and projects.</p>
             <UInput v-model="newTitle" aria-label="Item title" class="w-full" size="workspace" @keydown.enter="renameOnEnter" />
             <UAlert v-if="error" role="alert" color="error" variant="soft" title="Could not rename item" :description="error" class="mt-4" />
-            <template #footer><UButton size="workspace" label="Save title" :disabled="busy || readOnly" @click="actionTarget && change(actionTarget, { title: newTitle })" /></template>
+            <template #footer><UButton size="workspace" label="Save title" :loading="busy" :disabled="readOnly || !newTitle.trim()" @click="submitRename" /></template>
         </AppModal>
         <AppModal v-model:open="associate" title="Add to project" close-label="Close">
             <USelect v-model="associationProject" aria-label="Project" class="w-full" size="workspace" :ui="{ content: 'min-w-[240px] max-w-[calc(100vw-2rem)]' }" :items="projects.map(project => ({ label: project.name, value: project.id }))" />

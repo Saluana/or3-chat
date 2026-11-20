@@ -1,6 +1,6 @@
 import { presentError } from '~~/shared/errors';
 import { reportError, err } from '~/utils/errors';
-import { changeRefCount, createOrRefFile } from '~/db/files';
+import { changeRefCount, createOrRefFileWithStatus } from '~/db/files';
 import { useHooks } from '~/core/hooks/useHooks';
 import { useRuntimeConfig } from '#imports';
 import type { FilesAttachInputPayload } from '~/core/hooks/hook-types';
@@ -138,7 +138,7 @@ export async function persistAttachment(att: AttachmentLike, owner?: AttachmentI
         }
 
         // Use filtered values (in case hook transformed them)
-        const meta = await createOrRefFile(filtered.file, filtered.name, { assertCurrent: assertLocalOrigin });
+        const { meta, created } = await createOrRefFileWithStatus(filtered.file, filtered.name, { assertCurrent: assertLocalOrigin });
         try {
             assertLocalOrigin();
             scope?.assertCurrent('write');
@@ -158,7 +158,7 @@ export async function persistAttachment(att: AttachmentLike, owner?: AttachmentI
             scope?.assertCurrent('write');
             att.hash = meta.hash;
             att.meta = meta;
-            att.name = meta.name;
+            att.name = created ? meta.name : filtered.name;
             att.mime = meta.mime_type;
             att.kind = meta.kind;
             att.error = undefined;

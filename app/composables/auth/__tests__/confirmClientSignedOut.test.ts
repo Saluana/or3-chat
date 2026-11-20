@@ -64,6 +64,18 @@ describe('confirmClientSignedOut', () => {
         await expect(resultPromise).resolves.toBe(true);
     });
 
+    it('takes two fresh checks separated by the confirmation window', async () => {
+        const check = vi.fn(() => ({ ready: true, authenticated: false }));
+        registerClientAuthStatusResolver(check);
+
+        const result = confirmClientSignedOut();
+        await vi.advanceTimersByTimeAsync(DEFAULT_SIGNED_OUT_CONFIRM_MS - 1);
+        expect(check).toHaveBeenCalledOnce();
+        await vi.advanceTimersByTimeAsync(1);
+        await expect(result).resolves.toBe(true);
+        expect(check).toHaveBeenCalledTimes(2);
+    });
+
     it('returns false when status flips back to authenticated mid-wait', async () => {
         let authenticated: boolean | undefined = false;
         registerClientAuthStatusResolver(() => ({

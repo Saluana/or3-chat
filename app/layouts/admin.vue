@@ -20,16 +20,77 @@
             class="fixed top-0 left-0 right-0 h-16 bg-[var(--md-surface-container)] border-b-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-border-color)] flex items-center justify-between px-4 z-40 lg:hidden"
         >
             <div class="flex items-center gap-4">
-                <UButton
-                    variant="ghost"
-                    color="neutral"
-                    size="sm"
-                    square
-                    :icon="menuIcon"
-                    @click="toggleMobileMenu"
-                    aria-label="Toggle navigation menu"
-                    class="theme-btn"
-                />
+                <USlideover
+                    v-model:open="isMobileMenuOpen"
+                    side="left"
+                    title="Admin navigation"
+                    :ui="{
+                        overlay: 'bg-black/50',
+                        content: 'w-72 bg-[var(--md-surface-container)] border-r-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] shadow-[var(--md-elevation-3)]',
+                    }"
+                >
+                    <UButton
+                        variant="ghost"
+                        color="neutral"
+                        size="sm"
+                        square
+                        :icon="menuIcon"
+                        aria-label="Toggle navigation menu"
+                        class="theme-btn"
+                    />
+                    <template #content>
+                        <aside
+                            role="navigation"
+                            aria-label="Admin navigation"
+                            class="flex h-full min-h-0 flex-col"
+                        >
+                            <!-- Mobile Drawer Header -->
+                            <div class="p-4 border-b-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] flex items-center justify-between">
+                                <div>
+                                    <h1 class="text-lg font-bold">Admin</h1>
+                                    <p class="text-xs opacity-70 mt-1">System Control</p>
+                                </div>
+                                <UButton
+                                    variant="ghost"
+                                    color="neutral"
+                                    size="sm"
+                                    square
+                                    :icon="closeIcon"
+                                    @click="closeMobileMenu"
+                                    aria-label="Close navigation menu"
+                                    class="theme-btn"
+                                />
+                            </div>
+
+                            <!-- Mobile Navigation Links -->
+                            <AdminNavLinks
+                                :links="navLinks"
+                                :active-path="route.path"
+                                density="mobile"
+                                @navigate="closeMobileMenu"
+                            />
+
+                            <!-- Mobile Logout -->
+                            <div class="p-2 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)]">
+                                <button
+                                    class="w-full flex items-center gap-3 px-3 py-3 text-sm font-medium rounded-[var(--md-border-radius-small,var(--md-sys-shape-corner-small,4px))] transition-all duration-200 text-[var(--md-sys-color-error)] hover:bg-[var(--md-sys-color-error)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--md-sys-color-error)] focus:ring-offset-2 focus:ring-offset-[var(--md-surface-container)]"
+                                    @click="handleLogout"
+                                >
+                                    <UIcon
+                                        :name="logoutIcon"
+                                        class="w-5 h-5 flex-shrink-0 opacity-70"
+                                    />
+                                    <span class="flex-1 text-left">Logout</span>
+                                </button>
+                            </div>
+
+                            <!-- Mobile Drawer Footer -->
+                            <div class="p-4 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] text-xs text-[var(--md-on-surface-variant)]" role="contentinfo">
+                                <span>OR3 v{{ appVersion }}</span>
+                            </div>
+                        </aside>
+                    </template>
+                </USlideover>
                 <div class="flex flex-col">
                     <h1 class="text-lg font-bold tracking-wide" style="font-family: 'Press Start 2P', monospace; font-size: 14px;">Admin</h1>
                     <p class="text-[11px] opacity-60 font-medium tracking-wider">System Control</p>
@@ -40,85 +101,6 @@
                 <WorkspaceIndicator v-if="showWorkspaceContext" @click="openWorkspaceSelector" class="hidden sm:flex" />
             </div>
         </header>
-
-        <!-- Mobile Menu Overlay -->
-        <Transition
-            enter-active-class="transition-opacity duration-200"
-            enter-from-class="opacity-0"
-            enter-to-class="opacity-100"
-            leave-active-class="transition-opacity duration-200"
-            leave-from-class="opacity-100"
-            leave-to-class="opacity-0"
-        >
-            <div
-                v-if="isMobileMenuOpen"
-                class="fixed inset-0 bg-black/50 z-40 lg:hidden"
-                @click="closeMobileMenu"
-                aria-hidden="true"
-            />
-        </Transition>
-
-        <!-- Mobile Sidebar Drawer -->
-        <Transition
-            enter-active-class="transition-transform duration-300 ease-out"
-            enter-from-class="-translate-x-full"
-            enter-to-class="translate-x-0"
-            leave-active-class="transition-transform duration-200 ease-in"
-            leave-from-class="translate-x-0"
-            leave-to-class="-translate-x-full"
-        >
-            <aside
-                v-if="isMobileMenuOpen"
-                role="navigation"
-                aria-label="Admin navigation"
-                class="fixed top-0 left-0 bottom-0 w-72 bg-[var(--md-surface-container)] border-r-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] shadow-[var(--md-elevation-3)] z-50 lg:hidden flex flex-col"
-            >
-                <!-- Mobile Drawer Header -->
-                <div class="p-4 border-b-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] flex items-center justify-between">
-                    <div>
-                        <h1 class="text-lg font-bold">Admin</h1>
-                        <p class="text-xs opacity-70 mt-1">System Control</p>
-                    </div>
-                    <UButton
-                        variant="ghost"
-                        color="neutral"
-                        size="sm"
-                        square
-                        :icon="closeIcon"
-                        @click="closeMobileMenu"
-                        aria-label="Close navigation menu"
-                        class="theme-btn"
-                    />
-                </div>
-
-                <!-- Mobile Navigation Links -->
-                <AdminNavLinks
-                    :links="navLinks"
-                    :active-path="route.path"
-                    density="mobile"
-                    @navigate="closeMobileMenu"
-                />
-
-                <!-- Mobile Logout -->
-                <div class="p-2 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)]">
-                    <button
-                        class="w-full flex items-center gap-3 px-3 py-3 text-sm font-medium rounded-[var(--md-border-radius-small,var(--md-sys-shape-corner-small,4px))] transition-all duration-200 text-[var(--md-sys-color-error)] hover:bg-[var(--md-sys-color-error)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--md-sys-color-error)] focus:ring-offset-2 focus:ring-offset-[var(--md-surface-container)]"
-                        @click="handleLogout"
-                    >
-                        <UIcon
-                            :name="logoutIcon"
-                            class="w-5 h-5 flex-shrink-0 opacity-70"
-                        />
-                        <span class="flex-1 text-left">Logout</span>
-                    </button>
-                </div>
-
-                <!-- Mobile Drawer Footer -->
-                <div class="p-4 border-t-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[var(--md-outline-variant)] text-xs text-[var(--md-on-surface-variant)]" role="contentinfo">
-                    <span>OR3 v{{ appVersion }}</span>
-                </div>
-            </aside>
-        </Transition>
 
         <!-- Desktop Sidebar -->
         <aside
@@ -252,6 +234,7 @@
 </template>
 
 <script setup lang="ts">
+import { useMediaQuery } from '@vueuse/core';
 import { useAdminPages } from '~/composables/admin/useAdminPlugins';
 import { useConfirmDialog } from '~/composables/admin/useConfirmDialog';
 import { useAdminSession } from '~/composables/admin/useAdminData';
@@ -273,6 +256,10 @@ const { isOpen: isConfirmOpen, options: confirmOptions, onConfirm, onCancel } = 
 
 // Mobile menu state
 const isMobileMenuOpen = ref(false);
+const isDesktop = useMediaQuery('(min-width: 1024px)');
+watch(isDesktop, (desktop) => {
+    if (desktop) closeMobileMenu();
+});
 
 // Desktop collapse state.
 // Keep SSR and initial client render deterministic, then hydrate from localStorage.
@@ -438,26 +425,6 @@ const navLinks = computed<NavLink[]>(() => {
     return [...base, ...pluginLinks];
 });
 
-// Issue 29: Track whether we modified overflow to avoid conflicts
-const didModifyOverflow = ref(false);
-
-// Issue 28: Use watcher instead of direct DOM manipulation
-watch(isMobileMenuOpen, (isOpen) => {
-    if (import.meta.client) {
-        if (isOpen && !didModifyOverflow.value) {
-            document.body.style.overflow = 'hidden';
-            didModifyOverflow.value = true;
-        } else if (!isOpen && didModifyOverflow.value) {
-            document.body.style.overflow = '';
-            didModifyOverflow.value = false;
-        }
-    }
-});
-
-function toggleMobileMenu() {
-    isMobileMenuOpen.value = !isMobileMenuOpen.value;
-}
-
 function closeMobileMenu() {
     isMobileMenuOpen.value = false;
 }
@@ -471,10 +438,4 @@ watch(() => route.path, () => {
     closeMobileMenu();
 });
 
-// Issue 29: Cleanup only if we modified overflow
-onUnmounted(() => {
-    if (import.meta.client && didModifyOverflow.value) {
-        document.body.style.overflow = '';
-    }
-});
 </script>

@@ -15,6 +15,11 @@ const sessionState = ref({
     },
 });
 const sessionRefreshMock = vi.fn();
+const addToastMock = vi.fn<(toast: {
+    title: string;
+    description: string;
+    actions: { onClick: () => void }[];
+}) => void>();
 const refreshWorkspaceRevisionMock = vi.fn();
 const reloadNuxtAppMock = vi.fn();
 const confirmClientSignedOutMock = vi.fn(async () => false);
@@ -76,12 +81,13 @@ describe('auth session cross-tab workspace refresh', () => {
             workspace: { id: 'workspace-a' },
             authorizationRevision: 1,
         };
-        (globalThis as any).defineNuxtPlugin = (plugin: () => unknown) => scope.run(plugin);
+        (globalThis as any).defineNuxtPlugin = (plugin: (app: unknown) => unknown) => scope.run(() => plugin({}));
         (globalThis as any).useRuntimeConfig = () => ({
             public: { ssrAuthEnabled: true },
         });
         (globalThis as any).reloadNuxtApp = reloadNuxtAppMock;
-        vi.stubGlobal('useToast', () => ({ add: vi.fn(), remove: vi.fn() }));
+        addToastMock.mockReset();
+        vi.stubGlobal('useToast', () => ({ add: addToastMock, remove: vi.fn() }));
     });
 
     it('applies a newer storage revision and ignores an older one', async () => {
@@ -104,6 +110,7 @@ describe('auth session cross-tab workspace refresh', () => {
             expect(refreshWorkspaceRevisionMock).toHaveBeenCalledWith(newer);
         });
         expect(reloadNuxtAppMock).toHaveBeenCalledWith({ ttl: 500 });
+        expect(sessionState.value.session?.workspace.id).toBe('workspace-b');
 
         window.dispatchEvent(
             new StorageEvent('storage', {
@@ -124,9 +131,10 @@ describe('auth session cross-tab workspace refresh', () => {
     });
 
     it('does not reload on auth flip to signed-out when confirmation fails', async () => {
-        sessionRefreshMock.mockImplementation(async () => {
-            sessionState.value.session = null;
-            return sessionState.value;
+        sessionRefreshMock.mockImplementation(async ({ shouldCommit } = {}) => {
+            const signedOut = { session: null };
+            if (await shouldCommit?.(signedOut)) sessionState.value = signedOut;
+            return signedOut;
         });
         confirmClientSignedOutMock.mockResolvedValue(false);
 
@@ -137,22 +145,76 @@ describe('auth session cross-tab workspace refresh', () => {
             expect(sessionRefreshMock).toHaveBeenCalled();
         });
         expect(confirmClientSignedOutMock).toHaveBeenCalled();
+        expect(sessionState.value.session?.authenticated).toBe(true);
         expect(reloadNuxtAppMock).not.toHaveBeenCalled();
     });
 
     it('reloads on auth flip to signed-out when confirmation succeeds', async () => {
-        sessionRefreshMock.mockImplementation(async () => {
-            sessionState.value.session = null;
+        sessionRefreshMock.mockImplementation(async ({ shouldCommit } = {}) => {
+            const signedOut = { session: null };
+            if (await shouldCommit?.(signedOut)) sessionState.value = signedOut;
             return sessionState.value;
         });
         confirmClientSignedOutMock.mockResolvedValue(true);
+        const key = 'or3.plugin.example.secret.credential';
+        localStorage.setItem(key, 'former account');
+        const credentialAtReload = vi.fn(() => localStorage.getItem(key));
+        reloadNuxtAppMock.mockImplementation(credentialAtReload);
 
         await import('../11.auth-session-refresh.client');
         window.dispatchEvent(new CustomEvent('or3:auth-session-changed'));
 
         await vi.waitFor(() => {
             expect(reloadNuxtAppMock).toHaveBeenCalledWith({ ttl: 500 });
+            expect(sessionState.value.session).toBeNull();
+            expect(credentialAtReload).toHaveReturnedWith(null);
         });
+    });
+
+    it('shows the server retry window and suppresses early and overlapping retries', async () => {
+        vi.useFakeTimers();
+        sessionRefreshMock.mockRejectedValueOnce(Object.assign(new Error('rate limited'), {
+            status: 429,
+            response: new Response(null, { status: 429, headers: { 'Retry-After': '7' } }),
+        }));
+        sessionRefreshMock.mockImplementationOnce(() => new Promise(() => {}));
+        await import('../11.auth-session-refresh.client');
+        window.dispatchEvent(new Event('or3:auth-session-changed'));
+        await vi.advanceTimersByTimeAsync(0);
+
+        const toast = addToastMock.mock.lastCall?.[0];
+        expect(toast?.title).toBe('Too many requests');
+        expect(toast?.description).toContain('7 seconds');
+        const retry = toast?.actions[0]?.onClick;
+        if (!retry) throw new Error('Retry action was missing');
+        retry();
+        expect(sessionRefreshMock).toHaveBeenCalledTimes(1);
+        window.dispatchEvent(new Event('or3:auth-session-changed'));
+        window.dispatchEvent(new StorageEvent('storage', { key: 'or3:auth-session-changed' }));
+        await vi.advanceTimersByTimeAsync(6_999);
+        expect(sessionRefreshMock).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(sessionRefreshMock).toHaveBeenCalledTimes(2);
+        retry();
+        retry();
+        expect(sessionRefreshMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('commits an account switch in the same workspace before reloading', async () => {
+        const previous = { ...sessionState.value.session!, user: { id: 'former' } };
+        sessionState.value.session = previous;
+        const replacement = { session: { ...previous, user: { id: 'new-owner' } } };
+        sessionRefreshMock.mockImplementation(async ({ shouldCommit }) => {
+            if (await shouldCommit(replacement)) sessionState.value = replacement;
+            return replacement;
+        });
+        const sessionAtReload = vi.fn(() => sessionState.value);
+        reloadNuxtAppMock.mockImplementation(sessionAtReload);
+
+        await import('../11.auth-session-refresh.client');
+        window.dispatchEvent(new Event('or3:auth-session-changed'));
+
+        await vi.waitFor(() => expect(sessionAtReload).toHaveReturnedWith(replacement));
     });
 
     // Failure inventory: idle expiry, background timer suspension, failed renewal,

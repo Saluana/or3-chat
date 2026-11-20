@@ -10,7 +10,7 @@
                         v-bind="sidebarToggleButtonProps"
                         :icon="hoistedUiMenuIcon"
                         class="md:hidden!"
-                        :aria-controls="sidebarId"
+                        :aria-controls="sidebarOpen ? mobileSidebarId : undefined"
                         :aria-expanded="sidebarOpen"
                         :aria-label="
                             sidebarOpen ? 'Close navigation' : 'Open navigation'
@@ -90,7 +90,7 @@
                     >
                         <aside
                             v-if="sidebarOpen"
-                            :id="sidebarId"
+                            :id="mobileSidebarId"
                             class="docs-mobile-sidebar relative z-[61] h-full w-[min(84vw,320px)] max-w-full transform bg-[var(--md-surface)] border-r-[length:var(--md-border-width-subtle,var(--md-border-width,1px))] border-[color:var(--md-border-color)] shadow-2xl overflow-y-auto scrollbars"
                         >
                             <h2 :id="sidebarLabelId" class="sr-only">
@@ -117,7 +117,6 @@
         <div class="flex flex-1 min-h-0 overflow-hidden">
             <!-- Sidebar -->
             <aside
-                :id="sidebarId"
                 class="docs-sidebar flex-shrink-0 w-[272px] overflow-y-auto scrollbars hidden md:block"
             >
                 <div class="px-4 pt-6 pb-12">
@@ -479,7 +478,7 @@ const route = useRoute();
 
 const { isMobile } = useResponsiveState();
 const sidebarOpen = ref(false);
-const sidebarId = 'docs-sidebar';
+const mobileSidebarId = 'docs-mobile-sidebar';
 const sidebarLabelId = 'docs-sidebar-heading';
 
 let shouldRestoreFocus = true;
@@ -898,9 +897,10 @@ async function navigateToResult(path: string) {
 }
 
 function focusSearch() {
-    const input = document.querySelector(
+    const inputs = document.querySelectorAll<HTMLInputElement>(
         '.docs-header-search input, .docs-header-search-mobile input'
-    ) as HTMLInputElement | null;
+    );
+    const input = Array.from(inputs).find((field) => field.getClientRects().length);
     input?.focus();
     input?.select();
 }

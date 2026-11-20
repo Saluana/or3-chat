@@ -4,6 +4,7 @@ import {
     onMounted,
     onBeforeUnmount,
     reactive,
+    shallowReactive,
     watch,
     ref,
 } from 'vue';
@@ -54,7 +55,7 @@ const tileKey = (hash: string) => `gallery-tile:${hash}`;
 const tileHash = (key: string) => key.startsWith('gallery-tile:') ? key.slice(13) : '';
 const visibleHashes = new Set<string>();
 const queuedHashes = new Set<string>();
-const activeHashes = new Map<string, object>();
+const activeHashes = shallowReactive(new Map<string, object>());
 const tileOwners = new Map<string, ReturnType<NonNullable<typeof cache>['acquireTile']>>();
 let disposed = false;
 let backgrounded = false;
@@ -320,6 +321,7 @@ onMounted(() => {
     previousHashes = new Set(props.items.map((item) => item.hash));
     scheduleObserve();
     if (typeof document !== 'undefined') {
+        backgrounded = document.visibilityState === 'hidden';
         visibilityHandler = () => handleVisibilityChange();
         document.addEventListener('visibilitychange', visibilityHandler);
     }
@@ -394,16 +396,12 @@ function formatBytes(bytes: number): string {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const shortDate = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
+const fullDate = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
 function formatDate(timestamp: number): string {
-    return new Intl.DateTimeFormat(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year:
-            new Date(timestamp * 1000).getFullYear() ===
-            new Date().getFullYear()
-                ? undefined
-                : 'numeric',
-    }).format(new Date(timestamp * 1000));
+    const date = new Date(timestamp * 1000);
+    return (date.getFullYear() === new Date().getFullYear() ? shortDate : fullDate).format(date);
 }
 
 const downloadButtonProps = computed(() => {
@@ -525,7 +523,7 @@ defineExpose({ ensureUrl });
                         >
                         <template v-else>
                             <span class="sr-only">Loading preview…</span>
-                            <span class="or3-loading-delay absolute inset-0" aria-hidden="true">
+                            <span v-if="activeHashes.has(m.hash)" class="or3-loading-delay absolute inset-0" aria-hidden="true">
                                 <span class="block size-full animate-pulse bg-(--md-surface-container-high) motion-reduce:animate-none" />
                             </span>
                         </template>

@@ -73,7 +73,7 @@
                 >
                     <button
                         v-for="(hash, idx) in displayedHashes"
-                        :key="hash"
+                        :key="`${hash}-${idx}`"
                         type="button"
                         class="attachment-item flex items-center gap-2.5 pl-1.5 pr-3 py-1.5 rounded-[var(--md-border-radius-small,var(--md-border-radius))] bg-white/10 hover:bg-white/15 active:bg-white/20 transition-all cursor-pointer shadow-sm"
                         @click="toggleExpanded"
@@ -95,7 +95,7 @@
                                 <span
                                     class="attachment-name text-[13px] font-medium truncate max-w-[168px] leading-tight"
                                 >
-                                    {{ getAttachmentName(hash) }}
+                                    {{ getAttachmentName(hash, idx) }}
                                 </span>
                                 <span
                                     class="attachment-type text-[11px] opacity-50"
@@ -130,7 +130,7 @@
                                 <span
                                     class="attachment-name text-[13px] font-medium truncate max-w-[168px] leading-tight"
                                 >
-                                    {{ getImageName(hash) || `Image ${idx + 1}` }}
+                                    {{ getImageName(hash, idx) || `Image ${idx + 1}` }}
                                 </span>
                                 <span
                                     class="attachment-type text-[11px] opacity-50"
@@ -392,6 +392,7 @@
             <MessageAttachmentsGallery
                 v-if="hashList.length && expanded"
                 :hashes="hashList"
+                :names="attachmentNames"
                 @collapse="toggleExpanded"
             />
 
@@ -468,6 +469,7 @@
                         :teleport="true"
                     >
                         <UButton
+                            ref="editButton"
                             v-bind="editButtonProps"
                             aria-label="Edit message"
                             :disabled="props.message.pending === true"
@@ -604,6 +606,7 @@ import {
     nextTick,
     onMounted,
     onBeforeUnmount,
+    type ComponentPublicInstance,
 } from 'vue';
 import LoadingGenerating from './LoadingGenerating.vue';
 import MessageAttachmentsGallery from './MessageAttachmentsGallery.vue';
@@ -943,6 +946,7 @@ const {
     pdfMeta,
     maxDisplayedThumbs,
     displayedHashes,
+    attachmentNames,
     getAttachmentName,
     getImageName,
     expanded,
@@ -1022,10 +1026,15 @@ function wrappedBeginEdit() {
     beginEdit();
     if (editing.value && id) emit('begin-edit', id);
 }
-function wrappedCancelEdit() {
+const editButton = ref<ComponentPublicInstance | null>(null);
+
+async function wrappedCancelEdit() {
     const id = props.message.id;
     cancelEdit();
     if (id) emit('cancel-edit', id);
+    await nextTick();
+    const button = editButton.value?.$el;
+    if (button instanceof HTMLButtonElement) button.focus();
 }
 async function saveEdit() {
     let outcome: Awaited<ReturnType<typeof internalSaveEdit>>;

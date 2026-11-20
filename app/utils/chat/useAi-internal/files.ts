@@ -27,7 +27,7 @@
  * - Preserves original URL if conversion fails
  */
 
-import type { ContentPart } from '~/utils/chat/types';
+import type { ContentPart, MessageFileRef } from '~/utils/chat/types';
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 type DbFilesModule = typeof import('~/db/files');
 
@@ -42,9 +42,7 @@ type DbFilesModule = typeof import('~/db/files');
  * - Hash references are verified against IndexedDB before use
  * - _verified flag indicates blob was confirmed to exist
  */
-export type NormalizedFileRef = {
-    type: string;
-    url: string;
+export type NormalizedFileRef = MessageFileRef & {
     _verified?: true;
 };
 
@@ -103,7 +101,7 @@ async function getDbFilesModule(): Promise<DbFilesModule> {
  * }
  * ```
  */
-export async function normalizeFileUrl(f: { type: string; url: string }): Promise<NormalizedFileRef> {
+export async function normalizeFileUrl(f: MessageFileRef): Promise<NormalizedFileRef> {
     if (typeof FileReader === 'undefined') return f; // SSR safeguard
     const mime = f.type || '';
     // Only process images; leave other files (e.g., PDFs) untouched for now.

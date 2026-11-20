@@ -4,7 +4,7 @@
  * Listens on `window` in capture phase so the palette wins over pane-local
  * handlers, and defers all state changes to the palette controller.
  */
-import { onBeforeUnmount, onMounted } from 'vue';
+import { onActivated, onBeforeUnmount, onDeactivated, onMounted } from 'vue';
 import { scheduleCommandPalettePrewarm } from '~/core/search/command-palette/prewarm';
 import { useCommandPalette } from './useCommandPalette';
 
@@ -27,9 +27,20 @@ export function useCommandPaletteShortcut(): void {
         close();
     }
 
-    onMounted(() => {
+    function listen() {
         window.addEventListener('keydown', onKeydown, { capture: true });
         window.addEventListener('keydown', onEscape);
+    }
+
+    function unlisten() {
+        window.removeEventListener('keydown', onKeydown, { capture: true });
+        window.removeEventListener('keydown', onEscape);
+    }
+
+    onActivated(listen);
+    onDeactivated(unlisten);
+    onMounted(() => {
+        listen();
         // Idle callbacks can run while critical network requests are pending.
         // Warm optional search code only after the initial page resources settle.
         if (document.readyState === 'complete') scheduleCommandPalettePrewarm();
@@ -37,8 +48,7 @@ export function useCommandPaletteShortcut(): void {
     });
 
     onBeforeUnmount(() => {
-        window.removeEventListener('keydown', onKeydown, { capture: true });
-        window.removeEventListener('keydown', onEscape);
+        unlisten();
         window.removeEventListener('load', scheduleCommandPalettePrewarm);
     });
 }
