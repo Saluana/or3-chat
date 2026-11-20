@@ -4,6 +4,7 @@ import { modelSearchDefinition } from '../../shared/openrouter/delegation-model-
 import { normalizeError } from '../../shared/errors';
 import { readToolResultStorage } from '../../shared/chat/tool-result-artifact';
 import { PullResponseSchema, ThreadPayloadSchema, MessagePayloadSchema } from '../../shared/sync/schemas';
+import { discoverSyncHistory } from './fixtures/sync-history';
 import type { SyncChange } from '../../shared/sync/types';
 
 test.setTimeout(90000);
@@ -50,21 +51,13 @@ async function status(request: APIRequestContext, jobId: string) {
 async function pullHistory(request: APIRequestContext, origin: string, workspaceId: string) {
     const changes: SyncChange[] = [];
     let cursor = 0;
-    let historyIncarnation: string | null = null;
+    const headers = { origin, 'x-or3-cloud-intent': 'mutation' };
+    const syncHistory = await discoverSyncHistory(request, headers, workspaceId);
     for (;;) {
-        const response = await request.post('/api/sync/pull', { headers: { origin, 'x-or3-cloud-intent': 'mutation' },
-            data: { scope: { workspaceId }, cursor, limit: 1000, fileKindCapability: 'v1',
-                historyIncarnationCapability: 'incarnation-v1', historyIncarnation } });
+        const response = await request.post('/api/sync/pull', { headers, data: { ...syncHistory, scope: { workspaceId }, cursor, limit: 1000, fileKindCapability: 'v1' } });
         expect(response.ok(), await response.text()).toBe(true);
         const page = PullResponseSchema.parse(await response.json());
-        if (historyIncarnation === null) {
-            expect(page.requiresSnapshot).toBe(true);
-            expect(page.changes).toEqual([]);
-            expect(page.historyIncarnation).toEqual(expect.any(String));
-            historyIncarnation = page.historyIncarnation!;
-            continue;
-        }
-        expect(page.historyIncarnation).toBe(historyIncarnation);
+        expect(page.historyIncarnation).toBe(syncHistory.historyIncarnation);
         expect(page.requiresSnapshot).toBe(false);
         changes.push(...page.changes);
         if (!page.hasMore) return changes;
@@ -137,11 +130,7 @@ test('durable delegation browser closure preserves concurrent child results', as
         expect(calls[0]).toBe('parent-initial');
         expect(calls.at(-1)).toBe('parent-resume');
         expect(calls.slice(1, -1).sort()).toEqual(['durable-child-one', 'durable-child-two']);
-        const pull = await observer.post('/api/sync/pull', { headers, data: {
-            scope: { workspaceId }, cursor: 0, limit: 1000, fileKindCapability: 'v1',
-        } });
-        expect(pull.ok(), await pull.text()).toBe(true);
-        const history = await pull.text();
+        const history = JSON.stringify(await pullHistory(observer, origin, workspaceId));
         expect(history).toContain(messageId);
         for (const child of activity.delegation.children) expect(history).toContain(child.threadId);
         const returned = await browser.newContext({ storageState, viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
@@ -298,11 +287,7 @@ test('durable delegation interrupted parent dispatch remains unknown without rep
         expect(normalizeError(saved.error)).toMatchObject({ code: 'ERR_MODEL_OUTCOME_UNKNOWN' });
         expect(saved.tool_calls ?? []).toEqual([]);
         expect((await fixture()).requests).toEqual(['parent-initial']);
-        const pull = await observer.post('/api/sync/pull', { headers: { origin, 'x-or3-cloud-intent': 'mutation' }, data: {
-            scope: { workspaceId }, cursor: 0, limit: 1000, fileKindCapability: 'v1',
-        } });
-        expect(pull.ok(), await pull.text()).toBe(true);
-        const history = await pull.text();
+        const history = JSON.stringify(await pullHistory(observer, origin, workspaceId));
         expect(history).toContain(messageId);
         expect(history).not.toContain('durable-delegate');
         const returned = await browser.newContext({ storageState, viewport: { width: 390, height: 844 } });

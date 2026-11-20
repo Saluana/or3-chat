@@ -1,6 +1,7 @@
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { HISTORY_INCARNATION_CAPABILITY } from '../../shared/sync/schemas';
 import { createInviteToken } from '../../server/auth/invite-token';
 import { strToU8, zipSync } from 'fflate';
 
@@ -96,7 +97,7 @@ for (const [label, viewport] of [
             for (const name of ['Start a chat', 'Start a project', 'Create a document']) {
                 await cards.getByRole('button', { name, exact: true }).click();
                 const dialog = page.getByRole('dialog', { name: 'Welcome back', exact: true });
-                await expect(dialog).toBeVisible();
+                await expect(dialog, `Sign-in opens from ${name}`).toBeVisible();
                 await expect(dialog.getByRole('textbox', { name: 'Email', exact: true })).toBeVisible();
                 await expect(dialog.getByLabel('Password', { exact: true })).toBeVisible();
                 await expect(page.getByText(SIGN_IN_PROMPT, { exact: true })).toHaveCount(0);
@@ -263,7 +264,8 @@ for (const [label, viewport] of [
                 else {
                     expect(payload.session.workspace.id).not.toBe(workspaceId);
                     expect(payload.session.workspace.name).toBe('My Workspace');
-                    const deniedPull = await page.request.post('/api/sync/pull', { data: { scope: { workspaceId }, cursor: 0, limit: 10 } });
+                    const deniedPull = await page.request.post('/api/sync/pull', { data: { scope: { workspaceId }, cursor: 0, limit: 10,
+                        historyIncarnation: null, historyIncarnationCapability: HISTORY_INCARNATION_CAPABILITY } });
                     expect(deniedPull.status()).toBe(403);
                     const deniedFile = await page.request.post('/api/storage/presign-download', { data: { workspace_id: workspaceId, hash: 'a'.repeat(64) } });
                     expect(deniedFile.status()).toBe(403);
@@ -1026,7 +1028,8 @@ test('admin experience settings save and apply with validation and browser theme
     await page.keyboard.press('Escape');
     // Restore this disposable site's branding before the theme preview checks.
     const current = await readSettings();
-    expect((await write(initial.entries.filter((entry: {application: string}) => entry.application === 'runtime')
+    const brandingKeys = new Set(['OR3_SITE_NAME', 'OR3_SITE_DESCRIPTION']);
+    expect((await write(initial.entries.filter((entry: {key: string}) => brandingKeys.has(entry.key))
         .map((entry: {key: string; value: string | null}) => ({ key: entry.key, value: entry.value })), current.siteRevision)).ok()).toBe(true);
     await page.goto('/admin/branding');
     await expect(siteName).toHaveValue(initialName);

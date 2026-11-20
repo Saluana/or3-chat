@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
+import { discoverSyncHistory } from './fixtures/sync-history';
 
 // A disposable local Basic Auth + SQLite + filesystem server and fake model
 // must be started explicitly; this harness must never target a real instance.
@@ -42,8 +43,9 @@ test('managed network optimizations preserve authenticated storage, sync and mod
         size_bytes: bytes.length, name: 'fixture.png', kind: 'image', file_kind_capability: 'v1' } });
     expect(commit.ok(), await commit.text()).toBe(true);
     expect((await (await preflight()).json()).eligible).toEqual([]);
+    const syncHistory = await discoverSyncHistory(request, headers, workspaceId);
     const opId = randomUUID();
-    const push = await request.post('/api/sync/push', { headers, data: { scope: { workspaceId }, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [{
+    const push = await request.post('/api/sync/push', { headers, data: { ...syncHistory, scope: { workspaceId }, fileKindCapability: 'v1', workspaceItemCapability: 'v1', ops: [{
         id: opId, tableName: 'file_meta', operation: 'put', pk: hash,
         payload: { hash, name: 'fixture.png', kind: 'image', mime_type: 'image/png', size_bytes: bytes.length,
             storage_id: grant.storageId, storage_provider_id: 'fs', ref_count: 0, clock: 1, created_at: 1, updated_at: 1, deleted: false },
@@ -93,14 +95,14 @@ test('managed network optimizations preserve authenticated storage, sync and mod
             stamp: { deviceId: 'network-e2e', opId: id, clock: 1, hlc: `${String(Date.now()).padStart(15, '0')}:000000:network-e2e` },
             createdAt: Date.now(), attempts: 0, status: 'pending' };
     });
-    const compressed = gzipSync(JSON.stringify({ scope: { workspaceId }, ops, fileKindCapability: 'v1', workspaceItemCapability: 'v1' }));
+    const compressed = gzipSync(JSON.stringify({ ...syncHistory, scope: { workspaceId }, ops, fileKindCapability: 'v1', workspaceItemCapability: 'v1' }));
     const largePush = await request.post('/api/sync/push', { headers: { ...headers, 'content-type': 'application/json', 'content-encoding': 'gzip' }, data: compressed });
     expect(largePush.ok(), await largePush.text()).toBe(true);
     const pushResults = (await largePush.json()).results as Array<{ success: boolean; error?: string }>;
     expect(pushResults.every(item => item.success), JSON.stringify(pushResults)).toBe(true);
     let cursor = 0, pages = 0, found: string[] = [], more = true;
     while (more) {
-        const response = await request.post('/api/sync/pull', { headers, data: { scope: { workspaceId }, cursor, limit: 100, fileKindCapability: 'v1', workspaceItemCapability: 'v1' } });
+        const response = await request.post('/api/sync/pull', { headers, data: { ...syncHistory, scope: { workspaceId }, cursor, limit: 100, fileKindCapability: 'v1', workspaceItemCapability: 'v1' } });
         expect(response.ok(), await response.text()).toBe(true);
         const raw = await response.body();
         expect(raw.length).toBeLessThanOrEqual(1024 * 1024);
@@ -116,7 +118,7 @@ test('managed network optimizations preserve authenticated storage, sync and mod
     let snapshotId: string | undefined, highWatermark: number | undefined;
     const snapshotItems: string[] = [];
     do {
-        const response = await request.post('/api/sync/snapshot', { headers, data: { scope: { workspaceId }, pageSize: 100,
+        const response = await request.post('/api/sync/snapshot', { headers, data: { ...syncHistory, scope: { workspaceId }, pageSize: 100,
             ...(pageToken ? { pageToken } : {}), tables: ['threads'], fileKindCapability: 'v1', workspaceItemCapability: 'v1' } });
         expect(response.ok(), await response.text()).toBe(true);
         const raw = await response.body();

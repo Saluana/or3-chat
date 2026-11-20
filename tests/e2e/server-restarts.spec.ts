@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { discoverSyncHistory } from './fixtures/sync-history';
 
 if (process.env.OR3_RESTART_E2E_MODEL) test('restart waits for real background execution, cancels safely, and persists one tool receipt', async ({ page, context }, info) => {
     test.setTimeout(180_000);
@@ -72,7 +73,8 @@ if (process.env.OR3_RESTART_E2E_MODEL) test('restart waits for real background e
         { event: 'delivery_recovered', bootId: original.bootId, phase: 'preparing', status: 'committed' },
     ]);
     await expect.poll(async () => { try { return (await read()).operation.phase; } catch { return 'unreachable'; } }, { timeout: 120_000 }).toBe('succeeded');
-    const pull = await context.request.post('/api/sync/pull', { headers, data: { scope: { workspaceId }, cursor: 0, limit: 1000, fileKindCapability: 'v1' } });
+    const syncHistory = await discoverSyncHistory(context.request, headers, workspaceId);
+    const pull = await context.request.post('/api/sync/pull', { headers, data: { ...syncHistory, scope: { workspaceId }, cursor: 0, limit: 1000, fileKindCapability: 'v1' } });
     expect(pull.ok(), await pull.text()).toBe(true);
     const history = await pull.text(); expect(history).toContain(messageId); expect(history).toContain(id); expect(history).toContain('Restart fixture completed.');
     expect((await (await context.request.get(`${model}/state`)).json()).requests).toEqual([{ toolResults: 0 }, { toolResults: 1 }]);
@@ -135,12 +137,13 @@ if (process.env.OR3_RESTART_E2E_MODEL) test('browser queues retain identity and 
     await page.getByRole('button', { name: 'Publish file metadata', exact: true }).click();
     await expect.poll(async () => (await snapshot()).ops.length).toBe(0);
     const after = await snapshot(); expect(after.files).toHaveLength(1); expect(after.files[0].ref_count).toBe(1);
-    const pull = await context.request.post('/api/sync/pull', { headers, data: { scope: { workspaceId: workspace }, cursor: 0, limit: 1000, fileKindCapability: 'v1' } });
+    const syncHistory = await discoverSyncHistory(context.request, headers, workspace);
+    const pull = await context.request.post('/api/sync/pull', { headers, data: { ...syncHistory, scope: { workspaceId: workspace }, cursor: 0, limit: 1000, fileKindCapability: 'v1' } });
     expect(pull.ok(), await pull.text()).toBe(true);
     const changes = (await pull.json()).changes;
     expect(changes.filter((change: { tableName: string; pk: string }) => change.tableName === 'projects' && change.pk === before.ops[0].pk)).toHaveLength(1);
     await expect.poll(async () => {
-        const response = await context.request.post('/api/sync/pull', { headers, data: { scope: { workspaceId: workspace }, cursor: 0, limit: 1000, fileKindCapability: 'v1' } });
+        const response = await context.request.post('/api/sync/pull', { headers, data: { ...syncHistory, scope: { workspaceId: workspace }, cursor: 0, limit: 1000, fileKindCapability: 'v1' } });
         return (await response.json()).changes.some((change: { tableName: string; pk: string }) => change.tableName === 'file_meta' && change.pk === after.files[0].hash);
     }).toBe(true);
     const download = await context.request.post('/api/storage/presign-download', { headers, data: { workspace_id: workspace, hash: after.files[0].hash, file_kind_capability: 'v1' } });
