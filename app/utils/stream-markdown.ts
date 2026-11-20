@@ -4,5 +4,6 @@ import './stream-markdown-languages';
 import 'katex/dist/katex.min.css';
 import { WorkerCodeBlock } from './markdown/worker-code-block';
 
+export const documentationMarkdownPrefixes = ['https://', 'http://', '/'];
 export const streamMarkdownComponents = { codeblock: WorkerCodeBlock };
 export { StreamMarkdown, useShikiHighlighter } from 'streamdown-vue';
