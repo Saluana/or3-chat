@@ -24,7 +24,8 @@ notification offers **Retry**. Retry keeps the accepted credentials and loads
 the session again; when the service recovers, the account and workspace open
 without creating another account or submitting the password again. A rate-limited
 auth-change refresh shows **Too many requests** and enables retry when the server's window
-ends. Before clearing local data, the host verifies sign-out with two fresh session checks.
+ends. Basic Auth 0.0.21 reports a failed session probe as indeterminate. Before
+clearing local data, the host verifies sign-out with two fresh session checks.
 
 For local Convex development, keep the local Convex backend running alongside the app.
 
@@ -139,7 +140,7 @@ The updated provider passes both signup and team tokens through registration. A 
 
 If credential creation succeeded before canonical acceptance, use **Already registered? Sign in**. The existing account ID is retained. A manually pasted replacement code or signed link token is verified against the signed-in email and handed to the canonical store through the existing HttpOnly cookie; a stale cookie cannot override it. Credentials without accepted canonical provisioning cannot access protected sync/storage resources. There is no credential repair worker or account deletion step.
 
-These changes are included in `or3-provider-basic-auth@0.0.13`, the version pinned by this release. The 0.0.11 release’s link handoff alone does not provide signup-invite retries.
+These changes are available with `or3-provider-basic-auth@0.0.13` or later. The 0.0.11 release’s link handoff alone does not provide signup-invite retries.
 
 ## Verification Checklist
 
