@@ -116,7 +116,7 @@ export default defineConfig({
             deps: {
                 inline: [
                     // Qualify the installed icon resolver with reactive app config.
-                    /\/@nuxt\/icon\/dist\/runtime\/components\/shared\.js$/,
+                    /\/@nuxt\/icon\/dist\/runtime\/components\/(?:name|resolve-name)\.js$/,
                     // Keep the real toast owner's Nuxt #imports on host aliases.
                     /\/@nuxt\/ui\/dist\/runtime\/composables\/useToast\.js$/,
                     // Exercise the installed filesystem download route with the

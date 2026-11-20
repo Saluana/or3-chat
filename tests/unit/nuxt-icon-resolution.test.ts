@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { reactive, ref } from 'vue';
-import { useResolvedName } from '@nuxt/icon/runtime/components/shared.js';
+import { useResolvedName } from '@nuxt/icon/runtime/components/name.js';
 
 const icon = reactive({
     cssSelectorPrefix: 'i-',
@@ -30,7 +30,7 @@ describe('installed Nuxt icon resolution', () => {
         icon.aliases.folder = 'lucide:folder-open';
         expect(resolved.value).toBe('lucide:folder-open');
         name.value = 'i-custom-long-more-star';
-        icon.collections.push('custom-long-more');
+        icon.collections = [...icon.collections, 'custom-long-more'];
         expect(resolved.value).toBe('custom-long-more:star');
         expect(icon.collections).toEqual([...originalOrder, 'custom-long-more']);
     });

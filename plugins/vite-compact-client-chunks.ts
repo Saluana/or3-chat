@@ -1,4 +1,4 @@
-import { minify } from 'rolldown/utils';
+import { minify } from 'rolldown-minifier/utils';
 import type { Plugin } from 'vite';
 
 /** Preserve Oxc's compact printing after Terser's expression compression. */

@@ -25,24 +25,12 @@ the real SDK against a local HTTP server: transient HEAD stalls, lost marker
 acknowledgements, persistent stalls, and non-retryable access denials. Remove
 this patch after upgrading to a qualified provider release containing the fix.
 
-## @nuxt/icon 2.5.1
+## @nuxt/icon 2.6.3
 
-`useResolvedName()` sorted the shared reactive collection array on every icon
-mount, including already-qualified `collection:icon` names. Virtual-row recycling
-therefore repeatedly traversed and wrote the same 221-entry config array. The
-patch resolves hyphenated names with a read-only longest-prefix scan inside its
-existing computed value. Explicit names avoid the collection scan; aliases and
-reactive collection changes still resolve through the same owner.
-
-This patch targets the runtime module used by Nuxt's client and server builds.
-It adds no cache, registry or global lifecycle. Both lockfiles resolve 2.5.1;
-patch application is required by the existing install, Docker and generated
-project paths above. Remove it after qualifying an upstream version that avoids
-the repeated sort and preserves longest-prefix/custom collection behavior.
-
-The real installed resolver regression is `tests/unit/nuxt-icon-resolution.test.ts`.
-Production measurements and limits are in
-`audit-evidence/performance-20261022/ICON-RESOLUTION.md`.
+Nuxt Icon resolves collection names without sorting shared application config.
+The patch retains OR3's SVGO optimization for bundled client icons so the
+initial bundle stays within its asset budget. Remove it after qualifying an
+upstream release with equivalent client bundle optimization.
 
 ## or3-scroll 0.1.6
 
