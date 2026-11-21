@@ -502,7 +502,7 @@ describe('portable production transport conformance', () => {
     });
 
     it('returns deadline errors through the actual client transport', async () => {
-        vi.useFakeTimers();
+        vi.useFakeTimers({ toNotFake: ['setImmediate', 'clearImmediate'] });
         try {
             let release!: () => void;
             const gate = new Promise<void>((resolve) => { release = resolve; });

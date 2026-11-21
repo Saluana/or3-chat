@@ -99,7 +99,7 @@ function makeMessage(
 describe('message transaction and ordering contracts', () => {
     beforeEach(async () => {
         vi.stubGlobal('fetch', vi.fn(() => { throw new Error('Unexpected network request in synthetic message test'); }));
-        vi.useFakeTimers();
+        vi.useFakeTimers({ toNotFake: ['setImmediate', 'clearImmediate'] });
         vi.setSystemTime(new Date('2026-01-02T03:04:05.000Z'));
         testState.doAction.mockReset();
         testState.doAction.mockResolvedValue(undefined);

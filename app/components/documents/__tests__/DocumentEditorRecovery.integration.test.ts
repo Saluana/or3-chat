@@ -113,7 +113,7 @@ it('warns that an oversized locally saved document cannot sync without truncatin
 it('shows failed automatic history separately from body durability and retries without another edit', async () => {
     await mountEditor();
     controls.checkpoint.mockRejectedValueOnce(new Error('Synthetic checkpoint failure'));
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toNotFake: ['setImmediate', 'clearImmediate'] });
     editor.commands.insertContent(' Local edit');
     await vi.advanceTimersByTimeAsync(30000);
     await flushPromises();
