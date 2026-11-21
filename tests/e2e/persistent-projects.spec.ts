@@ -358,6 +358,7 @@ test('Projects stays in the sidebar while browsing, creating, pinning and search
                         per_request_limits: null,
                         supported_parameters: ['tools'],
                         supported_voices: null,
+                        endpoints: ['/api/v1/chat/completions'],
                         links: { details: '/fixture/sidebar-model' },
                         top_provider: {
                             context_length: 32768,

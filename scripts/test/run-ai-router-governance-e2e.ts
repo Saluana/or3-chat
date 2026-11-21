@@ -27,7 +27,7 @@ const zip = Bun.spawn(['zip', '-q', fixtureArchive, 'or3.manifest.json', 'packag
 if (await zip.exited) throw new Error('Unable to create the disposable plugin fixture archive.');
 const captured: Array<{ path: string; authorized: boolean; credentialClass: string; body: unknown }> = [];
 const model = (id: string) => ({ id, canonical_slug: id, name: id, created: 0, context_length: 100_000,
-    default_parameters: null, per_request_limits: null, supported_voices: null, links: { details: 'https://example.test/' },
+    default_parameters: null, per_request_limits: null, supported_voices: null, endpoints: ['/api/v1/chat/completions'], links: { details: 'https://example.test/' },
     pricing: { prompt: '0.000001', completion: '0.000001' },
     architecture: { input_modalities: ['text'], output_modalities: ['text'], modality: 'text->text' },
     top_provider: { context_length: 100_000, max_completion_tokens: 4096, is_moderated: false }, supported_parameters: ['tools'] });
