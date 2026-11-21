@@ -115,16 +115,8 @@
                                         : 'max-w-full',
                                 ]"
                                 class="prose prose-pre:font-mono or3-prose prose-pre:max-w-full prose-pre:overflow-x-auto"
-                                :allowed-link-prefixes="[
-                                    'https://',
-                                    'http://',
-                                    '/',
-                                ]"
-                                :allowed-image-prefixes="[
-                                    'https://',
-                                    'http://',
-                                    '/',
-                                ]"
+                                :allowed-link-prefixes="documentationMarkdownPrefixes"
+                                :allowed-image-prefixes="documentationMarkdownPrefixes"
                                 :code-block-show-line-numbers="false"
                             ></StreamMarkdown>
                         </div>
@@ -195,7 +187,7 @@
 
 <script setup lang="ts">
 import { presentError } from '~~/shared/errors';
-import { StreamMarkdown, streamMarkdownComponents } from '~/utils/stream-markdown';
+import { documentationMarkdownPrefixes, StreamMarkdown, streamMarkdownComponents } from '~/utils/stream-markdown';
 import { openRouterStream } from '~/utils/chat/openrouterStream';
 import type { ToolDefinition } from '~/utils/chat/types';
 import { getActiveWorkspaceId } from '~/db/client';
