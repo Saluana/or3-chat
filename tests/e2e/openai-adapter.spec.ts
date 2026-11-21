@@ -23,6 +23,15 @@ async function chooseModel(page: Page, name: string) {
     await catalog.getByRole('listitem').filter({ hasText: name.replace(' (OpenAI key)', '') }).getByRole('button', { name: 'Use model', exact: true }).click();
 }
 
+async function openChatWithHooks(page: Page) {
+    // Keep the actual Vite module URL, including any revision query string.
+    const [request] = await Promise.all([
+        page.waitForRequest(request => new URL(request.url()).pathname.endsWith('/core/hooks/useHooks.ts')),
+        page.goto('/chat'),
+    ]);
+    return request.url();
+}
+
 function routerReplies(page: Page) {
     return page.getByRole('tabpanel').getByText('OpenRouter fixture reply', { exact: true });
 }
@@ -667,23 +676,21 @@ test('reloading after a user turn is saved leaves a recoverable response', async
     expect((await page.request.post('/api/basic-auth/sign-in', { headers: { origin }, data: {
         email: process.env.OR3_OPENAI_E2E_EMAIL, password: process.env.OR3_OPENAI_E2E_PASSWORD,
     } })).ok()).toBe(true);
-    await page.goto('/chat');
+    const hooksModuleUrl = await openChatWithHooks(page);
     await chooseModel(page, 'Fixture Router');
     await send(page, 'establish chat');
     await expect(routerReplies(page)).toBeVisible({ timeout: 45_000 });
     // Pause a real post-commit hook before the send can create a response or
     // reach the provider. Reloading drops this hook along with the old page.
-    await page.evaluate(async () => {
+    await page.evaluate(async (url) => {
         const importModule = new Function('path', 'return import(path)') as (path: string) => Promise<{ useHooks: () => { addAction: (name: string, handler: (row: { role?: string; data?: { content?: string } }) => Promise<void>) => void } }>;
-        const url = performance.getEntriesByType('resource').map(entry => entry.name).find(name => name.includes('/core/hooks/useHooks.ts'));
-        if (!url) throw new Error('Hook module was not loaded by the application.');
         const { useHooks } = await importModule(url);
         useHooks().addAction('db.messages.append:action:after', async row => {
             if (row.role !== 'user' || row.data?.content !== 'reload-before-admission') return;
             sessionStorage.setItem('reload-before-admission-committed', 'yes');
             await new Promise<void>(() => {});
         });
-    });
+    }, hooksModuleUrl);
     const before = (await (await page.request.get(`${fixture}/__capture`)).json()).requests.length;
     await send(page, 'reload-before-admission');
     await expect.poll(() => page.evaluate(() => sessionStorage.getItem('reload-before-admission-committed'))).toBe('yes');
@@ -714,23 +721,23 @@ test('switching tabs while a saved turn is preparing does not lose its reply', a
     expect((await page.request.post('/api/basic-auth/sign-in', { headers: { origin }, data: {
         email: process.env.OR3_OPENAI_E2E_EMAIL, password: process.env.OR3_OPENAI_E2E_PASSWORD,
     } })).ok()).toBe(true);
-    await page.goto('/chat');
+    const hooksModuleUrl = await openChatWithHooks(page);
     await chooseModel(page, 'Fixture Router');
     await send(page, 'establish chat');
     await expect(routerReplies(page)).toBeVisible({ timeout: 45_000 });
+    await expect(page).toHaveURL(/\/chat\/[^/?#]+(?:[?#]|$)/);
+    const originalChatUrl = page.url();
     const originalTabId = await page.getByRole('tab', { selected: true }).getAttribute('id');
     expect(originalTabId).toBeTruthy();
-    await page.evaluate(async () => {
+    await page.evaluate(async (url) => {
         const importModule = new Function('path', 'return import(path)') as (path: string) => Promise<{ useHooks: () => { addAction: (name: string, handler: (row: { role?: string; data?: { content?: string } }) => Promise<void>) => void } }>;
-        const url = performance.getEntriesByType('resource').map(entry => entry.name).find(name => name.includes('/core/hooks/useHooks.ts'));
-        if (!url) throw new Error('Hook module was not loaded by the application.');
         const { useHooks } = await importModule(url);
         useHooks().addAction('db.messages.append:action:after', async row => {
             if (row.role !== 'user' || row.data?.content !== 'switch-before-admission') return;
             sessionStorage.setItem('switch-before-admission-committed', 'yes');
             await new Promise<void>(resolve => { (window as any).releaseSwitchPreparation = resolve; });
         });
-    });
+    }, hooksModuleUrl);
     await send(page, 'switch-before-admission');
     await expect.poll(() => page.evaluate(() => sessionStorage.getItem('switch-before-admission-committed'))).toBe('yes');
     await page.locator('.workspace-tab-new').click();
@@ -740,6 +747,7 @@ test('switching tabs while a saved turn is preparing does not lose its reply', a
     await page.locator(`[id="${originalTabId}"]`).click();
     await expect(page.getByText('separate conversation', { exact: true })).toHaveCount(0);
     await expect(routerReplies(page)).toHaveCount(2, { timeout: 30_000 });
+    await expect(page).toHaveURL(originalChatUrl);
     await page.reload();
     await expect(routerReplies(page)).toHaveCount(2, { timeout: 30_000 });
     await page.screenshot({ path: resolve(process.env.OR3_OPENAI_E2E_OUTPUT!, 'early-switch-recovered.png') });
@@ -751,17 +759,17 @@ test('switching tabs before a send is saved still sends the original message', a
     expect((await page.request.post('/api/basic-auth/sign-in', { headers: { origin }, data: {
         email: process.env.OR3_OPENAI_E2E_EMAIL, password: process.env.OR3_OPENAI_E2E_PASSWORD,
     } })).ok()).toBe(true);
-    await page.goto('/chat');
+    const hooksModuleUrl = await openChatWithHooks(page);
     await chooseModel(page, 'Fixture Router');
     await send(page, 'establish chat');
     await expect(routerReplies(page)).toBeVisible({ timeout: 45_000 });
     await expect(page.getByRole('button', { name: 'Stop generation', exact: true })).toHaveCount(0, { timeout: 45_000 });
+    await expect(page).toHaveURL(/\/chat\/[^/?#]+(?:[?#]|$)/);
+    const originalChatUrl = page.url();
     const originalTabId = await page.getByRole('tab', { selected: true }).getAttribute('id');
     expect(originalTabId).toBeTruthy();
-    await page.evaluate(async () => {
+    await page.evaluate(async (url) => {
         const importModule = new Function('path', 'return import(path)') as (path: string) => Promise<{ useHooks: () => { addFilter: (name: string, handler: (text: string) => Promise<string>) => void } }>;
-        const url = performance.getEntriesByType('resource').map(entry => entry.name).find(name => name.includes('/core/hooks/useHooks.ts'));
-        if (!url) throw new Error('Hook module was not loaded by the application.');
         const { useHooks } = await importModule(url);
         useHooks().addFilter('ui.chat.message:filter:outgoing', async text => {
             if (text !== 'switch-before-save') return text;
@@ -769,7 +777,7 @@ test('switching tabs before a send is saved still sends the original message', a
             await new Promise<void>(resolve => { (window as any).releaseUnpersistedSend = resolve; });
             return text;
         });
-    });
+    }, hooksModuleUrl);
     const input = page.getByRole('textbox', { name: 'Message input' });
     await input.fill('switch-before-save');
     await input.press('Enter');
@@ -786,6 +794,7 @@ test('switching tabs before a send is saved still sends the original message', a
     await page.locator(`[id="${otherTabId}"]`).click();
     await expect(page.getByRole('textbox', { name: 'Message input' })).toContainText('other tab draft');
     await page.locator(`[id="${originalTabId}"]`).click();
+    await expect(page).toHaveURL(originalChatUrl);
     await page.reload();
     await expect(routerReplies(page)).toHaveCount(2, { timeout: 30_000 });
     await page.screenshot({ path: resolve(process.env.OR3_OPENAI_E2E_OUTPUT!, 'switch-before-save-recovered.png') });
@@ -798,16 +807,14 @@ test('switching away during the first send keeps the new conversation', async ({
     expect((await page.request.post('/api/basic-auth/sign-in', { headers: { origin }, data: {
         email: process.env.OR3_OPENAI_E2E_EMAIL, password: process.env.OR3_OPENAI_E2E_PASSWORD,
     } })).ok()).toBe(true);
-    await page.goto('/chat');
+    const hooksModuleUrl = await openChatWithHooks(page);
     await chooseModel(page, 'Fixture Router');
     const before = ((await (await page.request.get(`${fixture}/__capture`)).json()).requests as Captured[])
         .filter(request => request.path === '/api/v1/chat/completions' && request.stream === true).length;
     const originalTabId = await page.getByRole('tab', { selected: true }).getAttribute('id');
     expect(originalTabId).toBeTruthy();
-    await page.evaluate(async () => {
+    await page.evaluate(async (url) => {
         const importModule = new Function('path', 'return import(path)') as (path: string) => Promise<{ useHooks: () => { addFilter: (name: string, handler: (text: string) => Promise<string>) => void } }>;
-        const url = performance.getEntriesByType('resource').map(entry => entry.name).find(name => name.includes('/core/hooks/useHooks.ts'));
-        if (!url) throw new Error('Hook module was not loaded by the application.');
         const { useHooks } = await importModule(url);
         useHooks().addFilter('ui.chat.message:filter:outgoing', async text => {
             if (text !== 'first-send-before-switch') return text;
@@ -815,7 +822,7 @@ test('switching away during the first send keeps the new conversation', async ({
             await new Promise<void>(resolve => { (window as any).releaseFirstSend = resolve; });
             return text;
         });
-    });
+    }, hooksModuleUrl);
     const input = page.getByRole('textbox', { name: 'Message input' });
     await input.fill('first-send-before-switch');
     await input.press('Enter');
