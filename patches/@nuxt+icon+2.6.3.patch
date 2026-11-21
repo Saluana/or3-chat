@@ -1,0 +1,24 @@
+diff --git a/node_modules/@nuxt/icon/dist/shared/icon.sP0tVXUq.mjs b/node_modules/@nuxt/icon/dist/shared/icon.sP0tVXUq.mjs
+--- a/node_modules/@nuxt/icon/dist/shared/icon.sP0tVXUq.mjs
++++ b/node_modules/@nuxt/icon/dist/shared/icon.sP0tVXUq.mjs
+@@ -7,1 +7,2 @@
+ import pm from 'picomatch';
++import { optimize } from 'svgo';
+@@ -466,7 +467,16 @@
+       bundleSizeKb: 0
+     };
+   }
+-  const valuesCompat = JSON.stringify(collections);
++  const optimizedCollections = collections.map((collection) => ({
++    ...collection,
++    icons: Object.fromEntries(Object.entries(collection.icons).map(([name, icon]) => {
++      const svg = optimize(`<svg xmlns="http://www.w3.org/2000/svg">${icon.body}</svg>`, { multipass: true }).data;
++      const wrapper = '<svg xmlns="http://www.w3.org/2000/svg">';
++      if (!svg.startsWith(wrapper) || !svg.endsWith("</svg>")) return [name, icon];
++      return [name, { ...icon, body: svg.slice(wrapper.length, -6) }];
++    }))
++  }));
++  const valuesCompat = JSON.stringify(optimizedCollections);
+   const bundleSizeKb = Buffer.byteLength(valuesCompat, "utf-8") / 1024;
+   if (sizeLimitKb > 0) {
+     if (bundleSizeKb > sizeLimitKb) {

@@ -28,7 +28,7 @@ if (liveSimulation && liveKey !== 'disposable-fixture-key') throw new Error('The
 const fixtureForward: typeof fetch = async (input, init) => {
     if (String(input).endsWith('/models')) return Response.json({ data: [{ id: liveModel, canonical_slug: liveModel,
         name: 'Fixture', created: 0, context_length: 100_000, default_parameters: null, per_request_limits: null,
-        supported_voices: null, links: { details: 'https://example.test/fixture' }, pricing: { prompt: '0', completion: '0' },
+        supported_voices: null, endpoints: ['/api/v1/chat/completions'], links: { details: 'https://example.test/fixture' }, pricing: { prompt: '0', completion: '0' },
         architecture: { input_modalities: ['text'], output_modalities: ['text'], modality: 'text->text' },
         top_provider: { context_length: 100_000, max_completion_tokens: 4096, is_moderated: false }, supported_parameters: ['tools'] }],
         links: { next: null }, total_count: 1 });
@@ -95,7 +95,7 @@ const provider = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request
     }
     if (request.method === 'GET' && url.pathname === '/api/v1/models') {
         const model = { id: 'fixture/model', canonical_slug: 'fixture/model', name: 'Fixture', created: 0,
-            context_length: 100_000, default_parameters: null, per_request_limits: null, supported_voices: null,
+            context_length: 100_000, default_parameters: null, per_request_limits: null, supported_voices: null, endpoints: ['/api/v1/chat/completions'],
             links: { details: 'https://example.test/fixture' }, pricing: { prompt: '0', completion: '0' },
             architecture: { input_modalities: ['text'], output_modalities: ['text'], modality: 'text->text' },
             top_provider: { context_length: 100_000, max_completion_tokens: 4096, is_moderated: false },
