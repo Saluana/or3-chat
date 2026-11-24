@@ -42,7 +42,7 @@ describe('arm64 runtime qualification', () => {
     expect(result.trace[1].at(-1)).toContain('process.arch');
     const probe = result.trace[1].at(-1);
     class FakeDatabase { prepare() { return { get: () => ({ value: 42 }) }; } close() {} }
-    const context = (arch: string) => ({ process: { version: 'v24.22.3', arch, exit: () => { throw new Error('probe failed'); } }, require: () => FakeDatabase });
+    const context = (arch: string) => ({ process: { version: 'v24.22.1', arch, exit: () => { throw new Error('probe failed'); } }, require: () => FakeDatabase });
     expect(() => runInNewContext(probe, context('arm64'))).not.toThrow();
     expect(() => runInNewContext(probe, context('x64'))).toThrow(/Unexpected Node runtime/);
   });

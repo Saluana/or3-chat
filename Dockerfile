@@ -171,7 +171,7 @@ FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf100
 # Node supplies its own TLS. Start the application with Distroless base-nossl
 # and add the Node distribution and Debian native libraries from the matching
 # upstream image, including their licenses and package inventory.
-FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:39b0407357c9fadf1a9708d22088f02de21f0e1e8a688474eea2d8701e7d5693 AS node-distribution
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:78f07ef1b5ea71ad7c055df15d0dd8997f2d288f9158623c4d4ae3d765b7d50d AS node-distribution
 FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS node-libraries
 RUN --mount=from=node-distribution,target=/source \
     set -eu; cd /source; mkdir /runtime; \
