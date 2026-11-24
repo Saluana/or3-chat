@@ -2,11 +2,11 @@ import { openFilesTab } from '~/composables/explorer/useExplorerReveal';
 import { usePaneApps } from '~/composables/core/usePaneApps';
 import { registerSidebarPage } from '~/composables/sidebar/registerSidebarPage';
 import { watch } from 'vue';
-import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { useLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 
 export default defineNuxtPlugin(() => {
     const cloud = useRuntimeConfig().public.ssrAuthEnabled;
-    const { data } = useSessionContext();
+    const data = useLocalWorkspaceSession();
     let dispose: (() => void) | undefined;
     const stop = watch(() => !cloud || data.value?.workspaceItemCapability === 'v1', enabled => {
         dispose?.(); dispose = undefined;

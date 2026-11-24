@@ -620,7 +620,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Configure sign-in, registration, invitations, accounts, workspace access, session refresh and retry behavior, and Basic Auth rate limits."
+                    "summary": "Configure sign-in, registration, invitations, accounts, workspace access, offline reopening and reconnect, session refresh and retry behavior, and Basic Auth rate limits."
                 },
                 {
                     "name": "background-execution.md",
@@ -746,7 +746,7 @@
                     "category": "Reference",
                     "categoryOrder": 4,
                     "order": 16,
-                    "summary": "Typed base and cloud settings, including lock-page session checks, safe redirects, denied-access recovery, responsive cloud artwork and sign-in layout, custom adapters, defaults, validation, and environment-variable references."
+                    "summary": "Typed base and cloud settings, including lock-page session checks, offline workspace policy, safe redirects, denied-access recovery, responsive cloud artwork and sign-in layout, custom adapters, defaults, validation, and environment-variable references."
                 },
                 {
                     "name": "environment-reference.md",

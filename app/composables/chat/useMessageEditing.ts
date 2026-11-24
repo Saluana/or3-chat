@@ -48,7 +48,7 @@
 
 import { ref, isRef, getCurrentScope, onScopeDispose, type Ref } from 'vue';
 import { useRuntimeConfig } from '#imports';
-import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
+import { getLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 import { getDb, getWorkspaceGeneration } from '~/db/client';
 import { patchMessageInDb } from '~/db/messages';
 
@@ -101,13 +101,13 @@ export function useMessageEditing(message: EditableMessageSource) {
     if (getCurrentScope()) onScopeDispose(() => { disposed = true; });
     // Capture scalar authorization fields: session objects may update in place.
     const identity = () => {
-        const session = getCachedSessionContext();
+        const session = getLocalWorkspaceSession();
         return JSON.stringify([session?.authenticated, session?.user?.id,
             session?.workspace?.id, session?.role, session?.authorizationRevision]);
     };
     let origin: { db: ReturnType<typeof getDb>; generation: number; identity: string; id?: string } | undefined;
     const assertCurrent = () => {
-        const session = getCachedSessionContext();
+        const session = getLocalWorkspaceSession();
         if (disposed || !origin || origin.db !== getDb()
             || origin.generation !== getWorkspaceGeneration() || origin.identity !== identity()
             || origin.id !== getMessage()?.id) throw new Error('The originating message is no longer available.');

@@ -2,6 +2,7 @@ import { useRuntimeConfig } from '#imports';
 import { FilePolicySchema, type FilePolicy } from '~~/shared/storage/file-policy';
 import { withStorageDeadline } from './storage-request';
 import { hasCloudAccess } from '~/core/cloud/access';
+import { getOfflineWorkspace } from '~/composables/auth/offline-workspace';
 
 const verifiedPolicies = new Map<string, FilePolicy>();
 
@@ -14,7 +15,7 @@ export function isCloudFileStorageConfigured(): boolean {
 
 /** Cloud writes require access; existing remote files remain readable after expiry. */
 export function isCloudFileStorageEnabled(): boolean {
-    return isCloudFileStorageConfigured() && hasCloudAccess();
+    return isCloudFileStorageConfigured() && !getOfflineWorkspace() && hasCloudAccess();
 }
 
 /** Canonical sync also forbids unsafe local replacement when storage is disabled. */
@@ -23,6 +24,10 @@ export function isCloudWorkspaceBackupEnabled(): boolean {
         const config = useRuntimeConfig().public;
         return config.ssrAuthEnabled === true && (config.sync as { enabled?: boolean } | undefined)?.enabled === true;
     } catch { return false; }
+}
+
+export function getVerifiedFilePolicy(workspaceId: string): FilePolicy | undefined {
+    return verifiedPolicies.get(workspaceId);
 }
 
 export async function loadFilePolicy(workspaceId: string, signal?: AbortSignal): Promise<FilePolicy> {

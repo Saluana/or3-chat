@@ -50,9 +50,14 @@ export function resolveLockPageRuntimeConfig(
 }
 
 export function useLockPageRuntimeConfig(): LockPageRuntimeConfig {
-    return resolveLockPageRuntimeConfig(
-        useRuntimeConfig().public as LockPagePublicRuntimeConfig
-    );
+    const config = resolveLockPageRuntimeConfig(useRuntimeConfig().public as LockPagePublicRuntimeConfig);
+    // The precached shell may have been built before the deployed lock-page
+    // settings were available. A disconnected Cloud launch must still gate
+    // private routes unless it can reopen a locally verified workspace.
+    if (import.meta.client && config.ssrAuthEnabled && !navigator.onLine) {
+        return { ...config, enabled: true };
+    }
+    return config;
 }
 
 export function isSameOrChildPath(path: string, basePath: string): boolean {

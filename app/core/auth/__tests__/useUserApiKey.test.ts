@@ -222,7 +222,8 @@ describe('personal key lifecycle', () => {
         vi.doMock('~/composables/workspace/useWorkspaceManager', () => ({ useWorkspaceManager: () => ({ activeWorkspaceId: ref(null) }) }));
         vi.stubGlobal('defineNuxtPlugin', (callback: () => unknown) => callback());
         vi.stubGlobal('useRuntimeConfig', () => ({ public: { ssrAuthEnabled: true } }));
-        vi.stubGlobal('useNuxtApp', () => ({}));
+        let dispose: (() => void) | undefined;
+        vi.stubGlobal('useNuxtApp', () => ({ vueApp: { onUnmount: (callback: () => void) => { dispose = callback; } } }));
         try {
             await (await import('~/plugins/00-workspace-db.client')).default;
             session.value = { session: { authenticated: true, user: { id: 'synthetic-account-b' } } };
@@ -232,6 +233,7 @@ describe('personal key lifecycle', () => {
             await auth.hydrateUserApiKeyFromKv();
             expect(stateRef.value.openrouterKey).toBeNull();
         } finally {
+            dispose?.();
             vi.unstubAllGlobals();
         }
     });
@@ -246,7 +248,8 @@ describe('personal key lifecycle', () => {
         vi.doMock('~/composables/workspace/useWorkspaceManager', () => ({ useWorkspaceManager: () => ({ activeWorkspaceId: ref(null) }) }));
         vi.stubGlobal('defineNuxtPlugin', (callback: () => unknown) => callback());
         vi.stubGlobal('useRuntimeConfig', () => ({ public: { ssrAuthEnabled: true } }));
-        vi.stubGlobal('useNuxtApp', () => ({}));
+        let dispose: (() => void) | undefined;
+        vi.stubGlobal('useNuxtApp', () => ({ vueApp: { onUnmount: (callback: () => void) => { dispose = callback; } } }));
         try {
             await (await import('~/plugins/00-workspace-db.client')).default;
             session.value = { session: { authenticated: false, user: { id: 'synthetic-account-a' } } };
@@ -262,6 +265,7 @@ describe('personal key lifecycle', () => {
             expect(await store.get('key')).toBe('synthetic-new-account-secret');
         } finally {
             confirmation.resolve(true);
+            dispose?.();
             vi.unstubAllGlobals();
         }
     });

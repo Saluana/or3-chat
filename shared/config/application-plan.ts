@@ -271,6 +271,7 @@ export function buildApplicationPlan(input: {
             enabled: effectiveSsrAuthEnabled,
             provider: or3CloudConfig.auth.provider,
             autoProvision: or3CloudConfig.auth.autoProvision ?? true,
+            offlineWorkspaceAccess: or3CloudConfig.auth.offlineWorkspaceAccess ?? true,
             registrationMode: resolvedRegistrationMode,
             sessionProvisioningFailure:
                 or3CloudConfig.auth.sessionProvisioningFailure ?? 'throw',

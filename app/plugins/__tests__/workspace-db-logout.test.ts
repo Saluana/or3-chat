@@ -1,5 +1,5 @@
 import { $fetch } from 'ofetch';
-import { effectScope, ref, type EffectScope } from 'vue';
+import { effectScope, onScopeDispose, ref, type EffectScope } from 'vue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('#imports', async (importOriginal) => ({
@@ -85,35 +85,11 @@ describe('workspace logout cleanup plugin', () => {
         confirmClientSignedOut.mockReset().mockResolvedValue(false);
         sessionState.value.session = null;
         refreshSession.mockReset().mockResolvedValue(sessionState.value);
-        (
-            globalThis as typeof globalThis & {
-                defineNuxtPlugin?: (plugin: () => unknown) => unknown;
-                useRuntimeConfig?: () => {
-                    public: { ssrAuthEnabled: boolean };
-                };
-                useNuxtApp?: () => {
-                    provide: (key: string, value: unknown) => void;
-                };
-            }
-        ).defineNuxtPlugin = (plugin) => plugin();
-        (
-            globalThis as typeof globalThis & {
-                useRuntimeConfig?: () => {
-                    public: { ssrAuthEnabled: boolean };
-                };
-            }
-        ).useRuntimeConfig = () => ({
-            public: { ssrAuthEnabled: true },
-        });
-        (
-            globalThis as typeof globalThis & {
-                useNuxtApp?: () => {
-                    provide: (key: string, value: unknown) => void;
-                };
-            }
-        ).useNuxtApp = () => ({
-            provide: vi.fn(),
-        });
+        vi.stubGlobal('defineNuxtPlugin', (plugin: () => unknown) => plugin());
+        vi.stubGlobal('useRuntimeConfig', () => ({ public: { ssrAuthEnabled: true } }));
+        vi.stubGlobal('useNuxtApp', () => ({
+            vueApp: { onUnmount: (callback: () => void) => scope.run(() => onScopeDispose(callback)) },
+        }));
     });
 
     it('does not clear workspace DBs when sign-out is not confirmed', async () => {
@@ -167,7 +143,7 @@ describe('workspace logout cleanup plugin', () => {
         expect(logoutCleanup).not.toHaveBeenCalled();
     });
 
-    it('clears workspace DBs when session is unauthenticated and sign-out is confirmed', async () => {
+    it('clears session resources but preserves workspace edits on anonymous startup', async () => {
         confirmClientSignedOut.mockResolvedValue(true);
         await import('~/plugins/00-workspace-db.client');
         await vi.waitFor(() => {
@@ -175,6 +151,7 @@ describe('workspace logout cleanup plugin', () => {
         });
         expect(logoutCleanup).toHaveBeenCalledWith(expect.anything(), {
             preservePluginSecrets: true,
+            preserveWorkspaceCaches: true,
         });
     });
 
@@ -187,6 +164,7 @@ describe('workspace logout cleanup plugin', () => {
         await vi.waitFor(() => {
             expect(logoutCleanup).toHaveBeenCalledWith(expect.anything(), {
                 preservePluginSecrets: true,
+                preserveWorkspaceCaches: true,
                 preserveOpenRouterPkce: true,
             });
         });

@@ -64,6 +64,7 @@ running a prebuilt image directly, but are not required for the wizard:
 | `NUXT_AUTH_ENABLED`, `NUXT_PUBLIC_SSR_AUTH_ENABLED` | `SSR_AUTH_ENABLED` |
 | `NUXT_AUTH_PROVIDER`, `NUXT_PUBLIC_AUTH_PROVIDER` | `OR3_AUTH_PROVIDER` / `AUTH_PROVIDER` |
 | `NUXT_PUBLIC_GUEST_ACCESS_ENABLED` | `OR3_GUEST_ACCESS_ENABLED` |
+| `NUXT_AUTH_OFFLINE_WORKSPACE_ACCESS` | `OR3_OFFLINE_WORKSPACE_ACCESS` |
 | `NUXT_AUTH_AUTO_PROVISION`, `NUXT_AUTH_REGISTRATION_MODE`, `NUXT_AUTH_BOOTSTRAP_EMAIL`, `NUXT_AUTH_INVITE_TOKEN_SECRET`, `NUXT_AUTH_INVITE_TOKEN_TTL_SECONDS` | matching `OR3_AUTH_*` / Basic Auth settings |
 | `NUXT_SYNC_ENABLED`, `NUXT_PUBLIC_SYNC_ENABLED` | `OR3_CLOUD_SYNC_ENABLED` / `OR3_SYNC_ENABLED` |
 | `NUXT_SYNC_PROVIDER`, `NUXT_PUBLIC_SYNC_PROVIDER` | `OR3_SYNC_PROVIDER` |
@@ -83,14 +84,11 @@ Server builds render every route, including `/`, `/documentation`, and
 `/openrouter-callback`, on each request, so public runtime values such as
 `NUXT_PUBLIC_OPEN_ROUTER_BASE_URL` apply identically whichever URL a session
 starts on. Only static builds (`bun run generate:static`) prerender those routes
-and bake public values in at build time. Server builds precache only a
-client-only offline shell (`/200.html`). The service worker uses it when a
-navigation fails because the network is unavailable, so the installed app still
-opens offline on any route. It is not used while the server answers navigations.
-The precache holds the startup code (the entry and the workspace page with their
-static imports) and stylesheets. Other build chunks, such as the document editor,
-Settings and admin pages, are cached by the service worker the first time they
-load, so a feature works offline once it has been used online.
+and bake public values in at build time. Server builds precache a neutral client shell (`/200.html`), bundled app
+code, and the assets needed for local features. The service worker loads the
+shell when the network cannot serve a navigation. Private workspace access
+uses the browser's last verified scope and reconnects through the current
+server session.
 
 ## Base application settings
 
@@ -132,6 +130,7 @@ These values are read by `config.or3.ts` and work in static and SSR builds.
 | Variable | Default | Purpose |
 |---|---:|---|
 | `OR3_GUEST_ACCESS_ENABLED` | `false` | Allow unauthenticated guest access where supported. |
+| `OR3_OFFLINE_WORKSPACE_ACCESS` | `true` | Allow returning browsers to open local Cloud workspace copies offline. |
 | `OR3_AUTH_AUTO_PROVISION` | `true` | Legacy registration switch. Prefer `OR3_AUTH_REGISTRATION_MODE` for new deployments. |
 | `OR3_AUTH_REGISTRATION_MODE` | derived | Exactly `open`, `invite_only`, or `disabled`; an explicit invalid or empty value fails configuration. When unset, `OR3_AUTH_AUTO_PROVISION=false` maps to `disabled`, otherwise `open`. |
 | `OR3_AUTH_INVITE_TOKEN_SECRET` | unset | HMAC secret required to create invitations and for `invite_only` registration. |

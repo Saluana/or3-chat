@@ -95,6 +95,23 @@ Provider SDK refresh and recovery belong in the client adapters. Before clearing
 
 Direct sync providers acquire provider-specific JWTs through `AuthTokenBroker`. Gateway providers call SSR endpoints that enforce `can()`; core should not reach directly into a Clerk SDK for tokens.
 
+## Offline workspace access
+
+After an online visit completes the app download, a returning browser can
+open the last verified workspace in airplane mode. Chats, documents, drafts,
+projects and file bytes already on the device remain available. Editing uses
+the last verified role. The app keeps only the account and workspace scope
+and local permissions needed to reopen it. Signing out clears that access.
+
+Cloud sync and uploads resume after the app verifies the current account and
+workspace again. If sign-in is needed, pending edits remain on the device.
+Cloud model replies and remote-only files require a connection.
+
+Site owners can set `OR3_OFFLINE_WORKSPACE_ACCESS=false` to require online
+verification before reopening a private Cloud workspace. Devices pick up that
+change on their next successful session check. Local-only installations can
+continue to work offline.
+
 ## OpenRouter is separate
 
 Connect OpenRouter with OAuth PKCE or paste a supported key. Source code must use `persistUserApiKey()` to save browser keys in Dexie `kv`, update reactive state, and emit the connection signal. Authenticated keys retain their account owner; another account cannot hydrate them. Existing unowned keys must be entered again when accounts are enabled. Model catalog requests use the same canonical key.

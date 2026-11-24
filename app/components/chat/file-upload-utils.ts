@@ -7,7 +7,8 @@ import type { FilesAttachInputPayload } from '~/core/hooks/hook-types';
 import { captureWorkspaceOperation, workspaceFilesAvailable, type WorkspaceOperationScope } from '~/utils/chat/workspace-access';
 import { getActiveWorkspaceId, getDb, getWorkspaceGeneration } from '~/db/client';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
-import { getCachedSessionContext, refreshCachedSessionContext } from '~/composables/auth/useSessionContext';
+import { refreshCachedSessionContext } from '~/composables/auth/useSessionContext';
+import { getLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 import { STATIC_FILE_CEILING } from '~~/shared/storage/file-policy';
 import { isCloudFileStorageEnabled } from '~/core/storage/file-policy';
 
@@ -98,11 +99,11 @@ export async function persistAttachment(att: AttachmentLike, owner?: AttachmentI
         if (catalogEnabled && !scope) {
             // A file picker may outlive the access token. Recover the session
             // before capturing authority, without admitting a different owner.
-            const session = getCachedSessionContext();
+            const session = getLocalWorkspaceSession();
             if (session?.expiresAt && Date.parse(session.expiresAt) <= Date.now()) {
                 await refreshCachedSessionContext();
                 assertLocalOrigin();
-                if (getCachedSessionContext()?.user?.id !== session.user?.id)
+                if (getLocalWorkspaceSession()?.user?.id !== session.user?.id)
                     throw new Error('Workspace access changed. Refresh and try again.');
             }
             scope = captureWorkspaceOperation({ subject: null, workspaceId: getActiveWorkspaceId() ?? 'local',

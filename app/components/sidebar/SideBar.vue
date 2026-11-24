@@ -153,7 +153,7 @@
 </template>
 
 <script setup lang="ts">
-import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { useLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 import { useSignInGate } from '~/composables/auth/useSignInGate';
 import {
     onMounted,
@@ -215,7 +215,7 @@ import { useSidebarThemeProps } from '~/composables/sidebar/useSidebarThemeProps
 import { isMobile } from '~/state/global';
 
 const iconEdit = useIcon('ui.edit');
-const { data: workspaceSession } = useSessionContext();
+const workspaceSession = useLocalWorkspaceSession();
 const { promptSignIn } = useSignInGate();
 const runtimeConfig = useRuntimeConfig();
 function requireCreationSignIn(): boolean {

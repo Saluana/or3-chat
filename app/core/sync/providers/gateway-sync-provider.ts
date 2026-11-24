@@ -220,6 +220,7 @@ async function requestJsonRaw<T>(
     baseUrl: string,
     options: {
         allowEmpty?: boolean;
+        expectedUserId?: string;
         gzipRequests?: boolean;
         signal?: AbortSignal;
         schema?: {
@@ -238,6 +239,7 @@ async function requestJsonRaw<T>(
         headers: {
             'Content-Type': 'application/json',
             'x-or3-cloud-intent': CLOUD_MUTATION_INTENT,
+            ...(options.expectedUserId ? { 'x-or3-account-id': options.expectedUserId } : {}),
             ...(payload.compressed ? { 'Content-Encoding': 'gzip' } : {}),
         },
         body: payload.body,
@@ -350,16 +352,20 @@ export function createGatewaySyncProvider(
         options.signal?.addEventListener('abort', forwardAbort, { once: true });
         const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 30_000);
         if (options.signal?.aborted) controller.abort();
-        // principalId partitions local cursors only. Authentication owns server visibility.
+        // Keep local cursor ownership out of the wire schema. On push, also
+        // bind the request to the verified account in case the cookie changes
+        // in another tab after the local outbox starts.
         let wireBody = body;
+        let expectedUserId: string | undefined;
         if (body && typeof body === 'object' && 'scope' in body) {
-            const { principalId: _principal, ...scope } = (body as { scope: SyncScope }).scope;
+            const { principalId, ...scope } = (body as { scope: SyncScope }).scope;
+            if (path === '/api/sync/push') expectedUserId = principalId;
             wireBody = { ...body, scope };
         }
         try {
             if (controller.signal.aborted) return await cancelled;
             return await Promise.race([requestJsonRaw<T>(path, wireBody, url,
-                { ...options, gzipRequests: config.gzipRequests, signal: controller.signal }), cancelled]);
+                { ...options, expectedUserId, gzipRequests: config.gzipRequests, signal: controller.signal }), cancelled]);
         } finally {
             clearTimeout(timer);
             options.signal?.removeEventListener('abort', forwardAbort);

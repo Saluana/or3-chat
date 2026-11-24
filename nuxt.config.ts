@@ -59,11 +59,6 @@ const localPackageAliases = [...localPackages.aliases];
 
 // Client asset output, recorded at build so the manifest hook can inspect files.
 let clientAssetsDir: string | undefined;
-// Client files the workspace shell loads at startup (`_nuxt/<file>`), set from
-// the client manifest. Only these chunks are precached; the rest are cached by
-// the service worker when first used.
-let pwaShellFiles: Set<string> | undefined;
-
 const UNHASHED_IMAGE_CACHE = {
     headers: { 'cache-control': 'public,max-age=604800,stale-while-revalidate=86400' },
 };
@@ -481,67 +476,46 @@ export default defineNuxtConfig({
             // production preview/E2E builds. Raise the cap so local preview and
             // Playwright can boot instead of hard-failing the build.
             maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-            // Ensure the prerendered callback HTML can be matched regardless of auth params
-            ignoreURLParametersMatching: [/^code$/, /^state$/],
+            // Match callback parameters and build-versioned theme stylesheet URLs.
+            ignoreURLParametersMatching: [/^code$/, /^state$/, /^v$/],
             // Never serve the generic SPA fallback for these routes.
             // /openrouter-callback uses a dedicated runtime rule below with
             // a precache fallback to the prerendered callback HTML.
             navigateFallbackDenylist: [
                 /\/openrouter-callback(?:[?/].*)?$/,
                 /\/streamsaver(?:\/.*)?$/,
-                /\/documentation(?:\/.*)?$/,
             ],
             // Explicitly set null for SSR builds to disable vite-plugin-pwa's default fallback.
             navigateFallback: pwaNavigateFallback,
-            manifestTransforms: [
-                (entries) => ({
-                    manifest: entries.filter((entry) => {
-                        // Remove streamsaver app shell from precache
-                        if (
-                            entry.url === 'streamsaver' ||
-                            entry.url === 'streamsaver/index.html'
-                        )
-                            return false;
-                        // Exclude heavy KaTeX assets from precache (loaded lazily when Markdown with math is viewed)
-                        // This avoids large install-time caches without affecting runtime loading
-                        if (/^_nuxt\/KaTeX_/i.test(entry.url)) return false;
-                        if (/^_nuxt\/katex\..*\.css$/i.test(entry.url))
-                            return false;
-                        // The exact tokenizer is a worker-only, on-demand asset.
-                        // Do not force its ~1 MB gzip payload into every PWA
-                        // installation; the browser will cache it after use.
-                        if (
-                            entry.url.endsWith('.js') &&
-                            entry.size > 1.5 * 1024 * 1024
-                        )
-                            return false;
-                        // Large on-demand workers (PDF extraction) are cached after use.
-                        if (/\.worker-[^/]+\.js$/.test(entry.url) && entry.size > 256 * 1024)
-                            return false;
-                        // Large artwork (theme backgrounds, sign-in and lock-page
-                        // art, the 1024px install icon) is not needed for the
-                        // offline shell: the static-images runtime cache keeps
-                        // what is shown. This was ~2.9 MB of the first visit.
-                        if (/\.(?:png|webp)$/i.test(entry.url) && entry.size > 32 * 1024)
-                            return false;
-                        // Feature chunks (editor, settings, admin, viewers) are
-                        // cached by the `nuxt-chunks` rule when first loaded.
-                        // Precaching all of them was ~400 files on a first visit.
-                        if (pwaShellFiles && /^_nuxt\/.+\.js$/.test(entry.url) && !pwaShellFiles.has(entry.url))
-                            return false;
-                        return true;
-                    }),
-                    warnings: [],
-                }),
+            // Install local features before first use. Lazy imports remain lazy
+            // at execution time, including editor, search and extraction workers.
+            globPatterns: [
+                '**/*.{js,css,html,ico,png,svg,webp,avif,woff2}',
+                '_nuxt/*.mjs',
+                '_plugins/*.mjs',
+                '_documentation/docmap.json',
             ],
-            globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+            // Preserve physical HTML filenames, including /200.html on Nitro.
+            // The Nuxt module's default transform rewrites them to app routes.
+            manifestTransforms: [
+                (manifest) => ({ manifest, warnings: [] }),
+            ],
             globIgnores: [
                 'streamsaver/**',
                 // These assets remain available online, but are not required to
                 // install or operate the offline application shell.
                 'screenshots/**',
-                // Fetch/cache only the responsive artwork sizes actually used.
-                'chat-artwork/**',
+                'chat-artwork/*-1448.webp',
+                'chat-artwork/bird-on-cloud*-960.webp',
+                'lock-page/app-preview-*.webp',
+                'logos/*1024.png',
+                'logos/logo-512.png',
+                'logos/icon-logo-svg.svg',
+                'bird-on-cloud*.webp',
+                'blank-chat-background.webp',
+                'blank-chat-bg-dark.webp',
+                'butthole-logo.webp',
+                '_nuxt/builds/**',
                 'logos/logo-8bit-raw.png',
                 'logos/logo-xl.png',
                 'logos/logo-1024.png',
@@ -575,25 +549,13 @@ export default defineNuxtConfig({
                             : {}),
                     },
                 },
-                // HTML navigation - always try network first for fresh content
+                // Serve verified SSR responses online and the neutral shell on transport failure.
                 {
-                    urlPattern: ({ request }) => request.mode === 'navigate',
-                    handler: 'NetworkFirst',
-                    options: {
-                        cacheName: 'pages-cache',
-                        expiration: {
-                            maxEntries: 50,
-                            maxAgeSeconds: 24 * 60 * 60, // 1 day
-                        },
-                        networkTimeoutSeconds: 3, // Fast timeout, then fallback to cache
-                        ...(isStaticGenerateBuild
-                            ? {}
-                            : {
-                                  precacheFallback: {
-                                      fallbackURL: pwaOfflineShell,
-                                  },
-                              }),
-                    },
+                    urlPattern: ({ request, sameOrigin }) => sameOrigin && request.mode === 'navigate',
+                    handler: 'NetworkOnly',
+                    ...(!isStaticGenerateBuild && {
+                        options: { precacheFallback: { fallbackURL: pwaOfflineShell } },
+                    }),
                 },
                 // Build chunks have content-hashed names, so a cached copy is
                 // always current. This keeps every feature used once available
@@ -972,20 +934,6 @@ export default defineNuxtConfig({
                     resource.preload = false;
                 }
             }
-            // Precache the startup shell: the entry and the workspace page with
-            // their static imports and stylesheets.
-            const shellFiles = new Set<string>();
-            const pending = Object.keys(manifest).filter(key =>
-                manifest[key]?.isEntry || key === 'pages/chat/[[id]].vue' || key === 'components/PageShell.vue');
-            const seen = new Set<string>();
-            for (let key = pending.pop(); key !== undefined; key = pending.pop()) {
-                const resource = manifest[key];
-                if (!resource || seen.has(key)) continue;
-                seen.add(key);
-                for (const file of [resource.file, ...(resource.css ?? [])]) shellFiles.add(`_nuxt/${file}`);
-                pending.push(...(resource.imports ?? []));
-            }
-            pwaShellFiles = shellFiles;
         },
         'pages:extend'(pages) {
             const workspacePage = resolve(__dirname, 'app/pages/chat/[[id]].vue');

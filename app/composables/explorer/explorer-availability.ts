@@ -1,9 +1,9 @@
 import { useRuntimeConfig } from '#imports';
 import { computed } from 'vue';
-import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { useLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 
 export function useExplorerAvailable() {
     const config = useRuntimeConfig().public;
-    const { data } = useSessionContext({ autoLoad: false });
+    const data = useLocalWorkspaceSession();
     return computed(() => config.ssrAuthEnabled !== true || data.value?.appAccessAllowed === true);
 }

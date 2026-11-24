@@ -9,10 +9,17 @@ import type { SessionContext } from '~/core/hooks/hook-types';
 import type { CloudAccess } from '~~/shared/cloud/access';
 import { fetchClientSession } from '~/composables/auth/client-session-request';
 import { takeBootSession } from '~/utils/boot-session';
+import {
+    invalidateOfflineWorkspace,
+    readOfflineWorkspaceRecord,
+    rememberOfflineWorkspace,
+    useOfflineWorkspace,
+} from './offline-workspace';
 
 export type SessionPayload = {
     session: SessionContext | null;
     appAccessAllowed: boolean;
+    offlineWorkspaceAccess?: boolean;
     workspaceItemCapability?: 'v1';
     explorerCapability?: 'v1';
     secretStoreEnabled?: boolean;
@@ -20,6 +27,7 @@ export type SessionPayload = {
 };
 type SessionRefreshOptions = {
     dedupe?: 'defer';
+    revalidateOfflineWorkspace?: boolean;
     shouldCommit?: (payload: SessionPayload) => boolean | Promise<boolean>;
 };
 
@@ -75,8 +83,9 @@ export function useSessionContext(
     const error = import.meta.server ? ref<Error | null>(null) : clientError;
 
     const data = computed<SessionPayload | null>(() => state.value);
+    const offline = useOfflineWorkspace();
 
-    const refresh = async ({ dedupe, shouldCommit }: SessionRefreshOptions = {}) => {
+    const refresh = async ({ dedupe, revalidateOfflineWorkspace, shouldCommit }: SessionRefreshOptions = {}) => {
         // Never fetch when auth is disabled (static builds, no server)
         if (isAuthDisabled()) {
             state.value = {
@@ -85,6 +94,10 @@ export function useSessionContext(
             };
             return state.value;
         }
+
+        // Offline workspace access is local only. Keep it out of the session
+        // state and do not treat it as a successful server validation.
+        if (import.meta.client && offline.value && (!revalidateOfflineWorkspace || !navigator.onLine)) return;
 
         let generation = latestRefreshGeneration;
         let request = latestRequest;
@@ -95,18 +108,28 @@ export function useSessionContext(
             pending.value = true;
             error.value = null;
 
+            const previousRecord = import.meta.client ? readOfflineWorkspaceRecord() : null;
             request = latestRequest = (async () => {
                 try {
-                    const bootSession = shouldCommit ? null : await takeBootSession();
+                    const bootSession = shouldCommit || revalidateOfflineWorkspace ? null : await takeBootSession();
                     const payload = await fetchClientSession(bootSession);
                     if (ownGeneration !== latestRefreshGeneration) return;
                     const commit = !shouldCommit || await shouldCommit(payload);
                     if (ownGeneration !== latestRefreshGeneration) return;
                     if (!commit) return payload;
+                    if (import.meta.client) rememberOfflineWorkspace(payload, previousRecord);
                     state.value = payload;
+                    offline.value = null;
                     return state.value;
                 } catch (err) {
                     if (ownGeneration !== latestRefreshGeneration) return;
+                    if (import.meta.client && previousRecord === readOfflineWorkspaceRecord()) {
+                        const status = (err as { statusCode?: number } | null)?.statusCode;
+                        if (status === 401 || status === 403) {
+                            invalidateOfflineWorkspace();
+                            offline.value = null;
+                        }
+                    }
                     lastSessionFailureAt = Date.now();
                     error.value = err instanceof Error ? err : new Error(String(err));
                     throw err;
@@ -135,6 +158,7 @@ export function useSessionContext(
             superseded = true;
             generation = latestRefreshGeneration;
             request = latestRequest;
+            if (!request) return;
         }
     };
 
@@ -167,6 +191,7 @@ export function useSessionContext(
     if (
         options.autoLoad !== false &&
         !state.value &&
+        !offline.value &&
         !pending.value &&
         Date.now() - lastSessionFailureAt > AUTO_LOAD_COOLDOWN_MS
     ) {
@@ -201,4 +226,13 @@ export function getCachedSessionContext(): SessionContext | null {
 /** Refresh the existing client session generation during bounded auth recovery. */
 export async function refreshCachedSessionContext(): Promise<void> {
     await useSessionContext().refresh();
+}
+
+/** Fence network requests started before entering offline mode or changing identity. */
+export function clearClientWorkspaceSession(): void {
+    ++latestRefreshGeneration;
+    latestRequest = undefined;
+    clientPending.value = false;
+    clientError.value = null;
+    useState<SessionPayload | null>('auth-session', () => null).value = null;
 }

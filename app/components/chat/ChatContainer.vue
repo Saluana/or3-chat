@@ -238,7 +238,7 @@ import { useToast, useHooks, useChat, useRuntimeConfig, useRoute, useState } fro
 import { getMaxMessageFileHashes } from '~/db/files-util';
 import { kv } from '~/db';
 import { getDb, getActiveWorkspaceId, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
-import type { SessionPayload } from '~/composables/auth/useSessionContext';
+import { useLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 import { liveQuery, type Subscription } from 'dexie';
 import { useThreadCompaction } from '~/composables/chat/useThreadCompaction';
 import { provideChatBranchAnchors } from '~/composables/projects/useChatBranchAnchors';
@@ -374,10 +374,7 @@ const welcomePreviewDismissed = ref(false);
 // showing the OpenRouter first-run card. The shared auth-session state is
 // populated by useSessionContext after sign-in; local/static builds have no
 // auth gate and may show the card immediately.
-const authSessionState = useState<SessionPayload | null>(
-    'auth-session',
-    () => null,
-);
+const authSessionState = useLocalWorkspaceSession();
 const welcomeContextReady = computed(() => {
     void delegatedWorkspaceGeneration.value;
     const session = authSessionState.value?.session;

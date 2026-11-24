@@ -4,6 +4,7 @@ import {
 } from '~/core/storage/provider-registry';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { watch, effectScope } from 'vue';
+import { canUseOfflineWorkspaceDb } from '~/composables/auth/offline-workspace';
 import { useCloudAccess } from '~/core/cloud/access';
 import { subscribeActiveWorkspaceDb } from '~/db/client';
 
@@ -43,9 +44,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     const { data: sessionData } = useSessionContext();
 
     const stop = watch(
-        () => ({ session: sessionData.value?.session, enabled: cloudEnabled.value }),
+        () => ({ session: sessionData.value?.appAccessAllowed === false ? null : sessionData.value?.session, enabled: cloudEnabled.value }),
         ({ session, enabled }) => {
-            const workspaceId = session?.authenticated
+            const workspaceId = session?.authenticated && session.workspace && canUseOfflineWorkspaceDb(session.workspace.id, session.user?.id)
                 ? session.workspace?.id ?? null
                 : null;
             // Bind first: re-enabling uploads requeues deferred admissions in
@@ -71,8 +72,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         { immediate: true }
     );
     const stopDb = subscribeActiveWorkspaceDb(() => {
-        const session = sessionData.value?.session;
-        queue?.setWorkspaceId(session?.authenticated ? session.workspace?.id ?? null : null,
+        const session = sessionData.value?.appAccessAllowed === false ? null : sessionData.value?.session;
+        queue?.setWorkspaceId(session?.authenticated && session.workspace && canUseOfflineWorkspaceDb(session.workspace.id, session.user?.id)
+            ? session.workspace.id : null,
             session?.authenticated ? session.user?.id ?? null : null);
     });
     const dispose = () => { stop(); stopDb(); accessScope.stop(); queue?.dispose(); };

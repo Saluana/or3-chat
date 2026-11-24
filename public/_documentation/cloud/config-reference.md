@@ -360,6 +360,12 @@ Important default behavior when using env:
 - Env: `OR3_AUTH_PROVIDER` (or compatibility alias `AUTH_PROVIDER`)
 - Purpose: Selects the SSR auth provider.
 
+#### `auth.offlineWorkspaceAccess`
+
+- Default `true`
+- Environment variable `OR3_OFFLINE_WORKSPACE_ACCESS`
+- Allows a returning browser to reopen the last verified Cloud workspace while disconnected. The device applies a policy update after its next successful session check.
+
 #### `auth.guestAccessEnabled`
 
 - Type: `boolean`

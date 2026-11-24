@@ -29,7 +29,7 @@
  * @see docs/core-hook-map.md for hook conventions
  */
 import Dexie from 'dexie';
-import { getDb, getWorkspaceGeneration } from './client';
+import { getActiveWorkspaceId, getDb, getWorkspaceGeneration } from './client';
 import { useHooks } from '../core/hooks/useHooks';
 import { parseOrThrow, nowSec, nextClock, getWriteTxTableNames } from './util';
 import { FileMetaCreateSchema, FileMetaSchema, type FileMeta } from './schema';
@@ -50,8 +50,9 @@ import {
 } from '~~/shared/files/file-kind';
 import { parseDocumentFileHashes } from '~/utils/documents/document-content';
 import { STATIC_FILE_CEILING } from '~~/shared/storage/file-policy';
-import { isCloudFileStorageEnabled, loadFilePolicy } from '~/core/storage/file-policy';
+import { getVerifiedFilePolicy, isCloudFileStorageConfigured, isCloudFileStorageEnabled, loadFilePolicy } from '~/core/storage/file-policy';
 import { touchFileCache } from '~/core/storage/file-cache';
+import { getOfflineWorkspace } from '~/composables/auth/offline-workspace';
 
 /** Capture the owner before extension callbacks can yield or switch workspaces. */
 function captureFileWrite() {
@@ -281,14 +282,22 @@ export async function createOrRefFileWithStatus(
             ? `filestore-${Date.now()}-${Math.random().toString(36).slice(2)}`
             : undefined;
     if (markId && hasPerf) performance.mark(`${markId}:start`);
+    const offline = getOfflineWorkspace();
+    const offlineWorkspaceId = offline && offline.workspaceId === getActiveWorkspaceId() && isCloudFileStorageConfigured()
+        ? offline.workspaceId : null;
     const cloud = isCloudFileStorageEnabled();
     const queue = cloud || import.meta.client ? (await import('~/core/storage/transfer-queue')).getStorageTransferQueue() : null;
-    const workspaceId = queue?.getWorkspaceId();
+    const workspaceId = offlineWorkspaceId ?? queue?.getWorkspaceId();
     if (cloud && (!queue || !workspaceId)) throw new Error('Cloud storage is not ready. Please retry.');
-    const policy = cloud && workspaceId ? await loadFilePolicy(workspaceId) : null;
+    const policy = offlineWorkspaceId ? getVerifiedFilePolicy(offlineWorkspaceId)
+        : cloud && workspaceId ? await loadFilePolicy(workspaceId) : undefined;
     assertCurrentDb();
-    if (file.size > (policy?.maxUploadBytes ?? getMaxFileSizeBytes())) throw new Error('File exceeds the upload size limit.');
-    const direct = Boolean(policy && file.size > policy.maxCachedFileBytes);
+    const maxUploadBytes = offline ? Math.min(policy?.maxUploadBytes ?? Infinity, getMaxFileSizeBytes())
+        : policy?.maxUploadBytes ?? getMaxFileSizeBytes();
+    if (file.size > maxUploadBytes) throw new Error('File exceeds the upload size limit.');
+    const direct = Boolean(!offline && policy && file.size > policy.maxCachedFileBytes);
+    const queueContext = workspaceId && (cloud || offlineWorkspaceId)
+        ? { db, workspaceId, assertLocalUpload: offlineWorkspaceId ? assertCurrentDb : undefined } : null;
     if (direct && !(typeof File !== 'undefined' && file instanceof File)) {
         throw new Error('Save this large generated file to disk, then select it for Cloud upload.');
     }
@@ -331,8 +340,8 @@ export async function createOrRefFileWithStatus(
                 assertCurrentDb();
                 if (!direct && !(await db.file_blobs.get(hash))) await db.file_blobs.put({ hash, blob: file });
                 const incremented = await changeFileRefRows(hash, 1, db);
-                if (incremented && !incremented.row.storage_id && !direct && cloud && queue && workspaceId)
-                    await queue.enqueue(hash, 'upload', { db, workspaceId });
+                if (incremented && !incremented.row.storage_id && !direct && queue && queueContext)
+                    await queue.enqueue(hash, 'upload', queueContext);
                 assertCurrentDb();
                 return incremented;
             });
@@ -426,8 +435,8 @@ export async function createOrRefFileWithStatus(
             const changed = (await changeFileRefRows(hash, 1, db))!;
             referenceChanges.push(changed.notification);
             storedMeta = changed.row;
-            if (!storedMeta.storage_id && !direct && cloud && queue && workspaceId)
-                await queue.enqueue(hash, 'upload', { db, workspaceId });
+            if (!storedMeta.storage_id && !direct && queue && queueContext)
+                await queue.enqueue(hash, 'upload', queueContext);
             assertCurrentDb();
             return;
         }
@@ -437,8 +446,8 @@ export async function createOrRefFileWithStatus(
             db.file_meta.put(mergedMeta),
             ...(!direct ? [db.file_blobs.put({ hash: mergedMeta.hash, blob: file })] : []),
         ]);
-        if (!mergedMeta.storage_id && !direct && cloud && queue && workspaceId)
-            await queue.enqueue(mergedMeta.hash, 'upload', { db, workspaceId });
+        if (!mergedMeta.storage_id && !direct && queue && queueContext)
+            await queue.enqueue(mergedMeta.hash, 'upload', queueContext);
         storedMeta = mergedMeta;
         createdNew = true;
         actionPayload = {

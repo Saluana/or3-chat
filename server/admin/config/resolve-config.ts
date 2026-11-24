@@ -269,6 +269,7 @@ export function buildOr3CloudConfigFromEnv(
             enabled: authEnabled,
             provider: authProvider as AuthProviderId,
             guestAccessEnabled: env.OR3_GUEST_ACCESS_ENABLED === 'true',
+            offlineWorkspaceAccess: readEnvBoolean(env.OR3_OFFLINE_WORKSPACE_ACCESS, true),
             autoProvision: env.OR3_AUTH_AUTO_PROVISION !== 'false',
             registrationMode: parseAuthRegistrationMode(
                 env.OR3_AUTH_REGISTRATION_MODE,

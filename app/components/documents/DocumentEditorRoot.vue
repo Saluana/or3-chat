@@ -344,7 +344,7 @@ import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import AutocompleteState from '~/plugins/EditorAutocomplete/state';
 import { acceptCommittedDocument, flush, loadDocument, refreshDocument, retainDocumentEditor, saveDocumentRecoveryCopy, setDocumentContent, setDocumentEditorConflict, setDocumentTitle, useDocumentState } from '~/composables/documents/useDocumentsStore';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
-import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
+import { getLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 import { liveQuery } from 'dexie';
 import { isVisibleWorkspaceItem, workspaceItemMetadata } from '~~/shared/posts/workspace-item';
 import {
@@ -706,10 +706,10 @@ function revisionOrigin() {
     const id = props.documentId;
     const current = editor.value;
     const generation = getWorkspaceGeneration();
-    const account = getCachedSessionContext()?.user?.id;
+    const account = getLocalWorkspaceSession()?.user?.id;
     return { db, id, current, isCurrent: () => !didUnmount && editorDb.value === db && getDb() === db
         && props.documentId === id && editor.value === current && !current?.isDestroyed
-        && getWorkspaceGeneration() === generation && getCachedSessionContext()?.user?.id === account };
+        && getWorkspaceGeneration() === generation && getLocalWorkspaceSession()?.user?.id === account };
 }
 
 async function saveAutomaticRevision(token: number) {
@@ -835,12 +835,12 @@ async function insertFiles(files: File[]) {
     const db = editorDb.value;
     const id = props.documentId;
     const generation = getWorkspaceGeneration();
-    const account = getCachedSessionContext()?.user?.id ?? null;
+    const account = getLocalWorkspaceSession()?.user?.id ?? null;
     const isCurrent = () => !didUnmount && current === editor.value && !!current &&
         !current.isDestroyed && current.isEditable && !itemReadOnly.value &&
         documentLoaded.value && loadedDocumentId === id && props.documentId === id &&
         editorDb.value === db && getDb() === db && getWorkspaceGeneration() === generation &&
-        (getCachedSessionContext()?.user?.id ?? null) === account;
+        (getLocalWorkspaceSession()?.user?.id ?? null) === account;
     if (!current || !isCurrent()) return;
     imageIntakeFailed.value = false;
     const owner = { assertCurrent() {
@@ -2002,11 +2002,11 @@ async function restoreRevision(revision: CompleteDocumentRevision) {
     const version = contentVersion.value;
     const title = titleDraft.value;
     const generation = getWorkspaceGeneration();
-    const account = getCachedSessionContext()?.user?.id ?? null;
+    const account = getLocalWorkspaceSession()?.user?.id ?? null;
     const assertCurrent = () => {
         if (didUnmount || current.isDestroyed || editor.value !== current || editorDb.value !== db
             || getDb() !== db || props.documentId !== id || getWorkspaceGeneration() !== generation
-            || (getCachedSessionContext()?.user?.id ?? null) !== account
+            || (getLocalWorkspaceSession()?.user?.id ?? null) !== account
             || itemReadOnly.value || externalWrite.value || current.state.doc !== before
             || contentVersion.value !== version || titleDraft.value !== title) {
             throw new Error('The document changed while preparing the restore.');
