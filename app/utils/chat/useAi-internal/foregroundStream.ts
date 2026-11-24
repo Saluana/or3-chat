@@ -522,10 +522,9 @@ async function runForegroundWithRouter(ctx: ForegroundStreamContext, routerId: s
                     }
                 }
 
-                // Batch writes: persist every 500ms OR every 50 chunks (whichever comes first)
-                // to reduce DB pressure while maintaining progress safety
                 ctx.abortSignal.throwIfAborted();
-                if (writeCoalescer.shouldFlush()) await flushProgress();
+                const progress = writeCoalescer.scheduleFlush();
+                if (progress) await progress;
                 ctx.abortSignal.throwIfAborted();
             }
 

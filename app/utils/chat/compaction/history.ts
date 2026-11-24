@@ -31,12 +31,33 @@ function sortedKeys(_key: string, value: unknown): unknown {
 
 /** Request admission tracks transcript and lineage, not independently updated display titles. */
 export function requestHistoryFingerprint(projection: ThreadProjection): string {
-    return JSON.stringify({ messages: projection.messages.map(requestHistoryMessage), segments: projection.segments.map(({ thread, rows, visible }) => ({
-        rows: rows.map(requestHistoryMessage), visible: visible.map(requestHistoryMessage), thread: { id: thread.id, parent_thread_id: thread.parent_thread_id,
+    // A row occurs in the transcript, its segment, and its visible segment.
+    // Encode its complete comparison value once, then retain each view's order
+    // and membership through references. Per-call caches also detect in-place edits.
+    const records: string[] = [];
+    const values = new Map<string, number>();
+    const references = new WeakMap<Message, number>();
+    const reference = (row: Message): number => {
+        const existing = references.get(row);
+        if (existing !== undefined) return existing;
+        const value = JSON.stringify(requestHistoryMessage(row), sortedKeys);
+        let index = values.get(value);
+        if (index === undefined) {
+            index = records.length;
+            records.push(value);
+            values.set(value, index);
+        }
+        references.set(row, index);
+        return index;
+    };
+    const views = { messages: projection.messages.map(reference), segments: projection.segments.map(({ thread, rows, visible }) => ({
+        rows: rows.map(reference), visible: visible.map(reference), thread: { id: thread.id, parent_thread_id: thread.parent_thread_id,
             anchor_message_id: thread.anchor_message_id, anchor_index: thread.anchor_index, branch_mode: thread.branch_mode,
             root_thread_id: thread.root_thread_id, summary_message_id: thread.summary_message_id, fork_reason: thread.fork_reason,
             project_id: thread.project_id, system_prompt_id: thread.system_prompt_id, status: thread.status, deleted: thread.deleted },
-    })) }, sortedKeys);
+    })) };
+    // JSON escapes embedded newlines, so these record boundaries are unambiguous.
+    return [JSON.stringify(views, sortedKeys), ...records].join('\n');
 }
 
 /** The original content may be gone, but the summary's own pair must be intact. */

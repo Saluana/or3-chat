@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, defineComponent, h, nextTick, ref, shallowRef } from 'vue';
+import { computed, defineComponent, h, nextTick, ref, shallowRef, type Component } from 'vue';
 import { mount } from '@vue/test-utils';
+import { DialogContent, DialogDescription, DialogRoot, DialogTitle } from 'reka-ui';
 import type {
     PaletteAction,
     PaletteResult,
@@ -136,12 +137,28 @@ const UModalStub = defineComponent({
     },
 });
 
-function mountPalette() {
+const RekaModalStub = defineComponent({
+    name: 'UModal',
+    props: ['open', 'content'],
+    emits: ['update:open'],
+    setup(props, { slots, emit }) {
+        return () => h(DialogRoot, {
+            open: props.open,
+            'onUpdate:open': (open: boolean) => emit('update:open', open),
+        }, () => h(DialogContent, props.content, () => [
+            h(DialogTitle, {}, () => 'Command palette'),
+            h(DialogDescription, {}, () => 'Search the workspace'),
+            slots.content?.(),
+        ]));
+    },
+});
+
+function mountPalette(modal: Component = UModalStub) {
     return mount(CommandPalette, {
         attachTo: document.body,
         global: {
             stubs: {
-                UModal: UModalStub,
+                UModal: modal,
                 UButton: {
                     name: 'UButton',
                     props: ['disabled'],
@@ -152,6 +169,17 @@ function mountPalette() {
             },
         },
     });
+}
+
+function dispatchKeyboard(
+    target: Element,
+    type: 'keydown' | 'keyup',
+    { timeStamp, ...init }: KeyboardEventInit & { timeStamp: number }
+): KeyboardEvent {
+    const event = new KeyboardEvent(type, { bubbles: true, cancelable: true, ...init });
+    Object.defineProperty(event, 'timeStamp', { value: timeStamp });
+    target.dispatchEvent(event);
+    return event;
 }
 
 describe('CommandPalette overlay', () => {
@@ -215,6 +243,72 @@ describe('CommandPalette overlay', () => {
         await input.trigger('keydown', { key: 'Escape' });
         expect(close).toHaveBeenCalledTimes(1);
         wrapper.unmount();
+    });
+
+    it.each([
+        { isComposing: true },
+        { keyCode: 229 },
+    ])('leaves candidate selection and commit keys to the input method with %j', async composition => {
+        const wrapper = mountPalette(RekaModalStub);
+        try {
+            await nextTick();
+            const input = wrapper.get('input[role="combobox"]');
+            for (const [index, key] of ['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].entries()) {
+                dispatchKeyboard(input.element, 'keydown', { key, timeStamp: 100 + index, ...composition });
+            }
+            expect(moveActive).not.toHaveBeenCalled();
+            expect(runPrimary).not.toHaveBeenCalled();
+            expect(openActionTray).not.toHaveBeenCalled();
+            expect(close).not.toHaveBeenCalled();
+
+            // Reka listens for Escape on window independently of the input.
+            dispatchKeyboard(wrapper.get('[role="dialog"]').element, 'keydown', { key: 'Escape', timeStamp: 105, ...composition });
+            expect(close).not.toHaveBeenCalled();
+
+            dispatchKeyboard(input.element, 'keydown', { key: 'Enter', timeStamp: 106 });
+            expect(runPrimary).toHaveBeenCalledOnce();
+            dispatchKeyboard(input.element, 'keydown', { key: 'Escape', timeStamp: 107 });
+            expect(close).toHaveBeenCalled();
+        } finally { wrapper.unmount(); }
+    });
+
+    it.each([
+        { boundary: 'input', key: 'Escape', keyCode: 27 },
+        { boundary: 'input', key: 'Enter', keyCode: 13 },
+        { boundary: 'dialog', key: 'Escape', keyCode: 27 },
+        { boundary: 'dialog', key: 'Enter', keyCode: 13 },
+    ])('ignores Chrome replaying one physical $key at the $boundary boundary', async ({ boundary, key, keyCode }) => {
+        controller.results.value = [result({ secondaryActions: [action({ id: 'new-pane', label: 'New pane' })] })];
+        const wrapper = mountPalette(boundary === 'dialog' ? RekaModalStub : UModalStub);
+        try {
+            await nextTick();
+            const input = wrapper.get('input[role="combobox"]');
+            const keyboard = (type: 'keydown' | 'keyup', init: KeyboardEventInit & { timeStamp: number }) =>
+                dispatchKeyboard(input.element, type, init);
+            keyboard('keydown', { key: 'Dead', code: 'KeyE', keyCode: 229, timeStamp: 100 });
+            await input.trigger('compositionstart');
+            keyboard('keydown', { key, code: key, keyCode: 229, isComposing: true, timeStamp: 100.5 });
+            await input.trigger('compositionend');
+            // Native Chrome sends keyup before replaying the same hardware keydown.
+            keyboard('keyup', { key, code: key, keyCode, timeStamp: 100.5 });
+            keyboard('keydown', { key, code: key, keyCode, timeStamp: 100.5 });
+            keyboard('keyup', { key, code: key, keyCode, timeStamp: 100.6 });
+            if (boundary === 'dialog' && key === 'Escape') {
+                dispatchKeyboard(wrapper.get('[role="dialog"]').element, 'keydown', { key, code: key, keyCode, timeStamp: 100.5 });
+            }
+            expect(close).not.toHaveBeenCalled();
+            expect(runPrimary).not.toHaveBeenCalled();
+
+            keyboard('keydown', { key: 'ArrowDown', code: 'ArrowDown', timeStamp: 100.5 });
+            expect(moveActive).toHaveBeenCalledWith(1);
+            keyboard('keydown', { key: 'Enter', code: 'Enter', metaKey: true, timeStamp: 100.7 });
+            keyboard('keydown', { key: 'Enter', code: 'Enter', ctrlKey: true, timeStamp: 100.8 });
+            expect(openActionTray).toHaveBeenCalledTimes(2);
+
+            // A separate physical press works immediately, without a grace period.
+            keyboard('keydown', { key, code: key, keyCode, timeStamp: 100.9 });
+            expect(key === 'Escape' ? close : runPrimary).toHaveBeenCalledOnce();
+        } finally { wrapper.unmount(); }
     });
 
     it('opens the action tray with Tab and Cmd+Enter', async () => {

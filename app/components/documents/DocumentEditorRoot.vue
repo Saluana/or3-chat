@@ -326,7 +326,7 @@ import AppModal from '~/components/ui/AppModal.vue';
 import { formatShortcut, isApplePlatform } from '~/utils/keyboard-shortcuts';
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRef, watch } from 'vue';
 import { useCachedViewActivity } from '~/composables/core/useCachedViewActivity';
-import { onClickOutside } from '@vueuse/core';
+import { onClickOutside, useDebounceFn } from '@vueuse/core';
 import { getSchema, isTextSelection } from '@tiptap/core';
 import type { BubbleMenuPluginProps } from '@tiptap/extension-bubble-menu';
 import { downloadBlob } from '~/utils/download-blob';
@@ -491,7 +491,12 @@ let revisionGeneration = 0;
 let automaticRetryCount = 0;
 let pendingAutomaticRevision: { origin: ReturnType<typeof revisionOrigin>; document: Editor['state']['doc']; title: string } | undefined;
 let didUnmount = false;
-let captureTimer: ReturnType<typeof setTimeout> | undefined;
+const captureSave = useDebounceFn((origin: ReturnType<typeof revisionOrigin>) => {
+    if (!origin.isCurrent()) return;
+    return ensureLocalDurability(origin.id, origin.db).catch((caught) => {
+        console.error('[DocumentEditor] Scheduled save failed', caught);
+    });
+}, 750, { maxWait: 5_000 });
 let revisionTimer: ReturnType<typeof setTimeout> | undefined;
 let unregisterSession: (() => void) | undefined;
 let lastAutomaticRevisionAt = 0;
@@ -546,8 +551,7 @@ function captureContent(id = props.documentId, db = editorDb.value): void {
     if (db !== editorDb.value || loadedDocumentId !== id) return;
     const current = editor.value;
     if (!current || current.isDestroyed) return;
-    if (captureTimer) clearTimeout(captureTimer);
-    captureTimer = undefined;
+    captureSave.cancel();
     const currentState = useDocumentState(id, db);
     if (!currentState.record) return;
     const sharedTitle = currentState.pendingTitle ?? currentState.record.title;
@@ -618,8 +622,7 @@ async function recoverLocalCopy() {
     try {
         const copy = await saveDocumentRecoveryCopy(origin.id, { title, content: document.toJSON() }, { conflictOwner: owner, isCurrent }, origin.db);
         if (!origin.isCurrent()) return;
-        if (captureTimer) clearTimeout(captureTimer);
-        captureTimer = undefined;
+        captureSave.cancel();
         ai.reset();
         if (owner) {
             if (!isCurrent()) return;
@@ -693,12 +696,7 @@ const autocompleteStatus = computed(() => ({
 onClickOutside(slashMenu, () => closeSlashMenu(false));
 
 function scheduleCapture() {
-    if (captureTimer) clearTimeout(captureTimer);
-    captureTimer = setTimeout(() => {
-        void ensureLocalDurability().catch((caught) => {
-            console.error('[DocumentEditor] Scheduled save failed', caught);
-        });
-    }, 750);
+    void captureSave(revisionOrigin());
 }
 
 function revisionOrigin() {
@@ -1051,8 +1049,7 @@ function registerActiveSession(id: string): void {
             }
             externalWrite.value = true;
             editor.value?.setEditable(false, false);
-            if (captureTimer) clearTimeout(captureTimer);
-            captureTimer = undefined;
+            captureSave.cancel();
             return () => {
                 externalWrite.value = false;
                 if (!didUnmount && editorDb.value === db && props.documentId === id) editor.value?.setEditable(!editorLocked.value, false);
@@ -1081,6 +1078,7 @@ function registerActiveSession(id: string): void {
 }
 
 async function loadActiveDocument(id: string) {
+    captureSave.cancel();
     const db = editorDb.value;
     if (documentOwnership?.id !== id || documentOwnership.db !== db) {
         const previous = documentOwnership;
@@ -1229,9 +1227,8 @@ const stopWorkspaceSubscription = subscribeActiveWorkspaceDb(() => {
     });
     unregisterSession?.();
     unregisterSession = undefined;
-    if (captureTimer) clearTimeout(captureTimer);
+    captureSave.cancel();
     if (revisionTimer) clearTimeout(revisionTimer);
-    captureTimer = undefined;
     revisionTimer = undefined;
     editor.value?.destroy();
     editor.value = null;
@@ -1398,7 +1395,7 @@ onBeforeUnmount(() => {
     paneResizeObserver = undefined;
     ai.abort();
     unregisterSession?.();
-    if (captureTimer) clearTimeout(captureTimer);
+    captureSave.cancel();
     if (revisionTimer) clearTimeout(revisionTimer);
     const pending = ensureLocalDurability().catch((caught) => {
         console.error('[DocumentEditor] Failed to save during teardown', caught);

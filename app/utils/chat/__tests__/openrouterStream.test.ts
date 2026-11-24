@@ -1078,6 +1078,27 @@ describe('background streaming helpers', () => {
     });
 
     it.each([
+        [undefined, null],
+        [0, '0'],
+        [12.8, '12'],
+        [-1, null],
+        [Infinity, null],
+        [NaN, null],
+    ] as const)(
+        'sends a valid reasoning cursor independently of the answer cursor (%s)',
+        async (reasoningOffset, expected) => {
+            const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({ status: 'streaming' }));
+            vi.stubGlobal('fetch', fetchMock);
+            const controller = new AbortController();
+            await pollJobStatus('job-1', 42, controller.signal, 3, reasoningOffset);
+            const url = new URL(fetchMock.mock.calls[0]![0], 'https://or3.test');
+            expect(url.searchParams.get('offset')).toBe('42');
+            expect(url.searchParams.get('attempt')).toBe('3');
+            expect(url.searchParams.get('reasoning_offset')).toBe(expected);
+        }
+    );
+
+    it.each([
         [429, 'rate_limit', true],
         [503, 'server', true],
         [404, 'not_found', true],

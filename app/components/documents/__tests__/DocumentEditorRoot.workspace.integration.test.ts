@@ -105,6 +105,35 @@ async function mountedWorkspaces(initialAvailability?: 'trashed' | 'missing', mo
 }
 
 describe('mounted document editor workspace lifecycle', () => {
+    it.each(['body', 'title'] as const)('bounds continuous %s editing saves and still saves after a pause', async (field) => {
+        const { dbA, editor } = await mountedWorkspaces();
+        let edits = 0;
+        const edit = () => {
+            const text = `Continuous edit ${++edits}`;
+            if (field === 'body') editor.commands.setContent(content(text), { emitUpdate: true });
+            else wrapper!.getComponent(Title).vm.$emit('update:model-value', text);
+        };
+        edit();
+        // Every edit arrives before the ordinary 750 ms trailing save can run.
+        const typing = setInterval(edit, 100);
+        try {
+            await vi.waitFor(async () => {
+                const row = await dbA.posts.get(documentId);
+                expect(field === 'body' ? row?.content : row?.title).toContain('Continuous edit');
+            }, { timeout: 6_000 });
+        } finally {
+            clearInterval(typing);
+        }
+
+        const finalText = 'Last edit before a pause';
+        if (field === 'body') editor.commands.setContent(content(finalText), { emitUpdate: true });
+        else await wrapper!.getComponent(Title).get('textarea').setValue(finalText);
+        await vi.waitFor(async () => {
+            const row = await dbA.posts.get(documentId);
+            expect(field === 'body' ? row?.content : row?.title).toContain(finalText);
+        }, { timeout: 1_500 });
+    }, 10_000);
+
     // A locally durable offline edit can lose sync's LWW comparison before the
     // periodic checkpoint runs. The live document must converge, while History
     // retains the displaced local text instead of silently losing it.

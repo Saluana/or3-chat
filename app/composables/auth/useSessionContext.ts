@@ -8,7 +8,7 @@ import type { ComputedRef, Ref } from 'vue';
 import type { SessionContext } from '~/core/hooks/hook-types';
 import type { CloudAccess } from '~~/shared/cloud/access';
 import { fetchClientSession } from '~/composables/auth/client-session-request';
-import { takeBootSession } from '~/utils/boot-session';
+import { SESSION_CHECK_TIMEOUT_MS, takeBootSession } from '~/utils/boot-session';
 import {
     invalidateOfflineWorkspace,
     readOfflineWorkspaceRecord,
@@ -109,10 +109,29 @@ export function useSessionContext(
             error.value = null;
 
             const previousRecord = import.meta.client ? readOfflineWorkspaceRecord() : null;
+            const controller = new AbortController();
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            const deadline = new Promise<never>((_resolve, reject) => {
+                timer = setTimeout(() => {
+                    const failure = new Error('Your session could not be checked in time. Please retry.');
+                    failure.name = 'TimeoutError';
+                    controller.abort(failure);
+                    reject(failure);
+                }, SESSION_CHECK_TIMEOUT_MS);
+            });
+            const checkSession = async () => {
+                const bootSession = shouldCommit || revalidateOfflineWorkspace
+                    ? null : await takeBootSession(controller.signal);
+                controller.signal.throwIfAborted();
+                return fetchClientSession(bootSession, controller.signal);
+            };
             request = latestRequest = (async () => {
                 try {
-                    const bootSession = shouldCommit || revalidateOfflineWorkspace ? null : await takeBootSession();
-                    const payload = await fetchClientSession(bootSession);
+                    const payload = await Promise.race([checkSession(), deadline]);
+                    controller.signal.throwIfAborted();
+                    // The budget bounds remote validation. A commit guard may
+                    // need to finish saving local drafts before changing scope.
+                    clearTimeout(timer);
                     if (ownGeneration !== latestRefreshGeneration) return;
                     const commit = !shouldCommit || await shouldCommit(payload);
                     if (ownGeneration !== latestRefreshGeneration) return;
@@ -134,6 +153,7 @@ export function useSessionContext(
                     error.value = err instanceof Error ? err : new Error(String(err));
                     throw err;
                 } finally {
+                    clearTimeout(timer);
                     if (ownGeneration === latestRefreshGeneration) pending.value = false;
                 }
             })();
@@ -172,6 +192,7 @@ export function useSessionContext(
             key: 'auth-session',
             dedupe: 'defer',
             retry: 0,
+            timeout: SESSION_CHECK_TIMEOUT_MS,
         });
 
         watchEffect(() => {

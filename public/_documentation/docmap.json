@@ -32,7 +32,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 2,
-                    "summary": "Search workspace sources and saved-file excerpts with resource-level chunk results, bounded cancellable initial chat reads, current previews and mentions, request-owned AI references, incremental conversation refresh, keyboard navigation, previews, coverage, and workspace-scoped action feedback."
+                    "summary": "Search workspace sources and saved-file excerpts with resource-level chunk results, bounded cancellable initial chat reads, current previews and mentions, request-owned AI references, incremental conversation and document refresh, input-method-aware keyboard navigation, previews, coverage, and workspace-scoped action feedback."
                 },
                 {
                     "name": "projects.md",
@@ -215,7 +215,7 @@
                     "category": "Records",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "Create, edit, sync, recover, and manage native documents, including History recovery of displaced open-editor edits, normalized conflict checks, project association for documents created from chat messages, workspace navigation, and editor sessions."
+                    "summary": "Create, edit, sync, recover, and manage native documents, including autosave during continuous typing, History recovery of displaced open-editor edits, normalized conflict checks, project association for documents created from chat messages, workspace navigation, and editor sessions."
                 },
                 {
                     "name": "prompts.md",
@@ -425,7 +425,7 @@
                     "category": "Source integration",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Browse and search within folders, find an item's Files and project locations, and use bulk selection and Trash in narrow panes. Covers workspace KV sync, text coverage, shared-byte retention, and trusted Plugin SDK catalog actions."
+                    "summary": "Browse and search within folders, find an item's Files and project locations, and use bulk selection and Trash in narrow panes. Covers workspace KV sync, text coverage, verified file reuse in chat, shared-byte retention, and trusted Plugin SDK catalog actions."
                 },
                 {
                     "name": "errors.md",
@@ -620,7 +620,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Configure sign-in, registration, invitations, accounts, workspace access, offline reopening and reconnect, session refresh and retry behavior, and Basic Auth rate limits."
+                    "summary": "Configure sign-in, registration, invitations, accounts, workspace access, offline reopening and reconnect, startup session deadlines, session refresh and retry behavior, and Basic Auth rate limits."
                 },
                 {
                     "name": "background-execution.md",
@@ -629,7 +629,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "Understand server-side jobs, browser and server requirements for delegated chats, retained tool results, and recovery after detachment."
+                    "summary": "Understand server-side jobs, browser and server requirements for delegated chats, retained tool results, incremental text and reasoning polling, and recovery after detachment."
                 },
                 {
                     "name": "notifications.md",
@@ -782,7 +782,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 20,
-                    "summary": "Hash-addressed Cloud files with durable uploads, authenticated resumable downloads, reusable chat attachments, and bounded browser caching."
+                    "summary": "Hash-addressed Cloud files with durable uploads, transfer retry delays, authenticated resumable downloads, reusable chat attachments, and bounded browser caching."
                 },
                 {
                     "name": "plugin-access-gating.md",
@@ -877,7 +877,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Understand chat admission, persistence, direct OpenAI cache boundaries and live qualification, literal user-message editing, streaming, recovery, tab and pane navigation ownership, dashboard subpages preserved across unrelated URL updates, retired command handles, durable layouts, attachment resource cleanup, and local token estimates, streaming Markdown prefix reuse with custom images and tail-only repair, cached Mermaid remounts, worker highlighting, pre-paint scroll anchoring and collapse refill, and smooth navigation."
+                    "summary": "Understand chat admission, persistence, direct OpenAI cache boundaries and live qualification, literal user-message editing, draft-safe pane plugin sends, streaming checkpoints, recovery, tab and pane navigation ownership, dashboard subpages preserved across unrelated URL updates, retired command handles, durable layouts, attachment resource cleanup, and local token estimates, streaming Markdown prefix reuse with custom images and tail-only repair, cached Mermaid remounts, worker highlighting, pre-paint scroll anchoring and collapse refill, and smooth navigation."
                 },
                 {
                     "name": "ai-preferences.md",

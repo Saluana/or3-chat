@@ -29,7 +29,7 @@ debounce, Enter cannot execute a command belonging to the old query.
 
 Renames, edits, replacements, and deletions refresh search even when record counts
 or timestamps stay the same. The selected preview refreshes with its source.
-Workspace changes retire previous results and pending reads.
+Workspace changes retire previous results and pending reads. After a local document edit, search refreshes that document by ID. Moving it to Trash removes its result.
 
 Chat and Document AI mention pickers refresh while open. Their search field queries
 the workspace, including items outside the initial suggestions. AI references are
@@ -152,6 +152,8 @@ text index still consumes memory proportional to the searchable history.
 The palette is a combobox over a listbox: the query owns focus and announces the
 active option via `aria-activedescendant`, result counts and source failures are
 announced politely, and focus is trapped inside the overlay while it is open.
+While an input method is composing text, its candidate picker handles the arrow keys, Enter, and Escape. Palette shortcuts resume when composition ends.
+
 Icons, chips, and surfaces are all theme tokens, so retro and cyberpunk themes
 restyle the palette along with the rest of the app.
 

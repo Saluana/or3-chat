@@ -458,6 +458,7 @@ import type {
     UploadedImage,
 } from '~/components/chat/chat-input/types';
 import { useChatInputAttachments } from '~/components/chat/chat-input/useChatInputAttachments';
+import type { StoredAttachmentReference } from '~/components/chat/file-upload-utils';
 import ChatComposerShell from '~/components/chat/ChatComposerShell.vue';
 import ChatProjectChoice from '~/components/projects/ChatProjectChoice.vue';
 import { useChatModelSelection } from '~/composables/chat/useChatModelSelection';
@@ -713,7 +714,7 @@ onMounted(async () => {
     await initializeEditor();
     inputReady = true;
     if (props.paneId && !componentDisposed && inputActive.value) {
-        registerPaneInput(props.paneId, { setText, focus, triggerSend, insertReference, attachFile });
+        registerPaneInput(props.paneId, { setText, focus, triggerSend, sendText, insertReference, attachFile, attachStoredFile });
     }
 });
 watch(trustedEditorRevision, () => {
@@ -908,6 +909,7 @@ const {
     handlePaste,
     openFileDialog,
     processAttachment,
+    processStoredAttachment,
 } = useChatInputAttachments({
     maxFiles: MAX_IMAGES,
     ownerKey: () => props.tabId ?? props.threadId,
@@ -1340,14 +1342,16 @@ const compatibilityModel = computed(() => previewModels.catalog.value.find(model
 const modelCannotReadAttachments = computed(() => {
     return !acceptsImageInput(compatibilityModel.value) && attachments.value.some(file => file.kind === 'image');
 });
-const modelCompatibilityMessage = computed(() => {
-    if (modelCannotReadAttachments.value) return 'This model cannot read these attachments. Choose another model or remove the attachments.';
+const toolCompatibilityMessage = computed(() => {
     if (!toolsAcknowledged.value && openRouterToolCapability(compatibilityModel.value) === 'unsupported'
         && compatibilityTools.preferences.value.enabled
         && contextTools.listTools.value.some(tool => compatibilityTools.preferences.value.tools[tool.definition.function.name] !== false))
         return 'This model cannot use tools. Choose another model or continue without tools.';
     return '';
 });
+const modelCompatibilityMessage = computed(() => modelCannotReadAttachments.value
+    ? 'This model cannot read these attachments. Choose another model or remove the attachments.'
+    : toolCompatibilityMessage.value);
 watch([selectedModel, () => props.threadId], () => { toolsAcknowledged.value = false; });
 watch([() => props.threadId, () => props.contextRevision, selectedModel, modelVariant,
     thinkingEnabled, reasoningEffort, promptText, stagedPromptId, promptSelectionRevision, aiSettings,
@@ -1355,8 +1359,9 @@ watch([() => props.threadId, () => props.contextRevision, selectedModel, modelVa
 // Attachment processing mutates the existing array and its pending/hash fields.
 // A shallow ref watch misses those changes and leaves an obsolete decision visible.
 watch([attachments, largeTextBlocks, imageSettings], invalidateContextDecision, { deep: true });
-async function handleSend(decision: { inspectLossyRequest?: boolean; lossyConfirmation?: import('~/utils/chat/lossy-request').LossyRequestPreview } = {}): Promise<SendResult> {
-    const result = await performSend(decision);
+async function handleSend(decision: { inspectLossyRequest?: boolean; lossyConfirmation?: import('~/utils/chat/lossy-request').LossyRequestPreview } = {}, explicitText?: string): Promise<SendResult> {
+    const result = await performSend(decision, explicitText);
+    if (explicitText !== undefined) return result;
     if ((result.status === 'rejected' || result.status === 'failed') && ['context_full', 'model_metadata_unavailable', 'invalid_context_limit', 'invalid_output_limit', 'unsupported_input'].includes(result.reason)) {
         sendBlock.value = result;
         if (result.status === 'rejected') lossyPreview.value = result.lossyPreview;
@@ -1366,9 +1371,11 @@ async function handleSend(decision: { inspectLossyRequest?: boolean; lossyConfir
     }
     return result;
 }
-const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfirmation?: import('~/utils/chat/lossy-request').LossyRequestPreview }): Promise<SendResult> => {
+const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfirmation?: import('~/utils/chat/lossy-request').LossyRequestPreview }, explicitText?: string): Promise<SendResult> => {
+    const independent = explicitText !== undefined;
     if (props.loading) return { status: 'rejected', reason: 'busy' };
-    if (modelCompatibilityMessage.value) return { status: 'rejected', reason: 'client_limit', error: modelCompatibilityMessage.value };
+    const compatibilityMessage = independent ? toolCompatibilityMessage.value : modelCompatibilityMessage.value;
+    if (compatibilityMessage) return { status: 'rejected', reason: 'client_limit', error: compatibilityMessage };
     if (viewOnly.value) return { status: 'rejected', reason: 'unavailable' };
     // Account first: a signed-out visitor cannot use any key, so never ask for one.
     if (signInRequired.value) {
@@ -1376,7 +1383,7 @@ const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfi
         return { status: 'rejected', reason: 'missing_credentials' };
     }
     if (
-        !guardPendingAttachmentSend(attachments.value, toast, {
+        !guardPendingAttachmentSend(independent ? [] : attachments.value, toast, {
             description: 'Please wait for attachments to finish before sending.',
             duration: 2600,
         })
@@ -1421,17 +1428,20 @@ const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfi
         return { status: 'rejected', reason: 'missing_credentials' };
     }
     if (
-        promptText.value.trim() ||
+        independent ? explicitText.trim() : (promptText.value.trim() ||
         uploadedImages.value.length > 0 ||
-        largeTextBlocks.value.length > 0
+        largeTextBlocks.value.length > 0)
     ) {
         // Provide the current editor JSON to hooks so downstream filters (mentions)
         // can extract structured mentions before the text is flattened.
-        const editorDoc = editor.value?.getJSON?.();
+        // Programmatic text is literal text, never editor HTML or the user's mentions.
+        const editorDoc = independent ? { type: 'doc', content: explicitText.split(/\r?\n/u).map(text => ({
+            type: 'paragraph', ...(text ? { content: [{ type: 'text', text }] } : {}),
+        })) } : editor.value?.getJSON?.();
         const submittedEditorDoc = editorDoc ? structuredClone(editorDoc) : undefined;
-        const submittedText = promptText.value;
-        const submittedAttachments = attachments.value.slice();
-        const submittedLargeTexts = largeTextBlocks.value.slice();
+        const submittedText = independent ? explicitText : promptText.value;
+        const submittedAttachments = independent ? [] : attachments.value.slice();
+        const submittedLargeTexts = independent ? [] : largeTextBlocks.value.slice();
         const submittedTabId = props.tabId; const submittedThreadId = props.threadId;
         const submittedRevision = composerRevision;
         const submittedTabRevision = submittedTabId ? tabContentRevisions.get(submittedTabId) ?? 0 : 0;
@@ -1505,6 +1515,8 @@ const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfi
             return await sendResult;
         }
         void previewModels.recordRecentModel(submittedSettings.model).catch(() => {});
+        // A plugin submission has no ownership of the user's current or saved draft.
+        if (independent) return await sendResult;
         const sameView = props.tabId === submittedTabId && (!submittedThreadId || props.threadId === submittedThreadId);
         if (!sameView || composerRevision !== submittedRevision) {
             if (!submittedTabId || (tabContentRevisions.get(submittedTabId) ?? 0) !== submittedTabRevision) return await sendResult;
@@ -1564,6 +1576,9 @@ function focus() {
 function triggerSend(): Promise<SendResult> {
     return handleSend();
 }
+function sendText(text: string): Promise<SendResult> {
+    return handleSend({}, text);
+}
 function insertReference(reference: { id: string; source: 'document' | 'chat' | 'file'; label: string }, afterText = ''): boolean {
     if (!isMentionSourceEnabled(reference.source === 'chat' ? 'conversations' : 'documents')) return false;
     const current = editor.value;
@@ -1581,34 +1596,29 @@ async function attachFile(file: File): Promise<boolean> {
     captureDraft();
     return true;
 }
+async function attachStoredFile(reference: StoredAttachmentReference): Promise<boolean> {
+    const initiatingTab = props.tabId;
+    const attachment = await processStoredAttachment(reference);
+    if (componentDisposed || props.tabId !== initiatingTab || attachment?.status !== 'ready') return false;
+    captureDraft();
+    return true;
+}
 async function attachMentionImage(id: string): Promise<void> {
     const initiatingTab = props.tabId;
     const initiatingEditor = editor.value;
     try {
         const origin = captureWorkspaceOperation({ subject: null, workspaceId: getActiveWorkspaceId() ?? 'local',
             threadId: 'mention-image', messageId: null, requestId: id, callId: id, abortSignal: new AbortController().signal });
-        const { readWorkspaceItem } = await import('~/utils/chat/workspace-items');
-        const { parseFileHashes } = await import('~/db/files-util');
-        const { getFileBlob } = await import('~/db/files');
-        await readWorkspaceItem(origin, { kind: 'file', id });
-        const row = await origin.db.posts.get(id);
-        const hash = parseFileHashes(row?.file_hashes)[0];
-        const meta = hash ? await origin.db.file_meta.get(hash) : undefined;
-        origin.assertCurrent();
-        if (!meta || meta.deleted || !meta.mime_type.startsWith('image/')) throw new Error('This image is unavailable.');
-        const blob = await getFileBlob(meta.hash, origin.db);
-        await readWorkspaceItem(origin, { kind: 'file', id });
         origin.assertCurrent();
         if (componentDisposed || props.tabId !== initiatingTab || editor.value !== initiatingEditor) return;
-        if (!blob) throw new Error('Image unavailable offline. Connect and retry.');
-        await attachFile(new File([blob], meta.name, { type: meta.mime_type }));
+        await attachStoredFile({ id, workspaceId: origin.workspaceId, generation: origin.generation, kind: 'image' });
     } catch (error) {
         if (!componentDisposed && props.tabId === initiatingTab) {
             toast.add({ title: 'Could not attach image', description: presentError(error, { fallbackMessage: 'Try again.' }).message, color: 'error' });
         }
     }
 }
-defineExpose({ setText, focus, triggerSend, insertReference, attachFile, captureDraft,
+defineExpose({ setText, focus, triggerSend, sendText, insertReference, attachFile, attachStoredFile, captureDraft,
     getSendOptions: () => ({
         model: selectedModel.value,
         modelVariant: modelVariant.value,
@@ -1626,7 +1636,7 @@ watch(inputActive, (active) => {
     if (!active) {
         if (props.paneId) unregisterPaneInput(props.paneId);
     } else if (props.paneId && !componentDisposed && inputReady) {
-        registerPaneInput(props.paneId, { setText, focus, triggerSend, insertReference, attachFile });
+        registerPaneInput(props.paneId, { setText, focus, triggerSend, sendText, insertReference, attachFile, attachStoredFile });
     }
 }, { flush: 'sync' });
 

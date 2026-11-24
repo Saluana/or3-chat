@@ -1045,18 +1045,12 @@ async function askInChat(row: Post) {
         origin.assertCurrent();
         const { getGlobalMultiPaneApi } = await import('~/utils/multiPaneApi');
         const { getPaletteHostContext } = await import('~/composables/search/useCommandPalette');
-        const { programmaticInsertReference, programmaticAttachFile, waitForPaneInput } = await import('~/composables/chat/useChatInputBridge');
+        const { programmaticInsertReference, programmaticAttachStoredFile, waitForPaneInput } = await import('~/composables/chat/useChatInputBridge');
         const hash = parseFileHashes(row.file_hashes)[0];
         const meta = hash ? await origin.db.file_meta.get(hash) : undefined;
         origin.assertCurrent();
-        let attachment: File | undefined;
-        if (row.postType === FILE_CATALOG_POST_TYPE && meta && ['image', 'pdf'].includes(meta.kind)) {
-            const { getFileBlob } = await import('~/db/files');
-            const blob = await getFileBlob(meta.hash, origin.db);
-            origin.assertCurrent();
-            if (!blob) throw new Error('Original file unavailable offline. Connect and retry.');
-            attachment = new File([blob], meta.name, { type: meta.mime_type });
-        }
+        const attachment = row.postType === FILE_CATALOG_POST_TYPE && meta && ['image', 'pdf'].includes(meta.kind)
+            ? { id: row.id, hash: meta.hash, workspaceId: origin.workspaceId, generation: origin.generation } : undefined;
         const api = getGlobalMultiPaneApi();
         const host = getPaletteHostContext();
         if (!api || !host) throw new Error('Chat navigation is unavailable.');
@@ -1077,7 +1071,7 @@ async function askInChat(row: Post) {
         if (api.activePaneId.value !== paneId || api.getPaneById(paneId)?.threadId !== targetThread || api.getPaneById(paneId)?.mode !== 'chat') throw new Error('The target chat changed. Retry from Files.');
         const current = await readWorkspaceItem(origin, { kind: row.postType === 'doc' ? 'document' : 'file', id: row.id });
         origin.assertCurrent();
-        const result = !paneId ? { status: 'unavailable' } : attachment ? await programmaticAttachFile(paneId, attachment)
+        const result = !paneId ? { status: 'unavailable' } : attachment ? await programmaticAttachStoredFile(paneId, attachment)
             : programmaticInsertReference(paneId, { id: row.id, source: row.postType === 'doc' ? 'document' : 'file', label: current.source.title });
         origin.assertCurrent();
         if (result.status !== 'ready') {

@@ -1942,6 +1942,10 @@ for (const kind of ['image', 'pdf'] as const) {
     test(`saved ${kind} uses native removable attachments without sending the draft`, async ({ page }, info) => {
         test.setTimeout(90_000);
         await page.route('**/api/__or3-e2e/models*', route => route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }));
+        let clientURL: string | undefined;
+        page.on('request', request => {
+            if (/\/db\/client\.ts(?:\?|$)/.test(request.url())) clientURL = request.url();
+        });
         await page.goto(`${chatPage}?workspace=1`);
         const input = page.getByRole('textbox', { name: 'Message input' });
         await expect(input).toBeVisible({ timeout: 45_000 });
@@ -1955,6 +1959,13 @@ for (const kind of ['image', 'pdf'] as const) {
         await (await chooser).setFiles(upload);
         const removeAttachment = page.getByRole('button', { name: kind === 'image' ? 'Remove image' : 'Remove PDF', exact: true });
         await expect(removeAttachment).toBeVisible();
+        // Chips appear during intake; wait for this original's committed catalog owner.
+        expect(clientURL).toBeTruthy();
+        await expect.poll(() => page.evaluate(async ({ url, filename }) => {
+            const client = await import(url);
+            const row = await client.getDb().posts.where('[postType+title]').equals(['or3:file', filename]).first();
+            return row && !row.deleted ? row.title : null;
+        }, { url: clientURL!, filename: name }), { timeout: 15_000 }).toBe(name);
         await removeAttachment.click();
         await page.getByRole('button', { name: 'Files', exact: true }).click();
         const files = page.locator('#main-content').getByRole('region', { name: 'Workspace Files' });

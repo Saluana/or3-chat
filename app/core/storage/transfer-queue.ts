@@ -176,7 +176,7 @@ export class FileTransferQueue {
             void db.file_transfers.filter(row => row.workspace_id === workspaceId && row.direction === 'upload' &&
                 ['queued', 'failed'].includes(row.state) &&
                 (row.last_error_details?.status === 402 || row.last_error_details?.code === 'ERR_STORAGE_QUOTA_EXCEEDED'))
-                .modify({ state: 'queued', attempts: 0, retry_at: 0 })
+                .modify({ state: 'queued', attempts: 0, consecutive_deferrals: 0, retry_at: 0 })
                 .then(() => this.scheduleProcessQueue(0)).catch(() => {});
         }
         this.scheduleProcessQueue(0);
@@ -315,6 +315,7 @@ export class FileTransferQueue {
                 bytes_done: 0,
                 state: 'queued',
                 attempts: 0,
+                consecutive_deferrals: 0,
                 retry_at: 0,
                 created_at: now,
                 updated_at: now,
@@ -385,7 +386,7 @@ export class FileTransferQueue {
         await db.transaction('rw', db.file_transfers, async () => {
             const current = await db.file_transfers.get(id);
             if (!current || (current.state !== 'pending_upload' && current.state !== 'remote_missing')) return;
-            await db.file_transfers.update(id, { state: 'queued', retry_at: 0, last_error: undefined, updated_at: nowSec() });
+            await db.file_transfers.update(id, { state: 'queued', consecutive_deferrals: 0, retry_at: 0, last_error: undefined, updated_at: nowSec() });
         });
         if (boundContext) this.assertBoundContext(boundContext);
         this.scheduleProcessQueue(0);
@@ -609,6 +610,7 @@ export class FileTransferQueue {
             const markedDone = await this.safeUpdateTransfer(transfer.id, {
                 state: 'done',
                 bytes_done: latest?.bytes_total ?? transfer.bytes_total,
+                consecutive_deferrals: 0,
                 retry_at: 0,
                 lease_owner: undefined,
                 lease_expires_at: undefined,
@@ -684,6 +686,9 @@ export class FileTransferQueue {
                 metadata.status === 429 || metadata.status === 408 || (metadata.status !== undefined && metadata.status >= 500) ||
                 error instanceof TypeError || (error as Error | undefined)?.name === 'TimeoutError' || (error as Error | undefined)?.name === 'NetworkError';
             const attempts = transfer.attempts + (deferred ? 0 : 1);
+            const consecutiveDeferrals = deferred
+                ? Math.min((transfer.consecutive_deferrals ?? 0) + 1, Number.MAX_SAFE_INTEGER)
+                : 0;
             const message = presentError(metadata).message;
 
             // Check if error is marked as non-retryable (e.g., file too large)
@@ -693,10 +698,15 @@ export class FileTransferQueue {
                 (error as { retryable?: boolean }).retryable === false;
 
             const failed = (!admissionDeferred && isNonRetryable) || (!deferred && attempts >= this.maxAttempts);
-            const delay = failed ? 0 : Math.max(this.getBackoffDelay(Math.max(1, attempts)), metadata.retryAfterMs ?? 0, admissionDeferred ? 60_000 : 0);
+            const delay = failed ? 0 : Math.max(
+                this.getBackoffDelay(Math.max(1, deferred ? consecutiveDeferrals : attempts)),
+                metadata.retryAfterMs ?? 0,
+                admissionDeferred ? 60_000 : 0
+            );
             const updated = await this.safeUpdateTransfer(transfer.id, {
                 state: failed ? 'failed' : 'queued',
                 attempts,
+                consecutive_deferrals: failed ? 0 : consecutiveDeferrals,
                 last_error: message,
                 last_error_details: errorDiagnostics(metadata),
                 retry_at: failed ? 0 : Date.now() + delay,
@@ -1495,8 +1505,9 @@ export class FileTransferQueue {
     }
 
     private getBackoffDelay(attempt: number): number {
-        const delay = this.backoffBaseMs * Math.pow(2, attempt - 1);
-        return Math.min(delay, this.backoffMaxMs);
+        const delay = Math.min(this.backoffBaseMs * Math.pow(2, attempt - 1), this.backoffMaxMs);
+        // Spread clients across the retry window without exceeding the local cap.
+        return Math.min(Math.round(delay * (0.75 + Math.random() * 0.5)), this.backoffMaxMs);
     }
 
     private rebindDb(): void {

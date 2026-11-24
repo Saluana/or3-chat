@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createChatPaletteSource, buildChatResources } from '../sources/chat-source';
-import { postToDocumentResource } from '../sources/document-source';
+import { createDocumentPaletteSource, postToDocumentResource } from '../sources/document-source';
 import { projectToResource } from '../sources/project-source';
 import { fileMetaToResource, isImageFileMeta } from '../sources/image-source';
 import { postToPluginResource } from '../sources/plugin-post-source';
@@ -245,6 +245,62 @@ describe('palette source adapters', () => {
             context
         );
         expect(resource.content).toContain('body phrase');
+    });
+
+    it('refreshes edited and removed documents without hydrating unrelated bodies', async () => {
+        const { Or3DB } = await import('~/db/client');
+        const { PaletteSourceIndex } = await import('../source-index');
+        const db = new Or3DB(`palette-document-delta-${crypto.randomUUID()}`);
+        const index = new PaletteSourceIndex('document');
+        const document = (id: string, body: string) => ({
+            id, title: id, postType: 'doc', deleted: false, meta: '',
+            created_at: 1, updated_at: 1, clock: 1,
+            content: JSON.stringify({ type: 'doc', content: [
+                { type: 'paragraph', content: [{ type: 'text', text: body }] },
+            ] }),
+        });
+        const hydrated: string[] = [];
+        db.posts.hook('reading', post => { if (post) hydrated.push(post.id); return post; });
+        try {
+            await db.posts.bulkPut([
+                document('edited', 'beforeword'), document('trashed', 'trash phrase'),
+                document('deleted', 'delete phrase'), document('changed-type', 'changed phrase'),
+                document('tombstone', 'soft deleted phrase'),
+                ...Array.from({ length: 50 }, (_, i) => document(`unrelated-${i}`, 'unrelated body')),
+            ]);
+            const source = createDocumentPaletteSource();
+            const localContext = { ...context, getDb: async () => db };
+            await index.replaceAll(await source.load(localContext));
+            await db.posts.update('edited', { content: document('edited', 'afterwords').content });
+            await db.posts.update('trashed', { meta: JSON.stringify({
+                'or3.workspace-item': { version: 1, trashed_at: 123 },
+            }) });
+            await db.posts.delete('deleted');
+            await db.posts.update('changed-type', { postType: 'example-note' });
+            await db.posts.update('tombstone', { deleted: true });
+            hydrated.length = 0;
+
+            const delta = await source.loadRecords!(localContext, [
+                'edited', 'trashed', 'deleted', 'changed-type', 'tombstone', 'missing', 'edited',
+            ]);
+            expect(hydrated.sort()).toEqual(['changed-type', 'edited', 'tombstone', 'trashed']);
+            expect(delta.resources.map(resource => resource.key)).toEqual(['document:edited']);
+            expect(delta.removedKeys).toEqual([
+                'document:trashed', 'document:deleted', 'document:changed-type', 'document:tombstone', 'document:missing',
+            ]);
+            for (const key of delta.removedKeys) await index.removeResource(key);
+            for (const resource of delta.resources) await index.upsertResource(resource);
+            expect((await index.search({ term: 'afterwords' })).results.map(result => result.key))
+                .toEqual(['document:edited']);
+            expect((await index.search({ term: 'beforeword' })).results).toEqual([]);
+            expect(index.getResources().filter(resource => resource.recordId.startsWith('unrelated-')))
+                .toHaveLength(50);
+
+            await db.posts.update('trashed', { meta: '' });
+            const restored = await source.loadRecords!(localContext, ['trashed']);
+            expect(restored.resources.map(resource => resource.key)).toEqual(['document:trashed']);
+            expect(restored.removedKeys).toEqual([]);
+        } finally { index.dispose(); await db.delete(); }
     });
 
     it('indexes project description', () => {

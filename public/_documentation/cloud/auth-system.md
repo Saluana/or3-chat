@@ -89,6 +89,8 @@ const authenticated = computed(() => context.data.value?.session.authenticated =
 await context.refresh();
 ```
 
+During startup the browser gives session validation and provider recovery a shared 10-second deadline. If the connection stalls, the lock page offers its existing retry flow and the workspace data stays on the device.
+
 Auth-provider client adapters signal sign-in and sign-out changes so the application refreshes its session and workspace scope. When the auth-change handler reloads after sign-in, it waits for the new page to publish the session and start sync. Confirmed sign-out, account switches, and workspace changes publish the new session before reload so local cleanup can run. Cross-tab workspace revisions refresh and publish the workspace in the current page before reload.
 
 Provider SDK refresh and recovery belong in the client adapters. Before clearing local data on sign-out, the host requires two fresh signed-out checks. For Basic Auth, each check uses the session endpoint and treats a failed request as indeterminate.

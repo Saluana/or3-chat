@@ -48,7 +48,7 @@ lease expirations, including deadlines equal to the current millisecond.
 
 While the browser is offline, transfers keep their retry budget and resume on
 the online event. Network failures, timeouts, rate limits, and server outages
-retain the original and defer work without consuming permanent-failure attempts.
+retain the original and defer work without consuming permanent-failure attempts. Consecutive deferrals increase the delay with jitter. A server-provided `Retry-After` sets the earliest retry time.
 Gateway control requests have a 60-second deadline; an entire byte transfer has
 a five-minute deadline. Provider operations accept the caller's `AbortSignal`,
 so cancellation and workspace changes also cancel control requests.

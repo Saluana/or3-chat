@@ -54,6 +54,13 @@ export function createStreamWriteCoalescer(options?: {
         dirtyBytes = 0;
         lastFlushAt = now();
     }
+    function shouldFlush() {
+        return dirtyEvents > 0 && (
+            dirtyEvents >= maxEvents ||
+            dirtyBytes >= maxBytes ||
+            now() - lastFlushAt >= maxDelayMs
+        );
+    }
 
     return {
         markDirty(bytes = 0) {
@@ -62,12 +69,19 @@ export function createStreamWriteCoalescer(options?: {
             dirtyBytes += Math.max(0, bytes);
             scheduleIdleFlush();
         },
-        shouldFlush() {
-            return dirtyEvents > 0 && (
-                dirtyEvents >= maxEvents ||
-                dirtyBytes >= maxBytes ||
-                now() - lastFlushAt >= maxDelayMs
-            );
+        scheduleFlush(): Promise<void> | undefined {
+            if (isDisposed() || !onIdleFlush) return;
+            if (!inFlight && shouldFlush()) {
+                // Keep consuming while one snapshot saves. Its callback reads
+                // the newest state when it starts; no per-token jobs are queued.
+                void onIdleFlush().catch(() => {});
+            }
+            if (inFlight && (dirtyEvents >= maxEvents * 4 || dirtyBytes >= maxBytes * 4)) {
+                // Bound the suffix accepted during a slow write. A failed older
+                // snapshot retains dirty state, so retry the latest snapshot
+                // before the consumer resumes or reaches a durability barrier.
+                return inFlight.catch(() => {}).then(() => onIdleFlush());
+            }
         },
         hasDirty() {
             return dirtyEvents > 0;

@@ -3,14 +3,14 @@
  *
  * **Purpose**
  * Provides a lightweight bridge for programmatic message injection into existing ChatInputDropper
- * instances. Allows pane plugin API to set input text and invoke native send flow without
+ * instances. Allows pane plugin API to submit explicit text through the native send flow without
  * re-hydrating thread history or duplicating user messages. Reuses exact UI pipeline.
  *
  * **Responsibilities**
  * - Maintain registry of chat input instances keyed by paneId
  * - Allow registration/unregistration of input APIs
  * - Provide `programmaticPrefill()` to inject text without sending
- * - Provide `programmaticSend()` to inject text and trigger send
+ * - Provide `programmaticSend()` to submit explicit text without changing the draft
  * - Check for pane existence via `hasPane()`
  *
  * **Non-responsibilities**
@@ -55,7 +55,7 @@
 /**
  * Lightweight bridge allowing programmatic message injection to existing ChatInputDropper instances
  * without re-hydrating thread history or duplicating user messages. Each ChatContainer will register
- * its input + send handler keyed by paneId. The pane plugin API can then set the input text and invoke
+ * its input + send handler keyed by paneId. The pane plugin API can submit explicit text through
  * the native onSend path (which already drives useChat/sendMessage and streaming) for a given pane.
  *
  * This avoids: (1) re-loading thread history, (2) re-sending duplicate user message content, and
@@ -65,7 +65,7 @@
  * registerPaneInput(paneId, api)   -> called by ChatContainer (client only)
  * unregisterPaneInput(paneId)      -> cleanup (HMR / pane close)
  * programmaticPrefill(paneId, text) -> sets and focuses editor text only
- * programmaticSend(paneId, text)    -> sets editor text + triggers native send
+ * programmaticSend(paneId, text)    -> submits explicit text and preserves the draft
  * hasPane(paneId)                  -> helper
  *
  * The ChatInputDropper exposes a minimal imperative API (setText, send). We attach it via ref binding.
@@ -73,13 +73,16 @@
 
 import { ref, watch } from 'vue';
 import type { SendResult } from '~/utils/chat/types';
+import type { StoredAttachmentReference } from '~/components/chat/file-upload-utils';
 
 interface ChatInputImperativeApi {
     setText(t: string): void;
     focus(): void;
     triggerSend(): Promise<SendResult>; // send current text/attachments
+    sendText?: (text: string) => Promise<SendResult>; // submit without changing the draft
     insertReference?: (reference: { id: string; source: 'document' | 'chat' | 'file'; label: string }, afterText?: string) => boolean;
     attachFile?: (file: File) => Promise<boolean>;
+    attachStoredFile?: (reference: StoredAttachmentReference) => Promise<boolean>;
 }
 
 interface RegisteredPaneInput {
@@ -135,8 +138,8 @@ export function unregisterPaneInput(paneId: string) {
  * Programmatically sends a message to a pane.
  *
  * **Behavior**
- * - Sets input text via `api.setText(text)`
- * - Triggers native send flow via `api.triggerSend()`
+ * - Submits explicit text via `api.sendText(text)` without touching the draft
+ * - Reuses native admission, settings and send hooks
  * - Awaits and returns the native composer's real `SendResult`
  *
  * **Error Handling**
@@ -153,10 +156,9 @@ export async function programmaticSend(
     text: string
 ): Promise<SendResult> {
     const r = find(paneId);
-    if (!r) return { status: 'rejected', reason: 'unavailable' };
+    if (!r?.api.sendText) return { status: 'rejected', reason: 'unavailable' };
     try {
-        r.api.setText(text);
-        return await r.api.triggerSend();
+        return await r.api.sendText(text);
     } catch (e) {
         if (import.meta.dev)
             console.debug('[useChatInputBridge] send failed', e);
@@ -211,6 +213,15 @@ export async function programmaticAttachFile(paneId: string, file: File): Promis
     const registered = find(paneId);
     if (!registered?.api.attachFile) return { status: 'unavailable' };
     if (!await registered.api.attachFile(file) || find(paneId) !== registered) return { status: 'unavailable' };
+    registered.api.focus();
+    return { status: 'ready' };
+}
+
+/** Attach a saved original through native intake without hashing unchanged bytes again. */
+export async function programmaticAttachStoredFile(paneId: string, reference: StoredAttachmentReference): Promise<{ status: 'ready' } | { status: 'unavailable' }> {
+    const registered = find(paneId);
+    if (!registered?.api.attachStoredFile) return { status: 'unavailable' };
+    if (!await registered.api.attachStoredFile(reference) || find(paneId) !== registered) return { status: 'unavailable' };
     registered.api.focus();
     return { status: 'ready' };
 }

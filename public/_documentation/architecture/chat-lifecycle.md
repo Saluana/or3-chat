@@ -45,6 +45,8 @@ A send moves through admission, durable user-message persistence, response strea
 
 The native composer clears submitted text and attachments once the matching request saves its user turn, without waiting for the provider, with a comparison that preserves edits made while preparation was pending. A refusal before that save, such as `context_full` or unavailable model metadata during admission, keeps the draft. After the save, a final filter or the provider can still refuse the request; Retry on the saved turn owns that recovery, so the composer is not restored. Accepted, completed, failed, aborted and detached remain distinct outcomes. See [send-result types](/documentation/types/chat-types#sending-and-request-state).
 
+When a pane plugin sends text through the native composer, the request uses the supplied text and the pane’s chat settings. The composer keeps its unsent text, mentions, large pasted blocks and attachments for the user’s next send.
+
 Create `useChat()` during component setup and dispose it on unmount. A disposed controller rejects new sends and retries and ignores continuation requests. Thread switching waits for foreground settlement but applies only if that navigation still owns the controller, account and workspace. Saved retry recovery checks the same origin again after reading its assistant row. Reuse the existing `ChatContainer.vue` send and acceptance handling when extending product actions: it watches the matching request's `persisted` or `streaming` state, then the terminal result, and fences draft clearing against text edits and navigation. `hasDurableSendAcceptance()` identifies the same saved user row.
 
 History synchronization and background-job recovery use browser-local storage.
@@ -185,7 +187,7 @@ shares its original registry without importing DOM-dependent Markdown code.
 The trusted plugin UI kit's raw `StreamMarkdown` and `highlighter()` APIs retain
 their existing main-thread behavior; custom renderers keep their own lifecycle.
 
-Render the controller's UI projections rather than raw stream events. Text, reasoning, tool progress, and partial output can arrive independently. Accumulators batch UI updates; persistence and display have separate responsibilities. A transport disconnect does not necessarily mean a server background job stopped.
+Render the controller's UI projections rather than raw stream events. Text, reasoning, tool progress, and partial output can arrive independently. Accumulators batch UI updates; persistence and display have separate responsibilities. Foreground generation can keep reading tokens while a local progress save is running. The writer coalesces newer progress, bounds the unsaved backlog, and drains pending writes at tool and completion boundaries. A transport disconnect does not necessarily mean a server background job stopped.
 
 The container reuses an active display projection when all of its fields are
 unchanged. Immediate updates to the persistence snapshot must not republish the

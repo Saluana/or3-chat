@@ -53,4 +53,38 @@ describe('requestHistoryFingerprint', () => {
             data: { ...(base.data as object), background_job_id: 'j', background_job_attempt: 2 } } as unknown as Message;
         expect(requestHistoryFingerprint(projection([synced]))).toBe(requestHistoryFingerprint(projection([base])));
     });
+
+    it('bounds comparison storage when the same history is present in several projection views', () => {
+        const body = 'x'.repeat(1024);
+        const rows = Array.from({ length: 1000 }, (_, index) => message(`m${index}`, body));
+        expect(requestHistoryFingerprint(projection(rows)).length).toBeLessThan(body.length * rows.length * 1.5);
+    });
+
+    it('compares independently materialized projection views by their complete content', () => {
+        const rows = [message('m1', 'hello'), message('m2', 'reply')];
+        const copied: ThreadProjection = { messages: structuredClone(rows), segments: [{ thread,
+            rows: structuredClone(rows).map(reversedKeys), visible: structuredClone(rows) }] };
+        expect(requestHistoryFingerprint(copied)).toBe(requestHistoryFingerprint(projection(rows)));
+        const before = requestHistoryFingerprint(copied);
+        (copied.segments[0]!.rows[0]!.data as Record<string, unknown>).error = 'new metadata';
+        expect(requestHistoryFingerprint(copied)).not.toBe(before);
+    });
+
+    it('detects edits on reused rows and changes to hidden rows, visibility, and lineage', () => {
+        const visible = message('m1', 'hello');
+        const hidden = message('m2', 'hidden', { deleted: true });
+        const view: ThreadProjection = { messages: [visible], segments: [{ thread: { ...thread }, rows: [visible, hidden], visible: [visible] }] };
+        let before = requestHistoryFingerprint(view);
+        (visible.data as Record<string, unknown>).content = 'edited';
+        expect(requestHistoryFingerprint(view)).not.toBe(before);
+        before = requestHistoryFingerprint(view);
+        (hidden.data as Record<string, unknown>).content = 'edited hidden row';
+        expect(requestHistoryFingerprint(view)).not.toBe(before);
+        before = requestHistoryFingerprint(view);
+        view.segments[0]!.visible = [];
+        expect(requestHistoryFingerprint(view)).not.toBe(before);
+        before = requestHistoryFingerprint(view);
+        view.segments[0]!.thread.anchor_message_id = 'different-anchor';
+        expect(requestHistoryFingerprint(view)).not.toBe(before);
+    });
 });

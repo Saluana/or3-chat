@@ -87,7 +87,7 @@ function ensure(id: string, db = getDb()): DocState {
         st.debouncedSave = useDebounceFn(() => {
             pendingSaves.delete(state);
             return flushInDb(saveDatabases.get(state) ?? db, id);
-        }, 750);
+        }, 750, { maxWait: 5_000 });
         documentsMap.set(id, st);
         saveDatabases.set(st, db);
     }

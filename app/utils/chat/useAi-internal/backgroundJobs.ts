@@ -1293,7 +1293,8 @@ async function pollBackgroundJob(tracker: BackgroundJobTracker): Promise<void> {
                 tracker.jobId,
                 tracker.lastContent.length,
                 pollAbortController.signal,
-                tracker.lastAttempt
+                tracker.lastAttempt,
+                tracker.lastReasoning.length
             );
             tracker.consecutivePollFailures = 0;
             tracker.notFoundPollFailures = 0;

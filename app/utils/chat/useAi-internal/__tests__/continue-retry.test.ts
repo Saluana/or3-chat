@@ -303,11 +303,13 @@ describe('continue/retry regressions', () => {
         } finally { vi.useRealTimers(); }
     });
 
-    it.each(['text', 'reasoning', 'image', 'superseded-image'] as const)('continue handles quiet %s without losing or leaking reply content', async (type) => {
+    it.each(['text', 'slow-text', 'reasoning', 'image', 'superseded-image'] as const)('continue handles quiet %s without losing or leaking reply content', async (type) => {
         vi.useFakeTimers();
         let release!: () => void;
+        let releaseWrite!: () => void;
         let consumed!: () => void;
         const providerPending = new Promise<void>((resolve) => { release = resolve; });
+        const pendingWrite = new Promise<void>((resolve) => { releaseWrite = resolve; });
         const chunkConsumed = new Promise<void>((resolve) => { consumed = resolve; });
         let continuation: Promise<void> | undefined;
         try {
@@ -347,13 +349,19 @@ describe('continue/retry regressions', () => {
             };
             dbState.where.mockReturnValue(whereChain);
 
-            const persistAssistant = vi.fn<AssistantPersister>(async () => null);
+            const persistAssistant = vi.fn<AssistantPersister>(async () => {
+                if (type === 'slow-text' && persistAssistant.mock.calls.length === 1) await pendingWrite;
+                return null;
+            });
             makeAssistantPersisterSpy.mockReturnValue(persistAssistant);
             openRouterStreamSpy.mockReturnValue(
                 (async function* () {
                     if (type === 'image' || type === 'superseded-image') {
                         yield { type: 'image', url: 'data:image/png;base64,AQ==' };
                         yield { type: 'text', text: '>>after image' };
+                    } else if (type === 'slow-text') {
+                        yield { type: 'text', text: `>> ${'x'.repeat(32768)}` };
+                        yield { type: 'text', text: ' world' };
                     } else yield { type, text: type === 'text' ? '>> world' : 'new reasoning' };
                     consumed();
                     await providerPending;
@@ -430,13 +438,20 @@ describe('continue/retry regressions', () => {
                 expect(reportErrorSpy).not.toHaveBeenCalled();
                 return;
             }
-            const content = type === 'text' ? 'Hello world' : type === 'image' ? `Hello${imageText} after image` : 'Hello';
+            const content = type === 'slow-text' ? `Hello ${'x'.repeat(32768)} world`
+                : type === 'text' ? 'Hello world' : type === 'image' ? `Hello${imageText} after image` : 'Hello';
             const reasoning = type === 'reasoning' ? 'new reasoning' : null;
             expect(tailAssistant.value).toMatchObject({ text: content, reasoning_text: reasoning });
             expect(messages.value.map((m) => m.id)).toEqual(['a1']);
             await vi.advanceTimersByTimeAsync(500);
             expect(persistAssistant).toHaveBeenCalledTimes(1);
-            expect(persistAssistant.mock.calls[0]?.[0]).toMatchObject({ content, reasoning });
+            if (type === 'slow-text') {
+                // The suffix was displayed while the prefix's checkpoint was blocked.
+                expect(persistAssistant.mock.calls[0]?.[0].content).not.toBe(content);
+                releaseWrite();
+                await vi.advanceTimersByTimeAsync(500);
+            }
+            expect(persistAssistant.mock.lastCall?.[0]).toMatchObject({ content, reasoning });
             expect(persistAssistant.mock.calls[0]?.[0].finalize).not.toBe(true);
             const liveText = streamAccAppend.mock.calls
                 .filter(([, options]) => options.kind === 'text')
@@ -454,6 +469,7 @@ describe('continue/retry regressions', () => {
             expect(persistAssistant).toHaveBeenCalledTimes(writes);
         } finally {
             release();
+            releaseWrite();
             await continuation;
             vi.useRealTimers();
         }

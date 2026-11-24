@@ -759,7 +759,8 @@ export async function continueMessageImpl(
                     }
                 }
 
-                if (writeCoalescer.shouldFlush()) await flushProgress();
+                const progress = writeCoalescer.scheduleFlush();
+                if (progress) await progress;
             }
 
             stopHeartbeat();

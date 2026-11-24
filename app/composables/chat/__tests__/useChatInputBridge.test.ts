@@ -79,11 +79,12 @@ describe('useChatInputBridge', () => {
         registerPaneInput('pane-1', {
             setText,
             focus: vi.fn(),
-            triggerSend: () => resultPromise,
+            triggerSend: vi.fn(),
+            sendText: () => resultPromise,
         });
 
         const pending = programmaticSend('pane-1', 'hello');
-        expect(setText).toHaveBeenCalledWith('hello');
+        expect(setText).not.toHaveBeenCalled();
         resolveSend({
             status: 'complete',
             requestId: 'r1',
@@ -107,7 +108,8 @@ describe('useChatInputBridge', () => {
             registerPaneInput('pane-1', {
                 setText: vi.fn(),
                 focus: vi.fn(),
-                triggerSend: async () => ({ status: 'rejected', reason }),
+                triggerSend: vi.fn(),
+                sendText: async () => ({ status: 'rejected', reason }),
             });
             await expect(programmaticSend('pane-1', 'hello')).resolves.toEqual({
                 status: 'rejected',

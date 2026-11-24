@@ -278,6 +278,54 @@ describe('runForegroundStreamLoop', () => {
         }
     });
 
+    it.each([false, true])('keeps consuming a bounded suffix while a progress write is slow and drains it before completion (retry=%s)', async (retry) => {
+        const firstWrite = deferred<void>();
+        const entered = deferred<void>();
+        let run: Promise<void> | undefined;
+        let activeWrites = 0;
+        let maximumWrites = 0;
+        openRouterStreamMock.mockImplementation(async function* () {
+            for (let index = 0; index < 1000; index++) yield { type: 'text', text: 'x' };
+        });
+        const { runForegroundStreamLoop } = await import('../foregroundStream');
+        const persistAssistant = vi.fn(async (_patch: Record<string, unknown>) => {
+            maximumWrites = Math.max(maximumWrites, ++activeWrites);
+            try {
+                if (persistAssistant.mock.calls.length === 1) {
+                    entered.resolve();
+                    await firstWrite.promise;
+                    if (retry) throw new Error('Temporary progress write failure');
+                }
+                return null;
+            } finally { activeWrites--; }
+        });
+        const ctx = {
+            apiKey: 'key', modelId: 'model',
+            orMessages: [{ role: 'user' as const, content: [{ type: 'text' as const, text: 'go' }] }],
+            modalities: ['text'], abortSignal: new AbortController().signal,
+            assistantId: 'assistant-slow-progress', streamId: 'stream-slow-progress', threadId: 'thread-1',
+            streamAcc: { append: vi.fn() }, hooks: { doAction: vi.fn(async () => {}) },
+            toolRegistry: { executeTool: vi.fn() }, persistAssistant,
+            assistantFileHashes: [], activeToolCalls: new Map(),
+            tailAssistant: { value: null as any }, rawMessages: { value: [] as any[] },
+        };
+        try {
+            run = runForegroundStreamLoop(ctx);
+            await entered.promise;
+            await vi.waitFor(() => expect(ctx.streamAcc.append.mock.calls.length).toBeGreaterThan(50));
+            await new Promise(resolve => setTimeout(resolve, 0));
+            expect(ctx.streamAcc.append.mock.calls.length).toBeLessThan(1000);
+            expect(persistAssistant).toHaveBeenCalledTimes(1);
+            firstWrite.resolve();
+            await run;
+            expect(maximumWrites).toBe(1);
+            expect(persistAssistant.mock.lastCall?.[0]).toMatchObject({ content: 'x'.repeat(1000) });
+        } finally {
+            firstWrite.resolve();
+            await run;
+        }
+    });
+
     it('coalesces 500 text events and terminally persists all content', async () => {
         openRouterStreamMock.mockImplementation(async function* () {
             for (let index = 0; index < 500; index += 1) yield { type: 'text', text: 'x' };
