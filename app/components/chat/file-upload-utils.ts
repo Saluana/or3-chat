@@ -1,6 +1,6 @@
 import { presentError } from '~~/shared/errors';
 import { reportError, err } from '~/utils/errors';
-import { changeFileRefRows, changeRefCount, createOrRefFileWithStatus, getFileBlob, notifyFileRefChanges } from '~/db/files';
+import { changeFileRefRows, changeRefCount, createOrRefFileWithStatus, getFileBlob, notifyFileRefChanges, resolveStoredFileKind } from '~/db/files';
 import { useHooks } from '~/core/hooks/useHooks';
 import { useRuntimeConfig } from '#imports';
 import type { FilesAttachInputPayload } from '~/core/hooks/hook-types';
@@ -97,11 +97,22 @@ export interface StoredAttachmentReference {
     kind?: 'image' | 'pdf';
 }
 
+const preparedStoredAttachment = Symbol('preparedStoredAttachment');
+
 export interface StoredAttachment {
-    reference: StoredAttachmentReference;
-    scope: WorkspaceOperationScope;
-    file: File;
-    meta: FileMeta;
+    readonly [preparedStoredAttachment]: true;
+    readonly reference: StoredAttachmentReference;
+    readonly scope: WorkspaceOperationScope;
+    readonly file: File;
+    readonly meta: FileMeta;
+}
+
+export type StoredAttachmentSource = StoredAttachmentReference | StoredAttachment;
+
+export class StoredAttachmentOfflineError extends Error {
+    constructor() {
+        super('Original file unavailable offline. Connect and retry.');
+    }
 }
 
 async function assertStoredAttachment(stored: StoredAttachment): Promise<FileMeta> {
@@ -112,20 +123,26 @@ async function assertStoredAttachment(stored: StoredAttachment): Promise<FileMet
     const post = await scope.db.posts.get(reference.id);
     const meta = await scope.db.file_meta.get(stored.meta.hash);
     scope.assertCurrent('write');
+    const kind = meta && resolveStoredFileKind(meta);
     if (!post || post.postType !== FILE_CATALOG_POST_TYPE || !isVisibleWorkspaceItem(post)
         || parseFileHashes(post.file_hashes).join() !== stored.meta.hash
         || (reference.hash && reference.hash !== stored.meta.hash)
-        || !meta || meta.deleted || !['image', 'pdf'].includes(meta.kind)
-        || (reference.kind && meta.kind !== reference.kind)
-        || meta.kind !== stored.meta.kind || meta.mime_type !== stored.meta.mime_type
+        || !meta || meta.deleted || kind !== stored.meta.kind || meta.mime_type !== stored.meta.mime_type
         || meta.size_bytes !== stored.meta.size_bytes || stored.file.size !== meta.size_bytes)
         throw new Error('That saved file is unavailable or has changed.');
     return meta;
 }
 
 /** Load the verified original once; later filters may still replace its bytes. */
-export async function loadStoredAttachment(reference: StoredAttachmentReference, owner: AttachmentIntakeOwner): Promise<StoredAttachment> {
+export async function loadStoredAttachment(input: StoredAttachmentSource, owner: AttachmentIntakeOwner): Promise<StoredAttachment> {
     owner.assertCurrent();
+    if (preparedStoredAttachment in input) {
+        // Files may already have fetched a Cloud original that does not fit the cache.
+        await assertStoredAttachment(input);
+        owner.assertCurrent();
+        return input;
+    }
+    const reference = input;
     const scope = captureWorkspaceOperation({ subject: null, workspaceId: reference.workspaceId,
         threadId: 'saved-chat-attachment', messageId: null, requestId: createRuntimeUuid(), callId: reference.id,
         abortSignal: owner.signal });
@@ -135,26 +152,30 @@ export async function loadStoredAttachment(reference: StoredAttachmentReference,
     const hash = parseFileHashes((source.row as { file_hashes?: string | null }).file_hashes)[0];
     const meta = hash ? await scope.db.file_meta.get(hash) : undefined;
     scope.assertCurrent('write'); owner.assertCurrent();
-    if (!meta || meta.deleted || !['image', 'pdf'].includes(meta.kind)
-        || (reference.hash && reference.hash !== meta.hash) || (reference.kind && reference.kind !== meta.kind))
+    const kind = meta && resolveStoredFileKind(meta);
+    if (!meta || meta.deleted || (kind !== 'image' && kind !== 'pdf')
+        || (reference.hash && reference.hash !== meta.hash) || (reference.kind && reference.kind !== kind))
         throw new Error('This file is not a supported image or PDF.');
-    const blob = await getFileBlob(meta.hash, scope.db);
+    const blob = await getFileBlob(meta.hash, scope.db, {
+        localOnly: typeof navigator !== 'undefined' && navigator.onLine === false,
+    });
     scope.assertCurrent('write'); owner.assertCurrent();
-    if (!blob) throw new Error('Original file unavailable offline. Connect and retry.');
+    if (!blob) throw new StoredAttachmentOfflineError();
     const file = new File([blob], meta.name, { type: meta.mime_type });
     const classification = await classifyFileBlob(file);
-    if (classification.kind !== meta.kind) throw new Error('This file is not a supported image or PDF.');
-    const stored = { reference, scope, file, meta };
+    if (classification.kind !== kind) throw new Error('This file is not a supported image or PDF.');
+    const stored: StoredAttachment = {
+        [preparedStoredAttachment]: true, reference: { ...reference }, scope, file, meta: { ...meta, kind },
+    };
     await assertStoredAttachment(stored); owner.assertCurrent();
     return stored;
 }
 
-async function retainStoredAttachment(stored: StoredAttachment, assertCurrent: () => void): Promise<FileMeta> {
-    const offline = getOfflineWorkspace();
-    const offlineWorkspaceId = offline?.workspaceId === stored.scope.workspaceId && isCloudFileStorageConfigured()
-        ? offline.workspaceId : null;
-    const policy = offlineWorkspaceId ? getVerifiedFilePolicy(offlineWorkspaceId)
-        : isCloudFileStorageEnabled() ? await loadFilePolicy(stored.scope.workspaceId, stored.scope.signal) : undefined;
+async function retainStoredAttachment(stored: StoredAttachment, assertCurrent: () => void, signal = stored.scope.signal): Promise<FileMeta> {
+    const { workspaceId } = stored.scope;
+    const offline = getOfflineWorkspace()?.workspaceId === workspaceId;
+    const policy = offline && isCloudFileStorageConfigured() ? getVerifiedFilePolicy(workspaceId)
+        : isCloudFileStorageEnabled() ? await loadFilePolicy(workspaceId, signal) : undefined;
     const limit = offline ? Math.min(policy?.maxUploadBytes ?? Infinity, getMaxFileBytes())
         : policy?.maxUploadBytes ?? getMaxFileBytes();
     assertCurrent();
@@ -240,7 +261,7 @@ export async function persistAttachment(att: AttachmentLike, owner?: AttachmentI
         const unchanged = stored && att.file === stored.file && filtered.file === stored.file;
         // Unchanged originals are checked under the retain transaction's lock.
         if (stored && !unchanged) await assertStoredAttachment(stored);
-        const { meta, created } = unchanged ? { meta: await retainStoredAttachment(stored, assertLocalOrigin), created: false }
+        const { meta, created } = unchanged ? { meta: await retainStoredAttachment(stored, assertLocalOrigin, owner?.signal), created: false }
             : await createOrRefFileWithStatus(filtered.file, filtered.name, { assertCurrent: assertLocalOrigin });
         try {
             assertLocalOrigin();

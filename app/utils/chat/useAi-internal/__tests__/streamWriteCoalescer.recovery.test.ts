@@ -12,6 +12,12 @@ describe('failed streamed progress durability', () => {
     beforeEach(() => vi.useFakeTimers());
     afterEach(async () => { for (const coalescer of coalescers.splice(0)) await coalescer.dispose(); vi.useRealTimers(); });
 
+    it('reports a missing progress writer when scheduling a save', () => {
+        const coalescer = create();
+        coalescer.markDirty();
+        expect(() => coalescer.scheduleFlush()).toThrow('Stream progress writer is not configured.');
+    });
+
     it('keeps storage-error semantics without browser globals', async () => {
         vi.stubGlobal('window', undefined);
         try {
@@ -104,7 +110,7 @@ describe('failed streamed progress durability', () => {
 
     it('cancels its idle retry and releases only its own guard during teardown', async () => {
         const idle = vi.fn(async () => {});
-        const first = createStreamWriteCoalescer({ maxDelayMs: 1, onIdleFlush: idle }); coalescers.push(first);
+        const first = createStreamWriteCoalescer({ maxDelayMs: 1, writeProgress: idle }); coalescers.push(first);
         const second = create();
         for (const writer of [first, second]) {
             writer.markDirty(); await writer.flush(async () => { throw new Error('blocked'); }).catch(() => {});

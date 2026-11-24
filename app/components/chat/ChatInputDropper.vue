@@ -458,7 +458,7 @@ import type {
     UploadedImage,
 } from '~/components/chat/chat-input/types';
 import { useChatInputAttachments } from '~/components/chat/chat-input/useChatInputAttachments';
-import type { StoredAttachmentReference } from '~/components/chat/file-upload-utils';
+import { StoredAttachmentOfflineError, type StoredAttachmentSource } from '~/components/chat/file-upload-utils';
 import ChatComposerShell from '~/components/chat/ChatComposerShell.vue';
 import ChatProjectChoice from '~/components/projects/ChatProjectChoice.vue';
 import { useChatModelSelection } from '~/composables/chat/useChatModelSelection';
@@ -714,7 +714,7 @@ onMounted(async () => {
     await initializeEditor();
     inputReady = true;
     if (props.paneId && !componentDisposed && inputActive.value) {
-        registerPaneInput(props.paneId, { setText, focus, triggerSend, sendText, insertReference, attachFile, attachStoredFile });
+        registerPaneInput(props.paneId, { tabId: props.tabId, setText, focus, triggerSend, sendText, insertReference, attachFile, attachStoredFile });
     }
 });
 watch(trustedEditorRevision, () => {
@@ -1596,7 +1596,7 @@ async function attachFile(file: File): Promise<boolean> {
     captureDraft();
     return true;
 }
-async function attachStoredFile(reference: StoredAttachmentReference): Promise<boolean> {
+async function attachStoredFile(reference: StoredAttachmentSource): Promise<boolean> {
     const initiatingTab = props.tabId;
     const attachment = await processStoredAttachment(reference);
     if (componentDisposed || props.tabId !== initiatingTab || attachment?.status !== 'ready') return false;
@@ -1614,7 +1614,9 @@ async function attachMentionImage(id: string): Promise<void> {
         await attachStoredFile({ id, workspaceId: origin.workspaceId, generation: origin.generation, kind: 'image' });
     } catch (error) {
         if (!componentDisposed && props.tabId === initiatingTab) {
-            toast.add({ title: 'Could not attach image', description: presentError(error, { fallbackMessage: 'Try again.' }).message, color: 'error' });
+            const description = error instanceof StoredAttachmentOfflineError
+                ? error.message : presentError(error, { fallbackMessage: 'Try again.' }).message;
+            toast.add({ title: 'Could not attach image', description, color: 'error' });
         }
     }
 }
@@ -1636,7 +1638,7 @@ watch(inputActive, (active) => {
     if (!active) {
         if (props.paneId) unregisterPaneInput(props.paneId);
     } else if (props.paneId && !componentDisposed && inputReady) {
-        registerPaneInput(props.paneId, { setText, focus, triggerSend, sendText, insertReference, attachFile, attachStoredFile });
+        registerPaneInput(props.paneId, { tabId: props.tabId, setText, focus, triggerSend, sendText, insertReference, attachFile, attachStoredFile });
     }
 }, { flush: 'sync' });
 

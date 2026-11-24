@@ -1991,6 +1991,30 @@ for (const kind of ['image', 'pdf'] as const) {
         if (kind === 'image') await expect(preview.getByRole('img', { name, exact: true })).toBeVisible();
         else await expect(preview.locator('.preview-note')).toBeVisible();
         await expect(preview.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
+        if (kind === 'pdf') {
+            // Keep the synchronized catalog row but remove its local original.
+            // This fixture has Cloud storage disabled, so there is no remote copy to fetch.
+            const original = await page.evaluate(async ({ url, name }) => {
+                const { getDb } = await import(url);
+                const db = getDb();
+                const meta = await db.file_meta.filter((row: { name: string }) => row.name === name).first();
+                const row = await db.file_blobs.get(meta.hash);
+                const bytes = [...new Uint8Array(await row.blob.arrayBuffer())];
+                await db.file_blobs.delete(row.hash);
+                return { hash: row.hash, mime: row.blob.type, bytes };
+            }, { url: clientURL!, name });
+            await preview.getByRole('button', { name: 'Ask in chat', exact: true }).click();
+            await expect(files.getByRole('alert').filter({ hasText: 'Files action failed' }))
+                .toContainText('Original file unavailable offline. Connect and retry.');
+            await expect(preview).toBeVisible();
+            await page.evaluate(async ({ url, original }) => {
+                const { getDb } = await import(url);
+                await getDb().file_blobs.put({
+                    hash: original.hash,
+                    blob: new Blob([new Uint8Array(original.bytes)], { type: original.mime }),
+                });
+            }, { url: clientURL!, original });
+        }
         await preview.getByRole('button', { name: 'Ask in chat', exact: true }).click();
         await expect(input).toContainText('Preserved attachment draft');
         await expect(input).toBeFocused();

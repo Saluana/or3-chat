@@ -78,15 +78,26 @@ describe('files.attach:filter:input hook', () => {
         };
     }
 
-    async function savedOriginal() {
-        const saved = attachment();
+    async function savedOriginal(legacyImage = false) {
+        const saved = legacyImage ? {
+            ...attachment(),
+            file: new NativeFile([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+                'original.png', { type: 'image/png' }) as unknown as File,
+            name: 'original.png',
+            mime: 'image/png',
+            kind: 'image',
+        } : attachment();
         await persistAttachment(saved);
+        if (legacyImage) {
+            await getDb().file_meta.update(saved.hash!, { kind: undefined });
+            expect((await getDb().file_meta.get(saved.hash!))?.kind).toBeUndefined();
+        }
         const post = (await getDb().posts.toArray())[0]!;
         const controller = new AbortController();
         const owner = { signal: controller.signal, assertCurrent: () => controller.signal.throwIfAborted() };
         vi.stubGlobal('File', NativeFile);
         const stored = await loadStoredAttachment({ id: post.id, hash: saved.hash!, workspaceId: workspace,
-            generation: getWorkspaceGeneration() }, owner);
+            generation: getWorkspaceGeneration(), ...(legacyImage ? { kind: 'image' as const } : {}) }, owner);
         return { stored, owner, controller, post, next: { ...saved, file: stored.file, status: 'pending' as AttachmentLike['status'] } };
     }
 
@@ -148,8 +159,8 @@ describe('files.attach:filter:input hook', () => {
         expect(await stored?.blob.text()).toBe('%PDF-1.4 attachment');
     });
 
-    it('retains an unchanged saved original after attachment filters without reading its bytes for hashing again', async () => {
-        const { stored, next } = await savedOriginal();
+    it.each(['PDF', 'legacy image'] as const)('retains a saved %s through attachment filters without hashing it again', async original => {
+        const { stored, next } = await savedOriginal(original === 'legacy image');
         const db = getDb();
         const meta = stored.meta;
         const hash = vi.spyOn(hashing, 'computeFileHash');
@@ -159,6 +170,7 @@ describe('files.attach:filter:input hook', () => {
             await persistAttachment(next, undefined, stored);
             expect(next.status).toBe('ready');
             expect(next.hash).toBe(meta.hash);
+            expect(next.kind).toBe(original === 'legacy image' ? 'image' : 'pdf');
             expect(next.name).toBe('composer-label.pdf');
             expect(filter).toHaveBeenCalledOnce();
             expect(hash).not.toHaveBeenCalled();
@@ -223,5 +235,23 @@ describe('files.attach:filter:input hook', () => {
         expect(next.status).toBe('error');
         expect((await getDb().file_meta.get(stored.meta.hash))?.ref_count).toBe(stored.meta.ref_count);
         if (mode === 'offline') expect(load).not.toHaveBeenCalled();
+    });
+
+    it('uses the active workspace policy when an offline workspace record belongs to another workspace', async () => {
+        const { stored, owner, next } = await savedOriginal();
+        const workspacePolicy = { maxUploadBytes: next.file.size } as Awaited<ReturnType<typeof policy.loadFilePolicy>>;
+        const previousOr3 = testRuntimeConfig.value.public.or3;
+        testRuntimeConfig.value.public.or3 = { limits: { maxFileSizeBytes: 1 } };
+        vi.spyOn(policy, 'isCloudFileStorageEnabled').mockReturnValueOnce(true).mockReturnValue(false);
+        vi.spyOn(policy, 'loadFilePolicy').mockResolvedValue(workspacePolicy);
+        vi.spyOn(offlineWorkspace, 'getOfflineWorkspace').mockReturnValue({ workspaceId: 'inactive-workspace',
+            workspaceName: 'Inactive workspace', userId: 'offline-owner', role: 'owner', workspaceItemCapability: 'v1' });
+        try {
+            await persistAttachment(next, owner, stored);
+            expect(next.status).toBe('ready');
+            expect((await getDb().file_meta.get(stored.meta.hash))?.ref_count).toBe(stored.meta.ref_count + 1);
+        } finally {
+            testRuntimeConfig.value.public.or3 = previousOr3;
+        }
     });
 });

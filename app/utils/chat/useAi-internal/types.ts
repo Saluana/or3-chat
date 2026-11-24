@@ -198,6 +198,6 @@ export type AssistantPersister = (params: {
     terminalState?: 'complete' | 'failed' | 'aborted' | 'interrupted';
     /** Synchronous ownership check against the row in the write transaction. */
     ifCurrent?: (message: Message | undefined) => boolean;
-    /** Tool execution requires confirmation that this owned row was written. */
+    /** Require confirmation that the current generation's row was written. */
     requireCurrent?: boolean;
 }) => Promise<string | null>;

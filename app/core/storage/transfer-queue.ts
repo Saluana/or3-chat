@@ -54,10 +54,16 @@ export type { FileTransferQueueConfig } from './transfer-queue-support';
 type BoundQueueContext = {
     workspaceId: string;
     db: Or3DB;
+    scopeGeneration?: number;
 };
 
 type PartialDownload = { blob: Blob; etag: string; total: number; storageId: string; hash: string };
 const MAX_PARTIAL_DOWNLOAD_BYTES = 16 * 1024 * 1024;
+const OFFLINE_ABORT = new DOMException('Device went offline', 'AbortError');
+
+function isBrowserOffline(): boolean {
+    return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
 
 function isAbortError(error: unknown): boolean {
     return typeof error === 'object'
@@ -109,7 +115,7 @@ export class FileTransferQueue {
     private processing = false;
     private processAgain = false;
     private readonly onOnline = () => this.scheduleProcessQueue(0);
-    private readonly onOffline = () => this.pauseRunning();
+    private readonly onOffline = () => this.pauseRunning(OFFLINE_ABORT);
     private readonly activity = globalThis as {
         addEventListener?: (type: string, callback: () => void) => void;
         removeEventListener?: (type: string, callback: () => void) => void;
@@ -235,12 +241,12 @@ export class FileTransferQueue {
         }
     }
 
-    private pauseRunning(): void {
+    private pauseRunning(reason?: DOMException): void {
         for (const id of this.running) {
             const controller = this.abortControllers.get(id);
             if (!controller || controller.signal.aborted) continue;
             this.requeueOnAbort.add(id);
-            controller.abort();
+            controller.abort(reason);
         }
     }
 
@@ -454,8 +460,13 @@ export class FileTransferQueue {
         }
     }
 
+    private isBoundContextCurrent(context: BoundQueueContext): boolean {
+        return this.db === context.db && this.workspaceId === context.workspaceId &&
+            (context.scopeGeneration === undefined || this.scopeGeneration === context.scopeGeneration);
+    }
+
     private assertBoundContext(context: BoundQueueContext): void {
-        if (this.db !== context.db || this.workspaceId !== context.workspaceId) {
+        if (!this.isBoundContextCurrent(context)) {
             throw new Error('workspace changed during storage transfer');
         }
     }
@@ -484,12 +495,13 @@ export class FileTransferQueue {
     }
 
     /** Repair pre-atomic-intake originals in bounded startup pages. */
-    private async recoverOrphanUploads(context: TransferExecutionContext): Promise<void> {
+    private async recoverOrphanUploads(context: BoundQueueContext): Promise<void> {
         if (!this.uploadsEnabled || this.recoveryComplete || !isCloudFileStorageEnabled()) return;
         const rows = this.recoveryCursor
             ? await context.db.file_meta.where(':id').above(this.recoveryCursor).limit(50).toArray()
             : await context.db.file_meta.orderBy(':id').limit(50).toArray();
         for (const meta of rows) {
+            if (!this.isBoundContextCurrent(context)) return;
             if (meta.deleted || meta.storage_id) continue;
             await context.db.transaction('rw', context.db.file_meta, context.db.file_blobs, context.db.file_transfers, async () => {
                 const current = await context.db.file_meta.get(meta.hash);
@@ -497,29 +509,32 @@ export class FileTransferQueue {
                 if (!current || current.deleted || current.storage_id || !original || original.cache_accessed_at) return;
                 if ((await context.db.file_transfers.where('[hash+direction]').equals([meta.hash, 'upload']).toArray())
                     .some(row => row.workspace_id === context.workspaceId && row.state !== 'done')) return;
-                await this.enqueue(meta.hash, 'upload', context);
+                if (this.isBoundContextCurrent(context)) await this.enqueue(meta.hash, 'upload', context);
             });
         }
+        if (!this.isBoundContextCurrent(context)) return;
         this.recoveryCursor = rows.at(-1)?.hash;
         this.recoveryComplete = rows.length < 50;
         if (!this.recoveryComplete) this.scheduleProcessQueue(0);
     }
 
     private async processQueue(): Promise<void> {
-        if (!this.workspaceId || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+        if (!this.workspaceId || isBrowserOffline()) return;
         if (this.processing) { this.processAgain = true; return; }
         if (this.running.size >= this.concurrency) return;
         this.processing = true;
 
+        const context = {
+            workspaceId: this.workspaceId,
+            dbName: this.db.name,
+            db: this.db,
+            scopeGeneration: this.scopeGeneration,
+        };
         try {
             await this.cleanupOldTransfers();
-            const context: TransferExecutionContext = {
-                workspaceId: this.workspaceId,
-                dbName: this.db.name,
-                db: this.db,
-            };
-
+            if (!this.isBoundContextCurrent(context)) return;
             await this.recoverOrphanUploads(context);
+            if (!this.isBoundContextCurrent(context) || isBrowserOffline()) return;
             const available = this.concurrency - this.running.size;
             const candidates = await this.claimQueuedTransfers(context, available);
 
@@ -529,7 +544,7 @@ export class FileTransferQueue {
             }
 
             for (const transfer of candidates) {
-                if (this.workspaceId !== context.workspaceId || this.db !== context.db ||
+                if (!this.isBoundContextCurrent(context) || isBrowserOffline() ||
                     (transfer.direction === 'upload' && !this.uploadsEnabled)) {
                     await this.safeUpdateTransfer(transfer.id, { state: 'queued', retry_at: 0,
                         lease_owner: undefined, lease_token: undefined, lease_expires_at: undefined }, context.db, transfer.lease_token);
@@ -546,6 +561,7 @@ export class FileTransferQueue {
             }
         } catch (error) {
             if (!this.isDatabaseClosedError(error)) {
+                if (!this.isBoundContextCurrent(context)) return;
                 throw error;
             }
             this.rebindDb();
@@ -644,6 +660,7 @@ export class FileTransferQueue {
                     await this.safeUpdateTransfer(transfer.id, {
                         state: 'queued',
                         retry_at: 0,
+                        ...(controller.signal.reason === OFFLINE_ABORT && { consecutive_deferrals: 0 }),
                         last_error: undefined,
                         lease_owner: undefined,
                         lease_expires_at: undefined,
@@ -682,11 +699,18 @@ export class FileTransferQueue {
             // Server maintenance/rate-limit deferrals retain the durable transfer
             // and its retry budget. A later attempt obtains a fresh presigned URL.
             const admissionDeferred = transfer.direction === 'upload' && (metadata.status === 402 || metadata.code === 'ERR_STORAGE_QUOTA_EXCEEDED');
-            const deferred = admissionDeferred || (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+            const offline = isBrowserOffline();
+            const errorName = (error as Error | undefined)?.name;
+            const networkError = error instanceof TypeError || errorName === 'NetworkError';
+            // Leave offline-only failures due so the next online event (or
+            // startup) can resume them. Offline pumps exit before claiming work.
+            const offlineOnly = offline && (networkError || metadata.code === 'ERR_NETWORK') &&
+                !admissionDeferred && (metadata.status ?? 0) === 0 && metadata.retryAfterMs === undefined;
+            const deferred = admissionDeferred || offline ||
                 metadata.status === 429 || metadata.status === 408 || (metadata.status !== undefined && metadata.status >= 500) ||
-                error instanceof TypeError || (error as Error | undefined)?.name === 'TimeoutError' || (error as Error | undefined)?.name === 'NetworkError';
+                networkError || errorName === 'TimeoutError';
             const attempts = transfer.attempts + (deferred ? 0 : 1);
-            const consecutiveDeferrals = deferred
+            const consecutiveDeferrals = deferred && !offlineOnly
                 ? Math.min((transfer.consecutive_deferrals ?? 0) + 1, Number.MAX_SAFE_INTEGER)
                 : 0;
             const message = presentError(metadata).message;
@@ -698,7 +722,7 @@ export class FileTransferQueue {
                 (error as { retryable?: boolean }).retryable === false;
 
             const failed = (!admissionDeferred && isNonRetryable) || (!deferred && attempts >= this.maxAttempts);
-            const delay = failed ? 0 : Math.max(
+            const delay = failed || offlineOnly ? 0 : Math.max(
                 this.getBackoffDelay(Math.max(1, deferred ? consecutiveDeferrals : attempts)),
                 metadata.retryAfterMs ?? 0,
                 admissionDeferred ? 60_000 : 0
@@ -709,7 +733,7 @@ export class FileTransferQueue {
                 consecutive_deferrals: failed ? 0 : consecutiveDeferrals,
                 last_error: message,
                 last_error_details: errorDiagnostics(metadata),
-                retry_at: failed ? 0 : Date.now() + delay,
+                retry_at: failed || offlineOnly ? 0 : Date.now() + delay,
                 lease_owner: undefined,
                 lease_expires_at: undefined,
                 lease_token: undefined,

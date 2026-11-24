@@ -131,8 +131,12 @@ count decoded base64 bytes, excluding padding, against the attachment limit.
 
 New regular chat uploads also create a catalog entry. Supported UTF-8 `.txt`,
 `.md`, and `.csv` uploads insert a removable chat reference. Images and PDFs use
-the existing attachment/model compatibility flow. **Ask in chat** returns to a
-chat and adds the selected item to its draft. For a saved image or PDF, the composer reuses its verified workspace hash. Attachment filters still run, and replacement files go through normal intake.
+the existing attachment/model compatibility flow. **Ask in chat** checks for the
+original of a saved image or PDF before opening the chat. If the original is
+unavailable offline, Files stays open and asks you to reconnect. The composer
+adds the selected item to the draft and reuses the verified workspace hash for a
+saved image or PDF. Attachment filters still run, and replacement files go
+through normal intake.
 
 Uploaded images appear in Files and can be isolated with the **Images** type
 filter. Opening Files with write access also catalogs older image uploads in
