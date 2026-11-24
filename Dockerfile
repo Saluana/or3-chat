@@ -168,13 +168,23 @@ RUN if [ "$OR3_DOCKER_PROFILE" = clerk-sqlite-s3 ]; then \
 # container receives database/master/operator volumes. No target-platform build.
 FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS vault-runtime
 
-# The distroless runtime keeps only Node, its required libraries, and the
-# pinned static multicall tool above. Both bases are pinned multi-arch
-# OCI indexes and the resulting architectures are scanned during release.
-FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:78f07ef1b5ea71ad7c055df15d0dd8997f2d288f9158623c4d4ae3d765b7d50d AS runtime
+# Node supplies its own TLS. Start the application with Distroless base-nossl
+# and add the Node distribution and Debian native libraries from the matching
+# upstream image, including their licenses and package inventory.
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:39b0407357c9fadf1a9708d22088f02de21f0e1e8a688474eea2d8701e7d5693 AS node-distribution
+FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS node-libraries
+RUN --mount=from=node-distribution,target=/source \
+    set -eu; cd /source; mkdir /runtime; \
+    for pkg in gcc-14-base libgcc-s1 libstdc++6 libgomp1 libzstd1; do \
+      record=var/lib/dpkg/status.d/$pkg; \
+      cp -a --parents "$record" "$record.md5sums" "usr/share/doc/$pkg" /runtime; \
+      awk '{print $2}' "$record.md5sums" | xargs -r cp -a --parents --target-directory=/runtime; \
+    done; \
+    cp -a --parents usr/lib/*-linux-gnu/libstdc++.so.6 usr/lib/*-linux-gnu/libgomp.so.1 usr/lib/*-linux-gnu/libzstd.so.1 /runtime
 
-USER 0:0
-RUN --mount=from=runtime-tools,source=/bin/busybox,target=/busybox ["/busybox", "rm", "-f", "/usr/lib/x86_64-linux-gnu/libz.so.1.3.1", "/usr/lib/aarch64-linux-gnu/libz.so.1.3.1"]
+FROM gcr.io/distroless/base-nossl-debian13:nonroot@sha256:4006ac92504be607b70de01d1f64f38288c69fcd8faa820f6d3aed266ea32ac5 AS runtime
+COPY --from=node-distribution /nodejs /nodejs
+COPY --from=node-libraries /runtime/ /
 COPY --from=patched-zlib /zlib/root/ /
 COPY --from=patched-zlib /zlib/distroless/ /
 

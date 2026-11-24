@@ -250,7 +250,7 @@ test('Dockerfile builds shared Nuxt output only once on the native runner', () =
   expect(dockerfile).toMatch(/^FROM --platform=\$BUILDPLATFORM node:.* AS operator-npm$/m);
   expect(dockerfile).toMatch(/^FROM --platform=\$BUILDPLATFORM node:.* AS build$/m);
   expect(dockerfile).toMatch(/^FROM busybox:1\.37\.0-uclibc@sha256:.* AS runtime-tools$/m);
-  expect(dockerfile).toMatch(/^FROM gcr\.io\/distroless\/nodejs24-debian13:.* AS runtime$/m);
+  expect(dockerfile).toMatch(/^FROM gcr\.io\/distroless\/base-nossl-debian13:nonroot@sha256:[0-9a-f]{64} AS runtime$/m);
   expect(dockerfile).toMatch(/^FROM docker:27\.5\.1-cli@sha256:.* AS docker-client$/m);
   expect(dockerfile).toMatch(/^FROM node:24-bookworm-slim@sha256:.* AS dashboard-operator$/m);
   const toolsStage = dockerfile.slice(dockerfile.indexOf('FROM busybox:'), dockerfile.indexOf('FROM docker:'));

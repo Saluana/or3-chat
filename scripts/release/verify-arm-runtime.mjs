@@ -34,6 +34,6 @@ function docker(args) {
 }
 
 docker(['run', '--rm', '--platform', 'linux/arm64', '--user', '65532:65532', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--tmpfs', '/tmp:rw,noexec,nosuid,size=64m', '--volume', '/data', '--entrypoint', '/bin/sh', image, '-c', 'printf runtime-contract > /data/probe && tar czf /tmp/data.tgz -C /data . && find /data -mindepth 1 -delete && tar xzf /tmp/data.tgz -C /data && test -f /data/probe']);
-docker(['run', '--rm', '--platform', 'linux/arm64', '--entrypoint', '/nodejs/bin/node', image, '-e', 'if(process.version!=="v24.22.1"||process.arch!=="arm64")throw Error("Unexpected Node runtime: "+process.version+" "+process.arch); const D=require("/app/.output/server/node_modules/better-sqlite3"); const d=new D(":memory:"); if(d.prepare("select 42 value").get().value!==42)process.exit(1); d.close()']);
+docker(['run', '--rm', '--platform', 'linux/arm64', '--entrypoint', '/nodejs/bin/node', image, '-e', 'if(process.version!=="v24.22.3"||process.arch!=="arm64")throw Error("Unexpected Node runtime: "+process.version+" "+process.arch); const D=require("/app/.output/server/node_modules/better-sqlite3"); const d=new D(":memory:"); if(d.prepare("select 42 value").get().value!==42)process.exit(1); d.close()']);
 await writeFile(resolve(output), `${JSON.stringify({ schemaVersion: 1, profile, check: 'nativeAddonArm64', result: 'passed', sourceSha, workflowRunId: runId, candidateDigest: digest }, null, 2)}\n`, { flag: 'wx' });
 console.log(`Wrote arm64 runtime qualification to ${output}`);

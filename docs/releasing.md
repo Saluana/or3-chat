@@ -187,8 +187,15 @@ a rerun, any reused receipt must identify the same run as the retained files.
 It publishes only source-qualified candidate evidence; it cannot
 publish npm or the public version images.
 
-The application and operator images currently replace the stable bases' zlib
-with Debian `1:1.3.dfsg+really1.3.2-4`, pinned by architecture and SHA-256 in
+The Basic application uses Distroless Debian 13 `base-nossl` with the upstream
+Node 24 binary and its Debian native runtime libraries. Node provides HTTPS
+through its bundled OpenSSL, and the vault uses Bun's TLS implementation.
+Native additions that dynamically link system `libssl.so.3` or
+`libcrypto.so.3` require a separately qualified image. Keep the Node and base
+image pins aligned when updating Debian, and verify both runtime architectures.
+
+The application and operator images ship Debian zlib
+`1:1.3.dfsg+really1.3.2-4`, pinned by architecture and SHA-256 in
 `Dockerfile`. This contains the upstream fix for
 [CVE-2026-76844](https://security-tracker.debian.org/tracker/CVE-2026-76844) and
 [CVE-2026-85091](https://security-tracker.debian.org/tracker/CVE-2026-85091).
