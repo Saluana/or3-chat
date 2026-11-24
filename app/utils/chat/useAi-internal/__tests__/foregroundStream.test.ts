@@ -165,8 +165,11 @@ describe('runForegroundStreamLoop', () => {
         appendToolResultMock.mockResolvedValue({ id: 'tool-msg' });
         let durableReceipt: unknown;
         const persistAssistant = vi.fn(async (patch: Parameters<AssistantPersister>[0]) => {
-            if (patch.requireCurrent && !acknowledged) throw new Error('Tool receipt not acknowledged');
-            if (patch.requireCurrent) durableReceipt = structuredClone(patch.toolCalls);
+            if (patch.toolCalls?.some(call => call.executionReceipt?.state === 'running')) {
+                expect(patch.requireCurrent).toBe(true);
+                if (!acknowledged) throw new Error('Tool receipt not acknowledged');
+                durableReceipt = structuredClone(patch.toolCalls);
+            }
             return null;
         });
         const executeTool = vi.fn(async () => {
@@ -274,6 +277,130 @@ describe('runForegroundStreamLoop', () => {
             finish.resolve();
             firstWrite.resolve();
             await run;
+            vi.useRealTimers();
+        }
+    });
+
+    it.each([false, true])('bounds the suffix accepted during a slow progress write (failure=%s)', async (fails) => {
+        const firstWrite = deferred<void>();
+        const entered = deferred<void>();
+        let run: Promise<void> | undefined;
+        let activeWrites = 0;
+        let maximumWrites = 0;
+        openRouterStreamMock.mockImplementation(async function* () {
+            for (let index = 0; index < 1000; index++) yield { type: 'text', text: 'x' };
+        });
+        const { runForegroundStreamLoop } = await import('../foregroundStream');
+        const persistAssistant = vi.fn(async (_patch: Record<string, unknown>) => {
+            maximumWrites = Math.max(maximumWrites, ++activeWrites);
+            try {
+                if (persistAssistant.mock.calls.length === 1) {
+                    entered.resolve();
+                    await firstWrite.promise;
+                    if (fails) throw new Error('Progress write failed');
+                }
+                return null;
+            } finally { activeWrites--; }
+        });
+        const ctx = {
+            apiKey: 'key', modelId: 'model',
+            orMessages: [{ role: 'user' as const, content: [{ type: 'text' as const, text: 'go' }] }],
+            modalities: ['text'], abortSignal: new AbortController().signal,
+            assistantId: 'assistant-slow-progress', streamId: 'stream-slow-progress', threadId: 'thread-1',
+            streamAcc: { append: vi.fn() }, hooks: { doAction: vi.fn(async () => {}) },
+            toolRegistry: { executeTool: vi.fn() }, persistAssistant,
+            assistantFileHashes: [], activeToolCalls: new Map(),
+            tailAssistant: { value: null as any }, rawMessages: { value: [] as any[] },
+        };
+        try {
+            run = runForegroundStreamLoop(ctx);
+            const outcome = run.then(() => null, (error: unknown) => error);
+            await entered.promise;
+            await vi.waitFor(() => expect(ctx.streamAcc.append.mock.calls.length).toBeGreaterThan(50));
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const buffered = ctx.streamAcc.append.mock.calls.length;
+            expect(buffered).toBeLessThan(1000);
+            expect(persistAssistant).toHaveBeenCalledTimes(1);
+            firstWrite.resolve();
+            if (fails) {
+                expect(await outcome).toEqual(new Error('Progress write failed'));
+                expect(ctx.streamAcc.append).toHaveBeenCalledTimes(buffered);
+                expect(persistAssistant).toHaveBeenCalledTimes(1);
+                return;
+            }
+            expect(await outcome).toBeNull();
+            expect(maximumWrites).toBe(1);
+            expect(persistAssistant.mock.lastCall?.[0]).toMatchObject({ content: 'x'.repeat(1000) });
+        } finally {
+            firstWrite.resolve();
+            await run?.catch(() => {});
+        }
+    });
+
+    it.each(['in-flight', 'settled', 'persistent'] as const)('retries the latest reply once after a %s progress failure at completion', async (failureMode) => {
+        vi.useFakeTimers();
+        const consumed = deferred<void>();
+        const nextChunk = deferred<void>();
+        const finish = deferred<void>();
+        const firstWrite = deferred<void>();
+        const providerClosed = deferred<void>();
+        let run: Promise<void> | undefined;
+        try {
+            openRouterStreamMock.mockImplementation(async function* () {
+                yield { type: 'text', text: 'early' };
+                consumed.resolve();
+                await nextChunk.promise;
+                yield { type: 'text', text: ' later' };
+                await finish.promise;
+                yield { type: 'done' };
+                providerClosed.resolve();
+            });
+            const { runForegroundStreamLoop } = await import('../foregroundStream');
+            const progressError = new Error('Temporary progress write failure');
+            const terminalError = new Error('Latest progress still could not be saved');
+            let durable = '';
+            const persistAssistant = vi.fn<AssistantPersister>(async ({ content }) => {
+                if (persistAssistant.mock.calls.length === 1) {
+                    await firstWrite.promise;
+                    throw progressError;
+                }
+                if (failureMode === 'persistent') throw terminalError;
+                durable = content ?? '';
+                return null;
+            });
+            run = runForegroundStreamLoop({
+                apiKey: 'key', modelId: 'model', orMessages: [], modalities: ['text'],
+                abortSignal: new AbortController().signal, assistantId: 'assistant-save',
+                streamId: 'stream-save', threadId: 'thread-1', streamAcc: { append: vi.fn() },
+                hooks: { doAction: vi.fn(async () => {}) }, toolRegistry: { executeTool: vi.fn() },
+                persistAssistant, assistantFileHashes: [], activeToolCalls: new Map(),
+                tailAssistant: { value: null }, rawMessages: { value: [] },
+            });
+            const outcome = run.then(() => null, (error: unknown) => error);
+            await consumed.promise;
+            await vi.advanceTimersByTimeAsync(500);
+            expect(persistAssistant.mock.calls[0]?.[0].content).toBe('early');
+            nextChunk.resolve();
+            await vi.advanceTimersByTimeAsync(0);
+
+            if (failureMode === 'settled') {
+                firstWrite.resolve();
+                await vi.advanceTimersByTimeAsync(0);
+            }
+            finish.resolve();
+            // Let the explicit flush reach the still-running progress write.
+            await vi.advanceTimersByTimeAsync(0);
+            firstWrite.resolve();
+            expect(await outcome).toBe(failureMode === 'persistent' ? terminalError : null);
+            await providerClosed.promise;
+            expect(persistAssistant).toHaveBeenCalledTimes(2);
+            expect(persistAssistant.mock.lastCall?.[0].content).toBe('early later');
+            expect(durable).toBe(failureMode === 'persistent' ? '' : 'early later');
+        } finally {
+            nextChunk.resolve();
+            finish.resolve();
+            firstWrite.resolve();
+            await run?.catch(() => {});
             vi.useRealTimers();
         }
     });

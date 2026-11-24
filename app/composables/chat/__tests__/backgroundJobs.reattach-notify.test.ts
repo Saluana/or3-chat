@@ -1620,6 +1620,33 @@ describe('backgroundJobs reattach + notifications', () => {
         expect(backgroundJobTrackers.has('job-1')).toBe(false);
     });
 
+    it('advances independent reasoning cursors and resets them for a replacement attempt', async () => {
+        vi.useFakeTimers();
+        const mod = await import('~/utils/chat/useAi-internal/backgroundJobs');
+        pollJobStatusMock
+            .mockResolvedValueOnce(makeStatus('streaming', { attempt: 1, content: undefined,
+                content_delta: 'b', content_length: 2, reasoning_delta: 'ing', reasoning_length: 8 }))
+            .mockResolvedValueOnce(makeStatus('streaming', { attempt: 2, content: '', content_reset: true,
+                content_length: 0, reasoning_text: '', reasoning_reset: true, reasoning_length: 0 }))
+            .mockResolvedValueOnce(makeStatus('complete', { attempt: 2, content: 'done', content_length: 4,
+                reasoning_text: 'fresh', reasoning_length: 5 }));
+        const tracker = mod.ensureBackgroundJobTracker({ jobId: 'job-1', userId: 'user-1', threadId: 'thread-1',
+            messageId: 'msg-1', initialAttempt: 1, initialContent: 'a', initialReasoning: 'think', useSse: false });
+        try {
+            await vi.advanceTimersByTimeAsync(1);
+            expect(tracker.lastReasoning).toBe('thinking');
+            await vi.advanceTimersByTimeAsync(5_000);
+            await expect(tracker.completion).resolves.toMatchObject({ status: 'complete', reasoning_text: 'fresh' });
+            expect(pollJobStatusMock.mock.calls.map(call => [call[1], call[3], call[4]])).toEqual([
+                [1, 1, 5], [2, 1, 8], [0, 2, 0],
+            ]);
+        } finally {
+            mod.stopBackgroundJobTracking(tracker);
+            mod.backgroundJobTrackers.clear();
+            vi.useRealTimers();
+        }
+    });
+
     it('keeps reconciling an active job after a transient transport outage', async () => {
         vi.useFakeTimers();
         const random = vi.spyOn(Math, 'random').mockReturnValue(0);

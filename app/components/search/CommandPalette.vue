@@ -486,7 +486,16 @@ const shellOverrides = useThemeOverrides({
     isNuxtUI: true,
 });
 
-const dialogContent = useDialogFocus(undefined, () => 'palette');
+const dialogContent = useDialogFocus(() => ({
+    onKeydownCapture(event: KeyboardEvent) {
+        // Intercept before input handlers, the dialog's Tab trap, and global
+        // Escape listeners can claim the input method's physical key.
+        if (isCompositionKey(event)) event.stopPropagation();
+    },
+    onEscapeKeyDown(event: KeyboardEvent) {
+        if (isCompositionKey(event)) event.preventDefault();
+    },
+}), () => 'palette');
 const shortLayoutViewport = useMediaQuery('(max-height: 500px)');
 const shortViewport = computed(() => shortLayoutViewport.value || dialogContent.value?.['data-compact-viewport'] !== undefined);
 const tinyLayoutViewport = useMediaQuery('(max-height: 240px)');
@@ -614,7 +623,27 @@ function restoreResultFocus(event: Event): void {
 
 watch([isOpen, mobileViewport, query], () => { mobilePreviewOpen.value = false; });
 
+let compositionKey: Pick<KeyboardEvent, 'key' | 'code' | 'timeStamp'> | undefined;
+function isCompositionKey(event: KeyboardEvent): boolean {
+    // Safari can report the final composition key with isComposing already false.
+    if (event.isComposing || event.keyCode === 229) {
+        compositionKey = { key: event.key, code: event.code, timeStamp: event.timeStamp };
+        return true;
+    }
+    // Chrome on macOS replays Enter/Escape after compositionend, even across
+    // keyup, with the same hardware timestamp. A new physical press has a new
+    // timestamp and must work immediately, without a post-composition timeout.
+    return compositionKey?.key === event.key && compositionKey.code === event.code &&
+        compositionKey.timeStamp === event.timeStamp;
+}
+
 function onKeydown(event: KeyboardEvent): void {
+    if (isCompositionKey(event)) {
+        // Keep candidate keys out of the dialog's Tab trap and Escape listener
+        // while leaving the input method's native behavior intact.
+        event.stopPropagation();
+        return;
+    }
     switch (event.key) {
         case 'ArrowDown':
             event.preventDefault();
@@ -639,6 +668,7 @@ function onKeydown(event: KeyboardEvent): void {
             void enterActionTray();
             return;
         case 'Escape':
+            if (event.defaultPrevented) return;
             event.preventDefault();
             close();
             return;
@@ -664,7 +694,10 @@ watch(focusToken, async () => {
 });
 
 watch(isOpen, async (open) => {
-    if (!open) return;
+    if (!open) {
+        compositionKey = undefined;
+        return;
+    }
     await nextTick();
     focusInput(true);
 }, { immediate: true });

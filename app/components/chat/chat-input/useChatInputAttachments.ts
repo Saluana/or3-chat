@@ -12,9 +12,10 @@ import {
     getMaxFileBytes,
     validateFile,
     persistAttachment,
+    loadStoredAttachment,
 } from '~/components/chat/file-upload-utils';
 import type { LargeTextBlock, UploadedImage } from './types';
-import type { AttachmentIntakeOwner } from '../file-upload-utils';
+import type { AttachmentIntakeOwner, StoredAttachment, StoredAttachmentSource } from '../file-upload-utils';
 
 const LARGE_TEXT_WORD_THRESHOLD = 600;
 
@@ -106,7 +107,8 @@ export function useChatInputAttachments(
     async function processAttachment(
         file: File,
         name?: string,
-        owner = captureIntake()
+        owner = captureIntake(),
+        stored?: StoredAttachment
     ) {
         try {
             owner.assertCurrent();
@@ -179,7 +181,7 @@ export function useChatInputAttachments(
             },
         };
         try {
-            await persistAttachment(attachment, attachmentOwner);
+            await persistAttachment(attachment, attachmentOwner, stored);
             attachmentOwner.assertCurrent();
             return attachment;
         } catch (error) {
@@ -187,6 +189,13 @@ export function useChatInputAttachments(
         } finally {
             owner.signal.removeEventListener('abort', abort);
         }
+    }
+
+    async function processStoredAttachment(reference: StoredAttachmentSource) {
+        const owner = captureIntake();
+        const stored = await loadStoredAttachment(reference, owner);
+        owner.assertCurrent();
+        return processAttachment(stored.file, stored.meta.name, owner, stored);
     }
 
     async function processFiles(files: FileList | File[] | null) {
@@ -354,6 +363,7 @@ export function useChatInputAttachments(
         dropZoneRef,
         isDragging,
         processAttachment,
+        processStoredAttachment,
         removeImage,
         removeTextBlock,
         clearAll,

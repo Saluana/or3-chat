@@ -154,6 +154,7 @@ describe('FileTransferQueue', () => {
     afterEach(() => {
         vi.clearAllTimers();
         vi.useRealTimers();
+        vi.restoreAllMocks();
         vi.unstubAllGlobals();
     });
 
@@ -466,6 +467,7 @@ describe('FileTransferQueue', () => {
             bytes_done: 0,
             state: 'queued',
             attempts: 0,
+            consecutive_deferrals: 4,
             created_at: 1,
             updated_at: 1,
         };
@@ -484,7 +486,7 @@ describe('FileTransferQueue', () => {
 
         await db.file_meta.put({ ...meta, storage_id: 'now-committed' });
         await expect(queue.retryRecoverable(transfer.id)).resolves.toBe(true);
-        expect((await db.file_transfers.get(transfer.id))?.state).toBe('queued');
+        expect(await db.file_transfers.get(transfer.id)).toMatchObject({ state: 'queued', consecutive_deferrals: 0 });
     });
 
     it('re-queues remote_missing downloads on enqueue so later blob availability can succeed', async () => {
@@ -954,30 +956,62 @@ describe('FileTransferQueue', () => {
         expect(maxActive).toBe(1);
     });
 
-    it('supports backoff progression and caps delay', () => {
+    it.each([
+        { sample: 0.5, delays: [100, 200, 250, 250] },
+        { sample: 0, delays: [75, 150, 188, 188] },
+        { sample: 0.999, delays: [125, 250, 250, 250] },
+    ])('persists progressive, capped and jittered maintenance delays across restarts (random $sample)', async ({ sample, delays }) => {
+        vi.setSystemTime(1_000);
+        vi.spyOn(Math, 'random').mockReturnValue(sample);
         const meta = makeMeta();
         const db = createDbStub([meta], [{ hash: meta.hash, blob: new Blob(['x']) }]);
-        const provider = {
+        const provider: ObjectStorageProvider = {
             id: 'provider-1',
             displayName: 'Provider',
             supports: { presignedUpload: true, presignedDownload: true },
-            getPresignedUploadUrl: vi.fn(),
-            getPresignedDownloadUrl: vi.fn(),
-        } as unknown as ObjectStorageProvider;
-
-        const queue = new FileTransferQueue(db as any, provider, {
+            getPresignedUploadUrl: vi.fn(async () => ({ url: 'https://upload.example', expiresAt: Date.now(), storageId: 'uploaded-original' })),
+            getPresignedDownloadUrl: vi.fn(async () => ({ url: 'https://download.example', expiresAt: Date.now() })),
+        };
+        let available = false;
+        const upload = vi.fn(async () => new Response('', { status: available ? 200 : 503 }));
+        vi.stubGlobal('fetch', upload);
+        const createQueue = () => new FileTransferQueue(db as any, provider, {
+            concurrency: 1,
+            maxAttempts: 1,
             backoffBaseMs: 100,
             backoffMaxMs: 250,
         });
-
-        expect((queue as any).getBackoffDelay(1)).toBe(100);
-        expect((queue as any).getBackoffDelay(2)).toBe(200);
-        expect((queue as any).getBackoffDelay(3)).toBe(250);
-        expect((queue as any).getBackoffDelay(8)).toBe(250);
+        let queue = createQueue();
+        queue.setWorkspaceId('ws-1');
+        try {
+            const transfer = await queue.enqueue(meta.hash, 'upload');
+            await pumpQueue();
+            for (const [index, delay] of delays.entries()) {
+                expect(await db.file_transfers.get(transfer!.id)).toMatchObject({
+                    state: 'queued', attempts: 0, retry_at: Date.now() + delay,
+                });
+                queue.dispose();
+                queue = createQueue();
+                queue.setWorkspaceId('ws-1');
+                await pumpQueue();
+                await vi.advanceTimersByTimeAsync(delay - 1);
+                expect(upload).toHaveBeenCalledTimes(index + 1);
+                if (index === delays.length - 1) available = true;
+                await vi.advanceTimersByTimeAsync(1);
+                await pumpQueue();
+            }
+            expect(await db.file_transfers.get(transfer!.id)).toMatchObject({
+                state: 'done', attempts: 0, consecutive_deferrals: 0,
+            });
+            expect(provider.getPresignedUploadUrl).toHaveBeenCalledTimes(delays.length + 1);
+        } finally {
+            queue.dispose();
+        }
     });
 
     it('persists retry_at so immediate pumping cannot bypass backoff', async () => {
         vi.setSystemTime(1_000);
+        vi.spyOn(Math, 'random').mockReturnValue(0.5);
         const meta = makeMeta();
         const db = createDbStub([meta], [{ hash: meta.hash, blob: new Blob(['x']) }]);
         const provider = {
@@ -1027,6 +1061,7 @@ describe('FileTransferQueue', () => {
         }
         expect((queue as any).doUpload).toHaveBeenCalledTimes(2);
         expect((await db.file_transfers.get(transfer.id))?.state).toBe('done');
+        queue.dispose();
     });
 
     it.each([413, 429, 503])('preserves permanent errors and defers HTTP %s without exhausting maintenance attempts', async status => {
@@ -1041,7 +1076,7 @@ describe('FileTransferQueue', () => {
             getPresignedDownloadUrl: vi.fn(async () => ({ url: 'https://download.example', expiresAt: Date.now() })),
         };
 
-        const queue = new FileTransferQueue(db as any, provider, { maxAttempts: 5 });
+        const queue = new FileTransferQueue(db as any, provider, { maxAttempts: 5, backoffBaseMs: 100, backoffMaxMs: 250 });
         queue.setWorkspaceId('ws-1');
         const upload = vi.fn(async () => new Response('upstream token=private-token', { status, headers: { 'Retry-After': '5' } }));
         vi.stubGlobal('fetch', upload);

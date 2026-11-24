@@ -80,13 +80,19 @@ const fixturePng = { name: 'composer.png', mimeType: 'image/png', buffer: Buffer
 const draftRecoveryScripts = new WeakMap<Page, string[]>();
 
 async function retryDraftRestore(page: Page, text: string): Promise<void> {
-    try {
-        await page.getByRole('button', { name: 'Retry restore', exact: true }).click({ timeout: 5_000 });
-    } catch (error) {
-        // Repair can let a pending startup restore finish and remove its toast
-        // while Playwright is checking the button's transition/actionability.
-        // Accept only the observed successful restore, never an unhealed error.
-        if (await page.getByRole('textbox', { name: 'Message input' }).innerText() !== text) throw error;
+    const retry = page.getByRole('button', { name: 'Retry restore', exact: true });
+    await expect(retry.first()).toBeVisible();
+    // A native account-index failure can warn multiple retained tab owners.
+    // Retry those real notices; the active saved buffer must be restored below.
+    while (await retry.count()) {
+        const before = await retry.count();
+        try {
+            await retry.first().click({ timeout: 5_000 });
+        } catch (error) {
+            // Repair can finish a pending startup restore while the notice closes.
+            if (await page.getByRole('textbox', { name: 'Message input' }).innerText() !== text) throw error;
+        }
+        await expect.poll(() => retry.count()).toBeLessThan(before);
     }
     await expect(page.getByRole('textbox', { name: 'Message input' })).toHaveText(text);
     await expect(page.getByText('Draft could not be restored', { exact: true })).toHaveCount(0);
@@ -157,10 +163,10 @@ test.describe('chat draft storage recovery faults', () => {
                 return result;
             };
             IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
-                if (this.name === 'workspace_tab_drafts') record('put-attempt', args[0]); return put.apply(this, args);
+                if (this.name === 'current_workspace_tab_drafts') record('put-attempt', args[0]); return put.apply(this, args);
             };
             IDBObjectStore.prototype.delete = function (...args: Parameters<typeof remove>) {
-                if (this.name === 'workspace_tab_drafts') record('delete-attempt', args[0]); return remove.apply(this, args);
+                if (this.name === 'current_workspace_tab_drafts') record('delete-attempt', args[0]); return remove.apply(this, args);
             };
         });
         await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
@@ -182,8 +188,8 @@ test.describe('chat draft storage recovery faults', () => {
                 const db = await new Promise<IDBDatabase>((resolve, reject) => {
                     const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
                 });
-                if (db.objectStoreNames.contains('workspace_tab_drafts')) rows.push(...await new Promise<unknown[]>((resolve, reject) => {
-                    const request = db.transaction('workspace_tab_drafts', 'readonly').objectStore('workspace_tab_drafts').getAll();
+                if (db.objectStoreNames.contains('current_workspace_tab_drafts')) rows.push(...await new Promise<unknown[]>((resolve, reject) => {
+                    const request = db.transaction('current_workspace_tab_drafts', 'readonly').objectStore('current_workspace_tab_drafts').getAll();
                     request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
                 }));
                 db.close();
@@ -204,10 +210,10 @@ test.describe('chat draft storage recovery faults', () => {
                     open.onsuccess = () => resolve(open.result);
                     open.onerror = () => reject(open.error);
                 });
-                if (db.objectStoreNames.contains('workspace_tab_drafts')) {
+                if (db.objectStoreNames.contains('current_workspace_tab_drafts')) {
                     const rows = await new Promise<Array<{ draft: { text: string } }>>((resolve, reject) => {
-                        const tx = db.transaction('workspace_tab_drafts', 'readonly');
-                        const read = tx.objectStore('workspace_tab_drafts').getAll();
+                        const tx = db.transaction('current_workspace_tab_drafts', 'readonly');
+                        const read = tx.objectStore('current_workspace_tab_drafts').getAll();
                         tx.oncomplete = () => resolve(read.result);
                         tx.onabort = () => reject(tx.error);
                     });
@@ -228,7 +234,7 @@ test.describe('chat draft storage recovery faults', () => {
                     const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
                 });
                 const rows = await new Promise<Array<{ draft: { attachments: unknown[] } }>>((resolve, reject) => {
-                    const request = db.transaction('workspace_tab_drafts', 'readonly').objectStore('workspace_tab_drafts').getAll();
+                    const request = db.transaction('current_workspace_tab_drafts', 'readonly').objectStore('current_workspace_tab_drafts').getAll();
                     request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
                 });
                 count += rows.reduce((sum, row) => sum + row.draft.attachments.length, 0); db.close();
@@ -264,7 +270,7 @@ test.describe('chat draft storage recovery faults', () => {
             for (const method of ['getAll', 'openCursor'] as const) {
                 const original = originals[method];
                 IDBIndex.prototype[method] = function (...args: unknown[]) {
-                    if (this.objectStore.name === 'workspace_tab_drafts') {
+                    if (this.objectStore.name === 'current_workspace_tab_drafts') {
                         throw new DOMException('Synthetic interrupted draft read', 'AbortError');
                     }
                     return Reflect.apply(original, this, args);
@@ -277,12 +283,12 @@ test.describe('chat draft storage recovery faults', () => {
         });
         await page.reload();
         await expect(input).toBeVisible({ timeout: 60_000 });
-        await expect(page.getByText('Draft could not be restored', { exact: true })).toBeVisible();
+        await expect(page.getByText('Draft could not be restored', { exact: true }).first()).toBeVisible();
         await expect(input).toBeEmpty();
         expect(await savedTexts(page)).toContain(marker);
         // Closing the failed composer must not acknowledge an empty draft.
         await page.reload();
-        await expect(page.getByText('Draft could not be restored', { exact: true })).toBeVisible({ timeout: 60_000 });
+        await expect(page.getByText('Draft could not be restored', { exact: true }).first()).toBeVisible({ timeout: 60_000 });
         expect(await savedTexts(page)).toContain(marker);
         await page.evaluate(() => (window as unknown as { restoreDraftReads: () => void }).restoreDraftReads());
         await retryDraftRestore(page, marker);
@@ -309,9 +315,9 @@ test.describe('chat draft storage recovery faults', () => {
                 const db = await new Promise<IDBDatabase>((resolve, reject) => {
                     const open = indexedDB.open(name); open.onsuccess = () => resolve(open.result); open.onerror = () => reject(open.error);
                 });
-                if (db.objectStoreNames.contains('workspace_tab_drafts')) {
+                if (db.objectStoreNames.contains('current_workspace_tab_drafts')) {
                     const rows = await new Promise<Array<{ tab_id: string; draft: { attachments: unknown[] } }>>((resolve, reject) => {
-                        const tx = db.transaction('workspace_tab_drafts', 'readonly'); const read = tx.objectStore('workspace_tab_drafts').getAll();
+                        const tx = db.transaction('current_workspace_tab_drafts', 'readonly'); const read = tx.objectStore('current_workspace_tab_drafts').getAll();
                         tx.oncomplete = () => resolve(read.result); tx.onabort = () => reject(tx.error);
                     });
                     count += rows.filter(row => savedTabIds.has(row.tab_id)).reduce((sum, row) => sum + row.draft.attachments.length, 0);
@@ -326,7 +332,7 @@ test.describe('chat draft storage recovery faults', () => {
             (window as unknown as { attachmentReadProbe: typeof probe }).attachmentReadProbe = probe;
             const original = IDBObjectStore.prototype.get;
             IDBObjectStore.prototype.get = function (...args: Parameters<typeof original>) {
-                if (this.name === 'file_blobs' && localStorage.getItem('or3:recovery:blob-read-repaired') !== 'yes') {
+                if (this.name === 'current_file_blobs' && localStorage.getItem('or3:recovery:blob-read-repaired') !== 'yes') {
                     probe.reads++;
                     throw new DOMException('Synthetic interrupted attachment read', 'AbortError');
                 }
@@ -341,12 +347,12 @@ test.describe('chat draft storage recovery faults', () => {
         await expect(input).toBeVisible({ timeout: 60_000 });
         await info.attach('after-attachment-read-reload', { body: JSON.stringify({ references: await savedReferences(), texts: await savedTexts(page), reads: await page.evaluate(() => (window as unknown as { attachmentReadProbe: { reads: number } }).attachmentReadProbe.reads), layout: await page.evaluate(() => Object.fromEntries(Object.keys(localStorage).filter(key => key.startsWith('or3:workspace-tabs:v1:')).map(key => [key, localStorage.getItem(key)]))) }), contentType: 'application/json' });
         await expect.poll(() => page.evaluate(() => (window as unknown as { attachmentReadProbe: { reads: number } }).attachmentReadProbe.reads)).toBeGreaterThan(0);
-        await expect(page.getByText('Draft could not be restored', { exact: true })).toBeVisible({ timeout: 15_000 });
+        await expect(page.getByText('Draft could not be restored', { exact: true }).first()).toBeVisible({ timeout: 15_000 });
         await expect(page.getByText('Attach these files again', { exact: true })).toHaveCount(0);
         expect(await savedReferences()).toBe(1);
         expect(await savedTexts(page)).toContain(marker);
         await page.reload();
-        await expect(page.getByText('Draft could not be restored', { exact: true })).toBeVisible({ timeout: 60_000 });
+        await expect(page.getByText('Draft could not be restored', { exact: true }).first()).toBeVisible({ timeout: 60_000 });
         expect(await savedReferences()).toBe(1);
         await page.evaluate(() => (window as unknown as { restoreAttachmentReads: () => void }).restoreAttachmentReads());
         await retryDraftRestore(page, marker);
@@ -373,7 +379,7 @@ test.describe('chat draft storage recovery faults', () => {
             // directly bypasses the version/state transaction acknowledgment.
             db.transaction = (...args: unknown[]) => {
                 const tables = args.slice(1, -1).flat() as Array<{ name?: string }>;
-                if (!String(args[0]).startsWith('rw') || !tables.some(table => table.name === 'workspace_tab_drafts')) {
+                if (!String(args[0]).startsWith('rw') || !tables.some(table => table.name === 'current_workspace_tab_drafts')) {
                     return transaction(...args);
                 }
                 return new Promise((resolve, reject) => { held.push({ args, resolve, reject }); });
@@ -465,7 +471,7 @@ test.describe('chat draft storage recovery faults', () => {
         await page.evaluate(() => {
             const put = IDBObjectStore.prototype.put; let faults = 0;
             IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
-                if (this.name === 'file_blobs' && faults++ === 0) throw new DOMException('Synthetic first attachment quota', 'QuotaExceededError');
+                if (this.name === 'current_file_blobs' && faults++ === 0) throw new DOMException('Synthetic first attachment quota', 'QuotaExceededError');
                 return put.apply(this, args);
             };
         });
@@ -494,7 +500,7 @@ test.describe('chat draft storage recovery faults', () => {
         await page.evaluate(() => {
             const put = IDBObjectStore.prototype.put;
             IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
-                if (this.name === 'file_blobs') throw new DOMException('Synthetic persistent attachment quota', 'QuotaExceededError');
+                if (this.name === 'current_file_blobs') throw new DOMException('Synthetic persistent attachment quota', 'QuotaExceededError');
                 return put.apply(this, args);
             };
             (window as unknown as { restoreRejectedAttachmentPut: () => void }).restoreRejectedAttachmentPut = () => { IDBObjectStore.prototype.put = put; };
@@ -534,7 +540,7 @@ test.describe('chat draft storage recovery faults', () => {
         await page.evaluate(() => {
             const put = IDBObjectStore.prototype.put; let blobWrites = 0;
             IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
-                if (this.name === 'file_blobs' && ++blobWrites === 2) throw new DOMException('Synthetic second composer file quota', 'QuotaExceededError');
+                if (this.name === 'current_file_blobs' && ++blobWrites === 2) throw new DOMException('Synthetic second composer file quota', 'QuotaExceededError');
                 return put.apply(this, args);
             };
         });
@@ -556,7 +562,7 @@ test.describe('chat draft storage recovery faults', () => {
                     const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
                 });
                 const rows = await new Promise<Array<{ blob: Blob }>>((resolve, reject) => {
-                    const request = db.transaction('file_blobs', 'readonly').objectStore('file_blobs').getAll();
+                    const request = db.transaction('current_file_blobs', 'readonly').objectStore('current_file_blobs').getAll();
                     request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
                 });
                 for (const row of rows) bytes.push(Array.from(new Uint8Array(await row.blob.arrayBuffer())));
@@ -607,7 +613,14 @@ test.describe('chat draft storage recovery faults', () => {
         await input.fill('Last durable draft before size limit');
         await expect.poll(() => savedTexts(page)).toContain('Last durable draft before size limit');
         // Text plus editor JSON exceed the existing 500k serialized-character cap.
+        const largeInputStarted = Date.now();
         await input.fill('x'.repeat(260_000));
+        const inputFilledAt = Date.now();
+        // Chromium may finish laying out this large contenteditable after fill
+        // returns. Wait for the real notice, then cross its removal transition.
+        await expect(page.getByText('Draft could not be saved', { exact: true })).toBeVisible({ timeout: 15_000 });
+        const warningVisibleAt = Date.now();
+        await page.waitForTimeout(500);
         await expect(page.getByText('Draft could not be saved', { exact: true })).toBeVisible();
         await expect.poll(() => savedTexts(page)).toEqual(['Last durable draft before size limit']);
         expect(await input.evaluate(element => element.textContent?.length)).toBe(260_000);
@@ -616,7 +629,11 @@ test.describe('chat draft storage recovery faults', () => {
         await expect(page.getByText('Draft could not be saved', { exact: true })).toBeHidden();
         await page.reload();
         await expect(input).toHaveText('Reduced draft recovers after size limit', { timeout: 60_000 });
-        await info.attach('oversized-draft-recovery', { body: JSON.stringify({ oversizedCharacters: 260_000, retainedPriorCopy: true, recovered: await input.textContent() }), contentType: 'application/json' });
+        const receipt = info.outputPath('oversized-draft-recovery.json');
+        await writeFile(receipt, JSON.stringify({ oversizedCharacters: 260_000, retainedPriorCopy: true,
+            fillMs: inputFilledAt - largeInputStarted, warningAfterFillMs: warningVisibleAt - inputFilledAt,
+            retainedPastRemovalTransition: true, recovered: await input.textContent() }, null, 2));
+        await info.attach('oversized-draft-recovery', { path: receipt, contentType: 'application/json' });
     });
 
     test('a failed layout save protects a new tab draft from refresh until retry succeeds', async ({ page }, info) => {
@@ -657,7 +674,7 @@ test.describe('chat draft storage recovery faults', () => {
             }
             const original = IDBObjectStore.prototype.put;
             if (failIndexedDb) IDBObjectStore.prototype.put = function (...args: Parameters<typeof original>) {
-                if (this.name === 'workspace_tab_drafts') throw new DOMException('Synthetic draft storage full', 'QuotaExceededError');
+                if (this.name === 'current_workspace_tab_drafts') throw new DOMException('Synthetic draft storage full', 'QuotaExceededError');
                 return original.apply(this, args);
             };
             (window as unknown as { releaseRecoveryQuota: () => void }).releaseRecoveryQuota = () => {
@@ -1026,8 +1043,8 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) for (const mode of ['light'
         });
         try {
             await new Promise<void>((resolve, reject) => {
-                const transaction = db.transaction('threads', 'readwrite');
-                for (let index = 0; index < 40; index++) transaction.objectStore('threads').put({
+                const transaction = db.transaction('current_threads', 'readwrite');
+                for (let index = 0; index < 40; index++) transaction.objectStore('current_threads').put({
                     id: `scroll-time-${index}`, title: `Scroll time ${index}`, status: 'ready',
                     deleted: false, pinned: false, forked: false, clock: 1,
                     created_at: Math.floor(Date.now() / 1000) - index,
@@ -1145,11 +1162,11 @@ test('an unsent draft and its attachment survive a reload and stay with their wo
         };
         const put = IDBObjectStore.prototype.put; const remove = IDBObjectStore.prototype.delete;
         IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
-            if (this.name === 'workspace_tab_drafts') record('draft-put-attempt', args[0]);
+            if (this.name === 'current_workspace_tab_drafts') record('draft-put-attempt', args[0]);
             return put.apply(this, args);
         };
         IDBObjectStore.prototype.delete = function (...args: Parameters<typeof remove>) {
-            if (this.name === 'workspace_tab_drafts') record('draft-delete-attempt', args[0]);
+            if (this.name === 'current_workspace_tab_drafts') record('draft-delete-attempt', args[0]);
             return remove.apply(this, args);
         };
         window.addEventListener('beforeunload', () => record('beforeunload', null), { capture: true });
@@ -1160,9 +1177,9 @@ test('an unsent draft and its attachment survive a reload and stay with their wo
         for (const { name } of await indexedDB.databases()) {
             if (!name) continue;
             const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); });
-            if (db.objectStoreNames.contains('workspace_tab_drafts')) {
+            if (db.objectStoreNames.contains('current_workspace_tab_drafts')) {
                 const rows = await new Promise<Array<{ account_key: string; draft: { text: string; attachments: Array<{ hash: string }> } }>>(resolve => {
-                    const request = db.transaction('workspace_tab_drafts', 'readonly').objectStore('workspace_tab_drafts').getAll();
+                    const request = db.transaction('current_workspace_tab_drafts', 'readonly').objectStore('current_workspace_tab_drafts').getAll();
                     request.onsuccess = () => resolve(request.result);
                 });
                 for (const row of rows) saved.push({ text: row.draft.text, hashes: row.draft.attachments.map(item => item.hash), account: row.account_key });
@@ -1282,14 +1299,14 @@ test('compaction chat memory lives under system prompt in settings, with working
     await expect(page.locator('[data-compaction-card]')).toBeVisible();
     await expect(page.locator('#chat-input-main [data-context-actions]')).toHaveCount(0);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    const memory = page.getByRole('region', { name: 'Context & compaction', exact: true });
+    const memory = page.getByRole('region', { name: 'Conversation memory', exact: true });
     await expect(memory).toBeVisible();
-    await memory.getByRole('button', { name: /^Context & compaction/ }).click();
-    await expect(memory.getByRole('button', { name: 'Compact', exact: true })).toBeVisible();
+    await memory.getByRole('button', { name: /^Conversation memory/ }).click();
+    await expect(memory.getByRole('button', { name: 'Summarize', exact: true })).toBeVisible();
     await expect(memory.getByRole('button', { name: 'Chat memory details' })).toHaveCount(0);
     await expect(memory).not.toContainText('auto-compaction off');
     await expect(memory.getByRole('meter', { name: 'Estimated context used' })).toBeVisible();
-    const automatic = memory.getByRole('switch', { name: 'Auto-compact when context is high' });
+    const automatic = memory.getByRole('switch', { name: 'Summarize automatically' });
     await expect(automatic).not.toBeChecked(); await automatic.click(); await expect(automatic).toBeChecked();
     const before = await settledCompactionSummaryId(page);
     await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
@@ -1306,7 +1323,7 @@ test('compaction chat memory lives under system prompt in settings, with working
     await expect.poll(() => compactionSummaryId(page), { timeout: COMPACTION_NAVIGATION_TIMEOUT }).toBe(before);
     await page.getByRole('textbox', { name: 'Message input' }).fill(draft);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    if (await memory.getByRole('button', { name: /^Context & compaction/ }).getAttribute('aria-expanded') === 'false') await memory.getByRole('button', { name: /^Context & compaction/ }).click();
+    if (await memory.getByRole('button', { name: /^Conversation memory/ }).getAttribute('aria-expanded') === 'false') await memory.getByRole('button', { name: /^Conversation memory/ }).click();
     await expect(automatic).toBeChecked();
     await expect(memory.locator('[data-context-indicator]')).toHaveAttribute('aria-busy', 'false');
     expect(Number(await memory.getByRole('meter').getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(80);
@@ -1326,12 +1343,12 @@ test('auto-compaction threshold slider follows the toggle and persists 10 percen
     await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 60_000 });
     const openSettings = async () => {
         await page.getByRole('button', { name: 'Settings', exact: true }).click();
-        await page.getByRole('button', { name: /^Context & compaction/ }).click();
+        await page.getByRole('button', { name: /^Conversation memory/ }).click();
     };
     await openSettings();
-    const memory = page.getByRole('region', { name: 'Context & compaction', exact: true });
-    const automatic = memory.getByRole('switch', { name: 'Auto-compact when context is high' });
-    const slider = memory.getByRole('slider', { name: 'Compact at context usage' });
+    const memory = page.getByRole('region', { name: 'Conversation memory', exact: true });
+    const automatic = memory.getByRole('switch', { name: 'Summarize automatically' });
+    const slider = memory.getByRole('slider', { name: 'Summarize when memory reaches' });
     await expect(slider).toHaveCount(0);
     await automatic.click();
     await expect(slider).toHaveAttribute('aria-valuenow', '80');
@@ -1366,9 +1383,9 @@ test('compaction composer meter updates configuration, media and accessible warn
     await page.route('**openrouter.ai/**', (route) => route.abort());
     await page.goto(`${chatPage}?compaction=1&meter=1`);
     const input = page.getByRole('textbox', { name: 'Message input' }); await expect(input).toBeVisible({ timeout: 60_000 });
-    const memory = page.getByRole('region', { name: 'Context & compaction', exact: true });
+    const memory = page.getByRole('region', { name: 'Conversation memory', exact: true });
     const indicator = memory.locator('[data-context-indicator]'); const meter = indicator.getByRole('meter', { name: 'Estimated context used' });
-    const settle = async () => { if (!await memory.isVisible()) await page.getByRole('button', { name: 'Settings', exact: true }).click(); if (await memory.getByRole('button', { name: /^Context & compaction/ }).getAttribute('aria-expanded') === 'false') await memory.getByRole('button', { name: /^Context & compaction/ }).click(); await expect(indicator).toHaveAttribute('aria-busy', 'false'); await expect(meter).toBeVisible(); };
+    const settle = async () => { if (!await memory.isVisible()) await page.getByRole('button', { name: 'Settings', exact: true }).click(); if (await memory.getByRole('button', { name: /^Conversation memory/ }).getAttribute('aria-expanded') === 'false') await memory.getByRole('button', { name: /^Conversation memory/ }).click(); await expect(indicator).toHaveAttribute('aria-busy', 'false'); await expect(meter).toBeVisible(); };
     const closeSettings = async () => { if (await memory.isVisible()) { await page.getByRole('button', { name: 'Close chat settings', exact: true }).click(); await expect(memory).not.toBeVisible(); } };
     const outside = async (action: () => Promise<unknown>) => { await closeSettings(); await action(); await settle(); };
     const percent = async () => Number(await meter.getAttribute('aria-valuenow'));
@@ -1425,8 +1442,8 @@ test('compaction media meter estimates inherited historical image cost without a
     const input = page.getByRole('textbox', { name: 'Message input' }); await expect(input).toBeVisible({ timeout: 60_000 });
     await input.fill('Text-only new draft');
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page.getByRole('region', { name: 'Context & compaction' }).getByRole('button', { name: /^Context & compaction/ }).click();
-    const meter = page.getByRole('region', { name: 'Context & compaction' }).getByRole('meter');
+    await page.getByRole('region', { name: 'Conversation memory' }).getByRole('button', { name: /^Conversation memory/ }).click();
+    const meter = page.getByRole('region', { name: 'Conversation memory' }).getByRole('meter');
     await expect(meter).toHaveAttribute('aria-valuetext', /reply tokens available/);
     await expect(meter).not.toHaveAttribute('aria-valuetext', /attachment cost unknown/);
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]'))).toEqual([]);
@@ -1593,8 +1610,8 @@ test('compaction lossy confirmation shows its estimate and preserves full saved 
         for (const { name } of await indexedDB.databases()) {
             if (!name) continue;
             const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
-            if (!db.objectStoreNames.contains('messages')) { db.close(); continue; }
-            const request = db.transaction('messages', 'readonly').objectStore('messages').getAll();
+            if (!db.objectStoreNames.contains('current_messages')) { db.close(); continue; }
+            const request = db.transaction('current_messages', 'readonly').objectStore('current_messages').getAll();
             const rows = await new Promise<Array<{ id: string; thread_id: string; role: string; data: Record<string, unknown> }>>((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
             db.close(); const selected = rows.filter((row) => row.thread_id === root);
             if (selected.length) return { rows: selected, requests: JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]') };
@@ -1603,11 +1620,11 @@ test('compaction lossy confirmation shows its estimate and preserves full saved 
     });
     const before = await read(); expect(before.rows.length).toBe(5);
     await input.fill('journey:lossy'); await page.getByRole('button', { name: 'Send message', exact: true }).click();
-    const inspect = page.getByRole('button', { name: 'Inspect lossy send', exact: true }); await expect(inspect).toBeVisible();
+    const inspect = page.getByRole('button', { name: 'Review messages to leave out', exact: true }); await expect(inspect).toBeVisible();
     expect(await read()).toEqual(before); await expect(input).toHaveText('journey:lossy');
     await inspect.click();
     const confirm = page.getByRole('button', { name: 'Send with these omissions', exact: true }); await expect(confirm).toBeVisible();
-    await expect(page.getByText(/Estimated input after omissions/)).toBeVisible();
+    await expect(page.getByText(/Estimated memory use after leaving out messages/)).toBeVisible();
     await expect(page.getByText('The original history stays saved. This request excludes only the entries below.')).toBeVisible();
     await expect(page.getByRole('list', { name: 'Messages omitted from this request' })).toBeVisible();
     expect(await read()).toEqual(before);
@@ -1623,7 +1640,7 @@ test('compaction lossy confirmation shows its estimate and preserves full saved 
     await page.getByRole('button', { name: 'Send message', exact: true }).click(); await expect(inspect).toBeVisible();
     await inspect.click(); await expect(confirm).toBeVisible(); await confirm.click();
     await expect.poll(async () => (await read()).requests.length).toBe(1);
-    await expect(page.getByRole('button', { name: 'Stop response', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Stop generation', exact: true })).toHaveCount(0);
     await expect(input).toBeEmpty(); const after = await read();
     expect(after.rows.filter((row) => before.rows.some((original) => original.id === row.id))).toEqual(before.rows);
     expect(after.rows.filter((row) => !before.rows.some((original) => original.id === row.id) && row.role === 'user')).toHaveLength(1);
@@ -1735,20 +1752,20 @@ test('native context recovery retains saved identities after reload', async ({ p
     const input = page.getByRole('textbox', { name: 'Message input' });
     await expect(input).toBeVisible({ timeout: 45_000 });
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page.getByRole('region', { name: 'Context & compaction' }).getByRole('button', { name: /^Context & compaction/ }).click();
-    await expect(page.getByRole('region', { name: 'Context & compaction' }).getByRole('meter')).toBeVisible();
+    await page.getByRole('region', { name: 'Conversation memory' }).getByRole('button', { name: /^Conversation memory/ }).click();
+    await expect(page.getByRole('region', { name: 'Conversation memory' }).getByRole('meter')).toBeVisible();
     await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
     const readAttempt = () => page.evaluate(async () => {
         const remembered = localStorage.getItem('or3:e2e:production-chat-thread');
         for (const { name } of await indexedDB.databases()) {
             if (!name) continue;
             const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
-            if (!db.objectStoreNames.contains('chat_request_recoveries')) { db.close(); continue; }
-            const tx = db.transaction(['messages', 'chat_request_recoveries'], 'readonly');
+            if (!db.objectStoreNames.contains('current_chat_request_recoveries')) { db.close(); continue; }
+            const tx = db.transaction(['current_messages', 'current_chat_request_recoveries'], 'readonly');
             const all = <T>(store: string) => new Promise<T[]>((resolve, reject) => { const request = tx.objectStore(store).getAll(); request.onsuccess = () => resolve(request.result as T[]); request.onerror = () => reject(request.error); });
             const [messages, checkpoints] = await Promise.all([
-                all<{ id: string; thread_id: string; role: string; pending: boolean; data: { content?: string; turn_id?: string } }>('messages'),
-                all<{ thread_id: string; user_message_id: string; assistant_message_id: string }>('chat_request_recoveries'),
+                all<{ id: string; thread_id: string; role: string; pending: boolean; data: { content?: string; turn_id?: string } }>('current_messages'),
+                all<{ thread_id: string; user_message_id: string; assistant_message_id: string }>('current_chat_request_recoveries'),
             ]); db.close();
             const rows = messages.filter((row) => row.thread_id === remembered);
             if (rows.length) return { rows, checkpoints: checkpoints.filter((row) => row.thread_id === remembered) };
@@ -1942,6 +1959,10 @@ for (const kind of ['image', 'pdf'] as const) {
     test(`saved ${kind} uses native removable attachments without sending the draft`, async ({ page }, info) => {
         test.setTimeout(90_000);
         await page.route('**/api/__or3-e2e/models*', route => route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }));
+        let clientURL: string | undefined;
+        page.on('request', request => {
+            if (/\/db\/client\.ts(?:\?|$)/.test(request.url())) clientURL = request.url();
+        });
         await page.goto(`${chatPage}?workspace=1`);
         const input = page.getByRole('textbox', { name: 'Message input' });
         await expect(input).toBeVisible({ timeout: 45_000 });
@@ -1955,6 +1976,13 @@ for (const kind of ['image', 'pdf'] as const) {
         await (await chooser).setFiles(upload);
         const removeAttachment = page.getByRole('button', { name: kind === 'image' ? 'Remove image' : 'Remove PDF', exact: true });
         await expect(removeAttachment).toBeVisible();
+        // Chips appear during intake; wait for this original's committed catalog owner.
+        expect(clientURL).toBeTruthy();
+        await expect.poll(() => page.evaluate(async ({ url, filename }) => {
+            const client = await import(url);
+            const row = await client.getDb().posts.where('[postType+title]').equals(['or3:file', filename]).first();
+            return row && !row.deleted ? row.title : null;
+        }, { url: clientURL!, filename: name }), { timeout: 15_000 }).toBe(name);
         await removeAttachment.click();
         await page.getByRole('button', { name: 'Files', exact: true }).click();
         const files = page.locator('#main-content').getByRole('region', { name: 'Workspace Files' });
@@ -1963,6 +1991,30 @@ for (const kind of ['image', 'pdf'] as const) {
         if (kind === 'image') await expect(preview.getByRole('img', { name, exact: true })).toBeVisible();
         else await expect(preview.locator('.preview-note')).toBeVisible();
         await expect(preview.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
+        if (kind === 'pdf') {
+            // Keep the synchronized catalog row but remove its local original.
+            // This fixture has Cloud storage disabled, so there is no remote copy to fetch.
+            const original = await page.evaluate(async ({ url, name }) => {
+                const { getDb } = await import(url);
+                const db = getDb();
+                const meta = await db.file_meta.filter((row: { name: string }) => row.name === name).first();
+                const row = await db.file_blobs.get(meta.hash);
+                const bytes = [...new Uint8Array(await row.blob.arrayBuffer())];
+                await db.file_blobs.delete(row.hash);
+                return { hash: row.hash, mime: row.blob.type, bytes };
+            }, { url: clientURL!, name });
+            await preview.getByRole('button', { name: 'Ask in chat', exact: true }).click();
+            await expect(files.getByRole('alert').filter({ hasText: 'Files action failed' }))
+                .toContainText('Original file unavailable offline. Connect and retry.');
+            await expect(preview).toBeVisible();
+            await page.evaluate(async ({ url, original }) => {
+                const { getDb } = await import(url);
+                await getDb().file_blobs.put({
+                    hash: original.hash,
+                    blob: new Blob([new Uint8Array(original.bytes)], { type: original.mime }),
+                });
+            }, { url: clientURL!, original });
+        }
         await preview.getByRole('button', { name: 'Ask in chat', exact: true }).click();
         await expect(input).toContainText('Preserved attachment draft');
         await expect(input).toBeFocused();
@@ -2137,14 +2189,14 @@ async function waitForDurableReply(page: Page, content: string): Promise<void> {
             open.onerror = () => resolve(false);
             open.onsuccess = () => {
                 const db = open.result;
-                if (!db.objectStoreNames.contains('messages')) {
+                if (!db.objectStoreNames.contains('current_messages')) {
                     db.close();
                     resolve(false);
                     return;
                 }
                 let found = false;
-                const tx = db.transaction('messages', 'readonly');
-                const rows = tx.objectStore('messages').getAll();
+                const tx = db.transaction('current_messages', 'readonly');
+                const rows = tx.objectStore('current_messages').getAll();
                 rows.onsuccess = () => {
                     found = rows.result.some((row: { role?: string; thread_id?: string; data?: { content?: unknown } }) =>
                         row.role === 'assistant' && row.thread_id === threadId && row.data?.content === content);
@@ -2487,9 +2539,9 @@ test.describe('production chat journey', () => {
                     request.onerror = () => resolve(null);
                     request.onsuccess = () => {
                         const db = request.result;
-                        if (!db.objectStoreNames.contains('posts') || !id) { db.close(); resolve(null); return; }
-                        const tx = db.transaction('posts', 'readonly');
-                        const get = tx.objectStore('posts').get(id);
+                        if (!db.objectStoreNames.contains('current_posts') || !id) { db.close(); resolve(null); return; }
+                        const tx = db.transaction('current_posts', 'readonly');
+                        const get = tx.objectStore('current_posts').get(id);
                         let value: string | null = null;
                         get.onsuccess = () => { value = get.result?.content ?? null; };
                         tx.oncomplete = () => { db.close(); resolve(value); };
@@ -2548,6 +2600,7 @@ test.describe('production chat journey', () => {
     });
     for (const theme of ['blank', 'retro', 'cyberpunk']) {
         test(`${theme} responsive messages preserve rich content and touch editing`, async ({ browser }, info) => {
+            test.setTimeout(90_000);
             const context = await browser.newContext({
                 viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
             });
@@ -2587,7 +2640,8 @@ test.describe('production chat journey', () => {
                 await edit.click();
                 const draft = page.locator('.cm-editor-assistant [contenteditable="true"]');
                 await expect(draft).toBeVisible();
-                await expect.poll(() => highlightingWorkers().length).toBe(0);
+                // Released blocks keep the worker warm for the existing 30-second grace.
+                await expect.poll(() => highlightingWorkers().length, { timeout: 35_000 }).toBe(0);
                 await page.getByRole('button', { name: 'Cancel', exact: true }).click();
                 await expect(page.locator('.cm-markdown-assistant pre.shiki')).toHaveCount(1);
                 for (const viewport of [{ width: 320, height: 568 }, { width: 844, height: 390 }, { width: 1920, height: 1080 }]) {
@@ -2718,7 +2772,7 @@ test.describe('production chat journey', () => {
             const original = IDBObjectStore.prototype.put;
             IDBObjectStore.prototype.put = function (...args: Parameters<typeof original>) {
                 const value = args[0] as { role?: string };
-                if (this.name !== 'messages' || value?.role !== 'user') return original.apply(this, args);
+                if (this.name !== 'current_messages' || value?.role !== 'user') return original.apply(this, args);
                 if (fault === 'quota') throw new DOMException('Synthetic user-turn storage full', 'QuotaExceededError');
                 const request = original.apply(this, args);
                 this.transaction.abort();
@@ -3077,9 +3131,9 @@ test.describe('production chat journey', () => {
             for (const { name } of await indexedDB.databases()) {
                 if (!name) continue;
                 const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
-                if (!db.objectStoreNames.contains('messages')) { db.close(); continue; }
+                if (!db.objectStoreNames.contains('current_messages')) { db.close(); continue; }
                 const rows = await new Promise<Array<{ role: string; pending: boolean; error?: string | null; data?: Record<string, unknown> | null; thread_id: string }>>((resolve, reject) => {
-                    const request = db.transaction('messages', 'readonly').objectStore('messages').getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                    const request = db.transaction('current_messages', 'readonly').objectStore('current_messages').getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
                 }); db.close();
                 const row = rows.filter((candidate) => candidate.thread_id === remembered && candidate.role === 'assistant').at(-1);
                 if (row) return { pending: row.pending, error: row.error ?? null, envelope: typeof row.data?.error_envelope === 'string' ? row.data.error_envelope : null };
@@ -3141,13 +3195,13 @@ test('PageShell compaction summary reload and original landmark navigation', asy
         const names = (await indexedDB.databases()).flatMap(({ name }) => name ? [name] : []);
         for (const name of names) {
             const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
-            if (!db.objectStoreNames.contains('messages') || !db.objectStoreNames.contains('threads')) { db.close(); continue; }
-            const tx = db.transaction(['threads', 'messages'], 'readonly');
+            if (!db.objectStoreNames.contains('current_messages') || !db.objectStoreNames.contains('current_threads')) { db.close(); continue; }
+            const tx = db.transaction(['current_threads', 'current_messages'], 'readonly');
             const read = <T>(store: string) => new Promise<T[]>((resolve, reject) => { const request = tx.objectStore(store).getAll(); request.onsuccess = () => resolve(request.result as T[]); request.onerror = () => reject(request.error); });
             const [threads, messages] = await Promise.all([
                 read<{ id: string; parent_thread_id?: string; summary_message_id?: string; branch_mode?: string;
-                    clock: number; updated_at: number; last_message_at?: number }>('threads'),
-                read<{ id: string; thread_id: string; role: string; pending?: boolean; data: { content?: unknown; kind?: string; compaction?: { model: string; anchor_message_id: string } } }>('messages'),
+                    clock: number; updated_at: number; last_message_at?: number }>('current_threads'),
+                read<{ id: string; thread_id: string; role: string; pending?: boolean; data: { content?: unknown; kind?: string; compaction?: { model: string; anchor_message_id: string } } }>('current_messages'),
             ]);
             db.close();
             if (threads.some((row) => row.id === source)) return { sourceRows: messages.filter((row) => row.thread_id === source), children: threads.filter((row) => row.parent_thread_id === source), summaries: messages.filter((row) => row.data.kind === 'compaction'), totalMessages: messages.length };

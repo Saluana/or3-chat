@@ -14,6 +14,11 @@ function category() {
     return CORE_PALETTE_CATEGORIES.find((c) => c.id === 'document')!;
 }
 
+function isSearchableDocument(post: Post | undefined): post is Post {
+    return Boolean(post && isVisibleWorkspaceItem(post) &&
+        post.postType === 'doc' && isIndexablePostType(post.postType));
+}
+
 export function createDocumentPaletteSource(): PaletteSearchSource {
     return {
         id: 'document',
@@ -25,14 +30,27 @@ export function createDocumentPaletteSource(): PaletteSearchSource {
             const db = (await context.getDb()) as Or3DB;
             const posts = (
                 await db.posts.where('postType').equals('doc').toArray()
-            ).filter(
-                (post) =>
-                    isVisibleWorkspaceItem(post) &&
-                    post.postType === 'doc' &&
-                    isIndexablePostType(post.postType)
-            );
+            ).filter(isSearchableDocument);
             context.signal?.throwIfAborted();
             return posts.map((post) => postToDocumentResource(post, context));
+        },
+        async loadRecords(context, recordIds) {
+            context.signal?.throwIfAborted();
+            const db = (await context.getDb()) as Or3DB;
+            context.signal?.throwIfAborted();
+            const ids = [...new Set(recordIds)];
+            const posts = await db.posts.bulkGet(ids);
+            context.signal?.throwIfAborted();
+            const resources: PaletteResource[] = [];
+            const removedKeys: string[] = [];
+            posts.forEach((post, index) => {
+                if (isSearchableDocument(post)) {
+                    resources.push(postToDocumentResource(post, context));
+                } else {
+                    removedKeys.push(`document:${ids[index]}`);
+                }
+            });
+            return { resources, removedKeys };
         },
     };
 }

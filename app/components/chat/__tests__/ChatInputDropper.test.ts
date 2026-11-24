@@ -14,6 +14,7 @@ import Mention from '@tiptap/extension-mention';
 import type { SendResult } from '~/utils/chat/types';
 import { useWorkspaceTabDrafts } from '~/composables/core/useWorkspaceTabDrafts';
 import { clearPanePendingPrompt, getPanePendingPrompt, setPanePendingPrompt } from '~/composables/core/usePanePrompt';
+import { programmaticSend } from '~/composables/chat/useChatInputBridge';
 
 const mockEnsureAiSettingsLoaded = vi.fn().mockResolvedValue(undefined);
 vi.mock('~/composables/chat/useAiSettings', () => ({
@@ -271,6 +272,58 @@ describe('ChatInputDropper', () => {
         mockIsOverDropZone.value = false;
         mockEnsureAiSettingsLoaded.mockResolvedValue(undefined);
         useWorkspaceTabDrafts().clear();
+    });
+
+    it.each(['accepted', 'rejected', 'busy'] as const)('preserves the entire draft when a plugin send is %s', async outcome => {
+        const client = process.client; process.client = true;
+        editorExtensionsFilter.apply = value => [...value as AnyExtension[], Mention];
+        vi.mocked(persistAttachment).mockImplementation(async att => {
+            att.status = 'ready'; att.hash = 'saved-pdf'; att.kind = 'pdf';
+        });
+        const wrapper = mount(ChatInputDropper, {
+            props: { loading: false, paneId: 'plugin-draft-pane', tabId: 'plugin-draft-tab', threadId: 'existing-chat' },
+            attrs: { onSend: (payload: { registerResult(result: Promise<SendResult>): void }) => {
+                payload.registerResult(Promise.resolve(outcome === 'accepted'
+                    ? { status: 'complete', requestId: 'plugin-send', userMessageId: 'u1', assistantMessageId: 'a1' }
+                    : { status: 'rejected', reason: 'filtered' }));
+            } },
+            global: { mocks: { $theme: createThemeMock() } },
+        });
+        try {
+            await vi.waitFor(() => expect(wrapper.findComponent(EditorContent).exists()).toBe(true));
+            await vi.waitFor(() => expect(useWorkspaceTabDrafts().isLoaded('plugin-draft-tab')).toBe(true));
+            const editor = wrapper.getComponent(EditorContent).props('editor')!;
+            editor.commands.setContent({ type: 'doc', content: [{ type: 'paragraph', content: [
+                { type: 'mention', attrs: { id: 'my-file', label: 'My saved file' } },
+                { type: 'text', text: ' My unfinished question' },
+            ] }] });
+            const vm = wrapper.vm as unknown as { attachFile(file: File): Promise<boolean>; captureDraft(): void; largeTextBlocks: unknown[] };
+            await vm.attachFile(new File(['%PDF'], 'my.pdf', { type: 'application/pdf' }));
+            const paste = new Event('paste', { bubbles: true, cancelable: true });
+            Object.defineProperty(paste, 'clipboardData', { value: {
+                items: [], getData: (type: string) => type === 'text/plain' ? 'private '.repeat(600) : '',
+            } });
+            editor.view.dom.dispatchEvent(paste);
+            await flushPromises(); vm.captureDraft();
+            const original = editor.getJSON();
+            const draft = useWorkspaceTabDrafts().read('plugin-draft-tab');
+            expect(draft?.attachments).toHaveLength(1);
+            expect(draft?.largeTextBlocks).toHaveLength(1);
+            if (outcome === 'busy') await wrapper.setProps({ loading: true });
+            const result = await programmaticSend('plugin-draft-pane', '<b>Plugin request</b>');
+            expect(result.status).toBe(outcome === 'accepted' ? 'complete' : 'rejected');
+            if (outcome !== 'busy') expect(wrapper.emitted('send')?.at(-1)?.[0]).toMatchObject({
+                text: '<b>Plugin request</b>', attachments: [], images: [], largeTexts: [],
+                editorDoc: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '<b>Plugin request</b>' }] }] },
+            });
+            else expect(wrapper.emitted('send')).toBeUndefined();
+            expect(editor.getJSON()).toEqual(original);
+            vm.captureDraft();
+            expect(useWorkspaceTabDrafts().read('plugin-draft-tab')).toMatchObject({
+                text: draft!.text, editorJson: draft!.editorJson,
+                attachments: draft!.attachments, largeTextBlocks: draft!.largeTextBlocks,
+            });
+        } finally { wrapper.unmount(); process.client = client; }
     });
 
     it('retains structured mentions, formatting and selection when a large paste becomes an attachment', async () => {

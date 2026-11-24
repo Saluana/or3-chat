@@ -21,6 +21,8 @@ export interface FileTransfer {
     bytes_done: number;
     state: FileTransferState;
     attempts: number;
+    /** Local retry progression for temporary failures; does not consume attempts. */
+    consecutive_deferrals?: number;
     last_attempt_at?: number;
     lease_owner?: string;
     /** Unique claim generation; an old worker cannot settle a replacement lease. */

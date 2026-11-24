@@ -533,11 +533,15 @@ export async function pollJobStatus(
     jobId: string,
     offset?: number,
     signal?: AbortSignal,
-    attempt?: number
+    attempt?: number,
+    reasoningOffset?: number
 ): Promise<BackgroundJobStatus> {
     const query = new URLSearchParams();
     if (typeof offset === 'number' && Number.isFinite(offset) && offset >= 0) {
         query.set('offset', String(Math.floor(offset)));
+    }
+    if (typeof reasoningOffset === 'number' && Number.isFinite(reasoningOffset) && reasoningOffset >= 0) {
+        query.set('reasoning_offset', String(Math.floor(reasoningOffset)));
     }
     if (
         typeof attempt === 'number' &&

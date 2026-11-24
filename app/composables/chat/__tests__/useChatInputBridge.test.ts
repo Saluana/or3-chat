@@ -4,6 +4,7 @@ import {
     programmaticPrefill,
     programmaticInsertReference,
     programmaticAttachFile,
+    programmaticAttachStoredFile,
     waitForPaneInput,
     programmaticSend,
     registerPaneInput,
@@ -13,8 +14,14 @@ import {
 describe('useChatInputBridge', () => {
     it('waits for the native composer after tab activation and stops on cancellation', async () => {
         unregisterPaneInput('pane-1');
-        const pending = waitForPaneInput('pane-1', new AbortController().signal);
-        registerPaneInput('pane-1', { setText: vi.fn(), focus: vi.fn(), triggerSend: vi.fn() });
+        const pending = waitForPaneInput('pane-1', new AbortController().signal, 'destination');
+        const input = { setText: vi.fn(), focus: vi.fn(), triggerSend: vi.fn() };
+        const ready = vi.fn();
+        void pending.then(ready);
+        registerPaneInput('pane-1', { ...input, tabId: 'outgoing' });
+        await Promise.resolve();
+        expect(ready).not.toHaveBeenCalled();
+        registerPaneInput('pane-1', { ...input, tabId: 'destination' });
         await expect(pending).resolves.toBe(true);
         unregisterPaneInput('pane-1');
         const abort = new AbortController();
@@ -32,6 +39,14 @@ describe('useChatInputBridge', () => {
         expect(attachFile).toHaveBeenCalledWith(file);
         expect(setText).not.toHaveBeenCalled();
         expect(triggerSend).not.toHaveBeenCalled();
+    });
+    it('returns unavailable if the stored attachment cannot be loaded by the composer', async () => {
+        const focus = vi.fn();
+        registerPaneInput('pane-1', { setText: vi.fn(), focus, triggerSend: vi.fn(),
+            attachStoredFile: vi.fn().mockRejectedValue(new Error('Original file unavailable offline.')) });
+        await expect(programmaticAttachStoredFile('pane-1', { id: 'saved-file', workspaceId: 'local', generation: 0 }))
+            .resolves.toEqual({ status: 'unavailable' });
+        expect(focus).not.toHaveBeenCalled();
     });
     // Replacement can happen while attachment validation/storage is pending.
     it('does not focus a replacement composer after an old attachment finishes', async () => {
@@ -79,11 +94,12 @@ describe('useChatInputBridge', () => {
         registerPaneInput('pane-1', {
             setText,
             focus: vi.fn(),
-            triggerSend: () => resultPromise,
+            triggerSend: vi.fn(),
+            sendText: () => resultPromise,
         });
 
         const pending = programmaticSend('pane-1', 'hello');
-        expect(setText).toHaveBeenCalledWith('hello');
+        expect(setText).not.toHaveBeenCalled();
         resolveSend({
             status: 'complete',
             requestId: 'r1',
@@ -107,7 +123,8 @@ describe('useChatInputBridge', () => {
             registerPaneInput('pane-1', {
                 setText: vi.fn(),
                 focus: vi.fn(),
-                triggerSend: async () => ({ status: 'rejected', reason }),
+                triggerSend: vi.fn(),
+                sendText: async () => ({ status: 'rejected', reason }),
             });
             await expect(programmaticSend('pane-1', 'hello')).resolves.toEqual({
                 status: 'rejected',

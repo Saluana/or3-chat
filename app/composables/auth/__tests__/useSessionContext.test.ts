@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 
 const fetchMock = vi.hoisted(() => vi.fn());
@@ -38,11 +38,86 @@ function deferred<T>() {
 }
 
 describe('useSessionContext refresh generations', () => {
+    afterEach(() => {
+        vi.useRealTimers();
+        delete (window as unknown as { __or3BootSession?: unknown }).__or3BootSession;
+    });
     beforeEach(() => {
         vi.resetModules();
         fetchMock.mockReset();
         recoverClientSessionMock.mockReset().mockResolvedValue(false);
         sessionState.value = { session: null, appAccessAllowed: false };
+    });
+    it.each(['boot', 'fetch', 'recovery', 'recovered-fetch'] as const)(
+        'bounds the entire session check when %s stalls and preserves the cached account',
+        async (stage) => {
+            vi.useFakeTimers();
+            const cached = { session: { authenticated: true, workspace: { id: 'workspace-cached' } }, appAccessAllowed: true };
+            sessionState.value = cached;
+            const stalled = deferred<TestPayload>();
+            const recovery = deferred<boolean>();
+            const bootController = new AbortController();
+            if (stage === 'boot') {
+                (window as unknown as { __or3BootSession?: unknown }).__or3BootSession = {
+                    at: Date.now(), response: stalled.promise, controller: bootController,
+                };
+            } else if (stage === 'fetch') fetchMock.mockReturnValue(stalled.promise);
+            else {
+                fetchMock.mockImplementationOnce(async () => {
+                    await new Promise(resolve => setTimeout(resolve, 4_000));
+                    return { session: null, appAccessAllowed: false };
+                });
+                if (stage === 'recovery') recoverClientSessionMock.mockReturnValue(recovery.promise);
+                else {
+                    recoverClientSessionMock.mockImplementationOnce(async () => {
+                        await new Promise(resolve => setTimeout(resolve, 4_000));
+                        return true;
+                    });
+                    fetchMock.mockReturnValueOnce(stalled.promise);
+                }
+            }
+            const { useSessionContext } = await import('../useSessionContext');
+            const context = useSessionContext({ autoLoad: false });
+            let failure: unknown;
+            let settled = false;
+            const refresh = context.refresh().catch(error => { failure = error; }).finally(() => { settled = true; });
+            await vi.advanceTimersByTimeAsync(9_999);
+            expect(settled).toBe(false);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(settled).toBe(true);
+            await refresh;
+            expect(failure).toMatchObject({ name: 'TimeoutError' });
+            expect(context.error.value).toBe(failure);
+            expect(context.pending.value).toBe(false);
+            expect(context.data.value).toEqual(cached);
+            if (stage === 'boot') expect(bootController.signal.aborted).toBe(true);
+            else expect(fetchMock.mock.calls.at(-1)?.[1].signal.aborted).toBe(true);
+            const callsAtDeadline = fetchMock.mock.calls.length;
+            stalled.resolve({ session: null, appAccessAllowed: false });
+            recovery.resolve(true);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(context.data.value).toEqual(cached);
+            expect(fetchMock).toHaveBeenCalledTimes(callsAtDeadline);
+            fetchMock.mockResolvedValue({ session: { authenticated: true, workspace: { id: 'workspace-retry' } }, appAccessAllowed: true });
+            await context.refresh();
+            expect(context.data.value?.session?.workspace?.id).toBe('workspace-retry');
+        }
+    );
+
+    it('bounds the head session prefetch even before application initialization', async () => {
+        vi.useFakeTimers();
+        let requestSignal: AbortSignal | undefined;
+        const nativeFetch = vi.fn((_url, init) => {
+            requestSignal = init.signal;
+            return new Promise<Response>((_resolve, reject) => {
+                requestSignal?.addEventListener('abort', () => reject(requestSignal?.reason), { once: true });
+            });
+        });
+        const { BOOT_SESSION_SCRIPT, takeBootSession } = await import('~/utils/boot-session');
+        new Function('fetch', BOOT_SESSION_SCRIPT)(nativeFetch);
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(requestSignal?.aborted).toBe(true);
+        await expect(takeBootSession()).resolves.toBeNull();
     });
 
     it('shares overlapping startup validation across session consumers', async () => {

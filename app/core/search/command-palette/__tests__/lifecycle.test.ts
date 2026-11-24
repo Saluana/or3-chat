@@ -110,4 +110,49 @@ describe('bindPaletteLifecycle', () => {
         dispose();
         expect(actions.size).toBe(0);
     });
+
+    it('coalesces document create, update, delete and Files mutations independently of chat changes', async () => {
+        const refreshSources = vi.fn(async () => undefined);
+        const { bindPaletteLifecycle } = await import('../lifecycle');
+        const dispose = bindPaletteLifecycle({ refreshSources } as unknown as PaletteCoordinator);
+        try {
+            actions.get('db.documents.create:action:after')?.({ entity: { id: 'created' } });
+            actions.get('db.documents.update:action:after')?.({
+                existing: { id: 'edited' }, updated: { id: 'edited' }, patch: { id: 'edited' },
+            });
+            actions.get('db.documents.delete:action:soft:after')?.({ id: 'deleted', entity: { id: 'deleted' } });
+            actions.get('db.documents.delete:action:hard:after')?.({ id: 'removed', entity: { id: 'removed' } });
+            actions.get('db.posts.create:action:after')?.({ entity: { id: 'post-created', postType: 'doc' } });
+            actions.get('db.posts.upsert:action:after')?.({ entity: { id: 'trashed', postType: 'doc' } });
+            actions.get('db.posts.delete:action:soft:after')?.({ id: 'post-deleted', entity: { id: 'post-deleted' } });
+            actions.get('db.posts.delete:action:hard:after')?.({ id: 'post-removed', entity: { id: 'post-removed' } });
+            actions.get('db.messages.append:action:after')?.({ thread_id: 'chat-one' });
+            await vi.advanceTimersByTimeAsync(250);
+            expect(refreshSources).toHaveBeenLastCalledWith(
+                ['document', 'file', 'todo-source', 'chat'],
+                new Map([
+                    ['document', ['created', 'edited', 'deleted', 'removed', 'post-created', 'trashed', 'post-deleted', 'post-removed']],
+                    ['chat', ['chat-one']],
+                ])
+            );
+
+            actions.get('db.documents.update:action:after')?.({ updated: { id: 'edited' } });
+            actions.get('db.documents.delete:action:hard:after')?.({});
+            actions.get('db.documents.create:action:after')?.({ entity: { id: 'later-created' } });
+            actions.get('db.messages.append:action:after')?.({ thread_id: 'chat-two' });
+            await vi.advanceTimersByTimeAsync(250);
+            expect(refreshSources).toHaveBeenLastCalledWith(
+                ['document', 'chat'], new Map([['chat', ['chat-two']]])
+            );
+
+            actions.get('db.documents.update:action:after')?.({ existing: { id: 'old' }, updated: { id: 'different' } });
+            await vi.advanceTimersByTimeAsync(250);
+            expect(refreshSources).toHaveBeenLastCalledWith(['document']);
+
+            actions.get('db.documents.update:action:after')?.({ updated: { id: 'edited' } });
+            actions.get('sync.pull:action:applied')?.();
+            await vi.advanceTimersByTimeAsync(250);
+            expect(refreshSources).toHaveBeenLastCalledWith(undefined);
+        } finally { dispose(); }
+    });
 });

@@ -514,6 +514,8 @@ Client tracking is handled by `app/utils/chat/useAi-internal/backgroundJobs.ts`:
   - `workflow.execution:action:state_update`
   - `workflow.execution:action:complete`
 
+After the first status snapshot, the browser sends the text and reasoning offsets it has already received. The status endpoint returns the new portions. A new generation attempt restores the full snapshot.
+
 Each job has one process-local tracker and one adaptive reconciliation transport,
 regardless of viewer count. Healthy SSE delivery suppresses hot polling. Polling
 uses typed retryable transport/rate-limit/server errors with bounded jitter,

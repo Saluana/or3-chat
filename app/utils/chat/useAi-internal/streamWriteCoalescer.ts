@@ -4,18 +4,19 @@ export function createStreamWriteCoalescer(options?: {
     maxBytes?: number;
     maxDelayMs?: number;
     now?: () => number;
-    onIdleFlush?: () => Promise<void>;
+    writeProgress?: () => Promise<void>;
 }) {
     const maxEvents = options?.maxEvents ?? 50;
     const maxBytes = options?.maxBytes ?? 16 * 1024;
     const maxDelayMs = options?.maxDelayMs ?? 500;
     const now = options?.now ?? Date.now;
-    const onIdleFlush = options?.onIdleFlush;
+    const writeProgress = options?.writeProgress;
     let dirtyEvents = 0;
     let dirtyBytes = 0;
     let lastFlushAt = now();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let inFlight: Promise<void> | undefined;
+    let inFlight: { completed: Promise<void>; background: boolean } | undefined;
+    let backgroundFailure: { error: unknown } | undefined;
     let disposed = false;
     const isDisposed = (): boolean => disposed;
     let failedWrite = false;
@@ -39,13 +40,11 @@ export function createStreamWriteCoalescer(options?: {
         timer = undefined;
     }
     function scheduleIdleFlush() {
-        if (isDisposed() || timer !== undefined || inFlight || dirtyEvents === 0 || !onIdleFlush)
+        if (isDisposed() || timer !== undefined || inFlight || backgroundFailure || dirtyEvents === 0 || !writeProgress)
             return;
         timer = setTimeout(() => {
             timer = undefined;
-            // flush() retains dirty progress on failure and schedules a retry.
-            // Terminal persistence still reports an unrecoverable write error.
-            void onIdleFlush().catch(() => {});
+            void startWrite(writeProgress, true).catch(() => {});
         }, Math.max(0, maxDelayMs - (now() - lastFlushAt)));
     }
     function resetDirty() {
@@ -53,6 +52,38 @@ export function createStreamWriteCoalescer(options?: {
         dirtyEvents = 0;
         dirtyBytes = 0;
         lastFlushAt = now();
+    }
+    function shouldFlush() {
+        return dirtyEvents > 0 && (
+            dirtyEvents >= maxEvents ||
+            dirtyBytes >= maxBytes ||
+            now() - lastFlushAt >= maxDelayMs
+        );
+    }
+
+    function startWrite(write: () => Promise<void>, background: boolean) {
+        // Deltas that arrive during the write remain dirty for the next snapshot.
+        resetDirty();
+        const completed = Promise.resolve().then(write).then(
+            () => {
+                backgroundFailure = undefined;
+                failedWrite = failedWrite && dirtyEvents > 0;
+                updateUnloadGuard();
+            },
+            (error: unknown) => {
+                dirtyEvents += 1;
+                lastFlushAt = now();
+                failedWrite = true;
+                if (background) backgroundFailure = { error };
+                updateUnloadGuard();
+                throw error;
+            }
+        ).finally(() => {
+            inFlight = undefined;
+            scheduleIdleFlush();
+        });
+        inFlight = { completed, background };
+        return completed;
     }
 
     return {
@@ -62,53 +93,49 @@ export function createStreamWriteCoalescer(options?: {
             dirtyBytes += Math.max(0, bytes);
             scheduleIdleFlush();
         },
-        shouldFlush() {
-            return dirtyEvents > 0 && (
-                dirtyEvents >= maxEvents ||
-                dirtyBytes >= maxBytes ||
-                now() - lastFlushAt >= maxDelayMs
-            );
+        scheduleFlush(): Promise<void> | undefined {
+            if (isDisposed()) return;
+            if (!writeProgress) throw new Error('Stream progress writer is not configured.');
+            if (backgroundFailure) throw backgroundFailure.error;
+            if (!inFlight && shouldFlush()) {
+                // Keep consuming while one snapshot saves. Its callback reads
+                // the newest state when it starts; no per-token jobs are queued.
+                void startWrite(writeProgress, true).catch(() => {});
+            }
+            if (inFlight && (dirtyEvents >= maxEvents * 4 || dirtyBytes >= maxBytes * 4)) {
+                // Bound the suffix accepted during a slow write. Rejection
+                // reaches the consumer before it reads more provider events.
+                return inFlight.completed.then(() => {
+                    if (isDisposed() || dirtyEvents === 0) return;
+                    return inFlight?.completed ?? startWrite(writeProgress, true);
+                });
+            }
         },
         hasDirty() {
             return dirtyEvents > 0;
         },
         flushed() {
             resetDirty();
+            backgroundFailure = undefined;
             failedWrite = false;
             updateUnloadGuard();
         },
-        async flush(write: () => Promise<void>) {
+        async flush(write = writeProgress) {
             if (isDisposed()) return;
+            if (!write) throw new Error('Stream progress writer is not configured.');
             // Another waiting caller may prepare the next snapshot first. Join
-            // that write too; returning while it is pending is not a flush receipt.
+            // that write too. Retry a failed background write with the latest
+            // snapshot. A failed explicit flush is already the durability barrier.
             while (inFlight) {
-                await inFlight;
+                const { completed, background } = inFlight;
+                try {
+                    await completed;
+                } catch (error) {
+                    if (!background) throw error;
+                }
                 if (isDisposed()) return;
             }
-            if (dirtyEvents === 0) return;
-            // Acknowledge only the snapshot entering this write. Deltas that
-            // arrive while it awaits storage remain dirty for the next write.
-            resetDirty();
-            const pending = Promise.resolve().then(write);
-            inFlight = pending;
-            try {
-                await pending;
-                // This acknowledges only the captured snapshot. Newer deltas
-                // arriving during a failed-write retry still need protection.
-                failedWrite = failedWrite && dirtyEvents > 0;
-                updateUnloadGuard();
-            } catch (error) {
-                dirtyEvents += 1;
-                lastFlushAt = now();
-                // Keep the displayed response available while storage retries.
-                // Starting another write is not acknowledgement of this one.
-                failedWrite = true;
-                updateUnloadGuard();
-                throw error;
-            } finally {
-                inFlight = undefined;
-                scheduleIdleFlush();
-            }
+            if (dirtyEvents > 0) await startWrite(write, false);
         },
         async dispose() {
             disposed = true;
@@ -116,7 +143,7 @@ export function createStreamWriteCoalescer(options?: {
             updateUnloadGuard();
             // Drain a prepared progress write before the caller finalizes the
             // row, so an older snapshot cannot land after its terminal state.
-            await inFlight?.catch(() => {});
+            await inFlight?.completed.catch(() => {});
         },
     };
 }

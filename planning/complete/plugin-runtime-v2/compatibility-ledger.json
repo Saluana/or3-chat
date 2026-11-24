@@ -12,8 +12,8 @@
   },
   "coverage": {
     "moduleCount": 39,
-    "exportCount": 609,
-    "callableExportCount": 283,
+    "exportCount": 611,
+    "callableExportCount": 285,
     "nuxtAutoImportCount": 310
   },
   "behaviorProfiles": [
@@ -2836,7 +2836,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "c937896753d61d76036d7c9c25027eb2fddb99be87602c005cc2d61a5b51b42a",
+      "apiSha256": "9f40fa80bbdb940a28ca36d5050858ad5008e20a414f28610c6bea63e962c006",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -3750,7 +3750,7 @@
               "resolvedReturnType": "boolean",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 173,
+                "line": 176,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function focusPaneInput(paneId: string): boolean;"
               }
@@ -3759,7 +3759,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 173,
+              "line": 176,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function focusPaneInput(paneId: string): boolean;"
             }
@@ -3866,6 +3866,32 @@
               "line": 158,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup\n): ActiveDocumentEditorSession | undefined;"
+            }
+          ]
+        },
+        {
+          "name": "getPaneInputTabId",
+          "kind": "value",
+          "nuxtAutoImport": false,
+          "signatures": [
+            {
+              "signature": "(paneId: string): string | undefined",
+              "declaredReturnType": "string | undefined",
+              "resolvedReturnType": "string | undefined",
+              "declaration": {
+                "source": "app/composables/chat/useChatInputBridge.ts",
+                "line": 246,
+                "syntaxKind": "FunctionDeclaration",
+                "text": "export function getPaneInputTabId(paneId: string): string | undefined;"
+              }
+            }
+          ],
+          "declarations": [
+            {
+              "source": "app/composables/chat/useChatInputBridge.ts",
+              "line": 246,
+              "syntaxKind": "FunctionDeclaration",
+              "text": "export function getPaneInputTabId(paneId: string): string | undefined;"
             }
           ]
         },
@@ -4031,23 +4057,23 @@
           "nuxtAutoImport": false,
           "signatures": [
             {
-              "signature": "export function hasPane(paneId: string);",
+              "signature": "export function hasPane(paneId: string, tabId?: string);",
               "declaredReturnType": null,
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 224,
+                "line": 240,
                 "syntaxKind": "FunctionDeclaration",
-                "text": "export function hasPane(paneId: string);"
+                "text": "export function hasPane(paneId: string, tabId?: string);"
               }
             }
           ],
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 224,
+              "line": 240,
               "syntaxKind": "FunctionDeclaration",
-              "text": "export function hasPane(paneId: string);"
+              "text": "export function hasPane(paneId: string, tabId?: string);"
             }
           ]
         },
@@ -4872,7 +4898,7 @@
               "resolvedReturnType": "Promise<{ status: \"ready\"; } | { status: \"unavailable\"; }>",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 210,
+                "line": 213,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function programmaticAttachFile(paneId: string, file: File): Promise<{ status: 'ready' } | { status: 'unavailable' }>;"
               }
@@ -4881,9 +4907,35 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 210,
+              "line": 213,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function programmaticAttachFile(paneId: string, file: File): Promise<{ status: 'ready' } | { status: 'unavailable' }>;"
+            }
+          ]
+        },
+        {
+          "name": "programmaticAttachStoredFile",
+          "kind": "value",
+          "nuxtAutoImport": false,
+          "signatures": [
+            {
+              "signature": "(paneId: string, reference: StoredAttachmentSource): Promise<{ status: \"ready\"; } | { status: \"unavailable\"; }>",
+              "declaredReturnType": "Promise<{ status: 'ready' } | { status: 'unavailable' }>",
+              "resolvedReturnType": "Promise<{ status: \"ready\"; } | { status: \"unavailable\"; }>",
+              "declaration": {
+                "source": "app/composables/chat/useChatInputBridge.ts",
+                "line": 222,
+                "syntaxKind": "FunctionDeclaration",
+                "text": "export async function programmaticAttachStoredFile(paneId: string, reference: StoredAttachmentSource): Promise<{ status: 'ready' } | { status: 'unavailable' }>;"
+              }
+            }
+          ],
+          "declarations": [
+            {
+              "source": "app/composables/chat/useChatInputBridge.ts",
+              "line": 222,
+              "syntaxKind": "FunctionDeclaration",
+              "text": "export async function programmaticAttachStoredFile(paneId: string, reference: StoredAttachmentSource): Promise<{ status: 'ready' } | { status: 'unavailable' }>;"
             }
           ]
         },
@@ -4898,7 +4950,7 @@
               "resolvedReturnType": "{ status: \"ready\"; } | { status: \"unavailable\"; }",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 198,
+                "line": 201,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function programmaticInsertReference(paneId: string,\n    reference: { id: string; source: 'document' | 'chat' | 'file'; label: string }, afterText?: string):\n    { status: 'ready' } | { status: 'unavailable' };"
               }
@@ -4907,7 +4959,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 198,
+              "line": 201,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function programmaticInsertReference(paneId: string,\n    reference: { id: string; source: 'document' | 'chat' | 'file'; label: string }, afterText?: string):\n    { status: 'ready' } | { status: 'unavailable' };"
             }
@@ -4924,7 +4976,7 @@
               "resolvedReturnType": "{ status: \"ready\"; } | { status: \"unavailable\"; }",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 186,
+                "line": 189,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function programmaticPrefill(\n    paneId: string,\n    text: string\n): { status: 'ready' } | { status: 'unavailable' };"
               }
@@ -4933,7 +4985,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 186,
+              "line": 189,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function programmaticPrefill(\n    paneId: string,\n    text: string\n): { status: 'ready' } | { status: 'unavailable' };"
             }
@@ -4950,7 +5002,7 @@
               "resolvedReturnType": "Promise<SendResult>",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 151,
+                "line": 155,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function programmaticSend(\n    paneId: string,\n    text: string\n): Promise<SendResult>;"
               }
@@ -4959,7 +5011,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 151,
+              "line": 155,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function programmaticSend(\n    paneId: string,\n    text: string\n): Promise<SendResult>;"
             }
@@ -5461,7 +5513,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 113,
+                "line": 117,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function registerPaneInput(paneId: string, api: ChatInputImperativeApi);"
               }
@@ -5470,7 +5522,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 113,
+              "line": 117,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function registerPaneInput(paneId: string, api: ChatInputImperativeApi);"
             }
@@ -6553,7 +6605,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 130,
+                "line": 134,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function unregisterPaneInput(paneId: string);"
               }
@@ -6562,7 +6614,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 130,
+              "line": 134,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function unregisterPaneInput(paneId: string);"
             }
@@ -7854,23 +7906,23 @@
           "nuxtAutoImport": false,
           "signatures": [
             {
-              "signature": "(paneId: string, signal: AbortSignal): Promise<boolean>",
+              "signature": "(paneId: string, signal: AbortSignal, tabId?: string): Promise<boolean>",
               "declaredReturnType": "Promise<boolean>",
               "resolvedReturnType": "Promise<boolean>",
               "declaration": {
                 "source": "app/composables/chat/useChatInputBridge.ts",
-                "line": 229,
+                "line": 251,
                 "syntaxKind": "FunctionDeclaration",
-                "text": "export function waitForPaneInput(paneId: string, signal: AbortSignal): Promise<boolean>;"
+                "text": "export function waitForPaneInput(paneId: string, signal: AbortSignal, tabId?: string): Promise<boolean>;"
               }
             }
           ],
           "declarations": [
             {
               "source": "app/composables/chat/useChatInputBridge.ts",
-              "line": 229,
+              "line": 251,
               "syntaxKind": "FunctionDeclaration",
-              "text": "export function waitForPaneInput(paneId: string, signal: AbortSignal): Promise<boolean>;"
+              "text": "export function waitForPaneInput(paneId: string, signal: AbortSignal, tabId?: string): Promise<boolean>;"
             }
           ]
         },

@@ -16,23 +16,30 @@ export function bindPaletteLifecycle(
     let timer: ReturnType<typeof setTimeout> | null = null;
     const registrations: Array<{ name: string; fn: () => void }> = [];
     const pendingSourceIds = new Set<string>();
-    const pendingChatIds = new Set<string>();
-    let fullChatPending = false;
+    const pendingRecordIds = new Map<string, Set<string>>();
+    const fullSourceIds = new Set<string>();
     let fullReconcilePending = false;
 
-    const scheduleReconcile = (sourceIds?: readonly string[], chatIds?: readonly string[]) => {
+    const scheduleReconcile = (
+        sourceIds?: readonly string[],
+        recordIds?: ReadonlyMap<string, readonly string[]>
+    ) => {
         if (!sourceIds) {
             fullReconcilePending = true;
             pendingSourceIds.clear();
-            pendingChatIds.clear();
+            pendingRecordIds.clear();
+            fullSourceIds.clear();
         } else if (!fullReconcilePending) {
-            for (const sourceId of sourceIds) pendingSourceIds.add(sourceId);
-            if (sourceIds.includes('chat')) {
-                if (!chatIds) {
-                    fullChatPending = true;
-                    pendingChatIds.clear();
-                } else if (!fullChatPending) {
-                    for (const id of chatIds) pendingChatIds.add(id);
+            for (const sourceId of sourceIds) {
+                pendingSourceIds.add(sourceId);
+                const ids = recordIds?.get(sourceId);
+                if (!ids) {
+                    fullSourceIds.add(sourceId);
+                    pendingRecordIds.delete(sourceId);
+                } else if (!fullSourceIds.has(sourceId)) {
+                    const pending = pendingRecordIds.get(sourceId) ?? new Set<string>();
+                    for (const id of ids) pending.add(id);
+                    pendingRecordIds.set(sourceId, pending);
                 }
             }
         }
@@ -45,10 +52,11 @@ export function bindPaletteLifecycle(
                 : [...pendingSourceIds];
             fullReconcilePending = false;
             pendingSourceIds.clear();
-            const records = !fullChatPending && pendingChatIds.size
-                ? new Map([['chat', [...pendingChatIds]]]) : undefined;
-            pendingChatIds.clear();
-            fullChatPending = false;
+            const records = pendingRecordIds.size
+                ? new Map([...pendingRecordIds].map(([sourceId, ids]) => [sourceId, [...ids]]))
+                : undefined;
+            pendingRecordIds.clear();
+            fullSourceIds.clear();
             if (generation !== getWorkspaceGeneration()) return;
             void (records ? coordinator.refreshSources(ids, records) : coordinator.refreshSources(ids));
         }, RECONCILE_DEBOUNCE_MS);
@@ -149,9 +157,14 @@ export function bindPaletteLifecycle(
     ];
     for (const group of localMutationGroups) {
         for (const name of group.names) {
-            const listener = (payload?: unknown) => scheduleReconcile(
-                group.sourceIds(), chatThreadIds(name, payload)
-            );
+            const listener = (payload?: unknown) => {
+                const records = new Map<string, readonly string[]>();
+                const chatIds = chatThreadIds(name, payload);
+                if (chatIds) records.set('chat', chatIds);
+                const documentIds = documentRecordIds(name, payload);
+                if (documentIds) records.set('document', documentIds);
+                scheduleReconcile(group.sourceIds(), records);
+            };
             (hooks.addAction as (name: string, fn: () => void) => void)(
                 name,
                 listener
@@ -163,7 +176,8 @@ export function bindPaletteLifecycle(
     return () => {
         if (timer) clearTimeout(timer);
         pendingSourceIds.clear();
-        pendingChatIds.clear();
+        pendingRecordIds.clear();
+        fullSourceIds.clear();
         fullReconcilePending = false;
         for (const { name, fn } of registrations) {
             (hooks.removeAction as (name: string, fn: () => void) => void)(
@@ -172,6 +186,21 @@ export function bindPaletteLifecycle(
             );
         }
     };
+}
+
+function documentRecordIds(name: string, payload: unknown): string[] | undefined {
+    if (!name.startsWith('db.documents.') && !name.startsWith('db.posts.')) return;
+    if (!payload || typeof payload !== 'object') return;
+    const row = payload as Record<string, unknown>;
+    // Updates carry `updated`; create/delete and Files Trash/restore carry
+    // `entity`. Conflicting identities need a full source reconciliation.
+    const ids = new Set<string>();
+    for (const candidate of [row, row.entity, row.updated, row.existing]) {
+        if (!candidate || typeof candidate !== 'object') continue;
+        const id = (candidate as Record<string, unknown>).id;
+        if (typeof id === 'string' && id) ids.add(id);
+    }
+    return ids.size === 1 ? [...ids] : undefined;
 }
 
 function chatThreadIds(name: string, payload: unknown): string[] | undefined {

@@ -69,6 +69,7 @@ import {
     type ToolLedgerEntry,
 } from '~~/shared/chat/tool-ledger';
 import { appendForegroundToolResult } from '~/utils/chat/transcript-repository';
+import { reportError } from '~/utils/errors';
 import { createStreamWriteCoalescer } from './streamWriteCoalescer';
 import {
     appendNormalizedAssistantText,
@@ -409,31 +410,31 @@ async function runForegroundWithRouter(ctx: ForegroundStreamContext, routerId: s
         // Provider context is iteration-local. `current.text` remains cumulative
         // for the UI and durable assistant row across the whole tool loop.
         const writeCoalescer = createStreamWriteCoalescer({
-            onIdleFlush: () => flushProgress(),
-        });
-        const pendingToolCalls: ToolCall[] = [];
-        let providerState: Record<string, unknown>[] = [];
-
-        const flushProgress = async () => {
-            await writeCoalescer.flush(async () => {
+            writeProgress: async () => {
                 await ctx.persistAssistant({
                     content: current.text,
                     usage: normalizedState.requestUsage,
                     reasoning: current.reasoning_text ?? null,
                     toolCalls: current.toolCalls ?? undefined,
+                    requireCurrent: true,
                 });
                 if (ctx.assistantFileHashes.length) {
                     current.file_hashes = ctx.assistantFileHashes;
                 }
-            });
-        };
+            },
+        });
+        const pendingToolCalls: ToolCall[] = [];
+        let providerState: Record<string, unknown>[] = [];
+        let finalProgressStarted = false;
 
         try {
             for await (const ev of stream) {
                 ctx.abortSignal.throwIfAborted();
-                if (ev.type === 'provider_state') { providerState = ev.items; continue; }
+                if (ev.type === 'done') continue;
                 normalizedState = reduceNormalizedStreamEvent(normalizedState, ev);
-                if (ev.type === 'usage') {
+                if (ev.type === 'provider_state') {
+                    providerState = ev.items;
+                } else if (ev.type === 'usage') {
                     if (normalizedState.requestUsage) writeCoalescer.markDirty();
                 } else if (ev.type === 'tool_call') {
                     // Tool call detected - enqueue for execution after stream closes
@@ -522,16 +523,16 @@ async function runForegroundWithRouter(ctx: ForegroundStreamContext, routerId: s
                     }
                 }
 
-                // Batch writes: persist every 500ms OR every 50 chunks (whichever comes first)
-                // to reduce DB pressure while maintaining progress safety
                 ctx.abortSignal.throwIfAborted();
-                if (writeCoalescer.shouldFlush()) await flushProgress();
+                const progress = writeCoalescer.scheduleFlush();
+                if (progress) await progress;
                 ctx.abortSignal.throwIfAborted();
             }
 
             // A short or non-text-only stream still reaches durable storage.
             ctx.abortSignal.throwIfAborted();
-            await flushProgress();
+            finalProgressStarted = true;
+            await writeCoalescer.flush();
             ctx.abortSignal.throwIfAborted();
 
             await streamHooks.flush();
@@ -812,8 +813,15 @@ async function runForegroundWithRouter(ctx: ForegroundStreamContext, routerId: s
             }
             throw streamError;
         } finally {
-            try { if (normalizedState.requestUsage) await flushProgress(); }
-            finally { await writeCoalescer.dispose(); }
+            try {
+                if (!finalProgressStarted && normalizedState.requestUsage) {
+                    await writeCoalescer.flush().catch((error) => {
+                        reportError(error, { code: 'ERR_DB_WRITE_FAILED', tags: { domain: 'chat', stage: 'foreground_usage' } });
+                    });
+                }
+            } finally {
+                await writeCoalescer.dispose();
+            }
         }
     }
 }

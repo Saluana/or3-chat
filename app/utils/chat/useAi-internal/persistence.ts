@@ -179,7 +179,7 @@ export function makeAssistantPersister(
             undefined,
             liveThreadGuard(db, assistantDbMsg.thread_id)
         ));
-        if (requireCurrent && !saved) throw new Error('The tool execution receipt was not acknowledged; the originating generation is no longer current.');
+        if (requireCurrent && !saved) throw new Error('The assistant write was not acknowledged; the originating generation is no longer current.');
         if (ownedSerialized !== undefined) {
             lastSerialized = ownedSerialized;
             return lastSerialized;

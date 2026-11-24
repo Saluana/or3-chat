@@ -689,24 +689,21 @@ export async function continueMessageImpl(
             CONTINUATION_PREFIX
         );
 
-        const writeCoalescer = createStreamWriteCoalescer({
-            onIdleFlush: () => flushProgress(),
-        });
-
         let requestUsage: RequestUsage | undefined;
         // A continuation extends the reply, so its request adds to what was already spent.
         const priorUsageTotals = readRequestUsage((target.data as Record<string, unknown> | null | undefined)?.usage)?.totals;
-        const flushProgress = async () => {
-            await writeCoalescer.flush(async () => {
+        const writeCoalescer = createStreamWriteCoalescer({
+            writeProgress: async () => {
                 await persistAssistant({
                     content: current.text,
                     usage: requestUsage,
                     reasoning: current.reasoning_text ?? null,
                     toolCalls: current.toolCalls ?? undefined,
+                    requireCurrent: true,
                 });
                 if (assistantFileHashes.length) current.file_hashes = assistantFileHashes;
-            });
-        };
+            },
+        });
 
         const appendTextDelta = (delta: string) => {
             if (!delta) return;
@@ -717,9 +714,11 @@ export async function continueMessageImpl(
         };
 
         innerStreamLifecycleStarted = true;
+        let finalProgressStarted = false;
         try {
             for await (const ev of stream) {
                 if (!ownsThread()) throw new ContinuationOwnershipLost();
+                if (ev.type === 'done') continue;
                 if (ev.type === 'usage') {
                     const measured = readMeasuredRequestUsage(ev.usage, ev.requestUsage);
                     if (measured) { requestUsage = { ...measured, iteration: 1, totals: addUsageTotals(priorUsageTotals, ev.usage) }; writeCoalescer.markDirty(); }
@@ -759,12 +758,14 @@ export async function continueMessageImpl(
                     }
                 }
 
-                if (writeCoalescer.shouldFlush()) await flushProgress();
+                const progress = writeCoalescer.scheduleFlush();
+                if (progress) await progress;
             }
 
             stopHeartbeat();
             appendTextDelta(continuationNormalizer.finish());
-            await flushProgress();
+            finalProgressStarted = true;
+            await writeCoalescer.flush();
 
             const stopped =
                 isStopped();
@@ -784,8 +785,8 @@ export async function continueMessageImpl(
                     }
                 );
         } catch (streamError) {
-            if (requestUsage) {
-                try { await flushProgress(); } catch (error) {
+            if (!finalProgressStarted && requestUsage) {
+                try { await writeCoalescer.flush(); } catch (error) {
                     reportError(error, { code: 'ERR_DB_WRITE_FAILED', tags: { domain: 'chat', stage: 'continue_usage' } });
                 }
             }

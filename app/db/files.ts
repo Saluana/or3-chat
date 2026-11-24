@@ -143,7 +143,7 @@ function toFileEntity(meta: FileMeta): FileEntity {
     };
 }
 
-function resolveStoredFileKind(meta: LegacyFileMetaInput): FileKind {
+export function resolveStoredFileKind(meta: LegacyFileMetaInput): FileKind {
     return meta.kind ?? classifyFileKind(meta.mime_type);
 }
 
@@ -507,7 +507,8 @@ export async function getFileMeta(hash: string, db = getDb()): Promise<FileMeta 
  * Retrieve the binary blob for a content hash.
  *
  * Behavior:
- * Returns the stored blob if present, otherwise attempts to ensure it exists.
+ * Returns the stored blob if present. Unless localOnly is set, a cache miss
+ * attempts to retrieve the original through the transfer queue.
  *
  * Constraints:
  * - May return undefined if blob is not available locally.
@@ -515,10 +516,10 @@ export async function getFileMeta(hash: string, db = getDb()): Promise<FileMeta 
  * Non-Goals:
  * - Does not guarantee a remote download.
  */
-export async function getFileBlob(hash: string, db = getDb()): Promise<Blob | undefined> {
+export async function getFileBlob(hash: string, db = getDb(), options?: { localOnly?: boolean }): Promise<Blob | undefined> {
     const row = await db.file_blobs.get(hash);
     if (row?.blob) { if (row.cache_accessed_at) await touchFileCache(db, hash); return row.blob; }
-    return ensureFileBlob(hash, db);
+    return options?.localOnly ? undefined : ensureFileBlob(hash, db);
 }
 
 /**
