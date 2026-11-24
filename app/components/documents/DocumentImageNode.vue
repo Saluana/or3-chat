@@ -58,7 +58,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/vue-3';
 import { getFileBlob } from '~/db/files';
 import { getDb, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
-import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
+import { getLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 import { useIcon } from '~/composables/useIcon';
 
 const props = defineProps<NodeViewProps>();
@@ -82,7 +82,7 @@ function releaseUrl() {
 // A node belongs to the document/editor scope in which it was mounted.
 const ownerDb = getDb();
 const ownerGeneration = getWorkspaceGeneration();
-const ownerAccount = getCachedSessionContext()?.user?.id ?? null;
+const ownerAccount = getLocalWorkspaceSession()?.user?.id ?? null;
 let requestRevision = 0;
 let scopeValid = true;
 let disposed = false;
@@ -90,7 +90,7 @@ let disposed = false;
 function hasOwnerScope() {
     return scopeValid && !disposed && getDb() === ownerDb &&
         getWorkspaceGeneration() === ownerGeneration &&
-        (getCachedSessionContext()?.user?.id ?? null) === ownerAccount;
+        (getLocalWorkspaceSession()?.user?.id ?? null) === ownerAccount;
 }
 
 function invalidateOwner() {
@@ -119,7 +119,7 @@ async function loadImage(hash: string) {
 }
 
 const stopWorkspaceSubscription = subscribeActiveWorkspaceDb(invalidateOwner);
-watch(() => getCachedSessionContext()?.user?.id ?? null, invalidateOwner, { flush: 'sync' });
+watch(() => getLocalWorkspaceSession()?.user?.id ?? null, invalidateOwner, { flush: 'sync' });
 watch(() => String(props.node.attrs.hash || ''), loadImage, { immediate: true });
 onBeforeUnmount(() => {
     disposed = true;

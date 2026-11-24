@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useToast, useRuntimeConfig } from '#imports';
-import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { useLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 import { useAmbiguousChatProjects } from '~/composables/projects/useChatProjectOwner';
 import { captureProjectOperation } from '~/utils/projects/operation';
 import { moveChatToProject } from '~/db/project-workspace';
@@ -13,7 +13,7 @@ const choices = useAmbiguousChatProjects(() => props.threadId);
 const toast = useToast();
 const busy = ref(false);
 const runtime = useRuntimeConfig();
-const { data: session } = useSessionContext();
+const session = useLocalWorkspaceSession();
 const writable = computed(() => runtime.public.ssrAuthEnabled !== true
     || session.value?.session?.role === 'owner' || session.value?.session?.role === 'editor');
 

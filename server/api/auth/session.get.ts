@@ -96,6 +96,7 @@ export default defineEventHandler(async (event) => {
     return {
         session: clientSession,
         appAccessAllowed,
+        ...(appAccessAllowed && config.auth.offlineWorkspaceAccess === true ? { offlineWorkspaceAccess: true } : {}),
         ...(cloudAccess ? { cloudAccess } : {}),
         ...(secrets?.provider ? { secretStoreEnabled: true } : {}),
         ...(workspaceItemCapability ? { workspaceItemCapability } : {}),

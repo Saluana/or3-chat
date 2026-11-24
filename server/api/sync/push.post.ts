@@ -22,7 +22,7 @@ import { requireWorkspaceItemCapability } from '../../utils/sync/workspace-item-
  * - Dispatches valid ops to the registered SyncGatewayAdapter.
  */
 import { requireCloudMutation } from '../../utils/security/cloud-mutation';
-import { defineEventHandler, createError, setResponseHeader } from 'h3';
+import { defineEventHandler, createError, getHeader, setResponseHeader } from 'h3';
 import { z } from 'zod';
 import {
     PendingOpSchema,
@@ -144,6 +144,11 @@ export default defineEventHandler(async (event) => {
     const session = await resolveSessionContext(event);
     if (!session.authenticated || !session.user || !session.workspace) {
         throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
+    }
+
+    const expectedUser = getHeader(event, 'x-or3-account-id');
+    if (expectedUser !== undefined && expectedUser !== session.user.id) {
+        throw createError({ statusCode: 401, statusMessage: 'Workspace session changed' });
     }
 
     requireCan(session, 'workspace.write', {

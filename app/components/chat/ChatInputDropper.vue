@@ -472,7 +472,7 @@ import {
     type SendResult,
 } from '~/utils/chat/types';
 import { useWorkspaceTabDrafts, type WorkspaceChatTabDraft } from '~/composables/core/useWorkspaceTabDrafts';
-import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
+import { getLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
 import {
     sanitizeModelVariant,
@@ -956,7 +956,7 @@ const tabDrafts = useWorkspaceTabDrafts();
 // Whose draft this composer is editing, captured at restore so a late capture
 // after a workspace or account change still lands with its original owner.
 let draftScope = tabDrafts.scope();
-const draftAccountId = computed(() => getCachedSessionContext()?.user?.id ?? 'local');
+const draftAccountId = computed(() => getLocalWorkspaceSession()?.user?.id ?? 'local');
 let draftSaveNoticeId: string | undefined;
 let draftRestoreNoticeId: string | undefined;
 // Bumped by every change to what the user sees in the composer. A send clears

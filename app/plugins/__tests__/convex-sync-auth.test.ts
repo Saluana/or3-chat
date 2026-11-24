@@ -483,6 +483,7 @@ describe('sync engine plugin', () => {
         await flushPluginAsyncWork();
 
         const firstProvider = providerRegistryState.active;
+        sessionState.value.session!.workspace = { id: 'ws-2' };
         workspaceState.value = 'ws-2';
         await nextTick();
         await flushPluginAsyncWork();
@@ -571,8 +572,10 @@ describe('sync engine plugin', () => {
         pluginControl.blockStart();
         await (await import('~/plugins/convex-sync.client')).default;
         await Promise.resolve();
+        sessionState.value.session!.workspace = { id: 'ws-2' };
         workspaceState.value = 'ws-2';
         await nextTick();
+        sessionState.value.session!.workspace = { id: 'ws-3' };
         workspaceState.value = 'ws-3';
         await nextTick();
         pluginControl.releaseStart();

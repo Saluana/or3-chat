@@ -7,11 +7,11 @@ import { evictWorkspaceDb, getActiveWorkspaceId, getWorkspaceGeneration, setActi
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine, tryGetHooks } from '~/core/hooks/useHooks';
-import { defineAsyncComponent, defineComponent, getCurrentInstance, h, KeepAlive, nextTick, reactive, ref, shallowRef, toRaw, type Component } from 'vue';
+import { computed, defineAsyncComponent, defineComponent, getCurrentInstance, h, KeepAlive, nextTick, reactive, ref, shallowRef, toRaw, type Component } from 'vue';
 import ChatContainer from '../ChatContainer.vue';
 import { CORE_APP_COMPONENT_DEFAULTS } from '~/theme/_shared/theme-components-registry';
 import type { ChatRequestState, SendResult } from '~/utils/chat/types';
-import type { SessionPayload } from '~/composables/auth/useSessionContext';
+import * as sessionContext from '~/composables/auth/useSessionContext';
 
 // ChatContainer rendering coverage uses the real scroller so streaming row
 // updates are exercised end to end. `tests/setup.ts` mocks `or3-scroll` for
@@ -621,12 +621,11 @@ describe('ChatContainer', () => {
         const ids = [`welcome-bootstrap-${crypto.randomUUID()}`, `welcome-auth-${crypto.randomUUID()}`];
         const bootstrapDb = setActiveWorkspaceDb(ids[0]!);
         await bootstrapDb.open();
-        const auth = ref<SessionPayload>({ appAccessAllowed: true,
+        const session = sessionContext.useSessionContext({ autoLoad: false });
+        const auth = ref<sessionContext.SessionPayload>({ appAccessAllowed: true,
             session: { authenticated: true, workspace: { id: ids[1]!, name: 'Authenticated target' } } });
-        const originalState = nuxtImports.useState;
-        const state = vi.spyOn(nuxtImports, 'useState').mockImplementation((key?: string | (() => unknown), init?: () => unknown) => {
-            if (typeof key === 'string') return key === 'auth-session' ? auth : originalState(key, init);
-            return originalState(key);
+        const state = vi.spyOn(sessionContext, 'useSessionContext').mockReturnValue({
+            ...session, data: computed(() => auth.value),
         });
         const runtimeConfig = nuxtImports.useRuntimeConfig();
         const config = vi.spyOn(nuxtImports, 'useRuntimeConfig').mockReturnValue({

@@ -41,6 +41,16 @@ export default defineNuxtPlugin(async () => {
     // Runtime adapters are disabled in local-only builds. Development previews
     // still need the host proof even without a managed workspace session.
     if (config.public.ssrAuthEnabled !== true && config.public.pluginDevelopment !== true) return;
+    try {
+        publishTrustedHostUiEvidence(await measureHostFacade());
+    } catch {
+        // An incomplete install or stale cache can leave a facade unavailable.
+        // Keep trusted plugin UI gated while the rest of the workspace boots.
+        publishTrustedHostUiEvidence(null);
+    }
+});
+
+async function measureHostFacade(): Promise<HostEsmFacadeEvidence> {
     const Sdk = await import('@or3/plugin-sdk');
     const html = document.documentElement.innerHTML;
     const [vueFacade, sdkFacade, vueComponentRendering] = await Promise.all([
@@ -49,7 +59,7 @@ export default defineNuxtPlugin(async () => {
         compiledRenderMatchesHost(),
     ]);
     const hostVue = Vue as unknown as FacadeModule;
-    const evidence: HostEsmFacadeEvidence = {
+    return {
         generatedFacade: true,
         importMap: importMapPrecedesModuleScripts(html),
         vueSingletonIdentity:
@@ -65,5 +75,4 @@ export default defineNuxtPlugin(async () => {
         vueComponentRendering,
         cspCompatible: true,
     };
-    publishTrustedHostUiEvidence(evidence);
-});
+}

@@ -69,6 +69,7 @@ setDefault('NUXT_PUBLIC_AUTH_PROVIDER', authProvider);
 setDefault('NUXT_PUBLIC_GUEST_ACCESS_ENABLED', guestAccessEnabled);
 setDefault('NUXT_AUTH_REGISTRATION_MODE', registrationMode);
 setDefault('NUXT_AUTH_AUTO_PROVISION', autoProvision);
+setDefault('NUXT_AUTH_OFFLINE_WORKSPACE_ACCESS', firstDefined(env.OR3_OFFLINE_WORKSPACE_ACCESS, 'true'));
 setDefault('NUXT_AUTH_BOOTSTRAP_EMAIL', bootstrapEmail);
 setDefault('NUXT_AUTH_INVITE_TOKEN_SECRET', inviteTokenSecret);
 setDefault('NUXT_AUTH_INVITE_TOKEN_TTL_SECONDS', inviteTokenTtlSeconds);

@@ -29,9 +29,9 @@ export function getTrustedHostUiDecision(): TrustedHostUiDecision {
 }
 
 export function publishTrustedHostUiEvidence(
-    evidence: HostEsmFacadeEvidence
+    evidence: HostEsmFacadeEvidence | null
 ): TrustedHostUiDecision {
-    decision = decideTrustedHostUi(evidence);
+    decision = decideTrustedHostUi(evidence ?? unproven);
     return decision;
 }
 

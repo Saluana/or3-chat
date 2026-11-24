@@ -35,7 +35,7 @@ import {
 } from '~/utils/projects/context';
 import { relatedChatsNotice } from '~/utils/projects/related-chats';
 import { useRuntimeConfig, useToast } from '#imports';
-import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
+import { getLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 import {
     addProjectUpload,
     addProjectDocument,
@@ -483,7 +483,7 @@ function connect() {
     controller = new AbortController();
     // The selected project can be cleared after sign-out but before this
     // kept-alive page unmounts. Do not capture an unauthorized workspace.
-    if (useRuntimeConfig().public.ssrAuthEnabled && !getCachedSessionContext()?.authenticated) {
+    if (useRuntimeConfig().public.ssrAuthEnabled && !getLocalWorkspaceSession()?.authenticated) {
         state.value = null;
         projects.value = [];
         projectsLoaded.value = false;
@@ -681,7 +681,7 @@ onDeactivated(() => {
 onActivated(() => {
     if (active) return;
     active = true;
-    if (useRuntimeConfig().public.ssrAuthEnabled && !getCachedSessionContext()?.authenticated) {
+    if (useRuntimeConfig().public.ssrAuthEnabled && !getLocalWorkspaceSession()?.authenticated) {
         connect();
         return;
     }

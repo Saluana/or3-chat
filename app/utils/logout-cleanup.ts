@@ -41,6 +41,8 @@ interface LogoutCleanupOptions {
      * An explicit authenticated -> signed-out transition still clears them.
      */
     preservePluginSecrets?: boolean;
+    /** Startup can follow an expired session with unsynced edits. */
+    preserveWorkspaceCaches?: boolean;
     /**
      * Keep the short-lived PKCE markers while the OpenRouter callback is
      * exchanging its authorization code. The callback clears them itself.
@@ -127,7 +129,7 @@ export async function logoutCleanup(
 
     await clearApiKey;
     if (!isCurrent()) return;
-    await clearWorkspaceDbsOnLogout(isCurrent);
+    if (!options.preserveWorkspaceCaches) await clearWorkspaceDbsOnLogout(isCurrent);
     if (!isCurrent()) return;
 
     // Clear local/session storage auth remnants and transient caches

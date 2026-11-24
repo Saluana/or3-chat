@@ -12,7 +12,7 @@ import { getActiveWorkspaceId, getDb, getWorkspaceDb, type Or3DB, type Workspace
 import { getFileBlob } from '~/db/files';
 import { newId } from '~/db/util';
 import { commitDraftVersion, DraftVersionCapacityError, listDraftVersions, readDraftBaseline, removeDraftVersion, type DraftBaseline } from '~/db/workspace-draft-recovery';
-import { getCachedSessionContext } from '~/composables/auth/useSessionContext';
+import { getLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 
 export interface WorkspaceChatTabDraft {
     version: 1;
@@ -92,7 +92,7 @@ export function currentWorkspaceDraftScope(): WorkspaceDraftScope {
     let db: Or3DB | null = null;
     try {
         workspaceId = getActiveWorkspaceId() ?? 'local';
-        accountKey = getCachedSessionContext()?.user?.id ?? 'local';
+        accountKey = getLocalWorkspaceSession()?.user?.id ?? 'local';
         db = getDb();
     } catch {
         // Storage can be unavailable; drafts then live in memory only.

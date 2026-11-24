@@ -461,7 +461,7 @@ import { getWorkspaceTabsStorageKey } from '~/composables/core/useWorkspaceTabPe
 import { useEmptyChatActions } from '~/composables/chat/useEmptyChatActions';
 import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import type { EmptyChatActionId } from '~/theme/_shared/chat-empty-state';
-import type { SessionPayload } from '~/composables/auth/useSessionContext';
+import { useLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 import { isViewOnlyMember, VIEW_ONLY_NOTICE } from '~/composables/auth/useViewOnlyAccess';
 import { useWorkspaceTabMetadata } from '~/composables/core/useWorkspaceTabMetadata';
 import WorkspaceChrome from '~/components/workspace-tabs/WorkspaceChrome.vue';
@@ -1935,7 +1935,7 @@ watch(
 );
 
 // Empty-chat creation is scoped to its originating pane/tab and workspace.
-const emptySession = useState<SessionPayload | null>('auth-session', () => null);
+const emptySession = useLocalWorkspaceSession();
 // The server renders a blank chat because saved tabs live in localStorage.
 // Before first paint, flag a saved tab that will replace it so the blank
 // chat's artwork stays hidden until the restored tab is bound.

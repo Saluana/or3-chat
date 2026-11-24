@@ -21,20 +21,20 @@
 import { computed, watch } from 'vue';
 import { setActiveWorkspaceDb } from '~/db/client';
 import { getHookBridge } from '~/core/sync/hook-bridge';
-import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { useLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 import { shouldClearWorkspaceForNullSession } from './shouldClearWorkspaceForNullSession';
 
 let workspaceChangeToken = 0;
 
 export function useWorkspaceManager() {
-    const { data: sessionData } = useSessionContext();
+    const sessionData = useLocalWorkspaceSession();
     
     /**
      * Compute active workspace ID from session data
      */
     const activeWorkspaceId = computed(() => {
         const session = sessionData.value?.session;
-        if (!session || !session.authenticated) {
+        if (!session?.authenticated || sessionData.value?.appAccessAllowed === false) {
             return null;
         }
         return session.workspace?.id ?? null;
@@ -60,13 +60,13 @@ export function useWorkspaceManager() {
             }
 
             const session = sessionData.value?.session;
-            if (session?.authenticated === false) {
+            if (sessionData.value && (!session?.authenticated || sessionData.value.appAccessAllowed === false)) {
                 if (token !== workspaceChangeToken) return;
                 setActiveWorkspaceDb(null);
                 return;
             }
 
-            const shouldClear = await shouldClearWorkspaceForNullSession(oldId ?? null);
+            const shouldClear = !sessionData.value || await shouldClearWorkspaceForNullSession(oldId ?? null);
             if (token !== workspaceChangeToken) return;
 
             if (!shouldClear) {

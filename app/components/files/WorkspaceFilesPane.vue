@@ -34,7 +34,7 @@ import { parseFileHashes } from '~/db/files-util';
 import { tiptapToPlainText } from '~/core/search/command-palette/normalize';
 import { normalizeProjectData } from '~/utils/projects/normalizeProjectData';
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
-import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { useLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 import { useWorkspaceFileActions } from '~/composables/files/useWorkspaceFileActions';
 import type { WorkspaceFileAction } from '~/composables/files/useWorkspaceFileActions';
 import { reportError } from '~/utils/errors';
@@ -70,7 +70,7 @@ const explorerEnabled = useExplorerAvailable();
 const widePreview = computed(() => paneWidth.value >= (explorerEnabled.value ? 1024 : 720));
 const organization = shallowRef<Awaited<ReturnType<typeof readExplorerOrganization>>>();
 const filesWorkspace = ref(getActiveWorkspaceId() ?? 'local');
-const { data: sessionData } = useSessionContext();
+const sessionData = useLocalWorkspaceSession();
 const filesPreferenceScope = computed(() => JSON.stringify([sessionData.value?.session?.user?.id ?? 'local', filesWorkspace.value]));
 const storedFolder = useLocalStorage(computed(() => 'or3:files-explorer:folder:v1:' + filesPreferenceScope.value), '');
 const folderId = computed<string | null>({ get: () => storedFolder.value || null,

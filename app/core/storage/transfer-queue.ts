@@ -267,7 +267,7 @@ export class FileTransferQueue {
     async enqueue(
         hash: string,
         direction: FileTransferDirection,
-        boundContext?: BoundQueueContext
+        boundContext?: BoundQueueContext & { assertLocalUpload?: () => void }
     ): Promise<FileTransfer | null> {
         const workspaceId = boundContext?.workspaceId ?? this.workspaceId;
         if (!workspaceId) {
@@ -275,21 +275,29 @@ export class FileTransferQueue {
         }
 
         const db = boundContext?.db ?? (this.rebindDb(), this.db);
-        if (boundContext) this.assertBoundContext(boundContext);
+        // Offline intake is already scoped to the local DB. It may record an
+        // intent before a verified session is available to run the transfer.
+        const localUpload = direction === 'upload' ? boundContext?.assertLocalUpload : undefined;
+        const assertCurrent = () => {
+            if (localUpload) localUpload();
+            else if (boundContext) this.assertBoundContext(boundContext);
+        };
+        assertCurrent();
 
         const transfer = await db.transaction('rw', db.file_transfers, async () => {
-            const existing = await this.findExistingTransfer(hash, direction, db);
-            if (boundContext) this.assertBoundContext(boundContext);
+            const existing = await this.findExistingTransfer(hash, direction, db, workspaceId);
+            assertCurrent();
             if (existing) {
                 // Prior 404 / pre-commit races park here; re-queue so later success can proceed.
                 if (
                     existing.state === 'remote_missing' ||
                     existing.state === 'pending_upload'
                 ) {
+                    if (localUpload) return existing;
                     await this.retryRecoverable(existing.id, db, boundContext);
-                    if (boundContext) this.assertBoundContext(boundContext);
+                    assertCurrent();
                     const retried = await db.file_transfers.get(existing.id);
-                    if (boundContext) this.assertBoundContext(boundContext);
+                    assertCurrent();
                     return retried ?? existing;
                 }
                 if (existing.state !== 'failed') {
@@ -312,9 +320,9 @@ export class FileTransferQueue {
                 updated_at: now,
             };
 
-            if (boundContext) this.assertBoundContext(boundContext);
+            assertCurrent();
             await db.file_transfers.put(created);
-            if (boundContext) this.assertBoundContext(boundContext);
+            assertCurrent();
             return created;
         });
         const tx = Dexie.currentTransaction as typeof Dexie.currentTransaction | undefined;
@@ -454,15 +462,16 @@ export class FileTransferQueue {
     private async findExistingTransfer(
         hash: string,
         direction: FileTransferDirection,
-        db = this.db
+        db = this.db,
+        workspaceId = this.workspaceId
     ): Promise<FileTransfer | undefined> {
         try {
             const existing = await db.file_transfers
                 .where('[hash+direction]')
                 .equals([hash, direction])
                 .toArray();
-            return existing.find(transfer => transfer.workspace_id === this.workspaceId && transfer.state !== 'done' && transfer.state !== 'failed')
-                ?? existing.find(transfer => transfer.workspace_id === this.workspaceId && transfer.state === 'failed');
+            return existing.find(transfer => transfer.workspace_id === workspaceId && transfer.state !== 'done' && transfer.state !== 'failed')
+                ?? existing.find(transfer => transfer.workspace_id === workspaceId && transfer.state === 'failed');
         } catch (error) {
             if (!this.isDatabaseClosedError(error)) {
                 throw error;

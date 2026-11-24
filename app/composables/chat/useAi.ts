@@ -27,6 +27,7 @@ import { useOpenRouterAuth } from '~/core/auth/useOpenrouter';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { resolveNotificationUserId } from '~/core/notifications/notification-user';
+import { useOfflineWorkspace } from '~/composables/auth/offline-workspace';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { state } from '~/state/global';
 import type { PaneContext } from '../../../types/chat-internal';
@@ -147,8 +148,10 @@ export function useChat(
         runtimeConfig.public.ssrAuthEnabled === true
             ? useSessionContext()
             : null;
+    const offlineWorkspace = useOfflineWorkspace();
+    // Keep the originating view attached while the server session is revalidated.
     const notificationUserId = computed(() =>
-        resolveNotificationUserId(sessionContext?.data.value?.session)
+        offlineWorkspace.value?.userId ?? resolveNotificationUserId(sessionContext?.data.value?.session)
     );
     const openRouterConfig = computed(() => runtimeConfig.public.openRouter);
     const requireUserKey = computed(

@@ -21,6 +21,7 @@ export interface Or3CloudConfig {
          * @default false
          */
         guestAccessEnabled?: boolean;
+        offlineWorkspaceAccess?: boolean;
         /**
          * Automatically provision users/workspaces on first authenticated session.
          * When false, only pre-provisioned users can sign in.

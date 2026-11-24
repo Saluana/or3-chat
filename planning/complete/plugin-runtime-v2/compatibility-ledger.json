@@ -2836,7 +2836,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "0af485b8d667213c26146aa9c2e318841f12ef7e926a319dbd8673b2ddc4b103",
+      "apiSha256": "c937896753d61d76036d7c9c25027eb2fddb99be87602c005cc2d61a5b51b42a",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -6761,7 +6761,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAi.ts",
-                "line": 77,
+                "line": 78,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[]; toolDraftId?: () => string | undefined; paneBindingOwnedByView?: boolean } = {}\n);"
               }
@@ -6770,7 +6770,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAi.ts",
-              "line": 77,
+              "line": 78,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[]; toolDraftId?: () => string | undefined; paneBindingOwnedByView?: boolean } = {}\n);"
             }

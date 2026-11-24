@@ -2,7 +2,7 @@ import { registerSidebarPage } from '~/composables/sidebar/registerSidebarPage';
 import { useProjectSidebar } from '~/composables/sidebar/useProjectSidebar';
 import { subscribeActiveWorkspaceDb } from '~/db/client';
 import { watch } from 'vue';
-import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { useLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 import { useHooks } from '~/core/hooks/useHooks';
 import { createAutomaticMemoryCapture } from '~/utils/projects/automatic-memory';
 
@@ -12,7 +12,7 @@ export default defineNuxtPlugin(() => {
         memoryCapture.notify(event);
     });
     const cloud = useRuntimeConfig().public.ssrAuthEnabled;
-    const { data } = useSessionContext();
+    const data = useLocalWorkspaceSession();
     const { projectId } = useProjectSidebar();
     const stopWorkspace = subscribeActiveWorkspaceDb(() => {
         projectId.value = '';

@@ -3,15 +3,15 @@
  * editing surfaces lock instead of accepting input that would never sync.
  */
 import { computed } from 'vue';
-import { getCachedSessionContext, useSessionContext } from '~/composables/auth/useSessionContext';
+import { getLocalWorkspaceSession, useLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 
 export const VIEW_ONLY_NOTICE = 'You have view-only access to this workspace.';
 
 export function isViewOnlyMember(): boolean {
-    return getCachedSessionContext()?.role === 'viewer';
+    return getLocalWorkspaceSession()?.role === 'viewer';
 }
 
 export function useViewOnlyAccess() {
-    const { data } = useSessionContext();
+    const data = useLocalWorkspaceSession();
     return computed(() => data.value?.session?.role === 'viewer');
 }

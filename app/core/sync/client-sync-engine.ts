@@ -22,6 +22,8 @@ import { getCachedSessionContext, useSessionContext } from '~/composables/auth/u
 import { startCoordinatedSubscription } from './subscription-coordinator';
 import { useAuthTokenBroker, type AuthTokenBroker } from '~/composables/auth/useAuthTokenBroker.client';
 import { useWorkspaceManager } from '~/composables/workspace/useWorkspaceManager';
+import { getLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
+import { getOfflineWorkspace } from '~/composables/auth/offline-workspace';
 import { watch, effectScope } from 'vue';
 import { hasCloudAccess, useCloudAccess } from '~/core/cloud/access';
 import type { SyncProvider, SyncScope } from '~~/shared/sync/types';
@@ -82,7 +84,7 @@ async function hasDirectProviderToken(provider: SyncProvider): Promise<boolean> 
  * transport. Workspace/account departure and DB eviction release it.
  */
 function releaseCapture(dbName: string, scope: SyncScope): void {
-    const session = getCachedSessionContext();
+    const session = getLocalWorkspaceSession();
     if (getActiveDbWorkspaceId() !== scope.workspaceId || !session?.authenticated
         || session.user?.id !== scope.principalId) cleanupHookBridge(dbName);
 }
@@ -201,7 +203,7 @@ async function startSyncEngine(
     principalId = getCachedSessionContext()?.user?.id,
     authorizationRevision = getCachedSessionContext()?.authorizationRevision,
 ): Promise<void> {
-    if (!hasCloudAccess()) return stopSyncEngine();
+    if (getOfflineWorkspace() || !hasCloudAccess()) return stopSyncEngine();
     const generation = lifecycleGeneration;
     // Explicit retry of a storage-paused subscription retains its staged chain.
     // A healthy same-scope start remains idempotent; auth changes still reconcile.
@@ -349,7 +351,9 @@ export async function setupSyncEngine(): Promise<void> {
         () => ({
             workspaceId: activeWorkspaceId.value,
             path: getRoutePathSafe(),
-            authenticated: sessionData.value?.session?.authenticated ?? false,
+            authenticated: sessionData.value?.session?.authenticated === true
+                && sessionData.value.appAccessAllowed !== false
+                && (!ssrAuthEnabled || sessionData.value.session.workspace?.id === activeWorkspaceId.value),
             principalId: sessionData.value?.session?.user?.id,
             authorizationRevision: sessionData.value?.session?.authorizationRevision,
             cloudEnabled: cloudEnabled.value,

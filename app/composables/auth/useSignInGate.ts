@@ -6,7 +6,7 @@
  */
 import { computed, watch } from 'vue';
 import { useRuntimeConfig, useToast } from '#imports';
-import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { useLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 import { isMobile } from '~/state/global';
 import { resolveAuthUiAdapter } from '~/core/auth-ui/registry';
 import { useOverlay } from '@nuxt/ui/composables/useOverlay';
@@ -21,7 +21,7 @@ export function useSignInGate() {
     // Resolve while setup is active; send handlers can run after it ends.
     const toast = useToast();
     const overlay = useOverlay();
-    const { data } = useSessionContext();
+    const data = useLocalWorkspaceSession();
 
     // Stays false until the session payload has loaded, so a slow fetch never
     // tells a signed-in user to sign in.

@@ -1,5 +1,5 @@
 import { useRuntimeConfig } from '#imports';
-import { getCachedSessionContext, getCachedSessionPayload } from '~/composables/auth/useSessionContext';
+import { getLocalWorkspaceSession, getLocalWorkspacePayload } from '~/composables/auth/useLocalWorkspaceSession';
 import { getActiveWorkspaceId, getDb, getWorkspaceGeneration, type Or3DB } from '~/db/client';
 import type { ToolExecutionContext } from './types';
 
@@ -18,7 +18,7 @@ export interface WorkspaceOperationScope {
 /** Cloud intake is enabled only after the selected adapter admits the catalog protocol. */
 export function workspaceFilesAvailable(): boolean {
     if (useRuntimeConfig().public.ssrAuthEnabled !== true) return true;
-    const payload = getCachedSessionPayload();
+    const payload = getLocalWorkspacePayload();
     return payload?.appAccessAllowed === true && payload.workspaceItemCapability === 'v1';
 }
 
@@ -29,7 +29,7 @@ export function captureWorkspaceOperation(context: ToolExecutionContext): Worksp
     const workspaceId = getActiveWorkspaceId() ?? 'local';
     const config = useRuntimeConfig().public;
     const authenticated = config.ssrAuthEnabled === true;
-    const session = authenticated ? getCachedSessionContext() : null;
+    const session = authenticated ? getLocalWorkspaceSession() : null;
     const subject = authenticated ? session?.user?.id ?? null : null;
     const authorizationRevision = session?.authorizationRevision;
     const role = session?.role;
@@ -37,7 +37,7 @@ export function captureWorkspaceOperation(context: ToolExecutionContext): Worksp
         db, generation, workspaceId, subject, signal: context.abortSignal,
         explorerLocal: !authenticated,
         get explorerCloud() {
-            const payload = getCachedSessionPayload();
+            const payload = getLocalWorkspacePayload();
             return authenticated && payload?.appAccessAllowed === true;
         },
         writable: !authenticated || role === 'owner' || role === 'editor',
@@ -49,7 +49,7 @@ export function captureWorkspaceOperation(context: ToolExecutionContext): Worksp
                 throw new Error('The originating workspace is no longer available.');
             }
             if (authenticated) {
-                const current = getCachedSessionContext();
+                const current = getLocalWorkspaceSession();
                 if (!subject || !current?.authenticated || current.user?.id !== subject
                     || current.workspace?.id !== workspaceId || current.role !== role
                     || current.authorizationRevision !== authorizationRevision

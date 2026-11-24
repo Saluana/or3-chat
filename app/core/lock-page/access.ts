@@ -1,6 +1,8 @@
 import { useState } from '#imports';
 import type { SessionContext } from '~/core/hooks/hook-types';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
+import { canUseOfflineWorkspaceDb, useOfflineWorkspace } from '~/composables/auth/offline-workspace';
+import { useLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 import {
     type LockPageRuntimeConfig,
     useLockPageRuntimeConfig,
@@ -124,6 +126,11 @@ export async function resolveLockPageAccess(): Promise<LockPageAccessResult> {
     // Refreshes explicitly below when it needs to, so skip the automatic load.
     const sessionState = useSessionContext({ autoLoad: false });
     const { validatedAt } = getSessionValidationState();
+    if (import.meta.client && useOfflineWorkspace().value) {
+        return evaluateLockPageAccess({
+            config, session: useLocalWorkspaceSession().value?.session ?? null, appAccessAllowed: true,
+        });
+    }
     const cachedPayload = sessionState.data.value;
     const cachedSession = cachedPayload?.session ?? null;
 
@@ -167,7 +174,8 @@ export async function resolveLockPageAccess(): Promise<LockPageAccessResult> {
     const result = evaluateLockPageAccess({
         config,
         session,
-        appAccessAllowed: payload?.appAccessAllowed,
+        appAccessAllowed: session?.workspace && !canUseOfflineWorkspaceDb(session.workspace.id, session.user?.id)
+            ? false : payload?.appAccessAllowed,
         hadSessionError,
     });
 
