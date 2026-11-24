@@ -364,6 +364,8 @@ export default defineNuxtConfig({
             // Nuxt Icon's source scan. Bundle the selected glyphs for static and
             // offline use; custom collections are already included above.
             icons: [...new Set([
+                // Provider UI lives outside the app source scanned above.
+                ...(isSsrAuthEnabled ? ['lucide:log-in'] : []),
                 ...Object.values(DEFAULT_ICONS),
                 ...Object.values(cyberpunkIcons),
                 ...Object.values(blankIcons),
