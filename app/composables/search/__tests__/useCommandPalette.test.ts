@@ -16,6 +16,7 @@ const executePaletteAction = vi.fn();
 const hydratePreview = vi.fn();
 const setQuery = vi.fn();
 const retrySource = vi.fn();
+const loadSearchModule = vi.fn();
 
 let snapshot: PaletteCoordinatorSnapshot;
 let listeners: ((snapshot: PaletteCoordinatorSnapshot) => void)[] = [];
@@ -45,9 +46,7 @@ const coordinator: PaletteCoordinator = {
 };
 
 vi.mock('~/core/search/command-palette/prewarm', () => ({
-    loadCommandPaletteSearchModule: async () => ({
-        createPaletteCoordinator: () => coordinator,
-    }),
+    loadCommandPaletteSearchModule: () => loadSearchModule(),
     scheduleCommandPalettePrewarm: vi.fn(),
 }));
 
@@ -122,8 +121,23 @@ describe('useCommandPalette', () => {
             categoryId: 'chat',
         } satisfies PalettePreview);
         executePaletteAction.mockResolvedValue({ ok: true });
+        loadSearchModule.mockResolvedValue({ createPaletteCoordinator: () => coordinator });
         disposeCommandPalette();
         setPaletteHostContext(host);
+    });
+
+    it('retries search initialization after a transient module load failure', async () => {
+        const failure = new Error('Chunk download interrupted');
+        loadSearchModule.mockRejectedValueOnce(failure);
+        const palette = useCommandPalette();
+        await expect(palette.warm()).rejects.toBe(failure);
+        await expect(palette.warm()).resolves.toBeUndefined();
+        expect(loadSearchModule).toHaveBeenCalledTimes(2);
+        palette.open();
+        await nextTick();
+        emitSnapshot({ results: [result()] });
+        expect(palette.activeResult.value?.key).toBe('chat:t1');
+        palette.close();
     });
 
     it('releases the search indexes after the palette stays closed', async () => {

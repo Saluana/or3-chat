@@ -15,6 +15,8 @@ const state = vi.hoisted(() => ({
     starts: [] as string[],
     subscriptionStatus: 'connected' as 'connected' | 'error',
     dispose: async () => {},
+    requiresToken: false,
+    token: vi.fn<() => Promise<string | null>>(),
 }));
 vi.mock('~/composables/auth/useSessionContext', () => ({
     useSessionContext: () => ({ data: state.session }),
@@ -24,9 +26,10 @@ vi.mock('~/composables/auth/useSessionContext', () => ({
 vi.mock('~/composables/workspace/useWorkspaceManager', () => ({
     useWorkspaceManager: () => ({ activeWorkspaceId: state.workspace }),
 }));
-vi.mock('~/composables/auth/useAuthTokenBroker.client', () => ({ useAuthTokenBroker: () => ({}) }));
+vi.mock('~/composables/auth/useAuthTokenBroker.client', () => ({ useAuthTokenBroker: () => ({ getProviderToken: () => state.token() }) }));
 vi.mock('../sync-provider-registry', () => ({
-    getActiveSyncProvider: () => ({ id: 'test-direct', mode: 'direct', capabilities: { historyIncarnation: 'v1' }, dispose: () => state.dispose() }),
+    getActiveSyncProvider: () => ({ id: 'test-direct', mode: 'direct', capabilities: { historyIncarnation: 'v1' },
+        ...(state.requiresToken ? { auth: { providerId: 'test-auth' } } : {}), dispose: () => state.dispose() }),
     registerSyncProvider: vi.fn(), setActiveSyncProvider: vi.fn(),
 }));
 vi.mock('../subscription-manager', () => ({
@@ -41,9 +44,46 @@ vi.mock('../outbox-manager', () => ({ OutboxManager: class {
     start() {} stop() {}
 } }));
 
-afterEach(() => { vi.unstubAllGlobals(); setHookEngine(null); });
+afterEach(() => { vi.unstubAllGlobals(); setHookEngine(null); state.requiresToken = false; state.token.mockReset(); });
 
 describe('sync lifecycle with real local write capture', () => {
+    it('switches workspace while the old provider token lookup is still pending', async () => {
+        setHookEngine(createTypedHookEngine(createHookEngine()));
+        const a = crypto.randomUUID(); const b = crypto.randomUUID();
+        const first = getWorkspaceDb(a); const second = getWorkspaceDb(b);
+        await first.open(); await second.open(); setActiveWorkspaceDb(a);
+        state.workspace = ref(a);
+        state.session = ref({ session: { authenticated: true, user: { id: 'user-A' } } });
+        state.starts = []; state.dispose = async () => {}; state.requiresToken = true;
+        let finishToken!: (token: string) => void;
+        state.token.mockImplementationOnce(() => new Promise(resolve => { finishToken = resolve; }))
+            .mockResolvedValue('current-provider-token');
+        let control!: { stop(): Promise<void>; isRunning(): boolean };
+        vi.stubGlobal('useRuntimeConfig', () => ({ public: { sync: { enabled: true }, ssrAuthEnabled: false } }));
+        vi.stubGlobal('useNuxtApp', () => ({ vueApp: { onUnmount: onScopeDispose },
+            provide: (_key: string, value: typeof control) => { control = value; } }));
+        vi.stubGlobal('useRouter', () => ({ currentRoute: ref({ path: '/' }) }));
+        const scope = effectScope();
+        try {
+            await scope.run(() => setupSyncEngine());
+            await vi.waitFor(() => expect(state.token).toHaveBeenCalledTimes(1));
+            (state.workspace as { value: string }).value = b;
+            setActiveWorkspaceDb(b);
+            await nextTick();
+            await vi.waitFor(() => expect(state.starts).toEqual([b]));
+            expect(control.isRunning()).toBe(true);
+            finishToken('old-provider-token');
+            await nextTick();
+            expect(state.starts).toEqual([b]);
+            expect(getDb()).toBe(second);
+        } finally {
+            finishToken('old-provider-token'); scope.stop(); await control?.stop(); setActiveWorkspaceDb(null);
+            for (const [id, db] of [[a, first], [b, second]] as const) {
+                evictWorkspaceDb(id); await Dexie.delete(db.name);
+            }
+        }
+    });
+
     it('keeps a newer workspace when an explicit reconnect pause lookup finishes late', async () => {
         setHookEngine(createTypedHookEngine(createHookEngine()));
         const a = crypto.randomUUID(); const b = crypto.randomUUID();

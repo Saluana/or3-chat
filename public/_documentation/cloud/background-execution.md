@@ -318,6 +318,8 @@ not rollback of a tool side effect or acknowledgement from every remote service.
 Workflow stopped snapshots are projected only from authoritative aborted status;
 refused/failed stops cannot pre-write a stopped workflow. Polling and SSE derive
 the same stopped view after reconnect without mutating terminal provider records.
+A confirmed cancellation includes workflow progress saved while the stop was in flight.
+A failing live viewer callback leaves generation and the other viewers running.
 
 ### Terminal retention and transport errors
 

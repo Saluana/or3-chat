@@ -58,4 +58,31 @@ describe('abort route workflow projection', () => {
         expect(emitMock).toHaveBeenCalledWith('job-1', 'aborted',
             expect.objectContaining({ workflow_state: expect.objectContaining({ executionState: 'stopped' }) }));
     });
+
+    it('keeps workflow progress committed while cancellation was in flight', async () => {
+        const original = job();
+        const latest = {
+            ...original, status: 'aborted', content: 'Finished first node', reasoning: '', chunksReceived: 2,
+            attempts: 3, completedAt: 1234,
+            workflow_state: {
+                executionState: 'running', currentNodeId: 'node-2', version: 4,
+                nodeStates: { 'node-1': { status: 'complete', output: 'Saved node output' } },
+            },
+        };
+        provider.getJob.mockResolvedValueOnce(original).mockResolvedValueOnce(latest);
+        provider.abortJob.mockResolvedValueOnce(true);
+
+        const result = await abortModule.default({} as never);
+
+        const stopped = {
+            executionState: 'stopped', version: 5, failedNodeId: 'node-2',
+            nodeStates: { 'node-1': { status: 'complete', output: 'Saved node output' } },
+        };
+        expect(result).toMatchObject({ aborted: true, workflow_state: stopped });
+        expect(emitMock).toHaveBeenCalledWith('job-1', 'aborted', expect.objectContaining({
+            content: latest.content, workflow_state: expect.objectContaining(stopped),
+        }));
+        expect(original.workflow_state.version).toBe(1);
+        expect(latest.workflow_state.version).toBe(4);
+    });
 });

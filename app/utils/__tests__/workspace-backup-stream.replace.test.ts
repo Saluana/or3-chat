@@ -3,6 +3,7 @@ import { Blob as NodeBlob } from 'node:buffer';
 import Dexie, { type Table } from 'dexie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Or3DB, logicalStoreName } from '~/db/client';
+import { computeHashHex } from '~/utils/hash';
 import {
     importWorkspaceStream,
     streamWorkspaceExport,
@@ -99,6 +100,27 @@ describe('workspace backup export reliability', () => {
     });
     afterEach(() => {
         vi.unstubAllGlobals();
+    });
+    it.each(['sha256', 'md5', 'bare-md5'] as const)('verifies %s original bytes and rolls back a corrupted replacement', async algorithm => {
+        const db = new Or3DB(`backup-checksum-${crypto.randomUUID()}`);
+        databases.push(db);
+        await db.open();
+        const original = createBlob(['original bytes'], { type: 'text/plain' });
+        const hex = await computeHashHex(original, algorithm === 'sha256' ? 'sha256' : 'md5');
+        const hash = algorithm === 'bare-md5' ? hex : `${algorithm}:${hex}`;
+        await db.file_blobs.put({ hash, blob: original });
+        const chunks: Uint8Array[] = [];
+        await streamWorkspaceExportToWritable({ db, writable: new WritableStream<Uint8Array>({ write(chunk) { chunks.push(chunk); } }).getWriter() });
+        const lines = (await createBlob(chunks).text()).trim().split('\n').map(line => JSON.parse(line));
+        // Valid base64 and unchanged record counts are insufficient to establish
+        // the identity of an immutable original after archive corruption.
+        const blobs = lines.find(line => line.type === 'rows' && line.table === 'file_blobs');
+        blobs.rows[0].blob.data = btoa('corrupt bytes!');
+        await expect(importWorkspaceStream({ db, file: backupBlob(lines), clearTables: true, overwriteValues: true })).rejects.toThrow(/hash|checksum/i);
+        expect(await (await db.file_blobs.get(hash))!.blob.text()).toBe('original bytes');
+        // Supported historical identities continue to round-trip unchanged.
+        await importWorkspaceStream({ db, file: createBlob(chunks), clearTables: true, overwriteValues: true });
+        expect(await (await db.file_blobs.get(hash))!.blob.text()).toBe('original bytes');
     });
     it('invalidates birth proof atomically when importing unclassified history, even an imported proof row', async () => {
         const db = new Or3DB(`import-proof-${crypto.randomUUID()}`); databases.push(db); await db.open();

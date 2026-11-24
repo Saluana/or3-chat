@@ -129,7 +129,8 @@ Normal chat also offers these workspace tools:
 | `workspace_propose_document_edit` | Stages edits using block references from the same execution's document read. The chat review card offers Apply or Discard. Apply saves content, a checkpoint, and its receipt atomically; Undo refuses to overwrite a later edit. |
 
 Source content is reference material and does not authorize actions. Reads and
-writes check the originating workspace and current permissions. Changed sources
+writes check the originating workspace and current permissions. Switching away
+invalidates a pending client tool even if you return to that workspace before it resumes. Changed sources
 must be read again, and conflicting editor drafts prevent a proposal from silently
 overwriting them. Saved files use catalog identities, never model-supplied URLs.
 In project chats, file pages read the binding's current ready/partial extraction

@@ -18,6 +18,8 @@ import { useChatModelSelection } from '~/composables/chat/useChatModelSelection'
 import { getKvByName, setKvByName } from '~/db/kv';
 import { assertDelegatedChatCurrent, attachDelegatedChat, delegatedChatController, delegatedChatJobs, finishDelegatedChat } from '../delegated-chat-runtime';
 import type { ToolExecutionContext } from '../types';
+import { readCapturedHistory } from '../history-reader';
+import { encodeCanonicalChatSeek } from '~~/shared/chat/history-reader';
 
 const auth = vi.hoisted(() => ({ session: null as null | { authenticated: boolean; user: { id: string };
     workspace: { id: string }; role: 'editor'; authorizationRevision: number } }));
@@ -53,6 +55,32 @@ afterEach(async () => {
     useModelStore().catalog.value = previousModels;
     useModelStore().favoriteModels.value = previousFavorites;
     auth.session = null;
+});
+
+it.each([false, true])('continues bounded canonical history pages past an already consumed index bucket (backward=%s)', async backward => {
+    const db = setActiveWorkspaceDb(workspace);
+    for (const ordered of [false, true]) {
+        await db.messages.clear();
+        await db.messages.bulkPut(['1a', '1b', '2a', '2b'].map(id => MessageSchema.parse({
+            id, thread_id: 'history', index: Number(id[0]), role: 'user',
+            ...(ordered ? { order_key: id } : {}), data: { content: id }, created_at: 1, updated_at: 1, clock: 1,
+        })));
+        const query = { kind: 'thread_page' as const, thread_id: 'history', limit: 2 };
+        const first = await readCapturedHistory(db, { ...query, cursor: encodeCanonicalChatSeek({ thread_id: 'history', backward }) });
+        expect(first.status).toBe('ok');
+        expect(first.messages?.map(row => row.id)).toEqual(backward ? ['2b', '2a'] : ['1a', '1b']);
+        expect(first.next_cursor).toBeDefined();
+        const partial = await readCapturedHistory(db, { ...query, cursor: encodeCanonicalChatSeek({
+            thread_id: 'history', backward, key: [backward ? 2 : 1, ordered ? (backward ? '2b' : '1a') : '', backward ? '2b' : '1a'],
+        }) });
+        expect(partial).toMatchObject({ status: 'ok', messages: [{ id: backward ? '2a' : '1b' }] });
+        const second = await readCapturedHistory(db, { ...query, cursor: first.next_cursor });
+        expect(second.status).toBe('ok');
+        expect(second.messages?.map(row => row.id)).toEqual(backward ? ['1b', '1a'] : ['2a', '2b']);
+        expect(second.examined_rows).toBeLessThanOrEqual(query.limit);
+        const end = await readCapturedHistory(db, { ...query, cursor: second.next_cursor });
+        expect(end).toMatchObject({ status: 'ok', messages: [] });
+    }
 });
 
 it('read_thread returns inherited reference history and the surviving retry turn in canonical order', async () => {

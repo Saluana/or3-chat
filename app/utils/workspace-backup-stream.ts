@@ -24,6 +24,7 @@ import { invalidateFirstBindEligibility } from '~/core/sync/history-incarnation'
 import type { IndexableType } from 'dexie';
 import { logicalStoreName, type Or3DB } from '~/db/client';
 import { STATIC_FILE_CEILING } from '~~/shared/storage/file-policy';
+import { computeHashHex, parseHash } from '~/utils/hash';
 
 /**
  * `WORKSPACE_BACKUP_FORMAT`
@@ -754,10 +755,18 @@ export async function importWorkspaceStream({
                             hash: string;
                             blob: { data: string; type: string };
                         }>;
-                        const payload = typedRows.map((row) => ({
-                            hash: row.hash,
-                            blob: base64ToBlob(row.blob),
-                        }));
+                        const payload: Array<{ hash: string; blob: Blob }> = [];
+                        for (const row of typedRows) {
+                            const blob = base64ToBlob(row.blob);
+                            const identity = parseHash(row.hash);
+                            // Preserve opaque keys from older/custom archives.
+                            // Recognized SHA-256/MD5 identities must match the
+                            // original before any replacement can commit.
+                            if (identity && await Dexie.waitFor(computeHashHex(blob, identity.algorithm)) !== identity.hex) {
+                                throw new Error(`Backup original failed its content hash check: ${row.hash}`);
+                            }
+                            payload.push({ hash: row.hash, blob });
+                        }
                         if (overwriteValues) {
                             await table.bulkPut(payload);
                         } else {

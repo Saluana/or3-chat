@@ -316,9 +316,7 @@ export function emitJobDelta(
         usage: state.usage,
         attempt: meta.attempt ?? state.attempt,
     };
-    for (const listener of state.listeners) {
-        listener(event);
-    }
+    broadcastLiveJobEvent(state, event);
 }
 
 /**
@@ -353,9 +351,7 @@ export function emitJobReasoningDelta(
         usage: state.usage,
         attempt: meta.attempt ?? state.attempt,
     };
-    for (const listener of state.listeners) {
-        listener(event);
-    }
+    broadcastLiveJobEvent(state, event);
 }
 
 /**
@@ -412,11 +408,16 @@ export function emitJobStatus(
         content_reset: meta.content_reset,
     };
 
-    for (const listener of state.listeners) {
-        listener(event);
-    }
+    broadcastLiveJobEvent(state, event);
     if (status !== 'streaming') {
         scheduleCleanup(jobId, state);
+    }
+}
+
+function broadcastLiveJobEvent(state: LiveJobState, event: LiveJobEvent): void {
+    for (const listener of [...state.listeners]) {
+        try { listener(event); }
+        catch { /* A viewer failure cannot fail generation or another viewer. */ }
     }
 }
 

@@ -9,17 +9,23 @@ export function useProjectSidebar() {
         () => 'home',
     );
     const settingsRequest = useState<string | null>('or3-sidebar-project-settings-request', () => null);
+    const navigationGeneration = useState<number>('or3-sidebar-project-navigation-generation', () => 0);
 
     async function openProjectSidebar(
         id: string,
         from: 'home' | 'projects' = 'home',
         section?: 'Settings',
     ) {
+        const generation = ++navigationGeneration.value;
         const previous = projectId.value;
         const previousReturn = returnTo.value;
         projectId.value = id;
         returnTo.value = from;
-        if (!(await setActiveSidebarPage('sidebar-projects-home'))) {
+        const activated = await setActiveSidebarPage('sidebar-projects-home');
+        // A superseded sidebar transition must not roll back a newer project
+        // selection made through another consumer of this shared state.
+        if (generation !== navigationGeneration.value) return;
+        if (!activated) {
             projectId.value = previous;
             returnTo.value = previousReturn;
             throw new Error('Projects is unavailable in this workspace.');
@@ -28,9 +34,12 @@ export function useProjectSidebar() {
     }
 
     async function openProjectsSidebar() {
+        const generation = ++navigationGeneration.value;
         const previous = projectId.value;
         projectId.value = '';
-        if (!(await setActiveSidebarPage('sidebar-projects-home'))) {
+        const activated = await setActiveSidebarPage('sidebar-projects-home');
+        if (generation !== navigationGeneration.value) return true;
+        if (!activated) {
             projectId.value = previous;
             throw new Error('Projects is unavailable in this workspace.');
         }

@@ -87,7 +87,7 @@ Document storage built on the shared `posts` table (`postType: 'doc'`) with TipT
 | `listDocumentFileHashes()`  | Unique file hashes referenced by active documents, from index keys only.                   |
 | `updateDocument(id, patch)` | Re-resolves titles/content, fires before/after hooks, persists and returns updated record; rejects with `DocumentConflictError` if the row changed meanwhile. `patch.content: null` means no content change: the stored content and its `file_hashes` are both kept. |
 | `softDeleteDocument(id)`    | Marks `deleted: true` and bumps `updated_at`; rejects with `DocumentConflictError` if the row changed meanwhile.            |
-| `hardDeleteDocument(id)`    | Removes the row entirely.                                                                  |
+| `hardDeleteDocument(id)`    | Removes the row entirely. If it changed during the operation, rejects with `DocumentConflictError` and preserves the newer edit. |
 
 `listDocumentFileHashes()` is a storage-facts API: it does not return `DocumentRecord`s, does not parse `content`, and does not invoke `db.documents.list:filter:output`. Keep using `listDocuments`/`getDocument` when callers need full records and hook output filters.
 
@@ -202,7 +202,10 @@ request again to retry. Saved/plugin quick actions use this same submission path
 
 Existing suggestions can still be accepted or rejected offline, including their
 local revision checkpoints and saves. Offline revision reads/writes use the
-already-loaded codec instead of fetching a cold worker. References, settings and token estimates
+already-loaded codec instead of fetching a cold worker. Online checkpoints also use
+that codec if the revision worker fails to start, stops responding, or cannot
+return its result. History reads check the decoded byte count against the
+manifest before using the snapshot. References, settings and token estimates
 remain local; token estimates use the same character approximation online and
 offline without downloading tokenizer code. Cached models remain available offline and
 the catalog refreshes after reconnecting. Connectivity does not imply provider

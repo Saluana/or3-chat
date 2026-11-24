@@ -14,7 +14,7 @@ export function createHistorySynchronizer(ports: {
     counts: () => { rawCount: number; uiCount: number; attachedJobs: number };
     log: (stage: string, details?: Record<string, unknown>) => void;
 }) {
-    let inFlight = false;
+    let inFlight: Promise<void> | undefined;
     let queued = false;
     let historyModule: Promise<typeof import('~/utils/chat/history')> | null = null;
     const loadModule = () => {
@@ -25,13 +25,8 @@ export function createHistorySynchronizer(ports: {
         return historyModule;
     };
 
-    async function ensureHistorySynced(): Promise<void> {
+    async function loadHistory(): Promise<void> {
         if (typeof window === 'undefined' || ports.disposed()) return;
-        if (inFlight) {
-            queued = true;
-            ports.log('history-sync-skip-in-flight', { threadId: ports.threadId.value || null });
-            return;
-        }
         const target = ports.threadId.value;
         if (!target) return;
         if (ports.loadedFor.value === target) {
@@ -41,25 +36,45 @@ export function createHistorySynchronizer(ports: {
         const ownsView = ports.captureOwner(target);
         ports.log('history-sync-start', { threadId: target, historyLoadedFor: ports.loadedFor.value,
             detached: ports.detached.value });
-        inFlight = true;
-        try {
-            if (ports.detached.value) ports.detached.value = false;
-            const stagedHistory = ref<ChatMessage[]>([]);
-            const stagedLoadedFor = ref<string | null>(ports.loadedFor.value);
-            const { ensureThreadHistoryLoaded } = await loadModule();
-            await ensureThreadHistoryLoaded(ports.threadId, stagedLoadedFor, stagedHistory);
-            if (!ownsView() || stagedLoadedFor.value !== target) return;
-            ports.publish(stagedHistory.value, target);
-            await ports.attach();
-            await ports.reconcile();
-            ports.log('history-sync-complete', { threadId: ports.threadId.value, ...ports.counts() });
-        } finally {
-            inFlight = false;
-            if (queued) {
-                queued = false;
-                void ensureHistorySynced();
-            }
+        if (ports.detached.value) ports.detached.value = false;
+        const stagedHistory = ref<ChatMessage[]>([]);
+        const stagedLoadedFor = ref<string | null>(ports.loadedFor.value);
+        const { ensureThreadHistoryLoaded } = await loadModule();
+        await ensureThreadHistoryLoaded(ports.threadId, stagedLoadedFor, stagedHistory);
+        if (!ownsView() || stagedLoadedFor.value !== target) return;
+        ports.publish(stagedHistory.value, target);
+        await ports.attach();
+        await ports.reconcile();
+        ports.log('history-sync-complete', { threadId: ports.threadId.value, ...ports.counts() });
+    }
+
+    function ensureHistorySynced(): Promise<void> {
+        if (typeof window === 'undefined' || ports.disposed()) return Promise.resolve();
+        if (inFlight) {
+            queued = true;
+            ports.log('history-sync-skip-in-flight', { threadId: ports.threadId.value || null });
+            return inFlight;
         }
+        // Awaiters join the complete drain, including a destination selected
+        // while the earlier read was pending. No detached retry can report
+        // navigation complete before its own history has been published.
+        inFlight = (async () => {
+            try {
+                do {
+                    queued = false;
+                    try { await loadHistory(); }
+                    catch (error) {
+                        // A failed outgoing read cannot discard a destination
+                        // already waiting in this drain. Without a newer caller,
+                        // retain the failure so an explicit retry can own it.
+                        if (!queued || ports.disposed()) throw error;
+                    }
+                } while (queued && !ports.disposed());
+            } finally {
+                inFlight = undefined;
+            }
+        })();
+        return inFlight;
     }
     return ensureHistorySynced;
 }

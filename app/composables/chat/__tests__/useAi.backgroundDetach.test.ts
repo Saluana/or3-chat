@@ -655,6 +655,66 @@ describe('useChat background detach race', () => {
         }
     });
 
+    it.each([false, true])('waits for destination history when switching threads during an earlier history read (older read rejects=%s)', async (rejectOlder) => {
+        let release!: () => void;
+        const held = new Promise<void>(resolve => { release = resolve; });
+        loadHistoryMock.mockImplementationOnce(async (thread, loaded, rows) => {
+            const target = thread.value;
+            await held;
+            if (rejectOlder) throw new Error('The old history load failed.');
+            rows.value = [{ id: 'old-message', role: 'assistant', content: 'old history' }];
+            loaded.value = target;
+            return true;
+        }).mockImplementationOnce(async (thread, loaded, rows) => {
+            rows.value = [{ id: 'destination-message', role: 'assistant', content: 'destination history' }];
+            loaded.value = thread.value;
+            return true;
+        });
+        const { useChat } = await import('~/composables/chat/useAi');
+        const scope = effectScope();
+        const chat = scope.run(() => useChat([], 'thread-1'))!;
+        let oldLoad: Promise<void> | undefined;
+        let switching: Promise<void> | undefined;
+        try {
+            oldLoad = chat.ensureHistorySynced();
+            await waitForCall(loadHistoryMock);
+            let settled = false;
+            switching = chat.switchThread('thread-2').then(() => { settled = true; });
+            await nextTick();
+            await new Promise(resolve => setTimeout(resolve, 0));
+            expect(settled).toBe(false);
+            release();
+            await switching;
+            expect(chat.threadId.value).toBe('thread-2');
+            expect(chat.messages.value).toMatchObject([{ id: 'destination-message', text: 'destination history' }]);
+        } finally {
+            release();
+            await Promise.all([oldLoad, switching]);
+            chat.dispose();
+            scope.stop();
+        }
+    });
+
+    it('propagates an unqueued history-sync failure and permits an explicit retry', async () => {
+        const failure = new Error('History load failed.');
+        loadHistoryMock.mockRejectedValueOnce(failure).mockImplementationOnce(async (thread, loaded, rows) => {
+            rows.value = [{ id: 'retried-message', role: 'assistant', content: 'retried history' }];
+            loaded.value = thread.value;
+            return true;
+        });
+        const { useChat } = await import('~/composables/chat/useAi');
+        const scope = effectScope();
+        const chat = scope.run(() => useChat([], 'thread-1'))!;
+        try {
+            await expect(chat.ensureHistorySynced()).rejects.toBe(failure);
+            await chat.ensureHistorySynced();
+            expect(chat.messages.value).toMatchObject([{ id: 'retried-message', text: 'retried history' }]);
+        } finally {
+            chat.dispose();
+            scope.stop();
+        }
+    });
+
     it('publishes staged history when the original account and workspace still own the view', async () => {
         loadHistoryMock.mockImplementationOnce(async (thread, loaded, rows) => {
             rows.value = [{ id: 'saved-message', role: 'assistant', content: 'saved response' }];

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import AppModal from '~/components/ui/AppModal.vue';
 
 const open = defineModel<boolean>({ required: true });
@@ -17,32 +17,40 @@ const folderName = ref('');
 const adding = ref(false);
 const saving = ref(false);
 const localError = ref('');
+let opening = 0;
 const destinationLabel = computed(() => props.folders.find(folder => folder.id === destination.value)?.path || props.label + ' root');
 async function submitFolder() {
     if (!props.createFolder || saving.value || !folderName.value.trim()) return;
     saving.value = true;
     localError.value = '';
+    const owner = opening;
     try {
-        destination.value = await props.createFolder(folderName.value, destination.value || null);
+        const created = await props.createFolder(folderName.value, destination.value || null);
+        if (owner !== opening) return;
+        destination.value = created;
         search.value = '';
         adding.value = false;
         folderName.value = '';
     } catch (cause) {
+        if (owner !== opening) return;
         localError.value = cause instanceof Error ? cause.message : 'The folder could not be created.';
-    } finally { saving.value = false; }
+    } finally { if (owner === opening) saving.value = false; }
 }
 const results = computed(() => {
     const query = search.value.trim().toLocaleLowerCase();
     return props.folders.filter(folder => folder.path.toLocaleLowerCase().includes(query));
 });
 watch(open, value => {
+    opening++;
     if (!value) return;
+    saving.value = false;
     search.value = '';
     destination.value = '';
     folderName.value = '';
     localError.value = '';
     adding.value = false;
-});
+}, { flush: 'sync' });
+onBeforeUnmount(() => { opening++; });
 </script>
 
 <template>

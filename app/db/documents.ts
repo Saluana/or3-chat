@@ -123,17 +123,19 @@ async function putDocumentPostRow(
     );
 }
 
-async function deleteDocumentPostRow(db: Or3DB, id: string): Promise<void> {
-    if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
+async function deleteDocumentPostRow(db: Or3DB, id: string, expected: Post): Promise<boolean> {
+    const commit = async () => {
+        if (JSON.stringify(await db.posts.get(id)) !== JSON.stringify(expected)) return false;
         await db.posts.delete(id);
-        return;
+        return true;
+    };
+    if (typeof (db as { transaction?: unknown }).transaction !== 'function') {
+        return commit();
     }
-    await db.transaction(
+    return db.transaction(
         'rw',
         getWriteTxTableNames(db, 'posts', { includeTombstones: true }),
-        async () => {
-            await db.posts.delete(id);
-        }
+        commit
     );
 }
 
@@ -838,10 +840,13 @@ export async function hardDeleteDocumentInDb(db: Or3DB, id: string): Promise<voi
         tableName: DOCUMENT_TABLE,
     };
     await hooks.doAction('db.documents.delete:action:hard:before', payload);
-    await dbRequired(
-        () => deleteDocumentPostRow(db, id),
+    const deleted = await dbRequired(
+        () => deleteDocumentPostRow(db, id, existing),
         { op: 'write', entity: 'posts', action: 'hardDeleteDocument' }
     );
+    if (!deleted) {
+        throw new DocumentConflictError('This document changed while it was being deleted. Nothing was deleted; reload it and try again.');
+    }
     await hooks.doAction('db.documents.delete:action:hard:after', payload);
 }
 

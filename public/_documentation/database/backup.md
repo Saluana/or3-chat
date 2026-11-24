@@ -53,7 +53,7 @@ Choose the destination workspace before importing and keep it selected for the o
 
 Streaming replace validates that every current table is declared before clearing data. Duplicate source primary keys, including file hashes across separate batches, are rejected inside the import transaction; all changes roll back. The overwrite option only permits a source record to replace a destination record, not duplicate source identities. Its import transaction rolls back when the stream is truncated, has unknown record types, lacks a terminal marker, or contains trailing records. Do not generalize those guarantees to every historical format or invent a recovery policy from a partial backup; inspect the actual error and format.
 
-After completion, reopen representative chats and documents and check attachments. Local restore accepts files up to 50 MiB each. A failed streaming restore rolls back the transaction, including Replace clears. Existing oversized local originals are preserved until the user explicitly replaces data. Local archives are not complete Cloud recovery copies.
+If a recognized file hash fails verification during JSONL restore, the import rolls back and keeps the previous original. After completion, reopen representative chats and documents and check attachments. Local restore accepts files up to 50 MiB each. A failed streaming restore rolls back the transaction, including Replace clears. Existing oversized local originals are preserved until the user explicitly replaces data. Local archives are not complete Cloud recovery copies.
 
 ## Integrate backup controls in source UI
 
@@ -67,6 +67,6 @@ canonical Cloud export and its sync wait while retaining account/workspace
 identity checks on Cloud installations. Calling `exportWorkspace()` without
 options keeps the normal Cloud or local behavior.
 
-Methods can report failure through `state.error`/`currentStep` rather than rejecting. A resolved promise alone does not prove success. Preserve the existing before/after/error/cancelled hooks and `workspace:reloaded` event after successful restore. The local stream codec lives in `app/utils/workspace-backup-stream.ts`; the Cloud framing and validation live in `shared/storage/workspace-archive.ts`. Cloud methods select the safe fresh-workspace flow automatically.
+Methods can report failure through `state.error`/`currentStep` rather than rejecting. A resolved promise alone does not prove success. Completion listeners run in registration priority order. A pending or failing listener leaves the finished backup marked successful and the controls available. A committed restore still emits `workspace:reloaded`. The local stream codec lives in `app/utils/workspace-backup-stream.ts`; the Cloud framing and validation live in `shared/storage/workspace-archive.ts`. Cloud methods select the safe fresh-workspace flow automatically.
 
 See [database safety](/documentation/database/safe-changes) and [Cloud recovery](/documentation/cloud/deployment-operations) for their distinct boundaries.

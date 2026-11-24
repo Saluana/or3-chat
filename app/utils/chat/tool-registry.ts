@@ -34,6 +34,7 @@ import type { WorkflowToolRegistrationPolicy } from '~~/shared/chat/workflow-too
 import { getContributionSurfaceSelection } from '~/composables/plugins/contribution-surface-selection';
 import { getContributionSurfaceKernel } from '~/composables/plugins/contribution-surface-kernel';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
+import { getDb, getWorkspaceGeneration } from '~/db/client';
 
 /**
  * `ToolHandler`
@@ -443,8 +444,8 @@ export function useToolRegistry() {
             return { result: null, toolName, error: `Tool "${toolName}" is unavailable for this conversation context.`, timedOut: false };
         }
 
-        const { getDb } = await import('~/db/client');
         const chatDb = getDb();
+        const chatGeneration = getWorkspaceGeneration();
         // Loaded before any handler transaction: awaiting import() inside one loses Dexie's zone.
         const { readChatToolPreferences } = await import('./tool-preferences');
         const isEnabled = async () => {
@@ -522,7 +523,7 @@ export function useToolRegistry() {
         const assertToolAuthorized = async () => {
             if (context?.assertToolAuthorized) await context.assertToolAuthorized();
             context?.abortSignal.throwIfAborted();
-            if (context?.threadId && getDb() !== chatDb)
+            if (context?.threadId && (getDb() !== chatDb || getWorkspaceGeneration() !== chatGeneration))
                 throw new Error('The originating workspace is no longer available.');
             if (getTool(toolName) !== tool
                 || !toolDefinitionEquals(tool.definition, capturedDefinition)

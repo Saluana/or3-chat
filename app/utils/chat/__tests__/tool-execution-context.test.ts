@@ -144,7 +144,7 @@ describe('client tool execution context', () => {
         expect((await getDb().threads.get('thread-1'))?.title).toBe('Authorized mutation');
     });
 
-    it.each(['refused', 'disabled', 'aborted'] as const)('does not execute after bridge validation is %s', async (outcome) => {
+    it.each(['refused', 'disabled', 'aborted', 'returned-workspace'] as const)('does not execute after bridge validation is %s', async (outcome) => {
         const registry = useToolRegistry();
         const definition: ToolDefinition = {
             type: 'function', runtime: 'client',
@@ -160,6 +160,13 @@ describe('client tool execution context', () => {
             if (outcome === 'disabled') await setKvByName(chatToolPreferenceKey('thread-1'),
                 JSON.stringify({ enabled: true, tools: { [definition.function.name]: false } }), getDb());
             if (outcome === 'aborted') abortController.abort();
+            if (outcome === 'returned-workspace') {
+                const otherId = `${workspace}-other`;
+                const other = setActiveWorkspaceDb(otherId);
+                setActiveWorkspaceDb(workspace);
+                evictWorkspaceDb(otherId);
+                await Dexie.delete(other.name);
+            }
         });
         const context: ToolExecutionContext = {
             subject: 'user-1', workspaceId: workspace, threadId: 'thread-1',

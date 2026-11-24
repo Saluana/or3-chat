@@ -383,7 +383,7 @@ test.describe('local document recovery faults', () => {
         await info.attach('late-document-read', { path, contentType: 'application/json' });
     });
 
-    for (const control of ['inline', 'dock', 'all'] as const) test(`AI review ${control} acceptance saves a real worker checkpoint and keeps rich formatting`, async ({ page }, info) => {
+    for (const control of ['inline', 'dock', 'all'] as const) test(`AI review ${control} acceptance saves a recoverable checkpoint and keeps rich formatting`, async ({ page }, info) => {
         const errors: string[] = [];
         const workers: string[] = [];
         page.on('pageerror', error => errors.push(error.message));
@@ -422,21 +422,38 @@ test.describe('local document recovery faults', () => {
                 && Number(strong.fontWeight) > Number(paragraph.fontWeight);
         })).toBe(true);
         await page.screenshot({ path: info.outputPath('formatted-review.png'), animations: 'disabled' });
-        if (control === 'dock') {
-            // A rejected checkpoint must leave the proposal retryable without
-            // mutating the body or leaking the button handler's rejection.
+        if (control === 'inline') {
+            // A transport-only failure uses the loaded codec automatically,
+            // preserving the same before-edit checkpoint without a user retry.
             await page.evaluate(() => {
                 const original = Worker.prototype.postMessage;
+                const fault = { count: 0 };
+                (window as unknown as { revisionWorkerFault: typeof fault }).revisionWorkerFault = fault;
                 Worker.prototype.postMessage = function (...args: Parameters<typeof original>) {
                     if (args[0]?.kind === 'encode') {
                         Worker.prototype.postMessage = original;
+                        fault.count++;
                         throw new DOMException('Synthetic checkpoint transport failure', 'DataCloneError');
                     }
                     return original.apply(this, args);
                 };
             });
+        }
+        if (control === 'dock') {
+            // A rejected checkpoint must leave the proposal retryable without
+            // mutating the body or leaking the button handler's rejection.
+            await page.evaluate(() => {
+                const original = IDBObjectStore.prototype.put;
+                IDBObjectStore.prototype.put = function (...args: Parameters<typeof original>) {
+                    if (this.name === 'current_posts' && args[0]?.postType === 'or3:document-revision') {
+                        IDBObjectStore.prototype.put = original;
+                        throw new DOMException('Synthetic checkpoint storage failure', 'QuotaExceededError');
+                    }
+                    return original.apply(this, args);
+                };
+            });
             await page.locator('.review-accept').click();
-            await expect(page.locator('.document-ai-composer .error-message')).toContainText('Synthetic checkpoint transport failure');
+            await expect(page.locator('.document-ai-composer .error-message')).toContainText('Synthetic checkpoint storage failure');
             await expect(page.getByTestId('persisted-document-body')).toHaveText('Original headingUnchanged body');
             await expect(page.locator('.review-bar')).toBeVisible();
         }
@@ -452,7 +469,9 @@ test.describe('local document recovery faults', () => {
         expect(checkpoint?.content[0]).toMatchObject({ type: 'heading', attrs: { level: 2 }, content: [
             { type: 'text', text: 'Original ' }, { type: 'text', text: 'heading', marks: [{ type: 'italic' }] },
         ] });
-        expect(workers.some(url => url.includes('document-revision.worker'))).toBe(true);
+        if (control === 'inline') {
+            expect(await page.evaluate(() => (window as unknown as { revisionWorkerFault: { count: number } }).revisionWorkerFault.count)).toBe(1);
+        } else expect(workers.some(url => url.includes('document-revision.worker'))).toBe(true);
         expect(errors).toEqual([]);
         await page.reload();
         await expect(body.locator('h2')).toHaveText('Revised heading', { timeout: 45_000 });

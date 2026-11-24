@@ -49,7 +49,9 @@ truncated streams, unsupported line types, and records after the terminal
 marker. A transaction failure rolls back its table changes. Duplicate source primary keys fail across batches in every mode. The importer
 uses the actual table key path, including compound keys, and tracks source
 identities for the current table. Missing or invalid primary keys also fail;
-transaction rollback preserves destination rows. In append mode, destination
+transaction rollback preserves destination rows. Restore checks the original file bytes
+against recognized content hashes before accepting the blob. A mismatch rolls back
+the whole local import, including an in-progress Replace. In append mode, destination
 key conflicts fail unless overwrite is enabled. Overwrite uses record-level
 `bulkPut`; it is not a field-by-field merge.
 

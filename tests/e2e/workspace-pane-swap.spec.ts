@@ -140,7 +140,12 @@ test('restores workspace tabs without adding blank tabs when profiles change', a
     await page.getByRole('button', { name: 'Apply profile', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Active in this workspace' })).toBeVisible();
     await expect(standardProfile).toHaveAttribute('aria-pressed', 'true');
-    await page.getByRole('dialog').getByRole('button', { name: 'Close dashboard', exact: true }).click();
+    // Profile-success notices can cover this corner while they are visible.
+    const closeDashboard = page.getByRole('dialog').getByRole('button', { name: 'Close dashboard', exact: true });
+    await closeDashboard.focus();
+    await expect(closeDashboard).toBeFocused();
+    await closeDashboard.press('Enter');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(tabs).toHaveCount(3, { timeout: 30_000 });
     await expect.poll(() => tabs.allTextContents()).toEqual(originalTabs);
     await expect(page.getByRole('textbox', { name: 'Message input' }).first()).toContainText('Keep this draft through profile changes');

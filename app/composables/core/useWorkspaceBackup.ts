@@ -1,7 +1,7 @@
 import { ref, type Ref } from 'vue';
 import Dexie from 'dexie';
 import { useRuntimeConfig } from '#imports';
-import { getDb } from '~/db/client';
+import { getDb, logicalStoreName } from '~/db/client';
 import { invalidateFirstBindEligibility } from '~/core/sync/history-incarnation';
 import { getCachedSessionContext, useSessionContext } from '~/composables/auth/useSessionContext';
 import { hasCloudAccess } from '~/core/cloud/access';
@@ -10,6 +10,7 @@ import { CLOUD_BACKUP_MAGIC, CloudBackupError, peekCloudBackup } from '~~/shared
 import { STATIC_FILE_CEILING } from '~~/shared/storage/file-policy';
 import { reportError, err, asAppError, type AppError, type ErrorCode } from '~/utils/errors';
 import { useHooks } from '~/core/hooks/useHooks';
+import type { InferHookParams } from '~/core/hooks/hook-types';
 import { useLazyBoundaries } from '~/composables/core/useLazyBoundaries';
 import {
     detectWorkspaceBackupFormat,
@@ -24,6 +25,11 @@ import {
 } from '~/utils/workspace-backup-stream';
 
 export type WorkspaceImportMode = 'replace' | 'append';
+type BackupCompletionAction =
+    | 'workspace.backup.export:action:after'
+    | 'workspace.backup.import:action:after'
+    | 'workspace.backup.peek:action:after'
+    | 'workspace:reloaded';
 
 export interface WorkspaceBackupState {
     isExporting: Ref<boolean>;
@@ -187,6 +193,16 @@ function validateBackupMeta(meta: unknown, database = getDb()): ImportMetadata {
  */
 export function useWorkspaceBackup(): WorkspaceBackupApi {
     const hooks = useHooks();
+    // Committed work no longer depends on observer completion. The engine
+    // invokes every ready listener now, in registry order, and coalesces only
+    // that listener's repeats while its prior invocation is still pending.
+    function notifyCompletion<K extends BackupCompletionAction>(name: K, ...args: InferHookParams<K>): void {
+        try {
+            void hooks._engine._dispatchActionObservers(name, args).catch(error => {
+                console.warn('[workspace-backup] Completion dispatch failed:', name, error);
+            });
+        } catch (error) { console.warn('[workspace-backup] Completion dispatch failed:', name, error); }
+    }
     const cloud = isCloudWorkspaceBackupEnabled();
     const session = cloud ? useSessionContext() : null;
     let appBaseURL = '/';
@@ -404,7 +420,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
             state.currentStep.value = 'done';
             state.progress.value = 100;
 
-            await hooks.doAction('workspace.backup.export:action:after', {
+            notifyCompletion('workspace.backup.export:action:after', {
                 ...exportTelemetry,
                 durationMs: Date.now() - exportStartedAt,
             });
@@ -510,7 +526,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
             state.backupFormat.value = resolvedFormat;
             state.currentStep.value = 'confirm';
 
-            await hooks.doAction('workspace.backup.peek:action:after', {
+            notifyCompletion('workspace.backup.peek:action:after', {
                 ...peekTelemetryBase,
                 format: resolvedFormat,
                 metadata,
@@ -638,9 +654,10 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                     acceptVersionDiff: true, // The preceding validation permits older compatible backups only.
                     chunkSizeBytes: DEFAULT_KILOBYTES_PER_CHUNK,
                     filter: (table: string, row: { blob?: Blob; firstBindEligible?: boolean }) => {
-                        if (table.replace(/^current_/, '') === 'sync_state') row.firstBindEligible = false;
+                        const logicalTable = logicalStoreName(table);
+                        if (logicalTable === 'sync_state') row.firstBindEligible = false;
                         assertImportOrigin();
-                        if (table === 'file_blobs' && row.blob && row.blob.size > STATIC_FILE_CEILING) throw new Error('Local restore cannot import files larger than 50 MiB.');
+                        if (logicalTable === 'file_blobs' && row.blob && row.blob.size > STATIC_FILE_CEILING) throw new Error('Local restore cannot import files larger than 50 MiB.');
                         return true;
                     },
                     progressCallback: (progress: DexieImportProgress) => {
@@ -679,12 +696,12 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
             state.currentStep.value = 'done';
             state.progress.value = 100;
 
-            await hooks.doAction('workspace.backup.import:action:after', {
+            notifyCompletion('workspace.backup.import:action:after', {
                 ...importTelemetry,
                 durationMs: Date.now() - importStartedAt,
             });
 
-            await hooks.doAction('workspace:reloaded');
+            notifyCompletion('workspace:reloaded');
         } catch (e) {
             const error = backupError(e);
             state.error.value = error;

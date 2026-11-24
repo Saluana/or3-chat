@@ -19,6 +19,9 @@ export interface EncodedDocumentRevision {
     chunks: string[];
 }
 
+export type DecodableDocumentRevision = Pick<EncodedDocumentRevision, 'encoding' | 'hash' | 'chunks'>
+    & Partial<Pick<EncodedDocumentRevision, 'originalBytes'>>;
+
 function bytesToBase64Url(bytes: Uint8Array): string {
     let binary = '';
     const stride = 0x8000;
@@ -48,12 +51,30 @@ async function gzip(bytes: Uint8Array): Promise<Uint8Array | null> {
     return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-async function gunzip(bytes: Uint8Array): Promise<Uint8Array> {
+async function gunzip(bytes: Uint8Array, maxBytes: number): Promise<Uint8Array> {
     if (typeof DecompressionStream === 'undefined') {
         throw new Error('This browser cannot decompress this revision.');
     }
     const stream = new Blob([bytes.slice().buffer as ArrayBuffer]).stream().pipeThrough(new DecompressionStream('gzip'));
-    return new Uint8Array(await new Response(stream).arrayBuffer());
+    const reader = stream.getReader();
+    const chunks: Uint8Array[] = [];
+    let length = 0;
+    try {
+        for (;;) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            length += value.byteLength;
+            if (length > maxBytes) {
+                await reader.cancel().catch(() => {});
+                throw new Error('Revision snapshot exceeds its allowed size in bytes.');
+            }
+            chunks.push(value);
+        }
+    } finally { reader.releaseLock(); }
+    const raw = new Uint8Array(length);
+    let offset = 0;
+    for (const chunk of chunks) { raw.set(chunk, offset); offset += chunk.byteLength; }
+    return raw;
 }
 
 export async function encodeDocumentRevision(
@@ -84,12 +105,24 @@ export async function encodeDocumentRevision(
 }
 
 export async function decodeDocumentRevision(
-    encoded: Pick<EncodedDocumentRevision, 'encoding' | 'hash'> & { chunks: string[] }
+    encoded: DecodableDocumentRevision
 ): Promise<DocumentRevisionSnapshot> {
+    // Stored manifests declare their original size. Enforce that bound while
+    // streaming, without introducing a new ceiling for valid large history.
+    const maxBytes = encoded.originalBytes ?? Number.MAX_SAFE_INTEGER;
+    if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
+        throw new Error('Revision snapshot declares an invalid size in bytes.');
+    }
+    if (encoded.chunks.length > 4096 || encoded.chunks.some(chunk => chunk.length > REVISION_CHUNK_MAX_CHARS)) {
+        throw new Error('Encoded revision exceeds its chunk size in bytes.');
+    }
     const payload = base64UrlToBytes(encoded.chunks.join(''));
     const raw = encoded.encoding === 'gzip-base64url'
-        ? await gunzip(payload)
+        ? await gunzip(payload, maxBytes)
         : payload;
+    if (raw.byteLength > maxBytes || (encoded.originalBytes !== undefined && raw.byteLength !== encoded.originalBytes)) {
+        throw new Error('Revision snapshot size does not match its declared bytes.');
+    }
     if (await sha256(raw) !== encoded.hash) {
         throw new Error('Revision checksum does not match its manifest.');
     }

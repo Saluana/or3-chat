@@ -2836,7 +2836,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "d2076be72d9b0615549f2d135a284784517dc753e1d7d485f86c813a8c9c91e5",
+      "apiSha256": "7fc4aa9e89d7cf81b7afddd3e59f19c2d2a2b882218adec69982f663f8893937",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -3046,7 +3046,7 @@
               "resolvedReturnType": "Promise<void>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 196,
+                "line": 199,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function captureDocumentEditor(documentId: string): Promise<void>;"
               }
@@ -3055,7 +3055,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 196,
+              "line": 199,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function captureDocumentEditor(documentId: string): Promise<void>;"
             }
@@ -3698,7 +3698,7 @@
               "resolvedReturnType": "Promise<void>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 214,
+                "line": 217,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function ensureDocumentEditorLocalDurability(\n    documentId: string\n): Promise<void>;"
               }
@@ -3707,7 +3707,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 214,
+              "line": 217,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function ensureDocumentEditorLocalDurability(\n    documentId: string\n): Promise<void>;"
             }
@@ -3776,7 +3776,7 @@
               "resolvedReturnType": "ActiveDocumentEditorSession | undefined",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 296,
+                "line": 299,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getActiveDocumentEditorSession(\n    documentId: string,\n    tabId?: string,\n): ActiveDocumentEditorSession | undefined;"
               }
@@ -3785,7 +3785,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 296,
+              "line": 299,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getActiveDocumentEditorSession(\n    documentId: string,\n    tabId?: string,\n): ActiveDocumentEditorSession | undefined;"
             }
@@ -3854,7 +3854,7 @@
               "resolvedReturnType": "ActiveDocumentEditorSession | undefined",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 158,
+                "line": 161,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function getDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup\n): ActiveDocumentEditorSession | undefined;"
               }
@@ -3863,7 +3863,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 158,
+              "line": 161,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function getDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup\n): ActiveDocumentEditorSession | undefined;"
             }
@@ -3932,7 +3932,7 @@
               "resolvedReturnType": "boolean",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 291,
+                "line": 294,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function hasActiveDocumentEditor(documentId: string): boolean;"
               }
@@ -3941,7 +3941,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 291,
+              "line": 294,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function hasActiveDocumentEditor(documentId: string): boolean;"
             }
@@ -4101,7 +4101,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 48,
+              "line": 54,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ImportMetadata {\n    databaseName: string;\n    databaseVersion: number;\n    tables: Array<{ name: string; rowCount: number }>;\n}"
             }
@@ -4144,7 +4144,7 @@
               "resolvedReturnType": "{ release: () => void; accept: (row: Post) => void; }",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 242,
+                "line": 245,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function leaseWorkspaceDocumentEditors(documentId: string, db: Or3DB,\n    expected: { title: string; content: TipTapDocument }): { release: () => void; accept: (row: Post) => void };"
               }
@@ -4153,7 +4153,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 242,
+              "line": 245,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function leaseWorkspaceDocumentEditors(documentId: string, db: Or3DB,\n    expected: { title: string; content: TipTapDocument }): { release: () => void; accept: (row: Post) => void };"
             }
@@ -6009,7 +6009,7 @@
               "resolvedReturnType": "Promise<void>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 228,
+                "line": 231,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export async function settleWorkspaceDocumentEditors(documentId: string, db: Or3DB): Promise<void>;"
               }
@@ -6018,7 +6018,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 228,
+              "line": 231,
               "syntaxKind": "FunctionDeclaration",
               "text": "export async function settleWorkspaceDocumentEditors(documentId: string, db: Or3DB): Promise<void>;"
             }
@@ -7833,7 +7833,7 @@
               "resolvedReturnType": "WorkspaceBackupApi",
               "declaration": {
                 "source": "app/composables/core/useWorkspaceBackup.ts",
-                "line": 188,
+                "line": 194,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useWorkspaceBackup(): WorkspaceBackupApi;"
               }
@@ -7842,7 +7842,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 188,
+              "line": 194,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useWorkspaceBackup(): WorkspaceBackupApi;"
             }
@@ -7859,7 +7859,7 @@
               "resolvedReturnType": "Promise<ActiveDocumentEditorSession | undefined>",
               "declaration": {
                 "source": "app/composables/documents/useDocumentEditorSessions.ts",
-                "line": 166,
+                "line": 169,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function waitForDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup,\n    timeoutMs = 1_500\n): Promise<ActiveDocumentEditorSession | undefined>;"
               }
@@ -7868,7 +7868,7 @@
           "declarations": [
             {
               "source": "app/composables/documents/useDocumentEditorSessions.ts",
-              "line": 166,
+              "line": 169,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function waitForDocumentEditorSession(\n    lookup: DocumentEditorSessionLookup,\n    timeoutMs = 1_500\n): Promise<ActiveDocumentEditorSession | undefined>;"
             }
@@ -7908,7 +7908,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 54,
+              "line": 60,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface WorkspaceBackupApi {\n    state: WorkspaceBackupState;\n    exportWorkspace(options?: { localOnly?: boolean }): Promise<void>;\n    peekBackup(file: Blob): Promise<void>;\n    importWorkspace(file: Blob): Promise<void>;\n    reset(): void;\n}"
             }
@@ -7922,7 +7922,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 28,
+              "line": 34,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface WorkspaceBackupState {\n    isExporting: Ref<boolean>;\n    isImporting: Ref<boolean>;\n    progress: Ref<number>; // 0-100\n    currentStep: Ref<\n        | 'idle'\n        | 'peeking'\n        | 'confirm'\n        | 'importing'\n        | 'exporting'\n        | 'done'\n        | 'error'\n    >;\n    importMode: Ref<WorkspaceImportMode>;\n    overwriteValues: Ref<boolean>;\n    backupMeta: Ref<ImportMetadata | null>;\n    backupFormat: Ref<'stream' | 'dexie' | 'cloud' | null>;\n    error: Ref<AppError | null>;\n}"
             }
@@ -7936,7 +7936,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useWorkspaceBackup.ts",
-              "line": 26,
+              "line": 27,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type WorkspaceImportMode = 'replace' | 'append';"
             }
@@ -11894,7 +11894,7 @@
     },
     {
       "source": "app/utils/chat/tool-registry.ts",
-      "apiSha256": "a5af40f4ac180b38d3e791bff74900e39cab173aeb676172f3816da3da155758",
+      "apiSha256": "d44960f89d513b4f88e890e37ca30d3929cd634ceb995d7021ce544237c0de0b",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tool-registry"
@@ -11915,7 +11915,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 47,
+              "line": 48,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ContextualToolHandler<TArgs = Record<string, unknown>> = (\n    args: TArgs,\n    context: ToolExecutionContext\n) => Promise<string> | string;"
             }
@@ -11929,7 +11929,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 61,
+              "line": 62,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ExtendedToolDefinition extends ToolDefinition {\n    description?: string; // human-readable summary for toggles or docs\n    icon?: string; // icon identifier (e.g., 'i-mdi:weather-partly-cloudy')\n    category?: string; // grouping category\n    defaultEnabled?: boolean; // default toggle state\n}"
             }
@@ -11943,7 +11943,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 44,
+              "line": 45,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type LegacyToolHandler<TArgs = Record<string, unknown>> = (\n    args: TArgs\n) => Promise<string> | string;"
             }
@@ -11957,7 +11957,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 77,
+              "line": 78,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisteredTool {\n    definition: ExtendedToolDefinition;\n    handler: ContextualToolHandler;\n    enabled: Ref<boolean>;\n    lastError: Ref<string | null>;\n    runtime: ToolRuntime;\n    available?: (context: ToolAvailabilityContext) => boolean;\n    ownerPluginId?: string;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    timeoutMs?: number;\n    /** Removes this exact registration; returns false after replacement/disposal. */\n    dispose: () => boolean;\n    _owner: symbol;\n    _stopWatcher: () => void;\n}"
             }
@@ -11971,7 +11971,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 94,
+              "line": 95,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisterOptions {\n    ownerPluginId?: string;\n    override?: boolean; // allow replacing an existing tool\n    enabled?: boolean; // explicit initial enabled state\n    runtime?: ToolRuntime;\n    /** Optional origin gate, checked both before advertising and before execution. */\n    available?: (context: ToolAvailabilityContext) => boolean;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    /** Host-owned long-running tools may opt into a longer bounded timeout. */\n    timeoutMs?: number;\n}"
             }
@@ -11985,7 +11985,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 93,
+              "line": 94,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolAvailabilityContext { workspaceId: string | null; threadId: string | null }"
             }
@@ -11999,7 +11999,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 53,
+              "line": 54,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolHandler<TArgs = Record<string, unknown>> = ContextualToolHandler<TArgs>;"
             }
@@ -12013,7 +12013,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 115,
+              "line": 116,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolRegistryState {\n    tools: Map<string, RegisteredTool>;\n    storageHydrated: boolean;\n    pendingEnabledStates?: Record<string, boolean>;\n    persistDebounceTimer: NodeJS.Timeout | null;\n}"
             }
@@ -12027,7 +12027,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 68,
+              "line": 69,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type TypedToolDefinition<TArgs extends Record<string, unknown>> =\n    ExtendedToolDefinition & { readonly __toolArgs?: TArgs };"
             }
@@ -12044,7 +12044,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/utils/chat/tool-registry.ts",
-                "line": 257,
+                "line": 258,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useToolRegistry();"
               }
@@ -12053,7 +12053,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 257,
+              "line": 258,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useToolRegistry();"
             }
@@ -12063,7 +12063,7 @@
     },
     {
       "source": "app/utils/chat/tools-public.ts",
-      "apiSha256": "3efe2f03fd11739ea9bf6cd6b6b8f00d6a8edff179cfe1866daa00a680a3bdfa",
+      "apiSha256": "615f8452a511c8169ee3ff8ea925b5acdfa74dccbfccdaae5bf117f044b23a20",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tools-public"
@@ -12108,7 +12108,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 61,
+              "line": 62,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ExtendedToolDefinition extends ToolDefinition {\n    description?: string; // human-readable summary for toggles or docs\n    icon?: string; // icon identifier (e.g., 'i-mdi:weather-partly-cloudy')\n    category?: string; // grouping category\n    defaultEnabled?: boolean; // default toggle state\n}"
             }
@@ -12122,7 +12122,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 77,
+              "line": 78,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface RegisteredTool {\n    definition: ExtendedToolDefinition;\n    handler: ContextualToolHandler;\n    enabled: Ref<boolean>;\n    lastError: Ref<string | null>;\n    runtime: ToolRuntime;\n    available?: (context: ToolAvailabilityContext) => boolean;\n    ownerPluginId?: string;\n    workflowPolicy?: WorkflowToolRegistrationPolicy;\n    timeoutMs?: number;\n    /** Removes this exact registration; returns false after replacement/disposal. */\n    dispose: () => boolean;\n    _owner: symbol;\n    _stopWatcher: () => void;\n}"
             }
@@ -12178,7 +12178,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 53,
+              "line": 54,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolHandler<TArgs = Record<string, unknown>> = ContextualToolHandler<TArgs>;"
             }
@@ -12206,7 +12206,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 68,
+              "line": 69,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type TypedToolDefinition<TArgs extends Record<string, unknown>> =\n    ExtendedToolDefinition & { readonly __toolArgs?: TArgs };"
             }
@@ -12223,7 +12223,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/utils/chat/tool-registry.ts",
-                "line": 257,
+                "line": 258,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useToolRegistry();"
               }
@@ -12232,7 +12232,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/tool-registry.ts",
-              "line": 257,
+              "line": 258,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useToolRegistry();"
             }

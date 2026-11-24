@@ -48,6 +48,26 @@ function createHost(): {
 }
 
 describe('useWorkspaceTabs', () => {
+    it('keeps the pending bind alive when the user reselects its loading tab', async () => {
+        const fake = createHost();
+        let finish!: () => void;
+        fake.host.bindResourceToPane = async (paneId, resource, activation) => {
+            await new Promise<void>(resolve => { finish = resolve; });
+            if (activation.isCurrent()) fake.bindings.set(paneId, resource);
+        };
+        const tabs = useWorkspaceTabs({ host: fake.host, paneLimit: ref(3), isMobile: ref(false),
+            workspaceId: () => 'local', profileId: () => 'standard', storage: null });
+        const resource = { kind: 'document', documentId: 'loading-document' } as const;
+        const opening = tabs.openResource(resource);
+        const tabId = tabs.activeTabId.value;
+        await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+        expect(await tabs.activateTab(tabId)).toBe(true);
+        finish();
+        expect(await opening).toMatchObject({ status: 'activated', tabId });
+        expect(fake.bindings.get('pane-a')).toEqual(resource);
+        expect(tabs.statusByTabId.value.get(tabId)).toBe('idle');
+    });
+
     // Delayed menu/plugin callbacks can retain the API after the shell unmounts.
     // Retirement must protect the host too, not just suppress manifest commits.
     it.each(['new-split', 'open-split', 'split-hidden', 'background', 'close-tab', 'close-split', 'restore', 'switch-scope'] as const)(

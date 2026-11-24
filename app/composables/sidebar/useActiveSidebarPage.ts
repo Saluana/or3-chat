@@ -48,6 +48,7 @@ interface ActiveSidebarPageState {
     previousPageId: ReturnType<typeof ref<string | null>>;
     initialRequestedPageId: string | null;
     isInitialized: boolean;
+    activationGeneration: number;
 }
 
 const g = globalThis as {
@@ -73,6 +74,7 @@ function createActiveSidebarPageState(): ActiveSidebarPageState {
         previousPageId: ref<string | null>(null),
         initialRequestedPageId,
         isInitialized: false, // Track if we've run the mount logic
+        activationGeneration: 0,
     };
 }
 
@@ -112,6 +114,12 @@ export async function setActiveSidebarPage(id: string): Promise<boolean> {
     const activeProfileDefaultPage = () => workspaceProfileDefaultPage(isMobile.value);
 
     if (!process.client) return false;
+    // Page-owned guards/hooks may await. Only the newest request may publish
+    // selection, persistence, or rollback after those hooks finish.
+    const generation = (state.activationGeneration ?? 0) + 1;
+    state.activationGeneration = generation;
+    const isCurrent = () => g.__or3ActiveSidebarPageState === state &&
+        state.activationGeneration === generation;
     const nextPage =
         (activeProfilePageIds().includes(id) ? getSidebarPage(id) : undefined) ||
         getSidebarPage(activeProfileDefaultPage()) ||
@@ -142,9 +150,11 @@ export async function setActiveSidebarPage(id: string): Promise<boolean> {
         if (nextPage.canActivate) {
             try {
                 const admission = await Promise.resolve(nextPage.canActivate(ctx));
+                if (!isCurrent()) return false;
                 if (admission === 'handled') return true;
                 if (!admission) return false;
             } catch (guardError) {
+                if (!isCurrent()) return false;
                 console.error(`[useActiveSidebarPage] canActivate hook failed for ${id}:`, guardError);
                 await hooks.doAction('ui.sidebar.page:action:load-error', {
                     pageId: id, error: guardError, phase: 'canActivate',
@@ -156,18 +166,22 @@ export async function setActiveSidebarPage(id: string): Promise<boolean> {
             try {
                 await Promise.resolve(currentPage.onDeactivate(ctx));
             } catch (deactivateError) {
+                if (!isCurrent()) return false;
                 console.error(`[useActiveSidebarPage] onDeactivate hook failed for ${currentPage.id}:`, deactivateError);
                 await hooks.doAction('ui.sidebar.page:action:load-error', {
                     pageId: currentPage.id, error: deactivateError, phase: 'onDeactivate',
                 });
             }
         }
+        if (!isCurrent()) return false;
         previousPageId.value = activePageId.value;
         activePageId.value = nextPage.id;
         if (nextPage.onActivate) {
             try {
                 await Promise.resolve(nextPage.onActivate(ctx));
+                if (!isCurrent()) return false;
             } catch (activateError) {
+                if (!isCurrent()) return false;
                 console.error(`[useActiveSidebarPage] onActivate hook failed for ${id}:`, activateError);
                 activePageId.value = previousPageIdSnapshot;
                 await hooks.doAction('ui.sidebar.page:action:load-error', {
@@ -178,8 +192,9 @@ export async function setActiveSidebarPage(id: string): Promise<boolean> {
         }
         storedActivePageId.value = nextPage.id;
         await hooks.doAction('ui.sidebar.page:action:open', { id: nextPage.id, page: nextPage });
-        return true;
+        return isCurrent();
     } catch (error) {
+        if (!isCurrent()) return false;
         console.error('[useActiveSidebarPage] Unexpected error during page activation:', error);
         activePageId.value = previousPageIdSnapshot;
         await hooks.doAction('ui.sidebar.page:action:load-error', {

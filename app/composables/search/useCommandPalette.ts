@@ -200,7 +200,21 @@ async function ensureCoordinator(): Promise<PaletteCoordinator> {
             return created;
         })();
     }
-    return coordinatorPromise;
+    const pending = coordinatorPromise;
+    try {
+        return await pending;
+    } catch (error) {
+        // A failed optional chunk load must not poison every subsequent open.
+        // Disposal or a newer load may already own a different promise.
+        if (coordinatorPromise === pending) coordinatorPromise = null;
+        throw error;
+    }
+}
+
+function onCoordinatorLoadFailure(): void {
+    if (!isOpen.value || coordinator) return;
+    loading.value = false;
+    errorMessage.value = 'Search could not start. Close and reopen search to retry.';
 }
 
 /** Release coordinator resources. Used by tests and full teardown. */
@@ -394,7 +408,7 @@ function open(): void {
         if (!isOpen.value || instance !== coordinator) return;
         applySnapshot(instance.getSnapshot());
         instance.setQuery(query.value);
-    })();
+    })().catch(onCoordinatorLoadFailure);
 }
 
 // The query and results stay while the dialog fades out; resetting them on
@@ -437,7 +451,7 @@ function setQuery(next: string): void {
         const instance = coordinator ?? (await ensureCoordinator());
         if (instance !== coordinator || query.value !== next) return;
         instance.setQuery(next);
-    })();
+    })().catch(onCoordinatorLoadFailure);
 }
 
 /** Pointer-driven selection: ignored while a keyboard selection holds the lock. */

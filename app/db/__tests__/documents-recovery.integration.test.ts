@@ -3,7 +3,7 @@ import Dexie from 'dexie';
 import { Blob as NodeBlob } from 'node:buffer';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { setActiveWorkspaceDb, evictWorkspaceDb, type Or3DB } from '~/db/client';
-import { createDocumentInDb, getDocumentInDb, listDocuments, updateDocumentInDb } from '~/db/documents';
+import { createDocumentInDb, DocumentConflictError, getDocumentInDb, hardDeleteDocumentInDb, listDocuments, updateDocumentInDb } from '~/db/documents';
 import { loadDocument, useDocumentState } from '~/composables/documents/useDocumentsStore';
 import { prepareDocumentRevision, pruneDocumentRevisions, listCompleteDocumentRevisions } from '~/db/document-revisions';
 import { createHookEngine } from '~/core/hooks/hooks';
@@ -40,6 +40,21 @@ it('lists readable documents when another document cannot be read', async () => 
     expect((await listDocuments()).map((doc) => doc.id)).toEqual([readable.id]);
     await expect(getDocumentInDb(db, broken.id)).rejects.toThrow(/cannot be read/);
     expect((await db.posts.get(broken.id))?.content).toBe('{not json');
+});
+
+it('refuses permanent deletion when a newer document edit commits during its hook', async () => {
+    const document = await createDocumentInDb(db, { title: 'Keep this work', content: content('Original') });
+    let release!: () => void;
+    let entered!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    hooks.addAction('db.documents.delete:action:hard:before', async () => { entered(); await gate; });
+    const deletion = hardDeleteDocumentInDb(db, document.id);
+    await started;
+    await updateDocumentInDb(db, document.id, { content: content('New edit in another pane') });
+    release();
+    await expect(deletion).rejects.toBeInstanceOf(DocumentConflictError);
+    expect((await getDocumentInDb(db, document.id))?.content).toEqual(content('New edit in another pane'));
 });
 
 it('never deletes an unrelated post named by a malformed revision', async () => {
