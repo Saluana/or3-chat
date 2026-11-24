@@ -322,9 +322,9 @@ test.describe('iOS keyboard scrolling', () => {
     });
 });
 
-test('opens only one palette after a missing document redirects to chat', async ({ page }) => {
+test('opens only one palette after a missing document returns to documents', async ({ page }) => {
     await page.goto('/docs/launch-qa-missing-document');
-    await expect(page).toHaveURL(/\/chat(?:\?|$)/);
+    await expect(page).toHaveURL(/\/docs(?:\?|$)/);
     const welcomeDismiss = page.getByRole('button', { name: 'Dismiss welcome', exact: true });
     while (await welcomeDismiss.count()) await welcomeDismiss.last().click();
     await page.getByRole('button', { name: 'Open command palette' }).click();
@@ -356,7 +356,7 @@ test('a palette-selected prompt applies to and survives reload of a blank chat',
     await expect(page.getByRole('button', { name: 'System prompt for this chat' })).toContainText('Palette prompt QA');
     await page.reload();
     const welcomeDismiss = page.getByRole('button', { name: 'Dismiss welcome', exact: true });
-    await expect(welcomeDismiss.first()).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Message input', exact: true })).toBeVisible();
     while (await welcomeDismiss.count()) await welcomeDismiss.last().click();
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await expect(page.getByRole('button', { name: 'System prompt for this chat' })).toContainText('Palette prompt QA');
@@ -393,6 +393,7 @@ test('search and open mentions follow renames, content edits, deletion, and work
     }, seed);
     await expect(mentions.getByRole('option', { name: /Orchid/ })).toHaveCount(0);
     await input.fill('@');
+    await mentions.getByPlaceholder('Search mentions…').click();
     await mentions.getByPlaceholder('Search mentions…').fill('Cobalt');
     await expect(mentions.getByPlaceholder('Search mentions…')).toBeFocused();
     await expect(mentions.getByRole('option', { name: /Cobalt renamed/ })).toBeVisible();

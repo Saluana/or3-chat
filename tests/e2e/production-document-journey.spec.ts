@@ -19,6 +19,8 @@ test.describe('local document recovery faults', () => {
     });
 
     async function imageRows(page: Page) {
+        // Native IndexedDB bypasses Dexie's logical aliases; inspect the
+        // activated v32 namespace rather than retained legacy stores.
         return page.evaluate(async () => {
             let meta = 0; let blobs = 0; let referenced = false;
             for (const { name } of await indexedDB.databases()) {
@@ -26,16 +28,17 @@ test.describe('local document recovery faults', () => {
                 const db = await new Promise<IDBDatabase>((resolve, reject) => {
                     const open = indexedDB.open(name); open.onsuccess = () => resolve(open.result); open.onerror = () => reject(open.error);
                 });
-                if (['file_meta', 'file_blobs', 'posts'].every(table => db.objectStoreNames.contains(table))) {
-                    const tx = db.transaction(['file_meta', 'file_blobs', 'posts'], 'readonly');
-                    const rows = <T>(table: string) => new Promise<T[]>((resolve, reject) => {
-                        const request = tx.objectStore(table).getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
-                    });
-                    const [files, bytes, documents] = await Promise.all([rows<{ hash: string }>('file_meta'), rows('file_blobs'), rows<{ file_hashes?: string }>('posts')]);
-                    meta += files.length; blobs += bytes.length;
-                    referenced ||= files.some(file => documents.some(document => document.file_hashes?.includes(file.hash)));
-                }
-                db.close();
+                try {
+                    if (['current_file_meta', 'current_file_blobs', 'current_posts'].every(table => db.objectStoreNames.contains(table))) {
+                        const tx = db.transaction(['current_file_meta', 'current_file_blobs', 'current_posts'], 'readonly');
+                        const rows = <T>(table: string) => new Promise<T[]>((resolve, reject) => {
+                            const request = tx.objectStore(table).getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                        });
+                        const [files, bytes, documents] = await Promise.all([rows<{ hash: string }>('current_file_meta'), rows('current_file_blobs'), rows<{ file_hashes?: string }>('current_posts')]);
+                        meta += files.length; blobs += bytes.length;
+                        referenced ||= files.some(file => documents.some(document => document.file_hashes?.includes(file.hash)));
+                    }
+                } finally { db.close(); }
             }
             return { meta, blobs, referenced };
         });
@@ -124,8 +127,9 @@ test.describe('local document recovery faults', () => {
                     const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
                 });
                 try {
+                    if (!db.objectStoreNames.contains('current_posts')) continue;
                     const row = await new Promise<{ content: string } | undefined>((resolve, reject) => {
-                        const request = db.transaction('posts').objectStore('posts').get(documentId);
+                        const request = db.transaction('current_posts').objectStore('current_posts').get(documentId);
                         request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
                     });
                     if (row) {
@@ -184,7 +188,7 @@ test.describe('local document recovery faults', () => {
         await page.evaluate(() => {
             const original = IDBObjectStore.prototype.put;
             IDBObjectStore.prototype.put = function (...args: Parameters<typeof original>) {
-                if (this.name === 'file_blobs') throw new DOMException('Synthetic image intake quota', 'QuotaExceededError');
+                if (this.name === 'current_file_blobs') throw new DOMException('Synthetic image intake quota', 'QuotaExceededError');
                 return original.apply(this, args);
             };
             (window as unknown as { restoreImageIntake: () => void }).restoreImageIntake = () => { IDBObjectStore.prototype.put = original; };
@@ -212,7 +216,7 @@ test.describe('local document recovery faults', () => {
             const original = IDBObjectStore.prototype.put;
             let writes = 0;
             IDBObjectStore.prototype.put = function (...args: Parameters<typeof original>) {
-                if (this.name === 'file_blobs' && ++writes === 2) {
+                if (this.name === 'current_file_blobs' && ++writes === 2) {
                     throw new DOMException('Synthetic second image quota', 'QuotaExceededError');
                 }
                 return original.apply(this, args);
@@ -239,13 +243,15 @@ test.describe('local document recovery faults', () => {
                 const db = await new Promise<IDBDatabase>((resolve, reject) => {
                     const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
                 });
-                const tx = db.transaction(['file_meta', 'posts'], 'readonly');
-                const rows = <T>(table: string) => new Promise<T[]>((resolve, reject) => {
-                    const request = tx.objectStore(table).getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
-                });
-                const [files, documents] = await Promise.all([rows<{ hash: string }>('file_meta'), rows<{ file_hashes?: string }>('posts')]);
-                results.push({ files: files.length, allReferenced: files.every(file => documents.some(document => document.file_hashes?.includes(file.hash))) });
-                db.close();
+                try {
+                    if (!['current_file_meta', 'current_posts'].every(table => db.objectStoreNames.contains(table))) continue;
+                    const tx = db.transaction(['current_file_meta', 'current_posts'], 'readonly');
+                    const rows = <T>(table: string) => new Promise<T[]>((resolve, reject) => {
+                        const request = tx.objectStore(table).getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+                    });
+                    const [files, documents] = await Promise.all([rows<{ hash: string }>('current_file_meta'), rows<{ file_hashes?: string }>('current_posts')]);
+                    results.push({ files: files.length, allReferenced: files.every(file => documents.some(document => document.file_hashes?.includes(file.hash))) });
+                } finally { db.close(); }
             }
             return results;
         });
@@ -262,7 +268,7 @@ test.describe('local document recovery faults', () => {
         await page.evaluate(() => {
             const put = IDBObjectStore.prototype.put;
             IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
-                if (this.name === 'posts') throw new DOMException('Synthetic document reference quota', 'QuotaExceededError');
+                if (this.name === 'current_posts') throw new DOMException('Synthetic document reference quota', 'QuotaExceededError');
                 return put.apply(this, args);
             };
             (window as unknown as { restoreDocumentReferencePut: () => void }).restoreDocumentReferencePut = () => { IDBObjectStore.prototype.put = put; };
@@ -525,7 +531,7 @@ test.describe('local document recovery faults', () => {
         await page.evaluate((fault) => {
             const original = IDBObjectStore.prototype.put;
             IDBObjectStore.prototype.put = function (...args: Parameters<typeof original>) {
-                if (this.name !== 'posts') return original.apply(this, args);
+                if (this.name !== 'current_posts') return original.apply(this, args);
                 if (fault === 'quota') throw new DOMException('Synthetic storage full', 'QuotaExceededError');
                 const request = original.apply(this, args);
                 this.transaction.abort();
@@ -711,7 +717,7 @@ test.describe('local document recovery faults', () => {
             await other.evaluate(() => {
                 const original = IDBObjectStore.prototype.put;
                 IDBObjectStore.prototype.put = function (...args: Parameters<typeof original>) {
-                    if (this.name === 'posts') throw new DOMException('Synthetic pending draft', 'QuotaExceededError');
+                    if (this.name === 'current_posts') throw new DOMException('Synthetic pending draft', 'QuotaExceededError');
                     return original.apply(this, args);
                 };
                 (window as unknown as { restoreRecoveryPut: () => void }).restoreRecoveryPut = () => { IDBObjectStore.prototype.put = original; };
