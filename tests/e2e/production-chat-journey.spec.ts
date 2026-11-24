@@ -1620,11 +1620,11 @@ test('compaction lossy confirmation shows its estimate and preserves full saved 
     });
     const before = await read(); expect(before.rows.length).toBe(5);
     await input.fill('journey:lossy'); await page.getByRole('button', { name: 'Send message', exact: true }).click();
-    const inspect = page.getByRole('button', { name: 'Inspect lossy send', exact: true }); await expect(inspect).toBeVisible();
+    const inspect = page.getByRole('button', { name: 'Review messages to leave out', exact: true }); await expect(inspect).toBeVisible();
     expect(await read()).toEqual(before); await expect(input).toHaveText('journey:lossy');
     await inspect.click();
     const confirm = page.getByRole('button', { name: 'Send with these omissions', exact: true }); await expect(confirm).toBeVisible();
-    await expect(page.getByText(/Estimated input after omissions/)).toBeVisible();
+    await expect(page.getByText(/Estimated memory use after leaving out messages/)).toBeVisible();
     await expect(page.getByText('The original history stays saved. This request excludes only the entries below.')).toBeVisible();
     await expect(page.getByRole('list', { name: 'Messages omitted from this request' })).toBeVisible();
     expect(await read()).toEqual(before);
@@ -1640,7 +1640,7 @@ test('compaction lossy confirmation shows its estimate and preserves full saved 
     await page.getByRole('button', { name: 'Send message', exact: true }).click(); await expect(inspect).toBeVisible();
     await inspect.click(); await expect(confirm).toBeVisible(); await confirm.click();
     await expect.poll(async () => (await read()).requests.length).toBe(1);
-    await expect(page.getByRole('button', { name: 'Stop response', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Stop generation', exact: true })).toHaveCount(0);
     await expect(input).toBeEmpty(); const after = await read();
     expect(after.rows.filter((row) => before.rows.some((original) => original.id === row.id))).toEqual(before.rows);
     expect(after.rows.filter((row) => !before.rows.some((original) => original.id === row.id) && row.role === 'user')).toHaveLength(1);
