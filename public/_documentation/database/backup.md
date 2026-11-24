@@ -31,6 +31,11 @@ reported as an export error.
 
 An export stays bound to the workspace selected when you chose **Export**, including while hooks, the save picker, or the streaming fallback are loading. Switching workspaces during that wait does not retarget the export.
 
+Local backups support original files up to 50 MiB each. Export stops if it
+finds a larger original and identifies the affected file. Use a Cloud backup
+if available. To retry a local export, keep the original separately before
+removing it from the workspace.
+
 On a Cloud installation, a local recovery export can preserve this browser's
 records and locally available originals even when failed sync writes prevent a
 complete Cloud backup. It does not wait for sync or download remote-only files.
@@ -43,7 +48,7 @@ Keep the downloaded file in a safe place. Backups can contain private conversati
 
 Choose a backup file; the page validates it and shows its size, table count, and row count. Import mode choices appear only after a file validates. The importer recognizes stream backups and supported older Dexie backup files. Use the same or a newer compatible application schema; backups from a newer database version can be rejected.
 
-Choose the destination workspace before importing and keep it selected for the operation. Import captures the selected destination, mode, and overwrite setting when it starts; later control changes cannot turn Append into Replace. An account or workspace change during preparation stops the import. The backup workflow uses the captured browser database; a backup's filename does not authorize or select a Cloud workspace.
+Choose the destination workspace before importing and keep it selected for the operation. Import captures the selected destination, mode, and overwrite setting when it starts. Later control changes cannot turn Append into Replace. If you change account or workspace before a local import commits, its changes roll back. The backup workflow uses the captured browser database. A backup's filename does not authorize or select a Cloud workspace.
 
 | Mode | Effect |
 | --- | --- |

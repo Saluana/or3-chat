@@ -4,6 +4,7 @@ import Dexie, { type Table } from 'dexie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Or3DB, logicalStoreName } from '~/db/client';
 import { computeHashHex } from '~/utils/hash';
+import { STATIC_FILE_CEILING } from '~~/shared/storage/file-policy';
 import {
     importWorkspaceStream,
     streamWorkspaceExport,
@@ -11,6 +12,12 @@ import {
     WORKSPACE_BACKUP_FORMAT,
     WORKSPACE_BACKUP_VERSION,
 } from '~/utils/workspace-backup-stream';
+
+// Exercise both sides of the byte boundary with real blobs at test scale.
+vi.mock('~~/shared/storage/file-policy', async load => ({
+    ...(await load<typeof import('~~/shared/storage/file-policy')>()),
+    STATIC_FILE_CEILING: 64 * 1024,
+}));
 
 interface TestRow {
     id: string;
@@ -100,6 +107,68 @@ describe('workspace backup export reliability', () => {
     });
     afterEach(() => {
         vi.unstubAllGlobals();
+    });
+    it.each(['file', 'download'] as const)('rejects an original above the restore limit from the %s export and round-trips an original at the limit', async sink => {
+        const db = new Or3DB(`backup-export-limit-${crypto.randomUUID()}`);
+        databases.push(db);
+        const oversized = createBlob([new Uint8Array(STATIC_FILE_CEILING + 1)]);
+        const original = createBlob([new Uint8Array(STATIC_FILE_CEILING).fill(37)]);
+        const oversizedHash = `sha256:${await computeHashHex(oversized, 'sha256')}`;
+        const originalHash = `sha256:${await computeHashHex(original, 'sha256')}`;
+        await db.open();
+        await db.file_blobs.put({ hash: oversizedHash, blob: oversized });
+        if (sink === 'file') await db.file_meta.put({
+            hash: oversizedHash,
+            name: 'large-original.pdf',
+            kind: 'pdf',
+            mime_type: 'application/pdf',
+            size_bytes: oversized.size,
+            ref_count: 1,
+            created_at: 1,
+            updated_at: 1,
+            clock: 1,
+            deleted: false,
+        });
+        const chunks: Uint8Array[] = [];
+        const destination = {
+            async write(chunk: Uint8Array) { chunks.push(chunk); },
+            close: vi.fn(async () => {}),
+            abort: vi.fn(async (_reason: unknown) => {}),
+        };
+        const exportToDestination = () => sink === 'file'
+            ? streamWorkspaceExport({
+                db,
+                fileHandle: { createWritable: async () => destination } as unknown as FileSystemFileHandle,
+            })
+            : streamWorkspaceExportToWritable({
+                db,
+                writable: new WritableStream(destination).getWriter(),
+            });
+
+        const expectedIdentity = sink === 'file' ? 'large-original.pdf' : oversizedHash;
+        await expect(exportToDestination()).rejects.toThrow(expectedIdentity);
+        const reason = destination.abort.mock.calls[0]?.[0] as Error | undefined;
+        expect(reason?.message).toContain('65,537 bytes');
+        expect(destination.close).not.toHaveBeenCalled();
+        expect(await createBlob(chunks).text()).not.toContain('{"type":"end"}');
+        expect((await db.file_blobs.get(oversizedHash))?.blob.size).toBe(oversized.size);
+
+        chunks.length = 0;
+        await db.file_blobs.delete(oversizedHash);
+        await db.file_meta.delete(oversizedHash);
+        await db.file_blobs.put({ hash: originalHash, blob: original });
+        await exportToDestination();
+        expect(destination.close).toHaveBeenCalledOnce();
+        await db.file_blobs.delete(originalHash);
+        await importWorkspaceStream({
+            db,
+            file: createBlob(chunks),
+            clearTables: true,
+            overwriteValues: true,
+        });
+        const restored = await db.file_blobs.get(originalHash);
+        expect(restored?.blob.size).toBe(STATIC_FILE_CEILING);
+        await expect(computeHashHex(restored!.blob, 'sha256')).resolves.toBe(originalHash.slice('sha256:'.length));
     });
     it.each(['sha256', 'md5', 'bare-md5'] as const)('verifies %s original bytes and rolls back a corrupted replacement', async algorithm => {
         const db = new Or3DB(`backup-checksum-${crypto.randomUUID()}`);

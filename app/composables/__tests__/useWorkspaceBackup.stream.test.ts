@@ -2,11 +2,13 @@ import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Blob as NodeBlob } from 'node:buffer';
 import Dexie from 'dexie';
+import { watch } from 'vue';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine, type TypedHookEngine } from '~/core/hooks/typed-hooks';
 
 const backupContext = vi.hoisted(() => ({
     db: null as Dexie | null,
+    workspaceGeneration: 0,
     cloud: false,
     session: null as { authenticated: boolean; user: { id: string }; workspace: { id: string } } | null,
     doAction: vi.fn<(name: string, ...args: unknown[]) => Promise<void>>(),
@@ -116,6 +118,7 @@ vi.mock('~/db/client', async importOriginal => {
         ...(await importOriginal<typeof import('~/db/client')>()),
         db: mockDb,
         getDb: () => backupContext.db ?? mockDb,
+        getWorkspaceGeneration: () => backupContext.workspaceGeneration,
     };
 });
 
@@ -192,6 +195,7 @@ describe('useWorkspaceBackup stream export', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         backupContext.db = null;
+        backupContext.workspaceGeneration = 0;
         backupContext.cloud = false;
         backupContext.session = null;
         backupContext.doAction.mockReset();
@@ -313,6 +317,65 @@ describe('useWorkspaceBackup stream export', () => {
         const calls = createWriteStream.mock.calls as unknown as Array<[string]>;
         expect(calls[0]?.[0]).toMatch(/\.or3\.jsonl$/);
         expect(streamWorkspaceExportToWritable).toHaveBeenCalledOnce();
+    });
+
+    it('leaves the selected file untouched when Cloud local recovery returns to an obsolete workspace selection', async () => {
+        backupContext.cloud = true;
+        const entered = deferred();
+        const release = deferred();
+        const createWritable = vi.fn();
+        Object.defineProperty(window, 'showSaveFilePicker', { configurable: true, value: async () => {
+            entered.resolve();
+            await release.promise;
+            return { createWritable };
+        } });
+        const { useWorkspaceBackup } = await import('../core/useWorkspaceBackup');
+        const { streamWorkspaceExport } = await import('~/utils/workspace-backup-stream');
+        const backup = useWorkspaceBackup();
+
+        const exporting = backup.exportWorkspace({ localOnly: true });
+        await entered.promise;
+        // The database object is reused when switching away and back.
+        backupContext.workspaceGeneration += 2;
+        release.resolve();
+        await exporting;
+
+        expect(backup.state.currentStep.value).toBe('error');
+        expect(backup.state.error.value?.message).toMatch(/account or workspace changed/i);
+        expect(streamWorkspaceExport).not.toHaveBeenCalled();
+    });
+
+    it('rolls back a streamed import if the account changes before the final read finishes', async () => {
+        const { db, file } = await importFixture('stream');
+        backupContext.session = { authenticated: true, user: { id: 'original-user' }, workspace: { id: 'original-workspace' } };
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const trailer = deferred();
+        Object.defineProperty(file, 'stream', { value: () => new ReadableStream<Uint8Array>({
+            start(controller) { controller.enqueue(bytes); },
+            async pull(controller) {
+                await trailer.promise;
+                controller.close();
+            },
+        }) });
+        const { useWorkspaceBackup } = await import('../core/useWorkspaceBackup');
+        const backup = useWorkspaceBackup();
+        const stop = watch(backup.state.progress, progress => {
+            if (progress !== 100) return;
+            backupContext.session!.user.id = 'other-user';
+            trailer.resolve();
+        }, { flush: 'sync' });
+
+        try {
+            await within(backup.importWorkspace(file));
+        } finally {
+            stop();
+            trailer.resolve();
+        }
+
+        expect(backup.state.currentStep.value).toBe('error');
+        expect(backup.state.error.value?.message).toMatch(/account or workspace changed/i);
+        expect(await db.table('messages').toArray()).toEqual([{ id: 'existing', text: 'Keep this message' }]);
+        expect(await db.table('sync_state').get('sync_history')).toMatchObject({ firstBindEligible: true });
     });
 
     it.each(['file_blobs', 'current_file_blobs'])('rejects oversized originals from Dexie table %s without replacing data', async table => {
