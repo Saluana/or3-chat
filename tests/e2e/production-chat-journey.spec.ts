@@ -1299,14 +1299,14 @@ test('compaction chat memory lives under system prompt in settings, with working
     await expect(page.locator('[data-compaction-card]')).toBeVisible();
     await expect(page.locator('#chat-input-main [data-context-actions]')).toHaveCount(0);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    const memory = page.getByRole('region', { name: 'Context & compaction', exact: true });
+    const memory = page.getByRole('region', { name: 'Conversation memory', exact: true });
     await expect(memory).toBeVisible();
-    await memory.getByRole('button', { name: /^Context & compaction/ }).click();
-    await expect(memory.getByRole('button', { name: 'Compact', exact: true })).toBeVisible();
+    await memory.getByRole('button', { name: /^Conversation memory/ }).click();
+    await expect(memory.getByRole('button', { name: 'Summarize', exact: true })).toBeVisible();
     await expect(memory.getByRole('button', { name: 'Chat memory details' })).toHaveCount(0);
     await expect(memory).not.toContainText('auto-compaction off');
     await expect(memory.getByRole('meter', { name: 'Estimated context used' })).toBeVisible();
-    const automatic = memory.getByRole('switch', { name: 'Auto-compact when context is high' });
+    const automatic = memory.getByRole('switch', { name: 'Summarize automatically' });
     await expect(automatic).not.toBeChecked(); await automatic.click(); await expect(automatic).toBeChecked();
     const before = await settledCompactionSummaryId(page);
     await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
@@ -1323,7 +1323,7 @@ test('compaction chat memory lives under system prompt in settings, with working
     await expect.poll(() => compactionSummaryId(page), { timeout: COMPACTION_NAVIGATION_TIMEOUT }).toBe(before);
     await page.getByRole('textbox', { name: 'Message input' }).fill(draft);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    if (await memory.getByRole('button', { name: /^Context & compaction/ }).getAttribute('aria-expanded') === 'false') await memory.getByRole('button', { name: /^Context & compaction/ }).click();
+    if (await memory.getByRole('button', { name: /^Conversation memory/ }).getAttribute('aria-expanded') === 'false') await memory.getByRole('button', { name: /^Conversation memory/ }).click();
     await expect(automatic).toBeChecked();
     await expect(memory.locator('[data-context-indicator]')).toHaveAttribute('aria-busy', 'false');
     expect(Number(await memory.getByRole('meter').getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(80);
@@ -1343,12 +1343,12 @@ test('auto-compaction threshold slider follows the toggle and persists 10 percen
     await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 60_000 });
     const openSettings = async () => {
         await page.getByRole('button', { name: 'Settings', exact: true }).click();
-        await page.getByRole('button', { name: /^Context & compaction/ }).click();
+        await page.getByRole('button', { name: /^Conversation memory/ }).click();
     };
     await openSettings();
-    const memory = page.getByRole('region', { name: 'Context & compaction', exact: true });
-    const automatic = memory.getByRole('switch', { name: 'Auto-compact when context is high' });
-    const slider = memory.getByRole('slider', { name: 'Compact at context usage' });
+    const memory = page.getByRole('region', { name: 'Conversation memory', exact: true });
+    const automatic = memory.getByRole('switch', { name: 'Summarize automatically' });
+    const slider = memory.getByRole('slider', { name: 'Summarize when memory reaches' });
     await expect(slider).toHaveCount(0);
     await automatic.click();
     await expect(slider).toHaveAttribute('aria-valuenow', '80');
@@ -1383,9 +1383,9 @@ test('compaction composer meter updates configuration, media and accessible warn
     await page.route('**openrouter.ai/**', (route) => route.abort());
     await page.goto(`${chatPage}?compaction=1&meter=1`);
     const input = page.getByRole('textbox', { name: 'Message input' }); await expect(input).toBeVisible({ timeout: 60_000 });
-    const memory = page.getByRole('region', { name: 'Context & compaction', exact: true });
+    const memory = page.getByRole('region', { name: 'Conversation memory', exact: true });
     const indicator = memory.locator('[data-context-indicator]'); const meter = indicator.getByRole('meter', { name: 'Estimated context used' });
-    const settle = async () => { if (!await memory.isVisible()) await page.getByRole('button', { name: 'Settings', exact: true }).click(); if (await memory.getByRole('button', { name: /^Context & compaction/ }).getAttribute('aria-expanded') === 'false') await memory.getByRole('button', { name: /^Context & compaction/ }).click(); await expect(indicator).toHaveAttribute('aria-busy', 'false'); await expect(meter).toBeVisible(); };
+    const settle = async () => { if (!await memory.isVisible()) await page.getByRole('button', { name: 'Settings', exact: true }).click(); if (await memory.getByRole('button', { name: /^Conversation memory/ }).getAttribute('aria-expanded') === 'false') await memory.getByRole('button', { name: /^Conversation memory/ }).click(); await expect(indicator).toHaveAttribute('aria-busy', 'false'); await expect(meter).toBeVisible(); };
     const closeSettings = async () => { if (await memory.isVisible()) { await page.getByRole('button', { name: 'Close chat settings', exact: true }).click(); await expect(memory).not.toBeVisible(); } };
     const outside = async (action: () => Promise<unknown>) => { await closeSettings(); await action(); await settle(); };
     const percent = async () => Number(await meter.getAttribute('aria-valuenow'));
@@ -1442,8 +1442,8 @@ test('compaction media meter estimates inherited historical image cost without a
     const input = page.getByRole('textbox', { name: 'Message input' }); await expect(input).toBeVisible({ timeout: 60_000 });
     await input.fill('Text-only new draft');
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page.getByRole('region', { name: 'Context & compaction' }).getByRole('button', { name: /^Context & compaction/ }).click();
-    const meter = page.getByRole('region', { name: 'Context & compaction' }).getByRole('meter');
+    await page.getByRole('region', { name: 'Conversation memory' }).getByRole('button', { name: /^Conversation memory/ }).click();
+    const meter = page.getByRole('region', { name: 'Conversation memory' }).getByRole('meter');
     await expect(meter).toHaveAttribute('aria-valuetext', /reply tokens available/);
     await expect(meter).not.toHaveAttribute('aria-valuetext', /attachment cost unknown/);
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:compaction-requests') ?? '[]'))).toEqual([]);
@@ -1752,8 +1752,8 @@ test('native context recovery retains saved identities after reload', async ({ p
     const input = page.getByRole('textbox', { name: 'Message input' });
     await expect(input).toBeVisible({ timeout: 45_000 });
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page.getByRole('region', { name: 'Context & compaction' }).getByRole('button', { name: /^Context & compaction/ }).click();
-    await expect(page.getByRole('region', { name: 'Context & compaction' }).getByRole('meter')).toBeVisible();
+    await page.getByRole('region', { name: 'Conversation memory' }).getByRole('button', { name: /^Conversation memory/ }).click();
+    await expect(page.getByRole('region', { name: 'Conversation memory' }).getByRole('meter')).toBeVisible();
     await page.getByRole('button', { name: 'Close chat settings', exact: true }).click();
     const readAttempt = () => page.evaluate(async () => {
         const remembered = localStorage.getItem('or3:e2e:production-chat-thread');
