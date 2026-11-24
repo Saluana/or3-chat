@@ -2081,20 +2081,24 @@ function onSidebarSelected(id: string) {
 async function onCompactionSourceSelected(target: { threadId: string; messageId: string; originThreadId: string; scrollMessageId?: string; generation: number }, paneIndex: number) {
     const pane = panes.value[paneIndex];
     if (!pane || pane.mode !== 'chat' || pane.threadId !== target.originThreadId || getWorkspaceGeneration() !== target.generation) return;
+    let destinationTabId: string | undefined;
     if (workspaceTabsEnabled.value) {
         const originTab = workspaceTabs.state.value.paneBindings.get(pane.id);
         if (!originTab || !await workspaceTabs.activateTab(originTab, 'pointer')) return;
         if (getWorkspaceGeneration() !== target.generation || panes.value[paneIndex]?.id !== pane.id
-            || pane.threadId !== target.originThreadId || activePaneIndex.value !== paneIndex) return;
+            || pane.threadId !== target.originThreadId || activePaneIndex.value !== paneIndex
+            || workspaceTabs.state.value.paneBindings.get(pane.id) !== originTab) return;
         const opened = await workspaceTabs.openResource({ kind: 'chat', threadId: target.threadId });
         if (opened.status !== 'activated') return;
+        destinationTabId = opened.tabId;
     } else {
         setActive(paneIndex);
-        await setPaneThread(paneIndex, target.threadId);
+        if (!await setPaneThread(paneIndex, target.threadId)) return;
     }
     await nextTick();
     const destination = panes.value[activePaneIndex.value];
-    if (getWorkspaceGeneration() !== target.generation || destination?.mode !== 'chat' || destination.threadId !== target.threadId) return;
+    if (getWorkspaceGeneration() !== target.generation || destination?.mode !== 'chat' || destination.threadId !== target.threadId
+        || destinationTabId && workspaceTabs.state.value.paneBindings.get(destination.id) !== destinationTabId) return;
     if (target.messageId) paneComponentRefs.get(destination.id)?.scrollToMessage?.({ threadId: target.threadId,
         messageId: target.scrollMessageId ?? target.messageId, generation: target.generation });
     closeSidebarIfMobile();
@@ -2106,15 +2110,21 @@ async function onCompactionCommitted(target: { threadId: string; messageId: stri
         || pane.threadId !== target.originThreadId || getWorkspaceGeneration() !== target.generation) return;
     if (workspaceTabsEnabled.value) {
         const originTab = workspaceTabs.state.value.paneBindings.get(pane.id);
-        const draft = workspaceTabDrafts.read(originTab);
+        const draftScope = workspaceTabDrafts.scope();
+        const draft = workspaceTabDrafts.read(originTab, draftScope);
         if (draft) {
             const childTab = await workspaceTabs.openResource({ kind: 'chat', threadId: target.threadId }, { target: 'background' });
-            if (childTab.status === 'created') workspaceTabDrafts.write(childTab.tabId, { ...draft,
-                editorJson: draft.editorJson ? structuredClone(draft.editorJson) : undefined,
-                attachments: draft.attachments.map(file => ({ ...file, url: file.url.startsWith('blob:') ? URL.createObjectURL(file.file) : file.url })),
-                largeTextBlocks: draft.largeTextBlocks.map(block => ({ ...block })),
-                composer: draft.composer ? { ...draft.composer, imageSettings: { ...draft.composer.imageSettings } } : undefined,
-            });
+            const currentDraftScope = workspaceTabDrafts.scope();
+            if (getWorkspaceGeneration() !== target.generation || currentDraftScope.key !== draftScope.key
+                || currentDraftScope.db !== draftScope.db) return;
+            if (childTab.status === 'created' && workspaceTabs.state.value.tabs.some(tab => tab.id === childTab.tabId)) {
+                workspaceTabDrafts.write(childTab.tabId, { ...draft,
+                    editorJson: draft.editorJson ? structuredClone(draft.editorJson) : undefined,
+                    attachments: draft.attachments.map(file => ({ ...file, url: file.url.startsWith('blob:') ? URL.createObjectURL(file.file) : file.url })),
+                    largeTextBlocks: draft.largeTextBlocks.map(block => ({ ...block })),
+                    composer: draft.composer ? { ...draft.composer, imageSettings: { ...draft.composer.imageSettings } } : undefined,
+                }, draftScope);
+            }
         }
     }
     try { await onCompactionSourceSelected(target, paneIndex); }

@@ -1000,8 +1000,8 @@ type ScrollApi = {
     refreshMeasurements?: () => void;
 };
 const scroller = ref<ScrollApi | null>(null);
-// Descendants created by a continuing stream also inherit viewActive's hidden state.
-const compactionNavigation = shallowRef<{ threadId: string; messageId: string; generation: number; origin: string | undefined }>();
+type MessageScrollTarget = { threadId: string; messageId: string; generation: number };
+const compactionNavigation = shallowRef<MessageScrollTarget & { origin: string | undefined; tabId: string | undefined }>();
 function onViewRelatedThread(message: UiChatMessage, target: { threadId: string; originThreadId: string; anchorMessageId: string; generation: number }) {
     if (currentThreadId.value !== target.originThreadId || props.threadId !== target.originThreadId
         || getWorkspaceGeneration() !== target.generation
@@ -1020,21 +1020,31 @@ function onViewCompactionSource(message: UiChatMessage, target: { threadId: stri
 }
 // PageShell calls the destination pane after its normal resource activation.
 // The source identity remains in the event; this command uses the visible row.
-function scrollToMessage(target: { threadId: string; messageId: string; generation: number }) {
-    if (getWorkspaceGeneration() !== target.generation || props.threadId !== target.threadId) return;
-    compactionNavigation.value = { ...target, origin: currentThreadId.value };
+function scrollToMessage(target: MessageScrollTarget) {
+    if (!viewActive.value || getWorkspaceGeneration() !== target.generation || props.threadId !== target.threadId) return;
+    compactionNavigation.value = { ...target, origin: currentThreadId.value, tabId: props.tabId };
 }
-watch([currentThreadId, allMessages, loading, compactionNavigation, scroller], async () => {
+watch([currentThreadId, allMessages, loading, compactionNavigation, scroller, viewActive,
+    () => props.threadId, () => props.tabId, delegatedWorkspaceGeneration], async () => {
     const target = compactionNavigation.value;
     if (!target) return;
-    if (getWorkspaceGeneration() !== target.generation || currentThreadId.value !== target.threadId && currentThreadId.value !== target.origin) {
-        compactionNavigation.value = undefined; return;
+    const ownsView = () => viewActive.value && getWorkspaceGeneration() === target.generation
+        && props.threadId === target.threadId && props.tabId === target.tabId;
+    if (!ownsView() || currentThreadId.value !== target.threadId && currentThreadId.value !== target.origin) {
+        compactionNavigation.value = undefined;
+        return;
     }
-    if (!scroller.value || loading.value || currentThreadId.value !== target.threadId || !allMessages.value.some((row) => row.id === target.messageId)) return;
+    const rows = allMessages.value;
+    if (!scroller.value || loading.value || currentThreadId.value !== target.threadId || !rows.some((row) => row.id === target.messageId)) return;
     await nextTick();
-    if (compactionNavigation.value !== target || getWorkspaceGeneration() !== target.generation || currentThreadId.value !== target.threadId) return;
-    if (!scroller.value) return;
-    scroller.value.scrollToItemKey?.(target.messageId, { align: 'center', smooth: false });
+    const viewport = scroller.value;
+    if (!viewport || compactionNavigation.value !== target || !ownsView() || currentThreadId.value !== target.threadId
+        || loading.value || allMessages.value !== rows) return;
+    // A newly opened list may still be estimating heights for its mounted
+    // rows. Measure before the jump and let it supersede any saved scroll.
+    cancelScrollRestore();
+    viewport.refreshMeasurements?.();
+    viewport.scrollToItemKey?.(target.messageId, { align: 'center', smooth: false });
     compactionNavigation.value = undefined;
 });
 
