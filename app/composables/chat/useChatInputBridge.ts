@@ -73,16 +73,17 @@
 
 import { ref, watch } from 'vue';
 import type { SendResult } from '~/utils/chat/types';
-import type { StoredAttachmentReference } from '~/components/chat/file-upload-utils';
+import type { StoredAttachmentSource } from '~/components/chat/file-upload-utils';
 
 interface ChatInputImperativeApi {
+    tabId?: string;
     setText(t: string): void;
     focus(): void;
     triggerSend(): Promise<SendResult>; // send current text/attachments
     sendText?: (text: string) => Promise<SendResult>; // submit without changing the draft
     insertReference?: (reference: { id: string; source: 'document' | 'chat' | 'file'; label: string }, afterText?: string) => boolean;
     attachFile?: (file: File) => Promise<boolean>;
-    attachStoredFile?: (reference: StoredAttachmentReference) => Promise<boolean>;
+    attachStoredFile?: (reference: StoredAttachmentSource) => Promise<boolean>;
 }
 
 interface RegisteredPaneInput {
@@ -218,12 +219,16 @@ export async function programmaticAttachFile(paneId: string, file: File): Promis
 }
 
 /** Attach a saved original through native intake without hashing unchanged bytes again. */
-export async function programmaticAttachStoredFile(paneId: string, reference: StoredAttachmentReference): Promise<{ status: 'ready' } | { status: 'unavailable' }> {
+export async function programmaticAttachStoredFile(paneId: string, reference: StoredAttachmentSource): Promise<{ status: 'ready' } | { status: 'unavailable' }> {
     const registered = find(paneId);
     if (!registered?.api.attachStoredFile) return { status: 'unavailable' };
-    if (!await registered.api.attachStoredFile(reference) || find(paneId) !== registered) return { status: 'unavailable' };
-    registered.api.focus();
-    return { status: 'ready' };
+    try {
+        if (!await registered.api.attachStoredFile(reference) || find(paneId) !== registered) return { status: 'unavailable' };
+        registered.api.focus();
+        return { status: 'ready' };
+    } catch {
+        return { status: 'unavailable' };
+    }
 }
 
 /**
@@ -232,20 +237,26 @@ export async function programmaticAttachStoredFile(paneId: string, reference: St
  * @param paneId - Unique pane identifier
  * @returns true if pane is registered, false otherwise
  */
-export function hasPane(paneId: string) {
-    return !!find(paneId);
+export function hasPane(paneId: string, tabId?: string) {
+    const registered = find(paneId);
+    return !!registered && (tabId === undefined || registered.api.tabId === tabId);
+}
+
+/** Identify the current composer when duplicate tabs show the same chat. */
+export function getPaneInputTabId(paneId: string): string | undefined {
+    return find(paneId)?.api.tabId;
 }
 
 /** Tab navigation finishes before a lazily mounted composer may register. */
-export function waitForPaneInput(paneId: string, signal: AbortSignal): Promise<boolean> {
+export function waitForPaneInput(paneId: string, signal: AbortSignal, tabId?: string): Promise<boolean> {
     if (signal.aborted) return Promise.resolve(false);
-    if (find(paneId)) return Promise.resolve(true);
+    if (hasPane(paneId, tabId)) return Promise.resolve(true);
     return new Promise(resolve => {
         const finish = (ready: boolean) => {
             stop(); clearTimeout(timer); signal.removeEventListener('abort', cancelled); resolve(ready);
         };
         const cancelled = () => finish(false);
-        const stop = watch(() => find(paneId), registered => { if (registered) finish(true); }, { flush: 'sync' });
+        const stop = watch(() => hasPane(paneId, tabId), registered => { if (registered) finish(true); }, { flush: 'sync' });
         const timer = setTimeout(() => finish(false), 2000);
         signal.addEventListener('abort', cancelled, { once: true });
         if (signal.aborted) finish(false);

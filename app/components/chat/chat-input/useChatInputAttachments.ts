@@ -15,7 +15,7 @@ import {
     loadStoredAttachment,
 } from '~/components/chat/file-upload-utils';
 import type { LargeTextBlock, UploadedImage } from './types';
-import type { AttachmentIntakeOwner, StoredAttachment, StoredAttachmentReference } from '../file-upload-utils';
+import type { AttachmentIntakeOwner, StoredAttachment, StoredAttachmentSource } from '../file-upload-utils';
 
 const LARGE_TEXT_WORD_THRESHOLD = 600;
 
@@ -191,7 +191,7 @@ export function useChatInputAttachments(
         }
     }
 
-    async function processStoredAttachment(reference: StoredAttachmentReference) {
+    async function processStoredAttachment(reference: StoredAttachmentSource) {
         const owner = captureIntake();
         const stored = await loadStoredAttachment(reference, owner);
         owner.assertCurrent();

@@ -36,7 +36,7 @@ Local-only intake defaults to 20 MiB via `or3.limits.maxFileSizeBytes`, with a 5
 | ---------------------------------- | --------------------------------------------------------------------------------------- |
 | `createOrRefFile(file, name)`      | Dedupes by hash, increments ref count, stores blob + metadata, runs before/after hooks. |
 | `getFileMeta(hash)`                | Loads metadata and applies output filters.                                              |
-| `getFileBlob(hash)`                | Returns the stored `Blob`; falls back to `ensureFileBlob` when missing locally.         |
+| `getFileBlob(hash, db?, options?)` | Returns the stored `Blob` and attempts a download on a cache miss. Set `localOnly` in the options to skip the download. |
 | `ensureFileBlob(hash)`             | Ensures a blob exists locally, downloading through the storage transfer queue (client only). |
 | `softDeleteFile(hash)`             | Marks a single file as deleted.                                                         |
 | `softDeleteMany(hashes)`           | Batch soft delete inside a transaction.                                                 |

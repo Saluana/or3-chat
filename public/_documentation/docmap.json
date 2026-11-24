@@ -251,7 +251,7 @@
                     "category": "Files",
                     "categoryOrder": 2,
                     "order": 0,
-                    "summary": "Hash-addressed blobs, captured workspace ownership, provisional reference cleanup, and transaction-safe delete/restore hooks."
+                    "summary": "Hash-addressed blobs, local-only cache reads, captured workspace ownership, provisional reference cleanup, and transaction-safe delete/restore hooks."
                 },
                 {
                     "name": "message-files.md",

@@ -39,6 +39,7 @@ import { useWorkspaceFileActions } from '~/composables/files/useWorkspaceFileAct
 import type { WorkspaceFileAction } from '~/composables/files/useWorkspaceFileActions';
 import { reportError } from '~/utils/errors';
 import { isCloudFileStorageEnabled, isCloudFileStorageConfigured } from '~/core/storage/file-policy';
+import type { StoredAttachment } from '~/components/chat/file-upload-utils';
 
 const pageElement = ref<HTMLElement | null>(null);
 const paneWidth = ref(0);
@@ -1036,49 +1037,117 @@ async function download(row = selected.value) {
     } catch (caught) { error.value = fileErrorMessage(caught, 'The download could not be completed. Try again.'); }
 }
 
+let askInChatRequest = 0;
 async function askInChat(row: Post) {
+    const request = ++askInChatRequest;
+    let origin: WorkspaceOperationScope | undefined;
+    let openingChat = false;
+    let targetStillActive: (() => boolean) | undefined;
+    let failureMessage = 'This item could not be added to chat. Try again.';
+    const assertCurrent = () => {
+        // Opening the target chat can unmount this pane. The handoff still
+        // belongs to the original workspace and most recent Files action.
+        if ((!openingChat && disposed) || request !== askInChatRequest)
+            throw new DOMException('Files action is no longer current', 'AbortError');
+        origin?.assertCurrent();
+    };
     error.value = '';
     try {
-        const origin = scope ?? capture();
-        const { readWorkspaceItem } = await import('~/utils/chat/workspace-items');
-        await readWorkspaceItem(origin, { kind: row.postType === 'doc' ? 'document' : 'file', id: row.id });
-        origin.assertCurrent();
-        const { getGlobalMultiPaneApi } = await import('~/utils/multiPaneApi');
-        const { getPaletteHostContext } = await import('~/composables/search/useCommandPalette');
-        const { programmaticInsertReference, programmaticAttachStoredFile, waitForPaneInput } = await import('~/composables/chat/useChatInputBridge');
-        const hash = parseFileHashes(row.file_hashes)[0];
-        const meta = hash ? await origin.db.file_meta.get(hash) : undefined;
-        origin.assertCurrent();
-        const attachment = row.postType === FILE_CATALOG_POST_TYPE && meta && ['image', 'pdf'].includes(meta.kind)
-            ? { id: row.id, hash: meta.hash, workspaceId: origin.workspaceId, generation: origin.generation } : undefined;
+        origin = scope ?? capture();
+        const sourceKind = row.postType === 'doc' ? 'document' : 'file';
+        const [{ readWorkspaceItem }, { getGlobalMultiPaneApi }, { getPaletteHostContext },
+            { getPaneInputTabId, hasPane, programmaticInsertReference, programmaticAttachStoredFile, waitForPaneInput },
+            { getOpenWorkspaceTabs }] = await Promise.all([
+            import('~/utils/chat/workspace-items'),
+            import('~/utils/multiPaneApi'),
+            import('~/composables/search/useCommandPalette'),
+            import('~/composables/chat/useChatInputBridge'),
+            import('~/core/search/command-palette/sources/workspace-tab-source'),
+        ]);
+        assertCurrent();
+        const current = await readWorkspaceItem(origin, { kind: sourceKind, id: row.id });
+        assertCurrent();
+        let attachment: StoredAttachment | undefined;
+        if (sourceKind === 'file') {
+            const hash = parseFileHashes((current.row as Post).file_hashes)[0];
+            const meta = hash ? await origin.db.file_meta.get(hash) : undefined;
+            const { resolveStoredFileKind } = await import('~/db/files');
+            assertCurrent();
+            if (!meta || meta.deleted) throw new Error('That saved file is unavailable.');
+            const kind = resolveStoredFileKind(meta);
+            if (kind === 'image' || kind === 'pdf') {
+                failureMessage = 'This file could not be attached. Try again from Files.';
+                const { loadStoredAttachment, StoredAttachmentOfflineError } = await import('~/components/chat/file-upload-utils');
+                try {
+                    attachment = await loadStoredAttachment({
+                        id: row.id, hash: meta.hash, kind, workspaceId: origin.workspaceId, generation: origin.generation,
+                    }, { signal: origin.signal, assertCurrent });
+                } catch (caught) {
+                    if (!(caught instanceof StoredAttachmentOfflineError)) throw caught;
+                    assertCurrent();
+                    error.value = caught.message;
+                    return;
+                }
+            }
+        }
+        assertCurrent();
         const api = getGlobalMultiPaneApi();
         const host = getPaletteHostContext();
         if (!api || !host) throw new Error('Chat navigation is unavailable.');
         const chatIndex = api.panes.value.findIndex(pane => pane.mode === 'chat');
-        if (chatIndex >= 0) api.setActive(chatIndex);
+        const chatPane = api.panes.value[chatIndex];
+        const paneId = chatPane?.id ?? api.activePaneId.value;
+        if (!paneId) throw new Error('The chat composer is unavailable.');
+        const previousChat = chatPane ? undefined : getOpenWorkspaceTabs()
+            .filter(tab => tab.resource.kind === 'chat').sort((a, b) => b.lastActivatedAt - a.lastActivatedAt)[0];
+        const savedThreadId = previousChat?.resource.kind === 'chat' ? previousChat.resource.threadId : null;
+        const targetThread = chatPane?.pendingThreadId ?? chatPane?.threadId ?? savedThreadId ?? '';
+        const targetTab = chatPane ? getPaneInputTabId(paneId) : host.openWorkspaceTab ? previousChat?.id : undefined;
+        const isTargetChat = () => {
+            const pane = api.getPaneById(paneId);
+            return api.activePaneId.value === paneId && pane?.mode === 'chat'
+                && (pane.threadId ?? '') === targetThread
+                && (pane.pendingThreadId === undefined || pane.pendingThreadId === targetThread)
+                && (!targetTab || !hasPane(paneId) || hasPane(paneId, targetTab));
+        };
+        openingChat = true;
+        if (chatPane) api.setActive(chatIndex);
         else {
-            const { getOpenWorkspaceTabs } = await import('~/core/search/command-palette/sources/workspace-tab-source');
-            const previousChat = getOpenWorkspaceTabs().filter(tab => tab.resource.kind === 'chat').sort((a, b) => b.lastActivatedAt - a.lastActivatedAt)[0];
-            const opened = previousChat && host.openWorkspaceTab ? await host.openWorkspaceTab(previousChat.id) : await host.openChat(previousChat?.resource.kind === 'chat' ? previousChat.resource.threadId : null, 'active');
+            const opened = targetTab && host.openWorkspaceTab
+                ? await host.openWorkspaceTab(targetTab) : await host.openChat(savedThreadId, 'active');
+            assertCurrent();
+            if (opened.ok ? opened.superseded : opened.error.code === 'not-found') return;
             if (!opened.ok) throw new Error(opened.error.message);
         }
+        targetStillActive = isTargetChat;
         await nextTick();
-        origin.assertCurrent();
-        const paneId = api.activePaneId.value;
-        const targetThread = paneId ? api.getPaneById(paneId)?.threadId : undefined;
-        if (!paneId || !await waitForPaneInput(paneId, origin.signal)) throw new Error('The chat composer is unavailable.');
-        origin.assertCurrent();
-        if (api.activePaneId.value !== paneId || api.getPaneById(paneId)?.threadId !== targetThread || api.getPaneById(paneId)?.mode !== 'chat') throw new Error('The target chat changed. Retry from Files.');
-        const current = await readWorkspaceItem(origin, { kind: row.postType === 'doc' ? 'document' : 'file', id: row.id });
-        origin.assertCurrent();
-        const result = !paneId ? { status: 'unavailable' } : attachment ? await programmaticAttachStoredFile(paneId, attachment)
-            : programmaticInsertReference(paneId, { id: row.id, source: row.postType === 'doc' ? 'document' : 'file', label: current.source.title });
-        origin.assertCurrent();
+        assertCurrent();
+        const ready = await waitForPaneInput(paneId, origin.signal, targetTab);
+        assertCurrent();
+        if (!isTargetChat()) return;
+        if (!ready) throw new Error('The chat composer is unavailable.');
+        let result: ReturnType<typeof programmaticInsertReference>;
+        if (attachment) {
+            result = await programmaticAttachStoredFile(paneId, attachment);
+        } else {
+            const latest = await readWorkspaceItem(origin, { kind: sourceKind, id: row.id });
+            assertCurrent();
+            if (!isTargetChat()) return;
+            result = programmaticInsertReference(paneId, { id: row.id, source: sourceKind, label: latest.source.title });
+        }
+        assertCurrent();
+        if (!isTargetChat()) return;
         if (result.status !== 'ready') {
-            throw new Error('This chat cannot accept references. Enable mentions and retry.');
+            if (!attachment) failureMessage = 'This chat cannot accept references. Enable mentions and retry.';
+            throw new Error(failureMessage);
         }
         preview.value = false;
-    } catch (caught) { error.value = fileErrorMessage(caught, 'This item could not be added to chat. Try again.'); }
+    } catch (caught) {
+        try { assertCurrent(); } catch { return; }
+        if (targetStillActive?.() === false) return;
+        if (openingChat) reportError(caught, { message: failureMessage, toast: true, tags: { domain: 'files' } });
+        else error.value = fileErrorMessage(caught, failureMessage);
+    }
 }
 async function addExisting() {
     await run(async origin => {
