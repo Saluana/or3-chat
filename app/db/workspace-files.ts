@@ -1,6 +1,6 @@
 import { PostSchema, type Post } from './schema';
 import { createOrRefFile, changeRefCount, changeFileRefRows, notifyFileRefChanges, type FileRefNotification, getFileBlob } from './files';
-import { parseFileHashes } from './files-util';
+import { FileOriginalUnavailableError, parseFileHashes } from './files-util';
 import { getWriteTxTableNames, nextClock, nowSec } from './util';
 import { useHooks } from '~/core/hooks/useHooks';
 import { classifyFileKind } from '~~/shared/files/file-kind';
@@ -185,7 +185,7 @@ export async function enableWorkspaceFileText(scope: WorkspaceOperationScope, id
     if (!meta || meta.deleted) throw new Error('This file is unavailable.');
     const blob = await getFileBlob(meta.hash, scope.db);
     scope.assertCurrent('write');
-    if (!blob) throw new Error('Original file unavailable offline. Connect and retry.');
+    if (!blob) throw new FileOriginalUnavailableError();
     const text = await extractWorkspaceFileText(blob, meta.name);
     scope.assertCurrent('write');
     return (await catalogWorkspaceFile(scope, meta.hash, { text, expected: post })).post;

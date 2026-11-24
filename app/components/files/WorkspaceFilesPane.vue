@@ -30,7 +30,7 @@ import { captureWorkspaceOperation, type WorkspaceOperationScope } from '~/utils
 import { workspaceRevision } from '~/utils/chat/workspace-items';
 import { FILE_CATALOG_POST_TYPE, isVisibleWorkspaceItem, workspaceItemMetadata } from '~~/shared/posts/workspace-item';
 import { createRuntimeUuid } from '~~/shared/runtime-id';
-import { parseFileHashes } from '~/db/files-util';
+import { FileOriginalUnavailableError, parseFileHashes } from '~/db/files-util';
 import { tiptapToPlainText } from '~/core/search/command-palette/normalize';
 import { normalizeProjectData } from '~/utils/projects/normalizeProjectData';
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
@@ -163,6 +163,7 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 let disposed = false;
 const undo = useExplorerUndo(filesScope, () => scope ?? capture(), () => busy.value, runOrganization);
 function fileErrorMessage(caught: unknown, fallback: string): string {
+    if (caught instanceof FileOriginalUnavailableError) return caught.message;
     const code = caught && typeof caught === 'object' && 'code' in caught ? caught.code : undefined;
     const message = code === 'conflict' ? 'This item changed. Refresh Files and try again.'
         : code === 'permission-denied' ? 'This file change is not allowed by workspace policy.' : fallback;
@@ -1027,7 +1028,7 @@ async function download(row = selected.value) {
         const { getFileBlob } = await import('~/db/files');
         const blob = await getFileBlob(hash, origin.db);
         origin.assertCurrent();
-        if (!blob) throw new Error('Original file unavailable offline. Connect and retry.');
+        if (!blob) throw new FileOriginalUnavailableError();
         const latest = await origin.db.posts.get(row.id);
         const metadata = await origin.db.file_meta.get(hash);
         origin.assertCurrent();
@@ -1077,17 +1078,10 @@ async function askInChat(row: Post) {
             const kind = resolveStoredFileKind(meta);
             if (kind === 'image' || kind === 'pdf') {
                 failureMessage = 'This file could not be attached. Try again from Files.';
-                const { loadStoredAttachment, StoredAttachmentOfflineError } = await import('~/components/chat/file-upload-utils');
-                try {
-                    attachment = await loadStoredAttachment({
-                        id: row.id, hash: meta.hash, kind, workspaceId: origin.workspaceId, generation: origin.generation,
-                    }, { signal: origin.signal, assertCurrent });
-                } catch (caught) {
-                    if (!(caught instanceof StoredAttachmentOfflineError)) throw caught;
-                    assertCurrent();
-                    error.value = caught.message;
-                    return;
-                }
+                const { loadStoredAttachment } = await import('~/components/chat/file-upload-utils');
+                attachment = await loadStoredAttachment({
+                    id: row.id, hash: meta.hash, kind, workspaceId: origin.workspaceId, generation: origin.generation,
+                }, { signal: origin.signal, assertCurrent });
             }
         }
         assertCurrent();

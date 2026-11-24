@@ -133,7 +133,7 @@ New regular chat uploads also create a catalog entry. Supported UTF-8 `.txt`,
 `.md`, and `.csv` uploads insert a removable chat reference. Images and PDFs use
 the existing attachment/model compatibility flow. **Ask in chat** checks for the
 original of a saved image or PDF before opening the chat. If the original is
-unavailable offline, Files stays open and asks you to reconnect. The composer
+missing, Files stays open. It asks you to reconnect when offline or to retry or upload the file again when online. The composer
 adds the selected item to the draft and reuses the verified workspace hash for a
 saved image or PDF. Attachment filters still run, and replacement files go
 through normal intake.

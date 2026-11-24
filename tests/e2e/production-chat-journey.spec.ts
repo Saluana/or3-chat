@@ -2004,8 +2004,15 @@ for (const kind of ['image', 'pdf'] as const) {
                 return { hash: row.hash, mime: row.blob.type, bytes };
             }, { url: clientURL!, name });
             await preview.getByRole('button', { name: 'Ask in chat', exact: true }).click();
-            await expect(files.getByRole('alert').filter({ hasText: 'Files action failed' }))
-                .toContainText('Original file unavailable offline. Connect and retry.');
+            const failure = files.getByRole('alert').filter({ hasText: 'Files action failed' });
+            await expect(failure).toContainText('The original file is unavailable. Try again or upload the file again.');
+            await page.context().setOffline(true);
+            try {
+                await preview.getByRole('button', { name: 'Ask in chat', exact: true }).click();
+                await expect(failure).toContainText('Original file unavailable offline. Connect and retry.');
+            } finally {
+                await page.context().setOffline(false);
+            }
             await expect(preview).toBeVisible();
             await page.evaluate(async ({ url, original }) => {
                 const { getDb } = await import(url);
