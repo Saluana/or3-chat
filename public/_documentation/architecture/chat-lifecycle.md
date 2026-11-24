@@ -322,6 +322,8 @@ The root, `/chat/:id?` and `/docs/:id?` URLs use distinct route records with one
 page key, so the workspace shell stays mounted across navigation. Moving between
 resources pushes a history entry that records the tab; Back/Forward reactivate
 that tab, or open the resource when the tab has changed or closed.
+Refreshing while a selected tab is still loading restores that tab in the same
+workspace and profile. Opening a direct link still opens its requested resource.
 Dashboard deep links reopen their page when the dashboard parameters change;
 workspace URL rewrites and unrelated query changes preserve the open settings subpage.
 
