@@ -9,7 +9,7 @@ import { DEFAULT_FILE_POLICY } from '~~/shared/storage/file-policy';
 import { createOrRefFile, softDeleteFile } from '~/db/files';
 import * as queues from '../transfer-queue';
 import type { ObjectStorageProvider, PresignedUrlResult } from '../types';
-import { deferred } from './fixtures/transfer-faults';
+import { deferred, installFaultClock } from './fixtures/transfer-faults';
 
 const policy = vi.hoisted(() => ({ cloud: false, configured: false, cacheBytes: 10 * 1024 * 1024 }));
 vi.mock('../file-policy', () => ({
@@ -381,6 +381,77 @@ describe('durable storage recovery contracts', () => {
         await until(async () => (await db.file_transfers.get(transfer!.id))?.state === 'done');
     });
 
+    it.each(['online event', 'queue restart'] as const)('promptly resumes an upload deferred by a failed offline fetch on %s', async resume => {
+        const db = await database(); await original(db);
+        const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+        const upload = vi.fn()
+            .mockImplementationOnce(async () => {
+                // Connectivity can change before the browser delivers its offline event.
+                online.mockReturnValue(false);
+                throw new TypeError('Failed to fetch');
+            })
+            .mockResolvedValue(new Response('', { status: 200 }));
+        vi.stubGlobal('fetch', upload);
+        const config = { maxAttempts: 1, backoffBaseMs: 60_000, backoffMaxMs: 60_000 };
+        const executor = queue(db, provider(), config); executor.setWorkspaceId('ws');
+        const transfer = await executor.enqueue(hash, 'upload');
+        const readTransfer = () => db.file_transfers.get(transfer!.id);
+        await until(async () => {
+            const current = await readTransfer();
+            return current?.state === 'queued' && Boolean(current.last_error);
+        });
+        expect(await readTransfer()).toMatchObject({ attempts: 0 });
+        expect(upload).toHaveBeenCalledOnce();
+
+        online.mockReturnValue(true);
+        if (resume === 'queue restart') {
+            executor.dispose();
+            queue(db, provider(), config).setWorkspaceId('ws');
+        } else {
+            window.dispatchEvent(new Event('online'));
+        }
+        await until(async () => (await readTransfer())?.state === 'done');
+        expect(await readTransfer()).toMatchObject({ attempts: 0, consecutive_deferrals: 0 });
+        expect(upload).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([
+        { reason: 'server retry deadline', retryAfter: 120_000 },
+        { reason: 'online transport backoff', retryAfter: 0 },
+    ])('honors a $reason across reconnect', async ({ retryAfter }) => {
+        const db = await database(); await original(db);
+        const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+        const clock = installFaultClock(Date.now());
+        vi.spyOn(Math, 'random').mockReturnValue(0.5);
+        const upload = vi.fn()
+            .mockImplementationOnce(async () => {
+                if (!retryAfter) throw new TypeError('Failed to fetch');
+                online.mockReturnValue(false);
+                return new Response('', { status: 429, headers: { 'Retry-After': String(retryAfter / 1000) } });
+            })
+            .mockResolvedValue(new Response('', { status: 200 }));
+        vi.stubGlobal('fetch', upload);
+        const backoff = 60_000;
+        const executor = queue(db, provider(), { backoffBaseMs: backoff }); executor.setWorkspaceId('ws');
+        const transfer = await executor.enqueue(hash, 'upload');
+        const readTransfer = () => db.file_transfers.get(transfer!.id);
+        await until(async () => Boolean((await readTransfer())?.last_error));
+        const retryAt = clock.now() + (retryAfter || backoff);
+        online.mockReturnValue(false);
+        window.dispatchEvent(new Event('offline'));
+        online.mockReturnValue(true);
+        window.dispatchEvent(new Event('online'));
+        await new Promise(resolve => setTimeout(resolve, 25));
+        expect(await readTransfer()).toMatchObject({ state: 'queued', attempts: 0, retry_at: retryAt });
+        expect(upload).toHaveBeenCalledOnce();
+
+        clock.set(retryAt);
+        executor.dispose();
+        queue(db).setWorkspaceId('ws');
+        await until(async () => (await readTransfer())?.state === 'done');
+        expect(upload).toHaveBeenCalledTimes(2);
+    });
+
     it('fences a delayed former owner before network, metadata, progress and settlement', async () => {
         const db = await database(); await original(db);
         const presign = deferred<PresignedUrlResult>();
@@ -484,6 +555,29 @@ describe('durable storage recovery contracts', () => {
         await until(async () => (await db.file_transfers.toArray()).some(row => row.hash === hash && row.state === 'done'), 700);
         expect((await db.file_meta.get(hash))?.storage_id).toBe('verified-original');
         expect((await db.file_transfers.toArray()).filter(row => row.hash === hash && row.state === 'done')).toHaveLength(1);
+    });
+
+    it('recovers the new workspace originals when an old recovery scan finishes after a switch', async () => {
+        policy.cloud = true;
+        const previousDb = await database();
+        const nextDb = await database();
+        await original(previousDb);
+        await previousDb.file_meta.update(hash, { deleted: true });
+        await original(nextDb);
+        let activeDb = previousDb;
+        const storage = provider();
+        const executor = queue(previousDb, storage, { dbResolver: () => activeDb });
+        // Complete the real IndexedDB read after changing the queue's binding.
+        previousDb.file_meta.hook('reading', row => {
+            activeDb = nextDb;
+            executor.setWorkspaceId('next', 'account');
+            return row;
+        });
+
+        executor.setWorkspaceId('previous', 'account');
+        await until(async () => (await nextDb.file_meta.get(hash))?.storage_id === 'verified-original');
+        expect(storage.getPresignedUploadUrl).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ workspaceId: 'next' }));
+        expect(await previousDb.file_transfers.count()).toBe(0);
     });
 
     it('rolls back original intake if its durable upload intent cannot be persisted', async () => {

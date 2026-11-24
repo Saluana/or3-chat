@@ -46,9 +46,12 @@ an explicit metadata restore.
 Startup schedules unfinished work at both persisted retry times and future
 lease expirations, including deadlines equal to the current millisecond.
 
-While the browser is offline, transfers keep their retry budget and resume on
-the online event. Network failures, timeouts, rate limits, and server outages
-retain the original and defer work without consuming permanent-failure attempts. Consecutive deferrals increase the delay with jitter. A server-provided `Retry-After` sets the earliest retry time.
+While the browser is offline, transfers keep their retry budget. Transfers
+paused by going offline are eligible as soon as the browser reconnects, even
+after a restart. Other network failures, timeouts, rate limits, and server
+outages retain the original and defer work without consuming permanent-failure
+attempts. Consecutive deferrals increase the delay with jitter. A
+server-provided `Retry-After` sets the earliest retry time.
 Gateway control requests have a 60-second deadline; an entire byte transfer has
 a five-minute deadline. Provider operations accept the caller's `AbortSignal`,
 so cancellation and workspace changes also cancel control requests.

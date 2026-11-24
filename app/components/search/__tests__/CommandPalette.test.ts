@@ -222,26 +222,24 @@ describe('CommandPalette overlay', () => {
         wrapper.unmount();
     });
 
-    it('moves the active row with arrow keys and prevents scrolling', async () => {
+    it('keeps palette navigation active when another listener prevents the browser default', async () => {
         const wrapper = mountPalette();
         const input = wrapper.get('input[role="combobox"]');
+        const preventBrowserDefault = (event: Event) => event.preventDefault();
+        input.element.addEventListener('keydown', preventBrowserDefault, { capture: true });
 
         await input.trigger('keydown', { key: 'ArrowDown' });
         expect(moveActive).toHaveBeenCalledWith(1);
         await input.trigger('keydown', { key: 'ArrowUp' });
         expect(moveActive).toHaveBeenCalledWith(-1);
-        wrapper.unmount();
-    });
-
-    it('runs the primary action on Enter and closes on Escape', async () => {
-        const wrapper = mountPalette();
-        const input = wrapper.get('input[role="combobox"]');
-
         await input.trigger('keydown', { key: 'Enter' });
-        expect(runPrimary).toHaveBeenCalledTimes(1);
-
+        expect(runPrimary).toHaveBeenCalledOnce();
         await input.trigger('keydown', { key: 'Escape' });
-        expect(close).toHaveBeenCalledTimes(1);
+        expect(close).not.toHaveBeenCalled();
+
+        input.element.removeEventListener('keydown', preventBrowserDefault, { capture: true });
+        await input.trigger('keydown', { key: 'Escape' });
+        expect(close).toHaveBeenCalledOnce();
         wrapper.unmount();
     });
 

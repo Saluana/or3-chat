@@ -644,7 +644,6 @@ function onKeydown(event: KeyboardEvent): void {
         event.stopPropagation();
         return;
     }
-    if (event.defaultPrevented) return;
     switch (event.key) {
         case 'ArrowDown':
             event.preventDefault();
@@ -669,6 +668,7 @@ function onKeydown(event: KeyboardEvent): void {
             void enterActionTray();
             return;
         case 'Escape':
+            if (event.defaultPrevented) return;
             event.preventDefault();
             close();
             return;

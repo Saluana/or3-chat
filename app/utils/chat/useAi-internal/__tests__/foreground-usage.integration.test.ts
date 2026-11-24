@@ -74,3 +74,43 @@ it('flushes measured usage before a provider interruption without bypassing the 
     expect(row.data).toMatchObject({ plugin_owned: 'preserve', generation_id: 'generation', generation_lease_id: 'request-lease' });
     expect(ctx.toolRegistry.executeTool).not.toHaveBeenCalled();
 });
+
+it('closes the provider when a progress save loses its conversation', async () => {
+    const db = getDb();
+    const initial = (await db.messages.get('assistant'))! as StoredMessage;
+    const persist = makeAssistantPersister(db, initial, [], 'request-lease');
+    let releaseWrite!: () => void;
+    const writeFinished = new Promise<void>(resolve => { releaseWrite = resolve; });
+    let providerClosed = false;
+    let consumedTail = false;
+    provider.mockImplementation(async function* (): AsyncGenerator<ORStreamEvent> {
+        try {
+            await db.threads.update('thread', { deleted: true });
+            yield { type: 'text', text: 'x'.repeat(16 * 1024) };
+            await writeFinished;
+            // Deliver the next network chunk after the failed write settles.
+            await new Promise(resolve => setTimeout(resolve, 0));
+            yield { type: 'text', text: 'next delta' };
+            consumedTail = true;
+            yield { type: 'text', text: 'unused remainder' };
+        } finally {
+            providerClosed = true;
+        }
+    });
+    const run = runForegroundStreamLoop({
+        apiKey: 'scripted', modelId: 'model', orMessages: [], modalities: ['text'], tools: [],
+        abortSignal: new AbortController().signal, assistantId: 'assistant', streamId: 'generation',
+        threadId: 'thread', workspaceId: workspace, originDb: db,
+        streamAcc: { append: vi.fn() }, hooks: useHooks(), toolRegistry: { executeTool: vi.fn() },
+        async persistAssistant(input) {
+            try { return await persist(input); }
+            finally { releaseWrite(); }
+        },
+        assistantFileHashes: [], activeToolCalls: new Map(),
+        tailAssistant: { value: null }, rawMessages: { value: [] },
+    });
+    await expect(run).rejects.toThrow(/not acknowledged/);
+    expect(providerClosed).toBe(true);
+    expect(consumedTail).toBe(false);
+    expect((await db.messages.get('assistant'))?.data).toMatchObject({ content: '' });
+});
