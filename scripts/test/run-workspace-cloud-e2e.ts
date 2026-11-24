@@ -109,6 +109,9 @@ try {
     const child = Bun.spawn(command, {
         cwd: root, stdout: 'inherit', stderr: 'inherit', env: {
             ...process.env,
+            // The automated workspace scenarios send every simulated device through the same loopback IP.
+            ...(!watch && !billing && !process.argv.includes('--build') && !process.env.OR3_RATE_LIMIT_OVERRIDES_JSON
+                ? { OR3_RATE_LIMIT_OVERRIDES_JSON: JSON.stringify({ 'auth:session': { maxRequests: 120 } }) } : {}),
             SSR_AUTH_ENABLED: 'true', AUTH_PROVIDER: 'basic-auth', OR3_AUTH_PROVIDER: 'basic-auth',
             OR3_GUEST_ACCESS_ENABLED: 'false', OR3_AUTH_REGISTRATION_MODE: 'open', OR3_AUTH_AUTO_PROVISION: 'true',
             OR3_LOCAL_PROVIDERS: 'false', OR3_USE_LOCAL_PACKAGES: 'false',

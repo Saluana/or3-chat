@@ -35,6 +35,7 @@ import { tiptapToPlainText } from '~/core/search/command-palette/normalize';
 import { normalizeProjectData } from '~/utils/projects/normalizeProjectData';
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 import { useLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
+import { useOfflineWorkspace } from '~/composables/auth/offline-workspace';
 import { useWorkspaceFileActions } from '~/composables/files/useWorkspaceFileActions';
 import type { WorkspaceFileAction } from '~/composables/files/useWorkspaceFileActions';
 import { reportError } from '~/utils/errors';
@@ -72,6 +73,7 @@ const widePreview = computed(() => paneWidth.value >= (explorerEnabled.value ? 1
 const organization = shallowRef<Awaited<ReturnType<typeof readExplorerOrganization>>>();
 const filesWorkspace = ref(getActiveWorkspaceId() ?? 'local');
 const sessionData = useLocalWorkspaceSession();
+const offlineWorkspace = useOfflineWorkspace();
 const filesPreferenceScope = computed(() => JSON.stringify([sessionData.value?.session?.user?.id ?? 'local', filesWorkspace.value]));
 const storedFolder = useLocalStorage(computed(() => 'or3:files-explorer:folder:v1:' + filesPreferenceScope.value), '');
 const folderId = computed<string | null>({ get: () => storedFolder.value || null,
@@ -1245,7 +1247,7 @@ watch(() => props.recordId, async id => {
         if (!disposed && origin === scope) { clearPreview(); error.value = fileErrorMessage(caught, 'This file could not be opened. Refresh Files and try again.'); }
     }
 });
-function resetScope() {
+function resetScope(resumePreviewId?: string) {
     if (disposed) return;
     undo.clear();
     generation++; scope = null; organization.value = undefined;
@@ -1255,15 +1257,21 @@ function resetScope() {
     associate.value = false; remove.value = false; existingCursor.value = ''; existingComplete.value = false;
     failures.value = []; uploadResult.value = ''; clearTimeout(uploadResultTimer); projects.value = []; readOnly.value = true; projectFilter.value = 'all'; actionTarget.value = null;
     organizationSubscription?.unsubscribe(); previewSubscription?.unsubscribe(); clearTimeout(resultTimer);
-    subscription?.unsubscribe(); subscription = undefined; void initialize();
+    subscription?.unsubscribe(); subscription = undefined; void initialize(resumePreviewId);
 }
 watch([
+    () => Boolean(offlineWorkspace.value),
+    () => sessionData.value?.session?.workspace?.id,
     () => sessionData.value?.session?.user?.id,
     () => sessionData.value?.session?.role,
     () => sessionData.value?.session?.authorizationRevision,
     () => sessionData.value?.session?.authenticated,
     explorerEnabled,
-], resetScope);
+], ([offline, workspace, user, role], [wasOffline, previousWorkspace, previousUser, previousRole]) => {
+    // Re-read the file under the new session before restoring its preview.
+    const sameMembership = workspace && user && workspace === previousWorkspace && user === previousUser && role === previousRole;
+    resetScope(offline !== wasOffline && sameMembership && preview.value ? selected.value?.id : undefined);
+});
 // The container query widths in the styles below (page and list).
 const LAYOUT_BREAKPOINTS = [600, 800, 1050];
 const layoutTier = (width: number) => LAYOUT_BREAKPOINTS.filter(breakpoint => width > breakpoint).length;
@@ -1292,7 +1300,7 @@ onMounted(async () => {
         });
         resizeObserver.observe(pageElement.value);
     }
-    stop = subscribeActiveWorkspaceDb(resetScope);
+    stop = subscribeActiveWorkspaceDb(() => resetScope());
     await initialize();
 });
 function observeOrganization(origin: WorkspaceOperationScope) {
@@ -1313,11 +1321,13 @@ function observeOrganization(origin: WorkspaceOperationScope) {
         },
     });
 }
-async function initialize() {
+async function initialize(resumePreviewId?: string) {
     let origin: WorkspaceOperationScope | null = null;
     try {
         scope = capture(); readOnly.value = !scope.writable;
         origin = scope;
+        if (resumePreviewId) await nextTick();
+        const initialPreview = previewGeneration;
         if (explorerEnabled.value) await importPreviewExplorerRecords(origin, filesScope);
         if (origin.writable) await catalogExistingImages(origin);
         origin.assertCurrent();
@@ -1325,9 +1335,11 @@ async function initialize() {
         if (explorerEnabled.value) observeOrganization(origin);
         await refresh();
         if (disposed || origin !== scope) return;
-        if (props.recordId) {
-            const row = await origin.db.posts.get(props.recordId);
+        const recordId = resumePreviewId ?? props.recordId;
+        if (recordId) {
+            const row = await origin.db.posts.get(recordId);
             origin.assertCurrent();
+            if (disposed || origin !== scope || (resumePreviewId && initialPreview !== previewGeneration)) return;
             if (row && isVisibleWorkspaceItem(row)) await open(row);
         }
     } catch (caught) {
