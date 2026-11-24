@@ -1138,7 +1138,7 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) for (const mode of ['light'
     }
 });
 
-test('an unsent draft and its attachment survive a reload and stay with their workspace', async ({ context, page }, info) => {
+test('an unsent draft and its attachment survive a reload and stay with their workspace', { tag: '@workspace-recovery' }, async ({ context, page }, info) => {
     test.setTimeout(120_000);
     await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
         ? route.continue() : route.abort('blockedbyclient'));
@@ -3146,7 +3146,7 @@ test.describe('production chat journey', () => {
 // Uses the gated route's scripted transport and real controller/writer. The
 // fixture buttons are not product compaction actions; PageShell/card/navigation
 // are the installed production path under qualification.
-test('PageShell compaction summary reload and original landmark navigation', async ({ page }, info) => {
+test('PageShell compaction summary reload and original landmark navigation', { tag: '@workspace-recovery' }, async ({ page }, info) => {
     test.setTimeout(120_000);
     const componentErrors: string[] = [];
     page.on('pageerror', error => componentErrors.push(error.message));
