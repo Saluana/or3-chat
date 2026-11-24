@@ -1424,8 +1424,14 @@ const tableActive = computed(() => {
 });
 const blockTypeItems = DOCUMENT_BLOCK_TYPE_ITEMS;
 
-function runToolbarAction(action: () => unknown) {
-    if (!editorLocked.value) action();
+function runToolbarAction(action: () => boolean | void) {
+    const current = editor.value;
+    if (editorLocked.value || !current) return;
+    // Tiptap can wait until the next animation frame to focus. Restore the
+    // editor's focus now so typing immediately after formatting reaches it.
+    if (action() === true && !current.isDestroyed && !current.view.hasFocus()) {
+        current.view.focus();
+    }
 }
 
 function shouldShowTextSelection({ state, view, element }: Parameters<NonNullable<BubbleMenuPluginProps['shouldShow']>>[0]) {
@@ -1457,45 +1463,35 @@ const formatButtons = computed<DocumentToolbarItem[]>(() => [
         icon: icons.bold,
         label: `Bold (${shortcut('b')})`,
         active: () => editor.value?.isActive('bold') ?? false,
-        run: () => {
-            editor.value?.chain().focus().toggleBold().run();
-        },
+        run: () => editor.value?.chain().focus().toggleBold().run(),
     },
     {
         id: 'italic',
         icon: icons.italic,
         label: `Italic (${shortcut('i')})`,
         active: () => editor.value?.isActive('italic') ?? false,
-        run: () => {
-            editor.value?.chain().focus().toggleItalic().run();
-        },
+        run: () => editor.value?.chain().focus().toggleItalic().run(),
     },
     {
         id: 'underline',
         icon: icons.underline,
         label: `Underline (${shortcut('u')})`,
         active: () => editor.value?.isActive('underline') ?? false,
-        run: () => {
-            editor.value?.chain().focus().toggleUnderline().run();
-        },
+        run: () => editor.value?.chain().focus().toggleUnderline().run(),
     },
     {
         id: 'strike',
         icon: icons.strike,
         label: 'Strikethrough',
         active: () => editor.value?.isActive('strike') ?? false,
-        run: () => {
-            editor.value?.chain().focus().toggleStrike().run();
-        },
+        run: () => editor.value?.chain().focus().toggleStrike().run(),
     },
     {
         id: 'code',
         icon: icons.code,
         label: 'Inline code',
         active: () => editor.value?.isActive('code') ?? false,
-        run: () => {
-            editor.value?.chain().focus().toggleCode().run();
-        },
+        run: () => editor.value?.chain().focus().toggleCode().run(),
     },
     {
         id: 'link',
@@ -1515,36 +1511,28 @@ const insertButtons = computed<DocumentToolbarItem[]>(() => [
         icon: icons.bulletList,
         label: 'Bullet list',
         active: () => editor.value?.isActive('bulletList') ?? false,
-        run: () => {
-            editor.value?.chain().focus().toggleBulletList().run();
-        },
+        run: () => editor.value?.chain().focus().toggleBulletList().run(),
     },
     {
         id: 'ordered',
         icon: icons.orderedList,
         label: 'Numbered list',
         active: () => editor.value?.isActive('orderedList') ?? false,
-        run: () => {
-            editor.value?.chain().focus().toggleOrderedList().run();
-        },
+        run: () => editor.value?.chain().focus().toggleOrderedList().run(),
     },
     {
         id: 'tasks',
         icon: icons.taskList,
         label: 'Task list',
         active: () => editor.value?.isActive('taskList') ?? false,
-        run: () => {
-            editor.value?.chain().focus().toggleTaskList().run();
-        },
+        run: () => editor.value?.chain().focus().toggleTaskList().run(),
     },
     {
         id: 'quote',
         icon: icons.quote,
         label: 'Quote',
         active: () => editor.value?.isActive('blockquote') ?? false,
-        run: () => {
-            editor.value?.chain().focus().toggleBlockquote().run();
-        },
+        run: () => editor.value?.chain().focus().toggleBlockquote().run(),
     },
 ]);
 const imageInsertButton = computed<DocumentToolbarItem>(() => ({
@@ -1564,17 +1552,13 @@ const overflowButtons = computed<DocumentToolbarItem[]>(() => [
         id: 'codeblock',
         icon: icons.codeBlock,
         label: 'Code block',
-        run: () => {
-            editor.value?.chain().focus().toggleCodeBlock().run();
-        },
+        run: () => editor.value?.chain().focus().toggleCodeBlock().run(),
     },
     {
         id: 'divider',
         icon: icons.divider,
         label: 'Divider',
-        run: () => {
-            editor.value?.chain().focus().setHorizontalRule().run();
-        },
+        run: () => editor.value?.chain().focus().setHorizontalRule().run(),
     },
     { id: 'table', icon: icons.table, label: 'Table', run: openTableDialog },
     imageInsertButton.value,

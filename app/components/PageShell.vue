@@ -1543,6 +1543,11 @@ async function initInitial(preserveWorkspaceRestore = false) {
         hasSyncedInitial.value = true;
         return;
     }
+    if (props.routeSync && workspaceTabsEnabled.value && resumeReloadedTab(preserveWorkspaceRestore)) {
+        hasSyncedInitial.value = true;
+        updateUrl();
+        return;
+    }
     if (props.initialThreadId) {
         if (props.validateInitial) {
             pane.validating = true;
@@ -1802,6 +1807,38 @@ function redirectNotFound(kind: 'chat' | 'doc') {
 
 // --------------- URL Sync ---------------
 let routeTargetsInFlight = 0;
+const workspaceTabSelectionPending = computed(() =>
+    workspaceTabs.state.value.runtime.get(workspaceTabs.activeTabId.value)?.status === 'loading'
+);
+
+function rememberReloadTab(tabId?: string): void {
+    const state = window.history.state;
+    const previous = state?.or3ReloadTab;
+    const scope = activeWorkspaceTabsScope;
+    const path = window.location.pathname;
+    if (tabId ? previous?.tabId === tabId && previous.scope === scope && previous.path === path : !previous) return;
+    try {
+        window.history.replaceState({
+            ...state,
+            or3ReloadTab: tabId ? { tabId, scope, path } : null,
+        }, '');
+    } catch {
+        // The router and workspace can still operate when history writes fail.
+    }
+}
+
+function resumeReloadedTab(restored: boolean): boolean {
+    const history = router.options.history;
+    const intent = history.state.or3ReloadTab;
+    if (!intent || typeof intent !== 'object' || Array.isArray(intent)) return false;
+    history.replace(history.location, { or3ReloadTab: null });
+    const [navigation] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
+    const scope = `${workspaceScopeId.value ?? 'local'}\0${resolvedProfile.value.id}`;
+    return restored && navigation?.type === 'reload' &&
+        intent.path === window.location.pathname && intent.scope === scope &&
+        intent.tabId === workspaceTabs.activeTabId.value;
+}
+
 /** `replace` keeps focus moves between visible split panes out of history. */
 function updateUrl(force = false, replace = false) {
     if (!process.client || !props.routeSync) return;
@@ -1827,7 +1864,17 @@ function updateUrl(force = false, replace = false) {
     const newPath = id ? `${base}/${id}` : base;
     const tabId = workspaceTabsEnabled.value ? workspaceTabs.activeTabId.value : undefined;
     const entryTabId = window.history.state?.or3TabId as string | undefined;
-    if (currentPath === newPath && entryTabId === tabId) return;
+    if (currentPath === newPath && workspaceTabSelectionPending.value &&
+        tabId && workspaceTabsReady.value && !workspaceTabsTransitioning.value) {
+        // The outgoing pane still owns its URL. Save the new selection on
+        // this entry before the Loading tab can be seen and reloaded.
+        rememberReloadTab(tabId);
+        return;
+    }
+    if (currentPath === newPath && entryTabId === tabId) {
+        rememberReloadTab();
+        return;
+    }
     // The root entry point can become /chat while a dashboard deep link is
     // mounting. Keep its operation context through that one route rewrite.
     const params = new URLSearchParams(window.location.search);
@@ -1842,7 +1889,7 @@ function updateUrl(force = false, replace = false) {
     // adds an entry, so Back/Forward stay in the app (see onRouteTarget).
     const binding = currentPath === '/' || (currentPath === newPath && (!entryTabId || entryTabId === tabId)) ||
         (entryTabId === tabId && currentPath === base && newPath.startsWith(`${base}/`));
-    const location = { path: newPath, query, state: { or3TabId: tabId }, force: true };
+    const location = { path: newPath, query, state: { or3TabId: tabId, or3ReloadTab: null }, force: true };
     void (force || replace || binding ? router.replace(location) : router.push(location));
 }
 
@@ -1851,6 +1898,7 @@ function updateUrl(force = false, replace = false) {
 // otherwise open the resource, which finds or creates its tab.
 async function onRouteTarget() {
     if (!props.routeSync || !shellActive.value || !hasSyncedInitial.value) return;
+    rememberReloadTab();
     if (route.path === '/') { updateUrl(true); return; } // Home keeps the current tab.
     const kind = route.path === '/docs' || route.path.startsWith('/docs/') ? 'doc'
         : route.path === '/chat' || route.path.startsWith('/chat/') ? 'chat' : null;
@@ -1919,12 +1967,10 @@ watch(
     () => {
         const active = panes.value[activePaneIndex.value];
         if (!active) return '';
-        // The bound resource only: the active tab id changes before its
-        // resource is bound, and would record the outgoing path for it.
         const tabId = workspaceTabs.state.value.paneBindings.get(active.id) || '';
         return `${tabId}:${active.mode}:${active.threadId || ''}:${
             active.documentId || ''
-        }`;
+        }:${workspaceTabSelectionPending.value}`;
     },
     () => updateUrl()
 );
@@ -2081,20 +2127,24 @@ function onSidebarSelected(id: string) {
 async function onCompactionSourceSelected(target: { threadId: string; messageId: string; originThreadId: string; scrollMessageId?: string; generation: number }, paneIndex: number) {
     const pane = panes.value[paneIndex];
     if (!pane || pane.mode !== 'chat' || pane.threadId !== target.originThreadId || getWorkspaceGeneration() !== target.generation) return;
+    let destinationTabId: string | undefined;
     if (workspaceTabsEnabled.value) {
         const originTab = workspaceTabs.state.value.paneBindings.get(pane.id);
         if (!originTab || !await workspaceTabs.activateTab(originTab, 'pointer')) return;
         if (getWorkspaceGeneration() !== target.generation || panes.value[paneIndex]?.id !== pane.id
-            || pane.threadId !== target.originThreadId || activePaneIndex.value !== paneIndex) return;
+            || pane.threadId !== target.originThreadId || activePaneIndex.value !== paneIndex
+            || workspaceTabs.state.value.paneBindings.get(pane.id) !== originTab) return;
         const opened = await workspaceTabs.openResource({ kind: 'chat', threadId: target.threadId });
         if (opened.status !== 'activated') return;
+        destinationTabId = opened.tabId;
     } else {
         setActive(paneIndex);
-        await setPaneThread(paneIndex, target.threadId);
+        if (!await setPaneThread(paneIndex, target.threadId)) return;
     }
     await nextTick();
     const destination = panes.value[activePaneIndex.value];
-    if (getWorkspaceGeneration() !== target.generation || destination?.mode !== 'chat' || destination.threadId !== target.threadId) return;
+    if (getWorkspaceGeneration() !== target.generation || destination?.mode !== 'chat' || destination.threadId !== target.threadId
+        || destinationTabId && workspaceTabs.state.value.paneBindings.get(destination.id) !== destinationTabId) return;
     if (target.messageId) paneComponentRefs.get(destination.id)?.scrollToMessage?.({ threadId: target.threadId,
         messageId: target.scrollMessageId ?? target.messageId, generation: target.generation });
     closeSidebarIfMobile();
@@ -2106,15 +2156,21 @@ async function onCompactionCommitted(target: { threadId: string; messageId: stri
         || pane.threadId !== target.originThreadId || getWorkspaceGeneration() !== target.generation) return;
     if (workspaceTabsEnabled.value) {
         const originTab = workspaceTabs.state.value.paneBindings.get(pane.id);
-        const draft = workspaceTabDrafts.read(originTab);
+        const draftScope = workspaceTabDrafts.scope();
+        const draft = workspaceTabDrafts.read(originTab, draftScope);
         if (draft) {
             const childTab = await workspaceTabs.openResource({ kind: 'chat', threadId: target.threadId }, { target: 'background' });
-            if (childTab.status === 'created') workspaceTabDrafts.write(childTab.tabId, { ...draft,
-                editorJson: draft.editorJson ? structuredClone(draft.editorJson) : undefined,
-                attachments: draft.attachments.map(file => ({ ...file, url: file.url.startsWith('blob:') ? URL.createObjectURL(file.file) : file.url })),
-                largeTextBlocks: draft.largeTextBlocks.map(block => ({ ...block })),
-                composer: draft.composer ? { ...draft.composer, imageSettings: { ...draft.composer.imageSettings } } : undefined,
-            });
+            const currentDraftScope = workspaceTabDrafts.scope();
+            if (getWorkspaceGeneration() !== target.generation || currentDraftScope.key !== draftScope.key
+                || currentDraftScope.db !== draftScope.db) return;
+            if (childTab.status === 'created' && workspaceTabs.state.value.tabs.some(tab => tab.id === childTab.tabId)) {
+                workspaceTabDrafts.write(childTab.tabId, { ...draft,
+                    editorJson: draft.editorJson ? structuredClone(draft.editorJson) : undefined,
+                    attachments: draft.attachments.map(file => ({ ...file, url: file.url.startsWith('blob:') ? URL.createObjectURL(file.file) : file.url })),
+                    largeTextBlocks: draft.largeTextBlocks.map(block => ({ ...block })),
+                    composer: draft.composer ? { ...draft.composer, imageSettings: { ...draft.composer.imageSettings } } : undefined,
+                }, draftScope);
+            }
         }
     }
     try { await onCompactionSourceSelected(target, paneIndex); }

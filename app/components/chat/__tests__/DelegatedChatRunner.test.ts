@@ -11,24 +11,27 @@ const chat = vi.hoisted(() => ({
 }));
 vi.mock('~/composables/chat/useAi', () => ({ useChat: () => chat }));
 
-it('interrupts the waiting parent when its child runner is unmounted', async () => {
+it.each(['unmounted', 'cancelled'] as const)('interrupts the waiting parent when its child runner is %s during its history read', async (ending) => {
     let finishSync!: () => void;
     chat.abort.mockReset();
     chat.sendMessage.mockReset();
     chat.ensureHistorySynced.mockReturnValue(new Promise<void>(resolve => { finishSync = resolve; }));
+    const controller = new AbortController();
     const completion = queueDelegatedChat({
         threadId: 'unmounted-child', workspaceId: getActiveWorkspaceId() ?? 'local',
         workspaceGeneration: getWorkspaceGeneration(), assertOrigin: () => {},
-        content: 'A task', model: 'test/model', thinking: false, signal: new AbortController().signal,
+        content: 'A task', model: 'test/model', thinking: false, signal: controller.signal,
     }).then(() => 'completed', error => (error as Error).message);
     const job = delegatedChatJobs().find(item => item.threadId === 'unmounted-child')!;
     const wrapper = mount(DelegatedChatRunner, { props: { job } });
     try {
         expect(chat.ensureHistorySynced).toHaveBeenCalled();
-        wrapper.unmount();
+        if (ending === 'unmounted') wrapper.unmount();
+        else controller.abort();
         await flushPromises();
         expect(chat.abort).toHaveBeenCalledOnce();
-        expect(await Promise.race([completion, Promise.resolve('still running')])).toMatch(/interrupted/i);
+        expect(await Promise.race([completion, Promise.resolve('still running')])).toMatch(/interrupted|cancelled/i);
+        expect(delegatedChatJobs().some(item => item.threadId === job.threadId)).toBe(false);
         finishSync();
         await flushPromises();
         expect(chat.sendMessage).not.toHaveBeenCalled();

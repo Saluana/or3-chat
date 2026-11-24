@@ -470,6 +470,9 @@ export function createPaletteCoordinator(options?: {
                                 term,
                                 limit: PALETTE_MAX_PER_SOURCE,
                                 signal: querySignal,
+                                accepts: parsed.kind === 'category'
+                                    ? resource => resource.categoryId === parsed.categoryId
+                                    : undefined,
                             });
                             if (searchResult.usingFallback) {
                                 entry.status = {
@@ -614,6 +617,7 @@ export function createPaletteCoordinator(options?: {
                     return entry.source.category.id !== 'command';
                 })
                 .flatMap((entry) => entry.index.getResources())
+                .filter((resource) => kind !== 'category' || resource.categoryId === categoryId)
                 .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
                 .slice(0, PALETTE_EMPTY_RECENTS)
                 .map((resource) => resourceToResult(resource));

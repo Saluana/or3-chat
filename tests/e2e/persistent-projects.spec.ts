@@ -1155,7 +1155,7 @@ test('persistent projects retain settings, extract files, preserve failed replac
 // This owns the exported browser artifact and destructive restore boundary:
 // lost internal posts, missing revision bytes, and a deleted memory resurrected
 // incorrectly can pass local store tests while breaking a user's portable backup.
-test('project backup restores memories and extracted revision bytes', async ({
+test('project backup restores memories and extracted revision bytes', { tag: '@workspace-recovery' }, async ({
     page,
 }, info) => {
     test.setTimeout(180000);

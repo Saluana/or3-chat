@@ -56,10 +56,37 @@ export async function readCapturedHistory(db: Or3DB, query: CanonicalChatQuery):
     const [total, indexedTotal] = await Promise.all([db.messages.where('thread_id').equals(query.thread_id).count(), indexed.count()]);
     if (total !== indexedTotal) return { status: 'scope_incomplete' };
     const keyBucketCount = key ? await db.messages.where('[thread_id+index]').equals([query.thread_id, key[0]]).count() : 0;
+    let includeKeyBucket = keyBucketCount > 1;
+    if (key && includeKeyBucket && keyBucketCount <= query.limit) {
+        // A page cursor commonly ends at the last row sharing this index.
+        // Check bounded index metadata before spending the content-row budget
+        // on that already consumed bucket. Legacy rows have no order_key and
+        // therefore appear only in the primary-key list, with an empty key.
+        const [ids, keys] = await Promise.all([
+            db.messages.where('[thread_id+index]').equals([query.thread_id, key[0]]).primaryKeys(),
+            db.messages.where('[thread_id+index+order_key+id]').between(
+                [query.thread_id, key[0]],
+                [query.thread_id, key[0], Dexie.maxKey], true, true).keys(),
+        ]);
+        const orderKeys = new Map<string, string>();
+        for (const value of keys) {
+            const entry: unknown = value;
+            if (Array.isArray(entry) && entry.length === 4
+                && entry[0] === query.thread_id && entry[1] === key[0]
+                && typeof entry[2] === 'string' && typeof entry[3] === 'string') {
+                orderKeys.set(entry[3], entry[2]);
+            }
+        }
+        includeKeyBucket = ids.some(id => {
+            const order = compareMessageOrder({ index: key[0], order_key: orderKeys.get(String(id)) ?? '', id: String(id) },
+                { index: key[0], order_key: key[1], id: key[2] });
+            return backward ? order < 0 : order > 0;
+        });
+    }
     const range = db.messages.where('[thread_id+index]').between(
         [query.thread_id, !backward && key ? key[0] : Dexie.minKey],
         [query.thread_id, backward && key ? key[0] : Dexie.maxKey],
-        !(key && !backward && keyBucketCount === 1), !(key && backward && keyBucketCount === 1));
+        !(key && !backward && !includeKeyBucket), !(key && backward && !includeKeyBucket));
     const candidates = await (backward ? range.reverse() : range).limit(query.limit).toArray();
     const boundary = candidates.at(-1)?.index;
     // A pathologically large tie group is an explicit incomplete page, not

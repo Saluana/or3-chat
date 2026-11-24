@@ -458,7 +458,8 @@ import type {
     UploadedImage,
 } from '~/components/chat/chat-input/types';
 import { useChatInputAttachments } from '~/components/chat/chat-input/useChatInputAttachments';
-import { StoredAttachmentOfflineError, type StoredAttachmentSource } from '~/components/chat/file-upload-utils';
+import type { StoredAttachmentSource } from '~/components/chat/file-upload-utils';
+import { FileOriginalUnavailableError } from '~/db/files-util';
 import ChatComposerShell from '~/components/chat/ChatComposerShell.vue';
 import ChatProjectChoice from '~/components/projects/ChatProjectChoice.vue';
 import { useChatModelSelection } from '~/composables/chat/useChatModelSelection';
@@ -1614,7 +1615,7 @@ async function attachMentionImage(id: string): Promise<void> {
         await attachStoredFile({ id, workspaceId: origin.workspaceId, generation: origin.generation, kind: 'image' });
     } catch (error) {
         if (!componentDisposed && props.tabId === initiatingTab) {
-            const description = error instanceof StoredAttachmentOfflineError
+            const description = error instanceof FileOriginalUnavailableError
                 ? error.message : presentError(error, { fallbackMessage: 'Try again.' }).message;
             toast.add({ title: 'Could not attach image', description, color: 'error' });
         }

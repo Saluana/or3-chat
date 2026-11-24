@@ -314,7 +314,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 3,
-                    "summary": "Export Cloud archives or local recovery copies, preserve background-message ordering, understand remote-only file coverage, and restore with captured workspace identity and server history fencing."
+                    "summary": "Export Cloud archives or local recovery copies, preserve background-message ordering, check remote-only file coverage and local file-size limits, verify original-file hashes during restore, and restore with captured workspace identity and server history fencing."
                 }
             ]
         },
@@ -338,7 +338,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Connect or paste a personal key, disconnect, understand quiet startup checks and migration errors, diagnose Cloud callback failures with credential-safe stages, and prepare a real OpenRouter preview."
+                    "summary": "Connect a personal key in the same tab or paste an existing key, disconnect, understand quiet startup checks and migration errors, diagnose Cloud callback failures with credential-safe stages, and prepare a real OpenRouter preview."
                 },
                 {
                     "name": "reference.md",
@@ -380,7 +380,7 @@
                     "category": "Using tools",
                     "categoryOrder": 0,
                     "order": 0,
-                    "summary": "Configure chat tools, web search, appearance editing with shared setting descriptions, workspace tools, delegated tasks, and retained results."
+                    "summary": "Configure chat tools, web search, appearance editing with shared setting descriptions, workspace-bound tool execution, delegated tasks, and retained results."
                 },
                 {
                     "name": "chat-tool-reliability.md",
@@ -425,7 +425,7 @@
                     "category": "Source integration",
                     "categoryOrder": 1,
                     "order": 3,
-                    "summary": "Browse and search within folders, find an item's Files and project locations, and use bulk selection and Trash in narrow panes. Covers workspace KV sync, text coverage, checking saved attachments before opening chat, shared-byte retention, and trusted Plugin SDK catalog actions."
+                    "summary": "Browse and search within folders, find an item's Files and project locations, and use bulk selection and Trash in narrow panes. Covers workspace KV sync, text coverage, online and offline handling of missing saved attachments, shared-byte retention, and trusted Plugin SDK catalog actions."
                 },
                 {
                     "name": "errors.md",
@@ -443,7 +443,7 @@
                     "category": "Source integration",
                     "categoryOrder": 1,
                     "order": 5,
-                    "summary": "Maintain local JSONL transactional restore and Cloud binary archives with bounded buffers, original-file hashes, and fresh-workspace recovery."
+                    "summary": "Maintain local JSONL export limits and workspace-scoped transactional restore, and Cloud binary archives with bounded buffers, original-file hashes, and fresh-workspace recovery."
                 }
             ]
         },
@@ -877,7 +877,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Understand chat admission, persistence, direct OpenAI cache boundaries and live qualification, literal user-message editing, draft-safe pane plugin sends, streaming checkpoint failures and recovery, tab and pane navigation ownership, dashboard subpages preserved across unrelated URL updates, retired command handles, durable layouts, attachment resource cleanup, and local token estimates, streaming Markdown prefix reuse with custom images and tail-only repair, cached Mermaid remounts, worker highlighting, pre-paint scroll anchoring and collapse refill, and smooth navigation."
+                    "summary": "Understand chat admission, persistence, direct OpenAI cache boundaries and live qualification, literal user-message editing, draft-safe pane plugin sends, streaming checkpoint failures and recovery, tab and pane navigation ownership, dashboard subpages preserved across unrelated URL updates, retired command handles, durable layouts, attachment resource cleanup, and local token estimates, streaming Markdown prefix reuse with custom images and tail-only repair, cached Mermaid remounts, worker highlighting, pre-paint scroll anchoring and collapse refill, and restoring a loading tab on refresh."
                 },
                 {
                     "name": "ai-preferences.md",

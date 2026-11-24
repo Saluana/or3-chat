@@ -99,6 +99,34 @@ describe('createPaletteCoordinator', () => {
         vi.useRealTimers();
     });
 
+    it('keeps Settings and Dashboard discovery separate within their shared source', async () => {
+        const settings = registerDashboardPlugin({ id: 'palette-filter-settings', label: 'Test settings',
+            icon: 'i-lucide-settings', capabilities: ['canAccessSettings'] });
+        const dashboard = registerDashboardPlugin({ id: 'palette-filter-dashboard', label: 'Test dashboard',
+            icon: 'i-lucide-layout-dashboard' });
+        registerPaletteSource(createDashboardPaletteSource());
+        const { createPaletteCoordinator } = await import('../coordinator');
+        const coordinator = createPaletteCoordinator({ debounceMs: 0 });
+        try {
+            await coordinator.ensureWarm();
+            for (const [query, key] of [['setting:', 'dashboard:palette-filter-settings'], ['dashboard:', 'dashboard:palette-filter-dashboard']]) {
+                coordinator.setQuery(query!);
+                await vi.advanceTimersByTimeAsync(0);
+                expect(coordinator.getSnapshot().results.map(result => result.key)).toEqual([key]);
+            }
+            const { searchWithIndex } = await import('~/core/search/orama');
+            vi.mocked(searchWithIndex).mockRejectedValueOnce(new Error('Index unavailable'));
+            for (const [query, key] of [['setting: test', 'dashboard:palette-filter-settings'], ['dashboard: test', 'dashboard:palette-filter-dashboard']]) {
+                coordinator.setQuery(query!);
+                await vi.advanceTimersByTimeAsync(0);
+                expect(coordinator.getSnapshot().results.map(result => result.key)).toEqual([key]);
+            }
+            coordinator.setQuery('');
+            await vi.advanceTimersByTimeAsync(0);
+            expect(coordinator.getSnapshot().results).toHaveLength(2);
+        } finally { coordinator.dispose(); settings.dispose(); dashboard.dispose(); }
+    });
+
     it('fans out, caps results, and supports empty-query discovery', async () => {
         const chatCategory = CORE_PALETTE_CATEGORIES.find((c) => c.id === 'chat')!;
         registerPaletteCommand(

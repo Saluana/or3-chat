@@ -134,7 +134,7 @@ describe('document editor sessions', () => {
         }
     });
 
-    it('does not let stale cleanup remove a replacement workspace session', () => {
+    it('does not let repeated stale cleanup remove a replacement workspace session', async () => {
         const stale = makeSession();
         const replacement = makeSession();
         const unregisterStale = registerDocumentEditorSession(stale);
@@ -149,6 +149,16 @@ describe('document editor sessions', () => {
         expect(
             getDocumentEditorSession({ paneId: 'pane-a', tabId: 'tab-a' })
         ).toBeUndefined();
+
+        const reopened = makeSession();
+        const unregisterReopened = registerDocumentEditorSession(reopened);
+        try {
+            unregisterStale();
+            await captureDocumentEditor('doc-a');
+            await ensureDocumentEditorLocalDurability('doc-a');
+            expect(reopened.captureContent).toHaveBeenCalledOnce();
+            expect(reopened.ensureLocalDurability).toHaveBeenCalledOnce();
+        } finally { unregisterReopened(); }
     });
 
     it('waits for a lazy editor session to register', async () => {

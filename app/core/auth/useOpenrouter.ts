@@ -16,7 +16,7 @@ import { CLOUD_MUTATION_INTENT } from '~~/shared/sync/types';
  * Constraints:
  * - Client-only (accesses `window`, `sessionStorage`, `localStorage`)
  * - PKCE uses S256 with a SHA-256 fallback when SubtleCrypto is unavailable
- * - Stores verifier in both sessionStorage and localStorage as fallback
+ * - Stores each complete PKCE attempt atomically in tab-scoped sessionStorage
  * - Redirect URL is configurable via `OPENROUTER_REDIRECT_URI` runtime config
  *
  * Non-goals:
@@ -31,6 +31,7 @@ import { useRuntimeConfig, useToast } from '#imports';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { disconnectOpenRouterConnection } from './useUserApiKey';
 import { sha256Bytes } from '~~/shared/runtime-crypto';
+import { storeOpenRouterPkceAttempt } from './openrouter-pkce';
 
 function base64urlencode(str: ArrayBuffer) {
     return btoa(String.fromCharCode(...new Uint8Array(str)))
@@ -114,80 +115,74 @@ export function useOpenRouterAuth() {
             }
             return;
         }
-        const codeVerifier = Array.from(
-            crypto.getRandomValues(new Uint8Array(64))
-        )
-            .map((b) => ('0' + b.toString(16)).slice(-2))
-            .join('');
-        const codeChallenge = base64urlencode((await sha256Bytes(codeVerifier)).buffer);
-        const codeChallengeMethod = 'S256';
-        // store the method so the callback knows how to exchange
         try {
-            sessionStorage.setItem(
-                'openrouter_code_method',
-                codeChallengeMethod
-            );
-            // Store the verifier so the callback can exchange it for a key
-            sessionStorage.setItem('openrouter_code_verifier', codeVerifier);
-            // Also store in localStorage as fallback for page reloads
-            localStorage.setItem('openrouter_code_verifier', codeVerifier);
-            localStorage.setItem('openrouter_code_method', codeChallengeMethod);
-        } catch {
-            // sessionStorage may fail in private browsing - continue anyway
-        }
-        // store a random state to protect against CSRF
-        const state = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-            .map((b) => ('0' + b.toString(16)).slice(-2))
-            .join('');
-        sessionStorage.setItem('openrouter_state', state);
-        localStorage.setItem('openrouter_state', state);
+            const codeVerifier = Array.from(
+                crypto.getRandomValues(new Uint8Array(64))
+            )
+                .map((b) => ('0' + b.toString(16)).slice(-2))
+                .join('');
+            const codeChallenge = base64urlencode((await sha256Bytes(codeVerifier)).buffer);
+            const codeChallengeMethod = 'S256';
+            // store a random state to protect against CSRF
+            const state = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+                .map((b) => ('0' + b.toString(16)).slice(-2))
+                .join('');
+            storeOpenRouterPkceAttempt({ version: 1, verifier: codeVerifier, state, method: codeChallengeMethod });
 
-        // default callback to current origin + known path when not provided
-        const redirectUri = rc.public.openRouterRedirectUri;
-        const callbackUrl =
-            (typeof redirectUri === 'string' && redirectUri) ||
-            `${window.location.origin}/openrouter-callback`;
+            // default callback to current origin + known path when not provided
+            const redirectUri = rc.public.openRouterRedirectUri;
+            const callbackUrl =
+                (typeof redirectUri === 'string' && redirectUri) ||
+                `${window.location.origin}/openrouter-callback`;
 
-        const params = new URLSearchParams();
-        // Per docs, only callback_url, code_challenge(+method), and optional state are required
-        // OpenRouter expects a 'callback_url' parameter
-        params.append('callback_url', callbackUrl);
-        params.append('state', state);
-        params.append('code_challenge', codeChallenge);
-        params.append('code_challenge_method', codeChallengeMethod);
-        // If you have a registered app on OpenRouter, including client_id helps avoid
-        // app auto-creation based on referrer (which can be flaky on mobile).
-        const clientId = rc.public.openRouterClientId as string | undefined;
-        if (clientId) params.append('client_id', String(clientId));
+            const params = new URLSearchParams();
+            // Per docs, only callback_url, code_challenge(+method), and optional state are required
+            // OpenRouter expects a 'callback_url' parameter
+            params.append('callback_url', callbackUrl);
+            params.append('state', state);
+            params.append('code_challenge', codeChallenge);
+            params.append('code_challenge_method', codeChallengeMethod);
+            // If you have a registered app on OpenRouter, including client_id helps avoid
+            // app auto-creation based on referrer (which can be flaky on mobile).
+            const clientId = rc.public.openRouterClientId as string | undefined;
+            if (clientId) params.append('client_id', String(clientId));
 
-        const authUrlConfig = rc.public.openRouterAuthUrl;
-        const authUrl =
-            (typeof authUrlConfig === 'string' && authUrlConfig) ||
-            'https://openrouter.ai/auth';
-        const url = `${authUrl}?${params.toString()}`;
+            const authUrlConfig = rc.public.openRouterAuthUrl;
+            const authUrl =
+                (typeof authUrlConfig === 'string' && authUrlConfig) ||
+                'https://openrouter.ai/auth';
+            const url = `${authUrl}?${params.toString()}`;
 
-        // Warn if callback URL is not HTTPS or localhost (common iOS issue)
-        try {
-            const u = new URL(callbackUrl);
-            const isLocalhost = ['localhost', '127.0.0.1'].includes(u.hostname);
-            const isHttps = u.protocol === 'https:';
-            if (!isHttps && !isLocalhost) {
-                console.warn(
-                    'OpenRouter PKCE: non-HTTPS, non-localhost callback_url detected. On mobile, use a public HTTPS tunnel and set OPENROUTER_REDIRECT_URI.',
-                    callbackUrl
-                );
+            // Warn if callback URL is not HTTPS or localhost (common iOS issue)
+            try {
+                const u = new URL(callbackUrl);
+                const isLocalhost = ['localhost', '127.0.0.1'].includes(u.hostname);
+                const isHttps = u.protocol === 'https:';
+                if (!isHttps && !isLocalhost) {
+                    console.warn(
+                        'OpenRouter PKCE: non-HTTPS, non-localhost callback_url detected. On mobile, use a public HTTPS tunnel and set OPENROUTER_REDIRECT_URI.',
+                        callbackUrl
+                    );
+                }
+            } catch {
+                // Invalid URL - skip warning
             }
+
+            // Debug (dev only): final URL for parameter inspection
+            if (import.meta.dev) {
+                console.debug('OpenRouter PKCE redirect URL:', url);
+            }
+
+            // Use assign to ensure history behaves consistently across mobile browsers
+            window.location.assign(url);
         } catch {
-            // Invalid URL - skip warning
+            isLoggingIn.value = false;
+            toast.add({
+                title: 'OpenRouter connection unavailable',
+                description: 'Your browser could not prepare a secure connection. Check browser storage and try again.',
+                color: 'error',
+            });
         }
-
-        // Debug (dev only): final URL for parameter inspection
-        if (import.meta.dev) {
-            console.debug('OpenRouter PKCE redirect URL:', url);
-        }
-
-        // Use assign to ensure history behaves consistently across mobile browsers
-        window.location.assign(url);
     };
 
     const logoutOpenRouter = async () => {

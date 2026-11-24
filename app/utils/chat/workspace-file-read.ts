@@ -3,7 +3,7 @@ import type { WorkspaceOperationScope } from './workspace-access';
 import { workspaceRevision, type WorkspaceSource } from './workspace-items';
 import type { ToolExecutionContext } from './types';
 import { workspaceItemMetadata } from '~~/shared/posts/workspace-item';
-import { parseFileHashes } from '~/db/files-util';
+import { FileOriginalUnavailableError, parseFileHashes } from '~/db/files-util';
 import { getFileBlob } from '~/db/files';
 import { resolveChatProject } from '~/db/project-workspace';
 import { PROJECT_POST_TYPES, ProjectSourceSchema, readPersistedProjectRecord } from '~~/shared/projects/workspace';
@@ -52,7 +52,7 @@ export async function readWorkspaceFilePage(scope: WorkspaceOperationScope,
         if (/\.(txt|md|csv)$/iu.test(meta.name)) {
             const blob = await getFileBlob(meta.hash, scope.db);
             scope.assertCurrent();
-            if (!blob) throw new Error('Original file unavailable offline. Connect and retry this page.');
+            if (!blob) throw new FileOriginalUnavailableError();
             if (blob.size !== meta.size_bytes) throw new Error('Original file size changed. Read it again.');
             bytes = blob;
             textCoverage = 'full';

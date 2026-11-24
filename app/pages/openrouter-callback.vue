@@ -72,22 +72,21 @@ import { reportError, err } from '~/utils/errors';
 import { exchangeOpenRouterCode } from '~/core/auth/openrouter-auth';
 import { persistUserApiKey, refreshOpenRouterConnection } from '~/core/auth/useUserApiKey';
 import { useOpenRouterAuth } from '~/core/auth/useOpenrouter';
+import {
+    clearOpenRouterPkceAttempt,
+    consumeOpenRouterPkceAttempt,
+    isCurrentOpenRouterPkceAttempt,
+    readOpenRouterPkceAttempt,
+} from '~/core/auth/openrouter-pkce';
 
 const toast = useToast();
 const route = useRoute();
 const router = useRouter();
-const { startLogin } = useOpenRouterAuth();
+const { startLogin, isLoggingIn } = useOpenRouterAuth();
 const warningIcon = useIcon('ui.warning');
 const checkIcon = useIcon('ui.check');
 const loadingIcon = useIcon('ui.loading');
 const retryIcon = useIcon('ui.refresh');
-
-const PKCE_MARKER_KEYS = [
-    'openrouter_auth_code',
-    'openrouter_code_verifier',
-    'openrouter_state',
-    'openrouter_code_method',
-];
 
 const loading = ref(true);
 const ready = ref(false);
@@ -95,13 +94,6 @@ const redirecting = ref(false);
 const errorMessage = ref('');
 // A confirmed CSP violation is distinct from an unclassified network failure.
 const cspViolation = ref(false);
-
-function clearPkceMarkers() {
-    PKCE_MARKER_KEYS.forEach((key) => {
-        sessionStorage.removeItem(key);
-        localStorage.removeItem(key);
-    });
-}
 
 /**
  * Only an enforced connection directive that blocked an OpenRouter origin
@@ -123,13 +115,14 @@ function onSecurityPolicyViolation(event: SecurityPolicyViolationEvent) {
 
 /** Discards the used authorization attempt and starts a fresh PKCE flow. */
 async function startAgain() {
-    clearPkceMarkers();
+    clearOpenRouterPkceAttempt();
     errorMessage.value = '';
     cspViolation.value = false;
     ready.value = false;
     loading.value = true;
     try {
         await startLogin();
+        if (!isLoggingIn.value) throw new Error('Connection could not start');
     } catch (e: any) {
         loading.value = false;
         ready.value = true;
@@ -197,25 +190,13 @@ onMounted(async () => {
         return;
     }
     document.addEventListener('securitypolicyviolation', onSecurityPolicyViolation);
-    const code =
-        route.query.code ||
-        sessionStorage.getItem('openrouter_auth_code') ||
-        localStorage.getItem('openrouter_auth_code') ||
-        '';
-    const state = route.query.state;
-    // Primary in sessionStorage (original), fallback to localStorage if a reload or restore lost it.
-    const verifier =
-        sessionStorage.getItem('openrouter_code_verifier') ||
-        localStorage.getItem('openrouter_code_verifier') ||
-        '';
-    const savedState =
-        sessionStorage.getItem('openrouter_state') ||
-        localStorage.getItem('openrouter_state') ||
-        '';
-    const codeMethod =
-        sessionStorage.getItem('openrouter_code_method') ||
-        localStorage.getItem('openrouter_code_method') ||
-        'S256';
+    const pkce = readOpenRouterPkceAttempt();
+    const hasQuery = route.query.code !== undefined || route.query.state !== undefined;
+    const code = hasQuery ? typeof route.query.code === 'string' ? route.query.code : '' : pkce?.callback?.code ?? '';
+    const state = hasQuery ? typeof route.query.state === 'string' ? route.query.state : '' : pkce?.callback?.state;
+    const verifier = pkce?.verifier ?? '';
+    const savedState = pkce?.state ?? '';
+    const codeMethod = pkce?.method ?? 'S256';
     log('query params present:', {
         code: Boolean(code),
         state: Boolean(state),
@@ -243,7 +224,7 @@ onMounted(async () => {
                 : 'This connection was started in a different browser or address. Start it again from this address.';
         return;
     }
-    if (savedState && state !== savedState) {
+    if (!savedState || state !== savedState) {
         reportError(
             err('ERR_AUTH', 'State mismatch (possible CSRF)', {
                 severity: 'error',
@@ -257,6 +238,13 @@ onMounted(async () => {
         return;
     }
 
+    if (!pkce || !consumeOpenRouterPkceAttempt(pkce)) {
+        loading.value = false;
+        ready.value = true;
+        errorMessage.value = 'This connection attempt is unavailable or was already used. Try again to start a fresh connection.';
+        return;
+    }
+
     let attempt = 0;
     const doExchange = async (): Promise<boolean> => {
         attempt++;
@@ -266,6 +254,12 @@ onMounted(async () => {
             codeMethod,
             attempt,
         });
+        if (!isCurrentOpenRouterPkceAttempt(pkce)) {
+            loading.value = false;
+            ready.value = true;
+            errorMessage.value = 'A newer connection attempt has started. Complete that connection or try again.';
+            return false;
+        }
         if (!result.ok) {
             // One UI layer, one error. The used authorization code is never
             // replayed automatically; the user explicitly starts a fresh flow.
@@ -291,7 +285,7 @@ onMounted(async () => {
                 }),
                 { toast: true }
             );
-            clearPkceMarkers();
+            clearOpenRouterPkceAttempt(pkce.state);
             loading.value = false;
             ready.value = true;
             return false;
@@ -312,11 +306,11 @@ onMounted(async () => {
                 }),
                 { toast: true }
             );
-            clearPkceMarkers();
+            clearOpenRouterPkceAttempt(pkce.state);
             return false;
         }
         log('clearing session markers (verifier/state/method)');
-        clearPkceMarkers();
+        clearOpenRouterPkceAttempt(pkce.state);
         // Allow event loop to process storage events in other tabs/components
         await new Promise((r) => setTimeout(r, 10));
         loading.value = false;

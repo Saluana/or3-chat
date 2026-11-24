@@ -50,8 +50,13 @@ export function queueDelegatedChat(input: Omit<DelegatedChatJob, 'controller' | 
     input.signal.throwIfAborted();
     return new Promise((resolve, reject) => {
         const job = shallowReactive<DelegatedChatJob>({ ...input, resolve, reject, stopWorkspace: () => {}, abort: () => {
-            if (job.controller) job.controller.abort();
-            else finishDelegatedChat(job, undefined, new Error('Delegated chat was cancelled.'));
+            try { job.controller?.abort(); }
+            finally {
+                // There may be no active request yet: the runner can still be
+                // awaiting its history read. Retire its job without waiting for
+                // that read or a late provider callback to acknowledge Stop.
+                finishDelegatedChat(job, undefined, new Error('Delegated chat was cancelled.'));
+            }
         } });
         job.stopWorkspace = subscribeActiveWorkspaceDb(() => {
             if (isCurrent(job)) return;

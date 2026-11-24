@@ -30,7 +30,7 @@ describe('useOpenRouterAuth', () => {
         }));
     });
 
-    afterEach(() => vi.unstubAllGlobals());
+    afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
     it.each(['native', 'http'] as const)('uses S256 PKCE in %s contexts', async (context) => {
         runtimeConfig.public.ssrAuthEnabled = false;
@@ -40,12 +40,42 @@ describe('useOpenRouterAuth', () => {
         const { useOpenRouterAuth } = await import('~/core/auth/useOpenrouter');
         await useOpenRouterAuth().startLogin();
         const url = new URL(assign.mock.calls[0]![0] as string);
-        const verifier = sessionStorage.getItem('openrouter_code_verifier')!;
+        const attempt = JSON.parse(sessionStorage.getItem('openrouter_code_verifier')!);
+        const verifier = attempt.verifier;
         expect(verifier).toMatch(/^[a-f0-9]{128}$/);
         expect(url.searchParams.get('code_challenge_method')).toBe('S256');
         expect(url.searchParams.get('code_challenge')).toBe(createHash('sha256').update(verifier).digest('base64url'));
-        expect(url.searchParams.get('state')).toBe(sessionStorage.getItem('openrouter_state'));
+        expect(url.searchParams.get('state')).toBe(attempt.state);
+        expect(localStorage.getItem('openrouter_code_verifier')).toBeNull();
     });
+
+    it.each(['getter', 'write'] as const)(
+        'recovers from an unavailable tab storage %s without leaving Connect stuck',
+        async failure => {
+            runtimeConfig.public.ssrAuthEnabled = false;
+            const assign = vi.fn();
+            vi.stubGlobal('window', { location: { origin: 'https://chat.example', assign } });
+            const unavailable = () => { throw new DOMException('Storage denied', 'SecurityError'); };
+            const blocked = failure === 'getter'
+                ? vi.spyOn(globalThis, 'sessionStorage', 'get').mockImplementation(unavailable)
+                : vi.spyOn(Storage.prototype, 'setItem').mockImplementation(unavailable);
+            const { useOpenRouterAuth } = await import('~/core/auth/useOpenrouter');
+            const auth = useOpenRouterAuth();
+
+            await expect(auth.startLogin()).resolves.toBeUndefined();
+            expect(assign).not.toHaveBeenCalled();
+            expect(auth.isLoggingIn.value).toBe(false);
+            expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ color: 'error' }));
+            expect(localStorage.getItem('openrouter_code_verifier')).toBeNull();
+            blocked.mockRestore();
+            await auth.startLogin();
+            expect(assign).toHaveBeenCalledTimes(1);
+            const url = new URL(assign.mock.calls[0]![0] as string);
+            const attempt = JSON.parse(sessionStorage.getItem('openrouter_code_verifier')!);
+            expect(url.searchParams.get('state')).toBe(attempt.state);
+            expect(url.searchParams.get('code_challenge')).toBe(createHash('sha256').update(attempt.verifier).digest('base64url'));
+        }
+    );
 
     it('requires a workspace session before starting cloud-mode OpenRouter OAuth', async () => {
         const { useOpenRouterAuth } = await import('~/core/auth/useOpenrouter');

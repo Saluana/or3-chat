@@ -19,6 +19,10 @@ MIME type. Tables without inline keys are exported as explicit key/value
 tuples, but import rejects these unsupported custom tables before clearing data.
 Current OR3 workspace tables use inline key paths.
 
+Export checks each original's byte length before encoding it and aborts the
+destination if it exceeds the local restore limit of 50 MiB. The error
+identifies the original by filename when available and by its content hash.
+
 Before writing the terminal marker or committing the destination, export checks
 its SHA-256 fingerprint against a second read in one database transaction.
 The fingerprint covers table declarations, row counts, records, and each
@@ -35,6 +39,11 @@ cannot retract bytes can leave an incomplete download; import rejects it.
 Read, write, cancellation, and destination-close failures propagate to the
 existing error/cancelled flow instead of reporting success.
 
+The Cloud local-recovery export and local import workflows supply a workspace
+and account guard to the codec. Export checks it before starting and before
+finalization. Import checks it through the final read and again inside the
+transaction before committing.
+
 ## Import guarantees and boundaries
 
 The importer targets the database passed by the caller. It rejects an
@@ -49,7 +58,9 @@ truncated streams, unsupported line types, and records after the terminal
 marker. A transaction failure rolls back its table changes. Duplicate source primary keys fail across batches in every mode. The importer
 uses the actual table key path, including compound keys, and tracks source
 identities for the current table. Missing or invalid primary keys also fail;
-transaction rollback preserves destination rows. In append mode, destination
+transaction rollback preserves destination rows. Restore checks the original file bytes
+against recognized content hashes before accepting the blob. A mismatch rolls back
+the whole local import, including an in-progress Replace. In append mode, destination
 key conflicts fail unless overwrite is enabled. Overwrite uses record-level
 `bulkPut`; it is not a field-by-field merge.
 

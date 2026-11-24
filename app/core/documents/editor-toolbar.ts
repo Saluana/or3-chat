@@ -53,5 +53,5 @@ export type DocumentToolbarItem = {
     text?: string;
     label: string;
     active?: () => boolean;
-    run: () => void;
+    run: () => boolean | void;
 };

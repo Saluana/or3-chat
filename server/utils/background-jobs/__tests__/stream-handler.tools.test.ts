@@ -718,6 +718,40 @@ describe('consumeBackgroundStreamWithTools', () => {
         dispose();
     });
 
+    it.each(['text', 'reasoning', 'terminal'] as const)(
+        'finishes generation and updates healthy viewers when a %s viewer throws',
+        async failure => {
+            const status = { status: 'streaming' as BackgroundJob['status'] };
+            const { provider, completeJob, failJob } = createProvider(status);
+            const broken = registerJobStream('job-1', event => {
+                if (failure === 'terminal' ? event.type === 'status' && event.status === 'complete'
+                    : event.type === 'delta' && (failure === 'reasoning' ? event.reasoning_delta : event.content_delta)) {
+                    throw new Error('Viewer disconnected');
+                }
+            });
+            const events: unknown[] = [];
+            const healthy = registerJobStream('job-1', event => events.push(event));
+            try {
+                await consumeBackgroundStream({
+                    jobId: 'job-1',
+                    stream: makeSseStream([
+                        { choices: [{ delta: { reasoning: 'Working it out' } }] },
+                        { choices: [{ delta: { content: 'Complete answer' } }] },
+                    ]),
+                    provider,
+                    context: { body: {}, apiKey: 'key', userId: 'user-1', workspaceId: 'ws-1',
+                        threadId: 'thread-1', messageId: 'msg-1', referer: 'http://localhost:3000' },
+                });
+
+                expect(completeJob).toHaveBeenCalledWith('job-1', 'Complete answer');
+                expect(failJob).not.toHaveBeenCalled();
+                expect(events).toContainEqual(expect.objectContaining({
+                    type: 'status', status: 'complete', content: 'Complete answer', reasoning: 'Working it out',
+                }));
+            } finally { broken(); healthy(); }
+        }
+    );
+
     it('completes a plain-text background stream after flushing its final content', async () => {
         const statusRef = { status: 'streaming' as const };
         const { provider, updateJob, completeJob, failJob } = createProvider(statusRef);

@@ -1,7 +1,7 @@
 import { ref, type Ref } from 'vue';
 import Dexie from 'dexie';
 import { useRuntimeConfig } from '#imports';
-import { getDb } from '~/db/client';
+import { getDb, getWorkspaceGeneration, logicalStoreName } from '~/db/client';
 import { invalidateFirstBindEligibility } from '~/core/sync/history-incarnation';
 import { getCachedSessionContext, useSessionContext } from '~/composables/auth/useSessionContext';
 import { hasCloudAccess } from '~/core/cloud/access';
@@ -10,6 +10,7 @@ import { CLOUD_BACKUP_MAGIC, CloudBackupError, peekCloudBackup } from '~~/shared
 import { STATIC_FILE_CEILING } from '~~/shared/storage/file-policy';
 import { reportError, err, asAppError, type AppError, type ErrorCode } from '~/utils/errors';
 import { useHooks } from '~/core/hooks/useHooks';
+import type { InferHookParams } from '~/core/hooks/hook-types';
 import { useLazyBoundaries } from '~/composables/core/useLazyBoundaries';
 import {
     detectWorkspaceBackupFormat,
@@ -19,11 +20,17 @@ import {
     streamWorkspaceExportToWritable,
     WORKSPACE_BACKUP_FORMAT,
     WORKSPACE_BACKUP_VERSION,
+    WorkspaceBackupFileSizeError,
     type WorkspaceBackupHeaderLine,
     type WorkspaceBackupProgress,
 } from '~/utils/workspace-backup-stream';
 
 export type WorkspaceImportMode = 'replace' | 'append';
+type BackupCompletionAction =
+    | 'workspace.backup.export:action:after'
+    | 'workspace.backup.import:action:after'
+    | 'workspace.backup.peek:action:after'
+    | 'workspace:reloaded';
 
 export interface WorkspaceBackupState {
     isExporting: Ref<boolean>;
@@ -160,6 +167,30 @@ function validateBackupMeta(meta: unknown, database = getDb()): ImportMetadata {
     return backupMeta.data;
 }
 
+function captureBackupOrigin(message: string) {
+    const db = getDb();
+    const generation = getWorkspaceGeneration();
+    const session = getCachedSessionContext();
+    const subject = session?.user?.id;
+    const workspace = session?.workspace?.id;
+    const authenticated = session?.authenticated ?? false;
+    return {
+        db,
+        assertCurrent() {
+            const current = getCachedSessionContext();
+            if (
+                getDb() !== db ||
+                getWorkspaceGeneration() !== generation ||
+                current?.user?.id !== subject ||
+                current?.workspace?.id !== workspace ||
+                (current?.authenticated ?? false) !== authenticated
+            ) {
+                throw new CloudBackupError(message);
+            }
+        },
+    };
+}
+
 /**
  * `useWorkspaceBackup`
  *
@@ -187,6 +218,16 @@ function validateBackupMeta(meta: unknown, database = getDb()): ImportMetadata {
  */
 export function useWorkspaceBackup(): WorkspaceBackupApi {
     const hooks = useHooks();
+    // Committed work no longer depends on observer completion. The engine
+    // invokes every ready listener now, in registry order, and coalesces only
+    // that listener's repeats while its prior invocation is still pending.
+    function notifyCompletion<K extends BackupCompletionAction>(name: K, ...args: InferHookParams<K>): void {
+        try {
+            void hooks._engine._dispatchActionObservers(name, args).catch(error => {
+                console.warn('[workspace-backup] Completion dispatch failed:', name, error);
+            });
+        } catch (error) { console.warn('[workspace-backup] Completion dispatch failed:', name, error); }
+    }
     const cloud = isCloudWorkspaceBackupEnabled();
     const session = cloud ? useSessionContext() : null;
     let appBaseURL = '/';
@@ -237,15 +278,14 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
         state.error.value = null;
 
         // A picker or hook can outlive the current workspace selection.
-        const exportDb = getDb();
+        // A local-only installation can still export its captured database.
+        // Cloud installs also need the original account and selection.
+        const exportOrigin = cloud ? captureBackupOrigin(
+            'Account or workspace changed during backup. Select the original workspace and try again.'
+        ) : null;
+        const exportDb = exportOrigin?.db ?? getDb();
+        const assertExportOrigin = exportOrigin?.assertCurrent;
         const exportCloud = !options.localOnly && cloud && hasCloudAccess();
-        const exportSession = cloud ? getCachedSessionContext() : null;
-        const exportSubject = exportSession?.user?.id;
-        const exportWorkspaceId = exportSession?.workspace?.id;
-        const assertCloudOrigin = () => {
-            const current = cloud ? getCachedSessionContext() : null;
-            if (cloud && (getDb() !== exportDb || current?.user?.id !== exportSubject || current?.workspace?.id !== exportWorkspaceId)) throw new CloudBackupError('Account or workspace changed while preparing backup.');
-        };
         const exportStartedAt = Date.now();
         let exportTelemetry: {
             format: 'stream' | 'cloud';
@@ -279,11 +319,12 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 'workspace.backup.export:action:before',
                 exportTelemetry
             );
+            assertExportOrigin?.();
 
             const updateStreamProgress = (
                 progress: WorkspaceBackupProgress
             ) => {
-                assertCloudOrigin();
+                assertExportOrigin?.();
                 const total = progress.totalTables + progress.totalRows;
                 const completed =
                     progress.completedTables + progress.completedRows;
@@ -304,15 +345,16 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                     ],
                 });
 
-                assertCloudOrigin();
+                assertExportOrigin?.();
                 if (exportCloud) {
                     const { exportCloudWorkspace } = await import('~/utils/cloud-workspace-backup');
-                    assertCloudOrigin();
+                    assertExportOrigin?.();
                     await exportCloudWorkspace(() => fileHandle.createWritable());
                 } else await streamWorkspaceExport({
                     db: exportDb,
                     fileHandle,
                     chunkSize: STREAM_CHUNK_SIZE,
+                    assertCurrent: assertExportOrigin,
                     onProgress: updateStreamProgress,
                 });
             } else {
@@ -332,7 +374,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 }
 
                 const streamSaverModule = await loadStreamSaver();
-                assertCloudOrigin();
+                assertExportOrigin?.();
                 // StreamSaver module may have default export or direct export
                 const streamSaverModuleWithDefault = streamSaverModule as { default?: typeof import('streamsaver') } | typeof import('streamsaver') | null;
                 const streamSaver = streamSaverModuleWithDefault && 'default' in streamSaverModuleWithDefault 
@@ -389,14 +431,15 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 };
 
                 if (exportCloud) {
-                    assertCloudOrigin();
+                    assertExportOrigin?.();
                     const { exportCloudWorkspace } = await import('~/utils/cloud-workspace-backup');
-                    assertCloudOrigin();
+                    assertExportOrigin?.();
                     await exportCloudWorkspace(createWriter);
                 } else await streamWorkspaceExportToWritable({
                     db: exportDb,
                     writable: await createWriter(),
                     chunkSize: STREAM_CHUNK_SIZE,
+                    assertCurrent: assertExportOrigin,
                     onProgress: updateStreamProgress,
                 });
             }
@@ -404,7 +447,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
             state.currentStep.value = 'done';
             state.progress.value = 100;
 
-            await hooks.doAction('workspace.backup.export:action:after', {
+            notifyCompletion('workspace.backup.export:action:after', {
                 ...exportTelemetry,
                 durationMs: Date.now() - exportStartedAt,
             });
@@ -510,7 +553,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
             state.backupFormat.value = resolvedFormat;
             state.currentStep.value = 'confirm';
 
-            await hooks.doAction('workspace.backup.peek:action:after', {
+            notifyCompletion('workspace.backup.peek:action:after', {
                 ...peekTelemetryBase,
                 format: resolvedFormat,
                 metadata,
@@ -551,24 +594,11 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
 
         // File reads, hooks, and lazy imports must not retarget a confirmed
         // operation or change its destructive/conflict policy.
-        const importDb = getDb();
+        const { db: importDb, assertCurrent: assertImportOrigin } = captureBackupOrigin(
+            'Account or workspace changed during import. Please select the backup again.'
+        );
         const importMode = state.importMode.value;
         const overwriteValues = state.overwriteValues.value;
-        const importSession = getCachedSessionContext();
-        const importSubject = importSession?.user?.id;
-        const importWorkspaceId = importSession?.workspace?.id;
-        const importAuthenticated = importSession?.authenticated ?? false;
-        const assertImportOrigin = () => {
-            const current = getCachedSessionContext();
-            if (
-                getDb() !== importDb ||
-                current?.user?.id !== importSubject ||
-                current?.workspace?.id !== importWorkspaceId ||
-                (current?.authenticated ?? false) !== importAuthenticated
-            ) {
-                throw new CloudBackupError('Account or workspace changed during import. Please select the backup again.');
-            }
-        };
 
         const fileWithName = file as Blob & { name?: string };
         const fileName =
@@ -612,8 +642,8 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                         importMode === 'replace'
                             ? true
                             : overwriteValues,
+                    assertCurrent: assertImportOrigin,
                     onProgress: (progress: WorkspaceBackupProgress) => {
-                        assertImportOrigin();
                         const total = progress.totalTables + progress.totalRows;
                         const completed =
                             progress.completedTables + progress.completedRows;
@@ -638,9 +668,10 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                     acceptVersionDiff: true, // The preceding validation permits older compatible backups only.
                     chunkSizeBytes: DEFAULT_KILOBYTES_PER_CHUNK,
                     filter: (table: string, row: { blob?: Blob; firstBindEligible?: boolean }) => {
-                        if (table.replace(/^current_/, '') === 'sync_state') row.firstBindEligible = false;
+                        const logicalTable = logicalStoreName(table);
+                        if (logicalTable === 'sync_state') row.firstBindEligible = false;
                         assertImportOrigin();
-                        if (table === 'file_blobs' && row.blob && row.blob.size > STATIC_FILE_CEILING) throw new Error('Local restore cannot import files larger than 50 MiB.');
+                        if (logicalTable === 'file_blobs' && row.blob && row.blob.size > STATIC_FILE_CEILING) throw new Error('Local restore cannot import files larger than 50 MiB.');
                         return true;
                     },
                     progressCallback: (progress: DexieImportProgress) => {
@@ -659,6 +690,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                 };
 
                 await importDb.transaction('rw', importDb.tables, async () => {
+                    assertImportOrigin();
                     await invalidateFirstBindEligibility(importDb);
                     // Include header reads and replacement clearing in the same
                     // transaction as proof consumption and imported data.
@@ -669,6 +701,7 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
                         overwriteValues,
                     }));
                     await invalidateFirstBindEligibility(importDb);
+                    assertImportOrigin();
                 });
             } else {
                 throw err('ERR_VALIDATION', 'Unsupported backup format.', {
@@ -679,12 +712,12 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
             state.currentStep.value = 'done';
             state.progress.value = 100;
 
-            await hooks.doAction('workspace.backup.import:action:after', {
+            notifyCompletion('workspace.backup.import:action:after', {
                 ...importTelemetry,
                 durationMs: Date.now() - importStartedAt,
             });
 
-            await hooks.doAction('workspace:reloaded');
+            notifyCompletion('workspace:reloaded');
         } catch (e) {
             const error = backupError(e);
             state.error.value = error;
@@ -741,7 +774,9 @@ export function useWorkspaceBackup(): WorkspaceBackupApi {
 
 /** Keep user-facing backup messages; other failures use the generic copy. */
 function backupError(e: unknown): AppError {
-    return asAppError(e, e instanceof CloudBackupError ? { code: 'ERR_VALIDATION', message: e.message } : {});
+    return asAppError(e, e instanceof CloudBackupError || e instanceof WorkspaceBackupFileSizeError
+        ? { code: 'ERR_VALIDATION', message: e.message }
+        : {});
 }
 
 function notCloudBackupMessage(format: 'stream' | 'dexie' | 'unknown') {

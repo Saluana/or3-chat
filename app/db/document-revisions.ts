@@ -123,6 +123,7 @@ export async function readDocumentRevision(
         const snapshot = await decodeRevisionInWorker({
             encoding: manifest.encoding,
             hash: manifest.titleContentHash,
+            originalBytes: manifest.originalBytes,
             chunks: rows.map((row) => row?.content ?? ''),
         });
         return { manifest, snapshot };

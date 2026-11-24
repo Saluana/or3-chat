@@ -2,7 +2,7 @@
  * @module app/db/files-util
  *
  * Purpose:
- * Shared helpers for handling message file hash lists.
+ * Shared helpers for message file hash lists and missing file originals.
  *
  * Responsibilities:
  * - Enforce per-message file hash limits
@@ -14,6 +14,14 @@
 import { useRuntimeConfig } from '#imports';
 
 const DEFAULT_MAX_FILES_PER_MESSAGE = 10;
+
+export class FileOriginalUnavailableError extends Error {
+    constructor() {
+        super(typeof navigator !== 'undefined' && navigator.onLine === false
+            ? 'Original file unavailable offline. Connect and retry.'
+            : 'The original file is unavailable. Try again or upload the file again.');
+    }
+}
 
 export function getMaxMessageFileHashes(): number {
     try {

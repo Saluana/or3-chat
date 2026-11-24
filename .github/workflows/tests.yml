@@ -85,7 +85,10 @@ jobs:
               - 'modules/**'
               - 'extensions/**'
               - 'plugins/**'
-              - 'tests/e2e/**'
+              - 'tests/e2e/{chat-tools,chat-tools-cloud,openai-adapter}.spec.ts'
+              - 'tests/e2e/fixtures/{ChatToolsJourney,CloudToolBridgeJourney}.vue'
+              - 'tests/e2e/fixtures/{chat-tool*,sync-history,ai-adapter-conformance}.ts'
+              - 'playwright.config.ts'
               - 'scripts/test/**'
               - 'nuxt.config.ts'
               - 'config.or3*.ts'
@@ -95,6 +98,18 @@ jobs:
               - 'packages/plugin-sdk/**'
               - 'packages/hosted-billing/**'
               - 'or3.providers.generated.json'
+            recovery:
+              - 'app/components/{PageShell.vue,chat/ChatContainer.vue,chat/ContextCompactionCard.vue,dashboard/workspace/WorkspaceBackupApp.vue}'
+              - 'app/composables/core/useWorkspace{Backup,Tab*}.ts'
+              - 'app/composables/core/useMultiPane.ts'
+              - 'app/db/{client,compaction}.ts'
+              - 'app/utils/workspace-backup*.ts'
+              - 'shared/storage/file-policy.ts'
+              - 'tests/e2e/{production-chat-journey,persistent-projects}.spec.ts'
+              - 'tests/e2e/fixtures/{ProductionChatJourney,ProjectsJourney}.vue'
+              - 'scripts/release/browser-onboarding.mjs'
+              - 'playwright.config.ts'
+              - '.github/workflows/tests.yml'
             runtime:
               - '.dockerignore'
               - '.github/workflows/tests.yml'
@@ -173,12 +188,15 @@ jobs:
             exit 1
           fi
 
-      - name: Install Chromium for deterministic chat tool tests
-        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.browser == 'true'
+      - name: Install Chromium for browser checks
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.browser == 'true' || steps.changes.outputs.recovery == 'true'
         # The runner image already has Chromium's libraries. --with-deps adds
         # optional fonts from the Ubuntu mirror, which can stall this job past
         # its timeout; these behavioral suites do not depend on those fonts.
-        run: bunx playwright install chromium
+        run: bunx playwright install --only-shell chromium
+      - name: Check local backup, draft recovery, and original-message navigation
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.recovery == 'true'
+        run: bun run test:e2e:journeys tests/e2e/persistent-projects.spec.ts --grep @workspace-recovery --workers=1 --retries=0
       - name: Verify chat tool lifecycle and recovery
         if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.browser == 'true'
         id: chat_tools

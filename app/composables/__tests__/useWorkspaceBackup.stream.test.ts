@@ -2,17 +2,26 @@ import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Blob as NodeBlob } from 'node:buffer';
 import Dexie from 'dexie';
+import { watch } from 'vue';
+import { createHookEngine } from '~/core/hooks/hooks';
+import { createTypedHookEngine, type TypedHookEngine } from '~/core/hooks/typed-hooks';
 
 const backupContext = vi.hoisted(() => ({
     db: null as Dexie | null,
+    workspaceGeneration: 0,
     cloud: false,
     session: null as { authenticated: boolean; user: { id: string }; workspace: { id: string } } | null,
     doAction: vi.fn<(name: string, ...args: unknown[]) => Promise<void>>(),
+    hooks: null as TypedHookEngine | null,
 }));
 const importDatabases: Dexie[] = [];
 
 vi.mock('~/core/storage/file-policy', () => ({
     isCloudWorkspaceBackupEnabled: () => backupContext.cloud,
+}));
+// Exercise both physical table names without allocating a 50 MiB archive.
+vi.mock('~~/shared/storage/file-policy', async load => ({
+    ...(await load<Record<string, unknown>>()), STATIC_FILE_CEILING: 8,
 }));
 vi.mock('~/core/cloud/access', () => ({ hasCloudAccess: () => true }));
 vi.mock('~/composables/auth/useSessionContext', () => ({
@@ -24,6 +33,13 @@ function deferred() {
     let resolve!: () => void;
     const promise = new Promise<void>(done => { resolve = done; });
     return { promise, resolve };
+}
+
+function within<T>(work: Promise<T>): Promise<T> {
+    let timer: ReturnType<typeof setTimeout>;
+    return Promise.race([work, new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Completion observer held backup ownership')), 1500);
+    })]).finally(() => clearTimeout(timer));
 }
 
 async function importFixture(format: 'stream' | 'dexie', conflict = false) {
@@ -102,13 +118,12 @@ vi.mock('~/db/client', async importOriginal => {
         ...(await importOriginal<typeof import('~/db/client')>()),
         db: mockDb,
         getDb: () => backupContext.db ?? mockDb,
+        getWorkspaceGeneration: () => backupContext.workspaceGeneration,
     };
 });
 
 vi.mock('~/core/hooks/useHooks', () => ({
-    useHooks: () => ({
-        doAction: backupContext.doAction,
-    }),
+    useHooks: () => backupContext.hooks,
 }));
 
 const mockError = () => {
@@ -180,9 +195,13 @@ describe('useWorkspaceBackup stream export', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         backupContext.db = null;
+        backupContext.workspaceGeneration = 0;
         backupContext.cloud = false;
         backupContext.session = null;
         backupContext.doAction.mockReset();
+        backupContext.hooks = createTypedHookEngine(createHookEngine());
+        backupContext.doAction.mockImplementation((name, ...args) => backupContext.hooks!._engine.doAction(name, ...args));
+        backupContext.hooks.doAction = backupContext.doAction;
         vi.stubGlobal('Blob', NodeBlob);
         // The legacy dependency uses FileReader; Node Blob gives both formats
         // the same real bytes in jsdom and fake-indexeddb.
@@ -227,11 +246,9 @@ describe('useWorkspaceBackup stream export', () => {
         const backup = useWorkspaceBackup();
         const entered = deferred();
         const release = deferred();
-        backupContext.doAction.mockImplementation(async name => {
-            if (name === 'workspace.backup.import:action:before') {
-                entered.resolve();
-                await release.promise;
-            }
+        backupContext.hooks!.addAction('workspace.backup.import:action:before', async () => {
+            entered.resolve();
+            await release.promise;
         });
 
         const importing = backup.importWorkspace(file);
@@ -300,6 +317,168 @@ describe('useWorkspaceBackup stream export', () => {
         const calls = createWriteStream.mock.calls as unknown as Array<[string]>;
         expect(calls[0]?.[0]).toMatch(/\.or3\.jsonl$/);
         expect(streamWorkspaceExportToWritable).toHaveBeenCalledOnce();
+    });
+
+    it('leaves the selected file untouched when Cloud local recovery returns to an obsolete workspace selection', async () => {
+        backupContext.cloud = true;
+        const entered = deferred();
+        const release = deferred();
+        const createWritable = vi.fn();
+        Object.defineProperty(window, 'showSaveFilePicker', { configurable: true, value: async () => {
+            entered.resolve();
+            await release.promise;
+            return { createWritable };
+        } });
+        const { useWorkspaceBackup } = await import('../core/useWorkspaceBackup');
+        const { streamWorkspaceExport } = await import('~/utils/workspace-backup-stream');
+        const backup = useWorkspaceBackup();
+
+        const exporting = backup.exportWorkspace({ localOnly: true });
+        await entered.promise;
+        // The database object is reused when switching away and back.
+        backupContext.workspaceGeneration += 2;
+        release.resolve();
+        await exporting;
+
+        expect(backup.state.currentStep.value).toBe('error');
+        expect(backup.state.error.value?.message).toMatch(/account or workspace changed/i);
+        expect(streamWorkspaceExport).not.toHaveBeenCalled();
+    });
+
+    it('rolls back a streamed import if the account changes before the final read finishes', async () => {
+        const { db, file } = await importFixture('stream');
+        backupContext.session = { authenticated: true, user: { id: 'original-user' }, workspace: { id: 'original-workspace' } };
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const trailer = deferred();
+        Object.defineProperty(file, 'stream', { value: () => new ReadableStream<Uint8Array>({
+            start(controller) { controller.enqueue(bytes); },
+            async pull(controller) {
+                await trailer.promise;
+                controller.close();
+            },
+        }) });
+        const { useWorkspaceBackup } = await import('../core/useWorkspaceBackup');
+        const backup = useWorkspaceBackup();
+        const stop = watch(backup.state.progress, progress => {
+            if (progress !== 100) return;
+            backupContext.session!.user.id = 'other-user';
+            trailer.resolve();
+        }, { flush: 'sync' });
+
+        try {
+            await within(backup.importWorkspace(file));
+        } finally {
+            stop();
+            trailer.resolve();
+        }
+
+        expect(backup.state.currentStep.value).toBe('error');
+        expect(backup.state.error.value?.message).toMatch(/account or workspace changed/i);
+        expect(await db.table('messages').toArray()).toEqual([{ id: 'existing', text: 'Keep this message' }]);
+        expect(await db.table('sync_state').get('sync_history')).toMatchObject({ firstBindEligible: true });
+    });
+
+    it.each(['file_blobs', 'current_file_blobs'])('rejects oversized originals from Dexie table %s without replacing data', async table => {
+        const db = new Dexie(`backup-blob-limit-${crypto.randomUUID()}`);
+        db.version(1).stores({ [table]: 'hash', sync_state: 'id' });
+        importDatabases.push(db);
+        await db.table(table).put({ hash: 'existing', blob: new NodeBlob(['keep']) });
+        backupContext.db = db;
+        // Dexie-export-import's Typeson Blob representation, including its
+        // byte buffer, is generated by the installed serializer.
+        const { exportDB } = await import('dexie-export-import');
+        await db.table(table).put({ hash: 'oversized', blob: new NodeBlob(['too large']) });
+        const file = await exportDB(db);
+        await db.table(table).delete('oversized');
+        const { useWorkspaceBackup } = await import('../core/useWorkspaceBackup');
+        const backup = useWorkspaceBackup();
+        backup.state.importMode.value = 'replace';
+        await backup.importWorkspace(file);
+        expect(backup.state.currentStep.value).toBe('error');
+        expect(backup.state.error.value?.message).toMatch(/larger than 50 MiB/);
+        expect((await db.table(table).toArray()).map(row => row.hash)).toEqual(['existing']);
+        expect(await (await db.table(table).get('existing')).blob.text()).toBe('keep');
+    });
+
+    // Completion hooks are real registered observers. A pending listener must
+    // neither strand committed data/UI nor prevent ready listeners or reload.
+    // Repeat the operation before releasing it to catch unbounded redispatch.
+    it.each((['stream', 'dexie'] as const).flatMap(format =>
+        (['pending', 'rejected'] as const).flatMap(fault =>
+            (['workspace.backup.import:action:after', 'workspace:reloaded'] as const).map(listener => ({ format, fault, listener })))))(
+        'releases committed $format imports with a $fault $listener observer', async ({ format, fault, listener }) => {
+        const { db, file } = await importFixture(format);
+        const { useWorkspaceBackup } = await import('../core/useWorkspaceBackup');
+        const backup = useWorkspaceBackup();
+        backup.state.overwriteValues.value = true;
+        const release = deferred();
+        const entered = deferred();
+        const events: string[] = [];
+        const observer = vi.fn(() => {
+            events.push('observer');
+            entered.resolve();
+            return fault === 'pending' ? release.promise : Promise.reject(new Error('Extension failed'));
+        });
+        backupContext.hooks!.addAction(listener, observer, 0);
+        backupContext.hooks!.addAction('workspace.backup.import:action:after', () => { events.push('after'); }, 10);
+        backupContext.hooks!.addAction('workspace:reloaded', () => { events.push('reload'); }, 10);
+        const first = backup.importWorkspace(file);
+        try {
+            await within(entered.promise);
+            expect(await db.table('messages').get('imported')).toMatchObject({ text: 'Backup message' });
+            await within(first);
+            expect(backup.state.isImporting.value).toBe(false);
+            expect(backup.state.currentStep.value).toBe('done');
+            expect(backup.state.error.value).toBeNull();
+            expect(events).toEqual(listener === 'workspace:reloaded' ? ['after', 'observer', 'reload'] : ['observer', 'after', 'reload']);
+            await within(backup.importWorkspace(file));
+            expect(events.filter(event => event === 'after')).toHaveLength(2);
+            expect(events.filter(event => event === 'reload')).toHaveLength(2);
+            expect(observer).toHaveBeenCalledTimes(fault === 'pending' ? 1 : 2);
+            expect(backup.state.isImporting.value).toBe(false);
+        } finally { release.resolve(); await first; }
+    });
+
+    it('keeps validated metadata available while an inspection observer stays pending', async () => {
+        const { file } = await importFixture('stream');
+        const { useWorkspaceBackup } = await import('../core/useWorkspaceBackup');
+        const backup = useWorkspaceBackup();
+        const release = deferred();
+        backupContext.hooks!.addAction('workspace.backup.peek:action:after', () => release.promise);
+        const peeking = backup.peekBackup(file);
+        try {
+            await within(peeking);
+            expect(backup.state.currentStep.value).toBe('confirm');
+            expect(backup.state.backupMeta.value?.tables[0]).toMatchObject({ name: 'messages', rowCount: 1 });
+            expect(backup.state.error.value).toBeNull();
+        } finally { release.resolve(); await peeking; }
+    });
+
+    it.each(['pending', 'rejected'] as const)('releases a completed export with a %s observer', async fault => {
+        const { useWorkspaceBackup } = await import('../core/useWorkspaceBackup');
+        const backup = useWorkspaceBackup();
+        const release = deferred();
+        const entered = deferred();
+        const observer = vi.fn(() => {
+            entered.resolve();
+            return fault === 'pending' ? release.promise : Promise.reject(new Error('Extension failed'));
+        });
+        const ready = vi.fn();
+        backupContext.hooks!.addAction('workspace.backup.export:action:after', observer, 0);
+        backupContext.hooks!.addAction('workspace.backup.export:action:after', ready, 10);
+        const exporting = backup.exportWorkspace();
+        try {
+            await within(entered.promise);
+            expect(writer.close).toHaveBeenCalledOnce();
+            await within(exporting);
+            expect(backup.state.isExporting.value).toBe(false);
+            expect(backup.state.currentStep.value).toBe('done');
+            expect(backup.state.error.value).toBeNull();
+            await within(backup.exportWorkspace());
+            expect(writer.close).toHaveBeenCalledTimes(2);
+            expect(ready).toHaveBeenCalledTimes(2);
+            expect(observer).toHaveBeenCalledTimes(fault === 'pending' ? 1 : 2);
+        } finally { release.resolve(); await exporting; }
     });
 
     it('falls back to StreamSaver when File System Access API is unavailable', async () => {

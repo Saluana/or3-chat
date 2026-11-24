@@ -13,7 +13,7 @@ import { getOfflineWorkspace } from '~/composables/auth/offline-workspace';
 import { STATIC_FILE_CEILING } from '~~/shared/storage/file-policy';
 import { getVerifiedFilePolicy, isCloudFileStorageConfigured, isCloudFileStorageEnabled, loadFilePolicy } from '~/core/storage/file-policy';
 import type { FileMeta } from '~/db/schema';
-import { parseFileHashes } from '~/db/files-util';
+import { FileOriginalUnavailableError, parseFileHashes } from '~/db/files-util';
 import { getWriteTxTableNames } from '~/db/util';
 import { FILE_CATALOG_POST_TYPE, isVisibleWorkspaceItem } from '~~/shared/posts/workspace-item';
 import { classifyFileBlob } from '~~/shared/files/file-kind';
@@ -109,12 +109,6 @@ export interface StoredAttachment {
 
 export type StoredAttachmentSource = StoredAttachmentReference | StoredAttachment;
 
-export class StoredAttachmentOfflineError extends Error {
-    constructor() {
-        super('Original file unavailable offline. Connect and retry.');
-    }
-}
-
 async function assertStoredAttachment(stored: StoredAttachment): Promise<FileMeta> {
     const { scope, reference } = stored;
     scope.assertCurrent('write');
@@ -160,7 +154,7 @@ export async function loadStoredAttachment(input: StoredAttachmentSource, owner:
         localOnly: typeof navigator !== 'undefined' && navigator.onLine === false,
     });
     scope.assertCurrent('write'); owner.assertCurrent();
-    if (!blob) throw new StoredAttachmentOfflineError();
+    if (!blob) throw new FileOriginalUnavailableError();
     const file = new File([blob], meta.name, { type: meta.mime_type });
     const classification = await classifyFileBlob(file);
     if (classification.kind !== kind) throw new Error('This file is not a supported image or PDF.');

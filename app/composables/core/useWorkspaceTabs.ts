@@ -242,13 +242,15 @@ export function useWorkspaceTabs(options: WorkspaceTabsOptions) {
             const next = transitionActivateTab(before, tabId);
             const paneId = next.activePaneId;
             if (!paneId) return 'failed';
-            const activation = coordinator.begin(paneId);
             commit(next);
             options.host.focusPane(paneId);
 
             // A tab visible in another split already owns its component tree.
+            // Its bind may still be loading. Merely focusing it must not abort
+            // that work without starting a replacement bind.
             if (visiblePane === paneId && !forceBind) return 'activated';
 
+            const activation = coordinator.begin(paneId);
             updateRuntime(tabId, { status: 'loading', errorMessage: undefined });
 
             const outgoingTabId = before.paneBindings.get(paneId);

@@ -24,6 +24,7 @@ import { invalidateFirstBindEligibility } from '~/core/sync/history-incarnation'
 import type { IndexableType } from 'dexie';
 import { logicalStoreName, type Or3DB } from '~/db/client';
 import { STATIC_FILE_CEILING } from '~~/shared/storage/file-policy';
+import { computeHashHex, parseHash } from '~/utils/hash';
 
 /**
  * `WORKSPACE_BACKUP_FORMAT`
@@ -95,6 +96,15 @@ const DEFAULT_EXPORT_LIMIT = 500;
 const FILE_BLOBS_MAX_ROWS_PER_BATCH = 20;
 const FILE_BLOBS_MAX_SERIALIZED_BYTES = 256 * 1024; // ~256 KB per JSONL line
 const MAX_IMPORT_LINE_CHARS = 128 * 1024 * 1024;
+
+export class WorkspaceBackupFileSizeError extends Error {
+    constructor(hash: string, size: number, name?: string) {
+        const original = name ? `“${name.slice(0, 100)}” (${hash})` : hash;
+        super(
+            `File ${original} is ${size.toLocaleString('en-US')} bytes. Local restore supports up to 50 MiB per file. Use a Cloud backup if available, or save the original separately before removing it and retrying.`
+        );
+    }
+}
 
 const textEncoder = new TextEncoder();
 
@@ -184,11 +194,13 @@ export async function streamWorkspaceExport({
     db,
     fileHandle,
     chunkSize = DEFAULT_EXPORT_LIMIT,
+    assertCurrent,
     onProgress,
 }: {
     db: Or3DB;
     fileHandle: FileSystemFileHandle;
     chunkSize?: number;
+    assertCurrent?: () => void;
     onProgress?: (progress: WorkspaceBackupProgress) => void;
 }): Promise<void> {
     const writable = await fileHandle.createWritable();
@@ -202,6 +214,7 @@ export async function streamWorkspaceExport({
         db,
         writer,
         chunkSize,
+        assertCurrent,
         onProgress,
     });
 }
@@ -216,11 +229,13 @@ export async function streamWorkspaceExportToWritable({
     db,
     writable,
     chunkSize = DEFAULT_EXPORT_LIMIT,
+    assertCurrent,
     onProgress,
 }: {
     db: Or3DB;
     writable: WritableStreamDefaultWriter<Uint8Array>;
     chunkSize?: number;
+    assertCurrent?: () => void;
     onProgress?: (progress: WorkspaceBackupProgress) => void;
 }): Promise<void> {
     const writer: WorkspaceBackupWriter = {
@@ -253,6 +268,7 @@ export async function streamWorkspaceExportToWritable({
         db,
         writer,
         chunkSize,
+        assertCurrent,
         onProgress,
     });
 }
@@ -261,11 +277,13 @@ async function streamWorkspaceExportCore({
     db,
     writer,
     chunkSize,
+    assertCurrent,
     onProgress,
 }: {
     db: Or3DB;
     writer: WorkspaceBackupWriter;
     chunkSize: number;
+    assertCurrent?: () => void;
     onProgress?: (progress: WorkspaceBackupProgress) => void;
 }) {
     const normalizedChunkSize =
@@ -386,6 +404,12 @@ async function streamWorkspaceExportCore({
                         hash: string;
                         blob: Blob;
                     }>) {
+                        if (row.blob.size > STATIC_FILE_CEILING) {
+                            const metadata = summaries.some(summary => summary.name === 'file_meta')
+                                ? await db.file_meta.get(row.hash)
+                                : undefined;
+                            throw new WorkspaceBackupFileSizeError(row.hash, row.blob.size, metadata?.name);
+                        }
                         const bytes = new Uint8Array(await Dexie.waitFor(row.blob.arrayBuffer()));
                         // Cover blob identity, length, MIME type and every byte
                         // without re-encoding binary data during validation.
@@ -463,6 +487,7 @@ async function streamWorkspaceExportCore({
     };
 
     try {
+        assertCurrent?.();
         const exported = await snapshot(writer, onProgress);
         // Prove the streamed records equal one consistent database snapshot.
         // The validation sink performs no I/O: a stalled destination never
@@ -477,7 +502,9 @@ async function streamWorkspaceExportCore({
         });
         // Even a sink that cannot roll back receives no valid terminal marker
         // when validation fails; the importer rejects its incomplete output.
+        assertCurrent?.();
         await writeLine(writer, { type: 'end' });
+        assertCurrent?.();
         await writer.close();
     } catch (error) {
         try {
@@ -540,12 +567,14 @@ export async function importWorkspaceStream({
     file,
     clearTables,
     overwriteValues,
+    assertCurrent,
     onProgress,
 }: {
     db: Or3DB;
     file: Blob;
     clearTables: boolean;
     overwriteValues: boolean;
+    assertCurrent?: () => void;
     onProgress?: (progress: WorkspaceBackupProgress) => void;
 }): Promise<void> {
     const lineIterator = iterateLinesFromBlob(file);
@@ -644,12 +673,6 @@ export async function importWorkspaceStream({
     };
 
     await db.transaction('rw', db.tables, async () => {
-        if (clearTables) {
-            for (const table of db.tables) {
-                await table.clear();
-            }
-        }
-
         let currentTable: string | null = null;
         let sawEnd = false;
         const completedTables = new Set<string>();
@@ -657,8 +680,16 @@ export async function importWorkspaceStream({
         let sourceKeys = new Set<string>();
 
         try {
+            assertCurrent?.();
+            if (clearTables) {
+                for (const table of db.tables) {
+                    await table.clear();
+                }
+            }
+
             for (;;) {
                 const next = await Dexie.waitFor(lineIterator.next());
+                assertCurrent?.();
                 if (next.done) break;
                 const raw = next.value.trim();
                 if (!raw) continue;
@@ -754,10 +785,18 @@ export async function importWorkspaceStream({
                             hash: string;
                             blob: { data: string; type: string };
                         }>;
-                        const payload = typedRows.map((row) => ({
-                            hash: row.hash,
-                            blob: base64ToBlob(row.blob),
-                        }));
+                        const payload: Array<{ hash: string; blob: Blob }> = [];
+                        for (const row of typedRows) {
+                            const blob = base64ToBlob(row.blob);
+                            const identity = parseHash(row.hash);
+                            // Preserve opaque keys from older/custom archives.
+                            // Recognized SHA-256/MD5 identities must match the
+                            // original before any replacement can commit.
+                            if (identity && await Dexie.waitFor(computeHashHex(blob, identity.algorithm)) !== identity.hex) {
+                                throw new Error(`Backup original failed its content hash check: ${row.hash}`);
+                            }
+                            payload.push({ hash: row.hash, blob });
+                        }
                         if (overwriteValues) {
                             await table.bulkPut(payload);
                         } else {
@@ -833,6 +872,7 @@ export async function importWorkspaceStream({
                 // ignore iterator cleanup errors
             }
         }
+        assertCurrent?.();
     });
 
     progress.completedRows = progress.totalRows;

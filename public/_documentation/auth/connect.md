@@ -11,7 +11,7 @@ OpenRouter models need an OpenRouter key. A Cloud operator can supply an instanc
 3. Complete the OpenRouter authorization flow in the browser.
 4. Return through OR3's callback page, then select a model and send a message.
 
-OR3 uses S256 PKCE to exchange the returned code for a key. In local mode, this also works on HTTP development origins where Web Crypto is unavailable; the verifier is kept in browser session storage, with a localStorage fallback for redirect recovery. In Cloud mode, the server owns the transaction. Use the same browser and OR3 origin throughout the flow.
+OR3 uses S256 PKCE to exchange the returned code for a key. In local mode, this also works on HTTP development origins where Web Crypto is unavailable. Start and finish the connection in the same tab. OR3 keeps the verifier and expected state together in that tab’s session storage. If the browser blocks session storage, you can retry Connect after enabling it. In Cloud mode, the server owns the transaction. Use the same browser and OR3 origin throughout the flow.
 
 ## Paste an existing key
 

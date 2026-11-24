@@ -1138,7 +1138,7 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) for (const mode of ['light'
     }
 });
 
-test('an unsent draft and its attachment survive a reload and stay with their workspace', async ({ context, page }, info) => {
+test('an unsent draft and its attachment survive a reload and stay with their workspace', { tag: '@workspace-recovery' }, async ({ context, page }, info) => {
     test.setTimeout(120_000);
     await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
         ? route.continue() : route.abort('blockedbyclient'));
@@ -2004,8 +2004,15 @@ for (const kind of ['image', 'pdf'] as const) {
                 return { hash: row.hash, mime: row.blob.type, bytes };
             }, { url: clientURL!, name });
             await preview.getByRole('button', { name: 'Ask in chat', exact: true }).click();
-            await expect(files.getByRole('alert').filter({ hasText: 'Files action failed' }))
-                .toContainText('Original file unavailable offline. Connect and retry.');
+            const failure = files.getByRole('alert').filter({ hasText: 'Files action failed' });
+            await expect(failure).toContainText('The original file is unavailable. Try again or upload the file again.');
+            await page.context().setOffline(true);
+            try {
+                await preview.getByRole('button', { name: 'Ask in chat', exact: true }).click();
+                await expect(failure).toContainText('Original file unavailable offline. Connect and retry.');
+            } finally {
+                await page.context().setOffline(false);
+            }
             await expect(preview).toBeVisible();
             await page.evaluate(async ({ url, original }) => {
                 const { getDb } = await import(url);
@@ -3170,7 +3177,7 @@ test.describe('production chat journey', () => {
 // Uses the gated route's scripted transport and real controller/writer. The
 // fixture buttons are not product compaction actions; PageShell/card/navigation
 // are the installed production path under qualification.
-test('PageShell compaction summary reload and original landmark navigation', async ({ page }, info) => {
+test('PageShell compaction summary reload and original landmark navigation', { tag: '@workspace-recovery' }, async ({ page }, info) => {
     test.setTimeout(120_000);
     const componentErrors: string[] = [];
     page.on('pageerror', error => componentErrors.push(error.message));

@@ -67,7 +67,7 @@ file: notes
 cmd: theme
 ```
 
-Removing the prefix (or clicking **All**) searches everything again.
+A category also filters the suggestions shown before you type a search term. Removing the prefix (or clicking **All**) searches everything again.
 
 ## Keyboard reference
 

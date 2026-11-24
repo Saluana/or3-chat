@@ -72,11 +72,19 @@ function scheduleAuthRetry(scope: SyncScope, generation: number, attempt = 1): v
 async function hasDirectProviderToken(provider: SyncProvider): Promise<boolean> {
     if (provider.mode !== 'direct' || !provider.auth) return true;
     if (!authTokenBroker) return false;
+    let cancel!: () => Promise<void>;
+    const cancelled = new Promise<boolean>(resolve => {
+        cancel = async () => { resolve(false); };
+    });
+    // SDK token lookups do not expose an AbortSignal. Let a newer lifecycle
+    // request release this wait without waiting for the old SDK to settle.
+    cancelStartup = cancel;
     try {
-        return Boolean(await authTokenBroker.getProviderToken({
+        return Boolean(await Promise.race([authTokenBroker.getProviderToken({
             providerId: provider.auth.providerId, template: provider.auth.template,
-        }));
+        }), cancelled]));
     } catch { return false; }
+    finally { if (cancelStartup === cancel) cancelStartup = null; }
 }
 
 /**

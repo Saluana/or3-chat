@@ -131,7 +131,7 @@ export default defineEventHandler(async (event) => {
         };
     }
 
-    const workflowState = projectBackgroundWorkflowState('aborted', job.workflow_state);
+    const workflowState = projectBackgroundWorkflowState('aborted', (latest ?? job).workflow_state);
     if (latest?.status === 'aborted') emitJobStatus(jobId, 'aborted', {
         content: latest.content,
         contentLength: latest.content.length,

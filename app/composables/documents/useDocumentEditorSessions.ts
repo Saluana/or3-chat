@@ -143,7 +143,10 @@ export function registerDocumentEditorSession(
         }
     }
 
+    let disposed = false;
     return () => {
+        if (disposed) return;
+        disposed = true;
         sessions.delete(session);
         if (!sessions.size) activeSessions.delete(documentId);
         if (

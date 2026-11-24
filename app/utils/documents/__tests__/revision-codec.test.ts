@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Blob as NodeBlob } from 'node:buffer';
 import {
     REVISION_CHUNK_MAX_CHARS,
     REVISION_SYNC_PAYLOAD_MAX_BYTES,
@@ -44,4 +45,16 @@ it('preflights sync payloads below the provider limit', () => {
     expect(() => assertRevisionSyncPayloadSize({
         content: 'x'.repeat(REVISION_SYNC_PAYLOAD_MAX_BYTES),
     })).toThrow(/maximum/iu);
+});
+
+it('refuses compressed history that expands past its declared snapshot size', async () => {
+    vi.stubGlobal('Blob', NodeBlob);
+    const encoded = await encodeDocumentRevision({
+        title: 'Imported checkpoint',
+        content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'repeat '.repeat(10_000) }] }] },
+    });
+    expect(encoded.encoding).toBe('gzip-base64url');
+    await expect(decodeDocumentRevision({ ...encoded, originalBytes: 128 }).then(() => 'decoded')).rejects.toThrow(/size|bytes/iu);
+    await expect(decodeDocumentRevision({ ...encoded, originalBytes: Number.MAX_SAFE_INTEGER })).rejects.toThrow(/size|bytes/iu);
+    expect(await decodeDocumentRevision(encoded)).toMatchObject({ title: 'Imported checkpoint' });
 });
