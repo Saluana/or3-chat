@@ -88,8 +88,8 @@ In Backgrounds, **Message buttons** has two switches, saved per light and dark
 mode like other Appearance choices: **Inside your messages** keeps copy, retry,
 branch, and edit inside your message bubble, and **Inside assistant replies**
 keeps the reply buttons inside the reply instead of on its bottom edge. Both
-are off by default. Themes that reveal buttons on hover, such as Retro on
-desktop, still do so.
+are off by default. Buttons placed inside a message stay visible, including in
+themes that otherwise reveal them on hover (Retro on desktop).
 
 ## Background images
 

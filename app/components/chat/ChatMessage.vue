@@ -1344,6 +1344,12 @@ const streamMdClasses = [
     justify-content: flex-start !important;
     margin: 0.5rem 0 0 !important;
 }
+/* Inside a message the buttons hold their own space, so hover-to-reveal themes
+   (Retro on desktop) would leave an empty strip; keep them visible instead. */
+:global(html[data-user-actions-inside] .cm-actions-user .cm-action-group),
+:global(html[data-assistant-actions-inside] .cm-actions-assistant .cm-action-group) {
+    opacity: 1 !important;
+}
 
 .line-clamp-6 {
     display: -webkit-box;
