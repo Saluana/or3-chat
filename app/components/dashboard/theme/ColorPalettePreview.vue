@@ -129,7 +129,7 @@ function saveRename() {
                     <template v-if="selected === 'chat'">
                         <div class="preview-conversation">
                             <p class="preview-bubble cm-user bg-primary text-white dark:text-white/95" :class="bubbleOverrides?.class">What should I pack?</p>
-                            <p>A rain jacket and a small daypack.</p>
+                            <p class="preview-assistant">A rain jacket and a small daypack.</p>
                         </div>
                         <div class="preview-composer" aria-hidden="true">
                             <UIcon :name="attachIcon" class="size-4 shrink-0" />
@@ -174,6 +174,17 @@ function saveRename() {
 </template>
 
 <style scoped>
+/* Mirrors the optional panel behind assistant replies (Colors → Chat). */
+.preview-assistant {
+    -webkit-backdrop-filter: var(--app-assistant-message-backdrop, none);
+    backdrop-filter: var(--app-assistant-message-backdrop, none);
+}
+:global(html[data-assistant-surface] .preview-assistant) {
+    padding: 0.5rem 0.75rem;
+    background: var(--app-assistant-message-bg);
+    border-radius: var(--md-border-radius-large, var(--md-border-radius));
+}
+
 .palette-preview {
     --preview-divider: var(--md-border-width) solid var(--md-border-color);
     container-type: inline-size;

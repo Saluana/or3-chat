@@ -1,10 +1,11 @@
 /** Singleton, batched user theme override store. */
 import { computed, ref, watch, type Ref, type WatchStopHandle } from 'vue';
 import { useNuxtApp } from '#app';
+import { useToast } from '#imports';
 import type { ThemePlugin } from '~/theme/_shared/types';
 import type { UserThemeOverrides } from './user-overrides-types';
 import { EMPTY_USER_OVERRIDES } from './user-overrides-types';
-import { applyMergedTheme } from './apply-merged-theme';
+import { applyMergedTheme, type MissingBackgroundImage } from './apply-merged-theme';
 import { isUserFontChoice } from './font-options';
 import {
     isDensityPreset,
@@ -21,8 +22,19 @@ const PERSIST_DELAY_MS = 50;
 interface ToastPayload {
     title?: string;
     description?: string;
-    color?: string;
+    color?: 'error' | 'warning' | 'success' | 'info' | 'neutral';
     timeout?: number;
+}
+
+function nuxtUiToast(): StoreState['toast'] {
+    try {
+        const toast = useToast();
+        return {
+            add: ({ timeout, ...payload }) => toast.add({ ...payload, duration: timeout }),
+        };
+    } catch {
+        return undefined;
+    }
 }
 
 interface StoreState {
@@ -98,13 +110,35 @@ function persist(store: StoreState): void {
                 title: 'Storage Full',
                 description:
                     'Could not save theme customizations. Clear browser data to free space.',
-                color: 'red',
+                color: 'error',
                 timeout: 5000,
             });
         } else {
             console.warn('[user-theme-overrides] Failed to save', error);
         }
     }
+}
+
+const AREA_LABELS: Record<MissingBackgroundImage['area'], string> = {
+    content: 'Content Layer 1',
+    overlay: 'Content Layer 2',
+    sidebar: 'Sidebar Background',
+};
+/** Each missing image is reported once per session, not on every re-apply. */
+const reportedMissingImages = new Set<string>();
+
+function notifyMissingBackgroundImages(store: StoreState, missing: MissingBackgroundImage[]): void {
+    const fresh = missing.filter(({ hash }) => !reportedMissingImages.has(hash));
+    if (!fresh.length) return;
+    for (const { hash } of fresh) reportedMissingImages.add(hash);
+    store.toast?.add?.({
+        title: 'Background image not found',
+        description: fresh.length === 1
+            ? `${AREA_LABELS[fresh[0]!.area]} is showing the theme pattern because its image isn't available on this device. Choose another image in Appearance → Backgrounds.`
+            : `${fresh.map(({ area }) => AREA_LABELS[area]).join(', ')} are showing the theme pattern because their images aren't available on this device. Choose other images in Appearance → Backgrounds.`,
+        color: 'warning',
+        timeout: 8000,
+    });
 }
 
 function scheduleCommit(store: StoreState): void {
@@ -116,7 +150,9 @@ function scheduleCommit(store: StoreState): void {
             if (revision !== store.revision) return scheduleCommit(store);
             const mode = store.activeMode.value;
             const overrides = mode === 'light' ? store.light.value : store.dark.value;
-            void applyMergedTheme(mode, overrides, store.themePlugin, () => revision === store.revision);
+            void applyMergedTheme(mode, overrides, store.themePlugin, () => revision === store.revision, {
+                onMissingBackgroundImages: (missing) => notifyMissingBackgroundImages(store, missing),
+            });
         });
     }
 
@@ -155,7 +191,8 @@ function initializeStore(store: StoreState): void {
         $toast?: { add?: (payload: ToastPayload) => void };
     };
     store.themePlugin = nuxtApp.$theme;
-    store.toast = nuxtApp.$toast;
+    // Nuxt UI exposes toasts through useToast(); $toast is kept for hosts that provide one.
+    store.toast = nuxtApp.$toast ?? nuxtUiToast();
     store.light.value = loadFromStorage('light') ?? createEmpty();
     store.dark.value = loadFromStorage('dark') ?? createEmpty();
     store.activeMode.value = detectModeFromHtml();

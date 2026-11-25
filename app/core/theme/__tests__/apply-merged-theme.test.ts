@@ -11,7 +11,8 @@ vi.mock('../backgrounds', () => ({
 const { applyMergedTheme, __resetMergedThemeApplicationState } = await import(
     '../apply-merged-theme'
 );
-const { applyThemeBackgrounds } = await import('../backgrounds');
+const { applyThemeBackgrounds, createThemeBackgroundTokenResolver } = await import('../backgrounds');
+const resolveToken = vi.mocked(createThemeBackgroundTokenResolver).mock.results[0]!.value as ReturnType<typeof vi.fn>;
 
 const mockLoadTheme = vi.fn();
 
@@ -538,5 +539,69 @@ describe('applyMergedTheme', () => {
 
         // Should not call applyThemeBackgrounds
         expect(applyThemeBackgrounds).not.toHaveBeenCalled();
+    });
+
+    it('applies the assistant message panel and keeps blur off unless chosen', async () => {
+        const root = document.documentElement;
+        const panel: UserThemeOverrides = {
+            colors: { enabled: true, assistantMessage: '#ffffffcc' },
+            backgrounds: { enabled: false },
+        };
+        await applyMergedTheme('light', panel, mockThemePlugin as any);
+        expect(root.style.getPropertyValue('--app-assistant-message-bg')).toBe('#ffffffcc');
+        expect(root.hasAttribute('data-assistant-surface')).toBe(true);
+        expect(root.style.getPropertyValue('--app-assistant-message-backdrop')).toBe('');
+
+        await applyMergedTheme('light', { ...panel, chat: { assistantBlur: true } }, mockThemePlugin as any);
+        expect(root.style.getPropertyValue('--app-assistant-message-backdrop')).toBe('blur(12px)');
+
+        await applyMergedTheme('light', { colors: { enabled: false }, chat: {} }, mockThemePlugin as any);
+        expect(root.style.getPropertyValue('--app-assistant-message-bg')).toBe('');
+        expect(root.style.getPropertyValue('--app-assistant-message-backdrop')).toBe('');
+        expect(root.hasAttribute('data-assistant-surface')).toBe(false);
+    });
+
+    it('toggles inside placement for user and assistant message buttons separately', async () => {
+        const root = document.documentElement;
+        await applyMergedTheme('light', { chat: { userActionsInside: true } }, mockThemePlugin as any);
+        expect(root.hasAttribute('data-user-actions-inside')).toBe(true);
+        expect(root.hasAttribute('data-assistant-actions-inside')).toBe(false);
+        await applyMergedTheme('light', { chat: { assistantActionsInside: true } }, mockThemePlugin as any);
+        expect(root.hasAttribute('data-user-actions-inside')).toBe(false);
+        expect(root.hasAttribute('data-assistant-actions-inside')).toBe(true);
+        await applyMergedTheme('light', {}, mockThemePlugin as any);
+        expect(root.hasAttribute('data-assistant-actions-inside')).toBe(false);
+    });
+
+    it('shows the theme layer and reports an area whose stored image is missing, without changing the preference', async () => {
+        const photo = { url: 'internal-file://sha256:gone', opacity: 0.4, fit: true };
+        const overrides: UserThemeOverrides = { backgrounds: { enabled: true, content: { base: photo } } };
+        const onMissingBackgroundImages = vi.fn();
+        resolveToken.mockResolvedValueOnce(null);
+        await applyMergedTheme('light', overrides, mockThemePlugin as any, undefined, { onMissingBackgroundImages });
+        expect(onMissingBackgroundImages).toHaveBeenCalledWith([{ area: 'content', hash: 'sha256:gone' }]);
+        const applied = vi.mocked(applyThemeBackgrounds).mock.calls.at(-1)![0]!;
+        expect(applied.content?.base).toEqual({ image: '/base.png', opacity: 0.2, color: '#ffffff' });
+        expect(overrides.backgrounds?.content?.base?.url).toBe('internal-file://sha256:gone');
+
+        __resetMergedThemeApplicationState();
+        onMissingBackgroundImages.mockClear();
+        resolveToken.mockResolvedValueOnce('blob:present');
+        await applyMergedTheme('light', overrides, mockThemePlugin as any, undefined, { onMissingBackgroundImages });
+        expect(onMissingBackgroundImages).not.toHaveBeenCalled();
+    });
+
+    it('marks a visible user sidebar image so opaque sidebar panels can reveal it', async () => {
+        const root = document.documentElement;
+        const sidebar = { url: '/sidebar-repeater.v2.webp', opacity: 0.4 };
+        await applyMergedTheme('light', { backgrounds: { enabled: true, sidebar } }, mockThemePlugin as any);
+        expect(root.hasAttribute('data-custom-sidebar-background')).toBe(true);
+        __resetMergedThemeApplicationState();
+        await applyMergedTheme('light', { backgrounds: { enabled: true, sidebar: { ...sidebar, opacity: 0 } } }, mockThemePlugin as any);
+        expect(root.hasAttribute('data-custom-sidebar-background')).toBe(false);
+        __resetMergedThemeApplicationState();
+        resolveToken.mockResolvedValueOnce(null);
+        await applyMergedTheme('light', { backgrounds: { enabled: true, sidebar: { url: 'internal-file://sha256:gone', opacity: 0.4 } } }, mockThemePlugin as any);
+        expect(root.hasAttribute('data-custom-sidebar-background')).toBe(false);
     });
 });

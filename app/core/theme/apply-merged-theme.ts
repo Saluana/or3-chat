@@ -63,6 +63,7 @@ interface MergedThemeApplicationState {
     colors: string;
     backgrounds: string;
     ui: string;
+    chat: string;
 }
 
 let lastAppliedState: MergedThemeApplicationState | null = null;
@@ -93,7 +94,11 @@ export async function applyMergedTheme(
     mode: 'light' | 'dark',
     overrides: UserThemeOverrides,
     themePlugin?: ThemePlugin,
-    shouldCommit?: () => boolean
+    shouldCommit?: () => boolean,
+    options: {
+        /** Called with areas whose stored image could not be loaded (shown as the theme pattern instead). */
+        onMissingBackgroundImages?: (areas: MissingBackgroundImage[]) => void;
+    } = {}
 ) {
     if (!isBrowser()) return;
 
@@ -134,6 +139,7 @@ export async function applyMergedTheme(
         colors: sectionSignature(overrides.colors),
         backgrounds: sectionSignature(overrides.backgrounds),
         ui: sectionSignature(overrides.ui),
+        chat: sectionSignature(overrides.chat),
     };
     const previous = lastAppliedState;
 
@@ -152,6 +158,9 @@ export async function applyMergedTheme(
     if (!previous || previous.colors !== nextState.colors) {
         applyColorOverrides(r, overrides);
     }
+    if (!previous || previous.chat !== nextState.chat) {
+        applyChatOverrides(r, overrides);
+    }
 
     const backgroundsChanged =
         !previous ||
@@ -166,7 +175,8 @@ export async function applyMergedTheme(
             r,
             baseBackgrounds,
             overrides,
-            shouldCommit
+            shouldCommit,
+            options.onMissingBackgroundImages
         );
         if (!committed) return;
     }
@@ -283,6 +293,10 @@ function applyColorOverrides(
         'data-custom-menu-surface',
         Boolean(overrides.colors?.enabled && overrides.colors.menuSurface)
     );
+    document.documentElement.toggleAttribute(
+        'data-assistant-surface',
+        Boolean(overrides.colors?.enabled && overrides.colors.assistantMessage)
+    );
     if (overrides.colors?.enabled) {
         for (const [key, cssVar] of Object.entries(COLOR_TOKEN_REGISTRY)) {
             const value = (overrides.colors as Record<string, unknown>)[key];
@@ -312,21 +326,90 @@ function applyColorOverrides(
     for (const cssVar of overrideVariables) style.removeProperty(cssVar);
 }
 
+/** Blur stays off unless chosen: backdrop-filter is costly while scrolling. */
+function applyChatOverrides(
+    style: CSSStyleDeclaration,
+    overrides: UserThemeOverrides
+): void {
+    if (overrides.chat?.assistantBlur) {
+        style.setProperty('--app-assistant-message-backdrop', 'blur(12px)');
+    } else {
+        style.removeProperty('--app-assistant-message-backdrop');
+    }
+    const root = document.documentElement;
+    root.toggleAttribute('data-user-actions-inside', Boolean(overrides.chat?.userActionsInside));
+    root.toggleAttribute('data-assistant-actions-inside', Boolean(overrides.chat?.assistantActionsInside));
+}
+
+export interface MissingBackgroundImage {
+    area: 'content' | 'overlay' | 'sidebar';
+    hash: string;
+}
+
+type BackgroundLayerFormat = NonNullable<ThemeBackgrounds['sidebar']>;
+
+/**
+ * A stored image can be gone (hard-deleted) or not yet downloaded on this
+ * device. Show the theme's own layer for that area instead of a blank one.
+ * Display-only: the saved preference is kept so a later sync can restore it.
+ */
+async function substituteMissingImages(
+    merged: ThemeBackgrounds,
+    base: ThemeBackgrounds | undefined,
+    overrides: UserThemeOverrides
+): Promise<MissingBackgroundImage[]> {
+    if (!overrides.backgrounds?.enabled) return [];
+    const areas: Array<{
+        area: MissingBackgroundImage['area'];
+        url: string | null | undefined;
+        set: (layer: BackgroundLayerFormat) => void;
+        base: BackgroundLayerFormat | undefined;
+    }> = [
+        { area: 'content', url: overrides.backgrounds.content?.base?.url, base: base?.content?.base,
+            set: (layer) => { merged.content = { ...merged.content, base: layer }; } },
+        { area: 'overlay', url: overrides.backgrounds.content?.overlay?.url, base: base?.content?.overlay,
+            set: (layer) => { merged.content = { ...merged.content, overlay: layer }; } },
+        { area: 'sidebar', url: overrides.backgrounds.sidebar?.url, base: base?.sidebar,
+            set: (layer) => { merged.sidebar = layer; } },
+    ];
+    const missing: MissingBackgroundImage[] = [];
+    for (const { area, url, base: baseLayer, set } of areas) {
+        if (!url?.startsWith('internal-file://')) continue;
+        if (await backgroundTokenResolver(url)) continue;
+        set({ ...baseLayer });
+        missing.push({ area, hash: url.slice('internal-file://'.length) });
+    }
+    return missing;
+}
+
 async function applyBackgroundOverrides(
     style: CSSStyleDeclaration,
     baseBackgrounds: ThemeBackgrounds | undefined,
     overrides: UserThemeOverrides,
-    shouldCommit?: () => boolean
+    shouldCommit?: () => boolean,
+    onMissingImages?: (areas: MissingBackgroundImage[]) => void
 ): Promise<boolean> {
     const mergedBackgrounds = buildMergedBackgrounds(
         baseBackgrounds,
         overrides
     );
+    const missing = await substituteMissingImages(mergedBackgrounds, baseBackgrounds, overrides);
+    if (shouldCommit && !shouldCommit()) return false;
     await applyThemeBackgrounds(mergedBackgrounds, {
         resolveToken: backgroundTokenResolver,
         shouldCommit,
     });
     if (shouldCommit && !shouldCommit()) return false;
+    if (missing.length) onMissingImages?.(missing);
+
+    // Themes with an opaque sidebar panel (Blank) reveal the image layer only
+    // when the user has chosen a visible sidebar image.
+    const sidebar = overrides.backgrounds?.enabled ? overrides.backgrounds.sidebar : undefined;
+    document.documentElement.toggleAttribute(
+        'data-custom-sidebar-background',
+        Boolean(sidebar?.url) && (sidebar?.opacity ?? 0) > 0
+            && !missing.some(({ area }) => area === 'sidebar')
+    );
 
     const themeBaseColor = mergedBackgrounds.content?.base?.color;
     const themeOverlayColor = mergedBackgrounds.content?.overlay?.color;

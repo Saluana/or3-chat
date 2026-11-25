@@ -106,6 +106,18 @@ export interface UserThemeOverrides {
         info?: string;
         infoHover?: string;
         infoActive?: string;
+        // Chat
+        assistantMessage?: string;
+    };
+
+    /** Chat surface effects that are not colors. */
+    chat?: {
+        /** Blur the background behind assistant messages (costly; off by default) */
+        assistantBlur?: boolean;
+        /** Keep the action buttons inside your message bubble instead of below it */
+        userActionsInside?: boolean;
+        /** Keep the action buttons inside the assistant reply instead of on its edge */
+        assistantActionsInside?: boolean;
     };
 
     /** Background layer overrides */

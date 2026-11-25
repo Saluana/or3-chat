@@ -72,13 +72,43 @@ preserving visible status information. CSS state changes apply immediately,
 including live typography changes, instead of animating every affected element.
 These are global accessibility choices, not per-theme light/dark presets.
 
+## Readable chat over backgrounds
+
+In Colors, **Chat → Assistant messages** puts a panel behind assistant replies so
+they stay readable over a background image. It is off until you pick a color.
+**Opacity** sets how solid the panel is (stored in the color's alpha channel, as
+`#RRGGBBAA`). **Blur behind** blurs the image behind the panel; it can make
+scrolling slow on some devices, so it is off by default. Your choice overrides
+themes that keep replies transparent. User messages and tool cards follow the
+existing **Hover surface** (Blank theme bubbles) and **Panel background** colors.
+
+## Message buttons
+
+In Backgrounds, **Message buttons** has two switches, saved per light and dark
+mode like other Appearance choices: **Inside your messages** keeps copy, retry,
+branch, and edit inside your message bubble, and **Inside assistant replies**
+keeps the reply buttons inside the reply instead of on its bottom edge. Both
+are off by default. Buttons placed inside a message stay visible, including in
+themes that otherwise reveal them on hover (Retro on desktop). Retro and
+Cyberpunk show inside buttons as a quiet footer (plain icons under a divider)
+at every width instead of boxed buttons.
+
 ## Background images
 
 In Backgrounds, select one area and use its inspector to choose an image,
-layout, opacity, pattern size, and base color. Uploads accept PNG, JPEG, WebP,
+layout, opacity, pattern size, and base color. **Choose image…** opens a picker
+for that area with the workspace's images, newest first, including images sent
+in chat. Search filters by file name; the first tile uploads a new image.
+Clicking or dropping on the preview still uploads directly. Uploads accept PNG, JPEG, WebP,
 or GIF up to 8 MiB. HEIC/HEIF photos must be exported as JPEG or PNG first.
 Validation uses file signatures, so a valid image with an empty browser MIME
 type still works. Rejected uploads show a Background image not applied toast.
+
+If a chosen image is no longer available on this device (deleted, or not yet
+downloaded), that area shows the theme pattern and a Background image not found
+notice appears once per session; your saved choice is kept, so it returns once
+the image is available again. A sidebar image also shows in themes with a solid
+sidebar panel, such as Blank.
 
 Uploaded bytes are stored in the active browser database and referenced by an
 `internal-file://<hash>` token. A runtime object URL is temporary and must not

@@ -3589,3 +3589,44 @@ html[data-theme='retro'].dark
         min-height: 60px;
     }
 }
+
+/* Message buttons placed inside messages (Appearance → Backgrounds) use the
+ * quiet footer from the phone layout at every width, instead of boxed buttons. */
+html[data-theme='retro'][data-user-actions-inside] .cm-user .cm-actions,
+html[data-theme='retro'][data-assistant-actions-inside] .cm-assistant .cm-actions {
+	width: 100% !important;
+	margin: 10px 0 0 !important;
+	padding-top: 4px !important;
+	border-top: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+}
+
+html[data-theme='retro'][data-user-actions-inside] .cm-user .cm-action-group,
+html[data-theme='retro'][data-assistant-actions-inside] .cm-assistant .cm-action-group {
+	background: transparent !important;
+	border: 0 !important;
+	box-shadow: none !important;
+}
+
+html[data-theme='retro'][data-user-actions-inside] .cm-user .cm-action-group button,
+html[data-theme='retro'][data-assistant-actions-inside] .cm-assistant .cm-action-group button {
+	background: transparent !important;
+	border-color: transparent !important;
+	box-shadow: none !important;
+	color: inherit !important;
+}
+
+html[data-theme='retro'][data-user-actions-inside] .cm-user .cm-action-group button:hover:not(:disabled),
+html[data-theme='retro'][data-assistant-actions-inside] .cm-assistant .cm-action-group button:hover:not(:disabled) {
+	background: color-mix(in srgb, currentColor 12%, transparent) !important;
+}
+
+html[data-theme='retro'][data-user-actions-inside] .cm-user .cm-action-group button:active:not(:disabled),
+html[data-theme='retro'][data-assistant-actions-inside] .cm-assistant .cm-action-group button:active:not(:disabled) {
+	background: color-mix(in srgb, currentColor 20%, transparent) !important;
+}
+
+html[data-theme='retro'][data-user-actions-inside] .cm-user .cm-action-group button:focus-visible,
+html[data-theme='retro'][data-assistant-actions-inside] .cm-assistant .cm-action-group button:focus-visible {
+	outline: 2px solid currentColor;
+	outline-offset: 1px;
+}

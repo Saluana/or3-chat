@@ -125,13 +125,27 @@
                         </fieldset>
                     </div>
 
-                    <label v-if="activeColorKey === 'dialogBackdrop'" class="color-field">
-                        <span class="field-label">Backdrop opacity · {{ backdropOpacity }}%</span>
-                        <input type="range" min="0" max="100" aria-label="Backdrop opacity"
-                            aria-describedby="theme-backdrop-opacity-help"
-                            :value="backdropOpacity" :disabled="!colorsEnabled" @input="setBackdropOpacity" />
-                        <span id="theme-backdrop-opacity-help" class="supporting-text text-xs">
-                            {{ APPEARANCE_SETTING_DESCRIPTIONS.backdropOpacity }}
+                    <label v-if="activeAlpha" class="color-field">
+                        <span class="field-label">{{ activeAlpha.label }} · {{ activeOpacity }}%</span>
+                        <input type="range" min="0" max="100" :aria-label="activeAlpha.label"
+                            aria-describedby="theme-color-opacity-help"
+                            :value="activeOpacity" :disabled="!colorsEnabled" @input="setActiveOpacity" />
+                        <span id="theme-color-opacity-help" class="supporting-text text-xs">
+                            {{ activeAlpha.help }}
+                        </span>
+                    </label>
+                    <label v-if="activeColorKey === 'assistantMessage'" class="color-field">
+                        <span class="color-toggle-row">
+                            <input
+                                type="checkbox"
+                                :checked="overrides.chat?.assistantBlur ?? false"
+                                aria-describedby="theme-assistant-blur-help"
+                                @change="set({ chat: { assistantBlur: ($event.currentTarget as HTMLInputElement).checked } })"
+                            />
+                            <span class="field-label">Blur behind</span>
+                        </span>
+                        <span id="theme-assistant-blur-help" class="supporting-text text-xs">
+                            {{ APPEARANCE_SETTING_DESCRIPTIONS.chat.assistantBlur }}
                         </span>
                     </label>
                     <div class="color-presets">
@@ -288,6 +302,16 @@ const basicColorGroups: PaletteColorGroup[] = [
             {
                 key: 'surfaceActive',
                 label: 'Selected & pressed background',
+            },
+        ],
+    },
+    {
+        label: 'Chat',
+        colors: [
+            {
+                key: 'assistantMessage',
+                label: 'Assistant messages',
+                hint: 'Off until you pick a color.',
             },
         ],
     },
@@ -508,7 +532,22 @@ const activeColorValue = computed(() => {
     return colorsEnabled.value && saved && isValidHex(saved) ? saved : themeColor.value;
 });
 const activeRgbHex = computed(() => expandHex(activeColorValue.value).slice(0, 7));
-const activeHex = computed(() => activeColorKey.value === 'dialogBackdrop' ? activeRgbHex.value : activeColorValue.value);
+/** Tokens whose opacity is edited with a slider and stored in the hex alpha channel. */
+const ALPHA_TOKENS: Partial<Record<ColorKey, { label: string; help: string; defaultAlpha: string }>> = {
+    dialogBackdrop: {
+        label: 'Backdrop opacity',
+        help: APPEARANCE_SETTING_DESCRIPTIONS.backdropOpacity,
+        defaultAlpha: 'ff',
+    },
+    assistantMessage: {
+        label: 'Opacity',
+        help: APPEARANCE_SETTING_DESCRIPTIONS.assistantMessageOpacity,
+        // A mostly solid panel is the useful starting point over a photo.
+        defaultAlpha: 'd9',
+    },
+};
+const activeAlpha = computed(() => ALPHA_TOKENS[activeColorKey.value] ?? null);
+const activeHex = computed(() => activeAlpha.value ? activeRgbHex.value : activeColorValue.value);
 const activeRgb = computed(() => hexToRgb(activeRgbHex.value));
 watch([activeColorKey, colorsEnabled], () => { hexDraft.value = null; });
 
@@ -562,8 +601,8 @@ function setActiveColorValue(color?: string) {
     if (!color || !colorsEnabled.value) return;
     const normalized = ensureHash(color).toLowerCase();
     if (!isValidHex(normalized)) return;
-    const next = activeColorKey.value === 'dialogBackdrop'
-        ? expandHex(normalized).slice(0, 7) + backdropAlpha.value
+    const next = activeAlpha.value
+        ? expandHex(normalized).slice(0, 7) + activeAlphaHex.value
         : normalized;
     setColor(activeColor.value, next);
 }
@@ -599,16 +638,21 @@ function updateActiveHex(event: Event) {
     const value = (event.currentTarget as HTMLInputElement).value;
     hexDraft.value = value;
     const color = ensureHash(value.trim()).toLowerCase();
-    if (activeColorKey.value === 'dialogBackdrop' && color.length !== 4 && color.length !== 7) return;
+    if (activeAlpha.value && color.length !== 4 && color.length !== 7) return;
     setActiveColorValue(color);
 }
 
-const backdropAlpha = computed(() => expandHex(activeColorValue.value).slice(7) || 'ff');
-const backdropOpacity = computed(() => Math.round(parseInt(backdropAlpha.value, 16) * 100 / 255));
-function setBackdropOpacity(event: Event) {
+const activeAlphaHex = computed(() =>
+    expandHex(activeColorValue.value).slice(7) || activeAlpha.value?.defaultAlpha || 'ff'
+);
+const activeOpacity = computed(() => Math.round(parseInt(activeAlphaHex.value, 16) * 100 / 255));
+function setActiveOpacity(event: Event) {
+    // Opacity needs a base color; an unset assistant panel starts from the app background.
+    const base = activeRgbHex.value || expandHex(getCurrentTokenColor('surface')).slice(0, 7);
+    if (!isValidHex(base)) return;
     const percent = (event.currentTarget as HTMLInputElement).valueAsNumber;
     const alpha = Math.round(percent * 255 / 100).toString(16).padStart(2, '0');
-    setColor(activeColor.value, activeRgbHex.value + alpha);
+    setColor(activeColor.value, base + alpha);
 }
 
 function expandHex(color: string): string {
@@ -755,6 +799,23 @@ const { copy: copyToClipboard } = useClipboard({ legacy: true });
     min-width: 0;
     flex-direction: column;
     gap: 0.55rem;
+}
+.color-field {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+.color-toggle-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+.color-toggle-row input {
+    width: 1rem;
+    height: 1rem;
+    accent-color: var(--md-primary);
 }
 .palette-editor-picker {
     width: min(100%, 11rem);

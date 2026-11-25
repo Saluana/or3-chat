@@ -30,12 +30,14 @@ Document AI has its own tool settings.
 
 Use the **Appearance** category in the chat's **Tools** settings to let a
 compatible model inspect and change your browser's appearance. For example,
-ask “Make my dark-mode accent teal and increase the text size to 18px.”
+ask “Make my dark-mode accent teal and increase the text size to 18px” or
+“Use the photo I just sent as my background, but keep it subtle.”
 
 | Tool | Behavior |
 | --- | --- |
-| `get_appearance` | Reads the active theme and mode, effective colors, saved overrides, and what each editable setting changes. |
-| `update_appearance` | Updates color tokens, fonts, interface scale, border widths, or corner radii for the active mode. It preserves omitted settings and rejects a request for a different mode. |
+| `get_appearance` | Reads the active theme and mode, effective colors, saved overrides, background areas, and what each editable setting changes. It also lists up to 12 workspace images by hash and name: images attached to this chat come first, newest first, marked `inChat`. |
+| `update_appearance` | Updates color tokens, fonts, interface scale, border widths, or corner radii for the active mode, including `colors.assistantMessage` (a `#RRGGBBAA` panel behind assistant replies) `chat.assistantBlur` (off by default), and `chat.userActionsInside` / `chat.assistantActionsInside` (keep message buttons inside user messages or assistant replies). It preserves omitted settings and rejects a request for a different mode. |
+| `set_background_image` | Sets one or more background areas (`content`, `overlay`, `sidebar`) in the active mode to an image hash from `get_appearance`, the theme pattern (`"theme"`), or nothing (`"none"`), with optional `layout` (`fill`, `single`, `repeat`) and `opacity`. It turns custom backgrounds on, writes all areas in one change, and rejects hashes that are not active images in the current workspace. |
 | `set_appearance_mode` | Switches between light and dark mode. |
 
 Changes use the same browser-local preferences as Theme Studio. To keep a

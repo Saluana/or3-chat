@@ -104,3 +104,98 @@ it('rejects unknown tokens and non-hex CSS before applying any part of an update
     }
     expect(theme.light.value.typography?.baseFontPx).toBeUndefined();
 });
+
+function image(hash: string, name: string, created_at: number, extra: Record<string, unknown> = {}) {
+    return {
+        hash, name, mime_type: 'image/png', kind: 'image', size_bytes: 100, ref_count: 0,
+        created_at, updated_at: created_at, deleted: false, clock: 1, ...extra,
+    } as never;
+}
+
+async function seedImages() {
+    const db = getDb();
+    await db.file_meta.bulkPut([
+        image('chat-photo', 'IMG_4021.jpg', 1),
+        image('mountains', 'mountains.png', 5),
+        image('old-trash', 'deleted.png', 9, { deleted: true }),
+        image('a-document', 'notes.pdf', 10, { kind: 'pdf', mime_type: 'application/pdf' }),
+    ]);
+    await db.messages.put({
+        id: 'with-photo', thread_id: threadId, index: 1, order_key: '1:with-photo', role: 'user',
+        data: { content: 'Make this my background' }, file_hashes: JSON.stringify(['chat-photo']),
+        pending: false, deleted: false, created_at: 1, updated_at: 1, clock: 1,
+    } as never);
+}
+
+it('lists chat images first and applies a chosen image to several areas in one change', async () => {
+    await enableChatTools();
+    await seedImages();
+    const inspected = JSON.parse((await execute('get_appearance', {})).result!);
+    expect(inspected.images).toEqual([
+        { hash: 'chat-photo', name: 'IMG_4021.jpg', inChat: true },
+        { hash: 'mountains', name: 'mountains.png', inChat: false },
+    ]);
+    expect(inspected.backgrounds).toMatchObject({ enabled: false, areas: { content: { image: 'none' } } });
+
+    const applied = await execute('set_background_image', {
+        mode: 'light', areas: ['content', 'sidebar'], image: 'chat-photo', opacity: 0.2,
+    });
+    expect(applied.error).toBeUndefined();
+    expect(JSON.parse(applied.result!)).toMatchObject({
+        image: { kind: 'file', hash: 'chat-photo', inChat: true }, layout: 'fill',
+        areas: [{ area: 'content', opacity: 0.2 }, { area: 'sidebar', opacity: 0.2 }],
+    });
+    const layer = { url: 'internal-file://chat-photo', fit: true, repeat: 'no-repeat', opacity: 0.2 };
+    expect(theme.light.value.backgrounds).toMatchObject({ enabled: true, content: { base: layer }, sidebar: layer });
+    expect(theme.light.value.backgrounds?.content?.overlay?.url).toBeFalsy();
+
+    expect((await execute('set_background_image', { mode: 'light', areas: ['sidebar'], image: 'theme' })).error).toBeUndefined();
+    expect(theme.light.value.backgrounds?.sidebar).toMatchObject({ url: '/sidebar-repeater.v2.webp', repeat: 'repeat', fit: false });
+    expect((await execute('set_background_image', { mode: 'light', areas: ['content'], image: 'none' })).error).toBeUndefined();
+    expect(theme.light.value.backgrounds?.content?.base).toMatchObject({ url: null, opacity: 0 });
+});
+
+it('refuses unknown, deleted, and non-image hashes and a stale color mode without changing backgrounds', async () => {
+    await enableChatTools();
+    await seedImages();
+    for (const hash of ['missing', 'old-trash', 'a-document']) {
+        const result = await execute('set_background_image', { mode: 'light', areas: ['content'], image: hash });
+        expect(result.error).toMatch(/No image with that hash/);
+    }
+    await expect(execute('set_background_image', { mode: 'dark', areas: ['content'], image: 'mountains' }))
+        .resolves.toMatchObject({ error: /active color mode changed/ });
+    await expect(execute('set_background_image', { mode: 'light', areas: [], image: 'mountains' }))
+        .resolves.toMatchObject({ result: null });
+    expect(theme.light.value.backgrounds?.content?.base?.url).toBeUndefined();
+    expect(theme.light.value.backgrounds?.enabled).toBe(false);
+});
+
+it('sets a semi-opaque assistant message panel and opt-in blur through update_appearance', async () => {
+    await enableChatTools();
+    const result = await execute('update_appearance', {
+        mode: 'light', colors: { assistantMessage: '#101820cc' }, chat: { assistantBlur: true },
+    });
+    expect(result.error).toBeUndefined();
+    expect(theme.light.value).toMatchObject({
+        colors: { enabled: true, assistantMessage: '#101820cc' },
+        chat: { assistantBlur: true },
+    });
+    const inspected = JSON.parse((await execute('get_appearance', {})).result!);
+    expect(inspected.overrides.chat).toEqual({ assistantBlur: true });
+    expect(inspected.colorTokenDescriptions.assistantMessage).toMatch(/assistant replies/);
+    await expect(execute('update_appearance', { mode: 'light', chat: { assistantBlur: 'yes' } }))
+        .resolves.toMatchObject({ result: null });
+});
+
+it('places message buttons inside user and assistant messages independently per mode', async () => {
+    await enableChatTools();
+    expect((await execute('update_appearance', { mode: 'light', chat: { userActionsInside: true } })).error).toBeUndefined();
+    expect(theme.light.value.chat).toMatchObject({ userActionsInside: true });
+    expect(theme.light.value.chat?.assistantActionsInside).toBeUndefined();
+    expect((await execute('update_appearance', { mode: 'light', chat: { assistantActionsInside: true } })).error).toBeUndefined();
+    expect(theme.light.value.chat).toMatchObject({ userActionsInside: true, assistantActionsInside: true });
+    expect(theme.dark.value.chat?.userActionsInside).toBeUndefined();
+    const inspected = JSON.parse((await execute('get_appearance', {})).result!);
+    expect(inspected.overrides.chat).toMatchObject({ userActionsInside: true, assistantActionsInside: true });
+    expect(inspected.settingDescriptions.chat.userActionsInside).toMatch(/inside your message bubble/);
+});

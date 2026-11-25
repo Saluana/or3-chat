@@ -85,10 +85,52 @@
                 @update:fit="(v: boolean) => activeLayer.onFit(v)"
                 @update:color="(c: string) => activeLayer.onColor(c)"
                 @upload="(file: File) => handleLayerUpload(file, activeLayer.key)"
+                @choose="pickerOpen = true"
                 @remove="removeLayer(activeLayer.key)"
                 @apply-preset="(src: string, opacity: number) => applyPreset(activeLayer.key, src, opacity)"
             />
         </div>
+
+        <section
+            class="message-button-settings"
+            aria-labelledby="theme-section-message-buttons"
+        >
+            <div>
+                <h3 id="theme-section-message-buttons" class="message-button-title">
+                    Message buttons
+                </h3>
+                <p class="supporting-text">
+                    Keep copy, retry, and edit buttons inside messages so a
+                    background image never sits behind them.
+                </p>
+            </div>
+            <label
+                v-for="option in messageButtonOptions"
+                :key="option.key"
+                class="background-toggle message-button-toggle"
+            >
+                <span class="message-button-copy">
+                    <span>{{ option.label }}</span>
+                    <small>{{ option.help }}</small>
+                </span>
+                <input
+                    type="checkbox"
+                    :checked="overrides.chat?.[option.key] ?? false"
+                    @change="set({ chat: { [option.key]: ($event.currentTarget as HTMLInputElement).checked } })"
+                />
+                <span class="background-toggle-track" aria-hidden="true">
+                    <span class="background-toggle-thumb" />
+                </span>
+            </label>
+        </section>
+
+        <ThemeImagePicker
+            v-model:open="pickerOpen"
+            :area-label="activeLayer.title"
+            :current-hash="hashFromBackgroundUrl(activeLayer.url)"
+            @select="(hash: string) => applyChosenImage(activeLayer.key, hash)"
+            @upload="(file: File) => handleLayerUpload(file, activeLayer.key)"
+        />
     </section>
 </template>
 
@@ -108,6 +150,16 @@ import {
     validateBackgroundImageFile,
 } from './types';
 import type { BackgroundPreset } from './types';
+import ThemeImagePicker from './ThemeImagePicker.vue';
+import { APPEARANCE_SETTING_DESCRIPTIONS } from '~/core/theme/appearance-setting-descriptions';
+import {
+    BACKGROUND_AREA_PATTERNS,
+    backgroundAreaPatch,
+    chosenImageLayer,
+    getBackgroundImageMeta,
+    hashFromBackgroundUrl,
+    type BackgroundArea,
+} from '~/core/theme/background-image-library';
 
 const themeApi = useUserThemeOverrides();
 const overrides = themeApi.overrides;
@@ -117,6 +169,19 @@ const toast = useToast();
 // Computed helpers for cleaner bindings
 const bgEnabled = computed(() => overrides.value.backgrounds?.enabled ?? false);
 const activeLayerKey = ref<LayerKey>('contentBg1');
+const pickerOpen = ref(false);
+const messageButtonOptions = [
+    {
+        key: 'userActionsInside',
+        label: 'Inside your messages',
+        help: APPEARANCE_SETTING_DESCRIPTIONS.chat.userActionsInside,
+    },
+    {
+        key: 'assistantActionsInside',
+        label: 'Inside assistant replies',
+        help: APPEARANCE_SETTING_DESCRIPTIONS.chat.assistantActionsInside,
+    },
+] as const;
 const chevronIcon = useIcon('ui.chevron.right').value;
 const contentBg1Url = computed(() => overrides.value.backgrounds?.content?.base?.url || null);
 const contentBg1Repeat = computed(() => overrides.value.backgrounds?.content?.base?.repeat || 'repeat');
@@ -201,13 +266,13 @@ function removeLayer(which: LayerKey) {
 }
 
 const presetsContent1: BackgroundPreset[] = [
-    { label: 'Default', src: '/bg-repeat.v2.webp', opacity: 0.08 },
+    { label: 'Default', ...BACKGROUND_AREA_PATTERNS.content },
 ];
 const presetsContent2: BackgroundPreset[] = [
-    { label: 'Default', src: '/bg-repeat-2.v2.webp', opacity: 0.125 },
+    { label: 'Default', ...BACKGROUND_AREA_PATTERNS.overlay },
 ];
 const presetsSidebar: BackgroundPreset[] = [
-    { label: 'Default', src: '/sidebar-repeater.v2.webp', opacity: 0.1 },
+    { label: 'Default', ...BACKGROUND_AREA_PATTERNS.sidebar },
 ];
 
 function applyPreset(which: LayerKey, src: string, opacity: number) {
@@ -407,31 +472,31 @@ function showUploadError(description: string) {
     });
 }
 
-function applyUploadedLayer(
-    which: LayerKey,
-    token: string,
-    currentOpacity: number
-) {
+const layerAreas: Record<LayerKey, BackgroundArea> = {
+    contentBg1: 'content',
+    contentBg2: 'overlay',
+    sidebarBg: 'sidebar',
+};
+
+function applyStoredImage(which: LayerKey, hash: string) {
     // Photos are usually meant as a single cover image, not a tiny tiled pattern.
-    const layer = {
-        url: token,
-        fit: true,
-        repeat: 'no-repeat' as const,
-        // Keep a visible floor so a 0% leftover from "remove" does not hide the upload.
-        opacity: currentOpacity > 0 ? currentOpacity : 0.35,
-    };
-    if (which === 'contentBg1') {
-        set({ backgrounds: { content: { base: layer } } });
-        local.contentBg1Opacity = layer.opacity;
+    const layer = chosenImageLayer(hash, local[layerLocalKeys[which].opacity]);
+    set(backgroundAreaPatch(layerAreas[which], layer));
+    local[layerLocalKeys[which].opacity] = layer.opacity!;
+}
+
+async function applyChosenImage(which: LayerKey, hash: string) {
+    // The picker lists only images, but the row may be deleted before the click lands.
+    if (!(await getBackgroundImageMeta(hash))) {
+        showUploadError('That image is no longer in this workspace.');
         return;
     }
-    if (which === 'contentBg2') {
-        set({ backgrounds: { content: { overlay: layer } } });
-        local.contentBg2Opacity = layer.opacity;
-        return;
-    }
-    set({ backgrounds: { sidebar: layer } });
-    local.sidebarBgOpacity = layer.opacity;
+    applyStoredImage(which, hash);
+    toast.add({
+        title: 'Background image applied',
+        description: 'Saved for this color mode.',
+        color: 'success',
+    });
 }
 
 // File upload handler with security validation
@@ -469,9 +534,7 @@ async function handleLayerUpload(file: File, which: LayerKey) {
             uploadFile,
             uploadFile.name || 'upload'
         );
-        const token = `internal-file://${meta.hash}`;
-        const currentOpacity = local[layerLocalKeys[which].opacity];
-        applyUploadedLayer(which, token, currentOpacity);
+        applyStoredImage(which, meta.hash);
 
         toast.add({
             title: 'Background image applied',
@@ -602,6 +665,37 @@ watch(
     outline: var(--app-focus-ring-width, 2px) solid
         var(--md-focus-ring, var(--background-editor-accent));
     outline-offset: var(--app-focus-ring-offset, 2px);
+}
+.message-button-settings {
+    display: grid;
+    min-width: 0;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: var(--md-border-width) solid var(--background-editor-border);
+}
+.message-button-title {
+    font-size: 1.0625rem;
+    font-weight: 650;
+}
+.message-button-settings .supporting-text {
+    max-width: 68ch;
+    font-size: 0.8125rem;
+}
+.message-button-toggle {
+    justify-content: space-between;
+    gap: 1rem;
+}
+.message-button-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+}
+.message-button-copy small {
+    max-width: 60ch;
+    color: var(--md-on-surface-variant, var(--md-on-surface));
+    font-size: 0.75rem;
+    font-weight: 400;
 }
 .background-workspace {
     display: grid;
