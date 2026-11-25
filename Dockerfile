@@ -173,14 +173,26 @@ FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf100
 # upstream image, including their licenses and package inventory.
 FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:78f07ef1b5ea71ad7c055df15d0dd8997f2d288f9158623c4d4ae3d765b7d50d AS node-distribution
 FROM --platform=$BUILDPLATFORM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS node-libraries
+ARG TARGETARCH
+COPY scripts/docker/vendor/libzstd/ /zstd/
 RUN --mount=from=node-distribution,target=/source \
     set -eu; cd /source; mkdir /runtime; \
-    for pkg in gcc-14-base libgcc-s1 libstdc++6 libgomp1 libzstd1; do \
+    for pkg in gcc-14-base libgcc-s1 libstdc++6 libgomp1; do \
       record=var/lib/dpkg/status.d/$pkg; \
       cp -a --parents "$record" "$record.md5sums" "usr/share/doc/$pkg" /runtime; \
       awk '{print $2}' "$record.md5sums" | xargs -r cp -a --parents --target-directory=/runtime; \
     done; \
-    cp -a --parents usr/lib/*-linux-gnu/libstdc++.so.6 usr/lib/*-linux-gnu/libgomp.so.1 usr/lib/*-linux-gnu/libzstd.so.1 /runtime
+    cp -a --parents usr/lib/*-linux-gnu/libstdc++.so.6 usr/lib/*-linux-gnu/libgomp.so.1 /runtime
+
+# Use the architecture-matched Debian 13 security update for CVE-2026-124851.
+RUN echo '23a6f8a774d5dceda5f759b4ecdcdd652dfbefbf8271912e6a7ab0ee3250dc75  /zstd/amd64.deb' | sha256sum -c - && \
+    echo 'ab5ad90f986b315bfa12be50f438aa3453e32da3b29540844d2d847800d2ce08  /zstd/arm64.deb' | sha256sum -c - && \
+    test "$(dpkg-deb --field /zstd/$TARGETARCH.deb Architecture)" = "$TARGETARCH" && \
+    test "$(dpkg-deb --field /zstd/$TARGETARCH.deb Version)" = '1.5.7+dfsg-1+deb13u1' && \
+    dpkg-deb --extract /zstd/$TARGETARCH.deb /runtime && \
+    dpkg-deb --control /zstd/$TARGETARCH.deb /zstd/control && \
+    cp /zstd/control/control /runtime/var/lib/dpkg/status.d/libzstd1 && \
+    cp /zstd/control/md5sums /runtime/var/lib/dpkg/status.d/libzstd1.md5sums
 
 FROM gcr.io/distroless/base-nossl-debian13:nonroot@sha256:4006ac92504be607b70de01d1f64f38288c69fcd8faa820f6d3aed266ea32ac5 AS runtime
 COPY --from=node-distribution /nodejs /nodejs

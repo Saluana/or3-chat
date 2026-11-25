@@ -209,6 +209,14 @@ artifact retains the full vulnerability report (including modified findings),
 the VEX document, and SBOM even if the gate fails. Remove the package overlay
 and its VEX together once a refreshed base supplies a qualified fixed package.
 
+The Distroless application runtime ships Debian 13's `libzstd1`
+`1.5.7+dfsg-1+deb13u1` for amd64 and arm64. The packages in
+`scripts/docker/vendor/libzstd/` match the signed Debian security package
+index. The Docker build verifies both SHA-256 digests and copies the selected
+package's library, license, and package inventory into the application image.
+Remove this overlay once the pinned Distroless Node image supplies the fixed
+package. [Debian security advisory](https://security-tracker.debian.org/tracker/DSA-6657-1)
+
 The scan utility also has an opt-in `--qualification-out` for the unfinished
 two-profile receipt path. It requires `--profile`, `--source-sha`, `--run-id`,
 `--candidate-digest`, a matching digest-pinned candidate image and a supported
