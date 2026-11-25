@@ -169,3 +169,20 @@ it('refuses unknown, deleted, and non-image hashes and a stale color mode withou
     expect(theme.light.value.backgrounds?.content?.base?.url).toBeUndefined();
     expect(theme.light.value.backgrounds?.enabled).toBe(false);
 });
+
+it('sets a semi-opaque assistant message panel and opt-in blur through update_appearance', async () => {
+    await enableChatTools();
+    const result = await execute('update_appearance', {
+        mode: 'light', colors: { assistantMessage: '#101820cc' }, chat: { assistantBlur: true },
+    });
+    expect(result.error).toBeUndefined();
+    expect(theme.light.value).toMatchObject({
+        colors: { enabled: true, assistantMessage: '#101820cc' },
+        chat: { assistantBlur: true },
+    });
+    const inspected = JSON.parse((await execute('get_appearance', {})).result!);
+    expect(inspected.overrides.chat).toEqual({ assistantBlur: true });
+    expect(inspected.colorTokenDescriptions.assistantMessage).toMatch(/assistant replies/);
+    await expect(execute('update_appearance', { mode: 'light', chat: { assistantBlur: 'yes' } }))
+        .resolves.toMatchObject({ result: null });
+});

@@ -61,7 +61,7 @@ function appearanceTool<Args extends Record<string, unknown>>(
 }
 
 type Mode = 'light' | 'dark';
-type AppearancePatch = Pick<UserThemeOverrides, 'colors' | 'typography' | 'shape'>;
+type AppearancePatch = Pick<UserThemeOverrides, 'colors' | 'typography' | 'shape' | 'chat'>;
 type UpdateArgs = AppearancePatch & { mode: Mode };
 
 const inspect = appearanceTool('get_appearance', 'Inspect appearance',
@@ -70,7 +70,7 @@ const inspect = appearanceTool('get_appearance', 'Inspect appearance',
     objectSchema({}));
 const update = appearanceTool<UpdateArgs>('update_appearance', 'Change appearance',
     'Change colors, fonts, interface size, borders, or corners.',
-    `Edit the active mode’s colors, fonts, interface scale, borders, or corner radii. Read get_appearance first and pass its mode. Colors use #RRGGBB or #RRGGBBAA. ${descriptions.backdropOpacity} Include onPrimary or onPrimaryContainer when adjusting their respective fills for contrast. Omitted settings are preserved.`,
+    `Edit the active mode’s colors, fonts, interface scale, borders, corner radii, or the panel behind assistant messages. Read get_appearance first and pass its mode. Colors use #RRGGBB or #RRGGBBAA. ${descriptions.backdropOpacity} ${descriptions.assistantMessageOpacity} When a background image makes replies hard to read, set colors.assistantMessage to a semi-opaque color that contrasts with onSurface (for example the surface color at alpha cc). Only enable chat.assistantBlur when the user asks for blur. Include onPrimary or onPrimaryContainer when adjusting their respective fills for contrast. Omitted settings are preserved.`,
     {
         ...objectSchema({
             mode: modeSchema,
@@ -102,6 +102,12 @@ const update = appearanceTool<UpdateArgs>('update_appearance', 'Change appearanc
                 }, descriptions.shape)),
                 minProperties: 1,
             },
+            chat: {
+                ...objectSchema(describedProperties({
+                    assistantBlur: { type: 'boolean' },
+                }, descriptions.chat)),
+                minProperties: 1,
+            },
         }, ['mode']),
         minProperties: 2,
     });
@@ -124,7 +130,7 @@ const BACKGROUND_LAYOUTS: Record<BackgroundLayout, Pick<UserBackgroundLayer, 'fi
 
 const setBackground = appearanceTool<BackgroundArgs>('set_background_image', 'Set background image',
     'Put a photo from your files or this chat behind the workspace or sidebar.',
-    `Set the background image of one or more app areas in the active mode. Read get_appearance first and pass its mode. Areas: content is the main workspace background (${BACKGROUND_AREA_LABELS.content}), overlay is a second texture layer drawn over it (${BACKGROUND_AREA_LABELS.overlay}), sidebar is the navigation sidebar. Use "content" unless the user names another area. image is a hash from get_appearance images (images marked inChat were sent in this chat, newest first, so "the photo I just sent" is the first inChat image), "theme" for the theme's default pattern, or "none" to clear the area. Photos default to layout "fill". Keep opacity low (0.15-0.35) when the user wants the background subtle so text stays readable. Custom backgrounds are switched on automatically.`,
+    `Set the background image of one or more app areas in the active mode. Read get_appearance first and pass its mode. Areas: content is the main workspace background (${BACKGROUND_AREA_LABELS.content}), overlay is a second texture layer drawn over it (${BACKGROUND_AREA_LABELS.overlay}), sidebar is the navigation sidebar. Use "content" unless the user names another area. image is a hash from get_appearance images (images marked inChat were sent in this chat, newest first, so "the photo I just sent" is the first inChat image), "theme" for the theme's default pattern, or "none" to clear the area. Photos default to layout "fill". Keep opacity low (0.15-0.35) when the user wants the background subtle so text stays readable. For a busy or high-contrast photo, offer to add a panel behind assistant messages with update_appearance colors.assistantMessage. Custom backgrounds are switched on automatically.`,
     objectSchema({
         mode: modeSchema,
         areas: {
@@ -205,14 +211,14 @@ export function registerAppearanceTools(theme: ReturnType<typeof useUserThemeOve
                     .find((candidate) => candidate && CSS.supports('color', candidate));
                 if (value) effectiveColors[key] = value;
             }
-            const { colors: savedColors, typography, shape } = theme.overrides.value;
+            const { colors: savedColors, typography, shape, chat } = theme.overrides.value;
             return JSON.stringify({
                 theme: root.dataset.theme,
                 mode: theme.activeMode.value,
                 effectiveColors,
                 colorTokenDescriptions: COLOR_TOKEN_DESCRIPTIONS,
                 settingDescriptions: descriptions,
-                overrides: { colors: savedColors, typography, shape },
+                overrides: { colors: savedColors, typography, shape, chat },
                 backgrounds: {
                     enabled: theme.overrides.value.backgrounds?.enabled ?? false,
                     areas: Object.fromEntries(BACKGROUND_AREAS.map((area) => [
@@ -222,7 +228,7 @@ export function registerAppearanceTools(theme: ReturnType<typeof useUserThemeOve
                 images,
             });
         }), options));
-        registrations.push(registry.registerTool(update, ({ mode, colors, typography, shape }, context) => withAppearanceAuthority(context, () => {
+        registrations.push(registry.registerTool(update, ({ mode, colors, typography, shape, chat }, context) => withAppearanceAuthority(context, () => {
             if (theme.activeMode.value !== mode) {
                 throw new Error('The active color mode changed. Read get_appearance before trying again.');
             }
@@ -230,6 +236,7 @@ export function registerAppearanceTools(theme: ReturnType<typeof useUserThemeOve
             if (colors) patch.colors = { enabled: true, ...colors };
             if (typography) patch.typography = typography;
             if (shape) patch.shape = { enabled: true, ...shape };
+            if (chat) patch.chat = chat;
             theme.set(patch);
             return JSON.stringify({ mode, updated: patch });
         }), options));

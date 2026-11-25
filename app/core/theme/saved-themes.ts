@@ -63,6 +63,7 @@ const overrides = z.object({
     density: z.object({ ...toggle, preset: z.enum(['theme', 'compact', 'comfortable', 'spacious']).optional() }),
     elevation: z.object({ ...toggle, preset: z.enum(['theme', 'flat', 'subtle', 'expressive']).optional() }),
     ui: z.object({ reducePatternsInHighContrast: z.boolean().optional() }),
+    chat: z.object({ assistantBlur: z.boolean().optional() }),
 }).partial() satisfies z.ZodType<UserThemeOverrides>;
 
 const savedTheme = z.object({

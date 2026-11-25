@@ -539,4 +539,24 @@ describe('applyMergedTheme', () => {
         // Should not call applyThemeBackgrounds
         expect(applyThemeBackgrounds).not.toHaveBeenCalled();
     });
+
+    it('applies the assistant message panel and keeps blur off unless chosen', async () => {
+        const root = document.documentElement;
+        const panel: UserThemeOverrides = {
+            colors: { enabled: true, assistantMessage: '#ffffffcc' },
+            backgrounds: { enabled: false },
+        };
+        await applyMergedTheme('light', panel, mockThemePlugin as any);
+        expect(root.style.getPropertyValue('--app-assistant-message-bg')).toBe('#ffffffcc');
+        expect(root.hasAttribute('data-assistant-surface')).toBe(true);
+        expect(root.style.getPropertyValue('--app-assistant-message-backdrop')).toBe('');
+
+        await applyMergedTheme('light', { ...panel, chat: { assistantBlur: true } }, mockThemePlugin as any);
+        expect(root.style.getPropertyValue('--app-assistant-message-backdrop')).toBe('blur(12px)');
+
+        await applyMergedTheme('light', { colors: { enabled: false }, chat: {} }, mockThemePlugin as any);
+        expect(root.style.getPropertyValue('--app-assistant-message-bg')).toBe('');
+        expect(root.style.getPropertyValue('--app-assistant-message-backdrop')).toBe('');
+        expect(root.hasAttribute('data-assistant-surface')).toBe(false);
+    });
 });

@@ -5,6 +5,10 @@ export const APPEARANCE_SETTING_DESCRIPTIONS = {
         enabled: 'Applies custom colors for this mode and restores the base palette when turned off.',
     },
     backdropOpacity: 'Controls how much the page dims behind a dialog through the dialog backdrop color’s alpha channel.',
+    assistantMessageOpacity: 'Sets how solid the panel behind assistant replies is. Raise it when a background image makes text hard to read.',
+    chat: {
+        assistantBlur: 'Blurs the background behind assistant replies. It can make scrolling slow on some devices, so it is off by default.',
+    },
     typography: {
         bodyFont: 'Sets the typeface for controls, messages, and supporting text.',
         headingFont: 'Sets the typeface for titles, section labels, and display text.',

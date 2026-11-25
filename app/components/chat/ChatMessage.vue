@@ -875,7 +875,7 @@ function toggleUserMessage() {
 const outerClass = computed(() => ({
     'bg-primary text-white dark:text-white/95 retro-message-user px-4 w-fit max-w-full self-end ml-auto pb-5 min-w-0':
         props.message.role === 'user',
-    'bg-white/5 retro-message-assistant w-full min-w-0':
+    'bg-white/5 chat-assistant-surface retro-message-assistant w-full min-w-0':
         props.message.role === 'assistant',
 }));
 
@@ -1303,6 +1303,23 @@ const streamMdClasses = [
 
 <style scoped>
 @import '~/assets/css/or3-prose.css';
+
+/* Assistant replies sit on an optional user-chosen panel (Appearance → Colors).
+   Themes keep replies transparent; the user's own choice must win over that. */
+.chat-assistant-surface {
+    -webkit-backdrop-filter: var(--app-assistant-message-backdrop, none);
+    backdrop-filter: var(--app-assistant-message-backdrop, none);
+}
+:global(html[data-assistant-surface] .chat-assistant-surface) {
+    background: var(--app-assistant-message-bg) !important;
+    border-radius: var(--md-border-radius-large, var(--md-border-radius)) !important;
+    padding-block: 0.75rem !important;
+}
+@media (max-width: 639px) {
+    :global(html[data-assistant-surface] .chat-assistant-surface) {
+        padding-inline: 0.75rem !important;
+    }
+}
 
 .line-clamp-6 {
     display: -webkit-box;

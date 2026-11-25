@@ -106,6 +106,14 @@ export interface UserThemeOverrides {
         info?: string;
         infoHover?: string;
         infoActive?: string;
+        // Chat
+        assistantMessage?: string;
+    };
+
+    /** Chat surface effects that are not colors. */
+    chat?: {
+        /** Blur the background behind assistant messages (costly; off by default) */
+        assistantBlur?: boolean;
     };
 
     /** Background layer overrides */

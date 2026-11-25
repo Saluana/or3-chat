@@ -72,6 +72,16 @@ preserving visible status information. CSS state changes apply immediately,
 including live typography changes, instead of animating every affected element.
 These are global accessibility choices, not per-theme light/dark presets.
 
+## Readable chat over backgrounds
+
+In Colors, **Chat → Assistant messages** puts a panel behind assistant replies so
+they stay readable over a background image. It is off until you pick a color.
+**Opacity** sets how solid the panel is (stored in the color's alpha channel, as
+`#RRGGBBAA`). **Blur behind** blurs the image behind the panel; it can make
+scrolling slow on some devices, so it is off by default. Your choice overrides
+themes that keep replies transparent. User messages and tool cards follow the
+existing **Hover surface** (Blank theme bubbles) and **Panel background** colors.
+
 ## Background images
 
 In Backgrounds, select one area and use its inspector to choose an image,

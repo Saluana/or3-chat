@@ -63,6 +63,7 @@ interface MergedThemeApplicationState {
     colors: string;
     backgrounds: string;
     ui: string;
+    chat: string;
 }
 
 let lastAppliedState: MergedThemeApplicationState | null = null;
@@ -134,6 +135,7 @@ export async function applyMergedTheme(
         colors: sectionSignature(overrides.colors),
         backgrounds: sectionSignature(overrides.backgrounds),
         ui: sectionSignature(overrides.ui),
+        chat: sectionSignature(overrides.chat),
     };
     const previous = lastAppliedState;
 
@@ -151,6 +153,9 @@ export async function applyMergedTheme(
     }
     if (!previous || previous.colors !== nextState.colors) {
         applyColorOverrides(r, overrides);
+    }
+    if (!previous || previous.chat !== nextState.chat) {
+        applyChatOverrides(r, overrides);
     }
 
     const backgroundsChanged =
@@ -283,6 +288,10 @@ function applyColorOverrides(
         'data-custom-menu-surface',
         Boolean(overrides.colors?.enabled && overrides.colors.menuSurface)
     );
+    document.documentElement.toggleAttribute(
+        'data-assistant-surface',
+        Boolean(overrides.colors?.enabled && overrides.colors.assistantMessage)
+    );
     if (overrides.colors?.enabled) {
         for (const [key, cssVar] of Object.entries(COLOR_TOKEN_REGISTRY)) {
             const value = (overrides.colors as Record<string, unknown>)[key];
@@ -310,6 +319,18 @@ function applyColorOverrides(
         ),
     ]);
     for (const cssVar of overrideVariables) style.removeProperty(cssVar);
+}
+
+/** Blur stays off unless chosen: backdrop-filter is costly while scrolling. */
+function applyChatOverrides(
+    style: CSSStyleDeclaration,
+    overrides: UserThemeOverrides
+): void {
+    if (overrides.chat?.assistantBlur) {
+        style.setProperty('--app-assistant-message-backdrop', 'blur(12px)');
+    } else {
+        style.removeProperty('--app-assistant-message-backdrop');
+    }
 }
 
 async function applyBackgroundOverrides(

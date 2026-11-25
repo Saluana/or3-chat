@@ -44,6 +44,7 @@ export const COLOR_TOKEN_REGISTRY = {
     info: '--md-info',
     infoHover: '--md-info-hover',
     infoActive: '--md-info-active',
+    assistantMessage: '--app-assistant-message-bg',
 } as const;
 
 export type RegisteredColorToken = keyof typeof COLOR_TOKEN_REGISTRY;
@@ -94,6 +95,7 @@ export const COLOR_TOKEN_DESCRIPTIONS = {
     info: 'Colors informational elements such as Marketplace status badges.',
     infoHover: 'Fills informational buttons on hover in themes such as Retro and Cyberpunk.',
     infoActive: 'Fills informational buttons while pressed in themes such as Retro and Cyberpunk.',
+    assistantMessage: 'Fills a panel behind assistant replies so they stay readable over background images. Use #RRGGBBAA; the alpha channel sets its opacity.',
 } as const satisfies Record<RegisteredColorToken, string>;
 
 /** Compatibility variables consumed by Nuxt UI's semantic color bridge. */
