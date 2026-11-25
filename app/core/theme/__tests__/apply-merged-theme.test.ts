@@ -559,4 +559,16 @@ describe('applyMergedTheme', () => {
         expect(root.style.getPropertyValue('--app-assistant-message-backdrop')).toBe('');
         expect(root.hasAttribute('data-assistant-surface')).toBe(false);
     });
+
+    it('toggles inside placement for user and assistant message buttons separately', async () => {
+        const root = document.documentElement;
+        await applyMergedTheme('light', { chat: { userActionsInside: true } }, mockThemePlugin as any);
+        expect(root.hasAttribute('data-user-actions-inside')).toBe(true);
+        expect(root.hasAttribute('data-assistant-actions-inside')).toBe(false);
+        await applyMergedTheme('light', { chat: { assistantActionsInside: true } }, mockThemePlugin as any);
+        expect(root.hasAttribute('data-user-actions-inside')).toBe(false);
+        expect(root.hasAttribute('data-assistant-actions-inside')).toBe(true);
+        await applyMergedTheme('light', {}, mockThemePlugin as any);
+        expect(root.hasAttribute('data-assistant-actions-inside')).toBe(false);
+    });
 });

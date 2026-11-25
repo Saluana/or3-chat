@@ -1321,6 +1321,30 @@ const streamMdClasses = [
     }
 }
 
+/* Optional placement (Appearance → Backgrounds): keep action buttons inside the
+   message so a background image never sits behind them. Themes otherwise hang
+   them below the bubble or across its bottom edge. */
+:global(html[data-user-actions-inside] .cm-user) {
+    --blank-actions-clearance: 0px;
+}
+:global(html[data-user-actions-inside] .cm-actions.cm-actions-user),
+:global(html[data-assistant-actions-inside] .cm-actions.cm-actions-assistant) {
+    position: static !important;
+    inset: auto !important;
+    transform: none !important;
+    width: auto !important;
+    max-width: 100% !important;
+    padding-block: 0 !important;
+}
+:global(html[data-user-actions-inside] .cm-actions.cm-actions-user) {
+    justify-content: flex-end !important;
+    margin: 0.375rem -0.5rem -0.25rem auto !important;
+}
+:global(html[data-assistant-actions-inside] .cm-actions.cm-actions-assistant) {
+    justify-content: flex-start !important;
+    margin: 0.5rem 0 0 !important;
+}
+
 .line-clamp-6 {
     display: -webkit-box;
     -webkit-line-clamp: 6;

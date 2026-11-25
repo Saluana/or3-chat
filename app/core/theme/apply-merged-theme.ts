@@ -331,6 +331,9 @@ function applyChatOverrides(
     } else {
         style.removeProperty('--app-assistant-message-backdrop');
     }
+    const root = document.documentElement;
+    root.toggleAttribute('data-user-actions-inside', Boolean(overrides.chat?.userActionsInside));
+    root.toggleAttribute('data-assistant-actions-inside', Boolean(overrides.chat?.assistantActionsInside));
 }
 
 async function applyBackgroundOverrides(

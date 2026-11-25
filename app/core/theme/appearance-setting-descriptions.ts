@@ -8,6 +8,8 @@ export const APPEARANCE_SETTING_DESCRIPTIONS = {
     assistantMessageOpacity: 'Sets how solid the panel behind assistant replies is. Raise it when a background image makes text hard to read.',
     chat: {
         assistantBlur: 'Blurs the background behind assistant replies. It can make scrolling slow on some devices, so it is off by default.',
+        userActionsInside: 'Places the copy, retry, branch, and edit buttons inside your message bubble so a background image never sits behind them.',
+        assistantActionsInside: 'Places the buttons under assistant replies inside the reply instead of on its bottom edge.',
     },
     typography: {
         bodyFont: 'Sets the typeface for controls, messages, and supporting text.',

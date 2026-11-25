@@ -82,6 +82,15 @@ scrolling slow on some devices, so it is off by default. Your choice overrides
 themes that keep replies transparent. User messages and tool cards follow the
 existing **Hover surface** (Blank theme bubbles) and **Panel background** colors.
 
+## Message buttons
+
+In Backgrounds, **Message buttons** has two switches, saved per light and dark
+mode like other Appearance choices: **Inside your messages** keeps copy, retry,
+branch, and edit inside your message bubble, and **Inside assistant replies**
+keeps the reply buttons inside the reply instead of on its bottom edge. Both
+are off by default. Themes that reveal buttons on hover, such as Retro on
+desktop, still do so.
+
 ## Background images
 
 In Backgrounds, select one area and use its inspector to choose an image,

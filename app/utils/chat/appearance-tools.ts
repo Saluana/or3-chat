@@ -69,8 +69,8 @@ const inspect = appearanceTool('get_appearance', 'Inspect appearance',
     'Read the active theme and color mode, effective color values, saved overrides, and what each appearance setting changes.',
     objectSchema({}));
 const update = appearanceTool<UpdateArgs>('update_appearance', 'Change appearance',
-    'Change colors, fonts, interface size, borders, or corners.',
-    `Edit the active mode’s colors, fonts, interface scale, borders, corner radii, or the panel behind assistant messages. Read get_appearance first and pass its mode. Colors use #RRGGBB or #RRGGBBAA. ${descriptions.backdropOpacity} ${descriptions.assistantMessageOpacity} When a background image makes replies hard to read, set colors.assistantMessage to a semi-opaque color that contrasts with onSurface (for example the surface color at alpha cc). Only enable chat.assistantBlur when the user asks for blur. Include onPrimary or onPrimaryContainer when adjusting their respective fills for contrast. Omitted settings are preserved.`,
+    'Change colors, fonts, interface size, borders, corners, or message button placement.',
+    `Edit the active mode’s colors, fonts, interface scale, borders, corner radii, or the panel behind assistant messages. Read get_appearance first and pass its mode. Colors use #RRGGBB or #RRGGBBAA. ${descriptions.backdropOpacity} ${descriptions.assistantMessageOpacity} When a background image makes replies hard to read, set colors.assistantMessage to a semi-opaque color that contrasts with onSurface (for example the surface color at alpha cc). Only enable chat.assistantBlur when the user asks for blur. When message buttons are hard to see over a background image, set chat.userActionsInside and/or chat.assistantActionsInside to move them inside the messages. Include onPrimary or onPrimaryContainer when adjusting their respective fills for contrast. Omitted settings are preserved.`,
     {
         ...objectSchema({
             mode: modeSchema,
@@ -105,6 +105,8 @@ const update = appearanceTool<UpdateArgs>('update_appearance', 'Change appearanc
             chat: {
                 ...objectSchema(describedProperties({
                     assistantBlur: { type: 'boolean' },
+                    userActionsInside: { type: 'boolean' },
+                    assistantActionsInside: { type: 'boolean' },
                 }, descriptions.chat)),
                 minProperties: 1,
             },

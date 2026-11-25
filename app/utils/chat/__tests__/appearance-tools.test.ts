@@ -186,3 +186,16 @@ it('sets a semi-opaque assistant message panel and opt-in blur through update_ap
     await expect(execute('update_appearance', { mode: 'light', chat: { assistantBlur: 'yes' } }))
         .resolves.toMatchObject({ result: null });
 });
+
+it('places message buttons inside user and assistant messages independently per mode', async () => {
+    await enableChatTools();
+    expect((await execute('update_appearance', { mode: 'light', chat: { userActionsInside: true } })).error).toBeUndefined();
+    expect(theme.light.value.chat).toMatchObject({ userActionsInside: true });
+    expect(theme.light.value.chat?.assistantActionsInside).toBeUndefined();
+    expect((await execute('update_appearance', { mode: 'light', chat: { assistantActionsInside: true } })).error).toBeUndefined();
+    expect(theme.light.value.chat).toMatchObject({ userActionsInside: true, assistantActionsInside: true });
+    expect(theme.dark.value.chat?.userActionsInside).toBeUndefined();
+    const inspected = JSON.parse((await execute('get_appearance', {})).result!);
+    expect(inspected.overrides.chat).toMatchObject({ userActionsInside: true, assistantActionsInside: true });
+    expect(inspected.settingDescriptions.chat.userActionsInside).toMatch(/inside your message bubble/);
+});

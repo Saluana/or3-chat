@@ -91,6 +91,39 @@
             />
         </div>
 
+        <section
+            class="message-button-settings"
+            aria-labelledby="theme-section-message-buttons"
+        >
+            <div>
+                <h3 id="theme-section-message-buttons" class="message-button-title">
+                    Message buttons
+                </h3>
+                <p class="supporting-text">
+                    Keep copy, retry, and edit buttons inside messages so a
+                    background image never sits behind them.
+                </p>
+            </div>
+            <label
+                v-for="option in messageButtonOptions"
+                :key="option.key"
+                class="background-toggle message-button-toggle"
+            >
+                <span class="message-button-copy">
+                    <span>{{ option.label }}</span>
+                    <small>{{ option.help }}</small>
+                </span>
+                <input
+                    type="checkbox"
+                    :checked="overrides.chat?.[option.key] ?? false"
+                    @change="set({ chat: { [option.key]: ($event.currentTarget as HTMLInputElement).checked } })"
+                />
+                <span class="background-toggle-track" aria-hidden="true">
+                    <span class="background-toggle-thumb" />
+                </span>
+            </label>
+        </section>
+
         <ThemeImagePicker
             v-model:open="pickerOpen"
             :area-label="activeLayer.title"
@@ -118,6 +151,7 @@ import {
 } from './types';
 import type { BackgroundPreset } from './types';
 import ThemeImagePicker from './ThemeImagePicker.vue';
+import { APPEARANCE_SETTING_DESCRIPTIONS } from '~/core/theme/appearance-setting-descriptions';
 import {
     BACKGROUND_AREA_PATTERNS,
     backgroundAreaPatch,
@@ -136,6 +170,18 @@ const toast = useToast();
 const bgEnabled = computed(() => overrides.value.backgrounds?.enabled ?? false);
 const activeLayerKey = ref<LayerKey>('contentBg1');
 const pickerOpen = ref(false);
+const messageButtonOptions = [
+    {
+        key: 'userActionsInside',
+        label: 'Inside your messages',
+        help: APPEARANCE_SETTING_DESCRIPTIONS.chat.userActionsInside,
+    },
+    {
+        key: 'assistantActionsInside',
+        label: 'Inside assistant replies',
+        help: APPEARANCE_SETTING_DESCRIPTIONS.chat.assistantActionsInside,
+    },
+] as const;
 const chevronIcon = useIcon('ui.chevron.right').value;
 const contentBg1Url = computed(() => overrides.value.backgrounds?.content?.base?.url || null);
 const contentBg1Repeat = computed(() => overrides.value.backgrounds?.content?.base?.repeat || 'repeat');
@@ -619,6 +665,37 @@ watch(
     outline: var(--app-focus-ring-width, 2px) solid
         var(--md-focus-ring, var(--background-editor-accent));
     outline-offset: var(--app-focus-ring-offset, 2px);
+}
+.message-button-settings {
+    display: grid;
+    min-width: 0;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: var(--md-border-width) solid var(--background-editor-border);
+}
+.message-button-title {
+    font-size: 1.0625rem;
+    font-weight: 650;
+}
+.message-button-settings .supporting-text {
+    max-width: 68ch;
+    font-size: 0.8125rem;
+}
+.message-button-toggle {
+    justify-content: space-between;
+    gap: 1rem;
+}
+.message-button-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+}
+.message-button-copy small {
+    max-width: 60ch;
+    color: var(--md-on-surface-variant, var(--md-on-surface));
+    font-size: 0.75rem;
+    font-weight: 400;
 }
 .background-workspace {
     display: grid;

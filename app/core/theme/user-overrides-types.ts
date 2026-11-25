@@ -114,6 +114,10 @@ export interface UserThemeOverrides {
     chat?: {
         /** Blur the background behind assistant messages (costly; off by default) */
         assistantBlur?: boolean;
+        /** Keep the action buttons inside your message bubble instead of below it */
+        userActionsInside?: boolean;
+        /** Keep the action buttons inside the assistant reply instead of on its edge */
+        assistantActionsInside?: boolean;
     };
 
     /** Background layer overrides */
