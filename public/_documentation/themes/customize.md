@@ -89,7 +89,9 @@ mode like other Appearance choices: **Inside your messages** keeps copy, retry,
 branch, and edit inside your message bubble, and **Inside assistant replies**
 keeps the reply buttons inside the reply instead of on its bottom edge. Both
 are off by default. Buttons placed inside a message stay visible, including in
-themes that otherwise reveal them on hover (Retro on desktop).
+themes that otherwise reveal them on hover (Retro on desktop). Retro and
+Cyberpunk show inside buttons as a quiet footer (plain icons under a divider)
+at every width instead of boxed buttons.
 
 ## Background images
 
