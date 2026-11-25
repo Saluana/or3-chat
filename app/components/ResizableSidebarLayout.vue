@@ -825,8 +825,9 @@ aside::before {
     opacity: var(--app-sidebar-bg-1-opacity, var(--sidebar-rep-opacity));
     z-index: 0;
     background-color: var(--app-sidebar-bg-color, var(--md-surface-variant));
-    background-size: var(--app-sidebar-bg-1-size, 240px)
-        var(--app-sidebar-bg-1-size, 240px);
+    /* One value: the layer size is `cover`, `contain`, or a length, and
+       `cover cover` is invalid (the image then renders at its natural size). */
+    background-size: var(--app-sidebar-bg-1-size, 240px);
 }
 
 aside {

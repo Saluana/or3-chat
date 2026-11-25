@@ -104,6 +104,12 @@ or GIF up to 8 MiB. HEIC/HEIF photos must be exported as JPEG or PNG first.
 Validation uses file signatures, so a valid image with an empty browser MIME
 type still works. Rejected uploads show a Background image not applied toast.
 
+If a chosen image is no longer available on this device (deleted, or not yet
+downloaded), that area shows the theme pattern and a Background image not found
+notice appears once per session; your saved choice is kept, so it returns once
+the image is available again. A sidebar image also shows in themes with a solid
+sidebar panel, such as Blank.
+
 Uploaded bytes are stored in the active browser database and referenced by an
 `internal-file://<hash>` token. A runtime object URL is temporary and must not
 be saved as the preference. Personal background choices remain above newly

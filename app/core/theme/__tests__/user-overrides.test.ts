@@ -351,7 +351,7 @@ describe('useUserThemeOverrides', () => {
         expect(add).toHaveBeenCalledWith(
             expect.objectContaining({
                 title: 'Storage Full',
-                color: 'red',
+                color: 'error',
             })
         );
         vi.useRealTimers();

@@ -18,7 +18,7 @@
             <div
                 ref="gridRef"
                 class="theme-image-grid"
-                role="listbox"
+                role="group"
                 aria-label="Workspace images"
                 @keydown="onGridKeydown"
             >
@@ -35,10 +35,9 @@
                     v-for="image in images"
                     :key="image.hash"
                     type="button"
-                    role="option"
                     class="theme-image-tile"
                     :class="{ selected: selectedHash === image.hash }"
-                    :aria-selected="selectedHash === image.hash"
+                    :aria-pressed="selectedHash === image.hash"
                     :aria-label="image.name"
                     :title="image.name"
                     data-picker-tile

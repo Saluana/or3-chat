@@ -3016,3 +3016,9 @@ html.dark[data-theme='blank'] .sb-welcome {
         outline: none !important;
     }
 }
+
+/* Blank's sidebar is a solid panel. When the user picks a sidebar background
+ * (Appearance → Backgrounds), let the image layer behind it show through. */
+html[data-theme='blank'][data-custom-sidebar-background] #sidebar-container-outer {
+    background-color: transparent !important;
+}
