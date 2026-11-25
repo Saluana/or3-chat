@@ -293,8 +293,12 @@ test('a personal OpenAI key chats directly while OpenRouter keeps working', asyn
     expect(luna!.roles).toContain('tool');
     await chooseModel(page, 'gpt-5.4-mini (OpenAI key)');
     // A real background job keeps running while the user switches workspace tabs.
-    const backgroundAdmission = page.waitForRequest(request => request.url().endsWith('/api/openrouter/stream') && request.method() === 'POST'
-        && request.postDataJSON()?._background === true, { timeout: 30_000 });
+    // Match the admission response contract ({ jobId, status: 'streaming' }) rather than
+    // the request body: bodies over 32 KiB are gzip Blobs that Playwright cannot read.
+    const backgroundAdmission = page.waitForResponse(async response => response.url().endsWith('/api/openrouter/stream')
+        && response.request().method() === 'POST'
+        && (response.headers()['content-type'] ?? '').includes('application/json')
+        && (await response.json().catch(() => null) as { status?: unknown } | null)?.status === 'streaming', { timeout: 30_000 });
     await send(page, 'openai:hold', true);
     await backgroundAdmission;
     await expect(page.getByText('OpenAI background started')).toBeVisible({ timeout: 15_000 });
