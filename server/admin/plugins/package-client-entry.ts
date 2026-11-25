@@ -1,7 +1,7 @@
 import type { Sha256 } from '../../../shared/plugins/runtime-descriptor';
 import type { PackageV2ClientEntry } from '../../../shared/plugins/runtime-descriptor';
 import { sha256Identity } from '../../../shared/plugins/digest';
-import { init, parse } from 'es-module-lexer';
+import { init, parse } from 'es-module-lexer/minimal';
 import type { Or3ExtensionManifestV2 } from '../extensions/types';
 import { PluginPackageAssetError, PluginPackageAssetReader } from './package-assets';
 import { ImmutablePluginPackageStore } from './package-store';
@@ -70,7 +70,7 @@ function createPackageAssetReader(): PluginPackageAssetReader {
  * building, so it is blocked instead of failing inside the user's browser.
  */
 export async function unresolvedBareImports(source: string): Promise<readonly string[]> {
-    await init;
+    await init();
     const found = new Set<string>();
     for (const entry of parse(source)[0]) {
         const specifier = entry.n;
@@ -120,7 +120,7 @@ export async function readPackageToolCardEntries(
     for (const card of input.manifest.toolCards ?? []) {
         const entry = await read(card.entry);
         const source = new TextDecoder().decode(entry.bytes);
-        await init;
+        await init();
         if (parse(source)[0].length)
             throw new PluginPackageClientEntryError(
                 'client-entry-unresolvable',

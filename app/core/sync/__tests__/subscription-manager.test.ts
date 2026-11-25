@@ -215,7 +215,7 @@ function buildChange(version: number): SyncChange {
 describe('SubscriptionManager', () => {
     afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers(); });
     beforeEach(() => {
-        vi.useFakeTimers();
+        vi.useFakeTimers({ toNotFake: ['setImmediate', 'clearImmediate'] });
         hookState.doAction.mockClear();
         hookBridgeState.markSyncTransaction.mockClear();
     });

@@ -1,41 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { applyThemeBackgrounds } from '../backgrounds';
 import type { ThemeBackgrounds } from '~/theme/_shared/types';
 
 describe('Theme Backgrounds', () => {
-    let mockResolveToken: (token: string) => Promise<string | null>;
-    let originalDocument: Document;
-
-    beforeEach(() => {
-        originalDocument = global.document;
-        mockResolveToken = vi.fn(async (token: string) => {
-            if (token.startsWith('internal-file://')) return null;
-            return token;
-        });
-
-        // Create minimal DOM mock
-        const mockStyle = new Map<string, string>();
-        const styleApi = {
-            setProperty: vi.fn((key: string, value: string) => {
-                mockStyle.set(key, value);
-            }),
-            getPropertyValue: vi.fn((key: string) => mockStyle.get(key) || ''),
-            removeProperty: vi.fn((key: string) => {
-                mockStyle.delete(key);
-                return '';
-            }),
-        };
-
-        global.document = {
-            documentElement: {
-                style: styleApi,
-            },
-        } as any;
-    });
+    const mockResolveToken = async (token: string) =>
+        token.startsWith('internal-file://') ? null : token;
 
     afterEach(() => {
-        global.document = originalDocument;
-        vi.clearAllMocks();
+        document.documentElement.style.cssText = '';
     });
 
     describe('applyThemeBackgrounds', () => {
@@ -55,24 +27,14 @@ describe('Theme Backgrounds', () => {
                 resolveToken: mockResolveToken,
             });
 
-            const setProperty = document.documentElement.style
-                .setProperty as any;
-            expect(setProperty).toHaveBeenCalledWith(
-                '--app-content-bg-1',
-                'url("/test-bg.webp")'
-            );
-            expect(setProperty).toHaveBeenCalledWith(
-                '--app-content-bg-1-opacity',
-                '0.5'
-            );
-            expect(setProperty).toHaveBeenCalledWith(
-                '--app-content-bg-1-repeat',
-                'repeat'
-            );
-            expect(setProperty).toHaveBeenCalledWith(
-                '--app-content-bg-1-size',
-                '200px'
-            );
+            expect(document.documentElement.style.getPropertyValue('--app-content-bg-1'))
+                .toBe('url("/test-bg.webp")');
+            expect(document.documentElement.style.getPropertyValue('--app-content-bg-1-opacity'))
+                .toBe('0.5');
+            expect(document.documentElement.style.getPropertyValue('--app-content-bg-1-repeat'))
+                .toBe('repeat');
+            expect(document.documentElement.style.getPropertyValue('--app-content-bg-1-size'))
+                .toBe('200px');
         });
 
         it('should apply sidebar layer', async () => {
@@ -89,20 +51,12 @@ describe('Theme Backgrounds', () => {
                 resolveToken: mockResolveToken,
             });
 
-            const setProperty = document.documentElement.style
-                .setProperty as any;
-            expect(setProperty).toHaveBeenCalledWith(
-                '--app-sidebar-bg-1',
-                'url("/sidebar.webp")'
-            );
-            expect(setProperty).toHaveBeenCalledWith(
-                '--app-sidebar-bg-1-opacity',
-                '0.1'
-            );
-            expect(setProperty).toHaveBeenCalledWith(
-                '--app-sidebar-bg-1-size',
-                'cover'
-            );
+            expect(document.documentElement.style.getPropertyValue('--app-sidebar-bg-1'))
+                .toBe('url("/sidebar.webp")');
+            expect(document.documentElement.style.getPropertyValue('--app-sidebar-bg-1-opacity'))
+                .toBe('0.1');
+            expect(document.documentElement.style.getPropertyValue('--app-sidebar-bg-1-size'))
+                .toBe('cover');
         });
 
         it('should clear layers when image is null', async () => {
@@ -118,16 +72,10 @@ describe('Theme Backgrounds', () => {
                 resolveToken: mockResolveToken,
             });
 
-            const setProperty = document.documentElement.style
-                .setProperty as any;
-            expect(setProperty).toHaveBeenCalledWith(
-                '--app-content-bg-1',
-                'none'
-            );
-            expect(setProperty).toHaveBeenCalledWith(
-                '--app-content-bg-1-opacity',
-                '1'
-            );
+            expect(document.documentElement.style.getPropertyValue('--app-content-bg-1'))
+                .toBe('none');
+            expect(document.documentElement.style.getPropertyValue('--app-content-bg-1-opacity'))
+                .toBe('1');
         });
 
         it('should apply gradients', async () => {
@@ -142,12 +90,8 @@ describe('Theme Backgrounds', () => {
                 resolveToken: mockResolveToken,
             });
 
-            const setProperty = document.documentElement.style
-                .setProperty as any;
-            expect(setProperty).toHaveBeenCalledWith(
-                '--app-header-gradient',
-                'url("/gradient.webp")'
-            );
+            expect(document.documentElement.style.getPropertyValue('--app-header-gradient'))
+                .toBe('url("/gradient.webp")');
         });
 
         it('should handle missing backgrounds gracefully', async () => {
@@ -155,20 +99,12 @@ describe('Theme Backgrounds', () => {
                 resolveToken: mockResolveToken,
             });
 
-            const setProperty = document.documentElement.style
-                .setProperty as any;
-            expect(setProperty).toHaveBeenCalledWith(
-                '--app-content-bg-1',
-                'none'
-            );
-            expect(setProperty).toHaveBeenCalledWith(
-                '--app-content-bg-2',
-                'none'
-            );
-            expect(setProperty).toHaveBeenCalledWith(
-                '--app-sidebar-bg-1',
-                'none'
-            );
+            expect(document.documentElement.style.getPropertyValue('--app-content-bg-1'))
+                .toBe('none');
+            expect(document.documentElement.style.getPropertyValue('--app-content-bg-2'))
+                .toBe('none');
+            expect(document.documentElement.style.getPropertyValue('--app-sidebar-bg-1'))
+                .toBe('none');
         });
 
         it('should clamp opacity to 0-1 range', async () => {
@@ -185,12 +121,8 @@ describe('Theme Backgrounds', () => {
                 resolveToken: mockResolveToken,
             });
 
-            const setProperty = document.documentElement.style
-                .setProperty as any;
-            expect(setProperty).toHaveBeenCalledWith(
-                '--app-content-bg-1-opacity',
-                '1'
-            );
+            expect(document.documentElement.style.getPropertyValue('--app-content-bg-1-opacity'))
+                .toBe('1');
         });
 
         it('should normalize invalid repeat values to default', async () => {
@@ -207,12 +139,8 @@ describe('Theme Backgrounds', () => {
                 resolveToken: mockResolveToken,
             });
 
-            const setProperty = document.documentElement.style
-                .setProperty as any;
-            expect(setProperty).toHaveBeenCalledWith(
-                '--app-content-bg-1-repeat',
-                'repeat'
-            );
+            expect(document.documentElement.style.getPropertyValue('--app-content-bg-1-repeat'))
+                .toBe('repeat');
         });
 
     });
