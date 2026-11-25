@@ -7,7 +7,7 @@ and retain their existing `~/utils/chat/types` imports. This builder deliberatel
 returns OpenRouter-shaped messages: existing chat hooks and recovery records
 continue to receive their established format.
 
-This is a browser-side host utility: local file hydration uses IndexedDB and FileReader. Portable plugins should use [SDK model calls](/documentation/plugins/plugin-sdk).
+This is a browser-side host utility. Local file hydration reads a blob from IndexedDB and tries FileReader, then encodes the same blob through `Blob.arrayBuffer()` if the first read fails. Portable plugins should use [SDK model calls](/documentation/plugins/plugin-sdk).
 
 ## Build a text request payload
 
@@ -73,10 +73,10 @@ Supported raster data URLs can pass through after validation. Image-like remote 
 
 Explicit file content has its own behavior: a valid data URL or HTTP(S) URL can be used as file data; binary values and local hashes are converted; blob references need hydration. A blob URL cannot be sent directly to a remote model.
 
-Hydrated references use shared in-memory data-URL and in-flight caches. Completed entries are bounded to 64 and disappear on page reload. Do not log attachment data, URLs, or the prepared provider payload.
+Hydrated references are cached in memory for the current workspace-scoped message build. The cache is bounded to 64 entries and 32 MiB of strings. Do not log attachment data, URLs, or the prepared provider payload.
 
 ## Handle failures
 
 Attachment preparation can throw `AttachmentHydrationError` with `code: 'ATTACHMENT_HYDRATION_FAILED'`, `messageIndex`, optional filename, and a reason: `missing`, `unsupported`, `unavailable`, `invalid`, or `not-image`. It does **not** silently drop an attachment that failed hydration and proceed with a changed request.
 
-Show the error and let the user remove or reattach the file. Do not catch it and resend text-only without the user's choice. The error text omits attachment data and URLs. See `app/core/auth/openrouter-build.ts` for the source contracts and [chat types](/documentation/types/chat-types) for internal message shapes.
+The native composer shows **Attachment could not be read** if preparation fails and keeps the draft text and attachments. The shared error code is `ERR_ATTACHMENT_HYDRATION_FAILED` and the notice guides the user to remove or reattach the file. See `app/core/auth/openrouter-build.ts` for the source contracts and [chat types](/documentation/types/chat-types) for internal message shapes.

@@ -13,6 +13,7 @@ export type ErrorCode =
     | 'ERR_DB_QUOTA_EXCEEDED'
     | 'ERR_FILE_VALIDATION'
     | 'ERR_FILE_PERSIST'
+    | 'ERR_ATTACHMENT_HYDRATION_FAILED'
     | 'ERR_STORAGE_UPLOAD_FAILED'
     | 'ERR_STORAGE_DOWNLOAD_FAILED'
     | 'ERR_STORAGE_QUOTA_EXCEEDED'
@@ -243,12 +244,13 @@ export function normalizeError(
     }
     if (e.name === 'SyncPayloadTooLargeError')
         code = 'ERR_SYNC_PAYLOAD_TOO_LARGE';
-    const contextCodes: Record<string, ErrorCode> = {
+    const domainCodes: Record<string, ErrorCode> = {
+        ATTACHMENT_HYDRATION_FAILED: 'ERR_ATTACHMENT_HYDRATION_FAILED',
         context_full: 'ERR_CONTEXT_FULL', model_metadata_unavailable: 'ERR_MODEL_METADATA_UNAVAILABLE',
         invalid_context_limit: 'ERR_CONTEXT_LIMIT_INVALID', invalid_output_limit: 'ERR_OUTPUT_LIMIT_INVALID',
     };
     const domainCode = data.code ?? e.code;
-    if (typeof domainCode === 'string' && Object.hasOwn(contextCodes, domainCode)) code = contextCodes[domainCode]!;
+    if (typeof domainCode === 'string' && Object.hasOwn(domainCodes, domainCode)) code = domainCodes[domainCode]!;
     const reportedProviderCode = (!knownCode(envelope.code) ? envelope.code : undefined)
         ?? structured.providerCode ?? e.providerCode;
     if (reportedProviderCode === 'context_length_exceeded' || reportedProviderCode === 'context_window_exceeded') code = 'ERR_CONTEXT_FULL';
@@ -274,6 +276,7 @@ export function normalizeError(
             'ERR_DB_QUOTA_EXCEEDED',
             'ERR_STORAGE_QUOTA_EXCEEDED',
             'ERR_FILE_VALIDATION',
+            'ERR_ATTACHMENT_HYDRATION_FAILED',
             'ERR_FILE_TOO_LARGE',
             'ERR_TOOL_OUTCOME_UNKNOWN',
             'ERR_MODEL_OUTCOME_UNKNOWN',
@@ -342,6 +345,10 @@ const copy: Record<ErrorCode, [string, string]> = {
     ERR_SYNC_PAYLOAD_TOO_LARGE: [
         'Change too large to sync',
         'This change exceeds sync limits. Reduce its size before trying again.',
+    ],
+    ERR_ATTACHMENT_HYDRATION_FAILED: [
+        'Attachment could not be read',
+        'Remove or reattach the file, then try again.',
     ],
     ERR_INTERNAL: [
         'Something went wrong',
@@ -511,6 +518,7 @@ export function presentError(
             'ERR_PROVIDER',
             'ERR_OVERLOADED',
             'ERR_PLUGIN_LOADER_DISABLED',
+            'ERR_ATTACHMENT_HYDRATION_FAILED',
             'ERR_CONTEXT_FULL', 'ERR_MODEL_METADATA_UNAVAILABLE', 'ERR_CONTEXT_LIMIT_INVALID', 'ERR_OUTPUT_LIMIT_INVALID',
         ].includes(e.code)
     ) {

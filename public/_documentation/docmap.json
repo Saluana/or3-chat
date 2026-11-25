@@ -365,7 +365,7 @@
                     "category": "Developer reference",
                     "categoryOrder": 1,
                     "order": 2,
-                    "summary": "Translate shared message content into the compatible OpenRouter hook format, preserve tool calls, select images, hydrate files, and handle attachment failures."
+                    "summary": "Translate shared message content into the compatible OpenRouter hook format, preserve tool calls, select images, recover from a failed attachment read, and preserve the draft if preparation fails."
                 }
             ]
         },
