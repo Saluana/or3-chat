@@ -349,14 +349,6 @@ async function applyBackgroundOverrides(
     });
     if (shouldCommit && !shouldCommit()) return false;
 
-    // Chat controls that sit directly on the workspace get a backing while a
-    // user-chosen image shows behind them.
-    const content = overrides.backgrounds?.enabled ? overrides.backgrounds.content : undefined;
-    document.documentElement.toggleAttribute(
-        'data-custom-content-background',
-        [content?.base, content?.overlay].some((layer) => Boolean(layer?.url) && (layer?.opacity ?? 0) > 0)
-    );
-
     const themeBaseColor = mergedBackgrounds.content?.base?.color;
     const themeOverlayColor = mergedBackgrounds.content?.overlay?.color;
     const themeSidebarColor = mergedBackgrounds.sidebar?.color;

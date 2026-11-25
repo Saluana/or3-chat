@@ -81,9 +81,6 @@ they stay readable over a background image. It is off until you pick a color.
 scrolling slow on some devices, so it is off by default. Your choice overrides
 themes that keep replies transparent. User messages and tool cards follow the
 existing **Hover surface** (Blank theme bubbles) and **Panel background** colors.
-While a custom image shows behind the chat, message action buttons that sit
-outside a panel get a small backing in the assistant panel color (or the app
-background at 85% when none is set).
 
 ## Background images
 
