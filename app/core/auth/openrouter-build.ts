@@ -212,16 +212,41 @@ async function remoteRefToDataUrl(ref: string, media: MediaHydration): Promise<s
 
 async function blobToDataUrl(blob: Blob, signal?: AbortSignal): Promise<string> {
     signal?.throwIfAborted();
-    return new Promise((resolve, reject) => {
-        const fr = new FileReader();
-        const abort = () => { fr.abort(); reject(signal?.reason ?? new DOMException('Media conversion cancelled.', 'AbortError')); };
-        const cleanup = () => signal?.removeEventListener('abort', abort);
-        fr.onerror = () => { cleanup(); reject(fr.error ?? new Error('FileReader error')); };
-        fr.onload = () => { cleanup(); resolve(fr.result as string); };
+    const dataUrl = await new Promise<string | null>((resolve) => {
+        const reader = new FileReader();
+        const finish = (result: string | null) => {
+            signal?.removeEventListener('abort', abort);
+            resolve(result);
+        };
+        const abort = () => {
+            finish(null);
+            reader.abort();
+        };
+        reader.onerror = reader.onabort = () => finish(null);
+        reader.onload = () => finish(typeof reader.result === 'string' ? reader.result : null);
         signal?.addEventListener('abort', abort, { once: true });
-        fr.readAsDataURL(blob);
-        if (signal?.aborted) abort();
-    });
+        try {
+            reader.readAsDataURL(blob);
+        } catch {
+            finish(null);
+        }
+    }).catch(() => null);
+    signal?.throwIfAborted();
+    if (dataUrl && hasUsableDataUrl(dataUrl)) return dataUrl;
+
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    signal?.throwIfAborted();
+    if (bytes.length === 0 || bytes.length !== blob.size) {
+        throw new Error('Incomplete attachment read');
+    }
+
+    // Bound each spread and align chunks to base64's three-byte groups.
+    const chunkSize = 24 * 1024;
+    let base64 = '';
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+        base64 += btoa(String.fromCharCode(...bytes.subarray(offset, offset + chunkSize)));
+    }
+    return `data:${blob.type || 'application/octet-stream'};base64,${base64}`;
 }
 
 type BinaryAttachmentData = ArrayBuffer | ArrayBufferView;
@@ -240,7 +265,8 @@ function hasUsableDataUrl(value: string): boolean {
 
 async function binaryToDataUrl(
     value: BinaryAttachmentData,
-    mediaType: string
+    mediaType: string,
+    signal?: AbortSignal
 ): Promise<string> {
     const bytes =
         value instanceof ArrayBuffer
@@ -255,7 +281,8 @@ async function binaryToDataUrl(
     return blobToDataUrl(
         new Blob([copy.buffer as ArrayBuffer], {
             type: mediaType || 'application/octet-stream',
-        })
+        }),
+        signal
     );
 }
 
@@ -288,8 +315,9 @@ async function hydrateFileData(
 ): Promise<string> {
     if (isBinaryAttachmentData(value)) {
         try {
-            return await binaryToDataUrl(value, mediaType);
+            return await binaryToDataUrl(value, mediaType, media.signal);
         } catch {
+            media.scope.assertCurrent();
             throw new AttachmentHydrationError({
                 filename,
                 messageIndex,
@@ -352,8 +380,7 @@ async function hydrateFileData(
         const remote = await remoteRefToDataUrl(ref, media);
         if (remote && hasUsableDataUrl(remote)) return remote;
     } catch {
-        // Convert all local-store/fetch failures into one caller-facing typed
-        // error below.
+        media.scope.assertCurrent();
     }
 
     throw new AttachmentHydrationError({
@@ -675,9 +702,11 @@ export async function buildOpenRouterMessages(
                     }
                     dataUrl = await binaryToDataUrl(
                         inlineImage.data,
-                        mediaType
+                        mediaType,
+                        media.signal
                     );
                 } catch {
+                    media.scope.assertCurrent();
                     throw new AttachmentHydrationError({
                         messageIndex: i,
                         reason: 'invalid',
@@ -759,7 +788,13 @@ export async function buildOpenRouterMessages(
                 continue;
             }
             // At this point either it's declared an image or remote unknown -> attempt hydration
-            let dataUrl = await hydrateHashToDataUrl(img.hash, media);
+            let dataUrl: string | null;
+            try {
+                dataUrl = await hydrateHashToDataUrl(img.hash, media);
+            } catch {
+                media.scope.assertCurrent();
+                throw new AttachmentHydrationError({ messageIndex: i, reason: 'unavailable' });
+            }
             if (!dataUrl) dataUrl = await remoteRefToDataUrl(img.hash, media);
             if (dataUrl && isSupportedRasterDataUrl(dataUrl)) {
                 if (!hasUsableDataUrl(dataUrl)) {

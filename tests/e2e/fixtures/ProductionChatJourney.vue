@@ -70,6 +70,7 @@ import type { FilesAttachInputPayload } from '~/core/hooks/hook-types';
 
 const PageShell = defineAsyncComponent(() => import('~/components/PageShell.vue'));
 const projectJourney = useRoute().query.project === '1';
+const attachmentJourney = useRoute().query.attachment === '1';
 const workspaceJourney = projectJourney || useRoute().query.workspace === '1';
 const filesReviewJourney = useRoute().query.files === 'review';
 const filesReviewMeasurement = ref('');
@@ -561,7 +562,7 @@ onMounted(async () => {
     if (!contextJourney && !presentationJourney && !meterJourney && !mediaJourney) await useModelStore().addFavoriteModel({
         id: '~openai/gpt-luna-latest', name: 'Scripted journey model', context_length: 1_000_000,
         top_provider: { max_completion_tokens: 65_536 }, supported_parameters: ['tools'],
-        architecture: { input_modalities: projectJourney ? ['text', 'image'] : ['text'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' },
+        architecture: { input_modalities: projectJourney || attachmentJourney ? ['text', 'image'] : ['text'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' },
     });
     if (contextJourney) {
         const store = useModelStore();

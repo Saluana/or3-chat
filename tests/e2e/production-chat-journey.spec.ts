@@ -872,6 +872,87 @@ test('project chat uploads become sources automatically without duplicate bindin
     await info.attach('automatic-project-attachments', { path: shot, contentType: 'image/png' });
 });
 
+for (const mode of ['native', 'reader-fails', 'both-reads-fail'] as const) {
+    test(`composer PNG send: ${mode}`, async ({ page }, info) => {
+        test.setTimeout(90_000);
+        await page.context().route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
+            ? route.continue() : route.abort('blockedbyclient'));
+        const dbModule = page.waitForRequest(request => /\/db\/client\.ts(?:\?|$)/.test(request.url()));
+        await page.goto(`${chatPage}?attachment=1`);
+        const input = page.getByRole('textbox', { name: 'Message input' });
+        const prompt = 'Describe this synthetic PNG.';
+        await expect(input).toBeVisible({ timeout: 45_000 });
+        await input.fill(prompt);
+        const chooser = page.waitForEvent('filechooser');
+        await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+        await (await chooser).setFiles(fixturePng);
+        const attachment = page.getByRole('button', { name: 'Remove image', exact: true });
+        await expect(attachment).toBeVisible();
+        const dbUrl = (await dbModule).url();
+        await expect.poll(() => page.evaluate(async ({ url, name }) => {
+            const { getDb } = await import(url) as typeof import('~/db/client');
+            const db = getDb();
+            const meta = await db.file_meta.filter(row => row.name === name && !row.deleted).first();
+            return meta ? Boolean(await db.file_blobs.get(meta.hash)) : false;
+        }, { url: dbUrl, name: fixturePng.name })).toBe(true);
+
+        // Fault only the send-time read of the selected PNG. Intake, the blob
+        // store, and the deterministic provider still run their usual paths.
+        const requests: unknown[] = [];
+        await page.exposeFunction('recordPngSend', (body: unknown) => { requests.push(body); });
+        await page.evaluate(({ mode, size }) => {
+            const isFixture = (blob: Blob) => blob.type === 'image/png' && blob.size === size;
+            const fetch = window.fetch.bind(window);
+            window.fetch = async (input, init) => {
+                const url = input instanceof Request ? input.url : String(input);
+                if (url.includes('/api/__or3-e2e/chat/completions') && typeof init?.body === 'string') {
+                    await (window as unknown as { recordPngSend: (body: unknown) => Promise<void> })
+                        .recordPngSend(JSON.parse(init.body));
+                }
+                return fetch(input, init);
+            };
+
+            if (mode === 'native') return;
+            const failedReaders = new WeakSet<Blob>();
+            const read = FileReader.prototype.readAsDataURL;
+            FileReader.prototype.readAsDataURL = function (blob) {
+                if (!isFixture(blob)) return read.call(this, blob);
+                failedReaders.add(blob);
+                queueMicrotask(() => this.dispatchEvent(new ProgressEvent('error')));
+            };
+            if (mode === 'both-reads-fail') {
+                const arrayBuffer = Blob.prototype.arrayBuffer;
+                Blob.prototype.arrayBuffer = function () {
+                    if (!failedReaders.has(this)) return arrayBuffer.call(this);
+                    return Promise.reject(new DOMException('Synthetic unreadable PNG', 'NotReadableError'));
+                };
+            }
+        }, { mode, size: fixturePng.buffer.length });
+
+        await page.getByRole('button', { name: 'Send message', exact: true }).click();
+        if (mode === 'both-reads-fail') {
+            await expect(page.getByText('Attachment could not be read', { exact: true }).first()).toBeVisible();
+            await expect(input).toHaveText(prompt);
+            await expect(attachment).toBeVisible();
+            await expect(page.locator('.cm-text-user').getByText(prompt, { exact: true })).toHaveCount(0);
+            expect(requests).toHaveLength(0);
+        } else {
+            await expect(page.getByText('Hello from deterministic stream.', { exact: true })).toBeVisible();
+            expect(requests).toHaveLength(1);
+            expect(requests[0]).toMatchObject({
+                messages: expect.arrayContaining([{
+                    role: 'user',
+                    content: expect.arrayContaining([
+                        { type: 'text', text: prompt },
+                        { type: 'image_url', image_url: { url: `data:image/png;base64,${fixturePng.buffer.toString('base64')}` } },
+                    ]),
+                }]),
+            });
+        }
+        await info.attach('png-send', { contentType: 'application/json', body: JSON.stringify({ mode, requests }) });
+    });
+}
+
 for (const theme of ['blank', 'retro', 'cyberpunk']) {
     test(`${theme} mobile keyboard keeps the composer close to the visible bottom`, async ({ page }, info) => {
         await page.setViewportSize({ width: 390, height: 844 });
