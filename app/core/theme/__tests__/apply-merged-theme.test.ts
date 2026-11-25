@@ -559,4 +559,15 @@ describe('applyMergedTheme', () => {
         expect(root.style.getPropertyValue('--app-assistant-message-backdrop')).toBe('');
         expect(root.hasAttribute('data-assistant-surface')).toBe(false);
     });
+
+    it('marks the root while a user image shows behind chat content', async () => {
+        const root = document.documentElement;
+        const photo = { url: 'internal-file://sha256:abc', opacity: 0.4 };
+        await applyMergedTheme('light', { backgrounds: { enabled: true, content: { base: photo } } }, mockThemePlugin as any);
+        expect(root.hasAttribute('data-custom-content-background')).toBe(true);
+        await applyMergedTheme('light', { backgrounds: { enabled: false, content: { base: photo } } }, mockThemePlugin as any);
+        expect(root.hasAttribute('data-custom-content-background')).toBe(false);
+        await applyMergedTheme('light', { backgrounds: { enabled: true, content: { base: { ...photo, opacity: 0 } } } }, mockThemePlugin as any);
+        expect(root.hasAttribute('data-custom-content-background')).toBe(false);
+    });
 });

@@ -1315,6 +1315,16 @@ const streamMdClasses = [
     border-radius: var(--md-border-radius-large, var(--md-border-radius)) !important;
     padding-block: 0.75rem !important;
 }
+/* Action buttons outside a panel sit on the background image; back them with
+   the assistant panel color, or the app background when none is set. */
+:global(html[data-custom-content-background] .cm-actions-user .cm-action-group),
+:global(html[data-custom-content-background]:not([data-assistant-surface]) .cm-actions-assistant .cm-action-group) {
+    background-color: var(
+        --app-assistant-message-bg,
+        color-mix(in srgb, var(--md-surface) 85%, transparent)
+    ) !important;
+    border-radius: var(--md-border-radius-small, var(--md-border-radius)) !important;
+}
 @media (max-width: 639px) {
     :global(html[data-assistant-surface] .chat-assistant-surface) {
         padding-inline: 0.75rem !important;
