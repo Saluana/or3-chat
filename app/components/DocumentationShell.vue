@@ -207,16 +207,8 @@
                                 :content="displayContent"
                                 :components="streamMarkdownComponents"
                                 class="prose prose-pre:font-mono or3-prose docs-prose max-w-none"
-                                :allowed-link-prefixes="[
-                                    'https://',
-                                    'http://',
-                                    '/',
-                                ]"
-                                :allowed-image-prefixes="[
-                                    'https://',
-                                    'http://',
-                                    '/',
-                                ]"
+                                :allowed-link-prefixes="documentationMarkdownPrefixes"
+                                :allowed-image-prefixes="documentationMarkdownPrefixes"
                                 :code-block-show-line-numbers="false"
                                 :shiki-theme="currentShikiTheme"
                             />
@@ -308,7 +300,7 @@ import {
     h,
 } from 'vue';
 import type { PropType } from 'vue';
-import { StreamMarkdown, streamMarkdownComponents } from '~/utils/stream-markdown';
+import { documentationMarkdownPrefixes, StreamMarkdown, streamMarkdownComponents } from '~/utils/stream-markdown';
 import {
     useNuxtApp,
     useRoute,
