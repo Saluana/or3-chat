@@ -25,7 +25,7 @@ for (const theme of themes) test(`UI audit: ${theme} phone model selection works
     await page.setViewportSize({ width: 320, height: 640 });
     await page.route(/\/models(?:\?|$)/, route => route.fulfill({ json: { data: [{
         id: 'openai/gpt-4o-mini', canonical_slug: 'openai/gpt-4o-mini', name: 'GPT-4o mini', context_length: 128000,
-        created: 1, default_parameters: null, per_request_limits: null, supported_voices: null,
+        created: 1, default_parameters: null, per_request_limits: null, supported_voices: null, endpoints: ['/api/v1/chat/completions'],
         links: { details: '/fixture/gpt-4o-mini' },
         top_provider: { context_length: 128000, max_completion_tokens: 8192, is_moderated: false },
         architecture: { modality: 'text->text', input_modalities: ['text'], output_modalities: ['text'] },
@@ -627,7 +627,7 @@ test.describe('responsive modal layouts', () => {
             await page.route('**/api/__or3-e2e/models*', route => route.fulfill({ json: {
                 data: [{ id: 'audit/model', canonical_slug: 'audit/model', name: 'Audit model',
                     description: 'Long model description '.repeat(70), context_length: 32000, created: 1,
-                    default_parameters: null, per_request_limits: null, supported_voices: null,
+                    default_parameters: null, per_request_limits: null, supported_voices: null, endpoints: ['/api/v1/chat/completions'],
                     links: { details: '/fixture/audit-model' }, supported_parameters: [],
                     top_provider: { context_length: 32000, max_completion_tokens: 8192, is_moderated: false },
                     architecture: { modality: 'text->text', input_modalities: ['text'], output_modalities: ['text'] },

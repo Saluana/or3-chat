@@ -15,7 +15,7 @@ test('disconnected welcome keeps editor history and loads settings on first open
     await page.route(/\/(?:api\/v1|api\/__or3-e2e)\/models(?:[?#]|$)/, async route => {
         catalogRequests++;
         await route.fulfill({ json: { data: [{ id: 'openai/gpt-4o-mini', canonical_slug: 'openai/gpt-4o-mini', name: 'GPT-4o mini',
-            created: 1, default_parameters: null, per_request_limits: null, supported_voices: null,
+            created: 1, default_parameters: null, per_request_limits: null, supported_voices: null, endpoints: ['/api/v1/chat/completions'],
             links: { details: '/fixture/gpt-4o-mini' },
             top_provider: { context_length: 128000, max_completion_tokens: 8192, is_moderated: false },
             context_length: 128000, architecture: { modality: 'text->text', input_modalities: ['text'], output_modalities: ['text'] },

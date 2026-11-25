@@ -8,6 +8,10 @@ export function useState<T>(key: string, init?: () => T): Ref<T> {
     return states.get(key) as Ref<T>;
 }
 
+export function useAppConfig() {
+    return { ui: { icons: { loading: 'i-lucide-loader-circle' } } };
+}
+
 export function useToast() {
     return { add: () => {} };
 }

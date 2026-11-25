@@ -28,7 +28,7 @@ const OPENAI_KEYS = new Set(['model', 'messages', 'stream', 'stream_options', 't
     'max_completion_tokens', 'reasoning_effort', 'temperature', 'top_p', 'stop', 'seed', 'response_format',
     'frequency_penalty', 'presence_penalty', 'logit_bias', 'user']);
 const openRouterModel = { id: 'fixture/router', canonical_slug: 'fixture/router', name: 'Fixture Router', created: 0,
-    context_length: 100_000, default_parameters: null, per_request_limits: null, supported_voices: null,
+    context_length: 100_000, default_parameters: null, per_request_limits: null, supported_voices: null, endpoints: ['/api/v1/chat/completions'],
     links: { details: 'https://example.test/fixture' }, pricing: { prompt: '0', completion: '0' },
     architecture: { input_modalities: ['text'], output_modalities: ['text'], modality: 'text->text' },
     top_provider: { context_length: 100_000, max_completion_tokens: 4096, is_moderated: false }, supported_parameters: ['tools', 'max_tokens'] };
