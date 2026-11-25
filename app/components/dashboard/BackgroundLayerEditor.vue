@@ -80,9 +80,9 @@
                         type="button"
                         class="background-action-button"
                         :disabled="!bgEnabled"
-                        @click="openFileInput"
+                        @click="$emit('choose')"
                     >
-                        Upload image
+                        Choose image…
                     </button>
                     <button
                         type="button"
@@ -230,6 +230,8 @@ const emit = defineEmits<{
     'update:fit': [value: boolean];
     'update:color': [value: string];
     upload: [file: File];
+    /** Open the image picker for this area. */
+    choose: [];
     remove: [];
     'apply-preset': [src: string, opacity: number];
 }>();

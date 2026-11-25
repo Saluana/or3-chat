@@ -3,7 +3,23 @@ import { APPEARANCE_SETTING_DESCRIPTIONS as descriptions } from '~/core/theme/ap
 import { USER_FONT_OPTIONS } from '~/core/theme/font-options';
 import { UI_SCALE_CHOICES } from '~/core/theme/theme-token-presets';
 import type { useUserThemeOverrides } from '~/core/theme/useUserThemeOverrides';
-import type { UserThemeOverrides } from '~/core/theme/user-overrides-types';
+import type { UserBackgroundLayer, UserThemeOverrides } from '~/core/theme/user-overrides-types';
+import {
+    BACKGROUND_AREAS,
+    BACKGROUND_AREA_LABELS,
+    BACKGROUND_AREA_PATTERNS,
+    backgroundAreasPatch,
+    chosenImageLayer,
+    getBackgroundImageMeta,
+    hashFromBackgroundUrl,
+    listBackgroundImages,
+    listThreadImageHashes,
+    readBackgroundArea,
+    type BackgroundArea,
+} from '~/core/theme/background-image-library';
+import { getImageMetasByHashes } from '~/db/files-select';
+import { registerToolCard } from './tool-cards-public';
+import BackgroundImageToolCard from '~/components/chat/tool-cards/BackgroundImageToolCard.vue';
 import { COLOR_TOKEN_ALIASES, COLOR_TOKEN_DESCRIPTIONS, COLOR_TOKEN_REGISTRY, type RegisteredColorToken } from '~/theme/_shared/design-token-registry';
 import type { JsonSchemaObject } from '~~/shared/chat/tool-schema';
 import { defineTool, useToolRegistry } from './tools-public';
@@ -89,19 +105,84 @@ const update = appearanceTool<UpdateArgs>('update_appearance', 'Change appearanc
         }, ['mode']),
         minProperties: 2,
     });
+type BackgroundLayout = 'fill' | 'single' | 'repeat';
+type BackgroundArgs = {
+    mode: Mode;
+    areas: BackgroundArea[];
+    image: string;
+    layout?: BackgroundLayout;
+    opacity?: number;
+};
+
+/** Maximum images get_appearance offers; chat images are listed first. */
+const MAX_OFFERED_IMAGES = 12;
+const BACKGROUND_LAYOUTS: Record<BackgroundLayout, Pick<UserBackgroundLayer, 'fit' | 'repeat'>> = {
+    fill: { fit: true, repeat: 'no-repeat' },
+    single: { fit: false, repeat: 'no-repeat' },
+    repeat: { fit: false, repeat: 'repeat' },
+};
+
+const setBackground = appearanceTool<BackgroundArgs>('set_background_image', 'Set background image',
+    'Put a photo from your files or this chat behind the workspace or sidebar.',
+    `Set the background image of one or more app areas in the active mode. Read get_appearance first and pass its mode. Areas: content is the main workspace background (${BACKGROUND_AREA_LABELS.content}), overlay is a second texture layer drawn over it (${BACKGROUND_AREA_LABELS.overlay}), sidebar is the navigation sidebar. Use "content" unless the user names another area. image is a hash from get_appearance images (images marked inChat were sent in this chat, newest first, so "the photo I just sent" is the first inChat image), "theme" for the theme's default pattern, or "none" to clear the area. Photos default to layout "fill". Keep opacity low (0.15-0.35) when the user wants the background subtle so text stays readable. Custom backgrounds are switched on automatically.`,
+    objectSchema({
+        mode: modeSchema,
+        areas: {
+            type: 'array',
+            items: { type: 'string', enum: [...BACKGROUND_AREAS] },
+            minItems: 1,
+            maxItems: BACKGROUND_AREAS.length,
+            uniqueItems: true,
+            description: 'Which areas to change. content = main workspace, overlay = second workspace layer, sidebar = navigation sidebar.',
+        },
+        image: { type: 'string', minLength: 1, maxLength: 128, description: 'An image hash from get_appearance images, "theme", or "none".' },
+        layout: { type: 'string', enum: Object.keys(BACKGROUND_LAYOUTS), description: 'fill covers the whole area, single shows the image once, repeat tiles it as a pattern.' },
+        opacity: { type: 'number', minimum: 0, maximum: 1, description: 'Image opacity from 0 to 1. Omit to keep the current value (at least 0.35 for a new photo).' },
+    }, ['mode', 'areas', 'image']));
 const setMode = appearanceTool<{ mode: Mode }>('set_appearance_mode', 'Switch color mode',
     'Switch between light and dark mode.',
     'Switch the app between light and dark mode. Each mode keeps its own appearance overrides.',
     objectSchema({ mode: modeSchema }, ['mode']));
 
-async function withAppearanceAuthority(context: ToolExecutionContext, run: () => string) {
+async function withAppearanceAuthority(
+    context: ToolExecutionContext,
+    run: (assertCurrent: () => void) => string | Promise<string>,
+) {
     const generation = getWorkspaceGeneration();
+    const assertCurrent = () => {
+        context.abortSignal.throwIfAborted();
+        if (getWorkspaceGeneration() !== generation || !workspaceToolsAvailable(context)) {
+            throw new Error('The originating workspace is no longer active.');
+        }
+    };
     await context.assertToolAuthorized?.();
-    context.abortSignal.throwIfAborted();
-    if (getWorkspaceGeneration() !== generation || !workspaceToolsAvailable(context)) {
-        throw new Error('The originating workspace is no longer active.');
-    }
-    return run();
+    assertCurrent();
+    return run(assertCurrent);
+}
+
+function describeArea(layer: Partial<UserBackgroundLayer> | undefined, area: BackgroundArea) {
+    const url = layer?.url ?? null;
+    const hash = hashFromBackgroundUrl(url);
+    return {
+        label: BACKGROUND_AREA_LABELS[area],
+        image: hash ?? (url === BACKGROUND_AREA_PATTERNS[area].src ? 'theme' : url ? 'other' : 'none'),
+        layout: layer?.fit ? 'fill' : layer?.repeat === 'no-repeat' ? 'single' : 'repeat',
+        opacity: layer?.opacity ?? 0,
+    };
+}
+
+/** Chat attachments first (newest first), then recent workspace images. */
+async function offeredImages(threadId: string | null) {
+    const chatHashes = threadId ? await listThreadImageHashes(threadId) : [];
+    const chat = (await getImageMetasByHashes(chatHashes.slice(0, MAX_OFFERED_IMAGES)))
+        .filter((meta) => meta.deleted !== true);
+    const seen = new Set(chat.map((meta) => meta.hash));
+    const recent = (await listBackgroundImages({ limit: MAX_OFFERED_IMAGES })).items
+        .filter((meta) => !seen.has(meta.hash));
+    return [
+        ...chat.map((meta) => ({ hash: meta.hash, name: meta.name, inChat: true })),
+        ...recent.map((meta) => ({ hash: meta.hash, name: meta.name, inChat: false })),
+    ].slice(0, MAX_OFFERED_IMAGES);
 }
 
 export function registerAppearanceTools(theme: ReturnType<typeof useUserThemeOverrides>) {
@@ -111,7 +192,9 @@ export function registerAppearanceTools(theme: ReturnType<typeof useUserThemeOve
     const dispose = () => registrations.forEach((registration) => registration.dispose());
 
     try {
-        registrations.push(registry.registerTool(inspect, (_, context) => withAppearanceAuthority(context, () => {
+        registrations.push(registry.registerTool(inspect, (_, context) => withAppearanceAuthority(context, async (assertCurrent) => {
+            const images = await offeredImages(context.threadId);
+            assertCurrent();
             const root = document.documentElement;
             const css = getComputedStyle(root);
             const effectiveColors: Partial<Record<RegisteredColorToken, string>> = {};
@@ -130,6 +213,13 @@ export function registerAppearanceTools(theme: ReturnType<typeof useUserThemeOve
                 colorTokenDescriptions: COLOR_TOKEN_DESCRIPTIONS,
                 settingDescriptions: descriptions,
                 overrides: { colors: savedColors, typography, shape },
+                backgrounds: {
+                    enabled: theme.overrides.value.backgrounds?.enabled ?? false,
+                    areas: Object.fromEntries(BACKGROUND_AREAS.map((area) => [
+                        area, describeArea(readBackgroundArea(theme.overrides.value, area), area),
+                    ])),
+                },
+                images,
             });
         }), options));
         registrations.push(registry.registerTool(update, ({ mode, colors, typography, shape }, context) => withAppearanceAuthority(context, () => {
@@ -143,6 +233,53 @@ export function registerAppearanceTools(theme: ReturnType<typeof useUserThemeOve
             theme.set(patch);
             return JSON.stringify({ mode, updated: patch });
         }), options));
+        registrations.push(registry.registerTool(setBackground, (args, context) => withAppearanceAuthority(context, async (assertCurrent) => {
+            const { mode, areas, image } = args;
+            const assertMode = () => {
+                if (theme.activeMode.value !== mode) {
+                    throw new Error('The active color mode changed. Read get_appearance before trying again.');
+                }
+            };
+            assertMode();
+            const meta = image === 'theme' || image === 'none' ? null : await getBackgroundImageMeta(image);
+            if (image !== 'theme' && image !== 'none' && !meta) {
+                throw new Error('No image with that hash is in this workspace. Use a hash from get_appearance images.');
+            }
+            assertCurrent();
+            assertMode();
+            const inChat = meta && context.threadId
+                ? (await listThreadImageHashes(context.threadId)).includes(meta.hash)
+                : false;
+            assertCurrent();
+            assertMode();
+            const layoutKey: BackgroundLayout = args.layout ?? (image === 'theme' ? 'repeat' : 'fill');
+            const layers: Partial<Record<BackgroundArea, Partial<UserBackgroundLayer>>> = {};
+            const applied = areas.map((area) => {
+                const current = readBackgroundArea(theme.overrides.value, area);
+                let layer: Partial<UserBackgroundLayer>;
+                if (meta) layer = { ...chosenImageLayer(meta.hash, current?.opacity), ...BACKGROUND_LAYOUTS[layoutKey] };
+                else if (image === 'theme') {
+                    const pattern = BACKGROUND_AREA_PATTERNS[area];
+                    layer = { url: pattern.src, opacity: pattern.opacity, ...BACKGROUND_LAYOUTS[layoutKey] };
+                } else layer = { url: null, opacity: 0 };
+                if (args.opacity !== undefined && image !== 'none') layer.opacity = args.opacity;
+                layers[area] = layer;
+                return { area, label: BACKGROUND_AREA_LABELS[area], opacity: layer.opacity ?? 0 };
+            });
+            // One write so every area changes together, and the change is visible.
+            theme.set(backgroundAreasPatch(layers, { enabled: true }));
+            return JSON.stringify({
+                mode,
+                areas: applied,
+                image: meta ? { kind: 'file', hash: meta.hash, name: meta.name, inChat } : { kind: image },
+                layout: image === 'none' ? null : layoutKey,
+            });
+        }), options));
+        registrations.push(registerToolCard({
+            tool: setBackground.function.name,
+            card: { mount() {}, component: BackgroundImageToolCard },
+            label: 'Background image',
+        }));
         registrations.push(registry.registerTool(setMode, ({ mode }, context) => withAppearanceAuthority(context, () => {
             theme.switchMode(mode);
             return JSON.stringify({ mode: theme.activeMode.value });

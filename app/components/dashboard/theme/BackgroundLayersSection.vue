@@ -85,10 +85,19 @@
                 @update:fit="(v: boolean) => activeLayer.onFit(v)"
                 @update:color="(c: string) => activeLayer.onColor(c)"
                 @upload="(file: File) => handleLayerUpload(file, activeLayer.key)"
+                @choose="pickerOpen = true"
                 @remove="removeLayer(activeLayer.key)"
                 @apply-preset="(src: string, opacity: number) => applyPreset(activeLayer.key, src, opacity)"
             />
         </div>
+
+        <ThemeImagePicker
+            v-model:open="pickerOpen"
+            :area-label="activeLayer.title"
+            :current-hash="hashFromBackgroundUrl(activeLayer.url)"
+            @select="(hash: string) => applyChosenImage(activeLayer.key, hash)"
+            @upload="(file: File) => handleLayerUpload(file, activeLayer.key)"
+        />
     </section>
 </template>
 
@@ -108,6 +117,15 @@ import {
     validateBackgroundImageFile,
 } from './types';
 import type { BackgroundPreset } from './types';
+import ThemeImagePicker from './ThemeImagePicker.vue';
+import {
+    BACKGROUND_AREA_PATTERNS,
+    backgroundAreaPatch,
+    chosenImageLayer,
+    getBackgroundImageMeta,
+    hashFromBackgroundUrl,
+    type BackgroundArea,
+} from '~/core/theme/background-image-library';
 
 const themeApi = useUserThemeOverrides();
 const overrides = themeApi.overrides;
@@ -117,6 +135,7 @@ const toast = useToast();
 // Computed helpers for cleaner bindings
 const bgEnabled = computed(() => overrides.value.backgrounds?.enabled ?? false);
 const activeLayerKey = ref<LayerKey>('contentBg1');
+const pickerOpen = ref(false);
 const chevronIcon = useIcon('ui.chevron.right').value;
 const contentBg1Url = computed(() => overrides.value.backgrounds?.content?.base?.url || null);
 const contentBg1Repeat = computed(() => overrides.value.backgrounds?.content?.base?.repeat || 'repeat');
@@ -201,13 +220,13 @@ function removeLayer(which: LayerKey) {
 }
 
 const presetsContent1: BackgroundPreset[] = [
-    { label: 'Default', src: '/bg-repeat.v2.webp', opacity: 0.08 },
+    { label: 'Default', ...BACKGROUND_AREA_PATTERNS.content },
 ];
 const presetsContent2: BackgroundPreset[] = [
-    { label: 'Default', src: '/bg-repeat-2.v2.webp', opacity: 0.125 },
+    { label: 'Default', ...BACKGROUND_AREA_PATTERNS.overlay },
 ];
 const presetsSidebar: BackgroundPreset[] = [
-    { label: 'Default', src: '/sidebar-repeater.v2.webp', opacity: 0.1 },
+    { label: 'Default', ...BACKGROUND_AREA_PATTERNS.sidebar },
 ];
 
 function applyPreset(which: LayerKey, src: string, opacity: number) {
@@ -407,31 +426,31 @@ function showUploadError(description: string) {
     });
 }
 
-function applyUploadedLayer(
-    which: LayerKey,
-    token: string,
-    currentOpacity: number
-) {
+const layerAreas: Record<LayerKey, BackgroundArea> = {
+    contentBg1: 'content',
+    contentBg2: 'overlay',
+    sidebarBg: 'sidebar',
+};
+
+function applyStoredImage(which: LayerKey, hash: string) {
     // Photos are usually meant as a single cover image, not a tiny tiled pattern.
-    const layer = {
-        url: token,
-        fit: true,
-        repeat: 'no-repeat' as const,
-        // Keep a visible floor so a 0% leftover from "remove" does not hide the upload.
-        opacity: currentOpacity > 0 ? currentOpacity : 0.35,
-    };
-    if (which === 'contentBg1') {
-        set({ backgrounds: { content: { base: layer } } });
-        local.contentBg1Opacity = layer.opacity;
+    const layer = chosenImageLayer(hash, local[layerLocalKeys[which].opacity]);
+    set(backgroundAreaPatch(layerAreas[which], layer));
+    local[layerLocalKeys[which].opacity] = layer.opacity!;
+}
+
+async function applyChosenImage(which: LayerKey, hash: string) {
+    // The picker lists only images, but the row may be deleted before the click lands.
+    if (!(await getBackgroundImageMeta(hash))) {
+        showUploadError('That image is no longer in this workspace.');
         return;
     }
-    if (which === 'contentBg2') {
-        set({ backgrounds: { content: { overlay: layer } } });
-        local.contentBg2Opacity = layer.opacity;
-        return;
-    }
-    set({ backgrounds: { sidebar: layer } });
-    local.sidebarBgOpacity = layer.opacity;
+    applyStoredImage(which, hash);
+    toast.add({
+        title: 'Background image applied',
+        description: 'Saved for this color mode.',
+        color: 'success',
+    });
 }
 
 // File upload handler with security validation
@@ -469,9 +488,7 @@ async function handleLayerUpload(file: File, which: LayerKey) {
             uploadFile,
             uploadFile.name || 'upload'
         );
-        const token = `internal-file://${meta.hash}`;
-        const currentOpacity = local[layerLocalKeys[which].opacity];
-        applyUploadedLayer(which, token, currentOpacity);
+        applyStoredImage(which, meta.hash);
 
         toast.add({
             title: 'Background image applied',

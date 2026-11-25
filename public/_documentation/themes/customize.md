@@ -75,7 +75,10 @@ These are global accessibility choices, not per-theme light/dark presets.
 ## Background images
 
 In Backgrounds, select one area and use its inspector to choose an image,
-layout, opacity, pattern size, and base color. Uploads accept PNG, JPEG, WebP,
+layout, opacity, pattern size, and base color. **Choose image…** opens a picker
+for that area with the workspace's images, newest first, including images sent
+in chat. Search filters by file name; the first tile uploads a new image.
+Clicking or dropping on the preview still uploads directly. Uploads accept PNG, JPEG, WebP,
 or GIF up to 8 MiB. HEIC/HEIF photos must be exported as JPEG or PNG first.
 Validation uses file signatures, so a valid image with an empty browser MIME
 type still works. Rejected uploads show a Background image not applied toast.
