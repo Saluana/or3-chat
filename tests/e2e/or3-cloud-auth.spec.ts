@@ -451,10 +451,7 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
             newDevice.on('requestfailed', request => moduleFailures.push(`${request.url()} ${request.failure()?.errorText}`));
             // Exercise the actual sync plugin and palette, not a test importer.
             await newDevice.goto('/');
-            await expect(async () => {
-                await newDevice.reload();
-                await expect(newDevice.getByRole('button', { name: 'Open command palette' }).first()).toBeVisible({ timeout: 5_000 });
-            }).toPass({ timeout: 45_000 });
+            await expect(newDevice.getByRole('button', { name: 'Open command palette' }).first()).toBeVisible({ timeout: 45_000 });
             await info.attach('cloud-browser-module-loads', { body: JSON.stringify(moduleFailures), contentType: 'application/json' });
             const openPalette = async () => {
                 await expect(async () => {
@@ -497,7 +494,9 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
                     email: 'member@example.test', password: 'DisposableMember!123', confirmPassword: 'DisposableMember!123',
                 } });
                 expect(registered.ok(), await registered.text()).toBe(true);
-                const memberSession = await (await member.request.get('/api/auth/session')).json();
+                const memberResponse = await member.request.get('/api/auth/session');
+                expect(memberResponse.status()).toBe(200);
+                const memberSession = await memberResponse.json();
                 const adminHeaders = { origin, 'x-or3-admin-intent': 'admin' };
                 const adminLogin = await page.request.post('/api/admin/auth/login', { headers: adminHeaders, data: {
                     username: 'workspace-e2e-admin', password: 'DisposableAdminE2e!123',

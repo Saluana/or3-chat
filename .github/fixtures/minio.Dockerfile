@@ -4,6 +4,7 @@ FROM golang:1.24.8-bookworm@sha256:4ed690d6649d63c312b99a6120025ec79ce3b542968a3
 # Keep the compiler pinned; go install verifies module downloads via Go's checksum database.
 ENV GOTOOLCHAIN=local
 # Official MinIO RELEASE.2025-10-15T17-29-55Z (source-only distribution).
-RUN go install -trimpath github.com/minio/minio@9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a
+# Avoid HTTP/2 stream resets during concurrent checksum downloads on hosted runners.
+RUN GODEBUG=http2client=0 go install -trimpath github.com/minio/minio@9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a
 
 ENTRYPOINT ["/go/bin/minio"]
