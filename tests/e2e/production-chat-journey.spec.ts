@@ -873,7 +873,7 @@ test('project chat uploads become sources automatically without duplicate bindin
 });
 
 for (const mode of ['native', 'reader-fails', 'both-reads-fail'] as const) {
-    test(`composer PNG send: ${mode}`, async ({ page }, info) => {
+    test(`composer PNG send: ${mode}`, { tag: '@workspace-recovery' }, async ({ page }, info) => {
         test.setTimeout(90_000);
         await page.context().route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
             ? route.continue() : route.abort('blockedbyclient'));
