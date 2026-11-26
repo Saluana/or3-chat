@@ -52,18 +52,43 @@ test('trial, editable admin allowances, and expiry preserve billing and data acc
     await expect(page.getByRole('button', { name: 'Upgrade to Cloud' })).toBeInViewport();
     expect(await page.locator('main').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath('billing-mobile.png'), fullPage: true });
-    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.addInitScript(() => {
+        const viewport = Object.assign(new EventTarget(), {
+            width: innerWidth, height: innerHeight, offsetTop: 0, offsetLeft: 0, scale: 1,
+        });
+        Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });
+    });
     await page.goto('/chat');
-    await expect(page.getByRole('complementary', { name: 'Subscription' })).toBeVisible();
+    const notice = page.getByRole('complementary', { name: 'Subscription' });
+    await expect(notice).toBeVisible();
     const shell = page.locator('#page-container');
-    await expect.poll(async () => { const box = await shell.boundingBox(); return box ? box.y + box.height : Infinity; }).toBeLessThanOrEqual(721);
+    const alignedWithViewport = (noticeVisible: boolean) => shell.evaluate((element, shown) => {
+        const rect = element.getBoundingClientRect();
+        const viewport = visualViewport!;
+        const notice = document.querySelector('[aria-label="Subscription"]')?.getBoundingClientRect();
+        const top = shown ? Math.max(viewport.offsetTop, notice?.bottom ?? Infinity) : viewport.offsetTop;
+        return Math.abs(rect.top - top) <= 2 &&
+            Math.abs(rect.bottom - (viewport.offsetTop + viewport.height)) <= 2;
+    }, noticeVisible);
+    const moveViewport = (height: number, offsetTop: number) => page.evaluate(({ height, offsetTop }) => {
+        Object.assign(visualViewport!, { height, offsetTop });
+        visualViewport!.dispatchEvent(new Event('resize'));
+    }, { height, offsetTop });
+    const fullHeight = await page.evaluate(() => innerHeight);
+    await expect.poll(() => alignedWithViewport(true)).toBe(true);
+    await moveViewport(320, 120);
+    await expect.poll(() => alignedWithViewport(true)).toBe(true);
+    await moveViewport(fullHeight, 0);
+    await expect.poll(() => alignedWithViewport(true)).toBe(true);
     await page.screenshot({ path: info.outputPath('billing-banner.png'), fullPage: true });
     await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click();
     await page.getByRole('button', { name: 'Dismiss plan notice' }).click();
-    await expect(page.getByRole('complementary', { name: 'Subscription' })).toBeHidden();
+    await expect(notice).toBeHidden();
+    await expect.poll(() => alignedWithViewport(false)).toBe(true);
+    await page.setViewportSize({ width: 1280, height: 720 });
     await page.reload();
     await expect(page.getByRole('button', { name: 'Dashboard', exact: true })).toBeVisible();
-    await expect(page.getByRole('complementary', { name: 'Subscription' })).toBeHidden();
+    await expect(notice).toBeHidden();
     await expect.poll(async () => (await shell.boundingBox())?.y).toBe(0);
     // Customers reach their plan inside the ordinary dashboard without an admin login.
     await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
