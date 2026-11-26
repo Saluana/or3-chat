@@ -71,3 +71,13 @@ applicable generated Vite cache (`node_modules/.cache/vite` for normal dev or
 `node_modules/.cache/vite-e2e-scroll` for the scroll harness), then restart. A stale optimized JavaScript
 copy can retain an old Vue CSS scope while loading the new stylesheet. Clean
 installs and production builds do not reuse this development cache.
+
+## workbox-precaching 7.4.1
+
+The worker used to fetch every precache entry serially, leaving a new browser
+unprotected against offline reloads while hundreds of files queued. Fetch assets
+in bounded batches of eight, while keeping the same full manifest, cache keys,
+integrity checks, and failed-install behavior. Do not switch to unlimited
+concurrency (Workbox issue #2528). Remove this patch once the pinned Workbox
+version supports bounded precache concurrency and passes the offline browser
+journey.

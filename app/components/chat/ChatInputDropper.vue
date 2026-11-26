@@ -15,6 +15,9 @@
         @click="handleContainerClick"
     >
         <div class="chat-input-inner-container flex flex-col gap-3.5 m-3.5">
+            <p v-if="!online" role="status" class="text-xs text-(--md-on-surface-variant)">
+                Offline. Keep drafting here and reconnect for AI replies.
+            </p>
             <p v-if="failedAttachmentNames.length" role="alert" class="text-sm text-(--md-error)">
                 Attachments could not be saved: {{ failedAttachmentNames.join(', ') }}.
                 Remove and attach those files again.
@@ -487,6 +490,8 @@ import {
     sanitizeModelVariant,
     type OpenRouterModelVariant,
 } from '~~/shared/openrouter/model-variants';
+
+const online = useOnline();
 
 const OpenRouterKeyModal = defineAsyncComponent(
     () => import('~/components/chat/OpenRouterKeyModal.vue')
@@ -1687,7 +1692,7 @@ const handlePromptSelected = (id: string) => {
 };
 
 // Emit live height via useResizeObserver (VueUse handles cleanup automatically)
-import { useResizeObserver } from '@vueuse/core';
+import { useOnline, useResizeObserver } from '@vueuse/core';
 
 const componentRootRef = ref<HTMLElement | null>(null);
 let lastHeight: number | null = null;

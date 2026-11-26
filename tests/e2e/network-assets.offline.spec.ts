@@ -81,6 +81,7 @@ test('mobile workspace cold-starts and saves local work offline', async ({ page,
   await launch.goto('/');
   await expect(launch.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 15_000 });
   expect(await launch.evaluate(() => navigator.onLine)).toBe(false);
+  await expect(launch.getByText('Offline. Keep drafting here and reconnect for AI replies.', { exact: true })).toBeVisible();
   const welcome = launch.getByRole('button', { name: 'Dismiss welcome', exact: true });
   await launch.addLocatorHandler(welcome, () => welcome.click());
   const chat = launch.getByRole('textbox', { name: 'Message input' });

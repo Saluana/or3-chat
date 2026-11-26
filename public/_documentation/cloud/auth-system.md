@@ -100,7 +100,9 @@ Direct sync providers acquire provider-specific JWTs through `AuthTokenBroker`. 
 ## Offline workspace access
 
 After an online visit completes the app download, a returning browser can
-open the last verified workspace in airplane mode. Chats, documents, drafts,
+open the last verified workspace in airplane mode. If the connection drops
+during the first app download, keep the tab open rather than refreshing.
+Chat shows an offline notice while disconnected. Chats, documents, drafts,
 projects and file bytes already on the device remain available. Editing uses
 the last verified role. The app keeps only the account and workspace scope
 and local permissions needed to reopen it. Signing out clears that access.
