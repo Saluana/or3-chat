@@ -245,7 +245,7 @@ function captureDiagnostics(input: unknown, hints: DiagnosticHints | undefined, 
         }
     } catch { /* Exotic exceptions must not prevent the user-facing notice. */ }
     if (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean') result.online = navigator.onLine;
-    const visibility = typeof document !== 'undefined' ? document.visibilityState : undefined;
+    const visibility = (globalThis as { document?: { visibilityState?: string } }).document?.visibilityState;
     if (visibility === 'visible' || visibility === 'hidden') result.pageVisibility = visibility;
     return result;
 }

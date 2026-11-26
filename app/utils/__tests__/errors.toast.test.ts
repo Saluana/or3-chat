@@ -94,7 +94,8 @@ describe('error toast bridge', () => {
             const latest = toast.toasts.value[0]!;
             expect(latest.title).toBe('Could not get a reply');
             expect(latest.description).toMatch(/message was saved.*Retry from the conversation instead of sending it again/i);
-            latest.actions?.find(action => action.label === 'Details')?.onClick?.(new MouseEvent('click'));
+            const openDetails = latest.actions?.find(action => action.label === 'Details')?.onClick;
+            if (typeof openDetails === 'function') openDetails(new MouseEvent('click'));
             expect(details).toHaveBeenCalledWith(expect.objectContaining({
                 code: 'ERR_STREAM_FAILURE', chatStage: 'after_save',
             }));
