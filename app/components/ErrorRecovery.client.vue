@@ -30,6 +30,9 @@
         <p class="mb-3 text-sm">
             Technical information to help diagnose this problem.
         </p>
+        <p v-if="details?.chatStage" class="mb-3 text-sm">
+            {{ details.chatStage === 'after_save' ? 'The message was saved. The reply did not finish.' : 'OR3 could not confirm the message was saved.' }}
+        </p>
         <pre
             class="max-w-full overflow-auto whitespace-pre-wrap break-all text-xs"
             >{{ JSON.stringify(details, null, 2) }}</pre
@@ -46,12 +49,11 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { databaseRecovery } from '~/db/client';
 import { useRuntimeConfig, navigateTo } from '#imports';
-import { setErrorRecoveryApi } from '~/utils/errors';
+import { setErrorRecoveryApi, type ErrorToastDetails } from '~/utils/errors';
 import { resolveAuthUiAdapter } from '~/core/auth-ui/registry';
 import {
     presentError,
     type RecoveryAction,
-    type ErrorMetadata,
 } from '~~/shared/errors';
 import AppModal from '~/components/ui/AppModal.vue';
 import OpenRouterKeyModal from '~/components/chat/OpenRouterKeyModal.vue';
@@ -70,7 +72,7 @@ const config = useRuntimeConfig();
 const keyOpen = ref(false);
 const keyActivated = ref(false);
 const signInOpen = ref(false);
-const details = ref<ErrorMetadata | null>(null);
+const details = ref<ErrorToastDetails | null>(null);
 const authComponent = computed(
     () =>
         resolveAuthUiAdapter(String(config.public.authProvider ?? ''))

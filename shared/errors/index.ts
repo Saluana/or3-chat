@@ -474,11 +474,14 @@ export function presentError(
     if (e.code === 'ERR_INTERNAL' || e.code === 'ERR_UNKNOWN') {
         if (context.operation === 'chat_send') {
             title = 'Could not send message';
-            message = 'Check that your draft is still in the composer, then try sending it again.';
-        } else if (context.operation === 'chat_reply') {
-            title = 'Could not get a reply';
-            message = 'Your message was saved to the chat. Retry from the conversation instead of sending it again.';
+            message = 'OR3 couldn’t confirm this message was saved. Check your draft and chat before trying again. If this started after a model change, switch back to the previous model.';
         }
+    }
+    const genericChatReply = context.operation === 'chat_reply'
+        && (e.code === 'ERR_INTERNAL' || e.code === 'ERR_UNKNOWN' || e.code === 'ERR_STREAM_FAILURE');
+    if (genericChatReply) {
+        title = 'Could not get a reply';
+        message = 'Your message was saved to the chat. Retry from the conversation instead of sending it again.';
     }
     if (e.router === 'openai' && e.source === 'provider' && (e.code === 'ERR_AUTH' || e.code === 'ERR_CREDITS')) {
         // OpenAI keys are managed in AI settings; OpenRouter's key and credit actions do not apply.

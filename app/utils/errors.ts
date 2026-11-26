@@ -187,8 +187,12 @@ export type ErrorToastApi = {
 };
 
 let errorToastApi: ErrorToastApi | null = null;
+export type ErrorToastDetails = ErrorMetadata & {
+    // Comes from app-owned request lifecycle, never from provider metadata.
+    chatStage?: 'before_save_confirmation' | 'after_save';
+};
 type ErrorRecoveryApi = Partial<Record<RecoveryAction, () => void>> & {
-    details?: (error: ErrorMetadata) => void;
+    details?: (error: ErrorToastDetails) => void;
 };
 let errorRecoveryApi: ErrorRecoveryApi = {};
 export function setErrorRecoveryApi(api: ErrorRecoveryApi): void {
@@ -209,10 +213,10 @@ function pushToast(error: AppError, retry?: () => void) {
     const toast = errorToastApi;
     if (!toast) return;
     try {
-        const presentation = presentError(error, {
-            ...trustedErrorContexts.get(error),
-            fallbackMessage: error.message,
-        });
+        const context = trustedErrorContexts.get(error);
+        const chatStage = context?.operation === 'chat_send' ? 'before_save_confirmation'
+            : context?.operation === 'chat_reply' ? 'after_save' : undefined;
+        const presentation = presentError(error, context);
         const actions: ToastAction[] = [];
         const labels = {
             update_key: 'Update API key',
@@ -245,10 +249,13 @@ function pushToast(error: AppError, retry?: () => void) {
             actions.push({
                 label: 'Details',
                 onClick: () => {
-                    errorRecoveryApi.details?.(errorDiagnostics(error));
+                    errorRecoveryApi.details?.({ ...errorDiagnostics(error), ...(chatStage ? { chatStage } : {}) });
                 },
             });
         toast.add({
+            // Nuxt UI merges the latest alert into this slot, including new
+            // recovery actions. Other error categories keep separate notices.
+            ...(chatStage ? { id: 'or3-chat-delivery-error' } : {}),
             title: presentation.title,
             description: presentation.message,
             actions: actions.length ? actions : undefined,

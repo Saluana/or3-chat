@@ -52,7 +52,7 @@ describe('error toast bridge', () => {
     });
 
     it.each([
-        ['chat_send', 'Could not send message', 'Check that your draft is still in the composer, then try sending it again.'],
+        ['chat_send', 'Could not send message', 'OR3 couldn’t confirm this message was saved. Check your draft and chat before trying again. If this started after a model change, switch back to the previous model.'],
         ['chat_reply', 'Could not get a reply', 'Your message was saved to the chat. Retry from the conversation instead of sending it again.'],
     ] as const)('makes an unclassified %s failure actionable without leaking exception text', (operation, title, description) => {
         setErrorToastApi({ add: mocks.addToast });
@@ -74,6 +74,35 @@ describe('error toast bridge', () => {
         });
 
         expect(mocks.addToast).not.toHaveBeenCalled();
+    });
+
+    it('keeps one visible chat failure and exposes the latest safe delivery stage', async () => {
+        let toast!: ReturnType<typeof useToast>;
+        const app = createApp(defineComponent({
+            setup() { toast = useToast(); return () => null; },
+        }));
+        app.mount(document.createElement('div'));
+        const details = vi.fn();
+        try {
+            setErrorToastApi(toast);
+            setErrorRecoveryApi({ details });
+            reportError(new Error('internal prepare debug text'), { operation: 'chat_send' });
+            reportError(err('ERR_STREAM_FAILURE', 'raw provider output'), { operation: 'chat_reply' });
+            for (let i = 0; i < 6; i++) await nextTick();
+
+            expect(toast.toasts.value).toHaveLength(1);
+            const latest = toast.toasts.value[0]!;
+            expect(latest.title).toBe('Could not get a reply');
+            expect(latest.description).toMatch(/message was saved.*Retry from the conversation instead of sending it again/i);
+            latest.actions?.find(action => action.label === 'Details')?.onClick?.(new MouseEvent('click'));
+            expect(details).toHaveBeenCalledWith(expect.objectContaining({
+                code: 'ERR_STREAM_FAILURE', chatStage: 'after_save',
+            }));
+            expect(JSON.stringify(details.mock.calls)).not.toMatch(/debug text|raw provider output/);
+        } finally {
+            app.unmount();
+            setErrorRecoveryApi({});
+        }
     });
 
     it('keeps distinct same-millisecond errors and their recovery controls in Nuxt UI', async () => {
