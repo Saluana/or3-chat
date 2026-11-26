@@ -273,6 +273,7 @@ export default defineNuxtConfig({
         public: {
             ...applicationPlan.runtimeConfig.public,
             gzipRequests: true,
+            errorDiagnosticsEnabled: process.env.NUXT_PUBLIC_ERROR_DIAGNOSTICS_ENABLED === 'true',
             chatToolIterations: 10,
             chatGeneratedImages: 6,
             devTools:

@@ -457,3 +457,20 @@ with “qualified to write schema 1” after state has reached schema 2. Use the
 pinned 0.1.129 CLI for recovery and upgrade; preserve managed state and backups.
 The corrected installed bundle retains its schema-2 writer qualification without
 an npm manifest and still refuses unknown future schemas.
+
+
+## Copyable error details in development and staging
+
+On an error notice, open **Details**, then choose **Copy diagnostics**. The
+expanded report is automatic in local development. On a staging SSR server set
+\`NUXT_PUBLIC_ERROR_DIAGNOSTICS_ENABLED=true\`. For a staging Docker image, pass
+\`--build-arg OR3_ERROR_DIAGNOSTICS_ENABLED=true\` so the setting is available in
+the built offline shell as well. The default for production builds is off.
+
+An expanded report can include the classified error, the last chat step
+entered, a local request ID, the time, an allowlisted exception type, and
+whether the browser reported being online and visible. The local request ID
+identifies one browser attempt; it is not an upstream provider trace. The
+report contains no message text, API keys, raw provider data, or stack trace.
+Nothing is sent automatically. If clipboard access is unavailable, the same
+report can be selected and copied by hand.

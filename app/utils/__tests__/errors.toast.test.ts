@@ -105,6 +105,34 @@ describe('error toast bridge', () => {
         }
     });
 
+    it.each([false, true])('shares allowlisted report fields only when detailed diagnostics is enabled (%s)', (enabled) => {
+        const details = vi.fn();
+        setErrorToastApi({ add: mocks.addToast });
+        setErrorRecoveryApi({ details, detailedDiagnostics: enabled });
+        const localRequestId = '3f0afba0-1b92-4fdd-bf53-abc0a969ce13';
+        const failure = Object.assign(new DOMException('private message and sk-or-example-secret', 'TransactionInactiveError'), {
+            threadId: 'private-thread', details: 'raw provider result',
+        });
+        reportError(failure, {
+            operation: 'chat_send',
+            diagnostic: { checkpoint: 'save_message', localRequestId },
+            tags: { url: 'https://private.example/?token=secret' },
+        });
+        mocks.addToast.mock.lastCall?.[0].actions.find((a: { label: string }) => a.label === 'Details').onClick();
+        const receipt = details.mock.lastCall?.[0];
+        expect(receipt).toMatchObject({ code: 'ERR_INTERNAL', chatStage: 'before_save_confirmation' });
+        if (enabled) {
+            expect(receipt.diagnostics).toMatchObject({
+                capturedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+                operation: 'chat_send', checkpoint: 'save_message', localRequestId,
+                exceptionType: 'TransactionInactiveError',
+            });
+        } else {
+            expect(receipt).not.toHaveProperty('diagnostics');
+        }
+        expect(JSON.stringify(receipt)).not.toMatch(/private|raw provider|sk-or/);
+    });
+
     it('keeps distinct same-millisecond errors and their recovery controls in Nuxt UI', async () => {
         let toast!: ReturnType<typeof useToast>;
         const app = createApp(defineComponent({

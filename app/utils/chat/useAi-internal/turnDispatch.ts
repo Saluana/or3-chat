@@ -348,6 +348,7 @@ export function createTurnDispatch(ports: {
                 };
                 reportError(visibleError, {
                     code: 'ERR_STREAM_FAILURE',
+                    diagnostic: { checkpoint: requestScope.diagnosticCheckpoint, localRequestId: requestId },
                     tags: {
                         domain: 'chat',
                         threadId: requestThreadId,

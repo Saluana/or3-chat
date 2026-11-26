@@ -33,11 +33,19 @@
         <p v-if="details?.chatStage" class="mb-3 text-sm">
             {{ details.chatStage === 'after_save' ? 'The message was saved. The reply did not finish.' : 'OR3 could not confirm the message was saved.' }}
         </p>
-        <pre
-            class="max-w-full overflow-auto whitespace-pre-wrap break-all text-xs"
-            >{{ JSON.stringify(details, null, 2) }}</pre
-        >
+        <p v-if="showDiagnostics" class="mb-3 text-sm">
+            This report includes the step that failed and browser state when available. It does not include messages or keys.
+        </p>
+        <pre v-if="!manualCopy" class="max-w-full overflow-auto whitespace-pre-wrap break-all text-xs">{{ diagnosticText }}</pre>
+        <textarea
+            v-else ref="copyField" :value="diagnosticText"
+            aria-label="Diagnostics to copy" readonly rows="6"
+            class="w-full rounded border border-current bg-transparent p-2 font-mono text-xs"
+            @focus="copyField?.select()"
+        />
+        <p v-if="copyStatus" role="status" class="mt-2 text-sm">{{ copyStatus }}</p>
         <template #footer>
+            <UButton v-if="showDiagnostics" variant="soft" @click="copyDiagnostics">Copy diagnostics</UButton>
             <UButton v-if="detailsAction" @click="recoverDetails">{{
                 labels[detailsAction]
             }}</UButton>
@@ -46,7 +54,7 @@
     </AppModal>
 </template>
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { computed, nextTick, ref, onMounted, onUnmounted } from 'vue';
 import { databaseRecovery } from '~/db/client';
 import { useRuntimeConfig, navigateTo } from '#imports';
 import { setErrorRecoveryApi, type ErrorToastDetails } from '~/utils/errors';
@@ -73,6 +81,32 @@ const keyOpen = ref(false);
 const keyActivated = ref(false);
 const signInOpen = ref(false);
 const details = ref<ErrorToastDetails | null>(null);
+const diagnosticsEnabled = import.meta.dev || config.public.errorDiagnosticsEnabled === true;
+const showDiagnostics = computed(() => diagnosticsEnabled && Boolean(details.value?.diagnostics));
+const diagnosticText = computed(() => {
+    if (!details.value) return '';
+    const { diagnostics, ...basic } = details.value;
+    return JSON.stringify(showDiagnostics.value ? { ...basic, diagnostics } : basic, null, 2);
+});
+const manualCopy = ref(false);
+const copyStatus = ref('');
+const copyField = ref<HTMLTextAreaElement | null>(null);
+
+async function copyDiagnostics() {
+    if (!showDiagnostics.value || !details.value) return;
+    const original = details.value;
+    try {
+        await navigator.clipboard.writeText(diagnosticText.value);
+        if (details.value === original) copyStatus.value = 'Diagnostics copied.';
+    } catch {
+        if (details.value !== original) return;
+        manualCopy.value = true;
+        copyStatus.value = 'Clipboard is unavailable. Touch and hold the report to copy it.';
+        await nextTick();
+        copyField.value?.focus();
+        copyField.value?.select();
+    }
+}
 const authComponent = computed(
     () =>
         resolveAuthUiAdapter(String(config.public.authProvider ?? ''))
@@ -132,7 +166,10 @@ function finishRecovery() {
 onMounted(() => {
     setErrorRecoveryApi({
         ...recovery.value,
+        detailedDiagnostics: diagnosticsEnabled,
         details: (metadata) => {
+            manualCopy.value = false;
+            copyStatus.value = '';
             details.value = metadata;
         },
     });

@@ -70,6 +70,7 @@ export function createTurnPreparation(ports: {
     return async function prepareTurn(requestScope: ChatRequest, contentOrParams: string | (SendMessageParams & { content: string }),
         maybeParams?: SendMessageParams) {
         const requestId = requestScope.requestId;
+        requestScope.diagnosticCheckpoint = 'prepare_conversation';
         let content: string;
         let sendMessagesParams: SendMessageParams;
 
@@ -418,10 +419,12 @@ export function createTurnPreparation(ports: {
             }
         }
         const startedAt = Date.now();
+        requestScope.diagnosticCheckpoint = 'check_model';
         recordPreparationFilter('ai.chat.model:filter:select');
         const modelId = await hooks.applyFilters('ai.chat.model:filter:select', model);
         const readiness = await useModelStore().resolveContextModel(modelId, { signal: preparationSignal });
         if (!readiness.ok) throw new ChatContextAdmissionError(readiness);
+        requestScope.diagnosticCheckpoint = 'prepare_model_request';
         const budgetModelMeta = catalog.value.find((entry) => entry.id === readiness.modelId)
             ?? favoriteModels.value.find((entry) => entry.id === readiness.modelId);
         // Model filters can select a different model; its metadata must own

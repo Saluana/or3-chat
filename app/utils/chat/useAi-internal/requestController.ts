@@ -19,6 +19,7 @@ import { isStaleForegroundGeneration } from '~/utils/chat/generation-lease';
 import { tryGetHooks } from '~/core/hooks/useHooks';
 import { serializeError } from '~~/shared/errors';
 import { parseHashes } from '~/utils/files/attachments';
+import type { DiagnosticCheckpoint } from '~/utils/errors';
 
 /**
  * The classified public error of a failed foreground turn, kept beside the
@@ -81,6 +82,7 @@ export type RequestFinalization = {
 /** One owner per admitted generation; attachment and save state are independent. */
 export type ChatRequest = {
     expectedProjectId?: string | null;
+    diagnosticCheckpoint?: DiagnosticCheckpoint;
     readonly requestId: string;
     readonly originDb: Or3DB;
     readonly workspaceId: string;
