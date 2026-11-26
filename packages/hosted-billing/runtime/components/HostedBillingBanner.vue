@@ -29,17 +29,30 @@ const message = computed(() => {
     if (status.value.state === 'active') return status.value.cancelAtPeriodEnd ? 'Your plan ends at the end of this billing period' : 'Your hosted plan is active';
     return status.value.state === 'review' ? 'Your billing account needs review. Contact support.' : 'Free Local · On this device';
 });
+// Presentation only: states that need the user to act get the warning tone.
+const needsAttention = computed(() => !status.value || status.value.state === 'paused' || status.value.state === 'review');
+// Presentation only: emphasise the lead clause so the band scans at a glance. The text read out is unchanged.
+const messageParts = computed(() => {
+    const text = String(message.value ?? '');
+    const dot = text.indexOf(' · ');
+    if (dot > 0) return { lead: text.slice(0, dot), rest: text.slice(dot), optional: true };
+    const stop = text.indexOf('. ');
+    if (stop > 0) return { lead: text.slice(0, stop + 1), rest: text.slice(stop + 1), optional: false };
+    return { lead: '', rest: text, optional: false };
+});
 </script>
 
 <template>
     <aside v-if="(status || error) && dismissed !== noticeKey && status?.state !== 'active' && !route.path.startsWith('/admin') && route.path !== '/billing'" ref="banner"
-        aria-label="Subscription" class="billing-notice">
+        aria-label="Subscription" class="billing-notice" :data-tone="needsAttention ? 'attention' : 'neutral'">
         <div class="billing-notice__row">
             <span role="status" class="billing-notice__status">
-                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>
-                <span>{{ message }}</span>
+                <svg v-if="needsAttention" aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2.5 20h19L12 3z"/><path d="M12 10v4m0 3h.01"/></svg>
+                <svg v-else aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>
+                <span class="billing-notice__message"><strong v-if="messageParts.lead" class="billing-notice__lead">{{ messageParts.lead }}</strong><span
+                    :class="messageParts.lead ? (messageParts.optional ? 'billing-notice__detail billing-notice__detail--optional' : 'billing-notice__detail') : 'billing-notice__plain'">{{ messageParts.rest }}</span></span>
             </span>
-            <NuxtLink to="/billing" class="billing-notice__link">View plans<span aria-hidden="true">›</span></NuxtLink>
+            <NuxtLink to="/billing" class="billing-notice__link">View plans</NuxtLink>
             <button type="button" class="billing-notice__dismiss" aria-label="Dismiss plan notice" @click="dismissed = noticeKey">
                 <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="m3 3 6 6m0-6L3 9"/></svg>
             </button>
@@ -56,33 +69,86 @@ html #page-container {
 </style>
 
 <style scoped>
+/* Anchored chrome band: an edge-to-edge row of app chrome, the same height as the desktop tab bar.
+   It sits in normal flow above #page-container and is never an overlay. Theme tokens carry it into dark and Retro. */
 .billing-notice {
     color: var(--ui-text-muted, currentColor);
-    padding-inline: max(.5rem, env(safe-area-inset-left)) max(.5rem, env(safe-area-inset-right));
+    background: var(--ui-bg-muted, color-mix(in srgb, currentColor 4%, transparent));
+    border-block-end: 1px solid var(--ui-border, color-mix(in srgb, currentColor 12%, transparent));
+    padding-inline: max(.75rem, env(safe-area-inset-left)) max(.25rem, env(safe-area-inset-right));
     font-size: .75rem;
     line-height: 1.35;
 }
 .billing-notice__row {
     display: flex;
     align-items: center;
-    gap: .55rem;
-    padding-inline-start: .35rem;
-    width: fit-content;
-    max-width: 100%;
-    margin-inline: auto;
-}
-.billing-notice__status, .billing-notice__link, .billing-notice__dismiss { display: inline-flex; align-items: center; }
-.billing-notice__status { gap: .4rem; min-width: 0; overflow-wrap: anywhere; }
-.billing-notice__status svg { flex: none; }
-.billing-notice__link, .billing-notice__dismiss {
-    flex: none;
+    gap: .5rem;
     min-height: 2rem;
-    color: inherit;
-    border-radius: .25rem;
 }
-.billing-notice__link { gap: .25rem; font-weight: 600; color: var(--ui-text, inherit); text-decoration: none; white-space: nowrap; }
-.billing-notice__link:hover { text-decoration: underline; }
-.billing-notice__dismiss { justify-content: center; width: 2rem; background: transparent; border: 0; padding: 0; cursor: pointer; }
-.billing-notice__dismiss:hover { background: var(--ui-bg-muted); }
+.billing-notice__status {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    min-width: 0;
+    padding-block: .375rem;
+}
+.billing-notice__status svg { flex: none; }
+.billing-notice[data-tone="attention"] .billing-notice__status svg { color: var(--ui-warning, currentColor); }
+.billing-notice__message { min-width: 0; overflow-wrap: anywhere; }
+.billing-notice__lead { font-weight: 600; color: var(--ui-text, inherit); }
+.billing-notice__plain { color: var(--ui-text, inherit); }
+.billing-notice__link {
+    position: relative;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    height: 1.5rem;
+    padding-inline: .5625rem;
+    border: 1px solid var(--ui-border-accented, var(--ui-border, currentColor));
+    border-radius: .375rem;
+    background: var(--ui-bg, transparent);
+    color: var(--ui-text, inherit);
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+}
+/* Extend the hit area to the full row height without enlarging the visible button. */
+.billing-notice__link::after { content: ''; position: absolute; inset: -.25rem -.125rem; }
+.billing-notice__link:hover { background: var(--ui-bg-elevated, var(--ui-bg-muted)); }
+.billing-notice__dismiss {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    color: inherit;
+    background: transparent;
+    border: 0;
+    border-radius: .375rem;
+    cursor: pointer;
+}
+.billing-notice__dismiss:hover { background: var(--ui-bg-elevated, var(--ui-bg-muted)); color: var(--ui-text, inherit); }
 .billing-notice__link:focus-visible, .billing-notice__dismiss:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
+.billing-notice__link:focus-visible { outline-offset: 1px; }
+
+/* Touch and phone sizes: a 42px row with 30px CTA and 40px dismiss. Long states wrap; actions stay on the first line. */
+@media (max-width: 640px), (pointer: coarse) {
+    .billing-notice { font-size: .8125rem; padding-inline-start: max(1rem, env(safe-area-inset-left)); }
+    .billing-notice__row { min-height: 2.625rem; gap: .625rem; }
+    .billing-notice__status { padding-block: .5rem; }
+    .billing-notice__link { height: 1.875rem; padding-inline: .6875rem; }
+    .billing-notice__link::after { inset: -.375rem -.25rem; }
+    .billing-notice__dismiss { width: 2.5rem; height: 2.5rem; }
+}
+/* Very small phones: drop the secondary " · detail" so the row never wraps for the default state. */
+@media (max-width: 359px) {
+    .billing-notice__detail--optional { display: none; }
+}
+@media (forced-colors: active) {
+    .billing-notice { border-block-end-color: CanvasText; }
+    .billing-notice__link { border-color: LinkText; }
+}
 </style>
