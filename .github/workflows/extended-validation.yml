@@ -190,9 +190,9 @@ jobs:
         run: bun install --cwd packages/hosted-billing --frozen-lockfile
       - run: bun run lint
         # Sequential scopes release TypeScript programs between processes.
-        # Keep each below the runner's memory limit with all rules enforced.
+        # Current type graphs exceed 4 GiB in several scopes; keep all rules enabled.
         env:
-          NODE_OPTIONS: --max-old-space-size=4096
+          NODE_OPTIONS: --max-old-space-size=6144
 
   performance:
     name: Strict performance budgets
