@@ -804,6 +804,7 @@ export function useChat(
             if (!stopped && !contextAdmissionFailureReason(error)) reportError(error, {
                 severity: 'error',
                 tags: { domain: 'chat', stage: 'send' },
+                operation: requestScope.userMessageId ? 'chat_reply' : 'chat_send',
                 toast: true,
             });
         } finally {

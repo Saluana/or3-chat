@@ -51,6 +51,21 @@ describe('error toast bridge', () => {
         );
     });
 
+    it.each([
+        ['chat_send', 'Could not send message', 'Check that your draft is still in the composer, then try sending it again.'],
+        ['chat_reply', 'Could not get a reply', 'Your message was saved to the chat. Retry from the conversation instead of sending it again.'],
+    ] as const)('makes an unclassified %s failure actionable without leaking exception text', (operation, title, description) => {
+        setErrorToastApi({ add: mocks.addToast });
+        reportError(new Error('private exception text'), { operation });
+        expect(mocks.addToast).toHaveBeenCalledWith(expect.objectContaining({ title, description }));
+        expect(JSON.stringify(mocks.addToast.mock.calls)).not.toContain('private exception text');
+        reportError({ status: 429, source: 'provider', retryAfterMs: 4000 }, { operation });
+        expect(mocks.addToast.mock.lastCall?.[0]).toMatchObject({
+            title: 'Too many requests',
+            description: 'Please wait 4 seconds before trying again.',
+        });
+    });
+
     it('honors toast false without resolving or displaying a toast', () => {
         setErrorToastApi({ add: mocks.addToast });
 

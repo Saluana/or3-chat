@@ -61,7 +61,7 @@ export interface ErrorContext {
     router?: 'openai';
     /** App-owned operation fallback, never an exception/response message. */
     fallbackMessage?: string;
-    operation?: 'login';
+    operation?: 'login' | 'chat_send' | 'chat_reply';
 }
 export interface ErrorMetadata {
     code: ErrorCode;
@@ -471,6 +471,15 @@ export function presentError(
     const e = normalizeError(input, context);
     let [title, message] = copy[e.code];
     let action: RecoveryAction | undefined;
+    if (e.code === 'ERR_INTERNAL' || e.code === 'ERR_UNKNOWN') {
+        if (context.operation === 'chat_send') {
+            title = 'Could not send message';
+            message = 'Check that your draft is still in the composer, then try sending it again.';
+        } else if (context.operation === 'chat_reply') {
+            title = 'Could not get a reply';
+            message = 'Your message was saved to the chat. Retry from the conversation instead of sending it again.';
+        }
+    }
     if (e.router === 'openai' && e.source === 'provider' && (e.code === 'ERR_AUTH' || e.code === 'ERR_CREDITS')) {
         // OpenAI keys are managed in AI settings; OpenRouter's key and credit actions do not apply.
         title = e.code === 'ERR_AUTH' ? 'OpenAI key needed' : 'OpenAI quota exhausted';
