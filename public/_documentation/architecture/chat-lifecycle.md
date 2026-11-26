@@ -414,7 +414,7 @@ Tab commands resolve to a status (`activated`, `created`, `failed`, or `supersed
 
 See [source map](/documentation/start/source-map), [documents](/documentation/database/documents), and [workspace-safe writes](/documentation/database/safe-changes#workspace-safe-operations).
 
-Chat settings and their nested selectors use fade transitions to keep anchor widths stable while Floating UI measures them. Scale transitions can create repeated resize notifications when a nested menu opens before its parent settles.
+On mobile, chat settings open in a bottom sheet; swipe down on the handle or use the close button to dismiss it. The desktop popover and nested selectors use fade transitions to keep anchor widths stable while Floating UI measures them. Scale transitions can create repeated resize notifications when a nested menu opens before its parent settles.
 
 ### Interrupted draft reads and saves
 

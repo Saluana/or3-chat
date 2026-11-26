@@ -2,12 +2,13 @@
     <div
         ref="root"
         :class="[
-            'chat-settings-popover flex w-[360px] max-w-[calc(100vw-1.5rem)] flex-col',
+            'chat-settings-popover flex flex-col',
+            sheet ? 'chat-settings-popover--sheet' : 'w-[360px] max-w-[calc(100vw-1.5rem)]',
             containerProps?.class || '',
         ]"
         :data-theme-target="containerProps?.['data-theme-target']"
         :data-theme-matches="containerProps?.['data-theme-matches']"
-        :style="lockedHeight ? { height: `${lockedHeight}px` } : undefined"
+        :style="!sheet && lockedHeight ? { height: `${lockedHeight}px` } : undefined"
     >
         <header class="chat-settings-header">
             <button
@@ -20,7 +21,7 @@
             >
                 <UIcon :name="iconChevronLeft" class="size-4" />
             </button>
-            <h2 class="chat-settings-title">
+            <h2 class="chat-settings-title" :aria-hidden="sheet && !toolsView ? true : undefined">
                 {{
                     activeGroup
                         ? getCategoryLabel(activeGroup.category)
@@ -496,6 +497,7 @@ import {
 } from '~~/shared/openrouter/reasoning';
 
 const props = defineProps<{
+    sheet?: boolean;
     containerWidth?: number;
     loading?: boolean;
     streaming?: boolean;
@@ -999,6 +1001,17 @@ const modelCatalogButtonProps = computed(() => {
     border-radius: var(--md-border-radius-large, var(--md-border-radius));
 }
 
+.chat-settings-popover--sheet {
+    min-height: 0;
+    max-height: none;
+    border-radius: 0;
+    flex: 1 1 auto;
+}
+
+.chat-settings-popover--sheet .chat-settings-body {
+    overscroll-behavior-y: contain;
+}
+
 /*
  * Buttons center on the title line (themes may enlarge them on touch
  * screens); the tool views' subtitle wraps onto its own line below.
@@ -1352,7 +1365,7 @@ const modelCatalogButtonProps = computed(() => {
 }
 
 @media (max-width: 640px) {
-    .chat-settings-popover {
+    .chat-settings-popover:not(.chat-settings-popover--sheet) {
         width: min(360px, calc(100vw - 1rem));
     }
 }
