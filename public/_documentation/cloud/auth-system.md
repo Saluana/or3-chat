@@ -173,7 +173,12 @@ Use [Troubleshooting](/documentation/cloud/troubleshooting) for session, provisi
 
 ## Managing a workspace in Admin
 
-Use **Workspaces** to search by name, open workspace details, or choose
+On mobile, use **Dashboard → Workspaces → Manage Workspaces** to create or
+switch workspaces and change settings you have permission to manage. The
+sidebar’s **More** sheet is for workspace shortcuts and account options, not
+deployment administration.
+
+In the deployment **Admin** panel, use **Workspaces** to search by name, open workspace details, or choose
 **Include deleted** to find workspaces that can be restored. **Create Workspace**
 requires a name and an existing owner account; owner search also works with Enter
 and explains when no accounts match.
