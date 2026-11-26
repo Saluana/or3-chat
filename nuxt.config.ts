@@ -16,7 +16,8 @@ import { compactClientChunksPlugin } from './plugins/vite-compact-client-chunks'
 import { compactGeneratedDataPlugin } from './plugins/vite-compact-generated-data';
 import { resolveDevProviderModule } from './shared/dev/local-providers';
 import { resolveLocalPackageAliases } from './shared/dev/local-packages';
-import { hostEsmFacadeImportMapScript } from './shared/plugins/host-esm-facade';
+import { hostEsmFacadeImportMapScript, HOST_ESM_FACADE_IMPORTS } from './shared/plugins/host-esm-facade';
+import { renderOfflineShell } from './shared/config/offline-shell';
 import blankSolarIcons from './app/theme/blank/icon-collection';
 import materialIcons from './app/theme/_shared/material-icon-collection';
 import { DEFAULT_ICONS } from './app/config/icon-tokens';
@@ -193,6 +194,7 @@ const pwaNavigateFallback = isStaticGenerateBuild ? '/index.html' : null;
 // Server builds never serve prerendered HTML online; this shell is precached
 // and used only when a navigation fails because the network is unavailable.
 const pwaOfflineShell = '/200.html';
+let offlineClientManifest: Parameters<typeof renderOfflineShell>[0] | undefined;
 const pwaOpenRouterCallbackFallback = isStaticGenerateBuild
     ? '/openrouter-callback/index.html'
     : undefined;
@@ -380,6 +382,28 @@ export default defineNuxtConfig({
         provider: 'local',
     },
     nitro: {
+        hooks: {
+            'prerender:generate'(route, nitro) {
+                if (isStaticGenerateBuild || route.route !== pwaOfflineShell || route.error || route.contents?.trim()) return;
+                if (!offlineClientManifest) throw new Error('Nuxt client manifest unavailable for offline shell.');
+                // Some Nuxt/Nitro versions return an empty document for this
+                // reserved route. A 200 response alone must not be precached.
+                const { public: publicConfig, app } = nitro.options.runtimeConfig;
+                // The color-mode module installs this browser bootstrap via
+                // Nitro's HTML render hook. Reuse that exact script in the
+                // neutral fallback so startup honors user/system appearance.
+                const colorMode = nitro.options.virtual['#color-mode-options'];
+                const prefix = 'export const script = ';
+                if (typeof colorMode !== 'string' || !colorMode.startsWith(prefix)) {
+                    throw new Error('Color-mode bootstrap unavailable for offline shell.');
+                }
+                const colorModeScript: unknown = JSON.parse(colorMode.slice(prefix.length));
+                if (typeof colorModeScript !== 'string' || !colorModeScript.trim()) {
+                    throw new Error('Invalid color-mode bootstrap for offline shell.');
+                }
+                route.contents = renderOfflineShell(offlineClientManifest, { public: publicConfig, app }, HOST_ESM_FACADE_IMPORTS, colorModeScript);
+            },
+        },
         // Supported server runtimes (Node 24/Bun) can await provider backend
         // verification during module initialization before accepting requests.
         esbuild: { options: { target: 'es2022' } },
@@ -497,7 +521,7 @@ export default defineNuxtConfig({
                 '_plugins/*.mjs',
                 '_documentation/docmap.json',
             ],
-            // Preserve physical HTML filenames, including /200.html on Nitro.
+            // Preserve the physical filename of the offline shell on Nitro.
             // The Nuxt module's default transform rewrites them to app routes.
             manifestTransforms: [
                 (manifest) => ({ manifest, warnings: [] }),
@@ -895,6 +919,7 @@ export default defineNuxtConfig({
             } });
         },
         'build:manifest'(manifest) {
+            offlineClientManifest = manifest;
             // Dynamic imports still load on navigation and NuxtLink keeps its
             // interaction prefetch. Avoid fetching every possible route from
             // SSR-generated <link rel="prefetch"> tags during initial load.
