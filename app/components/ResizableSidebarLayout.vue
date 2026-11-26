@@ -217,20 +217,20 @@ onMounted(() => {
             visualViewportStyle.value = {};
             return;
         }
-        // The visual viewport is in screen pixels; the shell may be zoomed.
-        const zoom =
-            parseFloat(
-                getComputedStyle(document.documentElement).getPropertyValue(
-                    '--app-ui-zoom'
-                )
-            ) || 1;
+        // The billing notice is in normal document flow above the shell. A
+        // fixed shell must leave room only for the part not already panned
+        // out of view, and fill the rest of Safari's visual viewport.
+        const localTop = `calc(${viewport.offsetTop}px / var(--app-ui-zoom, 1))`;
+        const localHeight = `calc(${viewport.height}px / var(--app-ui-zoom, 1))`;
+        const frameTop = `max(${localTop}, var(--or3-billing-banner-height, 0px))`;
         visualViewportStyle.value = {
             position: 'fixed',
-            top: `${viewport.offsetTop / zoom}px`,
+            top: frameTop,
             insetInline: '0',
             paddingInlineStart: 'env(safe-area-inset-left)',
             paddingInlineEnd: 'env(safe-area-inset-right)',
-            height: `${viewport.height / zoom}px`,
+            height: `max(1px, calc(${localTop} + ${localHeight} - ${frameTop}))`,
+            maxHeight: 'none',
         };
     };
     const queueUpdate = () => {
