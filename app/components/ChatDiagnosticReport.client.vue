@@ -54,6 +54,8 @@ function prepareReport() {
     // object or the larger copyable diagnostics into the request.
     preview.value = {
         id: receiptId ??= crypto.randomUUID(),
+        appVersion: config.appVersion,
+        localRequestId: diagnostics?.localRequestId,
         code, source, stage: chatStage,
         status: Number.isInteger(status) ? status : undefined, router, retryable,
         checkpoint: diagnostics?.checkpoint,

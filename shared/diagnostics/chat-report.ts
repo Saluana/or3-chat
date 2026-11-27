@@ -5,6 +5,8 @@ export const CHAT_REPORT_PATH = '/api/diagnostics/chat-report';
 export const CHAT_REPORT_INTENT = 'chat-report';
 export const chatReportSchema = z.object({
     id: z.uuid(),
+    appVersion: z.string().max(64).regex(/^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/),
+    localRequestId: z.uuidv4().optional(),
     code: z.custom<import('../errors').ErrorCode>(isKnownErrorCode),
     source: z.enum(['provider', 'session', 'admin', 'sync', 'storage', 'plugin', 'network', 'unknown']),
     stage: z.enum(['before_save_confirmation', 'after_save']),

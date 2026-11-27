@@ -484,8 +484,10 @@ admin** from chat error details. Reporting is off by default. The expanded
 
 Nothing is submitted on opening, previewing, or closing the report. The sender
 must choose **Send to site admin** while online. The preview is the exact
-diagnostic payload: a random receipt ID and allowlisted error classification
-and chat stage, plus an optional app checkpoint and connection status. Reports
+diagnostic payload: a random receipt ID, this site's release version, the
+classification and chat stage, and an optional app checkpoint and connection
+status. When captured, a local request ID identifies the app's chat attempt; it
+is not the report receipt ID or a verified provider/server trace. Reports
 do not include user IDs, text, files, links, conversation IDs, keys, or provider
 response bodies. The server authenticates and rate limits submissions by
 account; it does not store the account identity in the report.

@@ -8,7 +8,7 @@ import list from '../../admin/chat-reports.get';
 
 const fixture = vi.hoisted(() => ({
     userId: '',
-    config: { auth: { enabled: true }, public: { errorReportingEnabled: true },
+    config: { auth: { enabled: true }, public: { errorReportingEnabled: true, appVersion: '0.1.141' },
         admin: { auth: { username: 'test-admin', password: 'unused-for-test' }, allowedHosts: ['localhost'] },
         security: { proxy: {}, allowedOrigins: ['http://other.example'] } },
 }));
@@ -30,6 +30,8 @@ vi.mock('../../../admin/api', () => ({
 
 const report = {
     id: '1ff7da83-ccb8-4753-bb74-00c1268e661e',
+    appVersion: '0.1.141',
+    localRequestId: '99e00e04-18cf-4492-bb0c-4b8169f2cfd3',
     code: 'ERR_INTERNAL',
     source: 'unknown',
     stage: 'before_save_confirmation',
@@ -72,6 +74,7 @@ it('accepts only intended same-origin signed-in submissions and never stores pri
     expect((await post(report, { 'x-or3-account': '["basic","previous-account"]' })).status).toBe(409);
     expect((await post({ ...report, prompt: 'private input' })).status).toBe(400);
     expect((await post({ ...report, code: 'ERR_fabricated' })).status).toBe(400);
+    expect((await post({ ...report, appVersion: '1.2.3-untrusted' })).status).toBe(409);
     const response = await inbox('admin=test');
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ reports: [] });
