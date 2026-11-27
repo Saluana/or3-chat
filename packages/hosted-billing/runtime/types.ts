@@ -22,6 +22,7 @@ export interface BillingStatus {
     source?: AccessSource;
     allowed: boolean;
     trialEndsAt: number;
+    automaticTrialsEnabled?: boolean;
     paidUntil: number;
     accessExpiresAt?: number;
     cancelAtPeriodEnd: boolean;

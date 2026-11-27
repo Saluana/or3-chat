@@ -59,7 +59,7 @@ watch(userId, id => { if (id && route.query.checkout === 'success') void refresh
             <UAlert v-else-if="status.state === 'paused'" color="warning" title="Cloud is paused for your account" description="Contact support. You can keep working locally, export your data and manage billing." class="mb-5" />
             <UAlert v-else-if="status.state === 'review'" color="warning" title="Contact support about your subscription" description="You can continue working locally while we help." class="mb-5" />
             <UAlert v-else-if="status.state === 'payment_required'" color="warning" title="Cloud is paused" description="Update your subscription to resume syncing. You can keep working locally." class="mb-5" />
-            <UAlert v-else-if="status.state === 'expired' && !status.trialEndsAt" color="neutral" title="Cloud trial unavailable" description="Contact support if you think this is a mistake. You can still use Free Local or subscribe to Cloud." class="mb-5" />
+            <UAlert v-else-if="status.state === 'expired' && !status.trialEndsAt && status.automaticTrialsEnabled !== false" color="neutral" title="Cloud trial unavailable" description="Contact support if you think this is a mistake. You can still use Free Local or subscribe to Cloud." class="mb-5" />
             <div class="plan-grid" :class="{ 'plan-grid--paid': subscribed }">
                 <article v-if="!subscribed" class="plan-card">
                     <div class="plan-head">

@@ -2,7 +2,7 @@ import Stripe from 'stripe';
 import { createHash, randomUUID } from 'node:crypto';
 import { BillingAccountMissingError, BillingBusyError, BillingCommandError, BillingStore, type BillingAccount, type BillingOffer, type OfferCommand, type SupportCommand } from './store';
 import type { BillingSettings } from '../types';
-import type { BillingConfig } from './config';
+import { automaticTrialsEnabled, type BillingConfig } from './config';
 import { evaluateAccess } from './entitlement';
 import { isPaused } from '../../../../server/admin/pauses';
 
@@ -83,7 +83,11 @@ export class BillingService {
     }
 
     status(userId: string) {
-        return { ...this.store.status(userId), storageUsedBytes: this.usedBytes?.(userId) ?? 0 };
+        return {
+            ...this.store.status(userId),
+            automaticTrialsEnabled: automaticTrialsEnabled(),
+            storageUsedBytes: this.usedBytes?.(userId) ?? 0,
+        };
     }
 
     async validatePrice(offer: Pick<BillingOffer, 'priceId' | 'amountCents' | 'currency' | 'interval'> = this.store.currentOffer()!) {
