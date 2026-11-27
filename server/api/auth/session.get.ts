@@ -6,10 +6,10 @@
  *
  * Responsibilities:
  * - Bootstraps client-side session state during hydration.
- * - Checks rate limits (`auth:session`) by IP to prevent enumeration.
+ * - Bounds verification by IP and limits anonymous IPs or verified accounts.
  * - Disables caching (`Cache-Control: no-store`) to prevent leakage.
  */
-import { defineEventHandler, setResponseHeader } from 'h3';
+import { defineEventHandler, getRequestHeader, setResponseHeader } from 'h3';
 import { resolveSessionContext } from '../../auth/session';
 import { resolveEntitlements } from '../../auth/entitlements/registry';
 import { can } from '../../auth/can';
@@ -32,7 +32,7 @@ import { resolveCloudAccess } from '../../cloud/access';
  *
  * Behavior:
  * 1. Checks feature flag (`SSR_AUTH_ENABLED`).
- * 2. Rate limits by IP.
+ * 2. Bounds verifier traffic and applies anonymous/account limits.
  * 3. Resolves session context from cookies/tokens.
  * 4. Returns session object or null.
  *
@@ -58,20 +58,34 @@ export default defineEventHandler(async (event) => {
         event.node.req.socket.remoteAddress || 
         'unknown';
 
-    // Rate limit per IP to prevent session enumeration and DOS
-    const rateLimitResult = checkSyncRateLimit(clientIP, 'auth:session');
-    
-    enforceRateLimit(event, rateLimitResult);
-    recordSyncRequest(clientIP, 'auth:session');
-
-    // Add rate limit headers for client visibility
-    const stats = getSyncRateLimitStats(clientIP, 'auth:session');
-    if (stats) {
-        setResponseHeader(event, 'X-RateLimit-Limit', String(stats.limit));
-        setResponseHeader(event, 'X-RateLimit-Remaining', String(stats.remaining));
+    const reserve = (key: string, operation: string, showStats = true) => {
+        enforceRateLimit(event, checkSyncRateLimit(key, operation));
+        recordSyncRequest(key, operation);
+        const stats = showStats ? getSyncRateLimitStats(key, operation) : null;
+        if (stats) {
+            setResponseHeader(event, 'X-RateLimit-Limit', String(stats.limit));
+            setResponseHeader(event, 'X-RateLimit-Remaining', String(stats.remaining));
+        }
+    };
+    // Header presence is not identity. It merely decides whether this call
+    // could require verification; rejected/absent sessions still share the
+    // anonymous budget. Keep a separate ceiling before provider work.
+    const hasCredentialHint = Boolean(
+        getRequestHeader(event, 'cookie') || getRequestHeader(event, 'authorization')
+    );
+    const admitted = new Set<string>();
+    if (hasCredentialHint) reserve(clientIP, 'auth:session:verify', false);
+    else {
+        reserve(clientIP, 'auth:session');
+        admitted.add('anonymous');
     }
 
-    const session = await resolveSessionContext(event);
+    const session = await resolveSessionContext(event, (identity) => {
+        const subject = identity ? JSON.stringify([identity.provider, identity.providerUserId]) : 'anonymous';
+        if (admitted.has(subject)) return;
+        reserve(identity ? subject : clientIP, identity ? 'auth:session:account' : 'auth:session');
+        admitted.add(subject);
+    });
     const entitlements = session.authenticated
         ? await resolveEntitlements(event, session).catch(() => [])
         : [];

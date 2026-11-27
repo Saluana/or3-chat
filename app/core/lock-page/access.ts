@@ -1,4 +1,5 @@
 import { useState } from '#imports';
+import { normalizeError } from '~~/shared/errors';
 import type { SessionContext } from '~/core/hooks/hook-types';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { canUseOfflineWorkspaceDb, useOfflineWorkspace } from '~/composables/auth/offline-workspace';
@@ -17,7 +18,8 @@ export type LockPageAccessReason =
     | 'forbidden'
     | 'guest-allowed'
     | 'unauthenticated'
-    | 'session-error';
+    | 'session-error'
+    | 'session-rate-limited';
 
 export interface LockPageAccessResult {
     allowed: boolean;
@@ -149,6 +151,7 @@ export async function resolveLockPageAccess(): Promise<LockPageAccessResult> {
         now - validatedAt.value > LOCK_PAGE_SESSION_TTL_MS;
 
     let hadSessionError = Boolean(sessionState.error.value);
+    let sessionError: unknown = sessionState.error.value;
     let errorMessage = extractErrorMessage(sessionState.error.value);
 
     let payload = cachedPayload;
@@ -159,15 +162,22 @@ export async function resolveLockPageAccess(): Promise<LockPageAccessResult> {
             const validated = await sessionState.refresh({ dedupe: 'defer' });
             // Nuxt reports SSR failures through the error ref without rejecting.
             payload = import.meta.server ? sessionState.data.value : validated ?? null;
-            hadSessionError = Boolean(sessionState.error.value) || (!import.meta.server && !validated);
+            sessionError = sessionState.error.value;
+            hadSessionError = Boolean(sessionError) || (!import.meta.server && !validated);
             errorMessage = extractErrorMessage(sessionState.error.value);
             validatedAt.value = !hadSessionError && payload === sessionState.data.value ? Date.now() : 0;
         }
     } catch (error) {
         hadSessionError = true;
+        sessionError = error;
         // A failed validation must invalidate the shared cache.
         validatedAt.value = 0;
         errorMessage = extractErrorMessage(error) ?? errorMessage;
+    }
+
+    if (import.meta.client && hadSessionError && normalizeError(sessionError).status === 429 &&
+        cachedPayload?.appAccessAllowed && cachedSession?.authenticated) {
+        return { allowed: false, reason: 'session-rate-limited', session: cachedSession, errorMessage };
     }
 
     const session = payload?.session ?? null;

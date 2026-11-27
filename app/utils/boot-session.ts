@@ -6,9 +6,11 @@ export const SESSION_CHECK_TIMEOUT_MS = 10_000;
 /** Longest a boot response is reused; after that the first check refetches. */
 const BOOT_SESSION_MAX_AGE_MS = 10_000;
 
+type BootRateLimit = { rateLimited: true; retryAfter: string | null };
+
 type BootSession = {
     at: number;
-    response: Promise<SessionPayload | null>;
+    response: Promise<SessionPayload | BootRateLimit | null>;
     controller?: AbortController;
 };
 
@@ -17,7 +19,7 @@ type BootSession = {
  * deadline even if application initialization never reaches takeBootSession().
  */
 export const BOOT_SESSION_SCRIPT =
-    `(()=>{const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),${SESSION_CHECK_TIMEOUT_MS});window.__or3BootSession={at:Date.now(),controller,response:fetch('/api/auth/session',{cache:'no-store',credentials:'same-origin',headers:{accept:'application/json'},signal:controller.signal}).then(r=>r.ok?r.json():null).catch(()=>null).finally(()=>clearTimeout(timer))}})()`;
+    `(()=>{const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),${SESSION_CHECK_TIMEOUT_MS});window.__or3BootSession={at:Date.now(),controller,response:fetch('/api/auth/session',{cache:'no-store',credentials:'same-origin',headers:{accept:'application/json'},signal:controller.signal}).then(r=>r.ok?r.json():r.status===429?{rateLimited:true,retryAfter:r.headers.get('retry-after')}:null).catch(()=>null).finally(()=>clearTimeout(timer))}})()`;
 
 /**
  * Take a boot response once. Expired or failed responses leave the normal check
@@ -49,7 +51,16 @@ export async function takeBootSession(signal?: AbortSignal): Promise<SessionPayl
         else signal?.addEventListener('abort', onAbort, { once: true });
     });
     try {
-        return await Promise.race([boot.response, boundary]);
+        const result = await Promise.race([boot.response, boundary]);
+        if (result && 'rateLimited' in result) {
+            const headers = new Headers();
+            if (result.retryAfter) headers.set('retry-after', result.retryAfter);
+            throw Object.assign(new Error('Too many session requests'), {
+                statusCode: 429,
+                response: { headers },
+            });
+        }
+        return result;
     } finally {
         clearTimeout(timer);
         if (onAbort) signal?.removeEventListener('abort', onAbort);

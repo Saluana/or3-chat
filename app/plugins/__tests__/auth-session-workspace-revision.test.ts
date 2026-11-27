@@ -171,7 +171,7 @@ describe('auth session cross-tab workspace refresh', () => {
         });
     });
 
-    it('shows the server retry window and suppresses early and overlapping retries', async () => {
+    it('automatically retries a throttled account at the deadline without a toast or reload', async () => {
         vi.useFakeTimers();
         sessionRefreshMock.mockRejectedValueOnce(Object.assign(new Error('rate limited'), {
             status: 429,
@@ -182,22 +182,28 @@ describe('auth session cross-tab workspace refresh', () => {
         window.dispatchEvent(new Event('or3:auth-session-changed'));
         await vi.advanceTimersByTimeAsync(0);
 
-        const toast = addToastMock.mock.lastCall?.[0];
-        expect(toast?.title).toBe('Too many requests');
-        expect(toast?.description).toContain('7 seconds');
-        const retry = toast?.actions[0]?.onClick;
-        if (!retry) throw new Error('Retry action was missing');
-        retry();
-        expect(sessionRefreshMock).toHaveBeenCalledTimes(1);
-        window.dispatchEvent(new Event('or3:auth-session-changed'));
-        window.dispatchEvent(new StorageEvent('storage', { key: 'or3:auth-session-changed' }));
+        expect(addToastMock).not.toHaveBeenCalled();
+        expect(reloadNuxtAppMock).not.toHaveBeenCalled();
+        expect(sessionState.value.session?.workspace.id).toBe('workspace-a');
         await vi.advanceTimersByTimeAsync(6_999);
         expect(sessionRefreshMock).toHaveBeenCalledTimes(1);
         await vi.advanceTimersByTimeAsync(1);
+        window.dispatchEvent(new Event('or3:sync-session-invalid'));
         expect(sessionRefreshMock).toHaveBeenCalledTimes(2);
-        retry();
-        retry();
-        expect(sessionRefreshMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('coalesces overlapping normal refresh signals while the server check is pending', async () => {
+        vi.useFakeTimers();
+        let finish!: () => void;
+        sessionRefreshMock.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+        await import('../11.auth-session-refresh.client');
+        window.dispatchEvent(new Event('or3:sync-session-invalid'));
+        window.dispatchEvent(new Event('or3:sync-session-invalid'));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(sessionRefreshMock).toHaveBeenCalledTimes(1);
+        finish();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(sessionRefreshMock).toHaveBeenCalledTimes(1);
     });
 
     it('commits an account switch in the same workspace before reloading', async () => {

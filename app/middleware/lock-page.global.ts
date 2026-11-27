@@ -1,4 +1,4 @@
-import { defineNuxtRouteMiddleware, navigateTo } from '#app';
+import { abortNavigation, defineNuxtRouteMiddleware, navigateTo } from '#app';
 import { resolveLockPageAccess } from '~/core/lock-page/access';
 import {
     isAdminRoute,
@@ -6,7 +6,7 @@ import {
     useLockPageRuntimeConfig,
 } from '~/core/lock-page/runtime';
 
-export default defineNuxtRouteMiddleware(async (to) => {
+export default defineNuxtRouteMiddleware(async (to, from) => {
     const config = useLockPageRuntimeConfig();
 
     if (!config.ssrAuthEnabled || !config.enabled) {
@@ -30,6 +30,12 @@ export default defineNuxtRouteMiddleware(async (to) => {
         return;
     }
 
+    if (access.reason === 'session-rate-limited' &&
+        from?.meta.lockPageProtected === true) {
+        // Keep the current surface (and its draft), but don't admit another
+        // protected route from an unverified refresh.
+        return abortNavigation();
+    }
     return navigateTo(
         {
             path: config.route,

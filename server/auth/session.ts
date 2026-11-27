@@ -197,15 +197,20 @@ function getSessionProvisioningFailureMode(
  * });
  * ```
  */
+type VerifiedSessionIdentity = { provider: string; providerUserId: string };
+type AdmitSessionLookup = (identity: VerifiedSessionIdentity | null) => void;
+
 export async function resolveSessionContext(
-    event: H3Event
+    event: H3Event,
+    admit?: AdmitSessionLookup
 ): Promise<SessionContext> {
-    return resolveSessionContextAttempt(event, 2);
+    return resolveSessionContextAttempt(event, 2, admit);
 }
 
 async function resolveSessionContextAttempt(
     event: H3Event,
-    retriesRemaining: number
+    retriesRemaining: number,
+    admit?: AdmitSessionLookup
 ): Promise<SessionContext> {
     // Generate or retrieve request ID for cache isolation
     let requestId = event.context[REQUEST_ID_KEY] as string | undefined;
@@ -221,7 +226,11 @@ async function resolveSessionContextAttempt(
 
     // Check cache first
     if (event.context[cacheKey]) {
-        return event.context[cacheKey] as SessionContext;
+        const cached = event.context[cacheKey] as SessionContext;
+        admit?.(cached.authenticated && cached.provider && cached.providerUserId ? {
+            provider: cached.provider, providerUserId: cached.providerUserId,
+        } : null);
+        return cached;
     }
 
     // If SSR auth disabled, return unauthenticated
@@ -235,6 +244,7 @@ async function resolveSessionContextAttempt(
     const provider = getAuthProvider(providerId);
 
     if (!provider) {
+        admit?.(null);
         const nullSession: SessionContext = { authenticated: false };
         event.context[cacheKey] = nullSession;
         return nullSession;
@@ -255,14 +265,15 @@ async function resolveSessionContextAttempt(
         });
         // A provider outage must not look like logout. Deny protected work while
         // giving clients a retryable failure; only a verified absent session is 401.
-        if (import.meta.dev) throw error;
         if (
             typeof error === 'object' && error !== null &&
             'statusCode' in error &&
             (error.statusCode === 401 || error.statusCode === 403)
         ) {
+            admit?.(null);
             throw error;
         }
+        if (import.meta.dev) throw error;
         throw createError({
             statusCode: 503,
             statusMessage: 'Identity provider temporarily unavailable',
@@ -270,11 +281,16 @@ async function resolveSessionContextAttempt(
     }
 
     if (!providerSession) {
+        admit?.(null);
         recordSessionResolution(true);
         const nullSession: SessionContext = { authenticated: false };
         event.context[cacheKey] = nullSession;
         return nullSession;
     }
+
+    // Only the configured provider can supply an identity. Admit it before
+    // workspace/registration work (including invite consumption).
+    admit?.({ provider: providerSession.provider, providerUserId: providerSession.user.id });
 
     const storeId =
         (config.sync as { provider?: string } | undefined)?.provider ||
@@ -314,7 +330,7 @@ async function resolveSessionContextAttempt(
         providerSession.provider, providerSession.user.id, storeId
     );
     const retryResolution = (): Promise<SessionContext> => retriesRemaining > 0
-        ? resolveSessionContextAttempt(event, retriesRemaining - 1)
+        ? resolveSessionContextAttempt(event, retriesRemaining - 1, admit)
         : Promise.reject(createError({
             statusCode: 503,
             statusMessage: 'Workspace permissions changed; please retry',

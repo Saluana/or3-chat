@@ -72,13 +72,22 @@ The core server resolver in `server/auth/session.ts` verifies a registered provi
 
 Permission invalidation also fences in-flight resolution: an older lookup cannot restore a revoked role in the shared cache. Resolution retries against the current revision and returns `503` if permissions keep changing during the bounded retries.
 
-`GET /api/auth/session` reserves its existing per-IP `auth:session` rate allowance before
-resolving identity or entitlements, so concurrent lookups share the configured
-bucket. A rate-limited response includes `Retry-After`; all session responses
-remain `no-store`. If an auth-change refresh hits the limit, the account
-notification shows the retry window. Its **Retry** action waits for the
-window to end, and auth-change events received during that window share one
-refresh when it ends. The lock page's **Try again** action reloads the page.
+`GET /api/auth/session` keeps the `auth:session` budget for anonymous requests
+(60 per minute per trusted client IP by default). Credential-bearing requests
+first share a broader `auth:session:verify` ceiling (600 per minute per IP) so
+unverified traffic cannot make unlimited calls to the identity provider. Only
+a provider-verified identity enters the independent `auth:session:account`
+budget (60 per minute per provider account); absent and invalid identities
+still consume the anonymous budget. Request headers do not grant identity or
+access. These are in-process limits; deployments still need an edge policy
+appropriate for their traffic.
+
+Responses remain `no-store` and rate limits return `Retry-After`. Background
+signals share an in-flight refresh; when throttled, an open workspace stays
+visible with its draft and retries after the server window. A throttled
+navigation from that view is cancelled rather than granted using stale state.
+New entry still requires an allowed session; protected server operations
+continue to validate identity and permissions.
 
 It returns an envelope with `session` and `appAccessAllowed`. Client code reads
 it through `useSessionContext()`:

@@ -18,6 +18,7 @@ vi.mock('../../../sync/gateway/registry', () => ({ getActiveSyncGatewayAdapter: 
 vi.mock('h3', () => ({
     defineEventHandler: (handler: unknown) => handler,
     setResponseHeader: setResponseHeaderMock,
+    getRequestHeader: (event: H3Event, name: string) => event.node.req.headers[name],
     createError: (opts: { statusCode: number; statusMessage?: string }) => {
         const err = new Error(opts.statusMessage ?? 'Error') as Error & {
             statusCode: number;
@@ -57,11 +58,12 @@ vi.mock('../../../utils/net/request-identity', () => ({
 
 let handler: (event: H3Event) => Promise<unknown>;
 
-function makeEvent(): H3Event {
+function makeEvent(headers: Record<string, string> = {}): H3Event {
     return {
         context: {},
         node: {
             req: {
+                headers,
                 socket: {
                     remoteAddress: '127.0.0.1',
                 },
@@ -145,6 +147,40 @@ describe('GET /api/auth/session', () => {
 
         now += 60_000;
         await expect(handler(makeEvent())).resolves.toEqual({ session: null, appAccessAllowed: false });
+    });
+
+    it('limits each verified account independently on one IP and never trusts invalid credential bytes', async () => {
+        const limiter = await vi.importActual<typeof import('../../../utils/sync/rate-limiter')>(
+            '../../../utils/sync/rate-limiter'
+        );
+        checkSyncRateLimitMock.mockImplementation(limiter.checkSyncRateLimit);
+        recordSyncRequestMock.mockImplementation(limiter.recordSyncRequest);
+        getSyncRateLimitStatsMock.mockImplementation(limiter.getSyncRateLimitStats);
+        testRuntimeConfig.value.limits.operationRateLimits = {
+            'auth:session': { maxRequests: 1 },
+            'auth:session:account': { maxRequests: 1 },
+            'auth:session:verify': { maxRequests: 5 },
+        };
+        resolveSessionContextMock.mockImplementation(async (event, admit) => {
+            // Substitute only identity verification; production quota decisions and buckets are real.
+            const credential = event.node.req.headers.authorization;
+            const providerUserId = credential === 'Bearer valid-a' ? 'a' :
+                credential === 'Bearer valid-b' ? 'b' : undefined;
+            admit?.(providerUserId ? { provider: 'clerk', providerUserId } : null);
+            return providerUserId
+                ? { authenticated: true, user: { id: providerUserId } }
+                : { authenticated: false };
+        });
+
+        const request = (authorization: string) => handler(makeEvent({ authorization }));
+        await expect(request('Bearer valid-a')).resolves.toMatchObject({ session: { user: { id: 'a' } } });
+        await expect(request('Bearer valid-a')).rejects.toMatchObject({ statusCode: 429 });
+        await expect(request('Bearer invalid-a')).resolves.toMatchObject({ session: null });
+        await expect(request('Bearer invalid-b')).rejects.toMatchObject({ statusCode: 429 });
+        await expect(handler(makeEvent())).rejects.toMatchObject({ statusCode: 429 });
+        await expect(request('Bearer valid-b')).resolves.toMatchObject({ session: { user: { id: 'b' } } });
+        await expect(request('Bearer valid-b')).rejects.toMatchObject({ statusCode: 429 });
+        expect(resolveSessionContextMock).toHaveBeenCalledTimes(5);
     });
 
     it('returns null session payload when SSR auth is disabled', async () => {

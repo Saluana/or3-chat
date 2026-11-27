@@ -7,7 +7,7 @@ import { useFetch, useRuntimeConfig, useState } from 'nuxt/app';
 import type { ComputedRef, Ref } from 'vue';
 import type { SessionContext } from '~/core/hooks/hook-types';
 import type { CloudAccess } from '~~/shared/cloud/access';
-import { fetchClientSession } from '~/composables/auth/client-session-request';
+import { fetchClientSession, noteClientSessionRateLimit } from '~/composables/auth/client-session-request';
 import { SESSION_CHECK_TIMEOUT_MS, takeBootSession } from '~/utils/boot-session';
 import {
     invalidateOfflineWorkspace,
@@ -149,6 +149,7 @@ export function useSessionContext(
                             offline.value = null;
                         }
                     }
+                    if (!import.meta.server) noteClientSessionRateLimit(err);
                     lastSessionFailureAt = Date.now();
                     error.value = err instanceof Error ? err : new Error(String(err));
                     throw err;
@@ -246,7 +247,7 @@ export function getCachedSessionContext(): SessionContext | null {
 
 /** Refresh the existing client session generation during bounded auth recovery. */
 export async function refreshCachedSessionContext(): Promise<void> {
-    await useSessionContext().refresh();
+    await useSessionContext({ autoLoad: false }).refresh({ dedupe: 'defer' });
 }
 
 /** Fence network requests started before entering offline mode or changing identity. */
