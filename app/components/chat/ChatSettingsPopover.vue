@@ -8,25 +8,21 @@
         ]"
         :data-theme-target="containerProps?.['data-theme-target']"
         :data-theme-matches="containerProps?.['data-theme-matches']"
-        :style="!sheet && lockedHeight ? { height: `${lockedHeight}px` } : undefined"
+        :style="rootStyle"
     >
         <header class="chat-settings-header">
             <button
-                v-if="toolsView"
+                v-if="subView"
                 ref="backButton"
                 type="button"
                 class="chat-settings-back"
-                :aria-label="activeGroup ? 'Back to tools' : 'Back to chat settings'"
+                :aria-label="backLabel"
                 @click="backToSettings"
             >
                 <UIcon :name="iconChevronLeft" class="size-4" />
             </button>
-            <h2 class="chat-settings-title" :aria-hidden="sheet && !toolsView ? true : undefined">
-                {{
-                    activeGroup
-                        ? getCategoryLabel(activeGroup.category)
-                        : toolsView ? 'Tools' : 'Chat settings'
-                }}
+            <h2 class="chat-settings-title" :aria-hidden="sheet && !subView ? true : undefined">
+                {{ viewTitle }}
             </h2>
             <UButton
                 v-bind="closeButtonProps"
@@ -48,113 +44,58 @@
 
         <p v-if="toolPreferences.error.value" role="alert" class="px-4 py-2 text-sm text-error">{{ toolPreferences.error.value }}</p>
         <div
-            v-show="!toolsView"
+            v-show="!subView"
             class="chat-settings-body"
             :class="{ 'chat-settings-view-enter is-back': hasNavigated && !activeGroup }"
         >
             <section class="chat-settings-section">
                 <h3 class="chat-settings-heading">Chat</h3>
                 <div class="chat-settings-group">
-                    <UButton
-                        v-if="(isMobile || !containerWidth || containerWidth <= 400) && !modelItems.length"
-                        variant="ghost"
-                        color="neutral"
+                    <!-- Model and prompt rows open their pickers inside this panel. -->
+                    <button
+                        v-if="isMobile || !containerWidth || containerWidth <= 400"
+                        type="button"
                         aria-label="Current model"
                         :aria-describedby="modelLabelId"
-                        class="chat-settings-model-trigger ring-0! w-full px-3.5!"
+                        class="chat-settings-model-trigger"
                         :disabled="loading"
-                        @click="emit('open-model-catalog')"
+                        @click="openLibraryPage('models')"
                     >
                         <span class="chat-settings-icon" aria-hidden="true">
                             <ModelCatalogProviderLogo :slug="selectedProviderSlug" :size="18" />
                         </span>
-                        <span class="chat-settings-row-copy min-w-0 text-left">
-                            <span :id="modelLabelId" class="chat-settings-row-title truncate">{{ selectedModelLabel }}</span>
-                            <span class="chat-settings-row-description truncate">Browse available models</span>
+                        <span class="chat-settings-row-copy min-w-0">
+                            <span :id="modelLabelId" class="chat-settings-row-title truncate">
+                                {{ selectedModelLabel }}
+                            </span>
+                            <span class="chat-settings-row-description truncate">
+                                Current model for this chat
+                            </span>
                         </span>
-                        <UIcon :name="iconChevronDown" class="chat-settings-option-chevron size-4 shrink-0" aria-hidden="true" />
-                    </UButton>
-                    <!-- Favorites stay one click away; fresh accounts open the catalog. -->
-                    <USelectMenu
-                        v-else-if="isMobile || !containerWidth || containerWidth <= 400"
-                        v-model="selectedModel"
-                        :items="modelItems"
-                        value-key="value"
-                        :filter-fields="['label', 'description']"
-                        :search-input="modelSearchInput"
-                        :disabled="loading"
-                        aria-label="Current model"
-                        :aria-describedby="modelLabelId"
-                        class="chat-settings-model-trigger ring-0!"
-                        :ui="selectMenuUi"
-                    >
-                        <template #default="{ open }">
-                            <span class="chat-settings-icon" aria-hidden="true">
-                                <ModelCatalogProviderLogo :slug="selectedProviderSlug" :size="18" />
-                            </span>
-                            <span class="chat-settings-row-copy min-w-0">
-                                <span :id="modelLabelId" class="chat-settings-row-title truncate">
-                                    {{ selectedModelLabel }}
-                                </span>
-                                <span class="chat-settings-row-description truncate">
-                                    Current model for this chat
-                                </span>
-                            </span>
-                            <UIcon
-                                :name="iconChevronDown"
-                                class="chat-settings-option-chevron size-4 shrink-0"
-                                :class="{ 'is-open': open }"
-                                aria-hidden="true"
-                            />
-                        </template>
-                        <template #item-leading="{ item }">
-                            <ModelCatalogProviderLogo :slug="item.slug" :size="20" />
-                        </template>
-                        <template #empty>
-                            <UButton
-                                variant="ghost"
-                                size="sm"
-                                block
-                                class="chat-settings-popover-button"
-                                @click="emit('open-model-catalog')"
-                            >
-                                Browse model catalog
-                            </UButton>
-                        </template>
-                    </USelectMenu>
+                        <UIcon :name="iconChevronRight" class="chat-settings-option-chevron size-4 shrink-0" aria-hidden="true" />
+                    </button>
 
-                    <USelectMenu
-                        :model-value="promptSelection"
-                        :items="promptItems"
-                        value-key="value"
-                        :search-input="promptSearchInput"
-                        :disabled="loading || streaming || promptSaving || promptLoading"
+                    <button
+                        type="button"
                         aria-label="System prompt for this chat"
                         :aria-describedby="promptLabelId"
-                        class="chat-settings-model-trigger ring-0!"
-                        :ui="selectMenuUi"
-                        @update:model-value="selectPrompt"
+                        class="chat-settings-model-trigger"
+                        :disabled="loading || promptLoading"
+                        @click="openLibraryPage('prompts')"
                     >
-                        <template #default="{ open }">
-                            <span class="chat-settings-icon" aria-hidden="true">
-                                <UIcon :name="iconSystemPrompt" class="size-4" />
+                        <span class="chat-settings-icon" aria-hidden="true">
+                            <UIcon :name="iconSystemPrompt" class="size-4" />
+                        </span>
+                        <span class="chat-settings-row-copy min-w-0">
+                            <span :id="promptLabelId" class="chat-settings-row-title truncate">
+                                {{ selectedPromptLabel }}
                             </span>
-                            <span class="chat-settings-row-copy min-w-0">
-                                <span :id="promptLabelId" class="chat-settings-row-title truncate">
-                                    {{ selectedPromptLabel }}
-                                </span>
-                                <span class="chat-settings-row-description truncate">
-                                    System prompt for this chat
-                                </span>
+                            <span class="chat-settings-row-description truncate">
+                                System prompt for this chat
                             </span>
-                            <UIcon
-                                :name="iconChevronDown"
-                                class="chat-settings-option-chevron size-4 shrink-0"
-                                :class="{ 'is-open': open }"
-                                aria-hidden="true"
-                            />
-                        </template>
-                    </USelectMenu>
+                        </span>
+                        <UIcon :name="iconChevronRight" class="chat-settings-option-chevron size-4 shrink-0" aria-hidden="true" />
+                    </button>
                 </div>
 
                 <UButton
@@ -273,17 +214,17 @@
                     <UButton
                         v-bind="systemPromptsButtonProps"
                         class="chat-settings-popover-button chat-settings-nav-button px-3.5!"
-                        @click="emit('open-system-prompts')"
+                        @click="openLibraryPage('prompts')"
                     >
                         <span class="chat-settings-icon" aria-hidden="true">
                             <UIcon :name="iconSystemPrompt" class="size-4" />
                         </span>
                         <span class="chat-settings-row-copy">
                             <span class="chat-settings-row-title">
-                                Manage system prompts
+                                System prompts
                             </span>
                             <span class="chat-settings-row-description">
-                                Customize behavior and tone.
+                                Pick, search, and manage prompts.
                             </span>
                         </span>
                         <UIcon
@@ -295,7 +236,7 @@
                     <UButton
                         v-bind="modelCatalogButtonProps"
                         class="chat-settings-popover-button chat-settings-nav-button px-3.5!"
-                        @click="emit('open-model-catalog')"
+                        @click="openLibraryPage('models')"
                     >
                         <span class="chat-settings-icon" aria-hidden="true">
                             <UIcon :name="iconModelCatalog" class="size-4" />
@@ -317,6 +258,32 @@
                 </div>
             </nav>
         </div>
+        <ChatSettingsModelsPage
+            v-if="libraryPage === 'models'"
+            class="chat-settings-view-enter"
+            :class="{ 'is-back': modelDetailClosed }"
+            :selected-model="selectedModel"
+            :detail-id="detailModelId"
+            :disabled="loading"
+            @select="selectModelFromPage"
+            @open-detail="openModelDetail"
+            @open-catalog="emit('open-model-catalog')"
+        />
+        <ChatSettingsPromptsPage
+            v-if="libraryPage === 'prompts'"
+            class="chat-settings-view-enter"
+            :prompts="prompts"
+            :selection="promptSelection"
+            :default-prompt-id="defaultPromptId"
+            :disabled="loading || streaming || promptSaving || promptLoading"
+            :loading="promptLoading"
+            @select="selectPromptFromPage"
+            @new-prompt="emit('open-system-prompts', 'new')"
+            @open-library="emit('open-system-prompts', 'home')"
+        />
+        <p v-if="libraryPage === 'prompts' && promptError" class="m-0 px-4 pb-2 text-xs text-error" role="alert">
+            {{ promptError }}
+        </p>
         <div v-if="toolsView && !activeGroup" class="chat-settings-body chat-settings-view-enter" :class="{ 'is-back': hasNavigated }">
             <!-- Tool categories open a dedicated view with one scroll area. -->
             <section
@@ -465,8 +432,6 @@ import { useChatToolPreferences } from '~/composables/chat/useChatToolPreference
 import { useThemeOverrides } from '~/composables/useThemeResolver';
 import { OPENROUTER_OPTION_DESCRIPTORS } from '~~/shared/openrouter/model-variants';
 import type { ModelOptionDescriptor } from '~~/shared/ai/types';
-import { useWorkspaceModels } from '~/composables/chat/useWorkspaceModels';
-import { isModelHidden } from '~~/shared/ai/workspace-models';
 import { modelIdentity } from '~~/shared/ai/model-catalog';
 import { formatModelName, getProviderSlug } from '~/utils/modelCatalog';
 import { useModelStore } from '~/composables/chat/useModelStore';
@@ -486,6 +451,8 @@ import {
 } from '~/utils/chat/prompt-utils';
 import { isMobile } from '~/state/global';
 import ModelCatalogProviderLogo from '~/components/modal/model-catalog/ModelCatalogProviderLogo.vue';
+import ChatSettingsModelsPage from './ChatSettingsModelsPage.vue';
+import ChatSettingsPromptsPage from './ChatSettingsPromptsPage.vue';
 import {
     applyThinkingSelection,
     getReasoningEffortDescription,
@@ -520,7 +487,7 @@ const emit = defineEmits<{
     (e: 'close'): void;
     (e: 'use-default-model'): void;
     (e: 'compact' | 'cancel-compaction'): void;
-    (e: 'open-system-prompts'): void;
+    (e: 'open-system-prompts', mode: 'home' | 'new'): void;
     (e: 'open-model-catalog'): void;
     (e: 'pending-prompt-selected', id: string): void;
     (e: 'prompt-selected', id: string): void;
@@ -621,7 +588,94 @@ async function openTools() {
     backButton.value?.focus();
 }
 
+// Library pages (model and prompt pickers) open inside the panel like the tool views.
+type LibraryPage = 'models' | 'prompts';
+/** Library lists get at least this much room in the desktop popover. */
+const LIBRARY_MIN_HEIGHT = 480;
+const libraryPage = ref<LibraryPage | null>(null);
+const detailModelId = ref<string | null>(null);
+const modelDetailClosed = ref(false);
+let libraryTrigger: HTMLElement | null = null;
+const subView = computed(() => toolsView.value || libraryPage.value !== null);
+
+const viewTitle = computed(() => {
+    if (activeGroup.value) return getCategoryLabel(activeGroup.value.category);
+    if (toolsView.value) return 'Tools';
+    if (libraryPage.value === 'models') return detailModelId.value ? 'Model details' : 'Models';
+    if (libraryPage.value === 'prompts') return 'System prompts';
+    return 'Chat settings';
+});
+
+const backLabel = computed(() => {
+    if (activeGroup.value) return 'Back to tools';
+    if (detailModelId.value) return 'Back to models';
+    return 'Back to chat settings';
+});
+
+// The popover keeps a fixed height while a sub-view is open so it does not
+// jump; the sheet only keeps library pages from shrinking below the main view.
+const rootStyle = computed(() => {
+    if (!lockedHeight.value) return undefined;
+    if (props.sheet) {
+        return libraryPage.value ? { minHeight: `${lockedHeight.value}px` } : undefined;
+    }
+    return { height: `${lockedHeight.value}px` };
+});
+
+async function openLibraryPage(page: LibraryPage) {
+    const active = document.activeElement;
+    libraryTrigger = active instanceof HTMLElement ? active : null;
+    const currentHeight = root.value?.offsetHeight ?? 0;
+    lockedHeight.value = props.sheet
+        ? currentHeight || undefined
+        : Math.max(currentHeight, LIBRARY_MIN_HEIGHT);
+    libraryPage.value = page;
+    detailModelId.value = null;
+    modelDetailClosed.value = false;
+    hasNavigated.value = true;
+    await nextTick();
+    backButton.value?.focus();
+}
+
+async function closeLibraryPage() {
+    libraryPage.value = null;
+    detailModelId.value = null;
+    lockedHeight.value = undefined;
+    hasNavigated.value = true;
+    await nextTick();
+    libraryTrigger?.focus();
+}
+
+async function openModelDetail(modelId: string) {
+    detailModelId.value = modelId;
+    modelDetailClosed.value = false;
+    await nextTick();
+    backButton.value?.focus();
+}
+
+async function selectModelFromPage(modelId: string) {
+    if (props.loading) return;
+    selectedModel.value = modelId;
+    void recordRecentModel(modelId).catch(() => undefined);
+    await closeLibraryPage();
+}
+
+async function selectPromptFromPage(value: string) {
+    await selectPrompt(value);
+    if (!promptError.value) await closeLibraryPage();
+}
+
 async function backToSettings() {
+    if (detailModelId.value) {
+        // The models page returns focus to the row that opened the details.
+        detailModelId.value = null;
+        modelDetailClosed.value = true;
+        return;
+    }
+    if (libraryPage.value) {
+        await closeLibraryPage();
+        return;
+    }
     const fromCategory = !!activeGroup.value;
     await navigateToCategory(null, fromCategory);
     if (fromCategory) categoryTrigger?.focus();
@@ -657,7 +711,6 @@ const selectMenuUi = {
 
 const iconReasoning = useIcon('chat.reasoning');
 const iconVariantSettings = useIcon('chat.model.settings');
-const searchIcon = useIcon('ui.search');
 const iconToolWrench = useIcon('chat.tool.wrench');
 const iconClose = useIcon('ui.close');
 const iconChevronLeft = useIcon('ui.chevron.left');
@@ -693,9 +746,8 @@ const closeButtonProps = computed(() => {
     };
 });
 
-// Favorites model dropdown (narrow composers). Rows open the menu directly.
-const { favoriteModels, catalog } = useModelStore();
-const { policy: workspaceModels } = useWorkspaceModels();
+// The current-model row (narrow composers) opens the in-panel Models page.
+const { catalog, recordRecentModel } = useModelStore();
 const modelLabelId = useId();
 const promptLabelId = useId();
 const selectedModelLabel = computed(() => {
@@ -707,26 +759,6 @@ const selectedModelLabel = computed(() => {
 function providerSlugFor(modelId: string): string {
     return getProviderSlug({ id: modelId });
 }
-
-const modelItems = computed(() =>
-    (favoriteModels.value ?? []).filter(model => !isModelHidden(workspaceModels.value, model.id))
-        .map((model) => {
-            const value = model.canonical_slug ?? model.id;
-            if (!value) return null;
-            // Name and platform on separate lines so long names are not cut off.
-            return { label: formatModelName(model.name || value), description: modelIdentity(model).platformName, value, slug: providerSlugFor(value) };
-        })
-        .filter(
-            (
-                item
-            ): item is {
-                label: string;
-                description: string;
-                value: string;
-                slug: string;
-            } => Boolean(item)
-        )
-);
 
 const selectedProviderSlug = computed(() =>
     providerSlugFor(selectedModel.value ?? '')
@@ -769,11 +801,6 @@ const selectedPromptLabel = computed(() => {
     return prompts.value.find((prompt) => prompt.id === promptSelection.value)
         ?.title ?? 'Unavailable prompt';
 });
-
-const promptSearchInput = computed(() => ({
-    icon: searchIcon.value,
-    autofocus: !isMobile.value,
-}));
 
 watch(
     () => [props.threadId, props.paneId, props.promptSelectionRevision],
@@ -827,13 +854,6 @@ async function selectPrompt(value: string) {
         promptSaving.value = false;
     }
 }
-
-// Favorite picker: searchable when there are many favorites, matching the
-// composer's model picker (no mobile autofocus so the keyboard stays shut).
-const modelSearchInput = computed(() => ({
-    icon: searchIcon.value,
-    autofocus: !isMobile.value,
-}));
 
 // Model variant dropdown (options + descriptions from the shared helper).
 const variantItems = useModelVariantItems(() => props.variantOptions ?? OPENROUTER_OPTION_DESCRIPTORS);

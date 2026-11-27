@@ -84,6 +84,20 @@ const switchStub = {
     `,
 };
 
+// The Models page has its own suite; here it only needs to drive navigation.
+const modelsPageStub = {
+    name: 'ChatSettingsModelsPage',
+    props: ['selectedModel', 'detailId', 'disabled'],
+    emits: ['select', 'open-detail', 'open-catalog'],
+    template: '<div class="models-page-stub" :data-detail="detailId ?? \'\'" />',
+};
+
+const inputStub = {
+    props: ['modelValue'],
+    emits: ['update:modelValue'],
+    template: '<input v-bind="$attrs" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+};
+
 function popoverItems(wrapper: ReturnType<typeof mountPopover>) {
     return wrapper.findAllComponents(menuStub).map((menu) => ({
         label: menu.props('modelValue') as string,
@@ -108,13 +122,13 @@ function mountPopover(props: Record<string, unknown> = {}) {
         },
         global: {
             stubs: {
-                UButton: {
-                    template:
-                        '<button v-bind="$attrs" @click="$emit(\'click\')"><slot/></button>',
-                },
+                // $attrs carries the click listener, so the stub forwards it once.
+                UButton: { template: '<button v-bind="$attrs"><slot/></button>' },
                 UIcon: { template: '<span class="uicon-stub" />' },
                 USwitch: switchStub,
                 USelectMenu: menuStub,
+                UInput: inputStub,
+                ChatSettingsModelsPage: modelsPageStub,
             },
         },
     });
@@ -227,39 +241,38 @@ describe('ChatSettingsPopover options layout', () => {
         );
     });
 
-    it('offers favorites as the current-model dropdown', () => {
-        const { favoriteModels } = useModelStore();
-        favoriteModels.value = [
-            {
-                id: 'deepseek/deepseek-chat',
-                name: 'deepseek/deepseek-chat',
-            } as OpenRouterModel,
-        ];
-        try {
-            const narrow = mountPopover({ containerWidth: 360 });
-            const trigger = narrow.find('[aria-label="Current model"]');
-            expect(trigger.exists()).toBe(true);
-            expect(trigger.text()).toContain('deepseek/deepseek-chat');
-            expect(trigger.text()).toContain('Current model for this chat');
+    it('opens the Models page from the current-model row and returns after a choice', async () => {
+        const wrapper = mountPopover({ containerWidth: 360 });
+        const trigger = wrapper.find('[aria-label="Current model"]');
+        expect(trigger.text()).toContain('Current model for this chat');
 
-            const modelMenu = narrow
-                .findAllComponents(menuStub)
-                .find((menu) =>
-                    (menu.props('items') ?? []).some(
-                        (item: { slug?: string }) => item.slug
-                    )
-                );
-            expect(modelMenu).toBeTruthy();
-            const items = modelMenu!.props('items') as Array<{
-                value: string;
-                slug: string;
-            }>;
-            expect(items).toHaveLength(1);
-            // `~`-prefixed canonical slugs still resolve a provider logo.
-            expect(items[0]!.slug).toBe('deepseek');
-        } finally {
-            favoriteModels.value = [];
-        }
+        await trigger.trigger('click');
+        expect(wrapper.find('.chat-settings-title').text()).toBe('Models');
+        expect(wrapper.find('.chat-settings-body').attributes('style')).toContain('display: none');
+        const page = wrapper.findComponent(modelsPageStub);
+        expect(page.props('selectedModel')).toBe('deepseek/deepseek-chat');
+
+        page.vm.$emit('open-detail', 'openai/gpt-4o');
+        await flushPromises();
+        expect(wrapper.find('.chat-settings-title').text()).toBe('Model details');
+        expect(page.props('detailId')).toBe('openai/gpt-4o');
+        await wrapper.find('[aria-label="Back to models"]').trigger('click');
+        expect(wrapper.find('.chat-settings-title').text()).toBe('Models');
+        expect(page.props('detailId')).toBeNull();
+
+        page.vm.$emit('select', 'openai/gpt-4o');
+        await flushPromises();
+        expect(wrapper.emitted('update:model')?.at(-1)).toEqual(['openai/gpt-4o']);
+        expect(wrapper.find('.chat-settings-title').text()).toBe('Chat settings');
+        expect(wrapper.findComponent(modelsPageStub).exists()).toBe(false);
+    });
+
+    it('opens the Models page from the library and hands off to the full catalog', async () => {
+        const wrapper = mountPopover({ containerWidth: 600 });
+        await wrapper.findAll('button').find(button => button.text().includes('Model catalog'))!.trigger('click');
+        expect(wrapper.find('.chat-settings-title').text()).toBe('Models');
+        wrapper.findComponent(modelsPageStub).vm.$emit('open-catalog');
+        expect(wrapper.emitted('open-model-catalog')).toHaveLength(1);
     });
 
     it('hides the current-model row on wide composers', () => {
@@ -269,7 +282,7 @@ describe('ChatSettingsPopover options layout', () => {
         ).toBe(false);
     });
 
-    it('shows the current prompt below the model and offers Default and Disabled', async () => {
+    it('picks a prompt on the System prompts page and returns to settings', async () => {
         mockPrompts.items = [
             { id: 'prompt-a', title: 'Writing coach', favorite: true },
             { id: 'prompt-b', title: 'Code reviewer', favorite: false },
@@ -281,28 +294,52 @@ describe('ChatSettingsPopover options layout', () => {
         const prompt = wrapper.find('[aria-label="System prompt for this chat"]');
         expect(prompt.text()).toContain('Code reviewer');
         expect(model.element.compareDocumentPosition(prompt.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-        const menu = wrapper.findAllComponents(menuStub).find(
-            (item) => item.attributes('aria-label') === 'System prompt for this chat'
-        )!;
-        expect(menu.props('items').map((item: { label: string }) => item.label)).toEqual([
+
+        await prompt.trigger('click');
+        expect(wrapper.find('.chat-settings-title').text()).toBe('System prompts');
+        const rows = wrapper.findAll('.settings-page-row-main');
+        expect(rows.map(row => row.find('.settings-page-row-title').text())).toEqual([
             'Default', 'Disabled', 'Writing coach', 'Code reviewer',
         ]);
-        menu.vm.$emit('update:modelValue', '__or3_default_prompt__');
+        // Section labels carry no counts.
+        expect(wrapper.findAll('.settings-page-heading').map(heading => heading.text())).toEqual([
+            'Favorites', 'All prompts',
+        ]);
+        expect(rows[3]!.attributes('aria-current')).toBe('true');
+
+        await rows[0]!.trigger('click');
         await flushPromises();
         expect(mockPrompts.updateThread).toHaveBeenCalledWith('chat-1', '__or3_default_prompt__');
+        expect(wrapper.find('.chat-settings-title').text()).toBe('Chat settings');
         expect(prompt.text()).toContain('Default · Writing coach');
     });
 
-    it('stages Disabled for a new chat', async () => {
+    it('stages Disabled for a new chat from the System prompts page', async () => {
         const wrapper = mountPopover({ paneId: 'pane-1' });
         await flushPromises();
-        const menu = wrapper.findAllComponents(menuStub).find(
-            (item) => item.attributes('aria-label') === 'System prompt for this chat'
-        )!;
-        menu.vm.$emit('update:modelValue', '__or3_disabled_prompt__');
+        await wrapper.find('[aria-label="System prompt for this chat"]').trigger('click');
+        const disabled = wrapper.findAll('.settings-page-row-main')
+            .find(row => row.text().includes('Disabled'))!;
+        await disabled.trigger('click');
         await flushPromises();
         expect(mockPrompts.setPane).toHaveBeenCalledWith('pane-1', '__or3_disabled_prompt__');
         expect(wrapper.emitted('pending-prompt-selected')?.[0]).toEqual(['__or3_disabled_prompt__']);
-        expect(menu.text()).toContain('Disabled');
+        expect(wrapper.find('[aria-label="System prompt for this chat"]').text()).toContain('Disabled');
+    });
+
+    it('filters prompts and hands new prompts and the full library to the modal', async () => {
+        mockPrompts.items = [
+            { id: 'prompt-a', title: 'Writing coach', favorite: true },
+            { id: 'prompt-b', title: 'Code reviewer', favorite: false },
+        ];
+        const wrapper = mountPopover({ threadId: 'chat-1' });
+        await flushPromises();
+        await wrapper.findAll('button').find(button => button.text().includes('System prompts'))!.trigger('click');
+        await wrapper.find('[aria-label="Search system prompts"]').setValue('review');
+        expect(wrapper.findAll('.settings-page-row-title').map(title => title.text())).toEqual(['Code reviewer']);
+
+        await wrapper.findAll('button').find(button => button.text() === 'New prompt')!.trigger('click');
+        await wrapper.findAll('button').find(button => button.text() === 'Full library')!.trigger('click');
+        expect(wrapper.emitted('open-system-prompts')).toEqual([['new'], ['home']]);
     });
 });

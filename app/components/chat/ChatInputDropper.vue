@@ -809,18 +809,18 @@ watch(systemPromptsModal.isOpen, (open) => {
     if (!open) promptSelectionRevision.value++;
 });
 
-function openSystemPrompts() {
+function openSystemPrompts(mode: 'home' | 'new' = 'home') {
     systemPromptsModal.open({
-        mode: 'home',
+        mode,
         threadId: props.threadId,
         paneId: promptOwnerId.value,
         onSelected: handlePromptSelected,
     });
 }
 
-function openSystemPromptsFromSettings() {
+function openSystemPromptsFromSettings(mode: 'home' | 'new' = 'home') {
     chatSettingsOpen.value = false;
-    openSystemPrompts();
+    openSystemPrompts(mode);
 }
 
 function openModelCatalogFromSettings() {
