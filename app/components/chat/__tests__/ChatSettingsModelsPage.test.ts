@@ -56,23 +56,18 @@ const menuStub = {
     template: '<div class="menu-stub"><slot /></div>',
 };
 
-const contextMenuStub = {
-    name: 'UContextMenu',
-    props: ['items'],
-    emits: ['update:open'],
-    template: '<div class="context-menu-stub"><slot /></div>',
-};
-
 function mountPage(props: Record<string, unknown> = {}) {
     return mount(ChatSettingsModelsPage, {
         props: { selectedModel: 'openai/gpt-4o', detailId: null, ...props },
         global: {
             stubs: {
                 UInput: { template: '<input v-bind="$attrs" />' },
-                UButton: { template: '<button v-bind="$attrs"><slot /></button>' },
+                UButton: {
+                    props: ['icon'],
+                    template: '<button v-bind="$attrs" :data-icon="icon"><slot /></button>',
+                },
                 UIcon: { template: '<span class="uicon-stub" />' },
                 UDropdownMenu: menuStub,
-                UContextMenu: contextMenuStub,
                 ModelCatalogProviderLogo: { template: '<span />' },
                 ModelCatalogDetail: {
                     name: 'ModelCatalogDetail',
@@ -133,12 +128,27 @@ describe('ChatSettingsModelsPage', () => {
             'openai/gpt-4o',
             'mistral/mistral-medium',
         ]);
-        const selected = wrapper.find('[data-model-id="openai/gpt-4o"] .settings-page-row-main');
-        expect(selected.attributes('aria-current')).toBe('true');
-        expect(selected.text()).toContain('Vision · Tools');
+        const current = wrapper.find('[data-model-id="openai/gpt-4o"] .settings-page-row-main');
+        expect(current.attributes('aria-current')).toBe('true');
+        expect(current.text()).toContain('Vision · Tools');
+    });
 
-        await selected.trigger('click');
-        expect(wrapper.emitted('select')).toEqual([['openai/gpt-4o']]);
+    it('highlights a tapped row and uses it on a second tap', async () => {
+        const wrapper = mountPage();
+        await flushPromises();
+        const current = wrapper.find('[data-model-id="openai/gpt-4o"] .settings-page-row-main');
+        // The model in use starts highlighted, and tapping it does nothing more.
+        expect(current.attributes('aria-pressed')).toBe('true');
+        await current.trigger('click');
+        expect(wrapper.emitted('select')).toBeUndefined();
+
+        const gemini = wrapper.find('[data-model-id="google/gemini-pro"] .settings-page-row-main');
+        await gemini.trigger('click');
+        expect(gemini.attributes('aria-pressed')).toBe('true');
+        expect(current.attributes('aria-pressed')).toBe('false');
+        expect(wrapper.emitted('select')).toBeUndefined();
+        await gemini.trigger('click');
+        expect(wrapper.emitted('select')).toEqual([['google/gemini-pro']]);
     });
 
     it('offers only All and Favorites scopes and lists favorites flat', async () => {
@@ -167,48 +177,31 @@ describe('ChatSettingsModelsPage', () => {
         expect(headings(wrapper)).toEqual(['Favorites', 'Recent', 'All models']);
     });
 
-    it('opens details for a row and uses or favorites the model from there', async () => {
+    it('acts on the highlighted model from the action bar', async () => {
         const wrapper = mountPage();
-        await wrapper.find('[aria-label="Details for gemini-pro"]').trigger('click');
-        expect(wrapper.emitted('open-detail')).toEqual([['google/gemini-pro']]);
+        await flushPromises();
+        const use = wrapper.find('.settings-page-use');
+        expect(use.text()).toBe('In use');
+        expect(use.attributes('disabled')).toBeDefined();
 
-        await wrapper.setProps({ detailId: 'google/gemini-pro' });
+        await wrapper.find('[data-model-id="google/gemini-pro"] .settings-page-row-main').trigger('click');
+        expect(use.text()).toBe('Use model');
+        await wrapper.find('[aria-label="Add to favorites"]').trigger('click');
+        expect(store.addFavorite).toHaveBeenCalledWith(store.catalog.value[2]);
+        await wrapper.find('[aria-label="Model details"]').trigger('click');
+        expect(wrapper.emitted('open-detail')).toEqual([['google/gemini-pro']]);
+        await use.trigger('click');
+        expect(wrapper.emitted('select')).toEqual([['google/gemini-pro']]);
+    });
+
+    it('shows details in place and uses or favorites the model from there', async () => {
+        const wrapper = mountPage({ detailId: 'google/gemini-pro' });
         const detail = wrapper.findComponent({ name: 'ModelCatalogDetail' });
         expect(detail.props('favorite')).toBe(false);
         detail.vm.$emit('toggleFavorite');
         expect(store.addFavorite).toHaveBeenCalledWith(store.catalog.value[2]);
         detail.vm.$emit('use');
         expect(wrapper.emitted('select')).toEqual([['google/gemini-pro']]);
-    });
-
-    it('offers use, details, and favorite in the row menu instead of row buttons', async () => {
-        const wrapper = mountPage();
-        await flushPromises();
-        await wrapper.find('[data-model-id="google/gemini-pro"] .settings-page-row-title').trigger('contextmenu');
-        const menu = wrapper.findComponent(contextMenuStub);
-        const items = (menu.props('items') as Array<Array<{ label: string; onSelect: () => void }>>).flat();
-        expect(items.map((item) => item.label)).toEqual(['Use model', 'Details', 'Add to favorites']);
-
-        items[1]!.onSelect();
-        expect(wrapper.emitted('open-detail')).toEqual([['google/gemini-pro']]);
-        items[2]!.onSelect();
-        expect(store.addFavorite).toHaveBeenCalledWith(store.catalog.value[2]);
-
-        await wrapper.find('[data-model-id="openai/gpt-4o"] .settings-page-row-title').trigger('contextmenu');
-        const current = (menu.props('items') as Array<Array<{ label: string; disabled?: boolean }>>).flat();
-        expect(current[0]).toMatchObject({ label: 'Current model', disabled: true });
-    });
-
-    it('does not select the row when a long-press opens its menu', async () => {
-        const wrapper = mountPage();
-        await flushPromises();
-        const menu = wrapper.findComponent(contextMenuStub);
-        const row = wrapper.find('[data-model-id="google/gemini-pro"] .settings-page-row-main');
-        menu.vm.$emit('update:open', true);
-        await row.trigger('click');
-        menu.vm.$emit('update:open', false);
-        await row.trigger('click');
-        expect(wrapper.emitted('select')).toBeUndefined();
     });
 
     it('renders a bounded window and extends it on request', async () => {

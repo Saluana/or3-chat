@@ -24,6 +24,20 @@
             <h2 class="chat-settings-title" :aria-hidden="sheet && !subView ? true : undefined">
                 {{ viewTitle }}
             </h2>
+            <!-- Library pages hand off to their full modal from the header. -->
+            <template v-for="action in headerActions" :key="action.label">
+                <UTooltip :text="action.label" :delay-duration="300">
+                    <UButton
+                        v-bind="closeButtonProps"
+                        class="chat-settings-header-action"
+                        type="button"
+                        :aria-label="action.label"
+                        @click="action.run"
+                    >
+                        <UIcon :name="action.icon" class="size-4" />
+                    </UButton>
+                </UTooltip>
+            </template>
             <UButton
                 v-bind="closeButtonProps"
                 class="chat-settings-close"
@@ -267,7 +281,6 @@
             :disabled="loading"
             @select="selectModelFromPage"
             @open-detail="openModelDetail"
-            @open-catalog="emit('open-model-catalog')"
         />
         <ChatSettingsPromptsPage
             v-if="libraryPage === 'prompts'"
@@ -278,8 +291,7 @@
             :disabled="loading || streaming || promptSaving || promptLoading"
             :loading="promptLoading"
             @select="selectPromptFromPage"
-            @new-prompt="emit('open-system-prompts', 'new')"
-            @open-library="emit('open-system-prompts', 'home')"
+            @edit-prompt="(id: string) => emit('open-system-prompts', 'edit', id)"
         />
         <p v-if="libraryPage === 'prompts' && promptError" class="m-0 px-4 pb-2 text-xs text-error" role="alert">
             {{ promptError }}
@@ -487,7 +499,7 @@ const emit = defineEmits<{
     (e: 'close'): void;
     (e: 'use-default-model'): void;
     (e: 'compact' | 'cancel-compaction'): void;
-    (e: 'open-system-prompts', mode: 'home' | 'new'): void;
+    (e: 'open-system-prompts', mode: 'home' | 'new' | 'edit', promptId?: string): void;
     (e: 'open-model-catalog'): void;
     (e: 'pending-prompt-selected', id: string): void;
     (e: 'prompt-selected', id: string): void;
@@ -606,6 +618,19 @@ const viewTitle = computed(() => {
     return 'Chat settings';
 });
 
+const headerActions = computed(() => {
+    if (libraryPage.value === 'models' && !detailModelId.value) {
+        return [{ label: 'Open full catalog', icon: iconOpenFull.value, run: () => emit('open-model-catalog') }];
+    }
+    if (libraryPage.value === 'prompts') {
+        return [
+            { label: 'New prompt', icon: iconNewPrompt.value, run: () => emit('open-system-prompts', 'new') },
+            { label: 'Open full library', icon: iconOpenFull.value, run: () => emit('open-system-prompts', 'home') },
+        ];
+    }
+    return [];
+});
+
 const backLabel = computed(() => {
     if (activeGroup.value) return 'Back to tools';
     if (detailModelId.value) return 'Back to models';
@@ -718,6 +743,8 @@ const iconChevronRight = useIcon('ui.chevron.right');
 const iconChevronDown = useIcon('ui.chevron.down');
 const iconSystemPrompt = useIcon('chat.system_prompt');
 const iconModelCatalog = useIcon('chat.model.catalog');
+const iconOpenFull = useIcon('ui.fullscreen');
+const iconNewPrompt = useIcon('ui.plus');
 
 // Theme overrides - Container
 const containerProps = computed(() => {
@@ -1069,6 +1096,12 @@ const modelCatalogButtonProps = computed(() => {
 .chat-settings-close {
     flex: none;
     margin-inline-end: -0.25rem;
+}
+
+/* Header actions sit tight against the close button. */
+.chat-settings-header-action {
+    flex: none;
+    margin-inline-end: -0.75rem;
 }
 
 .chat-settings-back {

@@ -25,9 +25,9 @@
                         <button
                             type="button"
                             class="settings-page-row-main"
+                            :aria-pressed="row.value === highlighted"
                             :aria-current="row.value === selection ? 'true' : undefined"
-                            :disabled="disabled"
-                            @click="emit('select', row.value)"
+                            @click="onRowClick(row.value)"
                         >
                             <span class="settings-page-row-icon" aria-hidden="true">
                                 <UIcon :name="promptIcon" class="size-4" />
@@ -42,7 +42,7 @@
                                 v-if="row.value === selection"
                                 :name="checkIcon"
                                 class="settings-page-row-check"
-                                aria-hidden="true"
+                                aria-label="In use"
                             />
                         </button>
                     </li>
@@ -64,24 +64,25 @@
             </p>
         </div>
 
+        <!-- The action bar acts on the highlighted prompt; editing opens the full library. -->
         <div class="settings-page-footer">
             <UButton
                 variant="outline"
                 color="neutral"
-                class="settings-page-footer-button"
-                :icon="plusIcon"
-                @click="emit('new-prompt')"
-            >
-                New prompt
-            </UButton>
+                square
+                class="settings-page-action"
+                :icon="editIcon"
+                aria-label="Edit prompt"
+                :disabled="!highlightedIsSaved"
+                @click="emit('edit-prompt', highlighted)"
+            />
             <UButton
-                variant="outline"
-                color="neutral"
-                class="settings-page-footer-button"
-                :trailing-icon="externalIcon"
-                @click="emit('open-library')"
+                color="primary"
+                class="settings-page-use"
+                :disabled="highlightedIsCurrent || disabled"
+                @click="emit('select', highlighted)"
             >
-                Full library
+                {{ highlightedIsCurrent ? 'In use' : 'Use prompt' }}
             </UButton>
         </div>
     </div>
@@ -108,17 +109,35 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-    (e: 'select', value: string): void;
-    (e: 'new-prompt' | 'open-library'): void;
+    (e: 'select' | 'edit-prompt', value: string): void;
 }>();
 
 const searchIcon = useIcon('ui.search');
 const promptIcon = useIcon('chat.system_prompt');
 const checkIcon = useIcon('ui.check');
-const plusIcon = useIcon('ui.plus');
-const externalIcon = useIcon('catalog.external');
+const editIcon = useIcon('ui.edit');
 
 const query = ref('');
+
+// Tapping a row highlights it for the action bar; tapping it again uses it.
+const highlighted = ref(props.selection);
+const highlightedIsCurrent = computed(() => highlighted.value === props.selection);
+const highlightedIsSaved = computed(() =>
+    props.prompts.some((prompt) => prompt.id === highlighted.value)
+);
+
+// Follow the chat's selection (it can load after mount) unless the user moved on.
+watch(() => props.selection, (next, previous) => {
+    if (highlighted.value === previous) highlighted.value = next;
+});
+
+function onRowClick(value: string) {
+    if (highlighted.value === value) {
+        if (!props.disabled && !highlightedIsCurrent.value) emit('select', value);
+        return;
+    }
+    highlighted.value = value;
+}
 const limit = ref(PAGE_SIZE);
 watch(query, () => {
     limit.value = PAGE_SIZE;
@@ -264,18 +283,16 @@ const hiddenCount = computed(() => {
 
 /* Touch screens keep :hover on the last tapped row, so only hover-capable pointers get it. */
 @media (hover: hover) {
-    .settings-page-row-main:hover:not(:disabled) {
+    .settings-page-row-main:hover:not([aria-pressed='true']) {
         background: var(--md-surface-hover);
     }
 }
 
-.settings-page-row-main[aria-current='true'] {
+/* The highlighted row is the action bar's target. */
+.settings-page-row-main[aria-pressed='true'] {
     background: var(--md-surface-container-low);
-}
-
-.settings-page-row-main:disabled {
-    cursor: not-allowed;
-    opacity: 0.6;
+    box-shadow: inset 0 0 0 var(--md-border-width, 1px)
+        color-mix(in srgb, var(--md-border-color) 80%, transparent);
 }
 
 .settings-page-row-main:focus-visible {
@@ -335,16 +352,22 @@ const hiddenCount = computed(() => {
 }
 
 .settings-page-footer {
-    display: grid;
+    display: flex;
     flex-shrink: 0;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: center;
     gap: 0.5rem;
     padding: 0.625rem 0.75rem 0.75rem;
     border-top: var(--md-border-width-subtle, var(--md-border-width)) solid
         color-mix(in srgb, var(--md-border-color) 40%, transparent);
 }
 
-.settings-page-footer-button {
+.settings-page-action {
+    flex: none;
+    justify-content: center;
+}
+
+.settings-page-use {
+    flex: 1;
     justify-content: center;
 }
 

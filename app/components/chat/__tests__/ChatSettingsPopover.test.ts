@@ -128,6 +128,7 @@ function mountPopover(props: Record<string, unknown> = {}) {
                 USwitch: switchStub,
                 USelectMenu: menuStub,
                 UInput: inputStub,
+                UTooltip: { props: ['text', 'delayDuration'], template: '<slot />' },
                 ChatSettingsModelsPage: modelsPageStub,
             },
         },
@@ -271,8 +272,13 @@ describe('ChatSettingsPopover options layout', () => {
         const wrapper = mountPopover({ containerWidth: 600 });
         await wrapper.findAll('button').find(button => button.text().includes('Model catalog'))!.trigger('click');
         expect(wrapper.find('.chat-settings-title').text()).toBe('Models');
-        wrapper.findComponent(modelsPageStub).vm.$emit('open-catalog');
+        await wrapper.find('[aria-label="Open full catalog"]').trigger('click');
         expect(wrapper.emitted('open-model-catalog')).toHaveLength(1);
+
+        // Details have no full-catalog shortcut in the header.
+        wrapper.findComponent(modelsPageStub).vm.$emit('open-detail', 'openai/gpt-4o');
+        await flushPromises();
+        expect(wrapper.find('[aria-label="Open full catalog"]').exists()).toBe(false);
     });
 
     it('hides the current-model row on wide composers', () => {
@@ -306,8 +312,11 @@ describe('ChatSettingsPopover options layout', () => {
             'Favorites', 'All prompts',
         ]);
         expect(rows[3]!.attributes('aria-current')).toBe('true');
+        expect(rows[3]!.attributes('aria-pressed')).toBe('true');
 
         await rows[0]!.trigger('click');
+        expect(mockPrompts.updateThread).not.toHaveBeenCalled();
+        await wrapper.findAll('button').find(button => button.text() === 'Use prompt')!.trigger('click');
         await flushPromises();
         expect(mockPrompts.updateThread).toHaveBeenCalledWith('chat-1', '__or3_default_prompt__');
         expect(wrapper.find('.chat-settings-title').text()).toBe('Chat settings');
@@ -320,6 +329,8 @@ describe('ChatSettingsPopover options layout', () => {
         await wrapper.find('[aria-label="System prompt for this chat"]').trigger('click');
         const disabled = wrapper.findAll('.settings-page-row-main')
             .find(row => row.text().includes('Disabled'))!;
+        // A second tap on the highlighted row uses it.
+        await disabled.trigger('click');
         await disabled.trigger('click');
         await flushPromises();
         expect(mockPrompts.setPane).toHaveBeenCalledWith('pane-1', '__or3_disabled_prompt__');
@@ -327,7 +338,7 @@ describe('ChatSettingsPopover options layout', () => {
         expect(wrapper.find('[aria-label="System prompt for this chat"]').text()).toContain('Disabled');
     });
 
-    it('filters prompts and hands new prompts and the full library to the modal', async () => {
+    it('filters prompts and hands editing, new prompts, and the full library to the modal', async () => {
         mockPrompts.items = [
             { id: 'prompt-a', title: 'Writing coach', favorite: true },
             { id: 'prompt-b', title: 'Code reviewer', favorite: false },
@@ -338,8 +349,13 @@ describe('ChatSettingsPopover options layout', () => {
         await wrapper.find('[aria-label="Search system prompts"]').setValue('review');
         expect(wrapper.findAll('.settings-page-row-title').map(title => title.text())).toEqual(['Code reviewer']);
 
-        await wrapper.findAll('button').find(button => button.text() === 'New prompt')!.trigger('click');
-        await wrapper.findAll('button').find(button => button.text() === 'Full library')!.trigger('click');
-        expect(wrapper.emitted('open-system-prompts')).toEqual([['new'], ['home']]);
+        const edit = wrapper.find('[aria-label="Edit prompt"]');
+        expect(edit.attributes('disabled')).toBeDefined();
+        await wrapper.find('.settings-page-row-main').trigger('click');
+        await edit.trigger('click');
+
+        await wrapper.find('[aria-label="New prompt"]').trigger('click');
+        await wrapper.find('[aria-label="Open full library"]').trigger('click');
+        expect(wrapper.emitted('open-system-prompts')).toEqual([['edit', 'prompt-b'], ['new'], ['home']]);
     });
 });
