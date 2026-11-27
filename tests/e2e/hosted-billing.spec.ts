@@ -83,7 +83,9 @@ test('trial, editable admin allowances, and expiry preserve billing and data acc
     await moveViewport(fullHeight, 0);
     await expect.poll(() => alignedWithViewport(true)).toBe(true);
     await page.screenshot({ path: info.outputPath('billing-banner.png'), fullPage: true });
-    await page.getByRole('button', { name: 'Dismiss welcome', exact: true }).click();
+    // The provider welcome can cover billing controls, but is not part of the billing contract.
+    const welcome = page.getByRole('button', { name: 'Dismiss welcome', exact: true });
+    await page.addLocatorHandler(welcome, () => welcome.click(), { times: 1 });
     await page.getByRole('button', { name: 'Dismiss plan notice' }).click();
     await expect(notice).toBeHidden();
     await expect.poll(() => alignedWithViewport(false)).toBe(true);
