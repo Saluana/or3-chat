@@ -21,6 +21,22 @@ import { estimateChatRequest } from '~~/shared/chat/context-budget';
 import { countTokensApprox } from '../tokens';
 import { Blob as NodeBlob } from 'node:buffer';
 import { gunzipSync } from 'node:zlib';
+import { shallowRef } from 'vue';
+import type { OfflineWorkspace } from '~/composables/auth/offline-workspace';
+import type { SessionContext } from '~/core/hooks/hook-types';
+
+const offlineWorkspace = shallowRef<OfflineWorkspace | null>(null);
+let revalidatedSession: SessionContext | null = null;
+let validatedWorkspaceAccess = true;
+vi.mock('~/composables/auth/offline-workspace', async importOriginal => ({
+    ...await importOriginal<typeof import('~/composables/auth/offline-workspace')>(),
+    getOfflineWorkspace: () => offlineWorkspace.value,
+    useOfflineWorkspace: () => offlineWorkspace,
+}));
+vi.mock('~/composables/auth/useSessionContext', async importOriginal => ({
+    ...await importOriginal<typeof import('~/composables/auth/useSessionContext')>(),
+    getCachedSessionPayload: () => ({ session: revalidatedSession, appAccessAllowed: validatedWorkspaceAccess }),
+}));
 
 const runtimeConfigMock = {
     public: {
@@ -909,6 +925,60 @@ describe('background streaming helpers', () => {
             bodies[0]._backgroundAdmissionId
         );
     });
+
+    it.each(['same membership', 'changed workspace', 'changed role', 'changed user', 'access denied', 'signed out'] as const)(
+        'waits for verified workspace scope before retrying after reconnect: %s', async mode => {
+            vi.useFakeTimers();
+            const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+            runtimeConfigMock.public.ssrAuthEnabled = true;
+            const fetchMock = vi.fn()
+                .mockImplementationOnce(async () => {
+                    online.mockReturnValue(false);
+                    offlineWorkspace.value = { userId: 'user-1', workspaceId: 'workspace-1', workspaceName: 'Shared', role: 'editor' };
+                    throw new TypeError('Disconnected');
+                })
+                .mockResolvedValueOnce(createJsonResponse({ jobId: 'job-1', status: 'streaming', historyVersion: 1 }));
+            vi.stubGlobal('fetch', fetchMock);
+            try {
+                const start = startBackgroundStream({
+                    model: 'model-1', orMessages: [], modalities: ['text'], threadId: 't1', messageId: 'm1',
+                    admissionId: 'reconnect-1', history: testHistory(),
+                });
+                const outcome = start.then(result => ({ result }), error => ({ error }));
+                await vi.advanceTimersByTimeAsync(200);
+                online.mockReturnValue(true);
+                window.dispatchEvent(new Event('online'));
+                await vi.advanceTimersByTimeAsync(0);
+                expect(fetchMock).toHaveBeenCalledTimes(1);
+
+                validatedWorkspaceAccess = mode !== 'access denied';
+                revalidatedSession = mode === 'signed out' ? null : {
+                    authenticated: true, user: { id: mode === 'changed user' ? 'user-2' : 'user-1' },
+                    authorizationRevision: 12,
+                    workspace: { id: mode === 'changed workspace' ? 'workspace-2' : 'workspace-1', name: 'Shared' },
+                    role: mode === 'changed role' ? 'viewer' : 'editor',
+                };
+                offlineWorkspace.value = null;
+                await vi.advanceTimersByTimeAsync(0);
+
+                if (mode === 'same membership') {
+                    expect(await outcome).toMatchObject({ result: { jobId: 'job-1' } });
+                    expect(fetchMock).toHaveBeenCalledTimes(2);
+                    const [first, retry] = fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init.body)));
+                    expect(retry._backgroundAdmissionId).toBe(first._backgroundAdmissionId);
+                    expect(retry._backgroundAdmissionId).toBe('reconnect-1');
+                } else {
+                    expect(await outcome).toMatchObject({ error: { message: 'Workspace access changed. Refresh and try again.' } });
+                    expect(fetchMock).toHaveBeenCalledTimes(1);
+                }
+            } finally {
+                revalidatedSession = null;
+                validatedWorkspaceAccess = true;
+                offlineWorkspace.value = null;
+                online.mockRestore();
+            }
+        }
+    );
 
     it('recovers a committed admission when a retry rejects a now-missing attachment', async () => {
         vi.useFakeTimers();

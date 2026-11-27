@@ -1,6 +1,6 @@
 import { CLOUD_MUTATION_INTENT } from '~~/shared/sync/types';
 /** Host job admission, status and browser-tool transport. */
-import { shallowRef } from 'vue';
+import { shallowRef, watch } from 'vue';
 import { useRuntimeConfig } from '#imports';
 import { prepareJsonBody } from '~/utils/compress-json';
 import { prepareCloudAttachmentReferences } from './cloud-attachments';
@@ -19,6 +19,9 @@ import { getDeviceId } from '~/core/sync/hlc';
 import { isServerRouteAvailable, isMissingServerRoute, setServerRouteAvailable, assertDispatchOwner } from './server-route';
 import { prepareOpenRouterRequest, type ORMessage, type OpenRouterRequestBody } from './openrouter-request';
 import { openAiKeyHeaders } from '~/core/auth/useOpenAiKey';
+import { getOfflineWorkspace, useOfflineWorkspace, type OfflineWorkspace } from '~/composables/auth/offline-workspace';
+import { getCachedSessionPayload } from '~/composables/auth/useSessionContext';
+import { SESSION_CHECK_TIMEOUT_MS } from '~/utils/boot-session';
 
 /** Keep an uncertain admission in progress while the browser is offline. */
 async function waitForOnline(signal?: AbortSignal): Promise<void> {
@@ -35,6 +38,40 @@ async function waitForOnline(signal?: AbortSignal): Promise<void> {
         if (signal?.aborted) onAbort();
         else if (navigator.onLine) onOnline();
     });
+}
+
+// Being online does not authorize Cloud transport yet. Let the workspace
+// plugin finish its existing revalidation; don't replace it with a second check.
+async function waitForRevalidatedWorkspace(original: OfflineWorkspace, signal?: AbortSignal): Promise<void> {
+    const offline = useOfflineWorkspace();
+    if (offline.value && offline.value !== original) throw new Error('Workspace access changed. Refresh and try again.');
+    if (offline.value) await new Promise<void>((resolve, reject) => {
+        const cleanup = () => {
+            stop();
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', onAbort);
+        };
+        const onAbort = () => { cleanup(); reject(new DOMException('Admission cancelled', 'AbortError')); };
+        const stop = watch(offline, current => {
+            if (current === original) return;
+            cleanup();
+            if (current) reject(new Error('Workspace access changed. Refresh and try again.'));
+            else resolve();
+        }, { flush: 'sync' });
+        const timer = setTimeout(() => {
+            cleanup();
+            reject(new Error('Could not recheck workspace access. Reconnect and try again.'));
+        }, SESSION_CHECK_TIMEOUT_MS);
+        signal?.addEventListener('abort', onAbort, { once: true });
+        if (signal?.aborted) onAbort();
+    });
+    const payload = getCachedSessionPayload();
+    const checked = payload?.session;
+    if (payload?.appAccessAllowed !== true || !checked?.authenticated || checked.user?.id !== original.userId ||
+        checked.workspace?.id !== original.workspaceId || checked.role !== original.role ||
+        (checked.expiresAt && Date.parse(checked.expiresAt) <= Date.now())) {
+        throw new Error('Workspace access changed. Refresh and try again.');
+    }
 }
 
 function parseRetryAfterSeconds(value: string): number {
@@ -342,7 +379,9 @@ export async function startBackgroundStream(params: {
     let lastError: unknown;
     let hadAmbiguousAttempt = false;
     for (let attempt = 0; attempt < 3; attempt += 1) {
+        const offline = runtimeConfig.public.ssrAuthEnabled === true ? getOfflineWorkspace() : null;
         await waitForOnline(params.signal);
+        if (offline) await waitForRevalidatedWorkspace(offline, params.signal);
         await assertDispatchOwner(params);
         try {
             const resp = await fetchWithResponseDeadline('/api/openrouter/stream', {
